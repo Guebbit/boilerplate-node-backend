@@ -4,7 +4,7 @@
  * find who waits for a product (or which products anyone waits for), and the two cleanups owed to an erased account and a deleted
  * product.
  *
- * @see docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md#the-story
  */
 
 import type { ClientSession } from 'mongoose';
@@ -34,8 +34,10 @@ const upsertRequest = (
         .findOneAndUpdate(
             { userId: toObjectId(userId), productId: toObjectId(productId) },
             { $setOnInsert: { userId: toObjectId(userId), productId: toObjectId(productId) } },
-            // `rawResult`-free: `includeResultMetadata` tells an insert from a match.
-            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            /**
+             * `rawResult`-free: `includeResultMetadata` tells an insert from a match.
+             * https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+             */
             { upsert: true, returnDocument: 'after', includeResultMetadata: true }
         )
         .exec()

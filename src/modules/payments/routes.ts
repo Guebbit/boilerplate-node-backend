@@ -60,21 +60,27 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 /** Express router for payment operations (intent, confirm, sync, webhook, read back). */
 export const router = Router();
 
-// POST /payments/webhook/:provider — one callback per provider, resolved from the registry by name.
-// MUST stay above the auth wall below. `webhookLimiter`, not `credentialLimiters`: there is no
-// session here to skip a success on.
+/**
+ * POST /payments/webhook/:provider — one callback per provider, resolved from the registry by name.
+ * MUST stay above the auth wall below. `webhookLimiter`, not `credentialLimiters`: there is no
+ * session here to skip a success on.
+ */
 router.post('/webhook/:provider', webhookLimiter, postPaymentWebhook);
 
-// GET /payments/methods — public: which methods are offered is pre-purchase information, same
-// reasoning as GET /delivery/methods. MUST stay above the auth wall below.
+/**
+ * GET /payments/methods — public: which methods are offered is pre-purchase information, same
+ * reasoning as GET /delivery/methods. MUST stay above the auth wall below.
+ */
 router.get('/methods', getPaymentMethods);
 
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);
 
-// The staff Payments page. Static segments, and none of them collides with `/:id/...` below (those
-// are all POSTs on a longer path). Never shared-cached: the answer is the whole shop's money, and
-// `noStore` is the POST rule — RFC 9111 §3.5.
+/**
+ * The staff Payments page. Static segments, and none of them collides with `/:id/...` below (those
+ * are all POSTs on a longer path). Never shared-cached: the answer is the whole shop's money, and
+ * `noStore` is the POST rule — RFC 9111 §3.5.
+ */
 router.get('/', requirePermission('display', 'Payment'), privateNoCache, getPayments);
 router.post('/search', requirePermission('display', 'Payment'), noStore, getPayments);
 router.get('/refunds', requirePermission('display', 'Payment'), privateNoCache, getRefunds);
@@ -85,9 +91,11 @@ router.get(
     getPaymentAttention
 );
 
-// POST /payments — freeze an order's price, ready to confirm. No idempotencyKey: asking again
-// already refreshes the same intent, and the idempotency ledger would store the response, the
-// `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
+/**
+ * POST /payments — freeze an order's price, ready to confirm. No idempotencyKey: asking again
+ * already refreshes the same intent, and the idempotency ledger would store the response, the
+ * `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
+ */
 router.post(
     '/',
     requirePermission('checkout', 'Cart'),
@@ -96,10 +104,12 @@ router.post(
     postPayment
 );
 
-// POST /payments/:id/refunds — the operator returns the money, order untouched. The key
-// is REQUIRED: a retried refund would otherwise return the money twice, and a key whose first
-// attempt never reported an outcome answers "outcome unknown" instead of running again.
-/*
+/**
+ * POST /payments/:id/refunds — the operator returns the money, order untouched. The key
+ * is REQUIRED: a retried refund would otherwise return the money twice, and a key whose first
+ * attempt never reported an outcome answers "outcome unknown" instead of running again.
+ */
+/**
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
  * `shared/authorization-keys.generated.yaml`, so the guard demands the fresh session and audits that it did.
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
@@ -112,17 +122,21 @@ router.post(
     postPaymentRefund
 );
 
-// GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,
-// `/attention`), which a bare `/:id` would otherwise swallow. No permission
-// guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
+/**
+ * GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,
+ * `/attention`), which a bare `/:id` would otherwise swallow. No permission
+ * guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
+ */
 router.get('/:id', getPayment);
 
 // GET /payments/:id/refunds/:refundId — one refund record, scoped exactly like the payment read.
 router.get('/:id/refunds/:refundId', getRefund);
 
-// POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
-// Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the
-// key is optional because settling twice is refused by the record itself (409), never repeated.
+/**
+ * POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
+ * Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the
+ * key is optional because settling twice is refused by the record itself (409), never repeated.
+ */
 router.post(
     '/:id/refunds/:refundId/settle',
     requirePermission('create', 'Refund'),
@@ -130,9 +144,11 @@ router.post(
     postPaymentRefundSettle
 );
 
-// POST /payments/:id/refunds/:refundId/cancel — staff voiding a refund that must never be paid.
-// Same `create:Refund` key (and so the same `stepUp`) as the refund it voids; the key is optional
-// because cancelling twice is refused by the record itself (409), never repeated.
+/**
+ * POST /payments/:id/refunds/:refundId/cancel — staff voiding a refund that must never be paid.
+ * Same `create:Refund` key (and so the same `stepUp`) as the refund it voids; the key is optional
+ * because cancelling twice is refused by the record itself (409), never repeated.
+ */
 router.post(
     '/:id/refunds/:refundId/cancel',
     requirePermission('create', 'Refund'),
@@ -140,9 +156,11 @@ router.post(
     postPaymentRefundCancel
 );
 
-// POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the
-// challenge gate sit between the identity guards and idempotencyKey, mirroring where
-// `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
+/**
+ * POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the
+ * challenge gate sit between the identity guards and idempotencyKey, mirroring where
+ * `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
+ */
 router.post(
     '/:id/confirm',
     requirePermission('checkout', 'Cart'),
@@ -155,10 +173,12 @@ router.post(
     postPaymentConfirm
 );
 
-// POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
-// here: it is already idempotent by construction, keyed on the provider's own payment reference
-// rather than a client-supplied one, so a second sync call settles the same outcome, not a
-// second one. It spends the same per-account budget as `POST /`: both end in a provider call.
+/**
+ * POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
+ * here: it is already idempotent by construction, keyed on the provider's own payment reference
+ * rather than a client-supplied one, so a second sync call settles the same outcome, not a
+ * second one. It spends the same per-account budget as `POST /`: both end in a provider call.
+ */
 router.post(
     '/:id/sync',
     requirePermission('checkout', 'Cart'),

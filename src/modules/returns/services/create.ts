@@ -77,7 +77,6 @@ export type { CreateReturnInput, CreateReturnOutcome } from './outcome';
 /**
  * The lines already coming back on an order — what a new return's quantities are checked against.
  * A cancellation holds nothing that comes back (its units never shipped), so it is not counted.
- * @param orderId - the order
  * @param session - the opening's transaction, so the read happens under the order's lock
  */
 const alreadyReturned = (orderId: string, session: ClientSession): Promise<ProductQuantity[]> =>
@@ -167,8 +166,10 @@ const writeReturn = (
                 ...(opening.statedVia ? { statedVia: opening.statedVia } : {}),
                 openedBy: byStaff ? 'staff' : 'buyer',
                 policyExceptions: opening.policyExceptions,
-                // Opened already decided — a withdrawal, or staff opening it — so there is nothing
-                // left for staff to decide.
+                /**
+                 * Opened already decided — a withdrawal, or staff opening it — so there is nothing
+                 * left for staff to decide.
+                 */
                 ...(status === 'approved' ? { decidedAt: new Date() } : {})
             },
             session
@@ -187,7 +188,6 @@ const writeReturn = (
 
 /**
  * The ids of the order's lines that are goods Art. 16 takes the right of withdrawal away from.
- * @param order - the order
  */
 const excludedProductIds = (order: OrderDocument): Set<string> =>
     new Set(
@@ -293,16 +293,20 @@ const openFor = (
     const waiver = isWaiver(opener, input.reason);
     const { requestedAt } = opener.statement;
 
-    // Each reason has its own deadline: the shop's withdrawal period for a withdrawal or a
-    // goodwill return, two years from delivery for a defect or a wrong item. Staff opening a return
-    // for the shop's own reasons are not stopped by it; the record says they waived it.
+    /**
+     * Each reason has its own deadline: the shop's withdrawal period for a withdrawal or a
+     * goodwill return, two years from delivery for a defect or a wrong item. Staff opening a return
+     * for the shop's own reasons are not stopped by it; the record says they waived it.
+     */
     if (!waiver && !isReasonOpen(frozenDeadlinesOf(order), input.reason, requestedAt))
         return Promise.resolve(windowClosed(isGuaranteeReason(input.reason)));
 
-    // Art. 16: goods the product marks as excluded cannot be withdrawn from. Before dispatch the
-    // withdrawal takes the eligible goods (`withdraw.ts`), so only an order made wholly of
-    // excluded goods is refused. A defect or a wrong item is the guarantee, not the
-    // withdrawal: made-to-order goods are covered, and staff may waive the rule for a goodwill one.
+    /**
+     * Art. 16: goods the product marks as excluded cannot be withdrawn from. Before dispatch the
+     * withdrawal takes the eligible goods (`withdraw.ts`), so only an order made wholly of
+     * excluded goods is refused. A defect or a wrong item is the guarantee, not the
+     * withdrawal: made-to-order goods are covered, and staff may waive the rule for a goodwill one.
+     */
     const excluded =
         isGuaranteeReason(input.reason) || waiver ? new Set<string>() : excludedProductIds(order);
     if (input.reason === 'withdrawal' && isBeforeDispatch(order))
@@ -312,8 +316,10 @@ const openFor = (
                   openReturn(input, authContext, context)
               );
 
-    // Past this point goods are on their way or arrived — or nothing has shipped and the
-    // reason is not a withdrawal, so there is nothing to send back.
+    /**
+     * Past this point goods are on their way or arrived — or nothing has shipped and the
+     * reason is not a withdrawal, so there is nothing to send back.
+     */
     return deliveryService.shippedQuantities(input.orderId).then((shipped) => {
         if (shipped.length === 0) return notReturnable();
 
@@ -322,8 +328,10 @@ const openFor = (
 
         const returnable = shipped.filter(({ productId }) => !excluded.has(productId));
 
-        // The mail, the audit row and the order's return status follow the commit: they must
-        // not describe a return a lost race never wrote.
+        /**
+         * The mail, the audit row and the order's return status follow the commit: they must
+         * not describe a return a lost race never wrote.
+         */
         return openUnderLock(order, input, returnable, opener).then((outcome) => {
             if (!outcome.success) return outcome;
             nudgeOutbox();
@@ -384,8 +392,10 @@ export const createReturn = (
     authContext: AuthContext,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
-    // A choice between remedies exists only under the guarantee: a withdrawal and a goodwill
-    // return are refunded, so naming one there is a mistake the buyer should hear about.
+    /**
+     * A choice between remedies exists only under the guarantee: a withdrawal and a goodwill
+     * return are refunded, so naming one there is a mistake the buyer should hear about.
+     */
     if (input.preferredRemedy !== undefined && !isGuaranteeReason(input.reason))
         return Promise.resolve(badRemedy('preferredRemedy'));
     if (input.kind === 'cancellation') return createCancellation(input, authContext, context);

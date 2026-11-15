@@ -35,7 +35,6 @@ const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
  * Read `YYYY-MM-DD` as a calendar day.
- * @param text - the text
  * @returns the day, or `undefined` when it is not a real calendar date (`2026-02-30`)
  */
 export const parseDay = (text: string): CalendarDay | undefined => {

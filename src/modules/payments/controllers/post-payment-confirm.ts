@@ -38,12 +38,16 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             const declined =
                 !result.success &&
                 result.errors.some(({ code }) => code === ERROR_CODES.PAYMENT_DECLINED);
-            // Read by the decline-budget limiter's `requestWasSuccessful` (rate-limits.ts) so it
-            // spends its budget on a genuine decline only, never on the route's other 409.
+            /**
+             * Read by the decline-budget limiter's `requestWasSuccessful` (rate-limits.ts) so it
+             * spends its budget on a genuine decline only, never on the route's other 409.
+             */
             request.paymentConfirmDeclined = declined;
-            // Counted outcomes only: not-found/race rejections aren't confirm attempts. In flight
-            // is counted as its own label rather than folded into either — a spike in challenges
-            // is a different incident from a spike in declines.
+            /**
+             * Counted outcomes only: not-found/race rejections aren't confirm attempts. In flight
+             * is counted as its own label rather than folded into either — a spike in challenges
+             * is a different incident from a spike in declines.
+             */
             if (result.success)
                 paymentConfirmTotal.inc({
                     outcome: result.data.status === 'succeeded' ? 'succeeded' : 'in_flight'
@@ -51,8 +55,10 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             else if (declined) paymentConfirmTotal.inc({ outcome: 'declined' });
 
             if (refused(response, result)) return;
-            // `actions` ride along: the payment form swaps its stored payment for this answer, so
-            // an answer without them would hide the next step (finish at provider) right after.
+            /**
+             * `actions` ride along: the payment form swaps its stored payment for this answer, so
+             * an answer without them would hide the next step (finish at provider) right after.
+             */
             return paymentService
                 .presentWithActions(result.data, request.authContext)
                 .then((payment) => {

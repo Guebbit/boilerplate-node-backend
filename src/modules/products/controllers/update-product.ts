@@ -26,9 +26,11 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
     notFoundKey: 'products.not-found',
     replaceSchema: productService.zodProductReplaceSchema,
     patchSchema: productService.zodProductUpdateSchema,
-    // A multipart body carries these as strings; `readInput` decodes them before validation runs,
-    // so one JSON-shaped schema above validates both content types (`imageUpload` itself is
-    // outside the schema — `readUploadedImage`, inside `writeWithUploadedImage`, reads it).
+    /**
+     * A multipart body carries these as strings; `readInput` decodes them before validation runs,
+     * so one JSON-shaped schema above validates both content types (`imageUpload` itself is
+     * outside the schema — `readUploadedImage`, inside `writeWithUploadedImage`, reads it).
+     */
     input: {
         booleans: ['active', 'purchasable', 'allowBackorder', 'requiresShipping', 'noWithdrawal'],
         numbers: ['weight'],
@@ -36,8 +38,10 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
         jsonFields: ['translations']
     },
     update: (id, changes, request) =>
-        // The image fields are server-decided (the body's `imageUrl` can only be `null`) —
-        // carried PAST the factory's validation as `updateById`'s own `imageExtras` parameter.
+        /**
+         * The image fields are server-decided (the body's `imageUrl` can only be `null`) —
+         * carried PAST the factory's validation as `updateById`'s own `imageExtras` parameter.
+         */
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             productService.updateById(id, changes, callerContextOf(request), image)
         ),

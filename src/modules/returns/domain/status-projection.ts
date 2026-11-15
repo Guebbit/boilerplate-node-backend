@@ -40,8 +40,10 @@ export const projectReturnStatus = (
     returns: readonly ProjectedReturn[],
     ordered: ReadonlyMap<string, number>
 ): ProjectedReturnStatus => {
-    // A return with no lines (a withdrawal before dispatch: the order was canceled, nothing comes
-    // back) holds no goods, so it says nothing about how much of the order is back.
+    /**
+     * A return with no lines (a withdrawal before dispatch: the order was canceled, nothing comes
+     * back) holds no goods, so it says nothing about how much of the order is back.
+     */
     const holding = returns.filter(
         ({ status, kind, lines, remedy }) =>
             kind === 'return' &&

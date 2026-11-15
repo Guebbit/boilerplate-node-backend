@@ -25,8 +25,10 @@ import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { createdEvent } from './announce';
 import { appendTimeline } from './timeline';
-// `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
-// follows for its own writes.
+/**
+ * `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
+ * follows for its own writes.
+ */
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { BACKORDER_PROMISE_DAYS, shopCurrency } from '@modules/shop';
 import { termsVersion } from '@modules/account';
@@ -157,21 +159,23 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         input.lines.map(({ item }) => item.quantity)
     );
 
-    /*
+    /**
      * Pre-generated so `reserveForOrder` can use the SAME id the write below will eventually
      * create — reserving needs no row to exist yet.
      */
     const orderId = new Types.ObjectId();
 
-    /*
+    /**
      * The units are not SOLD here. They stay on the shelf until the payment lands or the hold
      * ends, so an unpaid order never removes stock from the world — the reserve/rollback shape
      * shared by `crud.ts`'s `create` and `cart`'s checkout.
      */
     const outcome = await inventoryService.reserveForOrder(
         orderId.toHexString(),
-        // A line frozen as a preorder claims the allowance, not a shelf unit; a backorder line takes
-        // the shelf first and claims only the rest.
+        /**
+         * A line frozen as a preorder claims the allowance, not a shelf unit; a backorder line takes
+         * the shelf first and claims only the rest.
+         */
         input.lines.map(({ item, backorder }, index) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -185,17 +189,21 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     );
     if (!outcome.held)
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
-    // The hold's OWN expiry, whatever payment method this is — a card order gets one exactly like
-    // a bank-transfer order, so the deadline shown to the buyer and the sweep's own timeout can
-    // never disagree. See `PlaceOrderShipping.holdMinutes`' own docblock for who chooses the length.
+    /**
+     * The hold's OWN expiry, whatever payment method this is — a card order gets one exactly like
+     * a bank-transfer order, so the deadline shown to the buyer and the sweep's own timeout can
+     * never disagree. See `PlaceOrderShipping.holdMinutes`' own docblock for who chooses the length.
+     */
     const { expiresAt: payBy } = outcome;
     const items = withOwedLines(orderItems, input.lines, outcome.owed);
 
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed order-number allocation or order write must give it back rather than leave it standing on a row that was never created
     try {
-        // Only spent once the hold is secured — a refused reserve above returns before this ever
-        // runs. Allocated INSIDE this try, not before it, so a throw here still releases the hold
-        // instead of leaving it standing with no order and no number spent on it.
+        /**
+         * Only spent once the hold is secured — a refused reserve above returns before this ever
+         * runs. Allocated INSIDE this try, not before it, so a throw here still releases the hold
+         * instead of leaving it standing with no order and no number spent on it.
+         */
         const orderNumber = await allocateOrderNumber();
 
         const orderDraft = {
@@ -211,8 +219,10 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
             ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
             ...(input.billingAddress ? { billingAddress: input.billingAddress } : {}),
-            // Priced off THESE frozen lines' total — the free-above rule prices the basket being
-            // bought, not a later edit of it. See `PlaceOrderShipping.priceFor`'s own docblock.
+            /**
+             * Priced off THESE frozen lines' total — the free-above rule prices the basket being
+             * bought, not a later edit of it. See `PlaceOrderShipping.priceFor`'s own docblock.
+             */
             ...(input.shipping?.method
                 ? {
                       shippingMethod: input.shipping.method.id,
@@ -220,16 +230,20 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
                   }
                 : {})
         };
-        // The conditional spreads above widen to a plain index signature, which `create`'s
-        // typed input cannot narrow back on its own; every field it can carry is optional or
-        // spread in.
+        /**
+         * The conditional spreads above widen to a plain index signature, which `create`'s
+         * typed input cannot narrow back on its own; every field it can carry is optional or
+         * spread in.
+         */
         const orderData = orderDraft as Partial<OrderDocument>;
 
-        // Announced here rather than left to `recordCreated`: this is the one function that writes a
-        // new order, so a future caller of it cannot forget to announce one the way a caller of
-        // `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
-        // order. The outbox row commits with the order itself, and is delivered after the response
-        // path has moved on: a slow or failing listener never delays this function's callers.
+        /**
+         * Announced here rather than left to `recordCreated`: this is the one function that writes a
+         * new order, so a future caller of it cannot forget to announce one the way a caller of
+         * `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
+         * order. The outbox row commits with the order itself, and is delivered after the response
+         * path has moved on: a slow or failing listener never delays this function's callers.
+         */
         const order = await announceInTransaction(
             (session) =>
                 orderRepository

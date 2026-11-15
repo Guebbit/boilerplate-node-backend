@@ -31,7 +31,6 @@ export type CancelRefusal = 'window-closed' | 'excluded' | 'no-key';
  * needs the refund key (`create:Refund`). Staff recording a withdrawal the buyer stated outside the
  * shop are held to the same two limits as the buyer, judged on the day it was stated.
  *
- * @param order - the order
  * @param authContext - the caller
  * @param remainder - the lines of the fulfillment order being canceled
  * @param statedAt - when the buyer stated the withdrawal: set by staff recording one, absent for

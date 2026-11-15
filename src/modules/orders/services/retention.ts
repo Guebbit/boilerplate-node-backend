@@ -122,8 +122,10 @@ export const eraseUserOrders = (
 ): Promise<AfterErase | undefined> =>
     orderRepository.findOpenUnpaidIdsOf(userId, session).then((orderIds) =>
         detachUserId(userId, session)
-            // Whatever the erased account did to ANY order (a staff member's changes, a
-            // buyer's own cancel) loses its name; the rows stay.
+            /**
+             * Whatever the erased account did to ANY order (a staff member's changes, a
+             * buyer's own cancel) loses its name; the rows stay.
+             */
             .then(() => clearTimelineActor(userId, session))
             .then(() => (orderIds.length > 0 ? () => cancelUnpaidOrders(orderIds) : undefined))
     );

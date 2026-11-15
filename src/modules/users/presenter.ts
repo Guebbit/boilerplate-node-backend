@@ -55,9 +55,11 @@ const sharedFields = (document: UserWire, role: string | null): Account => ({
     ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
     ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
     ...(document.locale === undefined ? {} : { locale: document.locale }),
-    // Stored encrypted (`./services/update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
-    // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
-    // the one place that decrypts it.
+    /**
+     * Stored encrypted (`./services/update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
+     * one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
+     * the one place that decrypts it.
+     */
     ...(document.phone === undefined
         ? {}
         : { phone: decryptPii(document.phone, phoneAad(document.id), 'user phone') }),
@@ -85,7 +87,6 @@ const sharedFields = (document: UserWire, role: string | null): Account => ({
  * An account as its own holder sees it (`/account`, the signup answer): no `actions`, and not the
  * shop's flag for staff.
  *
- * @param document - the account
  * @param role - the account's CURRENT tenant role, `null` for none
  */
 export const presentAccount = (document: UserWire, role: string | null): Account =>

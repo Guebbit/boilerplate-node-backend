@@ -62,9 +62,7 @@ export const accountReviewOpening = (userId: string, now: Date): SystemOpening =
 /**
  * A data export that could not be built: the person is still owed their file.
  *
- * @param failure - the failed export
  * @param failure.userId - whose export it is
- * @param failure.exportId - the failed export
  * @param now - the clock
  */
 export const exportFailedOpening = (

@@ -48,7 +48,7 @@ const isOperatorCancel = (request: Request): boolean =>
 /** Express router for order management (authenticated; `read:Order` alone sees only the caller's own orders). */
 export const router = Router();
 
-/*
+/**
  * All order routes require authentication — a SESSION, not an api key.
  *
  * `isAuth` rather than `isAuthOrCredential` because this router is mixed: the staff `Order`
@@ -60,24 +60,32 @@ export const router = Router();
  */
 router.use(getAuth, isAuth);
 
-// POST /orders/search — must come before /:id. Never Redis-cached: the answer depends on who is
-// asking (`read:Order` alone sees only their own orders), so a shared cache must never hold it — RFC 9111
-// §3.5. `noStore`, like every POST answer.
+/**
+ * POST /orders/search — must come before /:id. Never Redis-cached: the answer depends on who is
+ * asking (`read:Order` alone sees only their own orders), so a shared cache must never hold it — RFC 9111
+ * §3.5. `noStore`, like every POST answer.
+ */
 router.post('/search', noStore, getOrders);
 
-// GET /orders — list (`read:Order` alone sees own orders only). `privateNoCache`: the browser may keep its
-// own copy, revalidated every time.
+/**
+ * GET /orders — list (`read:Order` alone sees own orders only). `privateNoCache`: the browser may keep its
+ * own copy, revalidated every time.
+ */
 router.get('/', privateNoCache, getOrders);
 
-// GET /orders/export — every order the filters match, as CSV. Mounted before `/:id`, or `requireId`
-// answers 404 for the word `export`. `export:Order` carries its own step-up, so the guard
-// asks for a fresh session before the budget or the controller run; the budget is per account
-// (`rate-limits.ts`). No cache header here: the controller sets `private, no-store` on the file.
+/**
+ * GET /orders/export — every order the filters match, as CSV. Mounted before `/:id`, or `requireId`
+ * answers 404 for the word `export`. `export:Order` carries its own step-up, so the guard
+ * asks for a fresh session before the budget or the controller run; the budget is per account
+ * (`rate-limits.ts`). No cache header here: the controller sets `private, no-store` on the file.
+ */
 router.get('/export', requirePermission('export', 'Order'), ordersExportLimiter, getOrdersExport);
 
-// POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
-// replay the SAME order rather than mint a second one. `products`, not `orders` — no route on
-// this router still tags a cache entry `orders`.
+/**
+ * POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
+ * replay the SAME order rather than mint a second one. `products`, not `orders` — no route on
+ * this router still tags a cache entry `orders`.
+ */
 router.post(
     '/',
     requirePermission('create', 'Order'),
@@ -86,9 +94,11 @@ router.post(
     createOrder
 );
 
-// POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
-// the service's conditional write carries the caller's scope). An operator's cancel asks a fresh
-// session first, before the cache is touched: it is the door that can refund, or keep, the money.
+/**
+ * POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
+ * the service's conditional write carries the caller's scope). An operator's cancel asks a fresh
+ * session first, before the cache is touched: it is the door that can refund, or keep, the money.
+ */
 router.post(
     '/:id/cancel',
     requireFreshAuthWhen(isOperatorCancel, 'critical'),
@@ -103,17 +113,23 @@ router.post(
     postOrderOverrideStatus
 );
 
-// PUT /orders/:id/shipping-address — staff correcting where an unshipped order goes (a held
-// `incorrect_address` fulfillment order needs it). Before `/:id`, which PUT would otherwise match.
+/**
+ * PUT /orders/:id/shipping-address — staff correcting where an unshipped order goes (a held
+ * `incorrect_address` fulfillment order needs it). Before `/:id`, which PUT would otherwise match.
+ */
 router.put('/:id/shipping-address', requirePermission('update', 'Order'), putShippingAddress);
 
-// GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
-// caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.
+/**
+ * GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
+ * caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.
+ */
 router.get('/:id/timeline', privateNoCache, getOrderTimeline);
 
-// POST /orders/:id/timeline/notes — staff leave a note: staff-only row, its text stored encrypted. The
-// permission check runs before the per-account budget is spent, and the budget before the
-// idempotency ledger, so a replayed note still counts. DELETE withdraws a wrong note's text.
+/**
+ * POST /orders/:id/timeline/notes — staff leave a note: staff-only row, its text stored encrypted. The
+ * permission check runs before the per-account budget is spent, and the budget before the
+ * idempotency ledger, so a replayed note still counts. DELETE withdraws a wrong note's text.
+ */
 router.post(
     '/:id/timeline/notes',
     requirePermission('update', 'Order'),
@@ -127,8 +143,10 @@ router.delete(
     deleteOrderNote
 );
 
-// GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
-// caller's OWN order.
+/**
+ * GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
+ * caller's OWN order.
+ */
 router.get('/:id', privateNoCache, getOrderItem);
 
 // PUT /orders/:id — admin only (replace)

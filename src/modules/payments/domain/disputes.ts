@@ -48,14 +48,12 @@ export const openDisputeFilter = (): Record<string, unknown> => ({
 
 /**
  * Whether a dispute still waits on someone.
- * @param dispute - the dispute
  */
 export const isOpenDispute = (dispute: Pick<DisputeFacts, 'status'>): boolean =>
     OPEN_DISPUTE_STATUSES.includes(dispute.status);
 
 /**
  * Whether the payment has a dispute still open, of any kind (the staff list's `disputed` filter).
- * @param payment - the payment
  */
 export const hasOpenDispute = (payment: DisputablePayment): boolean =>
     (payment.disputes ?? []).some((dispute) => isOpenDispute(dispute));
@@ -63,7 +61,6 @@ export const hasOpenDispute = (payment: DisputablePayment): boolean =>
 /**
  * Whether a chargeback is open: the bank has the money, so the shop cannot refund it too.
  * An open inquiry is not one: refunds stay allowed, and a full refund ends it.
- * @param payment - the payment
  */
 export const hasOpenChargeback = (payment: DisputablePayment): boolean =>
     (payment.disputes ?? []).some(
@@ -73,7 +70,6 @@ export const hasOpenChargeback = (payment: DisputablePayment): boolean =>
 /**
  * What lost chargebacks took, in minor units: the shop cannot refund money the bank kept. A
  * `won` one took nothing (funds reinstated), so a late win gives the room back by itself.
- * @param payment - the payment
  * @param currency - the payment's currency
  */
 export const lostToChargebacks = (payment: DisputablePayment, currency: string): Money =>
@@ -90,7 +86,6 @@ export const lostToChargebacks = (payment: DisputablePayment, currency: string):
 /**
  * Whether the lost chargebacks cover this much: the bank already paid the buyer that money, so an
  * open refund of it may be reported returned (the bank returned it).
- * @param payment - the payment
  * @param amount - the refund's amount, a decimal
  * @param currency - the payment's currency
  */
@@ -103,7 +98,6 @@ export const lostChargebackCovers = (
 /**
  * Whether the payment has a dispute that is decided (any), so an open refund refused as
  * `disputed` is no longer waiting on one.
- * @param payment - the payment
  */
 export const hasDecidedDispute = (payment: DisputablePayment): boolean =>
     (payment.disputes ?? []).length > 0 && !hasOpenChargeback(payment);

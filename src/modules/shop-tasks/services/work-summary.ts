@@ -42,8 +42,10 @@ const BADGES: readonly Badge[] = [
     {
         key: 'salesOrders',
         opens: mayOpen('display', 'Order'),
-        // No third argument to `search`: a caller context there fires an `orders_viewed`
-        // analytics event, and a badge refresh is not a person viewing orders.
+        /**
+         * No third argument to `search`: a caller context there fires an `orders_viewed`
+         * analytics event, and a badge refresh is not a person viewing orders.
+         */
         count: (caller) =>
             orderService
                 .search(

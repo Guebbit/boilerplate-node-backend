@@ -3,7 +3,7 @@
  * The admin-only `/users` router: search, item read, write and delete, wired to the shared
  * response cache and the route-flag middleware the hard-delete endpoint uses.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { Router, type Request } from 'express';
@@ -63,18 +63,22 @@ const switchesAccount = (request: Request): Promise<boolean> =>
 /** Express router for user management (admin only). */
 export const router = Router();
 
-// Every route below needs a caller, but not the SAME key — `manager` reads and `support` reads
-// and updates, and a router-wide gate on one key made the other unreachable no matter what the
-// role file granted. Each mount below states the one key its own action needs.
-//
-// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module. Every route
-// here is a `User` rule over the tenant's directory — a partner integration syncing
-// accounts is the documented use case. No controller reads `authContext`.
+/**
+ * Every route below needs a caller, but not the SAME key — `manager` reads and `support` reads
+ * and updates, and a router-wide gate on one key made the other unreachable no matter what the
+ * role file granted. Each mount below states the one key its own action needs.
+ *
+ * `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module. Every route
+ * here is a `User` rule over the tenant's directory — a partner integration syncing
+ * accounts is the documented use case. No controller reads `authContext`.
+ */
 router.use(getAuth, isAuthOrCredential);
 
-// POST /users/search — must come before /:id to avoid matching "search" as an id. Never
-// Redis-cached: an admin-only answer, which a shared cache must never hold — RFC 9111 §3.5.
-// `noStore`, like every POST answer.
+/**
+ * POST /users/search — must come before /:id to avoid matching "search" as an id. Never
+ * Redis-cached: an admin-only answer, which a shared cache must never hold — RFC 9111 §3.5.
+ * `noStore`, like every POST answer.
+ */
 router.post('/search', requirePermission('read', 'User'), noStore, getUsers);
 
 // GET /users. `privateNoCache`: the browser may keep its own copy, revalidated every time.
@@ -108,14 +112,18 @@ router.patch(
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete('/:id', requirePermission('delete', 'User'), deleteUsers);
 
-// POST /users/:id/place-purchase-hold and /lift-purchase-hold — pause checkout for one account, or
-// end the pause. The ban's permission: both are a staff act on a buyer's standing, and neither
-// touches their login. A repeat finds the state reached and answers 409.
+/**
+ * POST /users/:id/place-purchase-hold and /lift-purchase-hold — pause checkout for one account, or
+ * end the pause. The ban's permission: both are a staff act on a buyer's standing, and neither
+ * touches their login. A repeat finds the state reached and answers 409.
+ */
 router.post('/:id/place-purchase-hold', requirePermission('ban', 'User'), postPlacePurchaseHold);
 router.post('/:id/lift-purchase-hold', requirePermission('ban', 'User'), postLiftPurchaseHold);
 
-// POST /users/:id/activate and /deactivate — switch an account on or off. A deactivation is a
-// ban today, so both ride the ban's permission; each answers 409 when the account is there already.
+/**
+ * POST /users/:id/activate and /deactivate — switch an account on or off. A deactivation is a
+ * ban today, so both ride the ban's permission; each answers 409 when the account is there already.
+ */
 router.post(
     '/:id/activate',
     requirePermission('ban', 'User'),

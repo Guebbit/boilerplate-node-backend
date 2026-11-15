@@ -21,8 +21,10 @@ import { respondWithOrder } from './respond';
  * caller's choice but only honored for admins — a customer's cancel is always refunded.
  */
 export const postCancelOrder = (
-    // The body is OPTIONAL on this route — a customer's cancel sends none — and Express leaves
-    // `request.body` undefined rather than empty when there is nothing to parse.
+    /**
+     * The body is OPTIONAL on this route — a customer's cancel sends none — and Express leaves
+     * `request.body` undefined rather than empty when there is nothing to parse.
+     */
     request: Request<{ id?: string }, unknown, CancelOrderRequest | undefined>,
     response: Response
 ): Promise<void> => {
@@ -30,9 +32,11 @@ export const postCancelOrder = (
     const id = requireId(request, response, { notFound: 'orders.not-found' });
     if (!id) return Promise.resolve();
 
-    // Parsed, not read raw: `refund` decides whether money goes back, and a raw `"false"` is a
-    // truthy string. An absent body parses as `{}`, which the schema's default turns into
-    // `refund: true`.
+    /**
+     * Parsed, not read raw: `refund` decides whether money goes back, and a raw `"false"` is a
+     * truthy string. An absent body parses as `{}`, which the schema's default turns into
+     * `refund: true`.
+     */
     const body = parseBody(CancelOrderByIdBody, request.body ?? {}, response);
     if (!body) return Promise.resolve();
 

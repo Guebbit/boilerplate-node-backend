@@ -77,8 +77,10 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
         objectIds: {
             id: '_id',
             userId: 'userId',
-            // Product data is embedded, not referenced — the snapshot's own `_id` is what
-            // identifies which product an order line holds.
+            /**
+             * Product data is embedded, not referenced — the snapshot's own `_id` is what
+             * identifies which product an order line holds.
+             */
             productId: 'items.product._id'
         },
         exact: {
@@ -159,15 +161,19 @@ const search = async (
     scope: Record<string, unknown> = {}
 ): Promise<{ items: Order[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
-    // `withScope`, not a spread: the scope is the authorization boundary, and a spread lets a
-    // client filter on the same key (`userId`) overwrite it — or the scope's `$or` overwrite the
-    // filter's. Both must match.
+    /**
+     * `withScope`, not a spread: the scope is the authorization boundary, and a spread lets a
+     * client filter on the same key (`userId`) overwrite it — or the scope's `$or` overwrite the
+     * filter's. Both must match.
+     */
     const match = withScope(withProjectionFilters(filters), scope);
 
-    // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
-    // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
-    // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
-    // makes ties the normal case rather than the edge one.
+    /**
+     * `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
+     * `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
+     * another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
+     * makes ties the normal case rather than the edge one.
+     */
     const chosen = sortOf(filters, ORDER_SORTABLE);
     const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: chosen ?? DEFAULT_SORT }];
 
@@ -220,8 +226,10 @@ async function* streamMatching(
         { $match: withScope(withProjectionFilters(filters), scope) },
         { $sort: chosen ?? DEFAULT_SORT }
     ]);
-    // Aggregate#cursor: a server-side cursor; `batchSize` is how many documents each round trip
-    // brings. https://mongoosejs.com/docs/api/aggregate.html#Aggregate.prototype.cursor()
+    /**
+     * Aggregate#cursor: a server-side cursor; `batchSize` is how many documents each round trip
+     * brings. https://mongoosejs.com/docs/api/aggregate.html#Aggregate.prototype.cursor()
+     */
     const cursor = (chosen ? run.collation(SORT_COLLATION) : run).cursor({ batchSize: 500 });
     for await (const document of cursor) yield* base.normalize([document]);
 }
@@ -382,8 +390,10 @@ const replaceShippingAddress = (
             {
                 _id: toObjectId(id),
                 status: observedStatus,
-                // Nothing has shipped, or units still remain to send: the same question as
-                // `canCorrectAddress`, so a dispatch that emptied the order in between wins.
+                /**
+                 * Nothing has shipped, or units still remain to send: the same question as
+                 * `canCorrectAddress`, so a dispatch that emptied the order in between wins.
+                 */
                 $or: [
                     { 'fulfillment.shipped': { $ne: true } },
                     { 'fulfillment.remaining': { $gt: 0 } }
@@ -516,8 +526,10 @@ const writeFulfillment = (
                 }
             },
             { $set: { fulfillment: summary } },
-            // No `updatedAt` bump: delivery's shipment report is not an edit of the order. The
-            // status step a first or last shipment causes is a separate write and still bumps.
+            /**
+             * No `updatedAt` bump: delivery's shipment report is not an edit of the order. The
+             * status step a first or last shipment causes is a separate write and still bumps.
+             */
             { returnDocument: 'after', session, timestamps: false }
         )
         .exec();
@@ -816,11 +828,13 @@ const deleteCanceledUnpaid = (document: OrderDocument): Promise<boolean> => {
     let deleted = false;
 
     return checkedDelete(document, () => {
-        // Mongoose merges a document's `$where` into its delete filter. `null` matches a missing
-        // field, so an order never paid (`paidAt`) and never handed late money
-        // (`moneyReceivedAt`) matches. Cleared after, as `versioning.ts` does, so a second use of
-        // the same object is not filtered on this one.
-        // https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
+        /**
+         * Mongoose merges a document's `$where` into its delete filter. `null` matches a missing
+         * field, so an order never paid (`paidAt`) and never handed late money
+         * (`moneyReceivedAt`) matches. Cleared after, as `versioning.ts` does, so a second use of
+         * the same object is not filtered on this one.
+         * https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
+         */
         Object.assign(document, {
             $where: {
                 ...(document.$where as object),
@@ -829,8 +843,10 @@ const deleteCanceledUnpaid = (document: OrderDocument): Promise<boolean> => {
                 moneyReceivedAt: null
             }
         });
-        // Mongoose's `deleteOne()` on a document answers a thenable whose result is the driver's
-        // delete outcome.
+        /**
+         * Mongoose's `deleteOne()` on a document answers a thenable whose result is the driver's
+         * delete outcome.
+         */
         return (document.deleteOne() as Promise<DeleteOutcome>)
             .then((outcome) => {
                 deleted = outcome.deletedCount > 0;
@@ -987,7 +1003,6 @@ export const orderEventRepository: AppendOnlyLedger<
      * One page of an order's rows, newest first: a log, so the order is fixed. Ties on `at` end on
      * the id, descending, so rows written in one transaction keep a total order across pages.
      *
-     * @param orderId - the order
      * @param types - the only types to count and return, or `undefined` for every row
      * @param pagination - which page, from `normalizePagination`
      */

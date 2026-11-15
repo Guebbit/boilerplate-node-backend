@@ -16,9 +16,11 @@ import { webhooksService } from '../services';
  */
 export const listWebhookSubscriptions = createListController({
     entity: 'webhookSubscriptions',
-    // `page`/`pageSize` swapped for the infra pair so an absent one stays absent for
-    // `normalizePagination` to default; `enabled` is pre-decoded by `readInput`'s `booleans`, and
-    // `sort` split on commas by its `csvLists`.
+    /**
+     * `page`/`pageSize` swapped for the infra pair so an absent one stays absent for
+     * `normalizePagination` to default; `enabled` is pre-decoded by `readInput`'s `booleans`, and
+     * `sort` split on commas by its `csvLists`.
+     */
     schema: ListWebhookSubscriptionsQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema

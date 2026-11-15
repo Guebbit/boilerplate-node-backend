@@ -12,8 +12,10 @@ import { returnService } from '../services';
 /** Handles `GET /returns`: newest first unless `sort` says otherwise. */
 export const getReturns = createListController({
     entity: 'returns',
-    // `page`/`pageSize` swapped for the infra pair so an absent one stays absent; `sort` is split
-    // on commas by `csvLists`.
+    /**
+     * `page`/`pageSize` swapped for the infra pair so an absent one stays absent; `sort` is split
+     * on commas by `csvLists`.
+     */
     schema: ListReturnsQueryParams.extend({ page: pageSchema, pageSize: pageSizeSchema }).partial(),
     input: { csvLists: ['sort'] },
     // Auth context is guaranteed by the isAuth middleware.

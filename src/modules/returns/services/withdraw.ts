@@ -227,8 +227,10 @@ export const withdrawBeforeDispatch = (
 
     return cancelAndRecord(order, opener, authContext, context).then((done) => {
         if ('canceled' in done)
-            // Not `ownOrder`: a staff member reads the order's new state through the same door
-            // that let them in, so the race falls back to a return for them too.
+            /**
+             * Not `ownOrder`: a staff member reads the order's new state through the same door
+             * that let them in, so the race falls back to a return for them too.
+             */
             return openableOrder(input.orderId, authContext).then((fresh) =>
                 fresh && !isBeforeDispatch(fresh.order) ? openAsReturn() : done.canceled
             );

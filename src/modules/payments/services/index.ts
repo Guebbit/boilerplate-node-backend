@@ -57,7 +57,7 @@ export type { OpenedReturnRefund } from './refunds';
 export type { MixRow } from './stats';
 export type { PaymentMethodInfo } from '../config';
 
-/*
+/**
  * `settlePayment`, `applyWebhookDelivery` and `performRefund` are NOT published: each is the choreography beneath a door
  * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
  * would skip them. `confirmPayment`/`syncPayment`/`receiveWebhook`/`applyWebhookSettlement` and

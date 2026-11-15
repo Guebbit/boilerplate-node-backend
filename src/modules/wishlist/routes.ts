@@ -25,8 +25,10 @@ router.get('/', getWishlist);
 // POST /wishlist/items — save a product. Saving what is saved is a no-op.
 router.post('/items', postWishlistItems);
 
-// POST /wishlist/items/:productId/move-to-cart
-// The move writes the caller's own basket, which needs no rule beyond being signed in.
+/**
+ * POST /wishlist/items/:productId/move-to-cart
+ * The move writes the caller's own basket, which needs no rule beyond being signed in.
+ */
 router.post('/items/:productId/move-to-cart', postMoveToCart);
 
 // DELETE /wishlist/items/:productId — remove one saved product

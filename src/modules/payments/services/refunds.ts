@@ -316,20 +316,26 @@ export const openRefund = (
         amount: toDecimalString(amount, currency),
         currency,
         status: 'pending' as const,
-        // Stamped here, not left to mongoose: this exact object is what the caller sends to the
-        // provider, and the port reads `createdAt` to decide whether a key has expired.
+        /**
+         * Stamped here, not left to mongoose: this exact object is what the caller sends to the
+         * provider, and the port reads `createdAt` to decide whether a key has expired.
+         */
         createdAt: new Date(),
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
         ...request.due,
         ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? '0' } : {}),
-        // One key per RECORD, not per payment: two different partial refunds must not be taken
-        // for one by the provider, while a retry of this one must be.
+        /**
+         * One key per RECORD, not per payment: two different partial refunds must not be taken
+         * for one by the provider, while a retry of this one must be.
+         */
         idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`,
-        // The fence token of the first attempt, when this request sends the record itself: a
-        // settle or a failure only lands while the record still carries it, so a claim by the
-        // sweep supersedes this attempt. A record opened inside a caller's transaction is sent
-        // after it commits, through a claim, and carries none until then.
+        /**
+         * The fence token of the first attempt, when this request sends the record itself: a
+         * settle or a failure only lands while the record still carries it, so a claim by the
+         * sweep supersedes this attempt. A record opened inside a caller's transaction is sent
+         * after it commits, through a claim, and carries none until then.
+         */
         ...(session ? {} : { attemptedAt: new Date() })
     };
     const newTotal = addMoney(toMinorUnits(amountRefunded, currency), amount);
@@ -370,11 +376,15 @@ export const openRefund = (
               })
     ).then((updated) => {
         if (updated) return { payment: updated, refund };
-        // Inside a caller's transaction the payment is the one that caller just wrote: a miss is
-        // final, and a re-read outside the transaction would see something older.
+        /**
+         * Inside a caller's transaction the payment is the one that caller just wrote: a miss is
+         * final, and a re-read outside the transaction would see something older.
+         */
         if (session) return null;
-        // A stamped request never gives up quietly: `null` would let the caller mark the event
-        // handled with no refund opened. Throwing leaves it unmarked, so the outbox redelivers.
+        /**
+         * A stamped request never gives up quietly: `null` would let the caller mark the event
+         * handled with no refund opened. Throwing leaves it unmarked, so the outbox redelivers.
+         */
         if (request.cancelEventId !== undefined && retriesLeft <= 0)
             throw new Error(
                 `Payments: the refund for order ${String(orderId)} could not be opened, its write kept missing`
@@ -422,7 +432,6 @@ const auditRefundRequested = (
  * leave the record `pending`. Nothing is announced (no `payment.refunded`, no credit note) until a
  * re-read says it succeeded, and the sweep re-reads it instead of sending it again.
  *
- * @param payment - the payment
  * @param refund - the record, as the attempt claimed it
  * @param refundRef - the provider's refund id
  * @returns always `null`: nothing settled here
@@ -458,16 +467,20 @@ const sendToProvider = (
             throw new RefundLeftOpenError(error, String(refund._id));
         });
 
-    // An open chargeback: the bank has this money. Nothing is asked of the provider (it would
-    // refuse with `charge_disputed` anyway); the record fails final, as that refusal would.
+    /**
+     * An open chargeback: the bank has this money. Nothing is asked of the provider (it would
+     * refuse with `charge_disputed` anyway); the record fails final, as that refusal would.
+     */
     if (hasOpenChargeback(payment))
         return refuse(
             new Error('A chargeback is open on this payment'),
             RefundFailureReason.disputed
         );
 
-    // The adapter code may be gone (a provider retired from the deployment): nothing was asked,
-    // so the money provably did not move, and asking again will not change that.
+    /**
+     * The adapter code may be gone (a provider retired from the deployment): nothing was asked,
+     * so the money provably did not move, and asking again will not change that.
+     */
     const provider = paymentProviderRegistry.resolve(payment.provider);
     if (!provider) {
         logger.warn({
@@ -541,15 +554,19 @@ const attemptRefund = (
     // Money recorded by hand has no provider to ask, and nothing here may declare it returned.
     if (isHandRecorded(payment)) return Promise.resolve(null);
 
-    // An outside refund took the room this one counted on: the provider would refuse it, so it
-    // stays open and unsent for staff to cancel or mark returned.
+    /**
+     * An outside refund took the room this one counted on: the provider would refuse it, so it
+     * stays open and unsent for staff to cancel or mark returned.
+     */
     if (exceedsRemaining(payment, refund)) return Promise.resolve(held(refund));
 
     if (!payment.providerRef) {
-        // Only a `succeeded` payment reaches here, and nothing can succeed before the provider
-        // has been asked for an intent — so this is a corrupted row, not a reachable state. Loud,
-        // and the record still settles: leaving it open would invite a second attempt at the same
-        // impossible refund.
+        /**
+         * Only a `succeeded` payment reaches here, and nothing can succeed before the provider
+         * has been asked for an intent — so this is a corrupted row, not a reachable state. Loud,
+         * and the record still settles: leaving it open would invite a second attempt at the same
+         * impossible refund.
+         */
         // Stryker disable all
         logger.error({
             message: 'Refunded a payment carrying no provider reference — money was NOT returned.',
@@ -607,7 +624,6 @@ const attemptKeepingGoing = (
  * A record the provider refuses stays open and the next one is still tried; any other error (the
  * database, say) stops the walk, as nothing after it can be trusted to land either.
  *
- * @param payment - the payment
  * @param context - present only for the admin request
  * @param statuses - which records to send: the sweep sends every open one; a request sends only
  *   those never attempted (`pending`), as a `failed` one is the sweep's to retry
@@ -774,8 +790,10 @@ const refusalFor = (
         ]);
     if (amount === undefined) return undefined;
 
-    // A decimal the currency has no minor unit for (0.001 EUR) would round to a different amount
-    // than the one the operator typed — refused rather than quietly changed.
+    /**
+     * A decimal the currency has no minor unit for (0.001 EUR) would round to a different amount
+     * than the one the operator typed — refused rather than quietly changed.
+     */
     if (!fitsCurrency(amount, payment.currency))
         return generateReject(422, [fieldError('amount', t('payments.refund-invalid-amount'))]);
     const minor = toMinorUnits(amount, payment.currency);
@@ -852,8 +870,10 @@ const refundFoundPayment = (
                 { code: ERROR_CODES.PAYMENT_DISPUTED, message: t('payments.disputed') }
             ])
         );
-    // The `PaymentActions.refund` rule. A refund still open counts against what is left, so only
-    // an exhausted payment is refused; a second partial refund beside an open one is allowed.
+    /**
+     * The `PaymentActions.refund` rule. A refund still open counts against what is left, so only
+     * an exhausted payment is refused; a second partial refund beside an open one is allowed.
+     */
     if (payment.status !== REFUNDABLE_PAYMENT_STATUS || remainingOf(payment) <= 0)
         return Promise.resolve(notRefundable());
 
@@ -924,7 +944,6 @@ const refundInFlight = (): ResponseReject =>
  * The answer for an operator who lost the settle: 409 `NOT_OPEN` if the money is back already,
  * `IN_FLIGHT` if the record moved on to a new attempt.
  *
- * @param paymentId - the payment
  * @param refundId - the record the operator named
  */
 const lostSettleRace = (paymentId: string, refundId: string): Promise<ResponseReject> =>
@@ -973,8 +992,10 @@ export const settleRefundByHand = (
         const refusal = handSettlementRefusal(payment, refund);
         if (refusal) return refusal;
 
-        // `null` is the loser of a race: the conditional write found the record no longer in the
-        // state it was read in (settled by a second operator, or claimed for a new attempt).
+        /**
+         * `null` is the loser of a race: the conditional write found the record no longer in the
+         * state it was read in (settled by a second operator, or claimed for a new attempt).
+         */
         return settleRefund(
             payment,
             refund,
@@ -1212,8 +1233,10 @@ export const refundForOrder = (
                       });
                       // Stryker restore all
                   })
-                  // Every outcome that did not throw is a handled event: the refund opened (already
-                  // stamped, this is a no-op), or there was nothing to return.
+                  /**
+                   * Every outcome that did not throw is a handled event: the refund opened (already
+                   * stamped, this is a no-op), or there was nothing to return.
+                   */
                   .then(() =>
                       eventId === undefined
                           ? undefined
@@ -1330,7 +1353,6 @@ export const openReturnRefund = (
  * Where the refund {@link openReturnRefund} opened for a return stands: what `returns` asks when
  * goods arrive for a return whose refund the proof of sending opened earlier.
  *
- * @param orderId - the order
  * @param returnId - the return the record pays for
  * @returns `'settled'` once the money went back, `'open'` while it is owed, `'none'` when no record exists
  */
@@ -1349,7 +1371,6 @@ export const returnRefundState = (
  * record is only put on file as owed. A card record goes to the provider; a refusal, like any
  * other error, is logged and left to the sweep, which finds the record by itself.
  *
- * @param orderId - the order
  * @param refundId - the record to send
  * @param context - the staff member, audited on the refund
  * @returns `'settled'` when the money went back, else `'open'`
@@ -1391,7 +1412,6 @@ export const sendOpenedRefund = (
  * refund the provider later took back keeps its `settledAt`-era note, so it is included only while
  * it still carries one; a settled-by-hand record has `settledAt` too.
  *
- * @param orderId - the order
  * @returns the payloads; empty when the order has no payment or nothing settled
  */
 export const settledRefundPayloads = (

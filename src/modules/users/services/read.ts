@@ -39,9 +39,11 @@ export const search = (
     items: UserWire[];
     meta: PaginatedMeta;
 }> =>
-    // `purchaseHold: true` is a question about NOW (an expired hold is not a hold), which a stored
-    // column filter cannot ask, so it rides in as the repository's scope. `purchaseHoldReview: true`
-    // asks whether the flag is still there, whatever became of the hold; the two combine.
+    /**
+     * `purchaseHold: true` is a question about NOW (an expired hold is not a hold), which a stored
+     * column filter cannot ask, so it rides in as the repository's scope. `purchaseHoldReview: true`
+     * asks whether the flag is still there, whatever became of the hold; the two combine.
+     */
     userRepository.search(filters, searchScopeOf(filters));
 
 /** Get a single user by ID. Returns undefined when no id is provided. */
@@ -139,6 +141,8 @@ export const toUserListItems = (
  * Returns the document if found, or undefined if no match.
  */
 export const findByEmail = (email: string): Promise<UserDocument | undefined | null> =>
-    // Credentials included: the callers (reset-request, setup-request) immediately push a
-    // token onto the document, which `select: false` would otherwise leave undefined.
+    /**
+     * Credentials included: the callers (reset-request, setup-request) immediately push a
+     * token onto the document, which `select: false` would otherwise leave undefined.
+     */
     userRepository.findOneWithCredentials({ email });

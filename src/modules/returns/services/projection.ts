@@ -22,8 +22,10 @@ export const syncReturnStatus = (orderId: string): Promise<void> =>
         .then(([returns, order]) => {
             if (!order) return undefined;
 
-            // Excluded goods never come back, and a unit canceled before it shipped never will, so
-            // neither may keep the order from reading `returned`.
+            /**
+             * Excluded goods never come back, and a unit canceled before it shipped never will, so
+             * neither may keep the order from reading `returned`.
+             */
             const canceled = returns
                 .filter(({ kind }) => kind === 'cancellation')
                 .flatMap(({ lines }) => wireLines(lines));

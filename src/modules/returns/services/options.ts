@@ -40,7 +40,6 @@ import { ownOrder } from './ownership';
 /**
  * The order a caller may ask about: staff holding `read:Return` see any; anyone else only
  * their own.
- * @param orderId - the order
  * @param authContext - the caller
  */
 const readableOrder = (
@@ -53,7 +52,6 @@ const readableOrder = (
 
 /**
  * Quantities as option lines, with the title the order froze for each product.
- * @param order - the order
  * @param quantities - product id → units
  */
 const optionLines = (
@@ -89,7 +87,6 @@ interface OfferedReasons {
  * withdrawal — with the non-withdrawal ones that are past their deadline listed as exceptions,
  * a preview of what opening them would waive. Anyone else: none.
  *
- * @param order - the order
  * @param authContext - the caller
  * @param now - the moment being asked about
  */
@@ -117,7 +114,6 @@ const offeredReasons = (
 /**
  * What one order can still return and cancel.
  *
- * @param orderId - the order
  * @param authContext - the caller: the buyer, or staff reading returns
  * @returns the options, or a 404 for an order the caller may not read
  */
@@ -133,11 +129,15 @@ export const getReturnOptions = (
             deliveryService.shippedQuantities(orderId),
             deliveryService.remainderOptions(orderId, order.fulfillment?.shipped === true)
         ]).then(([returns, shipped, remainders]) => {
-            // The buyer only for a reason whose deadline is still open (none left means no form);
-            // staff acting for the buyer for every one, naming what they would waive.
+            /**
+             * The buyer only for a reason whose deadline is still open (none left means no form);
+             * staff acting for the buyer for every one, naming what they would waive.
+             */
             const { reasons, exceptions, staff } = offeredReasons(order, authContext, new Date());
-            // Excluded goods (Art. 16) are offered only for a reason that is not the withdrawal:
-            // a defect or a wrong item reaches made-to-order goods too, and staff may waive the rule.
+            /**
+             * Excluded goods (Art. 16) are offered only for a reason that is not the withdrawal:
+             * a defect or a wrong item reaches made-to-order goods too, and staff may waive the rule.
+             */
             const excluded = new Set(
                 order.items
                     .filter((item) => isExcludedFromWithdrawal(item))

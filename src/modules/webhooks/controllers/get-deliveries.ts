@@ -16,9 +16,11 @@ import { webhooksService } from '../services';
  */
 export const listWebhookDeliveries = createListController({
     entity: 'webhookDeliveries',
-    // `status` closed to the generated wire enum — an unrecognised value 422s rather than
-    // silently matching every row, same as `audit-logs`' `outcome`. `page`/`pageSize` swapped
-    // for the infra pair so an absent one stays absent for `normalizePagination` to default.
+    /**
+     * `status` closed to the generated wire enum — an unrecognised value 422s rather than
+     * silently matching every row, same as `audit-logs`' `outcome`. `page`/`pageSize` swapped
+     * for the infra pair so an absent one stays absent for `normalizePagination` to default.
+     */
     schema: ListWebhookDeliveriesQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema

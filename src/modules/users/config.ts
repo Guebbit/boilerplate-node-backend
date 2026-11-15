@@ -6,7 +6,7 @@
  * The adapter that reads the ring is shape-only (`infrastructure/security/config.ts`); the
  * requirement that it be set is this module's, so deleting the module deletes it.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';
@@ -28,8 +28,10 @@ export const usersConfig = defineConfig({
             minBytes: 32,
             placeholder: 'your-pii-encryption-key-here'
         }),
-        // The frontend's own contact page, pre-filled for an account question: the way to ask a
-        // person about a purchase hold (GDPR Art. 22(3)).
+        /**
+         * The frontend's own contact page, pre-filled for an account question: the way to ask a
+         * person about a purchase hold (GDPR Art. 22(3)).
+         */
         NODE_FRONTEND_LINK_CONTACT: text({ default: FRONTEND_LINK_RULES.links.contact }),
         NODE_FRONTEND_LINK_PRIVACY: text({ default: FRONTEND_LINK_RULES.links.privacy })
     }

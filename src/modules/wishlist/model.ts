@@ -6,7 +6,7 @@
  * an amount matters it belongs in the cart (`POST /wishlist/items/{productId}/move-to-cart`), and one
  * field fewer is what makes `$addToSet` the whole idempotence story below.
  *
- * @see docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -82,7 +82,7 @@ export const wishlistSchema = new Schema<WishlistDocument>(
     }
 );
 
-/*
+/**
  * Deleting a product has to find every wishlist holding it; without this it reads the whole
  * collection. Left unnamed for the same reason the cart's twin is: nothing else creates it, so
  * Mongoose's derived name has nothing to disagree with.

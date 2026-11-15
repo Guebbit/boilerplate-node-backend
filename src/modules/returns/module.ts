@@ -9,7 +9,7 @@
  * A return is keyed by `orderId`, never by `userId`, so account erasure needs no `erase` hook here
  * — see `./services/personal-data.ts`.
  *
- * @see docs/modules/returns.md
+ * @see docs/modules/returns.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -20,8 +20,10 @@ import { router } from './routes';
 import { returnsRateLimits } from './rate-limits';
 import { returnsConfig } from './config';
 import { collectPersonalData } from './services/personal-data';
-// Also installs this module's event declarations. Reached directly, never through this module's
-// own barrel — see CLAUDE.md's module-barrel rule.
+/**
+ * Also installs this module's event declarations. Reached directly, never through this module's
+ * own barrel — see CLAUDE.md's module-barrel rule.
+ */
 import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED, RETURN_DECIDED } from './events';
 import { closeReturn } from './services/close';
 import { returnService } from './services';
@@ -73,7 +75,7 @@ export default {
     config: [returnsConfig.slice],
     rateLimits: returnsRateLimits,
     publicEvents,
-    /*
+    /**
      * A refund that pays for a return announces itself with that return's id. Closing is the same
      * conditional move whether this listener or the request that received the goods gets there
      * first — the refund may land in the request, or later when the payment sweep completes one

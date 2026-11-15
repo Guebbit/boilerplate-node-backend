@@ -7,7 +7,7 @@
  * goes through `userService`; `account`'s own steps sit behind `friends/account.ts` (see §5), which
  * the barrel does not publish. `userModel` stays unexported; nothing outside this module calls it.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#its-neighbourhood
  */
 
 export * from './services';

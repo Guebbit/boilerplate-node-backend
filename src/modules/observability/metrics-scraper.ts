@@ -40,8 +40,10 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
         return;
     }
 
-    // The scheme is required, not stripped-if-present: a bare token would mean the credential is
-    // read from a header shape no client should be sending — one more way for it to leak.
+    /**
+     * The scheme is required, not stripped-if-present: a bare token would mean the credential is
+     * read from a header shape no client should be sending — one more way for it to leak.
+     */
     const authorization = request.header('Authorization') ?? '';
     const provided = authorization.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)

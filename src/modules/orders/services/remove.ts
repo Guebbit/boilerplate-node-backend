@@ -112,12 +112,16 @@ export const remove = (
             }
         );
 
-    // SOFT delete — the default path for an order, which is a financial record. Already
-    // deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
+    /**
+     * SOFT delete — the default path for an order, which is a financial record. Already
+     * deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
+     */
     if (order.deletedAt) return Promise.resolve(generateSuccess(order, 200));
 
-    // Hidden means finished: a hidden open order could still be paid or shipped while its buyer
-    // can neither see, cancel nor withdraw it. Cancel first (which refunds), then hide.
+    /**
+     * Hidden means finished: a hidden open order could still be paid or shipped while its buyer
+     * can neither see, cancel nor withdraw it. Cancel first (which refunds), then hide.
+     */
     if (!softDeletable(order)) return Promise.resolve(orderNotCanceled());
 
     order.deletedAt = new Date();

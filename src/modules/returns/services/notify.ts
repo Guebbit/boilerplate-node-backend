@@ -94,8 +94,10 @@ export const mailReturnRequested = ({
             at,
             remedyChoice: isGuaranteeReason(found.reason),
             ...(kind === 'withdrawal-recorded' && withdrawal ? recorded : {}),
-            // A withdrawal is approved from the start, so the customer is told where to send the
-            // goods in the same mail; any other reason hears it once staff approve.
+            /**
+             * A withdrawal is approved from the start, so the customer is told where to send the
+             * goods in the same mail; any other reason hears it once staff approve.
+             */
             ...(withdrawal ? { returnAddress: returnAddress() } : {})
         });
     });

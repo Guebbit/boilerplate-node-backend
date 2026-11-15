@@ -49,8 +49,10 @@ export const setPassword = (
     session?: ClientSession
 ): Promise<UserDocument> => {
     user.password = password;
-    // A reset also re-stamps `verifiedAt`, which is on the wire: that is an edit. A plain change
-    // (password and the 2FA lock only, all off the wire) is not, so it must not 412 an open form.
+    /**
+     * A reset also re-stamps `verifiedAt`, which is on the wire: that is an edit. A plain change
+     * (password and the 2FA lock only, all off the wire) is not, so it must not 412 an open form.
+     */
     const isEdit = user.modifiedPaths().some((path) => !NOT_AN_EDIT_PATHS.has(path));
     return isEdit
         ? userRepository.save(user, session)
@@ -123,8 +125,10 @@ export const applyEmailChange = (
     newEmail: string,
     session: ClientSession
 ): Promise<UserDocument> => {
-    // Kept for the undo link: the only copy of the address the account is being moved away from.
-    // Guarded: the driver may run the transaction again, and by then `email` is already the new one.
+    /**
+     * Kept for the undo link: the only copy of the address the account is being moved away from.
+     * Guarded: the driver may run the transaction again, and by then `email` is already the new one.
+     */
     if (user.email !== newEmail) user.previousEmail = user.email;
     user.email = newEmail;
     user.pendingEmail = undefined;

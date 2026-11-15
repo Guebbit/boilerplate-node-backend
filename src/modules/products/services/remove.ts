@@ -77,10 +77,12 @@ const remove = (
         });
     };
 
-    // Translations go with a HARD delete, in this same transaction — through the port, never the
-    // `PRODUCT_DELETED` event: that event fires on a SOFT delete too, with the same `productId` —
-    // `hardDelete` on the payload is what lets a subscriber (`inventory`'s level row) tell the two
-    // apart. A soft delete can be restored, so both the rows and the counters must survive it.
+    /**
+     * Translations go with a HARD delete, in this same transaction — through the port, never the
+     * `PRODUCT_DELETED` event: that event fires on a SOFT delete too, with the same `productId` —
+     * `hardDelete` on the payload is what lets a subscriber (`inventory`'s level row) tell the two
+     * apart. A soft delete can be restored, so both the rows and the counters must survive it.
+     */
     if (hardDelete)
         return announceDeleted(product, true, (session) =>
             productRepository

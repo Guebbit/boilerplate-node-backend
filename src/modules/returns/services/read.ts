@@ -54,7 +54,6 @@ const isStaff = (authContext: AuthContext): boolean =>
  * flag needs the key that names the act and a status the act can run from; a customer holds none
  * of the keys, so a buyer is offered nothing here (their own door is `GET /returns/options`).
  * The caller's standing is resolved once, so a page of rows costs one ability, not one per row.
- * @param authContext - the caller
  * @returns a pure function from a return's status to its actions
  */
 const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => ReturnActions) => {
@@ -130,7 +129,6 @@ export const listReturns = (
  * One return, if this caller may see it: staff always, anyone else only on their own order — a
  * return on someone else's order is a 404, the same as one that does not exist.
  *
- * @param id - the return
  * @param authContext - the caller
  */
 export const getReturn = (

@@ -24,7 +24,6 @@ export const findByIdRaw = (productId: string) => productRepository.findByIdRaw(
  * {@link findByIdRaw} narrowed to the rows a caller may read ({@link callerScope}): a hidden or
  * removed product is `null` to a caller who lacks `display:Product`, exactly as a missing one is,
  * so a write that snapshots the product cannot widen what that caller may read.
- * @param productId - the product
  * @param scope - the caller's scope from `callerScope`
  */
 export const findByIdRawScoped = (productId: string, scope: Record<string, unknown>) =>
@@ -126,10 +125,12 @@ const withFallbackRow = (
     for (const [locale, fields] of rows)
         translations[locale] = {
             title: fields.title,
-            // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
-            // omit the key — `in` is a runtime presence check `fields.description ===
-            // undefined` isn't, since the index signature already promises every key a
-            // `string`.
+            /**
+             * `TranslationFields` types as `Record<string, string>`, but a row can genuinely
+             * omit the key — `in` is a runtime presence check `fields.description ===
+             * undefined` isn't, since the index signature already promises every key a
+             * `string`.
+             */
             ...('description' in fields ? { description: fields.description } : {})
         };
 

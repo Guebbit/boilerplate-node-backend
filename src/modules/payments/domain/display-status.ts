@@ -88,8 +88,10 @@ const FILTERS: Record<PaymentDisplayStatus, Record<string, unknown>> = {
         ]
     },
     [PaymentDisplayStatus.canceled]: { $and: [{ status: 'canceled' }, NO_OPEN_REFUND] },
-    // No settled refund and none open: a payment whose only refunds were canceled reads the same
-    // as one never refunded.
+    /**
+     * No settled refund and none open: a payment whose only refunds were canceled reads the same
+     * as one never refunded.
+     */
     [PaymentDisplayStatus.succeeded]: {
         $and: [
             { status: 'succeeded' },

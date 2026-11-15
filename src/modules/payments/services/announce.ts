@@ -4,7 +4,7 @@
  * with the `declined` status move itself. `PAYMENT_SUCCEEDED` is written by `./settlement.ts`
  * inside the settlement's own transaction.
  *
- * @see docs/understand/outbox.md
+ * @see docs/understand/outbox.md#using-it
  */
 
 import { announceInTransaction } from '@kernel/outbox';
@@ -49,8 +49,10 @@ export const recordDecline = (
                     extra,
                     session
                 )
-                // The order's timeline row rides the decline's own transaction, so a decline that
-                // lost its race leaves none. The provider's wording is not copied: ids only.
+                /**
+                 * The order's timeline row rides the decline's own transaction, so a decline that
+                 * lost its race leaves none. The provider's wording is not copied: ids only.
+                 */
                 .then((declined) =>
                     declined
                         ? orderService

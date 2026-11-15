@@ -31,8 +31,10 @@ export const createWebhookSubscriptionSecret = (
         .then((result) => {
             if (refused(response, result)) return;
             const subscription = viewSubscription(result.data.subscription, context.caller);
-            // The subscription's new tag (the body also carries the one-time secret) and the
-            // resource it belongs to (RFC 9110 §8.8.3).
+            /**
+             * The subscription's new tag (the body also carries the one-time secret) and the
+             * resource it belongs to (RFC 9110 §8.8.3).
+             */
             answerAsResource(response, subscription, `/webhooks/subscriptions/${id}`);
             return successResponse<WebhookSubscriptionCreated>(response, {
                 ...subscription,

@@ -29,8 +29,10 @@ export const createOrder = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // The confirmation mail is `orderService.create`'s — it is a fact about the order,
-            // not about the request that asked for one. See `CallerContext.locale`.
+            /**
+             * The confirmation mail is `orderService.create`'s — it is a fact about the order,
+             * not about the request that asked for one. See `CallerContext.locale`.
+             */
             orderCreatedTotal.inc();
             return respondWithOrder(response, result.data, request.authContext, 'createOrder', 201);
         })

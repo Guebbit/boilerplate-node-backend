@@ -5,7 +5,7 @@
  * why, and `module-coupling-observability` in `.dependency-cruiser.cjs`, which keeps this module
  * from reaching any domain beyond `audit-logs`.
  *
- * @see docs/modules/observability.md
+ * @see docs/modules/observability.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';
@@ -43,8 +43,10 @@ const readCounter = (name: string): Promise<(MetricSample & { metricName?: strin
 
     return metric.get().then(
         (result) =>
-            // prom-client's `get()` answers a generic metric object; only `values` is read, and
-            // absent reads as empty.
+            /**
+             * prom-client's `get()` answers a generic metric object; only `values` is read, and
+             * absent reads as empty.
+             */
             (result as { values?: (MetricSample & { metricName?: string })[] }).values ?? []
     );
 };
@@ -92,8 +94,10 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
         readCounter('auth_signup_total'),
         readCounter('cart_checkout_total'),
         readCounter('order_created_total'),
-        // Gauges, but read identically: `collect` recounts at scrape time, and an absent metric
-        // (inventory module deleted) reads as zero like every other row here.
+        /**
+         * Gauges, but read identically: `collect` recounts at scrape time, and an absent metric
+         * (inventory module deleted) reads as zero like every other row here.
+         */
         readCounter('products_low_stock_total'),
         readCounter('inventory_reserved_units_total'),
         readCounter('db_client_operation_duration_seconds')

@@ -2,7 +2,7 @@
  * @module
  * `observability`' configuration: the scrape credential, and which telemetry sinks are wired.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';

@@ -191,8 +191,10 @@ export const returnSchema = new Schema<ReturnDocument>(
  */
 returnSchema.plugin(moneyPlugin);
 
-// Backs "every return on this order" — the quantity check when a new one is opened, the customer's
-// own view, and `collect` for the account export.
+/**
+ * Backs "every return on this order" — the quantity check when a new one is opened, the customer's
+ * own view, and `collect` for the account export.
+ */
 returnSchema.index({ orderId: 1, createdAt: 1 }, { name: 'returns_orderId_createdAt' });
 
 // Backs the staff queue: a status filter, oldest waiting first.

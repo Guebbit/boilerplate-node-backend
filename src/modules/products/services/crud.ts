@@ -152,8 +152,10 @@ const withoutDates = ({
  * @param session - the transaction every write of this product joins
  */
 export const insertProduct = (
-    // `currency` omitted: it's never stored, always read live at serialization — see `./model`'s
-    // `applyProductAvailability`.
+    /**
+     * `currency` omitted: it's never stored, always read live at serialization — see `./model`'s
+     * `applyProductAvailability`.
+     */
     data: ProductCreateData,
     session: ClientSession
 ): Promise<ProductDocument> =>
@@ -271,7 +273,6 @@ export interface ProductUpdateOutcome {
  * what will be stored, not what was typed.
  *
  * @param product - the fetched document, BEFORE the change is applied
- * @param data - the changes
  */
 const auditedChangesOf = (product: ProductDocument, data: ProductUpdateData): AuditChanges =>
     auditChanges(
@@ -322,7 +323,6 @@ const applyDate = (
  *
  * @param name - the event for the date that moved
  * @param change - what moved
- * @param productId - the product
  * @param session - the edit's transaction
  */
 const announceDateChange = (
@@ -359,7 +359,7 @@ const applyUpdate = (
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
-    /*
+    /**
      * No stock write here, and the contract offers none: `UpdateProductRequest` and its
      * siblings carry no counter field.
      *
@@ -390,15 +390,19 @@ const applyUpdate = (
     if (data.taxClass !== undefined) product.taxClass = clearedOrValue(data.taxClass);
     // `null` clears it back to `standard` — $unset on save, same as taxClass.
     if (data.rateType !== undefined) product.rateType = clearedOrValue(data.rateType);
-    // `null` clears the SKU back to unset — $unset on save, same as weight/taxClass. The unique
-    // sparse index (`products_sku` on `productSchema`) is what turns a collision into a 409, not this.
+    /**
+     * `null` clears the SKU back to unset — $unset on save, same as weight/taxClass. The unique
+     * sparse index (`products_sku` on `productSchema`) is what turns a collision into a 409, not this.
+     */
     if (data.sku !== undefined) product.sku = clearedOrValue(data.sku);
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
     if (data.noWithdrawal !== undefined) product.noWithdrawal = data.noWithdrawal;
 
-    // If a new image was uploaded, update the url, thumbnail and pending key together — see
-    // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
-    // `imageUrl: null` unsets the field; the old-image deletion after the commit covers it too.
+    /**
+     * If a new image was uploaded, update the url, thumbnail and pending key together — see
+     * `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
+     * `imageUrl: null` unsets the field; the old-image deletion after the commit covers it too.
+     */
     const oldImageUrl = applyImageWriteback(product, data);
     if (differs(imageBefore, product.imageUrl)) changedFields.push('image');
 
@@ -463,13 +467,17 @@ export const updateByIdInTransaction = (
     data: ProductUpdateData,
     session: ClientSession
 ): Promise<ProductUpdateOutcome | ResponseReject> => {
-    // `withTransaction` may re-run this on a conflict: each attempt checks the caller's `If-Match`
-    // against the row it loads, instead of the first attempt's having used it up.
+    /**
+     * `withTransaction` may re-run this on a conflict: each attempt checks the caller's `If-Match`
+     * against the row it loads, instead of the first attempt's having used it up.
+     */
     rearmPrecondition();
 
     return productRepository.findById(id).then<ProductUpdateOutcome | ResponseReject>((product) => {
-        // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
-        // at the `.catch()` that has to tell them apart.
+        /**
+         * Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
+         * at the `.catch()` that has to tell them apart.
+         */
         if (!product) return generateReject(404, [t('products.not-found')]);
 
         return applyUpdate(product, data, session);

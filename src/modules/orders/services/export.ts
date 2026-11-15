@@ -107,9 +107,11 @@ export const openOrderExport = (
             metadata: { filter: auditedFilter(search), rowCount }
         });
 
-        // Readable.from: an object-mode stream over the generator; the caller's `pipeline`
-        // destroys it, and the cursor with it, when the client hangs up.
-        // https://nodejs.org/api/stream.html#streamreadablefromiterable-options
+        /**
+         * Readable.from: an object-mode stream over the generator; the caller's `pipeline`
+         * destroys it, and the cursor with it, when the client hangs up.
+         * https://nodejs.org/api/stream.html#streamreadablefromiterable-options
+         */
         return { source: Readable.from(csvRows(filters, scope)), csv: orderCsvWriter() };
     });
 };

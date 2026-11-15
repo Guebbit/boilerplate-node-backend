@@ -322,8 +322,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
             type: String,
             required: true
         },
-        // Sparse: an intent exists for a moment before the provider has been asked for one, and
-        // `unique` would otherwise collide every such document on `null`.
+        /**
+         * Sparse: an intent exists for a moment before the provider has been asked for one, and
+         * `unique` would otherwise collide every such document on `null`.
+         */
         providerRef: {
             type: String,
             unique: true,
@@ -345,8 +347,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
         receivedAt: {
             type: Date
         },
-        // Bank-transfer payments only. Sparse unique: a reference names exactly one payment, and a
-        // card payment has none.
+        /**
+         * Bank-transfer payments only. Sparse unique: a reference names exactly one payment, and a
+         * card payment has none.
+         */
         transferReference: {
             type: String,
             unique: true,
@@ -439,9 +443,11 @@ const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> =>
 export const applyPaymentTransform = applySerialization(paymentSchema, {
     omit: ['providerRef', 'transferReference', 'payBy', 'handledCancelEvents'],
     after: (serialized) => {
-        // The embedded refunds get the same treatment a top-level document does, by hand: the lean
-        // path never runs the subschema's own transform, and the `toJSON` path runs it on
-        // documents already turned to plain objects — one loop serves both.
+        /**
+         * The embedded refunds get the same treatment a top-level document does, by hand: the lean
+         * path never runs the subschema's own transform, and the `toJSON` path runs it on
+         * documents already turned to plain objects — one loop serves both.
+         */
         if (Array.isArray(serialized.refunds))
             serialized.refunds = serialized.refunds.map((refund: Record<string, unknown>) =>
                 wireRefund(refund)
@@ -449,7 +455,5 @@ export const applyPaymentTransform = applySerialization(paymentSchema, {
     }
 });
 
-/**
- * Model
- */
+/** The Payment collection; every read and write goes through `repository.ts`. */
 export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);

@@ -22,9 +22,11 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
 import { orderService } from './services';
-// Also registers this module's event declarations (ORDER_CANCELED, ORDER_CREATED,
-// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
-// module's own barrel — see CLAUDE.md's module-barrel rule.
+/**
+ * Also registers this module's event declarations (ORDER_CANCELED, ORDER_CREATED,
+ * ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
+ * module's own barrel — see CLAUDE.md's module-barrel rule.
+ */
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';
@@ -82,22 +84,26 @@ export default {
         {
             section: 'orders',
             collect: (subject) => orderService.findOwnOrders(subject.userId),
-            // Detach, never delete — the order survives the account, inside the same
-            // hard-delete transaction. A never-paid order is also canceled, after the commit.
-            // See `eraseUserOrders`.
+            /**
+             * Detach, never delete — the order survives the account, inside the same
+             * hard-delete transaction. A never-paid order is also canceled, after the commit.
+             * See `eraseUserOrders`.
+             */
             erase: ({ userId }, session) => orderService.eraseUserOrders(userId, session),
             // An inactive account keeps its orders and its link to them; only the PII clock starts.
             minimise: orderService.startOrderPiiClock
         },
         {
-            // The timeline of the same orders, in full: staff text and actors included, since
-            // the export is the buyer's data and not the buyer's screen. Erased with the orders'
-            // own detach (`eraseUserOrders` clears the actor), never separately.
+            /**
+             * The timeline of the same orders, in full: staff text and actors included, since
+             * the export is the buyer's data and not the buyer's screen. Erased with the orders'
+             * own detach (`eraseUserOrders` clears the actor), never separately.
+             */
             section: 'orderTimeline',
             collect: (subject) => orderService.collectTimelineOf(subject.userId)
         }
     ],
-    /*
+    /**
      * A hold that timed out takes its order with it — the units are already released by the
      * time this fires; what `inventory` cannot do is cancel an order without importing this
      * module. The SHOP is cancelling, not the customer, so the sweep acts as `SYSTEM_ACTOR`:
@@ -109,12 +115,16 @@ export default {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) =>
             orderService.expireReservationById(orderId)
         );
-        // The buyer's mails, from this module's own facts — see `./services/notify.ts` and
-        // `./services/cancel-mail.ts`.
+        /**
+         * The buyer's mails, from this module's own facts — see `./services/notify.ts` and
+         * `./services/cancel-mail.ts`.
+         */
         onDomainEvent(ORDER_CREATED, orderService.mailOrderPlaced);
-        // One handler for the event: the cancel mail and the shop's own pause after repeated buyer
-        // cancellations (`./services/purchase-hold.ts`, which logs its own failure and never
-        // rejects, so it cannot stall the mail or the order's later events).
+        /**
+         * One handler for the event: the cancel mail and the shop's own pause after repeated buyer
+         * cancellations (`./services/purchase-hold.ts`, which logs its own failure and never
+         * rejects, so it cannot stall the mail or the order's later events).
+         */
         onDomainEvent(ORDER_CANCELED, (payload) =>
             Promise.all([
                 orderService.mailOrderCanceled(payload),
@@ -138,14 +148,18 @@ export default {
             'order.paid',
             'order.paidExpress',
             'order.shipped',
-            // Shipped in part, held back by staff, and shipped in part with the rest canceled by
-            // the buyer: the states splitting an order into shipments adds.
+            /**
+             * Shipped in part, held back by staff, and shipped in part with the rest canceled by
+             * the buyer: the states splitting an order into shipments adds.
+             */
             'order.partiallyFulfilled',
             'order.onHold',
             'order.remainderCanceled',
             'order.delivered',
-            // One delivered order per withdrawal state, aged from the period: open (1 day back),
-            // last day (exactly `period` days back, closes at the end of today UTC), closed.
+            /**
+             * One delivered order per withdrawal state, aged from the period: open (1 day back),
+             * last day (exactly `period` days back, closes at the end of today UTC), closed.
+             */
             'order.withdrawal-open',
             'order.withdrawal-last-day',
             'order.withdrawal-closed',
@@ -159,9 +173,11 @@ export default {
             'order.softDeleted',
             'order.paidOffline',
             'order.awaitingTransfer',
-            // The three branches `./services/current.ts` can resolve a picture to, plus one order
-            // that buys all three products at once so a single response shows every branch side
-            // by side — see `shop-history.ts`.
+            /**
+             * The three branches `./services/current.ts` can resolve a picture to, plus one order
+             * that buys all three products at once so a single response shows every branch side
+             * by side — see `shop-history.ts`.
+             */
             'order.imageUnchanged',
             'order.imageReplaced',
             'order.productDeleted',

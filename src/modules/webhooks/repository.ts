@@ -98,8 +98,10 @@ const recordFailure = (subscriptionId: string): Promise<WebhookSubscriptionDocum
         .findOneAndUpdate(
             { _id: toObjectId(subscriptionId), failingSince: { $exists: false } },
             { $set: { failingSince: new Date() } },
-            // `timestamps: false`: delivery bookkeeping is not an edit, so it must not move
-            // `updatedAt` or the edit counter an open form's `If-Match` compares with.
+            /**
+             * `timestamps: false`: delivery bookkeeping is not an edit, so it must not move
+             * `updatedAt` or the edit counter an open form's `If-Match` compares with.
+             */
             { timestamps: false }
         )
         .exec()
@@ -165,7 +167,7 @@ const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | 
         .exec();
 };
 
-/*
+/**
  * Explicit annotation, not inferred: Mongoose's `Query` generics are large enough that TypeScript
  * refuses to serialize the inferred shape at this export boundary (TS7056) once the factory result
  * is spread into a repository object — see `create-repository.ts`'s own `Repository<TDocument, TWire>`
@@ -311,8 +313,10 @@ const applyOutcome = (
     patch: OutcomePatch
 ): Promise<WebhookDeliveryDocument | null> =>
     webhookDeliveryModel
-        // A key named with `undefined` is cleared, not skipped: a succeeded retry must not keep the
-        // error of the failure before it.
+        /**
+         * A key named with `undefined` is cleared, not skipped: a succeeded retry must not keep the
+         * error of the failure before it.
+         */
         .findOneAndUpdate({ _id: toObjectId(id), leaseToken }, setAndUnset(patch), {
             returnDocument: 'after'
         })

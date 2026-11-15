@@ -4,7 +4,7 @@
  * The frontend translates the code from its own locale files, so a row outlives a language change
  * and carries no copy this backend would have to keep in step with it.
  *
- * @see docs/modules/notifications.md
+ * @see docs/modules/notifications.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -91,13 +91,13 @@ export const notificationSchema: Schema<NotificationDocument> = new Schema<Notif
     { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-/*
+/**
  * The one read — a user's inbox, newest first — and the cap's trim, which walks the same order
  * from the far end. One compound index serves both.
  */
 notificationSchema.index({ userId: 1, createdAt: -1 });
 
-/*
+/**
  * One work notice per situation per recipient: a redelivered event upserts into the same row.
  * Partial, because a person's own messages carry no key and must never collide on its absence.
  */

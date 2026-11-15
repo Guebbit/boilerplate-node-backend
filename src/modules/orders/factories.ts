@@ -150,10 +150,12 @@ export const makeOrder = ({
             ...stripUndefined({ backorderedQuantity, promisedAt: toDate(promisedAt), promiseDated })
         })
     ),
-    // Passed through, never defaulted here: the model's own `default: OrderStatus.pending`
-    // already covers "not stated", and repeating that default in two places is how they drift.
+    /**
+     * Passed through, never defaulted here: the model's own `default: OrderStatus.pending`
+     * already covers "not stated", and repeating that default in two places is how they drift.
+     */
     ...stripUndefined({ status }),
-    /*
+    /**
      * The three shipping columns pass through rather than defaulting to anything. All three are
      * optional on the wire and absent when the checkout asked for none of them, so a
      * builder-supplied default would erase the difference between "not chosen" and "free" — which

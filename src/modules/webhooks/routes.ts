@@ -28,9 +28,11 @@ import { listWebhookEvents } from './controllers/get-events';
 /** Express router for the webhooks admin surface. */
 export const router = Router();
 
-// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
-// Subscription management for machine consumers. Serving the machines is what this
-// module exists to do.
+/**
+ * `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
+ * Subscription management for machine consumers. Serving the machines is what this
+ * module exists to do.
+ */
 router.use(getAuth, isAuthOrCredential);
 
 // GET /webhooks/subscriptions — list this tenant's subscriptions

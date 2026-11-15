@@ -127,7 +127,6 @@ export const withTimeline =
 /**
  * Leave a staff note on an order: one `note_added` row, written in its own transaction.
  *
- * @param orderId - the order
  * @param text - what staff wrote (1..2000, checked at the door)
  * @param context - the staff member, who holds `update:Order` (the route asked)
  * @returns the entry with `201`, or a 404 for an order that is not there. The audit row names the
@@ -197,7 +196,6 @@ const readsEveryOrder = (authContext: AuthContext | undefined): boolean =>
  * One page of an order's timeline as this caller may read it, newest first. The order itself is
  * already checked: the controller reached it through `getForCaller`.
  *
- * @param orderId - the order
  * @param authContext - the caller; staff see every row and its actor, the buyer neither the
  *   staff-only rows nor any actor
  * @param pagination - `page`/`pageSize` as they came off the request

@@ -44,14 +44,18 @@ export const create = (
     data: WithServerImage<CreateUserRequest>,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // 32 random bytes as hex, same size as an `account` reset token: unguessable and
-    // never surfaced anywhere, so "unusable until the owner sets one" is enforced by nobody
-    // knowing it.
+    /**
+     * 32 random bytes as hex, same size as an `account` reset token: unguessable and
+     * never surfaced anywhere, so "unusable until the owner sets one" is enforced by nobody
+     * knowing it.
+     */
     const password = randomBytes(32).toString('hex');
     const { role } = data;
 
-    // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
-    // must leave its row without ever having made a user.
+    /**
+     * Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
+     * must leave its row without ever having made a user.
+     */
     const refusal =
         role === undefined
             ? undefined
@@ -65,10 +69,12 @@ export const create = (
 
     return Promise.resolve()
         .then(() =>
-            // The account, its membership and the setup-mail event commit together or not at
-            // all: a failure between them leaves nothing behind to undo, so no compensating
-            // delete (which could itself fail) is needed, and a refused grant leaves no event.
-            // https://www.mongodb.com/docs/manual/core/transactions/
+            /**
+             * The account, its membership and the setup-mail event commit together or not at
+             * all: a failure between them leaves nothing behind to undo, so no compensating
+             * delete (which could itself fail) is needed, and a refused grant leaves no event.
+             * https://www.mongodb.com/docs/manual/core/transactions/
+             */
             announceInTransaction(
                 (session) =>
                     userRepository
@@ -126,8 +132,10 @@ export const create = (
             });
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
-                // No target id: the event is the admin's, gated by the admin's consent. A
-                // pseudonymous id is personal data and consent is the data subject's own.
+                /**
+                 * No target id: the event is the admin's, gated by the admin's consent. A
+                 * pseudonymous id is personal data and consent is the data subject's own.
+                 */
                 event: usersAnalyticsEvents.USER_CREATED,
                 properties: { admin_created: true }
             });

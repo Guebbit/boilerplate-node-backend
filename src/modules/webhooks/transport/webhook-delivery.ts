@@ -68,8 +68,10 @@ const errorName = (error: unknown): string | undefined =>
  * @param error - the chain's rejection: an {@link SsrfRefusedError}, an abort, or a network error
  */
 const describeDeliveryError = (error: unknown): string => {
-    // The delivery log is shown to the tenant: it gets a fixed line, never the reason or the
-    // resolved address. Network errors below stay detailed — a tenant debugs its own endpoint.
+    /**
+     * The delivery log is shown to the tenant: it gets a fixed line, never the reason or the
+     * resolved address. Network errors below stay detailed — a tenant debugs its own endpoint.
+     */
     if (error instanceof SsrfRefusedError) {
         logger.warn({
             message: 'A webhook delivery was refused by the SSRF guard.',
@@ -78,11 +80,13 @@ const describeDeliveryError = (error: unknown): string => {
         });
         return SSRF_REFUSED_TEXT;
     }
-    // 'AbortError' is the POST phase (`pinnedHttpsRequest`'s `signal` option, Node's own naming);
-    // 'TimeoutError' is the DNS phase (`ssrf-guard.ts`'s `rejectOnAbort`, `signal.reason` itself,
-    // a `DOMException` — `AbortSignal.timeout`'s own name for its reason). Read via `errorName`,
-    // not `error instanceof Error`: under Jest's VM sandboxing that `DOMException` fails
-    // `instanceof` this file's own `Error` (a cross-realm mismatch) despite genuinely being one.
+    /**
+     * 'AbortError' is the POST phase (`pinnedHttpsRequest`'s `signal` option, Node's own naming);
+     * 'TimeoutError' is the DNS phase (`ssrf-guard.ts`'s `rejectOnAbort`, `signal.reason` itself,
+     * a `DOMException` — `AbortSignal.timeout`'s own name for its reason). Read via `errorName`,
+     * not `error instanceof Error`: under Jest's VM sandboxing that `DOMException` fails
+     * `instanceof` this file's own `Error` (a cross-realm mismatch) despite genuinely being one.
+     */
     const name = errorName(error);
     if (name === 'AbortError' || name === 'TimeoutError') return 'Delivery timed out';
     if (error instanceof Error) return error.message;
@@ -107,8 +111,10 @@ const elapsedMs = (startedAt: number): number => Math.round(performance.now() - 
 export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<WebhookDeliveryResult> => {
     const startedAt = performance.now();
     const timeoutMs = attempt.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    // One signal for the whole attempt, DNS resolution included — see `ssrf-guard.ts`'s own
-    // `signal` parameter docblock for why the resolver needs it too.
+    /**
+     * One signal for the whole attempt, DNS resolution included — see `ssrf-guard.ts`'s own
+     * `signal` parameter docblock for why the resolver needs it too.
+     */
     const signal = AbortSignal.timeout(timeoutMs);
 
     return Promise.resolve()
@@ -131,8 +137,10 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
             });
         })
         .then((response): WebhookDeliveryResult => {
-            // Only the status is used — draining rather than reading keeps the socket from
-            // backing up on an endpoint that sends a body nobody asked for.
+            /**
+             * Only the status is used — draining rather than reading keeps the socket from
+             * backing up on an endpoint that sends a body nobody asked for.
+             */
             response.resume();
             const statusCode = response.statusCode ?? 0;
             const durationMs = elapsedMs(startedAt);

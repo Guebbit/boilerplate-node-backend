@@ -40,8 +40,10 @@ import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../mo
 const announceAutoDisable = (subscription: WebhookSubscriptionDocument | null): Promise<void> => {
     if (!subscription) return Promise.resolve();
 
-    // No request behind this: a background job, audited as the system actor — see `../audit.ts`'s
-    // own note on why not as whichever worker process ran it.
+    /**
+     * No request behind this: a background job, audited as the system actor — see `../audit.ts`'s
+     * own note on why not as whichever worker process ran it.
+     */
     recordAudit(systemCallerContext('WebhookSubscription'), {
         action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
         outcome: 'success',
@@ -173,9 +175,11 @@ const recordFailure = (
     const leaseToken = requireLeaseToken(delivery);
 
     if (retryAt) {
-        // Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
-        // no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
-        // reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
+        /**
+         * Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
+         * no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
+         * reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
+         */
         return webhookDeliveryRepository.applyOutcome(String(delivery._id), leaseToken, {
             status: 'pending',
             attempt: delivery.attempt + 1,
@@ -206,8 +210,10 @@ export const attemptDelivery = (
 ): Promise<WebhookDeliveryDocument | null> => {
     if (subscription.disabledAt) return finalizeUndeliverable(delivery, 'Subscription is disabled');
 
-    // The filter may have changed since this delivery was queued (retries, replays): an event the
-    // subscription no longer names must not reach its current url.
+    /**
+     * The filter may have changed since this delivery was queued (retries, replays): an event the
+     * subscription no longer names must not reach its current url.
+     */
     if (!matchesEventFilter(delivery.eventType, subscription.eventTypes))
         return finalizeUndeliverable(delivery, 'Event no longer matches the subscription filter');
 
@@ -219,10 +225,12 @@ export const attemptDelivery = (
         url: subscription.url,
         secrets,
         eventId: delivery.eventId,
-        // The Standard Webhooks envelope: `type` lets a subscriber on more than one event tell
-        // them apart without inspecting `data`'s shape; `timestamp` is `delivery.createdAt` (when
-        // the event occurred) rather than `Date.now()`, so it stays identical across every retry
-        // of the same delivery — see `../asyncapi.yaml`'s own header for the full shape.
+        /**
+         * The Standard Webhooks envelope: `type` lets a subscriber on more than one event tell
+         * them apart without inspecting `data`'s shape; `timestamp` is `delivery.createdAt` (when
+         * the event occurred) rather than `Date.now()`, so it stays identical across every retry
+         * of the same delivery — see `../asyncapi.yaml`'s own header for the full shape.
+         */
         payload: {
             type: delivery.eventType,
             timestamp: delivery.createdAt.toISOString(),

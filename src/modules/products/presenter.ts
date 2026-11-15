@@ -31,8 +31,10 @@ import { padDecimal } from '@domain-primitives/money';
 export const derivedStockFields = (facts: BuyableFacts) => {
     const now = new Date();
     const preorder = isPreorder(facts, now);
-    // A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
-    // allowance is full the product reads sold out, whatever the cached shelf says.
+    /**
+     * A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
+     * allowance is full the product reads sold out, whatever the cached shelf says.
+     */
     const available = preorder
         ? preorderAllowanceLeft(facts.backorderLimit, facts.backordered)
         : availableStock(facts.onHand, facts.reserved);

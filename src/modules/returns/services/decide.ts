@@ -65,8 +65,10 @@ const decide = (
     // The table's literal, not `toOf`'s widened status: the event payload names only these two.
     const { to } = RETURN_EVENTS[event];
 
-    // The order's timeline row and `return.decided` commit with the decision; a lost race writes none. A
-    // decline's reason stays on the return, where `reap:returns` owns its clock.
+    /**
+     * The order's timeline row and `return.decided` commit with the decision; a lost race writes none. A
+     * decline's reason stays on the return, where `reap:returns` owns its clock.
+     */
     return withTransaction((session) =>
         returnRepository
             .claimStatus(
@@ -121,9 +123,11 @@ const settleDecision = (
 ): Promise<ResponseSuccess<ReturnDocument>> => {
     nudgeOutbox();
 
-    // The order is read for one fact: whether the staff member is its buyer, which the audit row
-    // says (`ownOrder`) so a review sees an approval of one's own return at a glance. The decision
-    // has already committed, so a failed read costs the flag and never the audit row.
+    /**
+     * The order is read for one fact: whether the staff member is its buyer, which the audit row
+     * says (`ownOrder`) so a review sees an approval of one's own return at a glance. The decision
+     * has already committed, so a failed read costs the flag and never the audit row.
+     */
     return orderService
         .getById(String(decided.orderId))
         .catch((error: unknown) => {
@@ -156,7 +160,6 @@ const settleDecision = (
 
 /**
  * Approve a return request — the customer may now send the goods back.
- * @param id - the return
  * @param context - the staff member
  */
 export const approveReturn = (
@@ -167,7 +170,7 @@ export const approveReturn = (
 /**
  * Decline a return request, saying why: a code the buyer reads in their own language, and a message
  * when the code is `other`. Checked before anything is written.
- * @param id - the return
+ * @param id - the return being declined
  * @param decline - the code and the optional message to the buyer
  * @param context - the staff member
  */

@@ -8,7 +8,7 @@
  * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;
  * these files only ever enforce what the document itself requires.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#its-neighbourhood
  */
 
 import { presentAccount } from '../presenter';
@@ -62,8 +62,10 @@ export const userService = {
     flagPurchaseHoldReview,
     findAuthenticatableById,
     touchApiKeyUse,
-    // The barrel never publishes a presenter function, so a sibling that has to shape an account
-    // for a response reaches the helper through the service.
+    /**
+     * The barrel never publishes a presenter function, so a sibling that has to shape an account
+     * for a response reaches the helper through the service.
+     */
     toAccount: presentAccount,
     toUserContract,
     toUserListItems

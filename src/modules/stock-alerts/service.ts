@@ -4,7 +4,7 @@
  * one mail and one inbox row per waiting request, then delete the request. The click on "Notify
  * me" is the buyer's consent for that single mail, so nothing else is ever sent on it.
  *
- * @see docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md#the-story
  */
 
 import type { ClientSession } from 'mongoose';
@@ -151,8 +151,6 @@ const answerOne = (
  * never confirmed: the inbox row is its only notice. A mail that fails is logged: the request is
  * already gone and the inbox row stands.
  *
- * @param userId - the buyer
- * @param productId - the product
  * @param titles - the product's names by locale
  */
 const mailBuyer = (
@@ -165,8 +163,10 @@ const mailBuyer = (
         .then((user) => {
             // A locked account (banned, or its owner asked to delete it) gets no optional notice.
             if (!user || !isAuthenticatable(user)) return;
-            // An unproven address may belong to someone else, and the greeting carries a name the
-            // requester typed: it gets the inbox row only.
+            /**
+             * An unproven address may belong to someone else, and the greeting carries a name the
+             * requester typed: it gets the inbox row only.
+             */
             if (!user.verifiedAt) return;
             const locale = user.locale ?? getDefaultLocale();
             const mail = backInStockEmail(locale, user.username, {

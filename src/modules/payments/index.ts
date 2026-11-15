@@ -5,7 +5,7 @@
  * stay inside — every write still goes through the provider-confirmed choreography in
  * `services/settlement.ts`, never a direct document write from outside.
  *
- * @see docs/modules/payments.md
+ * @see docs/modules/payments.md#its-neighbourhood
  */
 
 export * from './services';

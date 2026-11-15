@@ -5,7 +5,7 @@
  * browser's `EventSource` and a Prometheus scraper, respectively. The other three routes take the
  * normal `getAuth`/`isAuth`/`requirePermission(...)` chain.
  *
- * @see docs/modules/observability.md
+ * @see docs/modules/observability.md#the-pipeline
  */
 
 import { Router } from 'express';
@@ -26,7 +26,7 @@ import { getObservabilityEvents } from './controllers/get-observability-events';
 /** Express router for observability endpoints mounted at /observability. */
 export const router = Router();
 
-/*
+/**
  * Both authenticated, though neither carries user data — both expose request volumes, error
  * rates, latency, login counters, uptime and heap, reconnaissance worth having before an attack.
  * They authenticate differently because their callers must: the SSE stream is opened by a

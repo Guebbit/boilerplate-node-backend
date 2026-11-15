@@ -174,16 +174,20 @@ export const markPaid = (
     return announceMove(
         session,
         (active) =>
-            // An order that can no longer be paid (the sweep already canceled it) takes no units
-            // back: the retake would reserve them and the cancel release them again, two ledger
-            // rows for nothing. Only a payable order retakes.
+            /**
+             * An order that can no longer be paid (the sweep already canceled it) takes no units
+             * back: the retake would reserve them and the cancel release them again, two ledger
+             * rows for nothing. Only a payable order retakes.
+             */
             orderRepository.findInSession(orderId, active).then((current) => {
                 if (!current || !isPayable(current.status)) return null;
-                // Money that lands after the hold was released takes its units again FIRST.
-                // Short, the order is not written `paid`: `null` sends the payment down the
-                // refund path, and the late cancel ends the order. Retaken but the order was
-                // lost to a racing move meanwhile, the units go back: a canceled order never
-                // keeps stock.
+                /**
+                 * Money that lands after the hold was released takes its units again FIRST.
+                 * Short, the order is not written `paid`: `null` sends the payment down the
+                 * refund path, and the late cancel ends the order. Retaken but the order was
+                 * lost to a racing move meanwhile, the units go back: a canceled order never
+                 * keeps stock.
+                 */
                 return inventoryService
                     .retakeReleasedForOrder(orderId, active)
                     .then((retake) =>
@@ -425,7 +429,6 @@ export interface FulfillmentSettlement {
  *
  * Never called by the summary write itself: an admin override to `shipped` commits before its
  * sync runs, and settling from "units remain" there would undo it.
- * @param orderId - the order
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
  * @param actor - the staff member whose act this is, for the timeline; absent for the system
@@ -460,7 +463,6 @@ export const settleFulfillment = (
  * Put the order back to being fulfilled, because units are open again: a `shipped` order (a lost
  * parcel) takes `reopen`, a `delivered` one (a replacement) takes `reship`, a `processing` one is
  * already there. Any other status cannot be sent to.
- * @param orderId - the order
  * @param session - the caller's transaction; the move commits with it or not at all
  * @param actor - the staff member whose act this is, for the order's history
  * @returns `true` when the order is now `processing`, `null` when it could not be put there

@@ -13,7 +13,7 @@ import { blankToUndefined } from '@infrastructure/http/schemas';
 import { statsService } from '../services';
 import { intervalField, periodFields, statsHandler } from './respond';
 
-/** `GET /stats/sales`. */
+/** `GET /stats/sales`: sales per currency over a period, bucketed by `interval`. */
 export const getSalesStats = statsHandler(
     'getSalesStats',
     z.strictObject({ ...periodFields, interval: intervalField }),
@@ -61,7 +61,7 @@ export const getPaymentMixStats = statsHandler(
     (period) => statsService.getPaymentMix(period)
 );
 
-/** `GET /stats/operations`. */
+/** `GET /stats/operations`: the cancellation, return and refund rates for a period. */
 export const getOperationsStats = statsHandler(
     'getOperationsStats',
     z.strictObject(periodFields),

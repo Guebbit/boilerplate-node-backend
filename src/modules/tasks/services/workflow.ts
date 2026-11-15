@@ -5,7 +5,7 @@
  * read, so two clicks produce one 200 and one 409. The rules (which status may go where, which
  * stamps a move owes) are `./domain`; this file is the write path around them.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#lifecycle
  */
 
 import type { CallerContext, Task, TaskSummary } from '@types';
@@ -330,7 +330,6 @@ const unassign = (
  * close is still worth writing down.
  *
  * @param id - the task
- * @param body - the note
  * @param context - the caller, who becomes its author
  */
 const addNote = (

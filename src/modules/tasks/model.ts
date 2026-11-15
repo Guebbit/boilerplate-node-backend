@@ -5,7 +5,7 @@
  * The dates are overridden from the generated `Task` type (string → Date): Mongoose holds native dates, and serialization is what narrows them back to
  * the wire's ISO strings.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -39,8 +39,10 @@ export interface TaskNoteDocument {
     at: Date;
 }
 
-/** Mongoose document type for tasks. Overrides the API-generated Task's dates (string vs Date),
- * its ObjectId references (string vs ObjectId) and the fields computed per caller or per read. */
+/**
+ * Mongoose document type for tasks. Overrides the API-generated Task's dates (string vs Date),
+ * its ObjectId references (string vs ObjectId) and the fields computed per caller or per read.
+ */
 export interface TaskDocument
     extends
         Omit<
@@ -107,8 +109,10 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         name: {
             type: String
         },
-        // The sender's account when they were signed in; absent for an anonymous sender, and for a
-        // system task the account the situation is about. Export and erasure follow it.
+        /**
+         * The sender's account when they were signed in; absent for an anonymous sender, and for a
+         * system task the account the situation is about. Export and erasure follow it.
+         */
         subjectId: {
             type: Schema.Types.ObjectId,
             ref: 'User'
@@ -179,8 +183,10 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         dueAt: {
             type: Date
         },
-        // Stamped by the overdue sweep in the same write that claims the task: the stamp IS
-        // the "already reminded" memory. Internal, not on the wire.
+        /**
+         * Stamped by the overdue sweep in the same write that claims the task: the stamp IS
+         * the "already reminded" memory. Internal, not on the wire.
+         */
         overdueNotifiedAt: {
             type: Date
         },
@@ -219,17 +225,17 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
     }
 );
 
-/*
+/**
  * The jurisdiction queue: a route set's open work, soonest due first.
  */
 taskSchema.index({ routeSet: 1, status: 1, dueAt: 1 });
 
-/*
+/**
  * The reminder sweeps' read: open tasks, oldest deadline first.
  */
 taskSchema.index({ status: 1, dueAt: 1 });
 
-/*
+/**
  * "Mine": one staff member's open work.
  */
 taskSchema.index(
@@ -237,7 +243,7 @@ taskSchema.index(
     { partialFilterExpression: { assigneeId: { $exists: true } } }
 );
 
-/*
+/**
  * Two racing events open ONE task: the loser of this unique key gets E11000 and touches instead.
  * Partial, so tasks without an open key (visitor messages, closed tasks) are not constrained.
  */
@@ -246,13 +252,13 @@ taskSchema.index(
     { unique: true, partialFilterExpression: { openKey: { $exists: true } } }
 );
 
-/*
+/**
  * "Have I seen this event?" - asked before every system open, so a redelivery after the task
  * closed cannot open a second one. Partial: visitor tasks carry none.
  */
 taskSchema.index({ eventIds: 1 }, { partialFilterExpression: { eventIds: { $exists: true } } });
 
-/*
+/**
  * The two branches of the data-subject query (`./domain/ownership`): an account's own id, and an
  * exact verified address. An `$or` is served by an index only when every branch has one. The
  * staff search on `email` is a case-insensitive unanchored regex that no B-tree serves; it scans
@@ -261,7 +267,7 @@ taskSchema.index({ eventIds: 1 }, { partialFilterExpression: { eventIds: { $exis
 taskSchema.index({ subjectId: 1 }, { partialFilterExpression: { subjectId: { $exists: true } } });
 taskSchema.index({ email: 1 }, { partialFilterExpression: { email: { $exists: true } } });
 
-/*
+/**
  * TTL index — Mongo deletes a CLOSED task once it has been closed for the retention window. On
  * `closedAt`, not `createdAt`: an open task is work owed and must never vanish, and a reopen
  * unsets `closedAt` so the clock stops. Its OWN single-field ascending index, because Mongo only
@@ -276,7 +282,7 @@ taskSchema.index({ email: 1 }, { partialFilterExpression: { email: { $exists: tr
  */
 taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * DAY_SECONDS });
 
-/*
+/**
  * A visitor's message is also deleted a retention window after it ARRIVED, closed or not: the
  * clock on `closedAt` alone would keep a forgotten message (and its address) for ever. Partial on
  * `source`, so a system to-do, which is work owed, keeps its closed-only rule. Same caveat as the

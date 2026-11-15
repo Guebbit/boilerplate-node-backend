@@ -54,24 +54,30 @@ export const STAFF_ROUTES = {
         email: 'none',
         severity: NotificationSeverity.warning
     },
-    // A task opened: whoever works its kind takes it. Mailed now because a person waits on it
-    // (a refund owed, a legal clock). A contact message is the exception: `notifyTaskStaff` makes
-    // it the bell's alone, and the main mailbox gets the mail.
+    /**
+     * A task opened: whoever works its kind takes it. Mailed now because a person waits on it
+     * (a refund owed, a legal clock). A contact message is the exception: `notifyTaskStaff` makes
+     * it the bell's alone, and the main mailbox gets the mail.
+     */
     'notifications.staff.task-opened': {
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.info
     },
-    // The same people as the opener, once, when the task passes its due date and nobody closed
-    // it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
-    // A contact message is the bell's alone here too (`notifyTaskStaff`).
+    /**
+     * The same people as the opener, once, when the task passes its due date and nobody closed
+     * it: this is the "overdue" mail the digest's rule describes. Warning, since something is late.
+     * A contact message is the bell's alone here too (`notifyTaskStaff`).
+     */
     'notifications.staff.task-overdue': {
         sets: 'per-notice',
         email: 'now',
         severity: NotificationSeverity.warning
     },
-    // The same people, once, three days before the due date: a deadline that costs money or a legal
-    // clock when missed. Info, since nothing is late yet.
+    /**
+     * The same people, once, three days before the due date: a deadline that costs money or a legal
+     * clock when missed. Info, since nothing is late yet.
+     */
     'notifications.staff.task-due-soon': {
         sets: 'per-notice',
         email: 'now',
@@ -83,8 +89,10 @@ export const STAFF_ROUTES = {
         email: 'none',
         severity: NotificationSeverity.info
     },
-    // No set does this work: an empty list is administrators only. Prometheus pages the operator
-    // too, so the bell is enough here.
+    /**
+     * No set does this work: an empty list is administrators only. Prometheus pages the operator
+     * too, so the bell is enough here.
+     */
     'notifications.staff.outbox-dead': {
         sets: [],
         email: 'none',
@@ -110,7 +118,6 @@ const PAGES = FRONTEND_LINK_RULES.staffPages;
  * opaque path the opener supplied; nothing here knows which screen it is.
  *
  * @param params - the task notice's params
- * @param params.taskId - the task
  * @param params.work - the opener's screen, if any
  */
 const taskLink = ({ taskId, work }: { taskId: string; work?: string | undefined }): StaffLink =>

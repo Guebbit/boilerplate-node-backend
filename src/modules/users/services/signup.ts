@@ -93,7 +93,6 @@ export const unlinkOAuthAccount = (userId: string, provider: string): Promise<bo
  *
  * No check here: `account` has already verified the provider's claim (`friends/account.ts`).
  *
- * @param userId - the account
  * @param account - the identity to attach
  * @param session - the transaction that also deletes the link token
  * @returns whether the link was written; `false` when the account already holds that provider

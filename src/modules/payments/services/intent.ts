@@ -91,21 +91,27 @@ const rejectStrayIntent = (
  * @returns the payment on the wire, carrying the `clientSecret` the browser finishes against —
  *   the one response that does, since it is never stored and never read back
  */
-// Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
-// `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+/**
+ * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+ * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+ */
 export const createIntent = async (
     orderId: string,
     authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> => {
     const order = await orderService.getById(orderId, buyerOrderScope(authContext));
     if (!order) return orderNotFound();
-    // Payable is asked of the order lifecycle rather than compared against a literal here, so
-    // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
-    // check, correctly refuses a second intent on an order that is already `paid`.
+    /**
+     * Payable is asked of the order lifecycle rather than compared against a literal here, so
+     * this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
+     * check, correctly refuses a second intent on an order that is already `paid`.
+     */
     if (!isPayable(order.status)) return notPayable();
 
-    // No provider configured: this deployment takes no card payments, and the order stays unpaid.
-    // Same answer as checkout's 409, for a client that skips both it and `GET /payments/methods`.
+    /**
+     * No provider configured: this deployment takes no card payments, and the order stays unpaid.
+     * Same answer as checkout's 409, for a client that skips both it and `GET /payments/methods`.
+     */
     const provider = resolvePaymentProvider();
     if (!provider)
         return generateReject(409, [
@@ -117,9 +123,11 @@ export const createIntent = async (
     const payerId = buyerIdOf(order);
     const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
-        // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
-        // document; spreading it copies nothing, since its schema paths are prototype getters,
-        // not the document's own enumerable properties.
+        /**
+         * Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
+         * document; spreading it copies nothing, since its schema paths are prototype getters,
+         * not the document's own enumerable properties.
+         */
         amount: orderTotal(order),
         currency,
         provider: provider.name
@@ -133,13 +141,17 @@ export const createIntent = async (
         { orderId, paymentId: String(payment._id) },
         payment.providerRef
     );
-    // Backstop for an adapter that opened a new intent instead of resuming: the row keeps the
-    // first, so the browser must not be handed the second's secret. The stray is canceled.
+    /**
+     * Backstop for an adapter that opened a new intent instead of resuming: the row keeps the
+     * first, so the browser must not be handed the second's secret. The stray is canceled.
+     */
     if (payment.providerRef && providerRef !== payment.providerRef)
         return rejectStrayIntent(provider, providerRef, orderId);
     const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
-    // The same backstop for two first-time asks racing: both prepared an intent, the conditional
-    // attach kept the first writer's reference, so this call's own is the stray.
+    /**
+     * The same backstop for two first-time asks racing: both prepared an intent, the conditional
+     * attach kept the first writer's reference, so this call's own is the stray.
+     */
     if (stored && stored.providerRef !== providerRef)
         return rejectStrayIntent(provider, providerRef, orderId);
     const prepared = {
@@ -206,10 +218,12 @@ export const cancelOpenIntentForOrder = (orderId: string, expired = false): Prom
             )
             .catch((error: unknown) => {
                 if (!(error instanceof PaymentInFlightError)) throw error;
-                // The provider refused to close the intent: the customer's money landed (or is on
-                // its way) in the last minutes before this cancel. Settling what the provider now
-                // says finds the order gone and puts the money straight back; still mid-flight,
-                // the reconciliation sweep finishes it once the provider has decided.
+                /**
+                 * The provider refused to close the intent: the customer's money landed (or is on
+                 * its way) in the last minutes before this cancel. Settling what the provider now
+                 * says finds the order gone and puts the money straight back; still mid-flight,
+                 * the reconciliation sweep finishes it once the provider has decided.
+                 */
                 return settleFromProvider(payment).then(() => undefined);
             })
             .catch((error: unknown) => {

@@ -54,8 +54,10 @@ const runErasureCascade = async (
     // A hold this account placed on someone else keeps its force but loses the name.
     await userRepository.forgetHoldSetter(user.id, session);
     await userRepository.deleteOne(user, session);
-    // Committed with the erasure, so the third-party deletion exists exactly when the erasure
-    // does and is retried by the outbox, never lost with a crash after the commit.
+    /**
+     * Committed with the erasure, so the third-party deletion exists exactly when the erasure
+     * does and is retried by the outbox, never lost with a crash after the commit.
+     */
     await enqueueOutboxEvent(USER_ERASED, { userId: user.id }, user.id, session);
     return deferred;
 };

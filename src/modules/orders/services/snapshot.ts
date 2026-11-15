@@ -69,15 +69,17 @@ export const freezeOrderLines = (
 ): Promise<OrderDocumentItem[]> =>
     resolveSnapshotProducts(locale, products).then((resolvedProducts) =>
         resolvedProducts.map((product, index) => {
-            // The picture is never frozen — `orderLineProductSchema` has nowhere to put it, and
-            // dropping it here rather than leaving Mongoose's strict mode to ignore it on save
-            // says so in the one place a reader of this function would look.
-            //
-            // `taxClass` never rides along either — only the RATE it resolves to does, exactly
-            // like `onHand`/`reserved` are excluded above it. `rateType` is different: it has no
-            // resolved form, so it is left IN `frozenProduct` below and rides across untouched —
-            // an invoice needs it to tell a zero-rated line from an exempt one. See
-            // `FrozenOrderLineProduct`.
+            /**
+             * The picture is never frozen — `orderLineProductSchema` has nowhere to put it, and
+             * dropping it here rather than leaving Mongoose's strict mode to ignore it on save
+             * says so in the one place a reader of this function would look.
+             *
+             * `taxClass` never rides along either — only the RATE it resolves to does, exactly
+             * like `onHand`/`reserved` are excluded above it. `rateType` is different: it has no
+             * resolved form, so it is left IN `frozenProduct` below and rides across untouched —
+             * an invoice needs it to tell a zero-rated line from an exempt one. See
+             * `FrozenOrderLineProduct`.
+             */
             const {
                 imageUrl: _imageUrl,
                 thumbnailUrl: _thumbnailUrl,

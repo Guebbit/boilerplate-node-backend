@@ -233,8 +233,10 @@ const claimAndRestock = (
             const everyReturn = await returnRepository.findByOrderId(orderId, session);
             const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
 
-            // The proof of sending opened and quoted the refund already: the goods arriving neither
-            // quote it again nor open a second record.
+            /**
+             * The proof of sending opened and quoted the refund already: the goods arriving neither
+             * quote it again nor open a second record.
+             */
             const openedOnProof = proofOpenedRefund(returned);
             const verdict = openedOnProof
                 ? {
@@ -269,8 +271,10 @@ const claimAndRestock = (
             );
             if (!received) return { kind: 'lost' };
 
-            // Only the units staff put back reach the shelf — and, in the same transaction, a
-            // paid backorder. A line set to 0 writes no movement at all.
+            /**
+             * Only the units staff put back reach the shelf — and, in the same transaction, a
+             * paid backorder. A line set to 0 writes no movement at all.
+             */
             const sellable = restockedLines(received.lines, restocked);
             if (sellable.length > 0)
                 await inventoryService.restockReturnedLines(
@@ -380,8 +384,10 @@ const closeAfterProofRefund = (
             state === 'open'
                 ? received
                 : closeReturn(String(received._id), context.caller.id)
-                      // `null` means the `PAYMENT_REFUNDED` listener, still delivering the proof's
-                      // refund, closed it first: answer with the return as it now stands.
+                      /**
+                       * `null` means the `PAYMENT_REFUNDED` listener, still delivering the proof's
+                       * refund, closed it first: answer with the return as it now stands.
+                       */
                       .then(
                           (closed) =>
                               closed ??
@@ -516,7 +522,6 @@ const receiveFor = (
 /**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.
  *
- * @param id - the return
  * @param input - what staff enter on receipt
  * @param context - the staff member
  * @returns the return as it now stands, or a refusal naming which case it was

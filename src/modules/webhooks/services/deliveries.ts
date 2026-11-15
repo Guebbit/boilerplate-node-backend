@@ -149,8 +149,10 @@ export const replay = async (
 ): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> => {
     const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
     if (!delivery) return generateReject(404, [t('generic.error-item-gone')]);
-    // A replay re-sends the stored payload to the subscription's CURRENT url: only a caller who
-    // may read this event may do it, or a narrowed-then-redirected stream would leak it.
+    /**
+     * A replay re-sends the stored payload to the subscription's CURRENT url: only a caller who
+     * may read this event may do it, or a narrowed-then-redirected stream would leak it.
+     */
     const unreadable = unreadableEventTypes([delivery.eventType], context.caller);
     if (unreadable.length > 0) return rejectEventReadRequired(unreadable);
 
@@ -179,8 +181,10 @@ export const replay = async (
         targetType: 'webhook_delivery',
         targetId: id
     });
-    // Read again rather than assumed: a failed replay that exhausts the chain can trip the
-    // auto-disable guard, and the row's `actions.replay` must say so.
+    /**
+     * Read again rather than assumed: a failed replay that exhausts the chain can trip the
+     * auto-disable guard, and the row's `actions.replay` must say so.
+     */
     const enabled = await webhookSubscriptionRepository.findEnabledIdsAmong([
         String(updated.subscriptionId)
     ]);

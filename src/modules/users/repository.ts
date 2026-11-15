@@ -3,7 +3,7 @@
  * The user collection's persistence layer: standard CRUD from the repository factory, plus the
  * credential and token operations `account` needs from the other side of the domain-primitives edge.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import {
@@ -233,14 +233,16 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             objectIds: { id: '_id' },
             text: ['email', 'username'],
             regex: { email: 'email', username: 'username' },
-            /*
+            /**
              * `active` filters the real column, not `deletedAt: { $exists: … }`: "show me
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
-            // No `role` filter here: the document carries no `role` column to match against —
-            // see `@modules/access`. Filtering a search by role needs a two-step resolve
-            // (membership rows holding that role, then the users among those ids) that this
-            // generic `exact` filter can't express; deliberately not rebuilt yet.
+            /**
+             * No `role` filter here: the document carries no `role` column to match against —
+             * see `@modules/access`. Filtering a search by role needs a two-step resolve
+             * (membership rows holding that role, then the users among those ids) that this
+             * generic `exact` filter can't express; deliberately not rebuilt yet.
+             */
             booleans: { active: 'active' },
             presence: { deleted: 'deletedAt' },
             sortable: { createdAt: 'createdAt', email: 'email', username: 'username' }
@@ -332,8 +334,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * answers, like `findByIdWithCredentials`.
      */
     findAuthenticatableById: (id: string) =>
-        // `id` as given: Mongoose casts it and a malformed one rejects (a client error upstream),
-        // where `toObjectId` would throw before any promise exists.
+        /**
+         * `id` as given: Mongoose casts it and a malformed one rejects (a client error upstream),
+         * where `toObjectId` would throw before any promise exists.
+         */
         userModel.findOne({ _id: id, ...AUTHENTICATABLE_FILTER }).exec(),
 
     /**
@@ -402,8 +406,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     linkOAuthAccount: (userId: string, account: OAuthAccount, session?: ClientSession) =>
         userModel
             .updateOne(
-                // One entry per provider: a link for a provider the account already holds matches
-                // nothing, so a repeated callback cannot grow the array.
+                /**
+                 * One entry per provider: a link for a provider the account already holds matches
+                 * nothing, so a repeated callback cannot grow the array.
+                 */
                 { _id: toObjectId(userId), 'oauthAccounts.provider': { $ne: account.provider } },
                 { $push: { oauthAccounts: account } },
                 { timestamps: false, session }
@@ -677,10 +683,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      */
     writeTwoFactor: (id: string, write: TwoFactorWrite) =>
         userModel
-            // `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
-            // https://mongoosejs.com/docs/api/model.html#Model.updateOne()
-            // `returnDocument: 'after'` gives the document as written; `projection` keeps it to the
-            // three derived fields, so the caller learns the outcome without a second read.
+            /**
+             * `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
+             * https://mongoosejs.com/docs/api/model.html#Model.updateOne()
+             * `returnDocument: 'after'` gives the document as written; `projection` keeps it to the
+             * three derived fields, so the caller learns the outcome without a second read.
+             */
             .findOneAndUpdate({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
                 timestamps: false,
                 updatePipeline: true,
@@ -776,8 +784,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * @param session - the transaction this write belongs to, when the caller owns one
      */
     saveWithoutEdit: (user: UserDocument, session?: ClientSession) =>
-        // Mongoose: `timestamps: false` on save skips the `updatedAt` stamp, and with it the
-        // revision plugin's `$inc`. https://mongoosejs.com/docs/timestamps.html
+        /**
+         * Mongoose: `timestamps: false` on save skips the `updatedAt` stamp, and with it the
+         * revision plugin's `$inc`. https://mongoosejs.com/docs/timestamps.html
+         */
         fencedSave(user, () => user.save({ session, timestamps: false })),
 
     /**
@@ -801,8 +811,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                         { 'purchaseHold.until': { $lte: now } }
                     ]
                 },
-                // The review flag rides in the same write: an automatic hold is also a case for a
-                // person to look at, and the flag outlives the hold's end.
+                /**
+                 * The review flag rides in the same write: an automatic hold is also a case for a
+                 * person to look at, and the flag outlives the hold's end.
+                 */
                 { $set: { purchaseHold: hold, purchaseHoldFlaggedAt: now } },
                 { timestamps: false }
             )
@@ -846,9 +858,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 { 'purchaseHold.until': { $lte: now } },
                 [
                     {
-                        // https://www.mongodb.com/docs/manual/reference/operator/aggregation/max/
-                        // `$max` skips a missing or null operand, so an account with no mark yet
-                        // takes the hold's `setAt`.
+                        /**
+                         * https://www.mongodb.com/docs/manual/reference/operator/aggregation/max/
+                         * `$max` skips a missing or null operand, so an account with no mark yet
+                         * takes the hold's `setAt`.
+                         */
                         $set: {
                             purchaseHoldResetAt: {
                                 $max: ['$purchaseHoldResetAt', '$purchaseHold.setAt']
@@ -857,8 +871,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     },
                     { $unset: 'purchaseHold' }
                 ],
-                // `updatePipeline`: Mongoose refuses an array update without it
-                // (https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()).
+                /**
+                 * `updatePipeline`: Mongoose refuses an array update without it
+                 * (https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()).
+                 */
                 { timestamps: false, updatePipeline: true }
             )
             .exec()
@@ -920,8 +936,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         userModel
             .find({
                 active: { $ne: false },
-                // `deletedBy` is the explicit marker that THIS reaper made the soft delete: a
-                // person's soft delete never carries it, whatever the account's warning history.
+                /**
+                 * `deletedBy` is the explicit marker that THIS reaper made the soft delete: a
+                 * person's soft delete never carries it, whatever the account's warning history.
+                 */
                 deletedBy: 'reaper',
                 deletedAt: { $lt: cutoff }
             })

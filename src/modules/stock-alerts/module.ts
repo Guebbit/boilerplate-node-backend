@@ -6,7 +6,7 @@
  * module reaches `products` and not the other way round). Account erase covers the rows through
  * `personalData` below.
  *
- * @see docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -36,8 +36,10 @@ export default {
         onDomainEvent(PRODUCT_BUYABLE_AGAIN, ({ productId }) =>
             stockAlertService.onBuyableAgain(productId)
         );
-        // Skipped for a product that is live again: a retried delivery can arrive after a
-        // restore, and the buyer's request still stands for a product on sale.
+        /**
+         * Skipped for a product that is live again: a retried delivery can arrive after a
+         * restore, and the buyer's request still stands for a product on sale.
+         */
         onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
             productService
                 .isLive(productId)

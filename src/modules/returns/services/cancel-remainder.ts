@@ -69,7 +69,7 @@ interface Canceled {
 
 /**
  * The Return row of a remainder cancel, closed when made.
- * @param order - the order
+ * @param order - the order the remainder belongs to
  * @param input - the request
  * @param opening - what the buyer stated, and who recorded it when it was staff
  * @param fulfillmentOrderId - the fulfillment order whose remainder was canceled
@@ -119,7 +119,6 @@ const rowFor = (
 /**
  * The transaction: lock the order, mark the lines, give the units back, write the Return and open
  * its refund record.
- * @param order - the order
  * @param input - the request
  * @param opening - what the buyer stated, and who recorded it when it was staff
  * @param fulfillmentOrderId - the fulfillment order whose remainder is canceled
@@ -196,7 +195,6 @@ const cancelUnderLock = (
  * Send the cancel's refund. Its record committed with the cancellation, so a refusal or any other
  * error is left to the payment sweep; nothing waits on it, the Return is closed already.
  *
- * @param order - the order
  * @param done - the cancellation just committed
  * @param context - the caller, audited on the refund
  */
@@ -211,7 +209,6 @@ const refund = (order: OrderDocument, done: Canceled, context: CallerContext): P
  * Everything a committed cancellation unlocks: the stock cache, the refund, the audit row, the
  * order's return status. The buyer's acknowledgement mail rides `return.requested`.
  *
- * @param order - the order
  * @param done - the cancellation just committed
  * @param context - the caller
  */
@@ -238,9 +235,7 @@ const announceCanceled = (
  * with the day and channel the buyer stated it, to record theirs. The key is asked first (403), so
  * a caller without it never learns what else is wrong.
  *
- * @param order - the order
  * @param input - the request
- * @param authContext - the caller
  * @param context - the caller, for the audit entry of a refusal
  * @param remainder - the lines of the fulfillment order being canceled
  * @returns a refusal, or the statement to write when the caller may go on

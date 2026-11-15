@@ -4,14 +4,16 @@
  * dashboard), it is plain HTTP so no protocol upgrade or extra dependency is needed, and
  * browsers reconnect automatically via the built-in `EventSource` client.
  *
- * @see docs/operate/frontend-observability.md
+ * @see docs/operate/frontend-observability.md#two-jobs-not-one
  */
 
 import type { Response } from 'express';
 import { openSseStream } from '@infrastructure/http/sse';
 import {
-    // Channel-name constants, shared with asyncapi.yaml so the event names a dashboard listens
-    // for are contractual rather than ad hoc strings.
+    /**
+     * Channel-name constants, shared with asyncapi.yaml so the event names a dashboard listens
+     * for are contractual rather than ad hoc strings.
+     */
     OBSERVABILITY_CHANNELS,
     type ObservabilityMetricsPayload,
     type ObservabilityChannel
@@ -55,25 +57,33 @@ const writeEvent = (
  * Merges Node.js memory stats with HTTP counters and realtime connection counts.
  */
 export const buildObservabilityPayload = (): Promise<ObservabilityMetricsPayload> => {
-    // Read synchronously before the async counter read, so all numbers in one frame describe
-    // roughly the same instant. What each memory field means is documented where it is read.
+    /**
+     * Read synchronously before the async counter read, so all numbers in one frame describe
+     * roughly the same instant. What each memory field means is documented where it is read.
+     */
     const snapshot = processSnapshot();
     return getHttpRequestCounters().then((counters) => ({
         // ISO-8601 so the client can compute its own clock skew and staleness.
         timestamp: new Date().toISOString(),
         uptimeSeconds: snapshot.uptimeSeconds,
-        // Bytes, the same four fields the two REST endpoints publish. The client differences
-        // consecutive frames, which is why nothing here is rounded to megabytes.
+        /**
+         * Bytes, the same four fields the two REST endpoints publish. The client differences
+         * consecutive frames, which is why nothing here is rounded to megabytes.
+         */
         memory: snapshot.memory,
         http: {
-            // Cumulative since boot (see `getHttpRequestCounters`), so the *client* derives
-            // rates by differencing consecutive frames.
+            /**
+             * Cumulative since boot (see `getHttpRequestCounters`), so the *client* derives
+             * rates by differencing consecutive frames.
+             */
             totalRequests: counters.totalRequests,
             totalErrors: counters.totalErrors
         },
         realtime: {
-            // Self-referential on purpose: a leak in `sseClients` (connections added but never
-            // removed) shows up as a climbing number on the dashboard those connections feed.
+            /**
+             * Self-referential on purpose: a leak in `sseClients` (connections added but never
+             * removed) shows up as a climbing number on the dashboard those connections feed.
+             */
             sseClients: sseClients.size
         }
     }));
@@ -115,9 +125,11 @@ export const streamObservabilityMetrics = (
     if (!stream) return;
 
     sseClients.add(response);
-    // Send the first payload immediately so the client has data before the first interval fires.
-    // Without it the dashboard would render empty for the first 5 seconds. A distinct
-    // SNAPSHOT channel (vs UPDATED) lets the client treat it as an initial state.
+    /**
+     * Send the first payload immediately so the client has data before the first interval fires.
+     * Without it the dashboard would render empty for the first 5 seconds. A distinct
+     * SNAPSHOT channel (vs UPDATED) lets the client treat it as an initial state.
+     */
     writeMetricsEvent(response, OBSERVABILITY_CHANNELS.METRICS_SNAPSHOT);
 
     // Periodic data push — the actual purpose of the stream.
@@ -125,15 +137,19 @@ export const streamObservabilityMetrics = (
         writeMetricsEvent(response, OBSERVABILITY_CHANNELS.METRICS_UPDATED);
     }, UPDATE_INTERVAL_MS);
 
-    // Keep-alive on a separate, slower timer. It carries a real payload rather than an SSE
-    // comment, so the client can also use it as a liveness signal.
+    /**
+     * Keep-alive on a separate, slower timer. It carries a real payload rather than an SSE
+     * comment, so the client can also use it as a liveness signal.
+     */
     const heartbeatInterval = setInterval(() => {
         writeMetricsEvent(response, OBSERVABILITY_CHANNELS.HEARTBEAT);
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Cleanup when the client disconnects or loses access, to avoid memory leaks and stale
-    // intervals. Both are essential: uncleared intervals would keep writing to a dead socket
-    // forever, and an un-deleted Set entry would pin the whole Response object in memory.
+    /**
+     * Cleanup when the client disconnects or loses access, to avoid memory leaks and stale
+     * intervals. Both are essential: uncleared intervals would keep writing to a dead socket
+     * forever, and an un-deleted Set entry would pin the whole Response object in memory.
+     */
     stream.onClose(() => {
         clearInterval(updatesInterval);
         clearInterval(heartbeatInterval);

@@ -5,7 +5,7 @@
  * main mailbox (`NODE_SUPPORT_EMAIL`), so it renders in `NODE_DEFAULT_LOCALE`; the customer's own
  * words stay untranslated, and it skips the shared `footer` partial.
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#mails-we-send
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
@@ -34,7 +34,6 @@ export type ContactReminder = 'overdue' | 'due-soon';
  * The `[#ref]` of a task: the last eight characters of its id, in a mail subject and on the staff
  * screens, so a mailbox thread can be matched to its task.
  *
- * @param id - the task's id
  */
 export const taskRef = (id: string): string => id.slice(-8);
 
@@ -51,15 +50,19 @@ export const contactRequestEmail = (
     const ref = taskRef(contact.id);
     const category = t(`tasks.task-category.${contact.category ?? 'none'}`);
     const link = frontendLink(FRONTEND_LINK_RULES.staffPages.task, locale, { id: contact.id });
-    // `[privacy]`: a data-protection request owes an answer within a month, so it is findable
-    // in the mailbox at a glance.
+    /**
+     * `[privacy]`: a data-protection request owes an answer within a month, so it is findable
+     * in the mailbox at a glance.
+     */
     const tags = contact.category === 'privacy' ? ' [privacy]' : '';
     const orderNumber = contact.orderNumber ?? t('tasks.email-contact.not-available');
     const title = t(`tasks.email-contact.title${wording}`, { ref, email: contact.email });
     return {
         template: 'tasks.contact',
-        // `[#ref]` keeps one message's mails together; the task's own subject is appended to the
-        // translated prefix, so an operator scanning the mailbox reads what it is about.
+        /**
+         * `[#ref]` keeps one message's mails together; the task's own subject is appended to the
+         * translated prefix, so an operator scanning the mailbox reads what it is about.
+         */
         subject: `${t(`tasks.email-contact.subject${wording}`)} [#${ref}]${tags}: ${contact.subject}`,
         text: [
             title,
@@ -86,8 +89,10 @@ export const contactRequestEmail = (
             labelLink: t('tasks.email-contact.label-link'),
             labelMessage: t('tasks.email-contact.label-message'),
             labelCreatedAt: t('tasks.email-contact.label-created-at'),
-            // The fallback lives here rather than in the markup: a template that only
-            // interpolates has no way to choose between a value and a translated placeholder.
+            /**
+             * The fallback lives here rather than in the markup: a template that only
+             * interpolates has no way to choose between a value and a translated placeholder.
+             */
             name: contact.name || t('tasks.email-contact.not-available'),
             email: contact.email,
             subject: contact.subject,

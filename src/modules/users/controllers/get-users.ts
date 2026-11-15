@@ -3,7 +3,7 @@
  * Controller for `GET /users` and `POST /users/search` — admin listing/search via query
  * parameters or body.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { z } from 'zod';

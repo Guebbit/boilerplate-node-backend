@@ -72,7 +72,6 @@ export const refundOwedOpening = (
  * it is a question about the books, not a refund anyone else can settle.
  *
  * @param payment - the payment and its order
- * @param payment.paymentId - the payment
  * @param payment.orderId - the order that was canceled
  * @param dueAt - when it is overdue
  */
@@ -91,7 +90,6 @@ export const amountMismatchOpening = (
 /**
  * An order paid with nothing set aside for it.
  *
- * @param orderId - the paid order
  * @param now - the clock
  */
 export const paidWithoutHoldOpening = (orderId: string, now: Date): ShopOpening => ({

@@ -10,7 +10,7 @@
  * `POST /returns` carries the account-keyed budget and an `Idempotency-Key`: it opens a row staff
  * must read, and a retried request must open it once.
  *
- * @see docs/modules/returns.md
+ * @see docs/modules/returns.md#the-lifecycle
  */
 
 import type { Request } from 'express';
@@ -75,10 +75,12 @@ router.use(getAuth, isAuth);
 // GET /returns — staff see all, anyone else their own orders'. `privateNoCache`: a per-caller answer.
 router.get('/', privateNoCache, getReturns);
 
-// POST /returns — open a return, or withdraw. The budget comes first: a spent one should not cost a write.
-// A staff `cancellation` is a refund, and a recorded withdrawal (`statedVia`) a legal act: both need a fresh session, at the critical tier. The step-up
-// sits BEFORE `idempotencyKey`: the ledger records any JSON answer, so a 401 challenge placed behind
-// it would be replayed as the answer to the same key after the staff member re-authenticated.
+/**
+ * POST /returns — open a return, or withdraw. The budget comes first: a spent one should not cost a write.
+ * A staff `cancellation` is a refund, and a recorded withdrawal (`statedVia`) a legal act: both need a fresh session, at the critical tier. The step-up
+ * sits BEFORE `idempotencyKey`: the ledger records any JSON answer, so a 401 challenge placed behind
+ * it would be replayed as the answer to the same key after the staff member re-authenticated.
+ */
 router.post(
     '/',
     returnsWriteLimiter,
@@ -87,8 +89,10 @@ router.post(
     postReturn
 );
 
-// GET /returns/options — what the order can still return and cancel. Before `/:id`, which would
-// otherwise read "options" as an id.
+/**
+ * GET /returns/options — what the order can still return and cancel. Before `/:id`, which would
+ * otherwise read "options" as an id.
+ */
 router.get('/options', privateNoCache, getReturnOptions);
 
 // GET /returns/:id — one return, scoped in the service.
@@ -100,9 +104,11 @@ router.post('/:id/approve', requirePermission('update', 'Return'), postReturnApp
 // POST /returns/:id/decline — staff refuse a `requested` return.
 router.post('/:id/decline', requirePermission('update', 'Return'), postReturnDecline);
 
-// POST /returns/:id/receive — the goods arrived. `receive:Return` carries `stepUp: critical` in
-// `shared/authorization-keys.generated.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
-// retried receipt land once, though the conditional move already guarantees the restock does.
+/**
+ * POST /returns/:id/receive — the goods arrived. `receive:Return` carries `stepUp: critical` in
+ * `shared/authorization-keys.generated.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
+ * retried receipt land once, though the conditional move already guarantees the restock does.
+ */
 router.post(
     '/:id/receive',
     requirePermission('receive', 'Return'),
@@ -110,17 +116,23 @@ router.post(
     postReturnReceive
 );
 
-// POST /returns/:id/proof-of-sending — staff recording the carrier's proof of sending. The same
-// `receive:Return` key (and so the same `stepUp`) as receiving: on a withdrawal it opens the refund,
-// as receiving would. No `Idempotency-Key`: a second call finds the proof recorded and answers 409.
+/**
+ * POST /returns/:id/proof-of-sending — staff recording the carrier's proof of sending. The same
+ * `receive:Return` key (and so the same `stepUp`) as receiving: on a withdrawal it opens the refund,
+ * as receiving would. No `Idempotency-Key`: a second call finds the proof recorded and answers 409.
+ */
 router.post('/:id/proof-of-sending', requirePermission('receive', 'Return'), postReturnProof);
 
-// POST /returns/:id/close — staff finishing a received return whose money will not follow the usual
-// way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end
-// of the same act. No `Idempotency-Key`: a second close finds the return closed and answers 409.
+/**
+ * POST /returns/:id/close — staff finishing a received return whose money will not follow the usual
+ * way. The same `receive:Return` key (and so the same `stepUp`) as receiving: closing is the end
+ * of the same act. No `Idempotency-Key`: a second close finds the return closed and answers 409.
+ */
 router.post('/:id/close', requirePermission('receive', 'Return'), postReturnClose);
 
-// POST /returns/:id/cancel — staff ending an approved return whose goods never came. `update:Return`,
-// the decision key: nothing moves (no money, no stock), so no step-up. No `Idempotency-Key`: a
-// second cancel finds the return canceled and answers 409.
+/**
+ * POST /returns/:id/cancel — staff ending an approved return whose goods never came. `update:Return`,
+ * the decision key: nothing moves (no money, no stock), so no step-up. No `Idempotency-Key`: a
+ * second cancel finds the return canceled and answers 409.
+ */
 router.post('/:id/cancel', requirePermission('update', 'Return'), postReturnCancel);

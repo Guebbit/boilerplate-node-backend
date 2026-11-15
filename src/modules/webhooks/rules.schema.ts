@@ -4,7 +4,7 @@
  * In any module: numbers and lists the PHP twin copies, as data.
  * Here: the retry ladder and the auto-disable thresholds.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_3-·-layout
  */
 
 import { z } from 'zod';

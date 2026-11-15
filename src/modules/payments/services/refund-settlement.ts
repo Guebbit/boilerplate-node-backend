@@ -37,7 +37,6 @@ import {
  * What is still refundable on a payment, in minor units: what was paid minus what has been asked
  * back (pending counts — see `PaymentDocument.amountRefunded`) minus what lost chargebacks took,
  * since the shop cannot return money the bank kept.
- * @param payment - the payment
  */
 export const remainingOf = (payment: PaymentDocument): Money =>
     subtractMoney(
@@ -238,7 +237,6 @@ const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureReason):
 /**
  * The `payment.refund_failed` payload: the record, the closed reason, and whether it ends the retrying.
  *
- * @param payment - the payment
  * @param refund - the record that failed
  * @param failureReason - the closed code
  * @param final - whether the refusal ends the retrying
@@ -265,7 +263,6 @@ const failedPayload = (
  * so a late error never walks back a refund that already succeeded or overwrites a newer attempt,
  * and writes no row.
  *
- * @param payment - the payment
  * @param refund - the record the provider refused, as it was read
  * @param failureReason - the closed code for what it said
  */
@@ -321,7 +318,6 @@ export const recordRefundFailure = (
  * Where the order's payment stamp stands once a settled refund was taken back: partly refunded
  * while another refund still stands, otherwise cleared so the order reads `paid` again.
  *
- * @param payment - the payment after the reversal
  */
 const stampAfterReversal = (payment: PaymentDocument): 'partially_refunded' | undefined =>
     payment.refunds.some((refund) => refund.status === RefundStatus.succeeded)

@@ -5,7 +5,7 @@
  * summed across every method/route series, and the two latency percentiles this in-app view
  * approximates from Prometheus histogram buckets.
  *
- * @see docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md#how-logs-and-traces-correlate
  */
 
 import {
@@ -42,14 +42,18 @@ const aggregateLatencyBuckets = (
         metricName?: string;
     }[]
 ): { buckets: LatencyBucket[]; totalCount: number } => {
-    // Keyed by bucket boundary, summing across every method/route series — the goal is one
-    // service-wide latency distribution, not a per-route one.
+    /**
+     * Keyed by bucket boundary, summing across every method/route series — the goal is one
+     * service-wide latency distribution, not a per-route one.
+     */
     const totals = new Map<number, number>();
     let totalCount = 0;
 
     for (const { value, labels, metricName } of values) {
-        // prom-client sets `metricName` only on the derived `_sum` and `_count` rows; bucket
-        // rows leave it undefined. Including them would inflate the counts badly.
+        /**
+         * prom-client sets `metricName` only on the derived `_sum` and `_count` rows; bucket
+         * rows leave it undefined. Including them would inflate the counts badly.
+         */
         if (metricName) continue;
         // `le` ("less than or equal") is the standard Prometheus bucket-boundary label.
         const { le } = labels;
@@ -64,8 +68,10 @@ const aggregateLatencyBuckets = (
         totals.set(boundary, (totals.get(boundary) ?? 0) + value);
     }
 
-    // Ascending order is required by the percentile scan below, which relies on cumulative
-    // counts increasing monotonically. `toSorted` copies rather than mutating in place.
+    /**
+     * Ascending order is required by the percentile scan below, which relies on cumulative
+     * counts increasing monotonically. `toSorted` copies rather than mutating in place.
+     */
     const buckets = [...totals]
         .toSorted(([a], [b]) => a - b)
         .map(([upperBound, cumulativeCount]) => ({ upperBound, cumulativeCount }));
@@ -97,8 +103,10 @@ export const percentileFromHistogramBuckets = (
         if (cumulativeCount >= threshold) return upperBound;
     }
 
-    // Fallthrough: the target rank sits in the `+Inf` bucket (i.e. slower than the largest
-    // boundary), so report the highest finite bound as a floor on the true value.
+    /**
+     * Fallthrough: the target rank sits in the `+Inf` bucket (i.e. slower than the largest
+     * boundary), so report the highest finite bound as a floor on the true value.
+     */
     return buckets.at(-1)?.upperBound ?? 0;
 };
 

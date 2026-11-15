@@ -178,8 +178,10 @@ export const transferInstructionsEmail = (
             body: t('payments.email-transfer.body'),
             beneficiary: instructions.beneficiary,
             iban: instructions.iban,
-            // Not a conditional spread: `undefined` here still reads as "unset" to the
-            // template's `typeof bic !== "undefined"` guard.
+            /**
+             * Not a conditional spread: `undefined` here still reads as "unset" to the
+             * template's `typeof bic !== "undefined"` guard.
+             */
             bic: instructions.bic,
             reference: instructions.reference,
             deadline: t('payments.email-transfer.deadline', {

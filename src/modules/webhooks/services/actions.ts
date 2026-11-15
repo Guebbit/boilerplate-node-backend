@@ -114,7 +114,6 @@ export const viewSubscription = (
  * subscription that is still there and switched on, and the read rule of the delivery's event
  * (a replay re-sends the stored payload).
  * @param subscriptionEnabled - whether the delivery's subscription exists and is enabled
- * @param eventType - the delivery's event
  * @param standing - how the caller stands to subscriptions
  */
 export const deliveryActions = (

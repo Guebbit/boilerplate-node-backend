@@ -14,7 +14,7 @@
  *           derives them from `items` at the single serialization point every response passes
  *           through, letting the contract mark them required.
  *
- * @see docs/modules/orders.md
+ * @see docs/modules/orders.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -274,8 +274,10 @@ const orderLineProductSchema = new Schema(
         requiresShipping: { type: Boolean },
         /** Art. 16 exclusion, frozen the same as every other line field — see `Product.noWithdrawal`. */
         noWithdrawal: { type: Boolean },
-        /** Frozen the same as every other line field — see `Product.sku`. No uniqueness
-         * constraint here: the constraint is on the CATALOGUE, and a frozen copy is history. */
+        /**
+         * Frozen the same as every other line field — see `Product.sku`. No uniqueness
+         * constraint here: the constraint is on the CATALOGUE, and a frozen copy is history.
+         */
         sku: { type: String },
         /** Grams, frozen the same as every other line field — see `Product.weight`. */
         weight: { type: Number, min: 0 },
@@ -284,7 +286,7 @@ const orderLineProductSchema = new Schema(
         /** The line was a preorder when sold, frozen — decided once at checkout, never re-derived. */
         preorder: { type: Boolean },
         deletedAt: { type: Date },
-        /*
+        /**
          * The decimal rate this line was actually charged, resolved from the product's `taxClass`
          * at freeze time (`services/snapshot.ts`) — never the class itself, and never re-resolved
          * from the product's CURRENT class.
@@ -308,8 +310,10 @@ const orderLineProductSchema = new Schema(
  */
 const applyOrderLineProductTransform = applySerialization(orderLineProductSchema, {
     after: (serialized) => {
-        // The frozen promise goes out as the shop's day, like the catalogue's `releaseDate`. Only a
-        // `Date` is converted, so a snapshot that already went through here is left alone.
+        /**
+         * The frozen promise goes out as the shop's day, like the catalogue's `releaseDate`. Only a
+         * `Date` is converted, so a snapshot that already went through here is left alone.
+         */
         if (serialized.releaseDate instanceof Date)
             serialized.releaseDate = shopDayOf(serialized.releaseDate);
     }
@@ -331,8 +335,10 @@ const orderItemSchema = new Schema(
         backorderedQuantity: { type: Number, min: 1 },
         promisedAt: { type: Date },
         promiseDated: { type: Boolean },
-        // The language `product.title`/`description` were resolved into when this line was
-        // frozen — see `OrderDocumentItem.locale`.
+        /**
+         * The language `product.title`/`description` were resolved into when this line was
+         * frozen — see `OrderDocumentItem.locale`.
+         */
         locale: {
             type: String,
             required: true,
@@ -347,18 +353,22 @@ const orderItemSchema = new Schema(
  */
 export const orderSchema = new Schema<OrderDocument>(
     {
-        // Not `required`, unlike everywhere else this repository stores a foreign key — erasure
-        // unsets it deliberately, rather than deleting the invoice.
+        /**
+         * Not `required`, unlike everywhere else this repository stores a foreign key — erasure
+         * unsets it deliberately, rather than deleting the invoice.
+         */
         userId: {
             type: Schema.Types.ObjectId
         },
         email: {
             type: String,
             required: true,
-            // Same casters as `users.email` — every stored row is consistently cased, whatever
-            // casing the snapshot was taken with. Search is aggregation-based here (`repository.ts`
-            // `search`), which does not cast `$match`, so its own `withNormalizedEmailFilter`
-            // normalises the QUERY side to match.
+            /**
+             * Same casters as `users.email` — every stored row is consistently cased, whatever
+             * casing the snapshot was taken with. Search is aggregation-based here (`repository.ts`
+             * `search`), which does not cast `$match`, so its own `withNormalizedEmailFilter`
+             * normalises the QUERY side to match.
+             */
             lowercase: true,
             trim: true
         },
@@ -372,7 +382,7 @@ export const orderSchema = new Schema<OrderDocument>(
         notes: {
             type: String
         },
-        /*
+        /**
          * The shipping choice, frozen at checkout: the method's id and what it COST THEN, so a
          * later rate change can't re-price history. Both fields are absent together when no
          * method was chosen (free-above-threshold or a genuinely free method like `pickup` still
@@ -383,7 +393,7 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String
         },
         shippingCost: moneyPath({ nonNegative: true }),
-        /*
+        /**
          * The customer's checkout choice — a preference, not a lock: a card payment still
          * settles normally regardless of this value, and then rewrites it to `card`, so the
          * field ends up saying how the order was actually paid. Absent on order creation that
@@ -393,7 +403,7 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String,
             enum: Object.values(PaymentMethodId)
         },
-        /*
+        /**
          * When this order's stock hold ends, stamped at checkout from the SAME duration handed
          * to `inventoryService.reserveForOrder` — the two must never disagree, which is why
          * neither is a second copy of the other's fallback. Absent once paid or canceled: the
@@ -402,7 +412,7 @@ export const orderSchema = new Schema<OrderDocument>(
         payBy: {
             type: Date
         },
-        /*
+        /**
          * `{year}-{sequence}`, minted once by `allocateOrderNumber` (`./services/order-numbering`)
          * at order-creation time. Not a tax invoice number — this order is a receipt, not an
          * invoice, see `docs/modules/orders.md`. Required: every write path allocates one.
@@ -411,7 +421,7 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String,
             required: true
         },
-        /*
+        /**
          * Stamped once, in the same conditional write that moves the order to `paid` — see the
          * interface field's own comment for what reads it.
          */
@@ -458,7 +468,7 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String,
             enum: [...STAMPED_RETURN_STATUSES]
         },
-        /*
+        /**
          * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
          * never re-read from config later, so a deployment's currency change cannot rewrite what
          * an old order actually charged.
@@ -471,7 +481,7 @@ export const orderSchema = new Schema<OrderDocument>(
         termsVersion: {
             type: String
         },
-        /*
+        /**
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
          * Present only when a line ships to an address: absent on an all-digital order, a pickup.
@@ -480,7 +490,7 @@ export const orderSchema = new Schema<OrderDocument>(
         shippingAddress: {
             type: orderAddressSchema
         },
-        /*
+        /**
          * Who the order is invoiced to — a snapshot like `shippingAddress`, and the one the invoice
          * reads (`invoicing/services/issue-invoice.ts`). Present on every order a checkout places;
          * absent on an admin-created order (no checkout).
@@ -488,7 +498,7 @@ export const orderSchema = new Schema<OrderDocument>(
         billingAddress: {
             type: orderAddressSchema
         },
-        /*
+        /**
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product
          * this is the only fact that hides one: `callerScope` (`services/scope.ts`) requires its
          * absence for a non-admin, and an admin passes no scope at all, which is how a
@@ -517,13 +527,13 @@ orderSchema.plugin(moneyPlugin);
  */
 orderSchema.plugin(revisionPlugin);
 
-/*
+/**
  * Indexes, declared on the schema so this is the one place deciding what's indexed. Names are
  * given rather than derived — Mongo identifies an index by name, so reusing a key under a new
  * name fails at startup instead of silently doing nothing; these are the names the databases
  * already carry.
  */
-/*
+/**
  * A receipt number names one order: the invariant, and what makes the staff `orderNumber` filter an
  * index hit. Production builds it through `npm run db:sync` (autoIndex is off there).
  */
@@ -534,16 +544,16 @@ orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt
 orderSchema.index({ email: 1 }, { name: 'orders_email' });
 /* Non-admin reads exclude soft-deleted rows (`callerScope` in `services/scope.ts`). */
 orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
-/*
+/**
  * `reap:orders`'s own sweep — NOT a TTL index: the row must survive, only its PII
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
 orderSchema.index({ piiClockStartedAt: 1 }, { name: 'orders_piiClockStartedAt', sparse: true });
-/*
+/**
  * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
  */
 orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
-/*
+/**
  * The staff list's date ranges and the stats' `paidAt` window. `paidAt` is sparse: an unpaid order
  * (most abandoned carts) never carries it.
  */
@@ -576,8 +586,10 @@ const applyOrderTotals = (serialized: Record<string, unknown>, currency: string)
 
     serialized.totalItems = count;
     serialized.totalQuantity = quantity;
-    // What the customer owes, from the one function that decides it — the same call the payment
-    // intent and the confirmation email make, so the three cannot quote different numbers.
+    /**
+     * What the customer owes, from the one function that decides it — the same call the payment
+     * intent and the confirmation email make, so the three cannot quote different numbers.
+     */
     serialized.totalPrice = orderTotal({ items, shippingCost: serialized.shippingCost, currency });
 };
 
@@ -588,16 +600,20 @@ const applyOrderTotals = (serialized: Record<string, unknown>, currency: string)
  */
 const applyOrderTax = (serialized: Record<string, unknown>, currency: string) => {
     const items = Array.isArray(serialized.items) ? serialized.items : [];
-    // `orderTaxBreakdown` only reads `product.price`/`quantity`/`product.taxRate` — the same
-    // narrowing `applyOrderTotals` above already relies on for `LineItem`.
+    /**
+     * `orderTaxBreakdown` only reads `product.price`/`quantity`/`product.taxRate` — the same
+     * narrowing `applyOrderTotals` above already relies on for `LineItem`.
+     */
     const breakdown = orderTaxBreakdown({
         items: items as TaxableLineItem[],
         shippingCost: serialized.shippingCost,
         currency
     });
 
-    // `items` is the serialized line list; one tax-breakdown line was computed per item above, so
-    // the index lines up.
+    /**
+     * `items` is the serialized line list; one tax-breakdown line was computed per item above, so
+     * the index lines up.
+     */
     for (const [index, item] of (items as Record<string, unknown>[]).entries()) {
         item.taxAmount = breakdown.lines[index].taxAmount;
         item.netAmount = breakdown.lines[index].netAmount;
@@ -640,13 +656,17 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
-    // `piiClockStartedAt` is the reaper's own bookkeeping, not part of the `Order` contract — same
-    // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
+    /**
+     * `piiClockStartedAt` is the reaper's own bookkeeping, not part of the `Order` contract — same
+     * reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
+     */
     omit: ['piiClockStartedAt', 'conformityUntil', 'conformityExtendedAt', 'moneyReceivedAt'],
     after: (serialized) => {
         applyOrderItems(serialized);
-        // `currency` is required on the schema, so a serialized order always carries it; the
-        // serialized shape is loose, hence the narrowing.
+        /**
+         * `currency` is required on the schema, so a serialized order always carries it; the
+         * serialized shape is loose, hence the narrowing.
+         */
         const currency = serialized.currency as string;
         applyOrderTotals(serialized, currency);
         applyOrderTax(serialized, currency);

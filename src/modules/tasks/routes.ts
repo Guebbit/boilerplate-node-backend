@@ -6,7 +6,7 @@
  * positional: a route appended in the wrong half is public or admin-only purely by where it was
  * typed.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import { Router } from 'express';
@@ -28,7 +28,7 @@ import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 /** Express router for tasks endpoints (public contact form; admin read/update). */
 export const router = Router();
 
-/*
+/**
  * PUBLIC, and it is the only one. The contact form is the whole reason this module exists for a
  * visitor, so it is mounted ABOVE the guard below rather than carrying an exemption.
  *
@@ -45,7 +45,7 @@ export const router = Router();
  */
 router.post('/', contactLimiters, getAuth, humanChallengeGate, idempotencyKey, postTask);
 
-/*
+/**
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why
  * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
  * catches a misplaced route that also reads the caller.
@@ -73,19 +73,25 @@ router.get('/summary', requirePermission('read', 'Task'), noStore, getTaskSummar
 // GET /tasks/:id — one task. After `/`, `/search` and `/summary`, so none matches as an id.
 router.get('/:id', requirePermission('read', 'Task'), privateNoCache, getTaskById);
 
-// The status doors: one action per effect, no body (`docs/understand/write-methods.md`). The status field
-// is read-only, so there is no PATCH.
+/**
+ * The status doors: one action per effect, no body (`docs/understand/write-methods.md`). The status field
+ * is read-only, so there is no PATCH.
+ */
 router.post('/:id/resolve', requirePermission('update', 'Task'), noStore, postTaskResolve);
 router.post('/:id/mark-spam', requirePermission('update', 'Task'), noStore, postTaskMarkSpam);
 router.post('/:id/reopen', requirePermission('update', 'Task'), noStore, postTaskReopen);
 
-// Assignment: a pair of actions, each with its own bell and audit row. Taking a task is assigning
-// yourself; a repeat finds the state reached and answers 409 (`docs/understand/write-methods.md`).
+/**
+ * Assignment: a pair of actions, each with its own bell and audit row. Taking a task is assigning
+ * yourself; a repeat finds the state reached and answers 409 (`docs/understand/write-methods.md`).
+ */
 router.post('/:id/assign', requirePermission('update', 'Task'), noStore, postTaskAssign);
 router.post('/:id/unassign', requirePermission('update', 'Task'), noStore, postTaskUnassign);
 
-// POST /tasks/:id/notes — the staff thread, append-only. `idempotencyKey` after the permission
-// check: a note has no delete door, so a retry after a lost answer must replay, not append twice.
+/**
+ * POST /tasks/:id/notes — the staff thread, append-only. `idempotencyKey` after the permission
+ * check: a note has no delete door, so a retry after a lost answer must replay, not append twice.
+ */
 router.post(
     '/:id/notes',
     requirePermission('update', 'Task'),

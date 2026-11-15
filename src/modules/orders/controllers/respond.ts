@@ -44,8 +44,10 @@ export const respondWithOrder = (
     orderService
         .withActions(order, authContext)
         .then((resolved) => {
-            // The order's real tag, and the resource it belongs to (RFC 9110 §8.8.3). Taken from
-            // the document: `resolved` is the wire shape.
+            /**
+             * The order's real tag, and the resource it belongs to (RFC 9110 §8.8.3). Taken from
+             * the document: `resolved` is the wire shape.
+             */
             answerAsResource(response, order, `/orders/${resolved.id}`);
             // A 201 always names the new order (RFC 9110 §9.3.3).
             createdOrOk<Order>(response, resolved, status, `/orders/${resolved.id}`);

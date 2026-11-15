@@ -196,7 +196,6 @@ export const withdrawalNotice = (
  * staff type a day on the shop's wall clock, and UTC would print the evening before it.
  *
  * @param locale - the recipient's language
- * @param date - the date
  */
 const longDate = (locale: string, date: Date): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: shopTimezone() }).format(date);

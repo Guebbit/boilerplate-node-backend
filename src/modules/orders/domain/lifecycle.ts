@@ -288,8 +288,10 @@ type StatusDerivedActions = Pick<OrderActions, 'cancel' | 'pay'>;
 export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => ({
     // `canTransition` allows a write that changes nothing; "may I cancel this" is not that.
     cancel: status !== OrderStatus.canceled && canTransition(status, OrderStatus.canceled, actor),
-    // Asked outside the request table: paying is a move no request makes. A client needs the
-    // answer anyway — it is what decides whether to offer the card form on an order that has no
-    // payment record yet.
+    /**
+     * Asked outside the request table: paying is a move no request makes. A client needs the
+     * answer anyway — it is what decides whether to offer the card form on an order that has no
+     * payment record yet.
+     */
     pay: isPayable(status)
 });

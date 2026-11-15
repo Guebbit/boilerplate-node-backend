@@ -7,7 +7,7 @@
  * import, keeping the import graph acyclic. No rules worth modelling here: deleting it costs a
  * convenience, not a capability.
  *
- * @see docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -32,8 +32,10 @@ export default {
         }
     ],
     subscribe: () => {
-        // Skipped for a product that is live again: a retried delivery can arrive after a
-        // restore, and pulling the line would tell a shopper "removed" about a product on sale.
+        /**
+         * Skipped for a product that is live again: a retried delivery can arrive after a
+         * restore, and pulling the line would tell a shopper "removed" about a product on sale.
+         */
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
             productService
                 .isLive(productId)

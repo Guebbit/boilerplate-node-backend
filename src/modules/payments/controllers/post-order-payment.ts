@@ -29,8 +29,10 @@ export const postOrderPayment = (request: Request<{ id?: string }>, response: Re
         .recordOfflinePayment(orderId, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // Only a `succeeded` payment comes back from here, where `pay` is false whatever the
-            // order says: no order read is needed for `actions`.
+            /**
+             * Only a `succeeded` payment comes back from here, where `pay` is false whatever the
+             * order says: no order read is needed for `actions`.
+             */
             const payment = paymentService.withActions(result.data, undefined, request.authContext);
             // 201 when a row was inserted; 200 when this converted an unpaid card intent's row.
             createdOrOk<Payment>(response, payment, result.status, `/payments/${payment.id}`);

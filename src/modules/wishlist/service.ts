@@ -4,7 +4,7 @@
  * what each product can do right now, like the cart's: the client renders from its own product
  * store, and shipping a product per line is over-serialization the contract suite fails on.
  *
- * @see docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md#the-pipeline
  */
 
 import type { ClientSession } from 'mongoose';
@@ -130,11 +130,13 @@ const moveToCart = (
         if (!saved) return generateReject(404, [t('wishlist.not-found')]);
 
         return cartService.addItemById(userId, productId).then((added) => {
-            // The line stays saved either way. A product genuinely gone from the catalogue reads
-            // as this module's own 404 (a refusal to buy it now is not a reason to throw away the
-            // fact that somebody wants it); the cart's own 422 — the line is already at
-            // per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) — and 409 — the cart is full — say
-            // something the shopper needs to hear, so they pass through.
+            /**
+             * The line stays saved either way. A product genuinely gone from the catalogue reads
+             * as this module's own 404 (a refusal to buy it now is not a reason to throw away the
+             * fact that somebody wants it); the cart's own 422 — the line is already at
+             * per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) — and 409 — the cart is full — say
+             * something the shopper needs to hear, so they pass through.
+             */
             if (!added.success)
                 return added.errors.some((error) =>
                     ['CART_QUANTITY_LIMIT', 'CART_LINE_LIMIT_REACHED'].includes(error.code)

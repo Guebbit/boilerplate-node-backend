@@ -8,7 +8,7 @@
  * Per process, like it: a message written in another worker process arrives at the next
  * `GET /notifications` instead. No broker fan-out: the app runs as a single host.
  *
- * @see docs/modules/notifications.md
+ * @see docs/modules/notifications.md#the-pipeline
  */
 
 import type { Response } from 'express';
@@ -77,14 +77,18 @@ export const streamNotifications = (
     owned.add(response);
     connections.set(userId, owned);
 
-    // A comment line (leading colon): keeps proxies from closing the connection, and an
-    // `EventSource` ignores it, so a client handles no heartbeat event.
+    /**
+     * A comment line (leading colon): keeps proxies from closing the connection, and an
+     * `EventSource` ignores it, so a client handles no heartbeat event.
+     */
     const heartbeat = setInterval(() => {
         response.write(': keep-alive\n\n');
     }, HEARTBEAT_INTERVAL_MS);
 
-    // The timer and the map entry must go: a timer left running writes to a dead socket
-    // forever, and a map entry left behind pins the whole response in memory.
+    /**
+     * The timer and the map entry must go: a timer left running writes to a dead socket
+     * forever, and a map entry left behind pins the whole response in memory.
+     */
     stream.onClose(() => {
         clearInterval(heartbeat);
         owned.delete(response);

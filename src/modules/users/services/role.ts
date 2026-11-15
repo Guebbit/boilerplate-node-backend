@@ -138,8 +138,10 @@ export const revokeUserRole = (
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        // The route already refuses this (and audits it); asked again so the door cannot be
-        // reached around it.
+        /**
+         * The route already refuses this (and audits it); asked again so the door cannot be
+         * reached around it.
+         */
         if (!context.caller.system && !holds(context.caller, 'assign', 'Role'))
             return roleManagementRequired();
 

@@ -11,7 +11,7 @@ export const ordersAnalyticsEvents = {
     // Orders
     ORDER_CREATED: 'order_created',
     ORDER_CANCELED: 'order_canceled',
-    /*
+    /**
      * A reservation timing out unpaid ends an order the same way a customer's cancel does, but is
      * a different fact for a funnel to count: one is a choice, the other is an abandonment nobody
      * confirmed. Same shape as `checkout_completed`/`checkout_failed` — see

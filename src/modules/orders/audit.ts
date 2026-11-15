@@ -17,7 +17,7 @@ export const ordersAuditActions = {
     ORDER_UPDATED: 'order.updated',
     ORDER_DELETED: 'order.deleted',
     ORDER_RESTORED: 'order.restored',
-    /*
+    /**
      * The one order write a customer performs. Audited because a canceled order is a support
      * question with a money answer — who canceled it, the customer or the shop, decides who owes
      * whom an apology. `actorRole` on the record carries who did it; `metadata` carries `cause`,

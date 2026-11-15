@@ -5,7 +5,7 @@
  * subscription, tracking attempts through to success, exhaustion, or a subscriber never told
  * about it because the subscription was disabled first).
  *
- * @see docs/reference/data.md
+ * @see docs/reference/data.md#the-two-halves
  */
 
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
@@ -112,11 +112,13 @@ export const webhookSubscriptionSchema = new Schema<
         autoDisabledAt: {
             type: Date
         },
-        // `_id: false` PLUS an explicit `id`: `./secrets.ts`'s `mintRingSecret` mints the id itself
-        // (`randomUUID()`) before the subscription is ever saved, so the CREATE response can name
-        // the ring entry it just made — an auto-assigned Mongoose `_id` is not knowable that early.
-        // Declared as a real schema field (not left to `_id`) so it round-trips through `.lean()`
-        // reads too, where no virtual is ever applied.
+        /**
+         * `_id: false` PLUS an explicit `id`: `./secrets.ts`'s `mintRingSecret` mints the id itself
+         * (`randomUUID()`) before the subscription is ever saved, so the CREATE response can name
+         * the ring entry it just made — an auto-assigned Mongoose `_id` is not knowable that early.
+         * Declared as a real schema field (not left to `_id`) so it round-trips through `.lean()`
+         * reads too, where no virtual is ever applied.
+         */
         secrets: {
             type: [
                 new Schema<WebhookSecretRingEntry>(
@@ -138,8 +140,10 @@ export const webhookSubscriptionSchema = new Schema<
  */
 webhookSubscriptionSchema.plugin(revisionPlugin);
 
-// "This tenant's subscriptions", and "which subscriptions want event X" — the two questions
-// `publish` and the admin list both ask.
+/**
+ * "This tenant's subscriptions", and "which subscriptions want event X" — the two questions
+ * `publish` and the admin list both ask.
+ */
 webhookSubscriptionSchema.index({ tenant: 1, createdAt: -1 });
 
 // Which enabled subscriptions (no `disabledAt`) listen for event X — `publish`'s fan-out read.
@@ -284,10 +288,12 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
     { timestamps: true }
 );
 
-// Mongoose `index(fields, options)`: 1 ascending, -1 descending; `unique` makes it a constraint.
-// https://mongoosejs.com/docs/guide.html#indexes
-// One row per (subscription, event): what makes a redelivered event's fan-out idempotent — see
-// `services/publish.ts`.
+/**
+ * Mongoose `index(fields, options)`: 1 ascending, -1 descending; `unique` makes it a constraint.
+ * https://mongoosejs.com/docs/guide.html#indexes
+ * One row per (subscription, event): what makes a redelivered event's fan-out idempotent — see
+ * `services/publish.ts`.
+ */
 webhookDeliverySchema.index({ subscriptionId: 1, eventId: 1 }, { unique: true });
 
 // The admin log's tenant-wide list, newest first.
@@ -299,14 +305,16 @@ webhookDeliverySchema.index({ subscriptionId: 1, createdAt: -1 });
 // The admin log filtered to one status, newest first.
 webhookDeliverySchema.index({ status: 1, createdAt: -1 });
 
-// The retry sweep's own read: due, retryable rows, in no particular order — see
-// `sweep:webhook-retries`.
+/**
+ * The retry sweep's own read: due, retryable rows, in no particular order — see
+ * `sweep:webhook-retries`.
+ */
 webhookDeliverySchema.index({ status: 1, nextAttemptAt: 1 });
 
 // The same read's other half: a STRANDED in_flight row whose lease already expired.
 webhookDeliverySchema.index({ status: 1, leaseExpiresAt: 1 });
 
-/*
+/**
  * TTL index — same caveat as every other TTL index in this repo (see `audit-logs/model.ts`):
  * Mongo will not modify `expireAfterSeconds` in place, so changing
  * `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` and restarting FAILS THE BOOT. `npm run db:sync` applies
