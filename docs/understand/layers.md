@@ -116,41 +116,12 @@ flowchart TD
 
 ## Quick map
 
-| Tier              | Folder                  | Main job                                                                                                                                                                                                                                                                    |
-| ----------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App               | `src/app`               | assembles this application; the only tier allowed to know every domain                                                                                                                                                                                                      |
-| Registry          | `src/modules.ts`        | the enabled module list — the one file that names every domain                                                                                                                                                                                                              |
-| Modules           | `src/modules/*`         | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                                                                                                                       |
-| Kernel            | `src/kernel`            | the module system, PLUS the authn/authz every module's guard shares — most of its code, not a minor detail; see [Modules](./modules.md) for why each earns its place                                                                                                        |
-| Domain primitives | `src/domain-primitives` | our own pure code every tier may import, `domain/` included — one file each: `money.ts` (amounts), `time.ts` (the unit constants and the zone-calendar helpers), `lifecycle.ts` (the status table), `postal-address.ts` (the address PII field list); npm is all it imports |
-| Infrastructure    | `src/infrastructure`    | technical substrate, Express and Mongoose included — see below                                                                                                                                                                                                              |
-| Types             | `src/types`             | the contract's generated types and the few shared type declarations; imports no tier, so every tier may import it                                                                                                                                                           |
-| Scenarios         | `scenarios/`            | the demo records and the flow runner — outside `src/` entirely, see below                                                                                                                                                                                                   |
-
-Four tiers — app, modules, kernel, infrastructure — and two folders every tier may import because they depend on no tier: `domain-primitives` and `types`. One alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@infrastructure/*`, `@domain-primitives/*`, `@types` — so every import
-line says which boundary it crosses. [Modules](./modules.md) has the full picture and the reasoning,
-including why these two are named `kernel` and `infrastructure` rather than `platform` and `core`.
-
 ### `scenarios/` — outside the tiers, one direction only
 
 `scenarios/` is outside `src/` entirely and inverts the usual rule: it imports a module's
 repository, model and factories directly — `@modules/<name>/repository`, never the barrel — which
 is exactly what `src/` itself may never do to a sibling. That inversion is what lets a production
 image omit the whole folder: nothing under `src/` reaches into it, so nothing there notices its
-absence.
-
-Enforced from both sides. `eslint-plugin-boundaries` (element type `'scenarios'`) gives it its own
-policies rather than folding it into `modules`, and `.dependency-cruiser.cjs`'s
-`src-cannot-reach-scenarios` rule is the reverse direction: no file under `src/` may import
-`scenarios/` at all, with no exception. The demo's control surface (`POST /__test/restore` and
-the rest) lives in `scenarios/support/demo.ts` and reaches the app the other way round:
-`scenarios/run-server.ts` passes it to `createApp` as an `extension`, so `src/` never imports it.
-
-See [The Flow Runner](../build/flow-runner.md) and [Data](../reference/data.md#the-demo-records)
-for what actually lives there.
-
-Inside a module, the layer files are `routes.ts`, `controllers/*`, `service.ts`, `repository.ts`,
-`model.ts`, plus `module.ts` (its manifest) and `index.ts` (its barrel).
 
 ### When `service.ts` becomes `services/`
 
@@ -158,162 +129,10 @@ A module's service starts as one file and stays one file for as long as reading 
 practical. Past roughly **300 lines** it stops being practical, and the sanctioned move is a
 `services/` folder with an `index.ts` — not a second module, and not a `helpers.ts` on the side. <!-- doc-paths:ignore -->
 
-This is a size rule, not an architectural one, and nothing above the layer changes: controllers
-still import `../services`, the module barrel exports one `<domain>Service` holding every operation
-the module offers, and the tier rules are untouched. An operation is published once, on that
-object, and never again by name: the object is the menu, and it is the seam a test spies on. What
-stays a named export is what is not an operation: constants, types, error classes, events, email
-builders and pure domain rules. It is written down because the alternative is worse in both directions — a
-1,200-line `service.ts` nobody wants to open, or a split that feels like breaking the convention
-and so gets done furtively. `account` is the one exception to "one `<domain>Service`" — see below
-for why.
-
-Split by **what the operations do**, never by size alone. `cart` is the worked example:
-
-| File          | What is in it                                                  |
-| ------------- | -------------------------------------------------------------- |
-| `view.ts`     | joining lines to products, and the shape the contract declares |
-| `items.ts`    | reading a cart and changing what is in it                      |
-| `checkout.ts` | turning a cart into an order, and the race that guards it      |
-| `reorder.ts`  | building a new cart from a past order                          |
-| `cleanup.ts`  | tearing down carts when a user or product is deleted           |
-
-One of those files is usually internal — here `view.ts`, whose helpers the others share and no
-caller asks for by name. Export its **types** from the barrel, not its helpers.
-
-`account` took the same step, and then a second one: two namespaces behind one `index.ts`, not one
-— `accountService` and `twoFactorService`. `export.ts` stays out of both on purpose (see the
-barrel's own docblock), and the address book left entirely, as `@modules/addresses`. A single
-object meant every caller of `accountService.login` was, to TypeScript, also coupled to 2FA;
-splitting along file boundaries removes that coupling without adding new ones, since
-neither group calls the other.
-
-Inside `services/`, one file per flow, as `cart` does:
-
-| Files                                                                          | The flow                                                      |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| `signup.ts`, `login.ts`, `logout.ts`, `refresh.ts`                             | getting in, getting out, staying in                           |
-| `password-reset-request.ts`, `password-reset.ts`, `password.ts`                | asking for a reset link, spending it, changing                |
-| `account-deletion.ts`, `purge-deletions.ts`                                    | locking the account, restoring it, and erasing it at the end  |
-| `email-change.ts`, `verification.ts`, `profile.ts`                             | the address, its proof, and the other profile fields          |
-| `two-factor-enrollment.ts`, `two-factor-challenge.ts`, `two-factor-lockout.ts` | `twoFactorService`: managing factors, the login step, the cap |
-| `two-factor-outcomes.ts`                                                       | internal: what the 2FA flows say back                         |
-
-`tokens.ts` is the one worth reading for the reason a
-split like this pays off in the first place:
-what makes a one-time token live — right type, not expired — is one function there, because a flow
-that forgot the expiry comparison would ship a link that worked forever.
-`local/no-persistence-imports` is what stops a controller reaching the `verificationtokens`
-repository to re-derive it.
-
-`orders` splits into `read.ts` (search and the narrow reads siblings ask for), `crud.ts` (create and
-amend), `remove.ts` (soft and hard delete, restore), `place.ts`, `status.ts`, `cancel.ts` and
-`override.ts`, among others.
-
-`locales` is another, and it carries the constraint worth knowing before a split like it: its rules
-answer with a rejection, not a verdict, so they stay in `services/` and the pure ones have nowhere
-below it to go. `keys.ts` is where they live instead — the internal file, in
-`view.ts`'s role.
-
-| File              | What is in it                                                         |
-| ----------------- | --------------------------------------------------------------------- |
-| `keys.ts`         | the rules a key must pass to be stored and rendered (internal)        |
-| `capabilities.ts` | which languages the deployment offers, static tier and dynamic merged |
-| `languages.ts`    | registering, editing and removing a language                          |
-| `entries.ts`      | one language's rows: the editing page, the writes and the bulk import |
-| `messages.ts`     | the two reads that hand out stored copy                               |
-
-**Files over the threshold that are not split** are a judgement, not a list kept here: `wc -l`
-answers which they are, today. `payments/services/settlement.ts` is the standing example — confirm,
-sync and webhook reconciliation, the one settlement choreography every path funnels through.
-
-The number's job is to make the split feel sanctioned instead of furtive, and a threshold silently
-re-fitted to whatever the largest file measures is not a threshold. Read 300 as the line past which a split needs no
-justification, not as a limit something enforces: nothing in the suite checks it.
-
-The table names the files and not their line counts, deliberately: a number on this page would be a
-published figure with no guard behind it.
-
 ### And `domain/`, if the module has rules
 
 A module may also carry `domain/` — pure business rules, lint-guaranteed free of Express, Mongoose
 and every tier. About half the modules have one; the rest do not, and that is the correct state rather than a gap.
-[Domain Layer](./domain-layer.md) is the full page: what earns a place there, the
-verdict-not-rejection shape, and when a module should instead go to full tactical DDD.
-
-**`delivery` is the one to read first**, because it is the argument in its shortest form. Its
-`domain/rates.ts` holds `findShippingMethod` and `priceShipping` (and a few siblings), and
-they are what the barrel publishes besides the service — a sibling can price a shipping method without learning that shipments,
-couriers or a `shipmentRepository` exist. That is what makes the export a published language rather
-than a handle on this module's storage, and it is why the number `cart`'s checkout freezes onto an
-order can never disagree with the number `GET /delivery/methods` quotes: there is one function, and
-both call it.
-
-A module may also carry module-owned declarations, each named for what it is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `events.ts` (its
-domain events) and `locales/` (its copy, in every language it ships). None of these is enumerated
-anywhere central — `audit.ts`, `metrics.ts` and `events.ts` register or augment themselves, while
-`locales` is declared in the manifest so the i18n boot can walk the registry without naming a
-domain. A module's slice of the demo records lives in `scenarios/<name>.ts` instead, deliberately
-outside this list — see [Data](../reference/data.md#the-demo-records).
-
-A module carries one of these only when it has something to declare, so they are not a per-module
-tax: most modules carry some subset of them, and some carry only one or two (`observability` has just `audit.ts` and `metrics.ts`). Collapsing them
-into central registries would trade that for a file every domain must edit.
-
-A module does not have to serve HTTP. `mounts` is optional on the manifest and each entry
-carries its `basePath` and router as a pair, so a domain that owns a collection and no URL is
-a first-class entry rather than a special case. `access` is the example: it owns the tenant and
-membership collections, but nothing in the boilerplate creates a shop or grants a role over the
-wire, so there is no URL of its own to mount — `account`, `api-keys` and `users` reach it only
-through its barrel. `app/routes.ts` mounts a module only when it declares both, so a router without a mount point (or
-the reverse) is skipped at runtime rather than rejected by the type.
-
-There are no layer directories: no top-level `controllers`, `services`, `repositories` or `models`. <!-- doc-paths:ignore -->
-Lint rejects them from inside a module so a re-created folder cannot quietly become a second home
-for domain code: `boundaries/no-unknown-files` (`eslint.config.ts`) refuses any file under `src/` that no tier element or file category classifies.
-
-There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`: directories named after
-a MECHANISM rather than a tier. Where each kind of file lives instead:
-
-| Not                           | But                                                      | Why                                            |                           |
-| ----------------------------- | -------------------------------------------------------- | ---------------------------------------------- | ------------------------- |
-| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`                  | domain-free pipeline; survives with no modules |                           |
-| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port                       | needed a user; see [Modules](./modules.md)     | <!-- doc-paths:ignore --> |
-| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/previous-email-cleanup.ts` | it is account's one-time-token lifecycle       | <!-- doc-paths:ignore --> |
-| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`                | the consumer half of an adapter                |                           |
-| `src/routes/index.ts`         | `src/app/system-routes.ts`                               | the ping belongs to no domain                  | <!-- doc-paths:ignore --> |
-| `src/bootstrap/*`             | `src/app/*`                                              | assembling this application                    |
-| `src/core/*`                  | `src/infrastructure/*`                                   | the name meant the opposite half elsewhere     |
-| `src/platform/*`              | `src/kernel/*`                                           | it is a microkernel, not a base layer          |
-
-The `jobs/` row is the interesting one. Leaving a mechanism directory answered _which tier_ owns it —
-expiring a refresh token is `account`'s business, not the substrate's. Landing in `services/`
-answers _where in the module_, under the
-rule [Modules](./modules.md#what-a-module-contains) states: a module root holds the manifest, the
-barrel, the contract files, the single-file layers and the self-registering slots, and everything
-else goes in a folder named for what it holds. A scheduled job is behaviour, so it sits with the
-rest of the module's behaviour.
-
-`src/app` is the assembly tier: the only place that reaches both `src/infrastructure` and every module.
-
-`src/infrastructure` is the bottom of the dependency graph: it may be imported by any
-layer above, and may never import from them. ESLint enforces this.
-
-| Folder                         | Main job                                                                                                                                                                                                                                                                                                               | Refuses                                                                                                                                                                                                                                            |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `infrastructure/runtime`       | runs once at startup: env validation, DB connect, [OTel SDK](../operate/opentelemetry.md), graceful shutdown — three files are reached per request, not only at boot: `environment.ts`'s parsing helpers (every module's own `config.ts`), `provider-registry.ts` (`resolve()`) and `readiness.ts` (the health probes) | a request-scoped mechanism of its own — every module's `config.ts` reads its slice per call, so a test can override one setting without reloading the module; the slice parses once per process (see [configuration](../operate/configuration.md)) |
-| `infrastructure/adapters`      | the substrate's I/O — anything that talks to something outside this process: [cache](redis-cache.md), [queue](rabbitmq.md), mailer, storage, [logger](../operate/winston.md), filesystem, PDF, image-signature sniffing                                                                                                | anything that talks only to this process's own memory                                                                                                                                                                                              |
-| `infrastructure/observability` | [metrics](../operate/prometheus.md), [tracing](../operate/opentelemetry.md) helpers, audit, analytics, SSE stream                                                                                                                                                                                                      | anything a caller reads back — signals go out, they are not an API                                                                                                                                                                                 |
-| `infrastructure/http`          | Express-coupled request/response helpers, and in `middlewares/` the domain-free pipeline: cache, locale, rate limiting, access logs, observability context, route flags                                                                                                                                                | anything that would still make sense with no `Request` and no `Response` — including anything that knows a service envelope, an audit action or a not-found key, which is a module's convention, a rung above protocol substrate                   |
-| `infrastructure/surfaces`      | one shared implementation per [route surface](./request-input.md) — the delete, restore, read-one, paged-list, search and update controller shapes each module's controller is a short spec against                                                                                                                    | anything with a single caller — a shape only one module needs is that module's controller, not a surface                                                                                                                                           |
-| `infrastructure/persistence`   | mongoose substrate every collection shares: the base repository, search/pagination filters, the serialization transform                                                                                                                                                                                                | anything that knows what a document _means_                                                                                                                                                                                                        |
-| `infrastructure/config`        | the typed env-slice machinery every module's `config.ts` is built from (`defineConfig`, field kinds, secret files, `.env` loading)                                                                                                                                                                                     | a module's own settings — each module declares its slice                                                                                                                                                                                           |     |
-| `infrastructure/security`      | the crypto primitives: password hashing, PII encryption, constant-time compare, pseudonymisation, versioned secrets, breached-password check                                                                                                                                                                           | deciding who may do what — that is `kernel` and `access`                                                                                                                                                                                           |     |
-| `infrastructure/i18n`          | resolves a language: catalog discovery, the admin-editable override layer, request-scoped `t`, `Accept-Language` negotiation                                                                                                                                                                                           | copy itself — it resolves a language, `shared/locales` holds the words                                                                                                                                                                             |
-
-Note what is **not** in that table: no `totals.ts`, no shared pricing, no "utils". The substrate
-holds no business rule, however many modules want one — see the `infrastructure` / `kernel` line in
-[Modules](./modules.md).
 
 ### A port does not have to be infrastructure
 
@@ -321,24 +140,8 @@ holds no business rule, however many modules want one — see the `infrastructur
 second — nothing selects between them yet, on purpose, since a switch offering one nobody wrote
 would only invite a guess at what going live needs. The tier is not part of the pattern. **A module
 may own a port of its own, in `providers/`**, when the thing behind it is its business rather than
-the application's.
 
-`payments/providers/` and `account/oauth/providers/` are the two in the tree. `payments/providers/`
-declares what a payment provider must do (a registry, errors, webhook-signature checking), ships no
-real one, and selects on `NODE_PAYMENT_PROVIDER` —
-so a project going live writes `stripe.ts` beside it and changes an env var, while the service, the <!-- doc-paths:ignore -->
-contract and the frontend hear nothing. `account/oauth/providers/` is the same shape one step
-further along: `github.ts` and `google.ts` are both real; the `fake` used in dev and tests is a
-[test double](../build/test-doubles.md), outside `src/`. Neither is
-`infrastructure` for the reason the table above gives: a substrate that knew what a charge or an
-OAuth handshake was would be holding a business rule.
-
-Which tier a port belongs to is the same question as everything else on this page: `image-store`
-survives an application with no modules, and `payments/providers` becomes meaningless without the
-domain that charges the card. The pattern is already being copied in the other direction —
-`infrastructure/observability/analytics/index.ts` builds its own `NODE_ANALYTICS_PROVIDER` seam from
-`createProviderRegistry` in `infrastructure/runtime/provider-registry.ts`, the same name-in, implementation-out
-shape `payments/providers` uses.
+Full detail: [Quick map](./layers-quick-map.md).
 
 ## How to read a feature
 
@@ -445,7 +248,7 @@ verdict: a service holding a repository is the design, a controller holding one 
 violation. The config states each layer's answer beside its reason, and the defaults are the
 strict reading.
 
-## Related pages
+## Read next
 
 - [Architecture](./architecture.md)
 - [Domain Layer](./domain-layer.md) — where a business rule goes, and the `domain/` folder

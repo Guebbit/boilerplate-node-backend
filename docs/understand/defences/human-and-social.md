@@ -55,7 +55,7 @@ Not much, and the honest framing is the deliverable:
   matters, revocable sessions, and an audit trail on staff writes. Each one converts "compromised"
   into "compromised, and here is exactly how far it got".
 
-## Related
+## Read next
 
 - [Authentication](authentication.md) — the factors and the step-up gate
 - [Email](email.md#mail-claiming-to-be-this-app) — SPF/DKIM/DMARC, the anti-spoofing half

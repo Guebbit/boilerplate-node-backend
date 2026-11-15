@@ -95,7 +95,7 @@ A non-2xx tells a provider the delivery failed and it comes back harder, so only
 body answers 400 — an authentic event this module simply ignores still answers 204. That is why
 the signature check is the only thing allowed to refuse.
 
-## Related
+## Read next
 
 - [Authorization](authorization.md) — the actor half of the order lifecycle
 - [Data layer](data-layer.md) — the conditional writes these races rely on

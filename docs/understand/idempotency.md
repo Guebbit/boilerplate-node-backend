@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Idempotency
 
+A retried write does the work once: how a repeated POST is recognised and answered from the first result.
+
 ## The problem it solves
 
 HTTP clients retry. A mobile app POSTs `/orders`, the server commits, and the connection drops
@@ -257,3 +259,9 @@ A keyed route answers through `json` or with no body.
 pattern as every other retained collection — see
 [Data retention](../reference/data.md#ttl-windows) for the caveat on changing it after the index
 already exists.
+
+## Read next
+
+- [Write Methods: POST](./write-methods-post.md#retrying-a-post): the client side of a retry.
+- [Transactional Outbox](./outbox.md)
+- [Redis Cache](./redis-cache.md)

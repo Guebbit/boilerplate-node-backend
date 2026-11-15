@@ -92,71 +92,27 @@ prevent.
 
 **What it is.** Node.js is a JavaScript runtime built on Chrome's V8 engine that lets you run JavaScript outside the browser. TypeScript adds a static type system on top of JavaScript — errors are caught at compile time, not at runtime.
 
-**Problem it solves.** JavaScript alone is untyped and error-prone at scale. Node.js gives you non-blocking I/O suitable for high-concurrency API servers. TypeScript gives you IDE autocomplete, type-safe refactors, and confidence that `data.user.id` actually exists before you ship.
-
-**In this repo.** The source language for everything in `src/`. `tsx` runs TypeScript directly in dev without a build step. CI runs `tsc --noEmit` to catch type errors before tests.
-
----
-
 ### Express
 
 **What it is.** Express is the most widely used HTTP framework for Node.js. It provides routing, a middleware pipeline, and a thin request/response abstraction on top of Node's built-in `http` module.
-
-**Problem it solves.** Raw Node.js `http` is verbose. Express gives you a clean way to declare routes, chain middleware (auth, logging, validation), and send responses — without locking you into an opinionated full-stack framework.
-
-**In this repo.** Express 5 is the transport layer. Routes match URLs, middlewares handle auth and rate limiting, and controllers convert HTTP input into service calls. Everything lives in `src/app.ts` (which assembles the pipeline from `src/app/*`), then a module's own `routes.ts` → `src/kernel/middlewares/` → the module's `controllers/`. Every domain is a module and mounts itself from its manifest; the only router `src/app/routes.ts` still names is the system ping.
-
-→ [Runtime](./runtime.md)
-
----
 
 ### Zod
 
 **What it is.** Zod is a TypeScript-first schema validation library. You define a schema once and Zod both validates the data and infers the TypeScript type from it — no duplicate type declarations.
 
-**Problem it solves.** External input (request bodies, env vars, query strings) is untyped at runtime. Casting it to `any` silently skips validation. Zod enforces shape and type coercion at the boundary and narrows the TypeScript type automatically, so downstream code is safe without extra guards.
-
-**In this repo.** Used in services for business-rule validation and in shared helpers. Also used by `orval` to generate typed API clients from `openapi.yaml`.
-
-→ [Runtime](./runtime.md)
-
----
-
 ### Helmet
 
 **What it is.** Helmet is a collection of small Express middleware functions that set HTTP response headers that browsers use to enable security policies (Content-Security-Policy, X-Frame-Options, HSTS, etc.).
-
-**Problem it solves.** By default Express sends almost no security headers. A browser talking to such a server is exposed to XSS, clickjacking, MIME-sniffing, and other well-known classes of attack. Helmet sets safe defaults in one `app.use(helmet())` call.
-
-**In this repo.** Applied early in the middleware chain so every response gets the headers, regardless of route.
-
-→ [Security](./security.md)
-
----
 
 ### JWT (jose) and password hashing (argon2id)
 
 **What it is.** JSON Web Tokens (JWT) are signed, compact tokens that carry claims (user ID, role, expiry) without a server-side session store. argon2id (from `node:crypto`) is a password hashing algorithm designed to be slow and memory-hungry — which makes brute-force attacks expensive.
 
-**Problem it solves.** A signed token lets another service check a login without calling this one, and a short-lived one limits what a leak is worth. It does **not** save a database read here: every request still looks the account and its roles up, so the token's "no lookup" benefit is not one this repo collects. argon2id prevents a leaked password hash from being reversed quickly.
-
-**In this repo.** One of two session modes, picked by `NODE_SESSION_MODE` ([Two ways to stay signed in](sessions.md)). `jwt` (default): a short-lived access token (Bearer header) plus a long-lived refresh token (HttpOnly cookie), the refresh token also stored server-side so it can be revoked. `cookie`: one random session id kept hashed in the database, no JWT at all. argon2id hashes passwords at user creation and verifies them at login.
-
-→ [Security](./security.md)
-
----
-
 ### express-rate-limit
 
 **What it is.** A middleware that counts requests per IP address over a fixed window and returns `429 Too Many Requests` when the limit is exceeded.
 
-**Problem it solves.** Without rate limiting, a single client can flood the API with requests, degrading it for everyone else or escalating a brute-force credential attack.
-
-**In this repo.** A global limiter is mounted in `src/app/security.ts`, with stricter per-route budgets declared by each module (the full table is generated in [Security](./security.md)). Window and max-requests of the global one come from `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
-
-→ [Security](./security.md)
-
----
+Full detail: [Core stack](./tools-explained-core.md).
 
 ## Data layer
 
@@ -164,73 +120,27 @@ prevent.
 
 **What it is.** MongoDB is a document database. Instead of rows and columns, it stores JSON-like documents (BSON) grouped into collections. Documents in the same collection do not need to share a schema.
 
-**Problem it solves.** Relational databases require you to define a rigid schema upfront and perform joins to reassemble related data. Document databases let you store a product with all its variants, prices, and images in one document — reads are fast because nothing needs joining, and the schema can evolve document by document.
-
-**In this repo.** The primary datastore. All data (users, products, orders, carts) lives in MongoDB. Accessed only through Mongoose models and repositories, never directly from controllers.
-
-→ [MongoDB & Mongoose](./mongodb-mongoose.md)
-
----
-
 ### Mongoose
 
 **What it is.** Mongoose is an ODM (Object-Document Mapper) for MongoDB. It lets you define schemas and models in TypeScript, add lifecycle hooks (`pre('save')`), define instance methods, and write queries with a fluent API instead of raw MongoDB driver calls.
-
-**Problem it solves.** The raw MongoDB driver accepts anything — no schema enforcement, no typed results. Mongoose adds schema validation, relationships via `ref`, query helpers, and TypeScript types so the persistence layer is typed and predictable.
-
-**In this repo.** Every collection has a Mongoose model at `src/modules/<name>/model.ts`, and the matching `repository.ts` beside it uses that model exclusively. Controllers never call Mongoose directly. The shared substrate every model builds on lives in `src/infrastructure/persistence/`.
-
-→ [MongoDB & Mongoose](./mongodb-mongoose.md)
-
----
 
 ### Redis
 
 **What it is.** Redis is an in-memory key-value store. Because data lives in RAM, reads and writes are orders of magnitude faster than a disk-backed database.
 
-**Problem it solves.** Serving the same expensive GET response (complex aggregation, multiple DB joins) repeatedly is wasteful. Without a cache, every request pays the full database cost. Redis stores computed responses with a TTL so repeated reads are served instantly without touching MongoDB.
-
-**In this repo.** Optional server-side response cache for public GET endpoints (products, locales). A route whose answer depends on who is asking is never cached server-side; entries are tagged by domain and a write invalidates its tags. All worker processes share one keyspace, so no broadcast is needed. A second, non-evicting Redis holds the rate-limit counters. When Redis is unavailable the API continues without caching.
-
-→ [Redis Cache](./redis-cache.md)
-
----
-
 ### RabbitMQ
 
 **What it is.** RabbitMQ is a message broker. Producers publish messages to named queues; consumers receive and process them independently. Messages are persisted to disk, so they survive restarts, and failed messages can be requeued for retry.
-
-**Problem it solves.** Some operations (sending email, generating a PDF) are slow or unreliable. Running them inside the HTTP handler means the client waits for them to finish — and if they fail, the request fails too. A message queue decouples the trigger from the work: the handler publishes a job and responds immediately; a separate consumer does the heavy work at its own pace and retries on failure.
-
-**In this repo.** Used for email delivery (`worker.email.send`), image digests, webhook delivery and account exports. Services publish through `enqueueEmail()` / `publishToQueue()`; consumers are registered at boot by `src/app/workers.ts` and by each module. Invoice PDFs are rendered synchronously, not queued. When RabbitMQ is not configured the queue calls fall back inline or no-op.
-
-→ [RabbitMQ](./rabbitmq.md)
-
----
 
 ### restic (backups)
 
 **What it is.** restic is a backup program: one static binary that writes encrypted, deduplicated snapshots to a repository (a local disk, SFTP, S3-compatible storage, or a REST server).
 
-**Problem it solves.** A database dump taken every hour is mostly the same bytes as the last one. A tool that stores each dump whole fills a disk in a week; a tool that stores them unencrypted turns a stolen bucket into a breach. restic cuts the stream into chunks, stores each chunk once, and encrypts on the client, so the storage only ever sees ciphertext and hourly backups cost what changed.
-
-**In this repo.** The `backup` container (`backup` compose profile) streams `mongodump --oplog` into restic with no gzip, backs up the uploads and the mail spool, and applies the keep knobs. The restore drill reads the same repository back. Pinned at 0.19.1; BSD-2-Clause.
-
-→ [Backups](../operate/backups.md) · [restic](../operate/restic.md) · [MongoDB Database Tools](../operate/mongodb-database-tools.md)
-
----
-
 ### rclone (the append-only second machine)
 
 **What it is.** rclone is a command-line tool for storage; its `serve restic` command speaks restic's REST protocol over a folder.
 
-**Problem it solves.** Whoever owns the app server also finds the restic password on it, and could delete every backup before encrypting the database. A repository on another machine that accepts new backups and refuses deletes (`--append-only`) makes the password alone useless for that.
-
-**In this repo.** `docker-compose.backup-server.yml`, dormant until started on a second machine: `rclone serve restic --append-only --private-repos` over TLS, one login per client, plus a weekly `forget --prune` and `check` on the machine's own disk. Pinned at 1.75.2; MIT.
-
-→ [Backup server](../operate/backup-server.md) · [rclone](../operate/rclone.md)
-
----
+Full detail: [Data layer](./tools-explained-core.md).
 
 ## Outbound
 
@@ -286,123 +196,45 @@ prevent.
 
 ## Observability stack
 
-Observability is the ability to understand what a running system is doing from its outputs. Three complementary signals cover the full picture:
-
-| Signal      | Question it answers                                         | Tool in this repo                         |
-| ----------- | ----------------------------------------------------------- | ----------------------------------------- |
-| **Traces**  | What did one specific request actually do, step by step?    | OpenTelemetry → OTel Collector → Tempo    |
-| **Metrics** | How is the system behaving in aggregate over time?          | Prometheus → Grafana                      |
-| **Logs**    | What text events happened, in what order, on which request? | Winston → stdout → Alloy → Loki → Grafana |
-
----
+Observability is the ability to understand what a running system is doing from its outputs. Three complementary signals cover the full picture.
 
 ### Winston (logs)
 
 **What it is.** Winston is the most widely used structured logging library for Node.js. It supports multiple transports (stdout, files, HTTP) and formats (JSON, pretty-print) and lets you define custom log levels.
 
-**Problem it solves.** `console.log` strings are hard to parse, filter, or correlate across requests. Structured JSON logs (one object per line) can be ingested by a log aggregator (Loki, Elasticsearch, CloudWatch) and queried with filters like `level=error AND service=api`.
-
-**In this repo.** Two loggers: `logger` for request/access logs and the audit logger (`src/infrastructure/observability/audit.ts`) for security events. Both write JSON to stdout. Every log line carries `trace_id` so a log entry can be linked back to its full trace in Grafana. Sensitive fields (`password`, `token`, `authorization`) are redacted before any log is written.
-
-→ [Winston & Audit Logs](../operate/winston.md)
-
----
-
 ### Prometheus (metrics)
 
 **What it is.** Prometheus is a time-series database and monitoring system. It works by scraping an HTTP endpoint exposed by the application — at regular intervals Prometheus pulls the current metric values and stores them as time-stamped data points.
-
-**Problem it solves.** Logs and traces tell you about individual events. Metrics answer aggregate questions: "What is the current request rate?", "How many errors happened in the last 5 minutes?", "Is p95 latency creeping up?" Without metrics you are blind to trends until they become outages.
-
-**In this repo.** Scrapes `/observability/metrics` every 15 seconds. Metrics include HTTP request rates, latency histograms (p50/p95/p99), error counts, in-flight requests, and business counters (logins, checkouts). Alert rules fire to Alertmanager when error rate or latency crosses configured thresholds. Stored for 7 days.
-
-→ [Prometheus](../operate/prometheus.md)
-
----
 
 ### Alertmanager
 
 **What it is.** Alertmanager is Prometheus's companion for alert routing. Prometheus evaluates rules and marks alerts as firing; Alertmanager groups, deduplicates, silences, and routes those alerts to configured receivers (Slack, PagerDuty, email, webhooks).
 
-**Problem it solves.** If Prometheus fired an alert directly to every receiver every 15 seconds during an outage you would be spammed with hundreds of identical messages. Alertmanager batches related alerts, applies repeat intervals, and applies silence rules — so on-call teams get one actionable notification, not a flood.
-
-**In this repo.** Local dev delivers alert mail to mailpit (a sink, so no real notification is sent); a route whose knob is set to empty goes to a `null` receiver. Alert rules (`prometheus.alert-rules.yaml`) cover availability, errors and latency, queue and outbox failures, stale scheduled jobs, and a `security.rules` group — the table is in [Prometheus](../operate/prometheus.md#alert-rules). Replace the receiver with Slack or PagerDuty for staging/production.
-
-→ [Prometheus](../operate/prometheus.md) · [Observability Reference](../operate/observability-reference.md)
-
----
-
 ### OpenTelemetry (traces)
 
 **What it is.** OpenTelemetry (OTel) is a vendor-neutral open standard for distributed tracing, metrics, and logs. It provides SDKs for every major language and a common wire format (OTLP). An "instrumentation" library wraps a framework (Express, Mongoose, Redis) and automatically creates "spans" for each operation.
-
-**Problem it solves.** When a request fails it is often not obvious _which_ database query was slow, _which_ middleware threw, or _which_ downstream call timed out. Distributed tracing produces a timeline of every operation that happened inside a single request — from the HTTP entry point down to the individual MongoDB query — with durations and error attributes attached to each step.
-
-**In this repo.** Auto-instrumentation for HTTP, Express, Mongoose, and Redis. No per-request code is needed — `startTracing()` is called once at boot before any instrumented libraries are imported. Traces are exported via OTLP/HTTP to the OTel Collector, which forwards them to Tempo.
-
-→ [OpenTelemetry](../operate/opentelemetry.md)
-
----
 
 ### OTel Collector
 
 **What it is.** The OpenTelemetry Collector is a standalone service that receives telemetry data from applications and routes it to one or more backends. It acts as a fan-out proxy: receive once, export to many.
 
-**Problem it solves.** If the app exports traces directly to Tempo, switching to Jaeger or a cloud vendor requires changing app code and redeploying. The collector breaks that coupling — swap backends in the collector config without touching the app. The collector can also batch, filter, and sample spans before export.
-
-**In this repo.** Listens on `:4318` (OTLP/HTTP) and `:4317` (OTLP/gRPC). Batches spans and exports to Tempo via internal gRPC. Config lives at `docker/observability/otel-collector.config.yaml`.
-
-→ [OpenTelemetry](../operate/opentelemetry.md) · [Observability Reference](../operate/observability-reference.md)
-
----
-
 ### Tempo (trace storage)
 
 **What it is.** Grafana Tempo is an open-source, horizontally scalable distributed trace storage system. It receives spans from the OTel Collector, stores them, and makes them queryable via TraceQL or by `trace_id` lookup.
-
-**Problem it solves.** Traces can be large — a busy API produces millions of spans per day. A general-purpose database is not designed to ingest, store, and query trace data efficiently. Tempo is optimised specifically for that workload: ingest is cheap, storage is compact, and lookups by trace ID are fast.
-
-**In this repo.** Runs in single-binary mode with local filesystem storage. Retention is 24 hours locally to keep disk usage small. All trace exploration happens through Grafana — you never query Tempo directly.
-
-→ [Tempo](../operate/tempo.md)
-
----
 
 ### Loki (log storage)
 
 **What it is.** Grafana Loki is a log aggregation system inspired by Prometheus. Instead of full-text indexing every word in every log line (like Elasticsearch does), Loki indexes only a small set of labels (`service`, `level`, `job`) and stores the raw log lines compressed. Queries filter by label first, then scan the matching compressed chunks.
 
-**Problem it solves.** Full-text indexed log stores (Elasticsearch) are expensive to run and scale because every word in every log line is indexed. Most log queries start with a label filter anyway (`service=api, level=error`). Loki's label-only index makes it much cheaper to operate while remaining fast for the most common query patterns.
-
-**In this repo.** Receives log lines from Alloy. Winston writes structured JSON to stdout; the container runtime captures it to a log file; Alloy tails that file and pushes to Loki. Labels parsed: `service`, `level`, `job`. Retention is 7 days. Queried via LogQL in Grafana.
-
-→ [Loki](../operate/loki.md)
-
----
-
 ### Alloy (log shipping)
 
 **What it is.** Alloy is Grafana's telemetry collector — an agent that tails log files on the host, applies pipeline transformations (parse JSON, add labels, drop noise), and pushes log entries to Loki. It replaces Promtail, which has been end of life since March 2026.
-
-**Problem it solves.** Loki does not pull logs — something must push them. Alloy sits on the host, knows where each container writes its log file, and handles the Docker vs Podman format differences without changes to the app itself.
-
-**In this repo.** One config, `docker/observability/alloy.logs.config.alloy`, reads both Docker (`json-file` log driver) and Podman (`k8s-file` / CRI format) at once, and the production stack loads the same file. `CONTAINER_LOGS_PATH` in `.env` says where the host keeps the logs (docker's is the default), and on Podman `CONTAINER_LOG_DRIVER=k8s-file` is what makes the log files exist at all — its own default, `journald`, writes none.
-
-→ [Loki](../operate/loki.md) · [Docker & Podman](../build/docker-and-podman.md)
-
----
 
 ### Grafana (UI)
 
 **What it is.** Grafana is an open-source observability UI. It connects to data sources (Prometheus, Tempo, Loki, and many others), renders dashboards and charts from queries, and lets you explore metrics, traces, and logs side by side.
 
-**Problem it solves.** Prometheus, Tempo, and Loki each have their own query language and their own UI. Grafana unifies them: one browser tab to explore a p95 latency spike (Prometheus), jump to the slow trace (Tempo), and read the correlated log lines (Loki) — all linked because they share a `trace_id`.
-
-**In this repo.** Auto-provisioned with Prometheus, Tempo, and Loki datasources. Ships a starter "API Traces" dashboard. Cross-signal jumps are configured so clicking a span opens the related Loki logs. Anonymous admin access in local dev — no login required. Available at `http://localhost:3001`.
-
-→ [Grafana](../operate/grafana.md)
-
----
+Full detail: [Observability stack](./tools-explained-observability.md).
 
 ## Project workflow tools
 
@@ -460,3 +292,8 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 **In this repo.** Five suites — unit, cross-cutting, integration, contract and fuzz (`npm test` runs them all). Config lives in `jest.config.js` and `tsconfig.jest.json`; see [Testing & Docs](../build/testing-and-docs.md).
 
 → [Testing & Docs](../build/testing-and-docs.md)
+
+## Read next
+
+- [Tools](./tool-map.md)
+- [Runtime](./runtime.md)

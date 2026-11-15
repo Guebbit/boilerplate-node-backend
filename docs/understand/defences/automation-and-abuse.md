@@ -84,7 +84,7 @@ So an honest first try never sees a challenge, and a credential-stuffing run mee
 exhausts the budget rung 1 already bounds. That is the whole design goal of this family stated in
 one rule: **put the cost on the behaviour, not on the person.**
 
-## Related
+## Read next
 
 - [Authentication](authentication.md#guessing-the-credential) — the budgets rung 1 extends
 - [Denial of service](denial-of-service.md) — the availability side of the same limits

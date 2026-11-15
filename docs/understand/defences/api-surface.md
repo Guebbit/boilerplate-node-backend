@@ -77,7 +77,7 @@ Listed rather than omitted, because "we do not have that" is a verdict and silen
 | The bundle matches its fragments    | `tests/cross-cutting/contract-bundles.test.ts`, `npm run check` |
 | The spec survives hostile input     | the `fuzz` suite, generating from the contract itself           |
 
-## Related
+## Read next
 
 - [Authorization](authorization.md) — the guards asserted against this route table
 - [Denial of service](denial-of-service.md) — the resource-consumption half of the API Top 10

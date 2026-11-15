@@ -166,7 +166,7 @@ Whatever the signal, two fields let you line them up afterwards:
 This is what makes the split above workable: an audit entry that looks wrong and the application
 log lines explaining it are one `app.request.id` query apart.
 
-## Related pages
+## Read next
 
 - [Winston & Audit Logs](../operate/winston.md)
 - [Observability Stack Reference](../operate/observability-reference.md) — the infrastructure the signals land in

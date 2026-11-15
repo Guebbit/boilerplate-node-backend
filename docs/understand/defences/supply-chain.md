@@ -71,7 +71,7 @@ difference is that this one does not sit under a dependency that moves.
 the moment a lockfile moves, which is why none is reproduced here — **run it, do not trust a
 transcription of it.** The `audit` job is what keeps the question being asked.
 
-## Related
+## Read next
 
 - [Infrastructure](infrastructure.md) — the image these packages end up in
 - [Runtime](runtime.md) — native code, where a dependency's bug becomes memory corruption

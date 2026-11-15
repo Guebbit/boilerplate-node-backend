@@ -43,7 +43,7 @@ usually typed as `string | undefined` and then used as a number.
 | Attack                       | How it works                                                                   | This boilerplate                                                                                                                                                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Environment-variable trust   | unvalidated config; proxy vars, `NODE_OPTIONS`, `NODE_TLS_REJECT_UNAUTHORIZED` | Every variable is read through a typed slice: a number that is not a whole number is refused at boot, never read as `NaN` or quietly replaced by a default, and the same gate refuses a missing, too-short or placeholder secret — [Configuration](../../operate/configuration.md), `infrastructure/config/define.ts` |
-| Debugger / inspector exposed | `--inspect` reachable from the network is remote code execution                | Nothing in production passes `--inspect`: `npm start` is `node --import tsx src/cluster.ts`, and only the dev-only `debug` script uses `--inspect-brk` — `package.json`                                                                                                                                               |
+| Debugger / inspector exposed | `--inspect` reachable from the network is remote code execution                | Nothing in production passes `--inspect`: `npm start` is `node --import tsx src/main.ts` (the cluster entry is `start:cluster`), and only the dev-only `debug` script uses `--inspect-brk` — `package.json`                                                                                                           |
 
 The `body-parser` advisory is the cautionary tale for this section: an INVALID `limit` value
 silently disabled size enforcement rather than failing. A config value that is wrong should be
@@ -70,7 +70,7 @@ bug in a native library lands as an unprivileged process rather than as root —
 [Infrastructure](infrastructure.md#the-container-and-the-image). That is the mitigation that
 actually applies to the rows above, since none of them can be prevented from inside `src/`.
 
-## Related
+## Read next
 
 - [Injection](injection.md) — where most "see the injection section" rows above go
 - [Denial of service](denial-of-service.md) — the availability half

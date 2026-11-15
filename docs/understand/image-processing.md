@@ -231,3 +231,8 @@ claim themselves. The hour of grace in the reaper covers an upload promoted but 
   to on-call. `onRecovered` logs the matching "reachable again" line. See
   `db.<collection>.find({ pendingImageKey: { $exists: true } })` above for the complementary,
   per-record signal.
+
+## Read next
+
+- [External Services](./external-services.md)
+- [Request Input](./request-input.md)

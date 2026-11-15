@@ -195,7 +195,7 @@ the filter and the predicate in `users/authenticatable.ts`, shared by the lookup
 the inactivity reaper. A provider the account already holds is not linked twice: the write is
 guarded on `oauthAccounts.provider`, and only a link that landed is audited.
 
-## Related
+## Read next
 
 - [Authorization](authorization.md) — what a proven identity is then allowed to do
 - [Crypto and secrets](crypto-and-secrets.md) — the hashing and randomness these controls rest on

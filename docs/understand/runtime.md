@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Runtime
 
+The runtime tools the backend stands on, and where each one is wired in.
+
 ## Main runtime tools
 
 | Tool                                                 | Why it is here          | Repo role                                                                  |
@@ -49,7 +51,7 @@ flowchart LR
 - [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts` (`npm run start:cluster` only); see also [Clustering & Shutdown](clustering.md)
 - [Zod schema basics](https://zod.dev/?id=basic-usage)
 
-## Related pages
+## Read next
 
 - [Layers](layers.md)
 - [Clustering & graceful shutdown](clustering.md)

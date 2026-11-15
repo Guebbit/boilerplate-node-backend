@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # MongoDB & Mongoose
 
+Why persistence is MongoDB through Mongoose, and which piece does which job.
+
 ## Why this stack exists in this repo
 
 This repository is the **MongoDB + Mongoose** flavor of the backend family.
@@ -234,7 +236,7 @@ each record can date itself, since an ObjectId's leading bytes are a timestamp.
 
 - [Mongoose: `diffIndexes()`](<https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()>)
 
-## Related pages
+## Read next
 
 - [Layers](layers.md)
 - [Redis Cache](./redis-cache.md)

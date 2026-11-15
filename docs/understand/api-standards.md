@@ -157,7 +157,7 @@ A source marked `verified` was read on 2026-11-06 (rows re-read on 2026-11-08 sa
 A promise date keeps AIP-142's meaning (a civil date, no time zone), so only its wire form is a
 difference: `civil-date-wire-form`. AIP-142 spells the type `google.type.Date`; we send the string.
 
-## Related
+## Read next
 
 - [Write Methods](write-methods.md), [Errors](../reference/errors.md), [Responses](../reference/responses.md)
 - [AI auditing](../build/ai-auditing.md): how the two audits run and where reports go

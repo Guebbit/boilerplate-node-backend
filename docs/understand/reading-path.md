@@ -175,3 +175,9 @@ Everything above is easier if these are in your head first:
 4. **Controllers respond, services decide, repositories query.** No layer does two of those.
 5. **`id` is not `_id`.** Mongo stores `_id`; the API speaks `id`. `persistence/serialize.ts` is
    the border.
+
+## Read next
+
+- [Architecture](./architecture.md)
+- [Layers](./layers.md)
+- [Request Flow](./request-flow.md)

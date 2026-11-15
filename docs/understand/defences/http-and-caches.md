@@ -63,7 +63,7 @@ application-level, in Redis.
 | Range / partial-content leaks               | a proxy caches partial private content                      | No surface: static files are public by construction, and the JSON API sends no `206`.                                                                                                                                                                                                                    |
 | Early hints / `103` confusion               | interim responses mishandled across layers                  | No surface: nothing sends `103`.                                                                                                                                                                                                                                                                         |
 
-## Related
+## Read next
 
 - [Denial of service](denial-of-service.md) — the availability half of this family
 - [Data layer](data-layer.md#the-cache) — the same cache, from the storage side

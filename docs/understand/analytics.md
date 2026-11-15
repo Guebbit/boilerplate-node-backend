@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Product Analytics
 
+Business events (signup, cart, checkout) leave the app through one helper, whichever provider receives them.
+
 ## Why it is here
 
 Product analytics answers **business** questions — "how many users abandon checkout?" — where
@@ -307,7 +309,7 @@ the API itself and an entire product's traffic would collapse onto one "visitor"
 - [Umami `/api/send`](https://umami.is/docs/api/sending-stats) — the endpoint both halves post to
 - [PostHog Node.js library](https://posthog.com/docs/libraries/node) — the client behind the `posthog` provider
 
-## Related pages
+## Read next
 
 - [Events & Logging](./events-and-logging.md) — analytics vs audit vs logs, and when to use which
 - [Frontend Observability](../operate/frontend-observability.md) — the browser half, which reports to the same Umami
