@@ -286,6 +286,10 @@ export default withMermaid(
                                 link: '/understand/defences/',
                                 collapsed: true,
                                 items: [
+                                    {
+                                        text: 'Every attack, A to Z',
+                                        link: '/understand/defences/a-to-z'
+                                    },
                                     { text: 'Injection', link: '/understand/defences/injection' },
                                     {
                                         text: 'Client-side',
