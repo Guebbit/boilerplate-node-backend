@@ -81,10 +81,11 @@ const AUDIENCES: ReadonlySet<string> = new Set([
 const HOME_PAGE = 'docs/index.md';
 
 /**
- * What the leading `---` block of a page says, or why it cannot be read.
+ * What the leading `---` block of a page says.
  *
  * @param text - A page's markdown.
- * @returns The parsed keys, or `undefined` when the page has no front-matter block.
+ * @returns The parsed keys; `{}` when the block is not a mapping; `undefined` when the page has no
+ *   front-matter block.
  */
 const frontMatterOf = (text: string): Record<string, unknown> | undefined => {
     const block = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text)?.[1];

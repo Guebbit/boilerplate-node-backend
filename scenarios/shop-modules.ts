@@ -4,7 +4,7 @@
  * `blank.ts` can read it too, without the two files importing each other: `index.ts` builds
  * `blank` and `shop` alike from these entries, so a value both need cannot live inside either.
  *
- * See: docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md
  */
 
 import type { SeedOutcome } from '@scenarios/seed';
@@ -43,11 +43,12 @@ export interface ShopModuleEntry {
  * Collected from the `shopModule` export of each `scenarios/<module>.ts` (`./shop-modules.generated`),
  * not listed here: a module's entry is added or removed by adding or deleting its file.
  * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
- * deliberately absent: those are what using the shop PRODUCES, once something drives it. See:
- * docs/build/demo-profile.md#how-a-scenario-is-built
+ * deliberately absent: those are what using the shop PRODUCES, once something drives it.
  *
  * `satisfies`, not an annotation: an annotation would widen every key to `string`, and
  * `./check.ts`'s compile-time check reads the literal keys straight off `keyof typeof shopModules`.
+ *
+ * @see docs/build/demo-profile.md#how-a-scenario-is-built
  */
 export const shopModules = shopModuleFixtures satisfies Record<string, ShopModuleEntry>;
 

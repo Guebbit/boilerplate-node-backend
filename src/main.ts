@@ -7,7 +7,7 @@
  * is imported dynamically below because a static import would be hoisted above `startTracing()`.
  * `src/cluster.ts` is the other entry (`npm run start:cluster`, a bare VM with no process manager).
  *
- * See: docs/understand/clustering.md
+ * @see docs/understand/clustering.md
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';

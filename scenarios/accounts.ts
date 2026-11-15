@@ -6,7 +6,7 @@
  * password stays PLAINTEXT — the schema's pre-save hook hashes it. The paired frontend's e2e reads
  * each login from the scenario description (`seedCredentials`), so it keeps no copy.
  *
- * See: docs/build/demo-profile.md#the-named-accounts
+ * @see docs/build/demo-profile.md#the-named-accounts
  */
 
 import { accessService } from '@modules/access';

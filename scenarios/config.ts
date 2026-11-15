@@ -6,7 +6,7 @@
  * Not part of the app's boot gate — the seeder is a script, not the app, and production has none of
  * these — but read through the same layer, so a blank value means "unset" here as everywhere.
  *
- * See: docs/build/demo-profile.md#the-named-accounts
+ * @see docs/build/demo-profile.md#the-named-accounts
  */
 
 import { defineConfig } from '@infrastructure/config/define';

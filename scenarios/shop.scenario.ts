@@ -5,7 +5,7 @@
  * (`scenarios/scenarios.generated.ts`), so the strip deletes this file rather than editing the
  * registry that lists it.
  *
- * See: docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md
  */
 
 import type { SeedOutcome } from '@scenarios/seed';

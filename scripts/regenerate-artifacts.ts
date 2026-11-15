@@ -21,7 +21,7 @@
  * import `@api/schemas.zod`. The client collections read `scenarios/subjects.ts` instead of a
  * generated dataset, are not committed, and so are not a step here either.
  *
- * See: docs/build/regenerating.md
+ * @see docs/build/regenerating.md
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
