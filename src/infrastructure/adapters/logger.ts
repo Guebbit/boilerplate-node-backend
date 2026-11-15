@@ -485,7 +485,9 @@ export const logger: Logger = winston.createLogger({
     // Merged into every record — lets a log aggregator filter by service when several
     // apps ship to the same backend.
     defaultMeta: {
-        service: loggingConfig().NODE_SERVICE_NAME
+        service: loggingConfig().NODE_SERVICE_NAME,
+        // Which process wrote the line: in cluster mode, which worker.
+        pid: process.pid
     },
     transports: [
         // stdout only, deliberately: in containers the platform owns log collection and
@@ -509,6 +511,7 @@ export const auditLogger: Logger = winston.createLogger({
     format: baseFormat,
     defaultMeta: {
         service: loggingConfig().NODE_SERVICE_NAME,
+        pid: process.pid,
         // Discriminator so the collector can route these to a separate index/retention policy.
         log_type: 'audit'
     },

@@ -65,6 +65,7 @@ Redaction runs first on purpose: its lists know the names code writes.
 | In code                                                                                 | On the line                                                          | Convention                      |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------- |
 | `service`                                                                               | `service.name`                                                       | resource attribute              |
+| `pid`                                                                                   | `process.pid`                                                        | process semconv                 |
 | `traceId`, `spanId`                                                                     | `trace_id`, `span_id`                                                | Logs Data Model (trace context) |
 | `method`, `route`, `statusCode`                                                         | `http.request.method`, `http.route`, `http.response.status_code`     | HTTP semconv                    |
 | `ip`, `userAgent`                                                                       | `client.address`, `user_agent.original`                              | client / user-agent semconv     |

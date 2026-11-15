@@ -23,6 +23,11 @@ import { REPO_ROOT } from '@tests/paths';
 export interface Cluster {
     /** The port the cluster's workers share. */
     port: number;
+    /**
+     * Requests answered so far, per worker pid: the spread across workers. Counts only the lines
+     * that carry a status code (see {@link createServedCounter}).
+     */
+    servedByPid: () => Map<number, number>;
     /** Stops the workers and the database they were given. */
     stop: () => Promise<void>;
 }
@@ -112,6 +117,139 @@ const waitForWorkers = (
     );
 
 /**
+ * Counts, per worker pid, the log lines that report one answered request.
+ *
+ * Two lines carry a status code: the access line (`request-logger.ts`) for what reaches the end of
+ * the chain, and `Antibot refused` (`antibot-log.ts`) for a 429, which the limiter answers before
+ * the access logger is mounted. Counting only those means one request is one count, whatever else
+ * a worker logs. The pid is the logger's own default field (`adapters/logger.ts`).
+ *
+ * `carry` holds the unfinished last line of a chunk: a chunk boundary falls anywhere, and a line
+ * split across two would otherwise be lost.
+ */
+const createServedCounter = () => {
+    const counts = new Map<number, number>();
+    let carry = '';
+
+    const countLine = (line: string): void => {
+        let record: Record<string, unknown>;
+        try {
+            // Narrowing: a log line is a JSON object; anything else (a stack trace) is skipped below.
+            record = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+            return;
+        }
+        const { message } = record;
+        // The line carries the logger's `pid` under its semantic name (`semantic-log-names.yaml`).
+        const pid = record['process.pid'];
+        const status = record['http.response.status_code'];
+        if (typeof message !== 'string' || typeof pid !== 'number') return;
+        const isAnswer =
+            (status === 200 && /^[A-Z]+ \S+ 200 /.test(message)) ||
+            (status === 429 && message.startsWith('Antibot refused'));
+        if (isAnswer) counts.set(pid, (counts.get(pid) ?? 0) + 1);
+    };
+
+    return {
+        counts,
+        /** @param chunk - the next piece of the child's output */
+        feed: (chunk: string): void => {
+            const lines = (carry + chunk).split('\n');
+            carry = lines.pop() ?? '';
+            for (const line of lines) countLine(line);
+        }
+    };
+};
+
+/**
+ * Spawn the real primary (`src/cluster.ts`) as a detached child with a complete, bootable
+ * environment, `env` layered over it.
+ *
+ * @param options - how many workers, which port and database to hand it, and the overrides
+ */
+const spawnPrimary = ({
+    workers,
+    env,
+    port,
+    dbUri
+}: {
+    workers: number;
+    env: Record<string, string>;
+    port: number;
+    dbUri: string;
+}): ChildProcess => {
+    // The preload is what registers the doubles production does not have (the fake payment
+    // provider, the mail log) — the same door `npm run dev` uses.
+    return spawn(
+        'npx',
+        ['tsx', '--import', './scenarios/support/development-doubles.ts', 'src/cluster.ts'],
+        {
+            cwd: REPO_ROOT,
+            // A new process group, PGID == this PID: `stop()` below signals the whole group, not
+            // just this one process — see its own docblock for why that is the point.
+            detached: true,
+            env: {
+                ...process.env,
+                /*
+                 * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
+                 * presence checks under `NODE_ENV=test`, and this suite wants them run for real
+                 * against the secrets set below.
+                 */
+                NODE_ENV: 'development',
+                NODE_PORT: String(port),
+                PORT: String(port),
+                NODE_DB_URI: dbUri,
+                NODE_TOKEN_ACCESS:
+                    '84860f6e3faa80b96e22593ea147c55d721af62475d82804a40610b892e84f80',
+                NODE_TOKEN_REFRESH:
+                    '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
+                /*
+                 * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
+                 * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
+                 * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
+                 * CI has none, so the child refuses to boot without them
+                 * (`src/kernel/module-config.ts`).
+                 */
+                NODE_URL: `http://127.0.0.1:${String(port)}`,
+                NODE_TOTP_ENCRYPTION_KEY:
+                    '92f71a95c55be9af2dace04afc34b7b8da824f58b7225bc8e289da7f6677581a',
+                NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
+                    'd31c29a41dec73b1cb2a6c16030c377e997176fee0fa4a2101a623f6093a44a7',
+                NODE_PII_ENCRYPTION_KEY:
+                    'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
+                /*
+                 * The shop's identity and VAT rates are required at boot too
+                 * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
+                 * values `.env-example` ships, so the child boots the way a fresh checkout does.
+                 */
+                NODE_LEGAL_COUNTRY: 'IT',
+                NODE_SHOP_TIMEZONE: 'Europe/Rome',
+                NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
+                NODE_LEGAL_STREET: 'Via Roma 1',
+                NODE_LEGAL_CITY: 'Milano',
+                NODE_LEGAL_ZIP: '20100',
+                NODE_SUPPORT_EMAIL: 'support@example.com',
+                NODE_LEGAL_PHONE: '+39 02 1234567',
+                NODE_VAT_RATE_DEFAULT: '0.22',
+                NODE_VAT_RATE_REDUCED: '0.10',
+                // The access line is `info`: a developer's `.env` set higher would hide it, and
+                // `createServedCounter` could count nothing.
+                NODE_LOG_LEVEL: 'info',
+                /*
+                 * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
+                 * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
+                 * process, and every assertion about crossing workers passes for the wrong reason.
+                 */
+                NODE_ENABLE_CLUSTERING: '1',
+                NODE_CLUSTER_WORKERS: String(workers),
+                ...env
+            },
+            stdio: ['ignore', 'pipe', 'pipe']
+        }
+    );
+};
+
+/**
  * Boot a cluster of `workers` processes with `env` layered over the defaults.
  *
  * Its own in-memory Mongo, because the workers connect over TCP from another process and cannot be
@@ -139,72 +277,7 @@ const startCluster = ({
             ])
         )
         .then(([mongo, port]) => {
-            // The preload is what registers the doubles production does not have (the fake payment
-            // provider, the mail log) — the same door `npm run dev` uses.
-            const child: ChildProcess = spawn(
-                'npx',
-                ['tsx', '--import', './scenarios/support/development-doubles.ts', 'src/cluster.ts'],
-                {
-                    cwd: REPO_ROOT,
-                    // A new process group, PGID == this PID: `stop()` below signals the whole group, not
-                    // just this one process — see its own docblock for why that is the point.
-                    detached: true,
-                    env: {
-                        ...process.env,
-                        /*
-                         * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
-                         * presence checks under `NODE_ENV=test`, and this suite wants them run for real
-                         * against the secrets set below.
-                         */
-                        NODE_ENV: 'development',
-                        NODE_PORT: String(port),
-                        PORT: String(port),
-                        NODE_DB_URI: mongo.uri,
-                        NODE_TOKEN_ACCESS:
-                            '84860f6e3faa80b96e22593ea147c55d721af62475d82804a40610b892e84f80',
-                        NODE_TOKEN_REFRESH:
-                            '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
-                        /*
-                         * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
-                         * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
-                         * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
-                         * CI has none, so the child refuses to boot without them
-                         * (`src/kernel/module-config.ts`).
-                         */
-                        NODE_URL: `http://127.0.0.1:${String(port)}`,
-                        NODE_TOTP_ENCRYPTION_KEY:
-                            '92f71a95c55be9af2dace04afc34b7b8da824f58b7225bc8e289da7f6677581a',
-                        NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
-                            'd31c29a41dec73b1cb2a6c16030c377e997176fee0fa4a2101a623f6093a44a7',
-                        NODE_PII_ENCRYPTION_KEY:
-                            'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
-                        /*
-                         * The shop's identity and VAT rates are required at boot too
-                         * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
-                         * values `.env-example` ships, so the child boots the way a fresh checkout does.
-                         */
-                        NODE_LEGAL_COUNTRY: 'IT',
-                        NODE_SHOP_TIMEZONE: 'Europe/Rome',
-                        NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-                        NODE_LEGAL_STREET: 'Via Roma 1',
-                        NODE_LEGAL_CITY: 'Milano',
-                        NODE_LEGAL_ZIP: '20100',
-                        NODE_SUPPORT_EMAIL: 'support@example.com',
-                        NODE_LEGAL_PHONE: '+39 02 1234567',
-                        NODE_VAT_RATE_DEFAULT: '0.22',
-                        NODE_VAT_RATE_REDUCED: '0.10',
-                        /*
-                         * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
-                         * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
-                         * process, and every assertion about crossing workers passes for the wrong reason.
-                         */
-                        NODE_ENABLE_CLUSTERING: '1',
-                        NODE_CLUSTER_WORKERS: String(workers),
-                        ...env
-                    },
-                    stdio: ['ignore', 'pipe', 'pipe']
-                }
-            );
+            const child = spawnPrimary({ workers, env, port, dbUri: mongo.uri });
 
             /*
              * Kept so a boot failure can say WHY. Discarding the child's output made every failure
@@ -227,10 +300,12 @@ const startCluster = ({
              */
             let workersReady = 0;
             let readyTail = '';
+            const served = createServedCounter();
 
             const capture = (chunk: Buffer | string): void => {
                 const text = String(chunk);
 
+                served.feed(text);
                 output.push(text);
                 if (output.length > MAX_CAPTURED_CHUNKS)
                     output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
@@ -294,7 +369,7 @@ const startCluster = ({
             return waitForListening(port, bootTimeoutMs)
                 .then(() => waitForWorkers(workers, bootTimeoutMs, () => workersReady))
                 .then(
-                    () => ({ port, stop }),
+                    () => ({ port, stop, servedByPid: () => served.counts }),
                     (error: unknown) =>
                         stop().then(() => {
                             const reason = error instanceof Error ? error.message : String(error);
@@ -349,3 +424,61 @@ export const tally = (statuses: number[]): Record<number, number> => {
 
     return counts;
 };
+
+/** What a primary that refused to boot left behind. */
+export interface Refusal {
+    /** The process's exit code. */
+    exitCode: number | null;
+    /** Everything it wrote to stdout and stderr. */
+    output: string;
+}
+
+/** How long a primary gets to refuse: boot plus the config check, well under a minute. */
+const REFUSAL_TIMEOUT_MS = 60_000;
+
+/**
+ * Start the primary where it should refuse to boot, wait for it to exit, and hand back how.
+ *
+ * {@link withCluster} cannot do this: it waits for workers that never come, and has no early-exit
+ * detection. No database is started: the refusal comes before the primary forks or connects.
+ * A primary still alive after {@link REFUSAL_TIMEOUT_MS} REJECTS, so a boot that wrongly succeeds
+ * fails the case.
+ *
+ * @param options - the worker count and the environment overrides
+ */
+export const expectRefusal = (options: {
+    workers: number;
+    env: Record<string, string>;
+}): Promise<Refusal> =>
+    freePort().then(
+        (port) =>
+            new Promise<Refusal>((resolve, reject) => {
+                const child = spawnPrimary({
+                    workers: options.workers,
+                    env: options.env,
+                    port,
+                    dbUri: 'mongodb://127.0.0.1:1/refusal'
+                });
+                const chunks: string[] = [];
+                const collect = (chunk: Buffer | string): void => {
+                    chunks.push(String(chunk));
+                };
+                child.stdout?.on('data', collect);
+                child.stderr?.on('data', collect);
+
+                const timer = setTimeout(() => {
+                    // The whole group: `child` is `npx`, and the primary may have forked workers.
+                    if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL');
+                    reject(
+                        new Error(
+                            `The primary was still running after ${String(REFUSAL_TIMEOUT_MS)}ms; it should have refused to boot.\n${chunks.join('')}`
+                        )
+                    );
+                }, REFUSAL_TIMEOUT_MS);
+
+                child.once('exit', (exitCode) => {
+                    clearTimeout(timer);
+                    resolve({ exitCode, output: chunks.join('') });
+                });
+            })
+    );

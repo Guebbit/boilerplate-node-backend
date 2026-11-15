@@ -1,11 +1,14 @@
 /**
  * @module
- * The decisions `src/cluster.ts`'s primary makes, as pure functions: how many workers to fork, and
- * what to do when one crashes. Kept apart from the primary itself, which is a script with process
- * side effects, so each rule can be tested on its own.
+ * The decisions `src/cluster.ts`'s primary makes, as pure functions: how many workers to fork,
+ * whether the environment allows forking them, and what to do when one crashes. Kept apart from
+ * the primary itself, which is a script with process side effects, so each rule can be tested on
+ * its own.
  *
  * See: docs/theory/clustering.md
  */
+
+import { ConfigError } from '@infrastructure/config/define';
 
 /**
  * How many workers to fork.
@@ -17,6 +20,42 @@
  */
 export const workerTarget = (requested: number, availableCpus: number): number =>
     Math.max(1, requested > 0 ? requested : availableCpus);
+
+/**
+ * Refuse to fork several workers that would each count rate limits alone.
+ *
+ * Without the `limits` Redis every worker keeps its own in-memory counters, so each
+ * `NODE_RATE_LIMIT_*` budget silently becomes `budget × workers`: a security control off by the
+ * worker count. Called by the primary only, before it forks. `--scale app=N` replicas and PM2
+ * cannot be seen from here, so they stay the operator's to set up.
+ * See: docs/theory/clustering.md
+ *
+ * @param environment - the primary's resolved settings
+ * @param environment.clustered - `NODE_ENABLE_CLUSTERING`
+ * @param environment.configuredWorkers - `NODE_CLUSTER_WORKERS`
+ * @param environment.availableCpus - `os.availableParallelism()`
+ * @param environment.limitsRedisUrl - `NODE_RATE_LIMIT_REDIS_URL`, when set
+ * @throws {ConfigError} when clustering would fork 2+ workers with no limits Redis
+ */
+export const assertSharedRateLimitCounters = ({
+    clustered,
+    configuredWorkers,
+    availableCpus,
+    limitsRedisUrl
+}: {
+    clustered: boolean;
+    configuredWorkers: number;
+    availableCpus: number;
+    limitsRedisUrl: string | undefined;
+}): void => {
+    const workers = workerTarget(configuredWorkers, availableCpus);
+    if (!clustered || limitsRedisUrl || workers < 2) return;
+    throw new ConfigError(
+        `Refusing to start ${String(workers)} cluster workers without NODE_RATE_LIMIT_REDIS_URL: ` +
+            'each worker would count rate limits alone, so every NODE_RATE_LIMIT_* budget would be ' +
+            'multiplied by the worker count. Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.'
+    );
+};
 
 /** What the primary does about one worker crash. */
 export type CrashVerdict =

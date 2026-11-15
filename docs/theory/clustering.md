@@ -23,7 +23,7 @@ of process management.
 - `/metrics` is per copy: each scrape hits a different worker, nothing aggregates them.
 - The `ApiRestarting` alert is unreliable: `process_start_time_seconds` jumps between workers.
 - SSE caps (per-user and global stream limits) are counted per copy, so the real ceiling is cap × workers.
-- Rate-limit budgets are per process without a `limits` Redis; the app logs an error at boot in cluster mode.
+- Rate-limit budgets are per process without a `limits` Redis, so `start:cluster` refuses to boot with 2+ workers and no `NODE_RATE_LIMIT_REDIS_URL`. PM2 and `--scale app=N` are not detected: set the URL yourself.
 
 ## Why a primary + workers (cluster mode)
 

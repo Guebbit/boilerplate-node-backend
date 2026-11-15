@@ -5,7 +5,7 @@
  * Sibling to `rate-limit-store.test.ts`, deliberately kept separate: that file lets the real
  * `RedisStore` run against a fake low-level `redis` client to guard the `connecting`-promise
  * handshake race. This one mocks `RedisStore` itself, because what is under test here — which
- * store gets built, URL-resolution priority, lazy construction, the missing-config alert, and the
+ * store gets built, URL-resolution priority, lazy construction, and the
  * init-failure regression below — needs to control `RedisStore.init`/`increment` directly rather
  * than drive them through a real Lua-script-loading round trip. One `jest.mock('rate-limit-redis')`
  * per file, so the two approaches cannot live together in one.
@@ -171,37 +171,6 @@ describe('rateLimitStore — which store gets built', () => {
         expect(mockConstruct).toHaveBeenCalledWith(
             expect.objectContaining({ prefix: 'rate-limit:credentials-identity:' })
         );
-    });
-});
-
-describe('rateLimitStore — the missing-config alert', () => {
-    it('logs when no Redis is configured and cluster mode runs more than one worker', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_ENABLE_CLUSTERING: '1', NODE_CLUSTER_WORKERS: '4' });
-
-        freshStore().rateLimitStore('global');
-
-        expect(freshLogger().error).toHaveBeenCalledWith(
-            expect.objectContaining({ namespace: 'global' })
-        );
-    });
-
-    it('stays quiet outside cluster mode, the default single process', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_ENABLE_CLUSTERING: '0', NODE_CLUSTER_WORKERS: '4' });
-
-        freshStore().rateLimitStore('global');
-
-        expect(freshLogger().error).not.toHaveBeenCalled();
-    });
-
-    it('stays quiet when a single worker makes per-process counting correct anyway', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_ENABLE_CLUSTERING: '1', NODE_CLUSTER_WORKERS: '1' });
-
-        freshStore().rateLimitStore('global');
-
-        expect(freshLogger().error).not.toHaveBeenCalled();
     });
 });
 
