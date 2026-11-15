@@ -3,22 +3,19 @@ type: reference
 audience: [anyone]
 ---
 
-# File Glossary
+# Reference
 
-**You found a filename and you do not know what it is.** This section answers that in one hop:
-what the file is, what breaks without it, and which page explains the concept behind it.
+**Look something up.** The folders of the repository, what lives in each, and the lookups an API
+reader or an operator keeps open: endpoints, errors, field limits, scripts, dependencies, terms.
 
-It is a **map, not a theory page**. Nothing here re-explains what
-[Theory](../understand/start.md), [Tools](../understand/tool-map.md) or [API](../build/api-contracts.md) already explain — every entry points
-at them instead.
+It is a **map, not a theory page**. Nothing here re-explains what the [understand](../understand/start.md) or
+[build](../build/start.md) sections already explain: a row points at them.
 
-::: tip Looking for something else?
-Reading the codebase for the first time? [Reading Path](../understand/reading-path.md) names nine
-files in order. This section is the opposite tool: it assumes you already hit a file and want out
-of it fast.
+::: tip Looking for a file you just found?
+Open it: every file starts with a `@module` header that says what it is. A row on these pages
+names the **folder**, and its "Read next" says which page explains the idea. Reading the codebase
+for the first time? [Reading Path](../understand/reading-path.md) names nine files in order.
 :::
-
----
 
 ## The map
 
@@ -47,96 +44,48 @@ flowchart TD
     class Contracts,Ops,Dev,Jobs,Data,Scenarios,Tests side;
 ```
 
-| Page                                      | Covers                                                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [Repository Root](./root.md)              | Everything with no directory above it — configs, manifests, tool entry points                                 |
-| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `shared/locales/`, and the five files at the top of `src/`           |
-| [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                   |
-| [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
-| [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |
-| [Data](./data.md)                         | `scripts/db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner          |
-| [Scripts & Hooks](./scripts.md)           | `scripts/` (including `db/`, `ops/` and `eslint/`), `.husky/`                                                 |
-| [Tests](./tests.md)                       | `tests/`, the co-located module suites, `tests/load/`                                                         |
-| [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`                                                               |
+### The folder map
 
----
+| Page                                      | Covers                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [Repository Root](./root.md)              | Everything with no directory above it — configs, manifests, tool entry points                                       |
+| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `src/domain-primitives/`, `shared/locales/`, and the entry files of `src/` |
+| [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                         |
+| [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                                  |
+| [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets       |
+| [Data](./data.md)                         | `scripts/db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner                |
+| [Scripts & Hooks](./scripts.md)           | `scripts/` folder by folder, `.husky/`                                                                              |
+| [Tests](./tests.md)                       | `tests/` suite by suite, the co-located module suites, `tests/load/`                                                |
+| [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`, the scheduled jobs                                                 |
 
-## How to read an entry
+### The API lookups
 
-Every page is a table. Three columns, and the third is the point:
+| Page                                          | Covers                                                       |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| [Endpoints](./endpoints.md)                   | Why each domain's routes are shaped as they are              |
+| [`GET /config`](./config.md)                  | The one public answer a client boots from                    |
+| [Observability endpoints](./observability.md) | The `/observability/*` routes and who may call them          |
+| [Success responses](./responses.md)           | The shape of an answer: a resource, a list, no body          |
+| [Error responses](./errors.md)                | Problem details, the `errors` extension, headers on an error |
+| [Sorting a list](./sorting.md)                | The `sort` parameter and which fields each list allows       |
+| [Field limits](./field-limits.md)             | The `maxLength` every string carries, by kind                |
 
-| File             | What it is                                                                                                                                                      | Read next                                                                           |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `src/modules.ts` | The list of domains this build serves: one import and one array entry each. Enabling or disabling a domain is one line here — there is no filesystem discovery. | [Modules](../understand/modules.md) · [Reading Path](../understand/reading-path.md) |
+### The other lookups
 
-- **What it is** — one or two sentences, present tense, saying what the file _is_ and what breaks
-  without it. If an entry needs three sentences, the concept belongs in a linked page and the
-  entry links to it.
-- **Read next** — where the explanation lives. `—` means no page covers it yet, and that is a
-  documentation gap on the record rather than a missing link.
-
-## Three tiers, so the whole repository fits in a few pages
-
-Most of the repository is repetition. A row per file would be neither writable nor readable, so
-every tracked file lands in exactly one of three tiers.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
-flowchart LR
-    F["A tracked file"] --> Q1{"Unique and<br/>hand-written?"}
-    Q1 -->|yes| Named["**Named** — its own row"]
-    Q1 -->|no| Q2{"One instance of<br/>a shape?"}
-    Q2 -->|yes| Pattern["**Pattern** — one row<br/>for the shape"]
-    Q2 -->|no| Excluded["**Excluded** — generated,<br/>vendored or binary"]
-
-    classDef named fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef pat fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef exc fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class Named named;
-    class Pattern pat;
-    class Excluded exc;
-```
-
-**Named.** The file is one of a kind — `orval.config.ts`, `src/app.ts`,
-`tests/cross-cutting/scheduled-jobs.test.ts`. It gets its own row.
-
-**Pattern.** The file is one instance of a shape that repeats. The shape gets the row and the
-explanation; an inventory table says which modules have it. This is where the leverage is:
-`src/modules/` collapses to about two dozen entries.
-
-**Excluded.** Generated, vendored or binary, stated once per directory so a reader knows it was a
-decision and not an oversight. `api/models/` is the large one — Orval writes it from
-`openapi.yaml` and it is regenerated wholesale.
-
-Anything git does not track is out by definition: `dist/`, `tmp/`, `node_modules/`,
-`docs/.vitepress/cache/`.
-
-## Why there are no file counts here
-
-A number in prose goes stale without anyone editing the line, and nothing distinguishes a stale
-count from a current one. So the glossary states **shapes** — "one per module", "one per
-channel" — and leaves the counting to `git ls-files`, which is always right and always to hand:
-
-```bash
-git ls-files | awk -F/ '{if (NF==1) print "ROOT"; else print $1}' | sort | uniq -c | sort -rn
-```
+| Page                                                | Covers                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| [Glossary](./glossary.md)                           | Terms as each module means them, and the terms that cross modules |
+| [Package scripts](./package-scripts.md)             | Every `npm run`, grouped by job                                   |
+| [Package dependencies](./package-dependencies.md)   | What each dependency is for                                       |
+| [Permission vocabulary](./permission-vocabulary.md) | The generated, closed lists of actions, subjects and sets         |
 
 ## Keeping this page true
 
-Nothing enforces it. These pages are prose, and prose about a filesystem goes stale the first time
-somebody adds a file without opening this section.
+A commit that adds, moves or removes a **folder** updates the row that names it, on the page the
+folder map above points to. A new file inside an existing folder needs nothing here: its own
+`@module` header says what it is, and `npm run check` refuses a dead path in a code span.
 
-So the habit is the mechanism: **a commit that adds, moves or deletes a file updates the page that
-names it.** The table in [the map](#the-map) says which page that is. To check a directory by hand,
-compare what the glossary names against what git tracks:
-
-```bash
-git ls-files src/infrastructure | while read -r f; do
-    grep -qF "\`$f\`" docs/reference/*.md || echo "undocumented: $f"
-done
-```
-
-::: warning If you are writing an entry
-The glossary describes what exists. If writing a row reveals a file that should not exist, raise
-it — do not document a mistake into permanence.
+::: warning If you are writing a row
+A row describes what exists. If writing one shows a folder that should not exist, raise it. Do not
+document a mistake into permanence.
 :::

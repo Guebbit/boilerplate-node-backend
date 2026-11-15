@@ -116,10 +116,10 @@ New to the stack? Start at [Tools Explained](./understand/tools-explained.md) fo
 
 Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation alignment.
 
-### [Files](./reference/start.md)
+### [Reference](./reference/start.md)
 
-The lookup surface: every file in the repository, what it is, and which page above explains it.
-Start here when you have landed on a filename rather than on a question.
+The lookup surface: the folders of the repository, what lives in each, and the lookups an API reader keeps open.
+Start here when you have a folder, a route or a term to look up rather than a question.
 
 ## Quick visual of the current repo
 
@@ -163,7 +163,7 @@ flowchart LR
 - Deploying instead of developing? [Getting Started — Production](./operate/first-deploy.md).
 - Not a developer, or explaining this to someone who is not? [Demo Shop](./use-the-shop/start.md) — the whole application in five short pages.
 - Want to know what one domain does, end to end? [Modules](./modules/start.md) — one page each, same shape every time.
-- Found a file and have no idea what it is? [File Glossary](./reference/start.md) — one hop to an answer.
+- Found a folder and have no idea what it is? [Reference](./reference/start.md) — one hop to an answer.
 - Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./build/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./understand/start.md) and [Layers](./understand/layers.md).
 - Want a specific dependency? Start at [Tools](./understand/tool-map.md) and jump to the tool page you need.

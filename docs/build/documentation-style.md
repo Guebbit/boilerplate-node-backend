@@ -264,8 +264,8 @@ passing a check. Judgement stays with whoever writes the page.
 
 ## Read next
 
-| You want to                            | Read                                   |
-| -------------------------------------- | -------------------------------------- |
-| See the file glossary these docs index | [File Glossary](../reference/start.md) |
-| Write a code comment                   | [Code comments](./code-comments.md)    |
-| Check the file paths the docs name     | `npm run check`                        |
+| You want to                         | Read                                |
+| ----------------------------------- | ----------------------------------- |
+| Look up a folder, a route or a term | [Reference](../reference/start.md)  |
+| Write a code comment                | [Code comments](./code-comments.md) |
+| Check the file paths the docs name  | `npm run check`                     |

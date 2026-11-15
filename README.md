@@ -107,20 +107,20 @@ and the flow runner are `scenarios/`, outside `src/` entirely; index sync and th
 
 ## The map
 
-| You want to                   | Read                                                                                                                                         |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Get it running                | [Getting Started](./docs/build/run-locally.md)                                                                                               |
-| **Read the code, first time** | **[Reading Path](./docs/understand/reading-path.md)** — nine files, in order                                                                 |
-| Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                                            |
-| Understand the shape          | [Architecture](./docs/understand/architecture.md) · [Layers](./docs/understand/layers.md) · [Modules](./docs/understand/modules.md)          |
-| Add or remove a domain        | [Adding & Removing a Module](./docs/build/module-lifecycle.md)                                                                               |
-| Change an endpoint            | [OpenAPI Workflow](./docs/build/openapi-workflow.md) · [Regenerating](./docs/build/regenerating.md)                                          |
-| Run the pair                  | [Pairing & Ports](./docs/build/pairing-and-ports.md)                                                                                         |
-| Look up a script              | [Package Scripts](./docs/reference/package-scripts.md)                                                                                       |
-| Catch an outbound webhook     | [Docker & Podman](./docs/build/docker-and-podman.md#the-integrations-profile-is-where-a-real-consumer-would-go) — the `integrations` profile |
-| Understand a dependency       | [Tools Explained](./docs/understand/tools-explained.md)                                                                                      |
-| Test something                | [Testing overview](./docs/build/testing-and-docs.md)                                                                                         |
-| Deploy it                     | [Getting Started — Production](./docs/operate/first-deploy.md)                                                                               |
+| You want to                         | Read                                                                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Get it running                      | [Getting Started](./docs/build/run-locally.md)                                                                                               |
+| **Read the code, first time**       | **[Reading Path](./docs/understand/reading-path.md)** — nine files, in order                                                                 |
+| Look up a folder, a route or a term | [Reference](./docs/reference/start.md) — one hop to an answer                                                                                |
+| Understand the shape                | [Architecture](./docs/understand/architecture.md) · [Layers](./docs/understand/layers.md) · [Modules](./docs/understand/modules.md)          |
+| Add or remove a domain              | [Adding & Removing a Module](./docs/build/module-lifecycle.md)                                                                               |
+| Change an endpoint                  | [OpenAPI Workflow](./docs/build/openapi-workflow.md) · [Regenerating](./docs/build/regenerating.md)                                          |
+| Run the pair                        | [Pairing & Ports](./docs/build/pairing-and-ports.md)                                                                                         |
+| Look up a script                    | [Package Scripts](./docs/reference/package-scripts.md)                                                                                       |
+| Catch an outbound webhook           | [Docker & Podman](./docs/build/docker-and-podman.md#the-integrations-profile-is-where-a-real-consumer-would-go) — the `integrations` profile |
+| Understand a dependency             | [Tools Explained](./docs/understand/tools-explained.md)                                                                                      |
+| Test something                      | [Testing overview](./docs/build/testing-and-docs.md)                                                                                         |
+| Deploy it                           | [Getting Started — Production](./docs/operate/first-deploy.md)                                                                               |
 
 ---
 
