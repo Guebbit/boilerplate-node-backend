@@ -99,15 +99,23 @@ export const createSharedProviderRegistry = <T>(
  * @param registry - the port's registry
  * @param variable - the selector's environment variable, for the message
  * @param name - the configured name
+ * @param development - the names that exist only as development doubles, and what to call one
+ *   (`noun`, e.g. "transport"): an unknown `name` on the list gets a refusal that says so, since
+ *   "Allowed: smtp" would not tell a developer why the `log` in their `.env` is refused outside
+ *   `NODE_ENV=development`
  * @throws {Error} when nothing is registered under `name`
  */
 export const requireProvider = <T>(
     registry: ProviderRegistry<T>,
     variable: string,
-    name: string
+    name: string,
+    development?: { readonly noun: string; readonly names: readonly string[] }
 ): T => {
     const provider = registry.resolve(name);
-    if (provider === undefined)
-        throw new Error(`Unknown ${variable}: "${name}". Allowed: ${registry.names().join(', ')}.`);
-    return provider;
+    if (provider !== undefined) return provider;
+    if (development?.names.includes(name))
+        throw new Error(
+            `Unknown ${variable}: "${name}" — \`${name}\` is a development ${development.noun}; it is loaded only when NODE_ENV=development.`
+        );
+    throw new Error(`Unknown ${variable}: "${name}". Allowed: ${registry.names().join(', ')}.`);
 };
