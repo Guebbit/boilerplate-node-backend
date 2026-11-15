@@ -59,3 +59,9 @@ flowchart LR
 - Reuse shared schemas, parameters, and responses inside [`openapi.yaml`](./openapi-workflow.md#openapi-is-the-source-of-truth).
 - Keep response handling consistent so auth, caching, metrics, and tracing can plug into the same request path.
 - Treat the sample entities (`users`, `products`, `orders`, `cart`, `observability`) as examples of API patterns, not product law.
+
+## Read next
+
+- [OpenAPI Workflow](./openapi-workflow.md)
+- [AsyncAPI Workflow](./asyncapi-workflow.md)
+- [Regenerating After a Change](./regenerating.md)

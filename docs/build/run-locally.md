@@ -220,7 +220,7 @@ them.
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,
 minutes), `npm run test:prism` (boots a mock server on a real port).
 
-## Where to go next
+## Read next
 
 | You want to                                 | Read                                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------------------- |

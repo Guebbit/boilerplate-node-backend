@@ -264,3 +264,9 @@ CI runs `lint:asyncapi` against `asyncapi.yaml` and `asyncapi.public.yaml`. Ther
 A break the maintainers decided on is listed in `ACKNOWLEDGED_BREAKS` (same file) with its JSON pointer and what replaced it, and the gate leaves exactly that pointer out. Delete the entry once the change has reached `origin/main`. Today it names `order.shipped`, replaced by `shipment.shipped` and `shipment.delivered` when an order learned to ship in parts.
 
 It is PR-only in CI (`asyncapi-breaking` in `ci.yml`) — on a push to main the code is already merged, and there is nothing left to diff against. Locally it is part of `complete`, comparing against whatever `origin/main` your machine last fetched.
+
+## Read next
+
+- [Versioning and Retiring an Endpoint](./versioning.md#webhooks)
+- [Regenerating After a Change](./regenerating.md)
+- [Contract Ownership & Fragmentation](./contract-fragmentation.md)

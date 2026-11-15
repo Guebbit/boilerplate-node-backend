@@ -97,7 +97,7 @@ That second one is worth internalising: a property that fails on your own assert
 
 The same technique and the same two rules apply in the paired frontend, over `boilerplate-vue-frontend/src/infrastructure/utils/formatters.ts` and `boilerplate-vue-frontend/src/infrastructure/utils/uploads.ts`.
 
-## Related pages
+## Read next
 
 - [Unit Testing](./unit-testing.md) — the example-based layer these sit beside
 - [Spec-Driven Fuzzing](./fuzz-testing.md) — the same idea aimed at HTTP endpoints instead of functions

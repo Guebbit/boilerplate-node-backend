@@ -114,7 +114,7 @@ score subsumes coverage; a line no test ran is a `NoCoverage` mutant. See
 [Tests → Three numbers](../reference/tests.md#three-numbers-and-they-are-not-the-same-question).
 :::
 
-## Related pages
+## Read next
 
 - [Testing](./testing-and-docs.md) — suite overview
 - [Integration Testing](./integration-testing.md) — the same `src/app.ts`, driven over real HTTP

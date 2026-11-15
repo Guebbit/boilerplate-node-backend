@@ -253,6 +253,18 @@ export default withMermaid(
                             { text: 'Load testing', link: '/build/load-testing' },
                             { text: 'Mutation Testing', link: '/build/mutation-testing' },
                             {
+                                text: 'Mutation: memory and workers',
+                                link: '/build/mutation-testing-memory'
+                            },
+                            {
+                                text: 'Mutation: running it',
+                                link: '/build/mutation-testing-running'
+                            },
+                            {
+                                text: 'Mutation: the ratchet',
+                                link: '/build/mutation-testing-ratchet'
+                            },
+                            {
                                 text: 'Coverage & Confidence',
                                 link: '/build/coverage-and-confidence'
                             },

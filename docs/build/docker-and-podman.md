@@ -332,7 +332,7 @@ It becomes worth considering when the project grows into:
 
 Until then, Docker/Podman compose is the simpler mental model.
 
-## Related pages
+## Read next
 
 - [Runtime](../understand/runtime.md)
 - [RabbitMQ](../understand/rabbitmq.md)

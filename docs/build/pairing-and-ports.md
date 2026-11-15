@@ -262,3 +262,9 @@ rejects it until that origin is added.
 The shipped `.env` is a development configuration: permissive CORS, seeded demo credentials, and
 datastores with default passwords. Do not do this on a public or shared network.
 :::
+
+## Read next
+
+- [Getting Started](./run-locally.md)
+- [Start a New Project](./new-project.md)
+- [Docker & Podman](./docker-and-podman.md)

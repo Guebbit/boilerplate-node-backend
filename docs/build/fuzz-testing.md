@@ -209,7 +209,7 @@ it passes the oracle, but it locks `authenticateAs` out and the fuzzing quietly 
 
 The run is **seeded**, so a failure is reproducible rather than a story about something that happened once. A counterexample printed by `fast-check` can be pasted straight into a regression test.
 
-## Related pages
+## Read next
 
 - [Contract Testing](./contract-testing.md) — the same `assertResponseMatchesContract` judge, driven by hand-written cases
 - [Contract-Derived Request Data](./contract-request-data.md) — generation from the zod side rather than the spec side

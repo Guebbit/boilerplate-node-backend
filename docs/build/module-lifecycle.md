@@ -584,7 +584,7 @@ What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries`
 co-located spec to its sibling's barrel, and `tests/contract/route-spec-parity.test.ts` keeps every mounted route in
 the spec and every spec operation mounted. Neither is a substitute for actually deleting a folder.
 
-## Related pages
+## Read next
 
 - [Modules](../understand/modules.md) — why the shape is what it is
 - [Layers](../understand/layers.md) — the layer stack inside one module

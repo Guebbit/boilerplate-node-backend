@@ -105,7 +105,7 @@ It prints these instead of guessing:
 It scaffolds two modules, one with the defaults and one with `--no-audit --group shop`, so both
 template variants compile. It is report-only and not part of the commit gate.
 
-## Related pages
+## Read next
 
 - [Adding & removing a module](module-lifecycle.md) — the procedure this automates
 - [The module template](../understand/modules.md#the-module-template) — the `example` module the template was cut from

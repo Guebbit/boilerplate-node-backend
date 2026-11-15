@@ -185,7 +185,7 @@ Runs as part of the contract suite — no separate script:
 
 Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of `tests/contract/` is — Stryker's `testPathIgnorePatterns` already covers the whole directory, so this file needed no extra configuration to stay out of the (unit-only) mutation run.
 
-## Related pages
+## Read next
 
 - [Contract Testing](./contract-testing.md) — the response-shape mirror of this page
 - [Testing](./testing-and-docs.md) — suite overview

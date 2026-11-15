@@ -393,7 +393,7 @@ Two notes worth keeping, because they outlived the tools:
   Meta run the idea in production internally, but it is not a product. If that changes, the
   prompt files here are the thing that would be replaced.
 
-## Related
+## Read next
 
 - [Mutation Testing](./mutation-testing.md) — the deterministic instrument this one complements
 - [Coverage & Confidence](./coverage-and-confidence.md) — what a score does and does not mean

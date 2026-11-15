@@ -315,7 +315,7 @@ green for mutants nobody re-ran.
 
 **What would change it.** The run outgrowing its window, or a decision to run the whole-repo mutation more often than monthly. Both make the trade worth re-examining; neither is true today.
 
-## Related pages
+## Read next
 
 - [Unit Testing](./unit-testing.md)
 - [Integration Testing](./integration-testing.md)

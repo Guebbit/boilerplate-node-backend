@@ -173,7 +173,7 @@ Optional, and only worth it once the rules above have actually been ignored more
 Write the page first and see whether it holds. A gate over `node_modules` is noisy, and as of this
 page's writing, this is the first time in the repo's life the rules here were broken.
 
-## Related pages
+## Read next
 
 - [Package Dependencies](../reference/package-dependencies.md)
 - [AsyncAPI Workflow](asyncapi-workflow.md)

@@ -157,7 +157,7 @@ module: the strip deletes it, and its dependencies with it.
 `docs/understand/modules.md#the-module-template` is the shape a new module follows; `docs/build/module-lifecycle.md#adding-a-module` walks through adding one from
 nothing, the same way this page walks through removing one.
 
-## Related pages
+## Read next
 
 - [Foundation and shop](../understand/strategic-ddd.md#4a-foundation-and-shop) — the `group` field, and
   why it is enforced rather than aspirational

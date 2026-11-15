@@ -645,7 +645,7 @@ TypeScript — while exactly one of them decides what the contract says.
 - [Contract Testing](contract-testing.md) — how the running app is held to the spec
 - [API overview](./api-contracts.md) — REST conventions used throughout
 
-## Useful links
+## Read next
 
 - [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0)
 - [Redocly CLI](https://redocly.com/docs/cli/commands/bundle) — `bundle` / `split` for OpenAPI

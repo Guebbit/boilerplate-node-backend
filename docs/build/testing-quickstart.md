@@ -162,7 +162,7 @@ unlucky afternoon and everyone learns to ignore it.
 `bench:k6 checkout` **writes** — it creates orders and moves stock. Point it at a throwaway
 database and `npm run scenario:apply:reset` afterwards.
 
-## Related
+## Read next
 
 - [Testing & Docs](./testing-and-docs.md) — the layers and the data behind them
 - [Package Scripts](../reference/package-scripts.md) — every script, annotated

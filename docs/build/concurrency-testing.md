@@ -131,7 +131,7 @@ The lost update between two _editors_ is the one race here with a client-facing 
 
 Run with `npm run test:integration` — they are part of the ordinary integration suite, not a separate command, because they gate merges like the rest of it.
 
-## Related pages
+## Read next
 
 - [Integration Testing](./integration-testing.md) — the harness these are built on
 - [MongoDB & Mongoose](../understand/mongodb-mongoose.md) — indexes, the one-author rule, atomic update operators

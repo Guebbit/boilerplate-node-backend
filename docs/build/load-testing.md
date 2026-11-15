@@ -117,3 +117,8 @@ An in-process "generate load" endpoint cannot do this job:
 - one synthetic burst in one worker is not a load _pattern_, which is what a dashboard is for;
 - it costs a controller, a route, an OpenAPI path and its generated models, to do worse what a
   CLI tool does well.
+
+## Read next
+
+- [Testing — Quick Start](./testing-quickstart.md)
+- [Cluster testing](./cluster-testing.md)

@@ -277,7 +277,7 @@ compile error. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.
 
-## Related pages
+## Read next
 
 - [OpenAPI Workflow](./openapi-workflow.md) — how to decide what the contract should say
 - [Contract Ownership & Fragmentation](./contract-fragmentation.md) — who owns what, and why the bundler never parses

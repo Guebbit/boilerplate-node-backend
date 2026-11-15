@@ -224,7 +224,7 @@ spends the afternoon again: the question it answered, mutation testing answers b
 
 ---
 
-## Related pages
+## Read next
 
 - [Mutation Testing](./mutation-testing.md) — the run, the baseline ratchet, the OOM history
 - [Unit Testing](./unit-testing.md) · [Integration Testing](./integration-testing.md) ·

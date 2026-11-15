@@ -87,7 +87,7 @@ mutation-specific cost this boundary also happens to avoid.
 | -------------------------- | ------------------------------------------------------------------------------- |
 | `npm run test:integration` | `scripts/testing/run-suite.ts integration` — sharded, in band within each shard |
 
-## Related pages
+## Read next
 
 - [Testing](./testing-and-docs.md) — suite overview
 - [Unit Testing](./unit-testing.md) — the layer below this one
