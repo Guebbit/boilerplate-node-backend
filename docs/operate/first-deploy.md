@@ -8,7 +8,7 @@ audience: [operator]
 The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
 of a dev box. `docker-compose.production.yml` is the other half: it runs the **built** image, binds
-the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), the `backup` job and a small monitoring set (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
+the API port to loopback only, and keeps to what a host needs: `app`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), and two opt-in profiles: `backup` (the backup job) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why it is one process per container, why observability is
