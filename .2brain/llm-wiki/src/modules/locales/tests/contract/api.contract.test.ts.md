@@ -1,36 +1,40 @@
 ---
 source: src/modules/locales/tests/contract/api.contract.test.ts
-sha256: 23cad1f0051e5b819c6ec46a4c2cdbbbfc60c19ba305bdc52b392aa81b953b14
-generated_at: 2026-11-08T06:27:12.479437+00:00
+sha256: 5fd0e35d6652262629698969cb7fc66ae8770b96a4df0c4355221682e8ecdc6a
+generated_at: 2026-11-14T20:23:05.953608+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/locales/tests/contract/api.contract.test.ts
 
 ## Purpose
-Contract tests for the `/locales` API surface. The central invariant guarded is the **two-tier distinction**: languages shipped as static deployment files are *answerable* (the API can serve error messages in them), while languages registered only in the database are merely *downloadable* (clients can pull their message dictionaries). The tests assert that a DB-only language never makes the dictionary endpoint answer for it, that the manifest's shape matches `listSupportedLocales()`, and that merging a language present in both tiers produces a single unified row. The file exists so a future change collapsing the two tiers fails here rather than surfacing in a client.
+
+Contract tests for the `/locales` API surface — the manifest, dictionary, per-locale read, and messages endpoints. The central property under guard is the **tier boundary**: a language that exists only in the database must never cause the API to claim it can answer in that language. The tests are written so that a future change collapsing the static (deployed-file) and dynamic (database) tiers fails here rather than surfacing as a client bug.
 
 ## Key elements
-- **`createEntry(bearer, tag, key, value, app?)`** — local helper; POSTs one translation entry through the real route and returns the new entry id. Used to seed state for messages/revision assertions.
-- **`tags(response)`** — local helper; extracts the array of locale tags from a manifest response body.
-- **`describe('GET /locales')`** — asserts the public manifest lists every deployed language, reports DB-only languages as `source: 'dynamic'`, merges dual-tier languages into one row (`source: 'both'`), exposes `entryCount`/`revision`, hides inactive languages from unauthenticated callers, and exposes them only to API keys holding `display:Locale`.
-- **`describe('GET /locales/:locale/dictionary')`** — asserts the endpoint serves the API's own i18next bundle (shared + module namespaces), 404s for undeployed locales, 404s for DB-only locales (tier boundary), and rejects path-traversal attempts (`..%2F..%2Fpackage`, `%2Fetc%2Fpasswd`, `en.json`) with 404.
-- **`describe('GET /locales/:locale')`** — asserts single-language detail matches the list shape, `POST → Location` round-trip works, static-only locales expose `actions: {…false}` with no `id`/`createdAt`, and inactive registered languages are hidden from visitors but visible to staff.
-- **`describe('GET /locales/:locale/messages')`** — asserts the client-mergeable message tree, revision stamp, empty-dictionary case, and public accessibility.
+
+- **`createEntry(bearer, tag, key, value, app?)`** — helper that POSTs a single locale entry through the real route and returns its id; used to seed data for the messages/manifest assertions.
+- **`tags(response)`** — extracts the `tag` array from a manifest response body.
+- **`describe('GET /locales')`** — asserts the manifest lists every deployed language, reports `default`/`fallback` from the i18n catalog, marks database-only languages as `source: 'dynamic'`, merges a language present in both tiers into one row (`source: 'both'`), reports `entryCount`/`revision`, hides inactive languages from the public list, and enforces the `display:Locale` API-key visibility rule.
+- **`describe('GET /locales/:locale/dictionary')`** — asserts the dictionary endpoint serves the API's own deployed JSON (shared + contributed namespaces), returns 404 for undeployed locales, still 404s for a database-only language (the tier-boundary assertion), and rejects path-traversal attempts (`..%2F..%2Fpackage`, `%2Fetc%2Fpasswd`, etc.) with 404.
+- **`describe('GET /locales/:locale')`** — asserts single-locale read returns the same shape as the manifest row, honors the `Location` header from POST, returns `source: 'static'` with `actions` all false and no `id`/`createdAt` for deployed-only languages, 404s for unknown tags, and hides inactive languages from unauthenticated callers while showing them to staff.
+- **`describe('GET /locales/:locale/messages')`** — asserts the nested key→value tree matches what was written, reports the correct `revision`, returns `{}` for an empty language, and is publicly accessible.
 
 ## Relationships
-- **`@infrastructure/i18n`** (`index.ts` → `catalog.ts`, `context.ts`): imports `listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale` (expected manifest values) and `translator` (used indirectly to confirm module-contributed namespaces appear in the dictionary response).
-- **`./support`** (`support.ts`): provides `createLanguage` (creates a DB row via the real API) and the `PORTUGUESE` payload constant.
-- **`tests/support/http.ts`**: supplies `api` (supertest wrapper), `authenticateAs`, `authenticateAsRole`.
-- **`tests/support/credentials.ts`**: supplies `credentialHolding` to mint a scoped API key for the `display:Locale` visibility test.
-- **`tests/support/setup-test-db.ts`**: `setupTestDb()` resets/creates the test database before each run.
-- **`tests/support/contract.ts`**: side-effect import that registers the shared contract-testing setup (response schema validation, problem+json assertions).
-- **`tests/support/ids.ts`**: exports `MISSING_ID` (imported here for reference in edge-case assertions).
-- **`tests/unit/scripts/contracts/root-assembly.test.ts`**: a sibling contract test in the same family; shares conventions for how contract suites are structured and run.
+
+- **`src/infrastructure/i18n/index.ts`** — source of the public re-exports (`listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale`, `translator`) that the manifest and dictionary assertions compare against.
+- **`src/infrastructure/i18n/catalog.ts`** / **`src/infrastructure/i18n/context.ts`** — the concrete implementations behind those i18n exports; the tests pin their output as the expected API response.
+- **`src/modules/locales/tests/contract/support.ts`** — provides `createLanguage` (creates a dynamic language row) and the `PORTUGUESE` fixture used throughout the suite.
+- **`tests/support/contract.ts`** — imported for side effects; configures the contract-test harness so responses are validated against the published OpenAPI schema.
+- **`tests/support/http.ts`** — supplies the `api()` HTTP client and `authenticateAs` used by every request in the file.
+- **`tests/support/credentials.ts`** — `credentialHolding(['display:Locale'])` mints a scoped API key for the inactive-visibility test.
+- **`tests/support/ids.ts`** — provides `MISSING_ID` for malformed-id assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to prepare an isolated database per test run.
 
 ## Notes
-- The file imports `'@tests/contract'` for its side effects (global contract expectations) — it is not a named import.
-- The tier-boundary test for `GET /locales/:locale/dictionary` is the load-bearing assertion: if a future refactor sources the API dictionary from the DB, this test fails before any client notices.
-- Path-traversal cases are encoded (`%2F`) because Express normalises literal `..` before routing; the test documents that the supported-locale allowlist is the actual guard, not middleware.
-- `itTranslation` is imported from `../../../../../shared/locales/it.json` to assert the dictionary response contains at least the shared bundle's keys; module-contributed keys are asserted by count (`> 0`) rather than by name since the set of modules is not known at test-authoring time.
-- The `createEntry` helper hard-codes `app = 'demo-fe'` as the default, matching the app name the manifest test expects for DB-only languages.
+
+- The file imports `@tests/contract` **for side effects only** (no named bindings); it registers OpenAPI schema checks globally so every `api()` response is validated against the published spec.
+- The path-traversal test (`..%2F..%2Fpackage`, `%2Fetc%2Fpasswd`) is the only security assertion in the file; it relies on the supported-locale allowlist acting as the traversal guard rather than on Express's own `..` normalisation.
+- The dictionary test for the "module half" asserts that *some* non-shared namespace keys exist (`contributed.length > 0`) rather than naming specific modules, so new i18n namespaces don't break the test.
+- `MISSING_ID` is imported but not visible in the truncated portion; it is likely used in a test case that was cut off (probably a 404/422 for an invalid locale id).
+- The test for `GET /locales` "is public" is deliberately unauthenticated — the comment notes the client that needs the manifest most is the one that just failed to log in.

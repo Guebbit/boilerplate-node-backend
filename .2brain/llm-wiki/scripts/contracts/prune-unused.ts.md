@@ -1,33 +1,36 @@
 ---
 source: scripts/contracts/prune-unused.ts
-sha256: ece0377c9374c43974af7c7137d07e3f8b01ccc3a0caf67258280566aa656ca9
-generated_at: 2026-11-08T02:44:10.512671+00:00
+sha256: 2c500fab96fee66dd55feee3f328837c91a3ee609b017659af632277b6a3adc7
+generated_at: 2026-11-14T17:28:30.732846+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/contracts/prune-unused.ts
 
 ## Purpose
-Final pipeline step that removes every OpenAPI component (schema, response, parameter, security scheme, etc.) and every tag that nothing in the live document references. Without it, a deleted module leaves orphaned shared components in the published contract. It is deliberately the **last** step because earlier steps inject references (ETag, If-Match, 413/415 responses) that an earlier prune would wrongly delete.
+
+Final pipeline step that removes every OpenAPI component no operation or other component references, plus every tag no operation uses. It exists because deleting an API module orphans its components (security schemes, schemas, responses) in the shared root document, and the published contract must not describe what the deployment no longer has.
 
 ## Key elements
-- **`pruneUnused`** (exported) — The `Step` function. Builds a `Findings` set of reachable refs, security-scheme names, and tag names, then deletes any component not in that set, filters `document.tags`, and prunes emptied `x-tagGroups`.
-- **`collect`** — Recursive walker over an arbitrary JSON subtree. Records `$ref` strings starting with `#/components/`, collects security-scheme names from `security` arrays, and gathers tag names from `tags` arrays. Explicitly skips `x-tagGroups` so it does not keep tags alive.
-- **`collectSchemes`** — Extracts the scheme names (object keys) from a `security` requirement array into `Findings.schemes`.
-- **`reachable`** — Seeds `collect` on the non-`components` portion of the document, then performs a worklist (queue) traversal through `components`, following newly discovered refs until the set stabilises.
-- **`pointerOf(kind, name)`** — Builds the canonical `#/components/<kind>/<name>` pointer used for set membership checks.
-- **`Findings`** — Interface holding three `Set`s: `refs`, `schemes`, `tags`.
-- **`COMPONENT_PREFIX`** — Constant `#/components/` used to detect in-document component references.
-- **`isObject`** — Type guard narrowing `unknown` to `Record<string, unknown>`.
+
+- **`pruneUnused`** (exported `Step`) — Entry point. Computes reachability, then deletes unreferenced components and unused tags in-place on the `OpenApiDocument`.
+- **`reachable`** — Splits the document into `components` and everything else, collects external refs, then iteratively (queue-based) follows refs *through* components to find the full transitive closure of used pointers.
+- **`collect`** — Recursive walker over a JSON node; accumulates `$ref` strings under `#/components/`, security-scheme names (from `security` arrays), and operation tag names (from `tags` arrays). Skips `x-tagGroups`.
+- **`collectSchemes`** — Extracts scheme names from a single `security` requirement array.
+- **`pointerOf`** — Builds a `#/components/<kind>/<name>` pointer string.
+- **`Findings`** — Interface holding the three collected `Set`s (`refs`, `schemes`, `tags`).
+- **`ComponentMap`**, **`COMPONENT_PREFIX`** — Type alias and the `#/components/` prefix constant.
 
 ## Relationships
-- **`openapi-document.ts`** — Supplies the `OpenApiDocument` and `Step` types that `pruneUnused` implements; the function mutates the document in place.
-- **`openapi-bundle.ts`** — Orchestrates the bundle pipeline and invokes `pruneUnused` as the terminal step.
-- **`tests/unit/scripts/contracts/prune-unused.test.ts`** — Unit tests exercising pruning of components, security schemes, tags, and `x-tagGroups`.
+
+- **`openapi-document.ts`** — Supplies the `OpenApiDocument` and `Step` types that `pruneUnused` implements/consumes.
+- **`openapi-bundle.ts`** — Orchestrates the pipeline; `pruneUnused` is registered as the last step it runs.
+- **`object-guards.ts`** — Provides `isPlainObject`, used throughout the walk to distinguish plain JSON objects from arrays and primitives.
+- **`tests/unit/scripts/contracts/prune-unused.test.ts`** — Unit tests exercising reachability, tag pruning, and `x-tagGroups` filtering.
 
 ## Notes
-- **Ordering is load-bearing.** `redocly bundle --remove-unused-components` (or any equivalent) must not be used *before* the steps that add `ETag`, `IfMatchHeader`, `PreconditionFailed`, and the 413/415 responses; those steps need the components that an early prune would delete.
-- Security schemes are reached by **name** (via `security` arrays), not by `$ref`. The pruning check for `securitySchemes` therefore looks up `found.schemes` rather than `found.refs`.
-- `x-tagGroups` is intentionally invisible to the tag walker; otherwise every tag listed in a group would be considered "used" and survive pruning.
-- A tag group whose `tags` array becomes empty after filtering is removed entirely (a docs renderer would otherwise show an empty section).
-- The reachability traversal uses an iterative worklist (`queue.pop()` loop), not recursion, to avoid stack-depth issues with long reference chains.
+
+- **Ordering is critical.** This step must run *after* steps that inject new references (e.g. `ETag`, `IfMatchHeader`, `PreconditionFailed`, 413/415 responses). Running `redocly bundle --remove-unused-components` in their place would delete components those later steps still need.
+- **Security schemes are tracked by name, not by `$ref`.** A scheme is kept if any `security` requirement array names it; a plain `#/components/securitySchemes/<name>` ref is not sufficient on its own.
+- **`x-tagGroups` is intentionally excluded from tag collection.** A family *lists* its tags without "using" them in the OpenAPI sense; counting it would keep every tag alive. After pruning, groups whose tags all vanish are removed from `x-tagGroups` as well.
+- The component reachability walk is **iterative** (explicit queue) rather than recursive, to avoid stack overflow on deeply nested component graphs.

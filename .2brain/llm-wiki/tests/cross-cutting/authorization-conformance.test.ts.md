@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/authorization-conformance.test.ts
-sha256: 2e145f628fcbc17ed6e3e8f3aaa61e0fcfdff6bea796dcda7f885af3ce85c825
-generated_at: 2026-11-08T09:24:11.549387+00:00
+sha256: 835f1a18203de29df784f9bb45d68436e2fb4dd132607868f781f8db0e1b32f8
+generated_at: 2026-11-14T23:01:36.863414+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Runs a shared authorization conformance suite (`shared/authorization-conformance.yaml`) against this repository's CASL-based evaluator. The YAML file is committed with identical bytes in both backends (this one and the PHP twin); each side runs it against its own implementation so that the two stay behaviorally equivalent for the exact cases the file enumerates. The file deliberately includes DENY cases to catch widened scopes that a pure-allow test would miss.
+Runs the shared authorization conformance cases (`shared/cases/authorization.cases.yaml`, committed byte-identical in both backends) against this repository's CASL-based evaluator, verifying that every allow/deny decision matches the PHP twin's Laravel Gate/Policy implementation. Also enforces minimum case-count floors so a truncated or empty cases file cannot produce a falsely clean pass.
 
 ## Key elements
 
-- **`ConformanceCase`** — interface describing one row in the YAML: `name`, `caller`, `action`, `subject`, `resource` (plain attribute bag), and `expect` (`'allow'` | `'deny'`).
-- **YAML load** — reads and parses `shared/authorization-conformance.yaml` once at module scope; destructures `cases`.
-- **Floor constants (`MIN_CASES`, `MIN_DENY`, `MIN_ALLOW`)** — minimum case counts the file must satisfy. Values differ depending on whether the `orders` module is deployed (30/20/10 vs 20/12/6).
-- **`'reads enough cases to be worth running'`** — asserts the floors so a silently empty or truncated YAML file fails loudly rather than producing a vacuous pass.
-- **`it.each` conformance loop** — for every case, builds an ability via `buildAbility(caller)` and calls `.can(action, subject(type, resource))`, asserting the allow/deny outcome matches the YAML expectation.
+- **`ConformanceCase` / `CaseCaller`** — interfaces describing one row of the shared YAML file (action, subject type, resource attributes, expected outcome, caller declaration).
+- **`callerOf(declared)`** — expands a case's optional `role` / `audience` / raw `permissions` into a full `Caller` via `assembleCaller`, `permissionsOfRole`, and `AUDIENCE_ROLES`.
+- **Floor assertions** (`MIN_CASES`, `MIN_DENY`, `MIN_ALLOW`) — first test in the suite; ensures the parsed case list is non-trivial and contains a meaningful split of allow and deny expectations.
+- **`it.each` loop** — iterates every case, builds a CASL ability with `buildAbility(callerOf(...))`, evaluates `.can(action, subject(type, attrs))`, and asserts the boolean maps to the expected `allow`/`deny`.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — imports `buildAbility`, the function that constructs a CASL `Ability` from a `Caller` object for each test case.
-- **`src/types/index.ts`** — barrel import (`@types`) from which the `Caller` type is pulled; the test's `caller` field is typed against it.
-- **`src/types/auth-context.ts`** — likely the defining module behind the `Caller` type re-exported through `src/types/index.ts`.
-- **`tests/support/paths.ts`** — provides `isDeployed('orders')`, used to select the appropriate floor thresholds when the orders module has been removed from the deployment.
+- **`src/kernel/ability.ts`** — `buildAbility` is the CASL ability factory invoked for every case assertion.
+- **`src/kernel/permissions.ts`** — supplies `assembleCaller`, `permissionsOfRole`, and `AUDIENCE_ROLES` used by `callerOf` to resolve role/audience declarations into concrete permission sets.
+- **`src/types/index.ts` → `src/types/auth-context.ts`** — source of the `Caller` type that `callerOf` returns and that `buildAbility` consumes.
+- **`tests/support/paths.ts`** — `isDeployed('orders')` determines whether the shop module is present in the current deployment, which adjusts the floor thresholds (30/20/10 vs. 20/12/6).
 
 ## Notes
 
-- The `subject()` import is from `@casl/ability`, **not** the test-case `subject` string field. CASL's `subject(type, attrs)` names the type of a plain object; the resource arrives as a YAML attribute bag with no backing class.
-- Floor thresholds are split into allow and deny separately because an evaluator that denies everything would satisfy every deny case yet violate the allow floor.
-- The YAML file is **not** copied between backends at build or test time; it is committed independently with identical bytes, the same arrangement used for Spectral rulesets.
-- The `it.each` title is `%s: %s` (expect + name) so a single failure in a large suite is identifiable by the expected outcome and case name without reading the assertion.
+- The floors are split by outcome (allow vs. deny) deliberately: an evaluator that denies *everything* would pass all deny cases and still look green without the allow floor.
+- The YAML file is never copied or synced between the two backend repos; each repo commits an identical file independently (same convention as the Spectral rulesets).
+- `subject()` here is the CASL helper that tags a plain object with its type name — the cases describe resource rows, not class instances.
+- The cases file is the source of truth for parity: widening a permission in one backend without updating the YAML will not be caught by the other side's tests.

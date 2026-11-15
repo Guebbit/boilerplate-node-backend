@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/domain/fulfillment.ts
-sha256: 1b1c4d290090c6ee7f8377f6f2e8744d1d87e7bfaec447de08b8c65f5f4202fb
-generated_at: 2026-11-08T05:28:19.463403+00:00
+sha256: 08d9e37690570b8725fabf7d72586acc94fa4dfbfa99e848ae4b71ee5e88cde0
+generated_at: 2026-11-14T19:39:14.447051+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure domain rules that turn an order's frozen lines into fulfillment-order drafts, derive a fulfillment order's status from its lines and hold state, and validate which lines a shipment may carry. Exists so that the grouping, status, and shipment-validation logic is fully testable in isolation, with no database or infrastructure dependency.
+Pure domain rules that decide how an order's lines split into fulfillment orders, what remains on each line, what status a fulfillment order derives, and which lines a shipment may carry. No I/O, no database — every rule is unit-testable in isolation.
 
 ## Key elements
 
-- **`WaitCause`** (`'preorder' | 'backorder'`) — why a fulfillment order is held for stock.
-- **`FulfillmentLine`** — a product on a stored fulfillment order with `quantity`, `shippedQuantity`, `canceledQuantity`.
-- **`GroupableLine`** — a line as read from the order's frozen snapshot; carries `ships`, optional `preorder`, `releaseDate`, `noWithdrawal`, and `backorder` metadata.
-- **`FulfillmentOrderDraft`** — a fulfillment order as the grouping rule produces it (before persistence), including `kind`, `status`, `holdReason`, `agreedAt`, `expectedAt`, `cause`, `defaulted`.
-- **`remainingOfLine` / `remainingOf`** — compute outstanding units for a single line or a whole set of lines.
-- **`groupOrderLines(lines, timeZone)`** — the core splitting rule: partitions lines into one "ships now" ordinary group, one "ships now" bespoke (`noWithdrawal`) group, and one `on_hold` group per (shop-day × cause × bespoke × defaulted) bucket. Returns numbered `FulfillmentOrderDraft[]`.
-- **`statusOfLines(lines, held)`** — derives `open` / `in_progress` / `on_hold` / `closed` / `canceled` from remaining quantities, shipment history, and hold flag.
-- **`ProductQuantity`** / **`ShipLinesVerdict`** — input/output shapes for shipment validation.
-- **`checkShipLines(lines, requested?)`** — validates a staff shipment request against remaining quantities; undefined/empty request means "ship everything that remains". (Truncated in source.)
-- **Internal:** `partsOf` (splits a line into ready + waiting parts), `promisedAt` (max date across a waiting group), `kindOf` (physical vs digital), `toFulfillmentLine` (maps to a zero-shipped/canceled line).
+- **`groupOrderLines(lines, timeZone)`** — the central grouping rule. Splits an order's `GroupableLine[]` into `FulfillmentOrderDraft[]`: one open order for ordinary now-ships, one open order for `noWithdrawal` now-ships, then one `on_hold` order per (shop-day, bespoke, cause, defaulted) group of waiting lines.
+- **`statusOfLines(lines, held)`** — derives `FulfillmentOrderStatus` from line quantities and hold state. Never set by a caller.
+- **`checkShipLines(lines, requested?)`** — validates a ship request against remaining quantities; returns a `ShipLinesVerdict` discriminated union (`ok` with `ProductQuantity[]`, or `ok:false` with a reason).
+- **`remainingOfLine` / `remainingOf`** — compute unsent units (`quantity − shipped − canceled`) for one line or a group.
+- **`FulfillmentLine`** — a line as stored on a fulfillment order (productId, title, quantity, shippedQuantity, canceledQuantity).
+- **`GroupableLine`** — a line as read from the order's frozen snapshot; carries `ships`, `preorder`, `releaseDate`, `noWithdrawal`, `backorder`.
+- **`FulfillmentOrderDraft`** — the output of grouping before persistence (number, kind, status, lines, hold fields, `cause`, `defaulted`).
+- **`WaitCause`** — `'preorder' | 'backorder'`.
+- **`ShipLinesVerdict`** — the ok/fail union returned by `checkShipLines`.
+- Private helpers: `kindOf`, `toFulfillmentLine`, `partsOf`, `promisedAt`.
 
 ## Relationships
 
-- **`src/domain-primitives/time.ts`** — imports `dayInZone`; used inside `groupOrderLines` to bucket waiting lines by shop calendar day before grouping by cause/defaulted flag.
-- **`src/modules/delivery/domain/index.ts`** — barrel for the delivery domain; re-exports this file's public types and functions so consumers can import from the domain root.
-- **`src/modules/delivery/services/fulfill.ts`** — the service that calls `groupOrderLines` at payment time and `checkShipLines` when a shipment is cut; receives the drafts and persists them via the repository.
-- **`src/modules/delivery/services/cut.ts`** — uses `remainingOfLine` / `remainingOf` to know how many units a shipment can carry.
-- **`src/modules/delivery/services/cancel-remainder.ts`** — reads `remainingOf` to determine what is left to cancel.
-- **`src/modules/delivery/presenter.ts`** — maps `FulfillmentOrderDraft` / stored fulfillment orders into view-model shapes for the UI.
-- **`src/modules/delivery/repository.ts`** — persists the drafts produced by `groupOrderLines` and the status updates produced by `statusOfLines`.
-- **`src/modules/delivery/model.ts`** — defines the stored persistence shape that `FulfillmentOrderDraft` maps into.
+- **`src/domain-primitives/time.ts`** — imports `dayInZone` to bucket waiting lines by the shop's calendar day when building the grouping key.
+- **`src/modules/delivery/domain/index.ts`** — barrel that re-exports this module's public surface so the rest of the delivery domain can import from one path.
+- **`src/modules/delivery/domain/lost.ts`** — moves owed units between fulfillment orders; consumes `FulfillmentLine` and `remainingOfLine`.
+- **`src/modules/delivery/domain/preorder.ts`** — supplies the `preorder` / `releaseDate` facts that `groupOrderLines` reads off `GroupableLine`.
+- **`src/modules/delivery/domain/reship.ts`** — builds a reshipment from the same `FulfillmentLine` shape and `checkShipLines` guard.
+- **`src/modules/delivery/model.ts`** — defines the persisted entity that mirrors `FulfillmentOrderDraft` once a number is assigned and it is written.
+- **`src/modules/delivery/presenter.ts`** — maps `FulfillmentLine` and `FulfillmentOrderStatus` into the shapes the UI renders.
+- **`src/modules/delivery/repository.ts`** — the I/O boundary; persists drafts and loads lines back for the services.
+- **`src/modules/delivery/services/actions.ts`** — consumes the exports of this module when performing delivery actions.
+- **`src/modules/delivery/services/cancel-remainder.ts`** — relies on `remainingOf` to decide how many units a cancellation consumes.
+- **`src/modules/delivery/services/cut.ts`** — calls `checkShipLines` to validate a ship request before writing shipment records.
+- **`src/modules/delivery/services/ensure.ts`** — calls `groupOrderLines` when an order transitions to paid, then persists the resulting drafts.
+- **`src/modules/delivery/services/found.ts`** — uses `checkShipLines` / `remainingOfLine` when a previously lost item is located and added to a shipment.
+- **`src/modules/delivery/services/fulfill.ts`** — calls `statusOfLines` after mutating shipped/canceled quantities to recompute the order's status.
+- **`src/modules/delivery/services/holds.ts`** — reads `FulfillmentOrderDraft.cause` / `.defaulted` and manages `on_hold` ↔ `open` transitions.
 
 ## Notes
 
-- **`defaulted` flag on backorder groups.** When a backorder's `promisedAt` comes from the 30-day catalogue default (`dated: false`), the draft is tagged `defaulted: true`. Downstream logic must skip updating `expectedAt` for these groups when the catalogue default changes — only catalogue-named dates are eligible for re-dating.
-- **`noWithdrawal` (Art. 16 CRD) lines are always split into their own fulfillment order.** This is deliberate: it lets a buyer cancel the ordinary remainder without inadvertently cancelling bespoke/perishable goods the shop is already working on.
-- **Digital lines ride with the physical group.** `kindOf` returns `physical` if *any* line ships; a mixed group is one physical fulfillment order, not separate digital and physical ones.
-- **`statusOfLines` with zero lines** returns `closed`, not `canceled`. This covers the lost-parcel case where all units have been re-attached to another fulfillment order.
-- **Grouping key order:** shop-day → bespoke flag → cause → defaulted. The bespoke bit (0/1) is inserted *before* cause so that, for the same day, the ordinary group always sorts ahead of the bespoke one, matching the "cancel the rest on its own" requirement.
+- All product-specific facts (`preorder`, `releaseDate`, `noWithdrawal`, `backorder`) are **frozen at checkout** on the line. They are never re-read from the product catalogue at payment or ship time.
+- The `defaulted: true` flag on a backorder promise means the 30-day default was used; a later catalogue date change must leave that group untouched.
+- `noWithdrawal` lines (Art. 16 CRD — made-to-order / perishable) are always isolated into their own fulfillment order so the buyer can cancel the ordinary remainder without voiding the shop's bespoke work.
+- `statusOfLines` treats an empty `lines` array as `closed` (everything moved to another fulfillment order, e.g. a lost-parcel re-assignment), not as `canceled`.
+- The grouping key order is: shop-day → bespoke flag → cause → defaulted. This guarantees deterministic numbering (1 = ordinary open, 2 = bespoke open, then waiting groups by date).
+- `checkShipLines` signals failure via the discriminated union return value, **not** by throwing.

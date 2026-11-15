@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/cancel.test.ts
-sha256: d16c4b3f52a7df9cd358c330d4dd79cf949e4a4feb1e61bbbcc0be32cc62f320
-generated_at: 2026-11-08T07:03:39.693312+00:00
+sha256: 7da01e78dcc19451344a661430b82baa1cfdcbfc3690f55016af7ebdf66b36ec
+generated_at: 2026-11-14T20:49:39.514313+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the order-cancellation paths (`orderService.cancelOnRequestById` and the system-actor `cancelForErasureById`). They pin the authorization boundaries (customer vs. admin vs. moderator vs. system), the 404/409 refusal contract, the status-gate invariant (no interleaving can cancel a shipped or paid order), refund semantics, and the audit/analytics side effects that must fire on every successful cancel.
+Integration tests for the order-cancellation write path (`cancelOnRequestById` and the system-actor `cancelForErasureById`). They verify the authorization matrix (customer / admin / moderator / system actor), status-gate invariants, refund semantics, and that the audit, analytics, mailer, and domain-event side effects fire correctly.
 
 ## Key elements
 
-- **`seedOrder(user)`** – helper that creates a product and a pending order for the given user.
-- **`asUser(user)`** – shorthand for `asCustomer(user.id)`, used in most customer-path tests.
-- **`describe('cancelOnRequestById')`** – core authorization & status-gate tests: owner cancel, stranger 404, shipped 409, shop-owner cancel, operator cancels `processing` (customer cannot), system actor cannot cancel a `paid` order (pins B21 race), soft-deleted → 404.
-- **`describe('… who gets their money back')`** – refund semantics: customer cancel is always refunded; operator/moderator may waive with `{ refund: false }`; the `ORDER_CANCELED` event is always emitted regardless of refund flag. Uses `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents`, and `settleOutboxNudges`.
-- **`describe('… audit and analytics')`** – asserts `emitAuditEvent` and `emitAnalyticsEvent` are called with the correct action/event constants and actor role.
-- **Mocks** – `enqueueEmail` (mailer), the audit port, and the analytics port are replaced at module level (see Notes).
+- **`cancelOnRequestById` suite** – covers: owner cancels pending; stranger gets 404; shipped order gets 409 with `ORDER_NOT_CANCELABLE`; admin cancels another user's order; processing→canceled is admin-only; system actor cannot cancel a paid order (B21 race); soft-deleted order returns 404.
+- **`cancelOnRequestById — who gets their money back` suite** – asserts refund/cause fields on the `ORDER_CANCELED` payload captured via `onDomainEvent`. Pins that a customer's `refund: false` is overridden to `true`, while admin/moderator may waive the refund.
+- **`cancelOnRequestById — audit and analytics` suite** – asserts `emitAuditEvent` and `emitAnalyticsEvent` payloads (action, actor role, outcome) using `observePort`.
+- **`seedOrder(user)`** – creates a product + a single-item order for the given user.
+- **`asUser(user)`** – shorthand alias for `asCustomer(user.id)`.
+- **Mocks** – `enqueueEmail` (mailer), audit port, and analytics port are all replaced at the module level (see Notes).
+- **`setupTestDb()`** – in-memory DB bootstrap; `afterEach` restores all mocks.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** – exports `orderService`, the primary subject under test.
-- **`src/modules/orders/services/cancel.ts`** – exports `cancelForErasureById`, the system-actor cancel path tested in the B21 race case.
-- **`src/modules/orders/events.ts`** – provides `ORDER_CANCELED`, used to subscribe and assert domain-event payloads.
-- **`src/modules/orders/repository.ts`** – `orderRepository` is used to set up non-default statuses and to assert post-condition state.
-- **`src/modules/orders/model.ts`** – `orderModel` is imported (used for soft-delete assertion via `order.deletedAt`).
-- **`src/modules/orders/module.ts`** – `ordersModule` is registered via `registerModules` so the outbox relay can deliver events.
-- **`src/modules/orders/audit.ts`** / **`src/modules/orders/analytics.ts`** – provide `ordersAuditActions` and `ordersAnalyticsEvents` constants used in assertions.
-- **`src/kernel/events.ts`** – `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` drive the event-bus lifecycle in refund tests.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes the outbox so async event delivery is observable; `outboxEventModel` is imported for outbox inspection.
-- **`src/kernel/registry.ts`** – `registerModules` ensures module subscriptions are active before tests run.
-- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is mocked to verify the cancellation notification is queued.
-- **`src/infrastructure/observability/audit.ts`** / **`src/infrastructure/observability/analytics/index.ts`** – replaced via `jest.mock` so tests can observe port calls without hitting real sinks.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `markOrderPaidAt`, `setWithdrawUntil`, `timelineOf` build the order fixtures.
+- **`src/modules/orders/services/cancel.ts`** – source of `cancelForErasureById`, the system-actor entry point exercised in the "B21 race" test.
+- **`src/modules/orders/services/index.ts`** – source of the `orderService` export; `cancelOnRequestById` is the primary API under test.
+- **`src/modules/orders/events.ts`** – provides the `ORDER_CANCELED` constant used to subscribe in the refund suite.
+- **`src/modules/orders/repository.ts`** – `orderRepository.findById` / `updateStatusIfIn` / `save` are called directly to assert post-state and to advance status between test steps.
+- **`src/modules/orders/model.ts`** – `orderModel` is imported (used by the repository layer).
+- **`src/modules/orders/module.ts`** – `ordersModule` is passed to `registerModules` so the kernel can route events.
+- **`src/modules/orders/audit.ts`** – supplies `ordersAuditActions` constants for assertion matching.
+- **`src/modules/orders/analytics.ts`** – supplies `ordersAnalyticsEvents` constants for assertion matching.
+- **`src/kernel/events.ts`** – `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` manage the in-test event bus.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes the outbox so async event delivery completes before assertions.
+- **`src/kernel/registry.ts`** – `registerModules` wires the orders module into the kernel for the test process.
+- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is mocked; tests assert the cancellation notice is queued.
+- **`src/infrastructure/observability/audit.ts`** – replaced with a port-mock factory (see Notes).
+- **`src/infrastructure/observability/analytics/index.ts`** – `emitAnalyticsEvent` is replaced with a jest.fn (see Notes).
+- **`src/modules/orders/tests/factories.ts`** – provides `createOrder`, `toOrderItem`, `markOrderPaidAt`, `setWithdrawUntil`, `timelineOf`.
 
 ## Notes
 
-- **Port mocks use `jest.mock`, not `jest.spyOn`.** A CommonJS namespace import exposes a non-configurable getter, so `jest.spyOn` cannot redefine it. This fails under Stryker's sandbox and the `jest.config.mutation.js` swc transform. See `tests/support/ports.ts` for full reasoning.
-- **Refund tests require `markDomainEventsWired()` + `settleOutboxNudges()`.** The outbox relay only delivers events in a process whose modules are registered; without both calls the `cancellations` array stays empty.
-- **404 vs 409 is a deliberate client-facing contract.** "Not found" (stranger's order, soft-deleted) and "not in a cancelable state" (shipped, paid, processing) return different statuses so a client can distinguish "retry later" from "wrong order."
-- **Soft-deleted orders are 404, not 403.** The comment states the principle: "hidden means hidden" — no information leak that the order exists.
-- **The moderator refund-waive test pins a historical bug** where holding only the `update:Order` permission (not the scope wildcard) incorrectly forced a refund.
+- **Audit & analytics ports are `jest.mock`-replaced, not `spyOn`-ed.** A CommonJS namespace import exposes a non-configurable getter that `jest.spyOn` cannot redefine; this fails under the SWC transform used by `jest.config.mutation.js` and inside Stryker's sandbox. The `@tests/ports` helper provides the replacement factories.
+- **`settleOutboxNudges()` must be awaited after each cancellation** that should produce a domain event; without it the outbox relay has not delivered and the captured `cancellations` array stays empty.
+- **`markDomainEventsWired()` is required** before subscribing via `onDomainEvent`; the kernel will not dispatch to listeners in an "unwired" test process.
+- **Refund override is intentional test surface:** passing `{ refund: false }` as a customer is silently upgraded to `refund: true`; the test documents that the customer cannot waive their own refund.
+- The "B21 race" test guards a specific past bug where the system actor's `pending→canceled` edge was accidentally reachable from `paid`.

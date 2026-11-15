@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/index.ts
-sha256: 089b9a01f2df080ce213bfa83ec67f1ae9e1e228ca4266e88e1141e86726b474
-generated_at: 2026-11-08T04:18:18.516587+00:00
+sha256: 2bb4f072aa01a023a732ccb3b1941ea70336b3c4a75ebe98709e55a5eee4d872
+generated_at: 2026-11-14T18:44:57.973864+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that assembles the account module's service layer into two public objects — `accountService` and `twoFactorService` — plus a small set of named re-exports (token-type constants, OAuth error classes, a few pure helpers). It exists so that every controller and external caller reaches account logic through exactly one of those two objects, keeping 2FA callers decoupled from core-account callers at the type level.
+Barrel file that assembles the account service layer into two flat objects (`accountService`, `twoFactorService`) and re-exports shared constants, error classes, and small named helpers. It is the single public surface that controllers and the module's public index use to reach every authentication, profile, token, OAuth, and 2FA operation, while hiding the per-flow sub-modules it imports.
 
 ## Key elements
 
-- **`accountService`** — Object aggregating ~45 functions from ~26 sub-modules (signup, login, logout, refresh, password reset/change, profile, email verification/change, account deletion, sessions, OAuth, previous-email cleanup, export-row reaping, reauth, re-encryption, mail, public config). This is the primary entry point for all non-2FA account operations.
-- **`twoFactorService`** — Separate object for 2FA enrollment, removal, backup codes, and the login-time challenge/verify pair. Deliberately isolated so importing `accountService` does not pull 2FA types into a caller's dependency graph.
-- **Named re-exports** — `PASSWORD_RESET_TOKEN_TYPE`, `ACCOUNT_RESTORE_TOKEN_TYPE`, `EMAIL_VERIFY_TOKEN_TYPE`, `EMAIL_CHANGE_TOKEN_TYPE`, `EMAIL_CHANGE_UNDO_TOKEN_TYPE` (from `../token-types`); `termsVersion` (from `../consent-record`); `operatorIdentity`; `RESET_REQUEST_SECONDS`; `amrAfterReauth`; `VERIFY_RESEND_SECONDS`; six `OAuth*Error` classes (from `./oauth`).
-- **Excluded from both objects** — `./export` and `./export-job` are intentionally not re-exported here; only the export controllers and `../module.ts` import them directly.
+- **`accountService`** — Flat object (~45 methods) covering signup, login, logout, session management, token refresh, password reset/change, email verification & change, profile read/update, OAuth linking, account deletion & restore, previous-email cleanup, export-row reaping, inactive-account reaping, TOTP re-encryption, account mail, and public config. Each method is a direct alias to a function in a sibling sub-module (`./signup`, `./login`, `./oauth`, `./sessions`, etc.).
+- **`twoFactorService`** — Flat object (9 methods) for 2FA status, enrollment (setup/confirm/remove/disable), backup-code regeneration, and the login-time challenge/verify pair. Kept separate so a caller of `accountService.login` is not coupled at the TypeScript level to any 2FA type.
+- **Named re-exports** — Token-type constants (`PASSWORD_RESET_TOKEN_TYPE`, `EMAIL_VERIFY_TOKEN_TYPE`, etc.), `termsVersion` (from `../consent-record`), `operatorIdentity`, `RESET_REQUEST_SECONDS`, `VERIFY_RESEND_SECONDS`, `amrAfterReauth`, and six OAuth error classes (`OAuthEmailUnverifiedError`, `OAuthIdentityTakenError`, …).
 
 ## Relationships
 
-- **Controllers (all `src/modules/account/controllers/*`)** — Each listed controller (`get-account`, `get-session`, `get-sessions`, `get-2fa`, `get-oauth-callback`, `get-oauth-links`, `get-reauth-methods`, `get-refresh-token`, `delete-account`, `delete-email-change`, `delete-oauth-link`, `delete-session`, `post-2fa-backup-codes`) imports `accountService` and/or `twoFactorService` from this file to perform its single HTTP operation.
-- **`src/modules/account/consent-record.ts`** — Source of the `termsVersion` value re-exported here; no other interaction.
-- **`src/app/config-routes.ts`** — Top-level route registration; consumes the service objects indirectly through the controllers listed above.
-- **`../session/`** (not a graph neighbor listed, but noted in the file's docblock) — Provides JWT signing, refresh-cookie, and shared expiry utilities that the sub-services import; no file outside this module imports `../session/` directly.
+- **`src/modules/account/consent-record.ts`** — This file re-exports `termsVersion` from it; no other interaction.
+- **Controllers (`get-account`, `get-session`, `get-sessions`, `get-refresh-token`, `get-2fa`, `get-reauth-methods`, `get-oauth-links`, `get-oauth-callback`, `delete-account`, `delete-email-change`, `delete-oauth-link`, `delete-session`, `post-2fa-backup-codes`)** — Each imports `accountService` or `twoFactorService` (or a re-exported error class) from this file to call a single service method; they never import the sub-modules directly.
+- **`src/app/config-routes.ts`** — Consumes this module's public surface (via `../index`) when wiring the account routes; no direct import of the sub-modules.
 
 ## Notes
 
-- The split into two objects is a deliberate TypeScript coupling decision: a file that calls only `accountService.login` should not see 2FA types in its import graph. Adding a function to the "wrong" object is a breaking change for type-level consumers.
-- The file is pure wiring — it contains no business logic, no `if`/`for`, no side effects at module level beyond the two object literals.
-- Sub-service files (e.g. `./login`, `./signup`) are never imported by controllers directly; they are only reachable through the `accountService` / `twoFactorService` objects defined here.
-- `exportRows.reapExpiredExports` is included in `accountService`, but the heavier export pipeline (`./export`, `./export-job`) is excluded — a distinction that can be confusing when searching for "export" logic.
+- **Two objects, not one.** Neither `accountService` nor `twoFactorService` calls the other. Splitting them means a caller that only needs `accountService.login` has no compile-time dependency on any 2FA type.
+- **Deliberate exclusions.** `./export` and `./export-job` are *not* on `accountService`; they are wired only by the export controllers and `../module.ts`. The address book lives in the separate `@modules/addresses` module.
+- **No sibling data access.** Each module declares its own `personalData` section; `../module.ts` resolves and passes the list in. This file never reaches into a sibling's data store.
+- **Sub-layer.** `../session/` (JWT signing, refresh cookie, shared expiry) sits below this layer and is not imported by anything outside the account module.
+- **Convention.** Every operation is reachable via one of the two objects; constants, error classes, and pure helpers remain named exports. There are no "loose" exported functions that duplicate an object method.

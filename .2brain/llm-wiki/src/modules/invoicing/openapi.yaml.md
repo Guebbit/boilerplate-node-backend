@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/openapi.yaml
-sha256: edb15ffc81c1ed6e24ff6c6069e2136d16f8431028730bb32bf5f4470e52850f
-generated_at: 2026-11-08T06:12:19.531838+00:00
+sha256: dde6e405b7272910079266253ebededcad64146e2b1b37362a2d3f08b93f74d5
+generated_at: 2026-11-14T20:12:11.597768+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module-level OpenAPI 3.1 contract for the invoicing domain. It defines the public API surface for downloading frozen invoice and credit-note PDFs, listing an order's credit notes, and declares the invoicing section that the data-export bundler appends to `POST /account/export`. It exists so that clients, generated SDKs, and AI assistants have a single normative source for this module's endpoints, error semantics, and schema shapes.
+OpenAPI 3.1.0 contract for the **invoicing** module. It defines the three order-scoped endpoints (download invoice PDF, list credit notes, download a credit-note PDF), the module's error-code vocabulary, and the `invoicing` section the bundler injects into `POST /account/export`. It is the single source of truth for what the invoicing API exposes and how errors/limits are signalled.
 
 ## Key elements
 
-- **Tag `Invoicing`** (`x-family: Buying`) — all three operations file under it; describes the frozen, never-re-rendered PDF documents.
-- **`x-error-codes`** (top-level) — module-wide error identifiers: `ORDER_INVOICE_NOT_ISSUED` (404) and `ORDER_CREDIT_NOTE_NOT_ISSUED` (404).
-- **`x-personal-data.invoicing`** — contract for the invoicing slice of `POST /account/export`; requires `invoices[]` and `creditNotes[]` (empty arrays, never absent).
-- **`GET /orders/{id}/invoice`** (`getOrderInvoice`) — returns a binary PDF with `Content-Disposition: inline; filename="invoice-<number>.pdf"`; supports 401/404/429/503.
-- **`GET /orders/{id}/credit-notes`** (`listOrderCreditNotes`) — returns `CreditNotesResponse` (oldest-first array of `CreditNoteSummary`); supports 401/404.
-- **`GET /orders/{id}/credit-notes/{creditNoteId}`** (`getOrderCreditNote`) — returns a binary PDF with `Content-Disposition: inline; filename="credit-note-<number>.pdf"`; supports 401/404/429/503.
-- **`CreditNoteSummary`** — one row in the credit-note list: `id`, `number`, `issuedAt`, `currency`, `grandTotal`, `refundId`.
-- **`CreditNotesResponse`** — wrapper with a single `items` array of `CreditNoteSummary`.
-- **`ExportInvoiceDocument`** — one row in the account export: `orderId`, `number`, `issuedAt`, `currency`, `grandTotal` (no line items or VAT breakdown).
+- **`GET /orders/{id}/invoice`** (`getOrderInvoice`) — Returns the frozen invoice PDF issued at the `pending → paid` transition. Server names the file via `Content-Disposition`. Rate-limited (`429`); returns `503` + `Retry-After` when the render queue is saturated.
+- **`GET /orders/{id}/credit-notes`** (`listOrderCreditNotes`) — Unpaged list of `CreditNoteSummary` rows (one per settled refund, oldest first). Empty array when the order was never refunded or the caller lacks `display:Payment`.
+- **`GET /orders/{id}/credit-notes/{creditNoteId}`** (`getOrderCreditNote`) — Downloads a single credit-note PDF. Same 429/503 behaviour as the invoice route.
+- **`x-error-codes`** — `ORDER_INVOICE_NOT_ISSUED` (404) and `ORDER_CREDIT_NOTE_NOT_ISSUED` (404); both intentionally indistinguishable from a plain "order not found" to the client.
+- **`x-personal-data.invoicing`** — Declares the module's export slice (`invoices` + `creditNotes` arrays of `ExportInvoiceDocument`). Removed automatically if the module is removed.
+- **Schemas** — `CreditNoteSummary`, `CreditNotesResponse`, `ExportInvoiceDocument`. All are deliberately *summaries* (number, amount, currency, date); the frozen document body (line items, VAT, seller identity) lives only in the PDF.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Every parameter (`IdPathParam`), shared response (`Unauthorized`, `NotFound`, `TooManyRequests`, `ServiceUnavailable`), and value type (`Id`, `CurrencyCode`, `NonNegativeDecimalAmount`) is pulled in via `$ref` using the relative path `../../../shared/contracts/openapi.root.yaml`. This file never redefines those primitives.
+- **`shared/contracts/openapi.root.yaml`** — All cross-module `$ref`s resolve here: the shared `Id` / `IdPathParam` / `CurrencyCode` / `NonNegativeDecimalAmount` schemas and the canonical `Unauthorized`, `NotFound`, `TooManyRequests`, `ServiceUnavailable` responses. This file contributes no shared components back; it only consumes them.
 
 ## Notes
 
-- **Deliberate 404 ambiguity.** An unknown/inaccessible order and a "not yet issued" document both return HTTP 404. The body error code differs (`orders.not-found` vs. `ORDER_INVOICE_NOT_ISSUED` / `ORDER_CREDIT_NOTE_NOT_ISSUED`), but the status line is the same by design so a client cannot probe for order existence.
-- **Frozen documents, not live renders.** Invoices and credit notes are written once (at `pending → paid` transition or at refund settlement) and are never re-rendered from current config. The 503 response applies only when a render slot is busy; a stored copy never triggers it.
-- **`x-cache: no-store`** appears on both PDF-download operations but **not** on the credit-note list endpoint.
-- **Rate limiting.** A comment notes `invoicingLimiter` guards the invoice/credit-note routes (see `routes.ts`); the 429 response is declared but the limiter logic lives outside this file.
-- **`x-personal-data` is a bundler contract, not a path.** It is metadata the export bundler reads to assemble `AccountExportResponse`; removing this key (and the module) removes the section from the export without any code change in the export handler.
-- **Credit-note list access control is implicit.** The endpoint returns 404 (not 403) when the caller lacks `display:Payment`; the spec does not enumerate this as a distinct error code.
+- Invoices are **frozen at issue time**; the endpoint never re-renders from current config. A `404` means "not invoiced yet" (never paid, or the invoice listener failed), not a missing record.
+- Credit-note `404` collapses three cases (non-existent, wrong order, insufficient permission) into one status + code — by design, to avoid leaking existence.
+- PDF endpoints carry `x-cache: no-store`; the list endpoint does not.
+- The `503` path is specific: all render slots busy **and** the bounded queue full. A cached/stored PDF never hits this.
+- The export schema is a strict subset of the download response; do not add line-item fields there.

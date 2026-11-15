@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/index.ts
-sha256: aad2bb73f539158266967f95a5a116a3e93337649d30be0d0cbe5b734f2bf62c
-generated_at: 2026-11-08T08:49:43.625264+00:00
+sha256: 2c9c75fa7bb717a3b457e9d5c032f3e9974bd0ce519e581950110c484d08ebe5
+generated_at: 2026-11-14T22:28:22.289506+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel/index file for the users service. It aggregates every sub-module function (read, credentials, signup, purchase-hold, reaper, etc.) into a single `userService` object that serves as the **only** public API surface for the User domain. Controllers and account services call through this object and never import the bare sub-module functions directly.
+Barrel module that aggregates the User document's admin-facing CRUD, search, role management, and purchase-hold operations into a single `userService` object. It exists so controllers and sibling modules have one stable import point rather than reaching into individual sub-module files. Deliberately excludes authentication, registration, verification, 2FA, and erasure flows, which belong to the `account` module behind `../friends/account.ts`.
 
 ## Key elements
 
-- **`userService`** — the sole object export. ~65 named methods grouped by concern:
-  - *Read/search:* `search`, `getById`, `staffContacts`, `findByEmail`, `emailTaken`, `findAuthenticatableById`, `findByIdWithCredentials`, `findForLogin`, `findByOAuthIdentity`, `findByIdWithPendingEmail`, `emailOrPendingEmailTaken`
-  - *Lifecycle (staff-gated):* `create`, `updateById`, `activate`, `deactivate`, `removeById`, `restoreById`
-  - *Self-service / own-account:* `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `eraseAgain`, `restoreDeletionState`, `findDueScheduledDeletions`
-  - *Inactivity reaper:* `softDeleteInactive`, `eraseInactive`, `findInactiveUnwarned`, `minimiseInactive`, `findReaperSoftDeletedPastGrace`, etc.
-  - *Credentials / 2FA:* `setPassword`, `markSessionsEnded`, `armReauthCode`, `spendDeliveredCode`, `persistTwoFactorMethods`, `claimTotpStep`, `spendBackupCode`, `bumpSessionEpoch`, `reserveMfaAttempt`, `resetMfaAttempts`, `touchLastActive`, `touchApiKeyUse`, `clearLapsedPreviousEmail`, `clearDeliveredCode`
-  - *Email change:* `markEmailVerified`, `applyEmailChange`, `restorePreviousEmail`, `cancelPendingEmail`, `markInactivityWarned`
-  - *Signup / OAuth:* `registerSelfService`, `registerFromOAuth`, `buildSignupDecoy`, `linkOAuthAccount`, `unlinkOAuthAccount`
-  - *Purchase holds:* `setPurchaseHold`, `liftPurchaseHold`, `purchaseHoldOf`, `takeAutomaticPurchaseHold`, `flagPurchaseHoldReview`
-  - *Ops / re-encryption / export:* `reencryptUserPhones`, `reencryptTwoFactorSecrets`, `exportSignInMethods`, `userAuditChanges`, `enqueueIfPending`
-  - *Presentation:* `toAccount` (aliased from `presentAccount`), `toUserContract`, `toUserContracts`
-- **Direct re-exports (not behind `userService`):** `isAuthenticatable`, `isRestorable`, `personalDataSubjectOf`, and the types `TwoFactorSecretRing`, `ActivePurchaseHold`, `StaffContact`.
+- **`userService`** — the sole public surface object. Controllers call through this; they never import the bare sub-module functions. Includes `search`, `getById`, `create`, `updateById`, `activate`, `deactivate`, `removeById`, `restoreById`, `assignUserRole`, `revokeUserRole`, the five `purchaseHold*` functions, `findAuthenticatableById`, `touchApiKeyUse`, and the presenter helpers `toAccount`, `toUserContract`, `toUserListItems`.
+- **Re-exported types** — `TwoFactorSecretRing`, `ActivePurchaseHold`, `StaffContact` for consumers that only need the shape.
+- **Re-exported predicates / helpers** — `isAuthenticatable`, `isRestorable`, `personalDataSubjectOf`, `privacyFrontendLink` (GDPR Art. 14(3)(b) link used by `account`'s setup mail).
+- **Sub-module imports** (not re-exported individually): `./read`, `./activation`, `./create`, `./update`, `./role`, `./remove`, `./purchase-hold`, `./lookups`, `./credentials`, `../presenter`.
 
 ## Relationships
 
-- **Account controllers** (`delete-account.ts`, `post-signup.ts`, `update-account.ts`) import `userService` and call its methods for all User-document mutations and reads.
-- **Account services** (`login.ts`, `oauth.ts`, `password.ts`, `email-change.ts`, `account-deletion.ts`, `export.ts`, `export-job.ts`, `logout.ts`, `password-reset-request.ts`, `erasure-ledger.ts`, `caller.ts`) consume specific `userService` methods (e.g. `setPassword`, `findByOAuthIdentity`, `applyEmailChange`, `eraseInactive`, `exportSignInMethods`) to perform their flow-specific logic while delegating all document-level work here.
-- **`src/modules/account/module.ts`** wires the controllers and services together; it does not import this barrel directly but the services it registers do.
+- **`src/modules/orders/services/purchase-hold.ts`** — Consumes the `purchaseHold*` exports to set, lift, flag, and query holds during order processing.
+- **`src/modules/orders/services/crud.ts`** / **`src/modules/orders/services/notify.ts`** — Read user data via `getById` / presenter helpers when composing order operations and notifications.
+- **`src/modules/cart/services/checkout.ts`** — Checks purchase-hold state and user authenticatability during checkout validation.
+- **`src/modules/api-keys/services/api-keys.ts`** / **`src/modules/api-keys/services/resolver.ts`** — Call through `userService` for user-credential bookkeeping during API-key operations.
+- **`src/modules/notifications/services/staff.ts`** — Consumes `staffContacts` to resolve recipients for staff-facing notifications.
+- **`src/modules/example/services/notify.ts`** / **`src/modules/example/services/owner.ts`** — Sibling example flows that read user data through the service surface.
+- **Integration tests** (`account/tests/…`, `api-keys/tests/…`, `cart/tests/…`, `delivery/tests/…`) — Exercise the service surface through `userService` rather than reaching into sub-files, confirming the barrel is the contract.
 
 ## Notes
 
-- The raw low-level `update` and `remove` functions are **deliberately not exposed** on `userService`. All mutations go through the higher-level named doors (`updateById`, `removeById`, `updateOwnProfile`, `softDeleteInactive`, `eraseInactive`, etc.) so the staff-role / ownership check is enforced before the document is loaded.
-- `toAccount` exists as a workaround: the barrel "never publishes a presenter function," so a sibling that needs to shape an account for an HTTP response reaches `presentAccount` via the service object instead.
-- Architectural boundary (per header comment): this file enforces only what the User *document* requires. HTTP routing, sessions, email sending, rate-limiting, and anti-automation all live in the `account` module.
-- Follows the "one file per flow" convention documented in `docs/theory/layers.md`; this index is purely a re-export/aggregation with no business logic.
+- The barrel intentionally does **not** re-export presenter functions as named top-level exports; a sibling that needs to shape an account for a response goes through `userService.toAccount` (which is `presentAccount` under the hood).
+- Role mutations (`assignUserRole`, `revokeUserRole`) are the "role door" and enforce the grant at the document level; the broader permission check happens in `updateById` / `activate` / `deactivate` / `removeById`, which load by id and ask the staff-role question first.
+- One-file-per-flow convention (see `docs/theory/layers.md`): each sub-module (`./create`, `./update`, etc.) handles a single operation. This index file adds no logic of its own beyond re-export and object assembly.

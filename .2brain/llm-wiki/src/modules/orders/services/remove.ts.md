@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/remove.ts
-sha256: 7fafc100409c8b00166a808cfbe6036d67cc5fd58d8171e102065a9b440ceee4
-generated_at: 2026-11-08T07:00:14.958186+00:00
+sha256: f2254bf7a127e81c078e0aaded0bd461ea361f0405fe6e5311e1aa6e04df4c23
+generated_at: 2026-11-14T20:46:13.482690+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles order deletion (soft and hard) and restoration of soft-deleted orders. Because an order is a financial record, the default path stamps `deletedAt` (soft delete) and a separate `restoreById` undoes it; hard delete is restricted to orders that are canceled and were never paid. The file centralizes the refusal logic, the write, and the audit trail so callers need only know the public door.
+Implements order deletion (soft and hard) and soft-delete restoration. Because an order is a financial record, the default path is a soft delete that stamps `deletedAt`; a hard delete is restricted to orders that were canceled and never paid. The file also exposes the id-based public entry point (`removeById`) that loads the document before delegating to the core `remove` logic.
 
 ## Key elements
 
-- **`remove`** *(exported, `@internal`)* — Core delete. Accepts an already-loaded `OrderDocument` plus a `hardDelete` flag. Soft path stamps `deletedAt` (idempotent if already set) and saves; hard path runs refusal checks then a conditional `deleteCanceledUnpaid`, cascading to `deleteTimelineOf` on success.
-- **`removeById`** *(exported)* — Public entry point. Fetches the order by id (404 if absent) and delegates to `remove`. This is what the barrel exposes.
-- **`restoreById`** *(exported)* — Clears `deletedAt` on a soft-deleted order and saves. Returns 409 `ORDER_NOT_DELETED` if the order is not in a soft-deleted state.
-- **`hardDeleteRefusal`** *(internal)* — Priority-ordered guard: `paidAt` → `ORDER_INVOICED`, then `moneyReceivedAt` → `ORDER_HAS_MONEY_HISTORY`, then not-canceled → `ORDER_NOT_CANCELED`. Returns `undefined` when the order passes `hardDeletable`.
-- **`hardDeleteCanceled`** *(internal)* — Executes the conditional delete. On a miss (order moved or already gone) re-reads the row to produce the correct refusal or 404.
-- **Response helpers** — `orderInvoiced`, `orderHasMoneyHistory`, `orderNotDeleted`, `orderMissing`, `orderNotCanceled`: small factories returning pre-built `ResponseReject` objects with i18n'd messages.
+- **`remove(order, hardDelete?, context?)`** — Core delete. Soft path: idempotent (already-deleted orders return 200), requires the order to be `canceled`, stamps `deletedAt`, saves, audits. Hard path: checks refusal reasons, performs a conditional delete, cascades timeline removal, audits. Marked `@internal`.
+- **`removeById(id, hardDelete?, context?)`** — Public entry point. Fetches the order by ID (404 if missing) then delegates to `remove`.
+- **`restoreById(id, context?)`** — Undoes a soft delete by clearing `deletedAt`. Returns 404 if the order is absent, 409 `ORDER_NOT_DELETED` if it was never soft-deleted.
+- **`hardDeleteRefusal(order)`** *(private)* — Returns a 409 response explaining why a hard delete is refused, in priority order: `ORDER_INVOICED` → `ORDER_HAS_MONEY_HISTORY` → `ORDER_NOT_CANCELED`. Returns `undefined` when the delete is permitted.
+- **`hardDeleteCanceled(order)`** *(private)* — Executes the conditional repository delete; on a race miss re-reads the order to produce a precise refusal or 404.
+- **`orderMissing()` / `orderNotCanceled()`** *(private)* — Reusable 404 / 409 response builders.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — All return values are shaped through `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` union types.
-- **`@infrastructure/i18n`** — `t()` localizes every user-facing refusal message.
-- **`@infrastructure/observability/audit`** — `recordAudit` is called after each successful delete/restore to write an audit row.
-- **`src/modules/orders/audit.ts`** — Provides the `ordersAuditActions` constants (`ORDER_DELETED`, `ORDER_RESTORED`).
-- **`src/modules/orders/domain/`** — `hardDeletable` and `softDeletable` predicates gate which path an order may take.
-- **`src/modules/orders/model.ts`** — `OrderDocument` is the shape read from and written to the repository.
-- **`src/modules/orders/repository.ts`** — `orderRepository.save`, `.findById`, and `.deleteCanceledUnpaid` are the only persistence calls.
-- **`src/modules/orders/services/timeline.ts`** — `deleteTimelineOf` removes the order's timeline entries after a successful hard delete.
-- **`src/modules/orders/services/index.ts`** — Barrel that re-exports `removeById` as the module's public delete API.
-- **`src/types/auth-context.ts`** — `CallerContext` is forwarded into `recordAudit` for attribution.
-- **`src/modules/orders/tests/integration/remove-race.test.ts`** — Exercises the read-then-write race in the hard-delete path.
-- **`src/modules/orders/tests/integration/service-crud.test.ts`** — Covers soft-delete, restore, and idempotency scenarios.
+- **`src/modules/orders/repository.ts`** (`orderRepository`) — All reads (`findById`) and writes (`save`, `deleteCanceledUnpaid`) go through the module's repository.
+- **`src/modules/orders/domain/index.ts`** (`hardDeletable`, `softDeletable`) — Domain predicates that gate which orders are eligible for each delete path.
+- **`src/modules/orders/services/timeline.ts`** (`deleteTimelineOf`) — Hard delete cascades: the order's timeline is removed once the row is gone.
+- **`src/modules/orders/audit.ts`** (`ordersAuditActions`) — Supplies the `ORDER_DELETED` / `ORDER_RESTORED` action identifiers.
+- **`src/infrastructure/observability/audit.ts`** (`recordAudit`) — Writes the audit row on every successful mutation.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every return value.
+- **`src/infrastructure/i18n/index.ts`** (`t`) — Localized user-facing messages.
+- **`src/types/index.ts`** (`CallerContext`) — Optional caller identity forwarded to audit; omit when no request context exists.
+- **`src/modules/orders/services/index.ts`** (barrel) — Republishes `removeById` and `restoreById` as the module's public delete surface.
+- **`src/modules/orders/tests/integration/remove-race.test.ts`**, **`src/modules/orders/tests/integration/service-crud.test.ts`** — Integration tests covering the conditional-delete race and the CRUD contract.
 
 ## Notes
 
-- `remove` is marked `@internal`; only `removeById` is published through the barrel. Callers outside this module should not import `remove` directly.
-- Soft delete is intentionally idempotent: if `deletedAt` is already set, the function returns 200 with the existing document rather than erroring. This makes `DELETE` safe to retry.
-- The hard-delete refusal checks `paidAt` directly instead of querying the invoicing module for whether a freeze landed — a paid order is kept regardless.
-- On a hard-delete miss (conditional delete returns `deleted = false`), the file re-reads the order to distinguish "moved to a non-deletable state" from "row truly gone," returning the correct 409 vs. 404.
-- The `context` parameter is optional in every public function, allowing background jobs or CLI scripts to call deletion without a request-scoped auth context.
+- **Soft delete is idempotent**: calling `remove` on an already-deleted order returns `200` with the existing document, making `DELETE` safe to retry.
+- **Hard-delete refusal priority is fixed**: invoiced → money-history → not-canceled. An order that is *both* invoiced and open always answers with `ORDER_INVOICED`.
+- **`remove` is `@internal`**; the barrel exposes only `removeById` (and `restoreById`). External callers should not pass a pre-loaded `OrderDocument` directly.
+- **The hard delete performs no side-effects of its own** (stock release, payment-intent cancel, webhooks). Those are the responsibility of the cancel operation; hard delete is pure row + timeline cleanup.
+- **`paidAt` is checked before `moneyReceivedAt`**, even though both block hard delete, because an invoice must survive regardless of whether late money was also recorded.

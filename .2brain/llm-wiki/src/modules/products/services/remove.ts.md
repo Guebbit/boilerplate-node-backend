@@ -1,43 +1,38 @@
 ---
 source: src/modules/products/services/remove.ts
-sha256: 08a569fac00db56d6b7d9b6f3d22ea5ec96bf41d53e8819c7604c09bef03b685
-generated_at: 2026-11-08T07:48:11.745609+00:00
+sha256: d7fbaf6034e8e37f930bc61cf7517b0d617521a7fa13501f7280b004dbb9d391
+generated_at: 2026-11-14T21:28:56.955314+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/products/services/remove.ts
 
 ## Purpose
-
-Implements soft delete, hard delete, and restore of a product. Coordinates the database write, side-effect cleanup (translations, image), event announcement, and audit logging into a single transactional unit, then returns an HTTP-shaped response object.
+Implements the product deletion and restore operations (soft delete, hard delete, and undo). It coordinates the write, the `PRODUCT_DELETED` outbox event, translation cleanup, image removal, and audit logging within a single transaction so that the event exists exactly when the delete commits.
 
 ## Key elements
-
-- **`announceDeleted`** (internal) – Runs a caller-supplied `write` and publishes a `PRODUCT_DELETED` outbox event in the same Mongoose transaction. Pre-fetches product titles (via `titlesOf`) so the event payload carries display names for subscribers.
-- **`remove`** (exported) – Core delete logic. Hard path: deletes the row, removes translation rows, deletes the image file, records audit, returns `200` with `undefined`. Soft path: idempotent no-op if `deletedAt` already set; otherwise stamps `deletedAt` and saves. Both paths announce via the outbox.
-- **`removeById`** (exported) – Convenience wrapper: fetches the document by ID, returns a localized 404 if missing, then delegates to `remove`.
-- **`restoreById`** (exported) – Clears `deletedAt` on a soft-deleted product and saves. Returns 404 if the product doesn't exist, 409 (`PRODUCT_NOT_DELETED`) if it was never soft-deleted. Does **not** publish an event.
+- **`removeById(id, hardDelete?, context?)`** — Public entry point. Fetches the product by ID, then delegates to `remove`. Returns 404 if not found.
+- **`restoreById(id, context?)`** — Undoes a soft delete by clearing `deletedAt`. Returns 404 if missing, 409 if the product was not soft-deleted. Announces no event (carts/wishlists that emptied stay emptied).
+- **`remove(product, hardDelete?, context?)`** (internal) — Core logic. Hard delete: removes the row + translations in one transaction, then deletes the image file. Soft delete: stamps `deletedAt` once (idempotent—repeating is a no-op). Both paths publish `PRODUCT_DELETED` via the outbox and record an audit row.
+- **`announceDeleted(product, hardDelete, write)`** (internal) — Reads the product's translated titles *before* the write (hard delete destroys them), then runs `write` and the outbox event in the same transaction.
 
 ## Relationships
-
-- **`repository.ts`** – All reads/writes go through `productRepository` (`findById`, `deleteOne`, `save`).
-- **`outbox.ts`** – `announceInTransaction` wraps the write so the `PRODUCT_DELETED` event commits atomically with the delete.
-- **`translation.ts`** – `removeTranslations` is called inside the hard-delete transaction to cascade translation rows.
-- **`image-store.ts`** – `imageStore.remove` is called after the hard-delete transaction commits to delete the physical file.
-- **`lookups.ts`** – `titlesOf` is called before the transaction to snapshot titles for the event payload (hard delete removes them from the DB).
-- **`events.ts`** – Supplies the `PRODUCT_DELETED` event name used in the outbox entry.
-- **`audit.ts` (products)** – Provides `productsAuditActions` enum values for audit records.
-- **`audit.ts` (infrastructure)** – `recordAudit` writes the audit row after the operation succeeds.
-- **`response.ts`** – `generateSuccess` / `generateReject` shape the returned response objects.
-- **`i18n`** – `t()` localizes 404 / 409 error messages.
-- **`types` (`CallerContext`)** – Optional request context forwarded to audit; omitted when no HTTP request is behind the call.
-- **`services/index.ts`** – Re-exports this module's public API.
+- **`src/modules/products/repository.ts`** — `productRepository` performs the actual `deleteOne` / `save` / `findById` calls.
+- **`src/kernel/outbox.ts`** — `announceInTransaction` writes the `PRODUCT_DELETED` event atomically with the data change; the relay retries delivery to subscribers.
+- **`src/kernel/translation.ts`** — `removeTranslations` is called only on hard delete, inside the same transaction, to drop the product's rows in other languages.
+- **`src/infrastructure/adapters/image-store.ts`** — The image adapter's `remove` method deletes the stored image file after a hard delete commits.
+- **`src/modules/products/events.ts`** — Exports the `PRODUCT_DELETED` event name used in the outbox payload.
+- **`src/modules/products/audit.ts`** — `productsAuditActions` supplies the audit action codes (`ADMIN_PRODUCT_DELETED`, `ADMIN_PRODUCT_RESTORED`).
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the audit log entry.
+- **`src/infrastructure/i18n/index.ts`** — `t` provides localized error messages for "not found" and "not deleted".
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP responses returned to callers.
+- **`src/modules/products/services/lookups.ts`** — `titlesOf` fetches the product's translated names before a hard delete erases them.
+- **`src/modules/products/services/index.ts`** — Re-exports `removeById` and `restoreById` for consumers of the products service barrel.
+- **`src/types/auth-context.ts`** — `CallerContext` type threaded through for audit attribution.
 
 ## Notes
-
-- **Soft delete is idempotent.** If `deletedAt` is already set, `remove` returns immediately with the existing document—no write, no event, no audit. Re-issuing DELETE is safe by design.
-- **Translation cleanup is transactional, not event-driven.** `removeTranslations` runs inside the same transaction as the hard-delete write. It is *not* triggered by a subscriber reacting to `PRODUCT_DELETED`; doing so would be too late (the rows would already be gone) and would couple the module to subscriber internals.
-- **Subscribers distinguish soft vs hard via the `hardDelete` flag on the event payload.** The event fires for both paths; the flag is the only differentiator.
-- **Restore is intentionally silent.** It clears `deletedAt` and saves. Downstream effects of the original delete (cart lines, wishlist entries) are not reversed.
-- **The image file is removed *after* the transaction commits** (`.then(() => imageStore.remove(...))`), so a transaction rollback does not leave a dangling file deletion. Conversely, a crash between commit and `imageStore.remove` leaves an orphaned file—there is no compensating cleanup here.
-- **The response does not wait for event delivery.** The outbox relay retries independently; this function resolves as soon as the local transaction commits.
+- **Idempotency contract:** A second soft delete is a silent no-op (returns 200 with the existing doc). Undo is always `restoreById`, never a second DELETE.
+- **Event disambiguation:** Both soft and hard deletes emit `PRODUCT_DELETED`; subscribers distinguish them via the `hardDelete` boolean on the payload. This is why translations are removed via the direct port call (`removeTranslations`) rather than by reacting to the event.
+- **Image deletion is outside the transaction:** The image file is removed *after* the DB transaction commits. If that call fails, the row is already gone—the image is an orphan, not a data-integrity concern.
+- **`context` is optional:** Omitting it means the caller has no request/session behind it (a system job, for instance); the audit call is still made but with no user attribution.
+- **Restore does not re-announce:** Products that were on sale, off sale, or hidden at delete time come back exactly as they were; the cascade effects (emptied cart lines, cleared wishlists) are intentionally not reversed.

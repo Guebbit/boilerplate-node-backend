@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/providers/index.ts
-sha256: 890d92e9b7506ce76a134885dcc52e185042c24ec610c0d313960e82af84baee
-generated_at: 2026-11-08T07:23:32.967793+00:00
+sha256: 1e53c4457eaeecad1b7f5b8ce335eb9f387803212b1f578402e47d106507c9ad
+generated_at: 2026-11-14T21:03:10.968533+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-This file is the **payment provider port** — the single interface a real PSP (Stripe, Adyen, …) must implement, plus every supporting type the rest of the payments module consumes. It exists so that no concrete provider is shipped: the boilerplate contains zero card-payment code, and a live project plugs in by adding one adapter file and one `registerPaymentProvider` call. The file is the canonical place to see *what a provider must answer*, without reading any specific adapter.
+Defines the **payment provider port** — the typed contract (interfaces, status unions, and the `PaymentProvider` interface) that any real PSP adapter or the test double must implement. It is the single seam where the application talks to a payment service: the card never reaches this server, an intent is prepared before charging, and the authoritative outcome arrives asynchronously via webhook. No production provider ships with the boilerplate; a live project adds one adapter file plus one `registerPaymentProvider` call.
 
 ## Key elements
 
-- **`PaymentProvider`** — the interface every adapter implements. Methods: `name`, `prepare`, `confirm`, `retrieve`, `refund`, `parseWebhook` (truncated in the listing but referenced throughout the JSDoc).
-- **`ProviderPaymentStatus`** — closed union: `open | requires_action | processing | succeeded | declined`. `canceled` and refund state are intentionally *not* here; they belong to this application, not the provider.
-- **`ProviderPaymentState`** — one answer about an intent: status, optional `cardLast4`, `amountReceived` (decimal string), `currency`, and `paymentId` echo.
-- **`PreparedPayment`** — returned by `prepare`: `providerRef` (persisted) and `clientSecret` (browser-only, never stored).
-- **`RefundedByProvider`** / **`ProviderRefundState`** / **`ProviderRefund`** — the three shapes a refund can take at the provider (immediate answer, later state, full listing row).
-- **`ProviderWebhookEvent`** — the *thin* normalised webhook: `id`, optional `providerRef`, optional `refundRef`, optional `dispute`. The body is never trusted for the outcome; settlement re-reads via `retrieve`.
-- **`ProviderDisputeState`** — alias for `DisputeReport`; carries its own state because some PSPs (Adyen) have no re-read endpoint.
-- **`registerPaymentProvider`** — re-exported from `./registry`; the single call a deployment makes to bind an implementation.
-- **`PaymentInFlightError`, `PaymentProviderError`** — re-exported from `./errors`.
-- **`signWebhookPayload`, `verifyWebhookSignature`, `WEBHOOK_SIGNATURE_HEADER`, `WebhookRejected`** — re-exported from `./webhook-signature`.
+- **`ProviderPaymentStatus`** — union of the five provider-side states (`open`, `requires_action`, `processing`, `succeeded`, `declined`). Cancellation and refund state are owned by this application, not the provider.
+- **`ProviderPaymentState`** — what a provider reports for one intent (status, `cardLast4`, `amountReceived`, `currency`, `paymentId`). `amountReceived` is required to verify a `succeeded` settlement.
+- **`PreparedPayment`** — return value of `prepare`: the `providerRef` (persisted) and an optional `clientSecret` (hand-to-browser, never stored).
+- **`RefundedByProvider` / `ProviderRefundState` / `ProviderRefund`** — refund lifecycle types; distinguish "immediate refusal" (throws) from "accepted but pending" and from later provider-side failure.
+- **`ProviderDisputeState`** — alias for `DisputeReport`; the one webhook event that carries its own state (Adyen has no re-read endpoint).
+- **`ProviderWebhookEvent`** — deliberately thin delivery envelope (event `id`, `providerRef`, `refundRef`, optional `dispute`). The body is never trusted for outcome; settlement re-reads via `retrieve`.
+- **`PaymentProvider`** — the interface every adapter implements. Methods: `prepare`, `confirm`, `retrieve`, refund, refund retrieval, dispute handling, and `parseWebhook`. Carries extensive idempotency and lease-timing contracts.
+- **Re-exports** — `PaymentInFlightError`, `PaymentProviderError` from `./errors`; `signWebhookPayload`, `verifyWebhookSignature`, `WEBHOOK_SIGNATURE_HEADER`, `WebhookRejected` from `./webhook-signature`.
 
 ## Relationships
 
-- **`./registry`** — `index.ts` re-exports `registerPaymentProvider` and imports `paymentProviderRegistry`; the registry is where the `NODE_PAYMENT_PROVIDER` environment key is resolved at runtime.
-- **`./errors`** — `index.ts` re-exports the two error classes so callers have a single import surface.
-- **`./webhook-signature`** — `index.ts` re-exports the HMAC/signature helpers; `parseWebhook` on the provider interface is expected to call `verifyWebhookSignature` before trusting a body.
-- **`@infrastructure/runtime/provider-registry`** — provides `requireProvider`, the generic lookup that the module's controllers use to fetch the active `PaymentProvider` instance by name.
-- **`@infrastructure/config/define`** — provides `defineProbe`, used to gate the provider behind a config probe.
-- **`../config`** — provides `paymentsConfig` (e.g. provider name, timeouts) read at wiring time.
-- **`scenarios/support/doubles/payments/fake.ts`** — implements `PaymentProvider` as an in-process double for dev, demo, and tests.
-- **`scenarios/support/doubles/payments/register.ts`** — calls `registerPaymentProvider` with the fake before the application boots.
-- **`src/modules/payments/controllers/post-payment-refund.ts`, `post-payment-refund-cancel.ts`, `post-payment-refund-settle.ts`** — consume `PaymentProvider.refund`, `RefundedByProvider`, and `ProviderRefundState` to drive refund creation, cancellation, and sweep.
-- **`src/modules/payments/controllers/post-payment-webhook.ts`** — calls `parseWebhook` / `ProviderWebhookEvent`, then re-reads via `retrieve` or `retrieveRefund` before writing.
-- **`src/modules/payments/domain/display-status.ts`** — maps `ProviderPaymentStatus` (and refund state) onto the application's public status vocabulary.
-- **`src/modules/payments/services/deadline.ts`** — provides the lease/deadline mechanism the refund sweep relies on; the `refund` JSDoc references the 10-minute sweep window that `deadline` enforces.
-- **`src/modules/payments/module.ts`** — wires the provider registry, config, and controllers together; the single place `registerPaymentProvider` is invoked in production.
+- **`src/modules/payments/providers/registry.ts`** (`paymentProviderRegistry`) — the runtime lookup table; `requireProvider` (from `provider-registry`) resolves the active adapter by name at call time.
+- **`src/modules/payments/providers/errors.ts`** — source of the two exported error classes; kept separate to avoid circular imports.
+- **`src/modules/payments/providers/webhook-signature.ts`** — HMAC signing/verification helpers re-exported here so consumers import from one place.
+- **`src/modules/payments/config.ts`** (`paymentsConfig`) — provides configuration (e.g. provider name, lease constants) that the port's timing contracts reference.
+- **`src/infrastructure/config/define.ts`** (`defineProbe`) — used to register a health-readiness probe tied to provider availability.
+- **`src/infrastructure/runtime/provider-registry.ts`** (`requireProvider`) — the runtime mechanism that selects which implementation answers, keyed by `NODE_PAYMENT_PROVIDER`.
+- **Controllers** (`src/modules/payments/controllers/post-payment-webhook.ts`, `post-payment-refund.ts`, `post-payment-refund-settle.ts`, `post-payment-refund-cancel.ts`) — the primary consumers that call `parseWebhook`, `refund`, `retrieveRefund`, etc. through the resolved `PaymentProvider`.
+- **`scenarios/support/doubles/payments/fake.ts`** — the in-process double that implements `PaymentProvider` for dev, demo, and tests.
+- **`scenarios/support/doubles/payments/register.ts`** — calls `registerPaymentProvider` to install the fake before the app boots.
+- **`src/modules/payments/domain/display-status.ts`** — domain-level status mapping; the provider statuses defined here are the source it translates from.
+- **`src/modules/payments/services/deadline.ts`** — lease/deadline service; the port's docstrings reference its five-minute in-flight lease and the refund-sweep lease that adapters must respect.
 
 ## Notes
 
-- **`open` means "intent exists, nothing attempted yet."** Settlement must write *nothing* for this status; do not treat it as an error.
-- **`amountReceived` is a decimal string, not an integer.** A real adapter converts minor units (cents) to this format. Settlement compares it against the frozen amount; a `succeeded` without it is a mismatch.
-- **`clientSecret` is the one field that must never be persisted, logged, or audited.** It authorises completing the payment in the browser.
-- **Webhook events are deliberately thin.** The body names *which* intent/refund it concerns but carries no authoritative status (disputes are the exception). Always re-read via `retrieve`/`retrieveRefund` before writing.
-- **Idempotency of `refund` is two-layered.** The provider-side key (`refund:{paymentId}:{refundId}`) protects concurrent retries; the application-side conditional write on `amountRefunded` protects the sequential case. After the provider's key window expires (e.g. Stripe: 24 h), the adapter must fall back to listing refunds and adopting one by `metadata.refund_record`.
-- **`cardLast4` is the only card-derived data this server may store.** Receiving a full PAN means the adapter is in the wrong PCI scope.
-- **The file re-exports rather than re-declares** `PaymentProviderError`, the webhook helpers, and `registerPaymentProvider`. Canonical definitions live in `./errors`, `./webhook-signature`, and `./registry` respectively; edit those, not this barrel.
+- The file is a **pure type/interface module** — no runtime logic beyond the re-exports and the two imported bindings (`requireProvider`, `defineProbe`, `paymentsConfig`, `paymentProviderRegistry`). Adding a new provider requires only implementing `PaymentProvider` and calling `registerPaymentProvider`; no changes to this file.
+- `clientSecret` is explicitly marked "NEVER persisted, logged or audited." Any adapter that writes it to storage violates the contract.
+- Idempotency is a **two-layer** concern: the provider's own key (e.g. `refund:{paymentId}:{refundId}`) prevents double-charges at the PSP, while the application's conditional write prevents double-recording locally. Adapters must honour both.
+- Adapters must time their outbound calls well inside the relevant lease window (5 min for the idempotency ledger; 10 min for the refund sweep) or a retry will read a false "outcome unknown."
+- Webhook bodies are **never** trusted for payment status; the settlement path always calls `retrieve`. The single exception is the dispute event, which carries its own state and is ordered by `observedAt`.

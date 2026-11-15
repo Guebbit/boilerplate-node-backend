@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-error-declarations.test.ts
-sha256: 0d8dae304345a23c455b91b4c44f8fa375e59ff0846290aab213c8216d9da4a1
-generated_at: 2026-11-08T09:25:36.029431+00:00
+sha256: 441e6b60ddcb72b8ec0861462d9afcbf4170a38e03d435a3694e6a9307f86955
+generated_at: 2026-11-14T23:02:35.107738+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that every OpenAPI contract fragment declares a `404` response on any operation whose path template carries an id parameter (e.g. `{id}`, `{orderId}`). This is a cross-cutting invariant: a malformed id always yields 404 (same as an unknown id), so the contract must state that on *every* such operation, not just the ones whose service happens to return a miss. The test reads the per-module fragments rather than the generated bundle so failure messages point at an editable file.
+Cross-cutting contract test that verifies every OpenAPI operation fragment correctly declares the error responses and `x-error-codes` that the runtime guards and the shared id-rule *must* produce. It exists because an undeclared status is not cosmetic: the generated frontend client has no type for it, and the PHP twin's response-schema suite will reject it.
 
 ## Key elements
 
-- **`METHODS`** – `Set` of the five valid OpenAPI operation keys (`get` … `delete`); used to filter non-operation entries out of a path object.
-- **`TAKES_AN_ID`** – regex `/\{[^}]*[Ii]d}/` matching any path template whose parameter name contains "id" (case-insensitive). Matching on the parameter *name* rather than a route list is the actual trigger condition.
-- **`Operation`** – interface capturing `module`, `route`, `method`, and the list of declared response `codes`.
-- **`operations()`** – walks `MODULES_ROOT`, reads each module's `openapi.yaml`, parses it with the `yaml` library, and flattens every method-keyed operation into an `Operation[]`.
-- **`takingAnId()`** – filters `operations()` to those whose route matches `TAKES_AN_ID`.
-- **`describe('declared error responses')`** – two tests:
-  - *Canary*: asserts `operations().length > 40` and `takingAnId().length ≥ 20` so the suite cannot pass vacuously if fragments are renamed or the path shape changes.
-  - *404 assertion*: collects id-taking operations that omit `404` from their declared codes and expects the list to be empty.
+- **`operations()`** — Reads every module's `openapi.yaml` fragment under `MODULES_ROOT`, flattens all path × method pairs into `{ module, route, method, codes[] }` entries.
+- **`TAKES_AN_ID`** — Regex (`/\{[^}]*[Ii]d\}/`) matching any path parameter whose name contains "id"; the trigger for the 404 obligation.
+- **`takingAnId()`** — Filters `operations()` to those matching `TAKES_AN_ID`.
+- **`sendsEnrollment(action, subject)`** — Replays the kernel's ability check for every preset role × verified state to determine whether a guard would emit `SECOND_FACTOR_ENROLLMENT_REQUIRED` (403) for a given ask.
+- **`obligationsOf(route)`** — Given a mounted route, returns the list of `{ status, code }` pairs its guards obligate the operation to declare (401 `REAUTH_REQUIRED` from fresh-auth guards or step-up rules, 403 `deniedCode`, 403 enrollment).
+- **`specKey(route)`** — Converts a mounted-route path (Express `:param`) to OpenAPI `{param}` form for cross-referencing.
+- **`describe('declared error responses')`** — Asserts every id-taking operation lists `404` in its responses.
+- **`describe('declared error codes')`** — Three assertions: (1) no non-app-scoped catalogue code is orphaned, (2) every guard-made code is listed on every operation whose route mounts that guard, (3) security-scope permission names match the guard's asks exactly (both directions).
 
 ## Relationships
 
-- **`tests/support/paths.ts`** – provides `MODULES_ROOT` (imported as `@tests/paths`), the directory under which per-module `openapi.yaml` fragments are discovered.
+- **`tests/support/paths.ts`** — Provides `MODULES_ROOT` (directory of per-module contract fragments).
+- **`tests/support/contract-routes.ts`** — Provides `everyMountedRoute()` and the `MountedRoute` type used to enumerate actual guard mounts and their permission asks.
+- **`tests/support/spec-walk.ts`** — Provides `errorCodeIndex()` (catalogue, app-scoped set, per-operation listed codes), `listOperations()`, and `readSpec()` for cross-referencing `x-error-codes` and `security` blocks.
+- **`tests/support/stub.ts`** — Provides `asStub<AuthContext>()` to construct synthetic auth contexts inside `sendsEnrollment`.
+- **`src/kernel/permissions.ts`** — Source of truth for `PRESET_ROLES`, `findRule`, `ruleId`, `staffRoleWithheld`, `callerForSubject`; the test mirrors the guard's logic through these same helpers.
+- **`src/kernel/ability.ts`** — `holds()` is the ability check the test invokes to replicate the guard's enrollment decision.
+- **`src/types/index.ts` / `src/types/auth-context.ts`** — `AuthContext` type used when constructing stub contexts.
+- **`scripts/contracts/generate-request-content-types.ts`** — Consumes the same contract fragments this test reads; a test failure signals a gap the generator would propagate into the frontend client.
 
 ## Notes
 
-- **Scope is 404 on a path id only.** The 422 that a malformed id in a *body* or *query* produces is covered by `tests/integration/malformed-ids.test.ts`, which discovers those sites from the schema itself.
-- **500 is intentionally not asserted.** A sweep over 500 finds three operations (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) whose status is either an omission or a deliberate shape; deciding which is an endpoint-level question, not a cross-cutting one.
-- **The contract is a shared, three-repo artifact.** `openapi.yaml` must stay byte-identical with the paired frontend and the PHP twin; an undeclared status breaks the generated client types and the twin's response-schema suite. Fixes therefore require coordinated edits across repositories.
-- **Fragments, not the bundle.** The bundled `openapi.yaml` is generated; a failure in it would name a line nobody edits. Reading the fragments keeps the error message actionable.
+- **Reads fragments, not the bundle.** The bundled `openapi.yaml` is generated; a failure there would point at a line nobody edits. This test always resolves back to a per-module fragment.
+- **Explicit non-assertion of 500s on three endpoints** (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) — the doc block states whether those are omissions or deliberate shapes is an endpoint-level question requiring a three-repo change.
+- **422 for body/query ids** is deliberately out of scope; `tests/integration/malformed-ids.test.ts` covers that path.
+- **Canary assertion** (`operations().length > 40`, `takingAnId().length ≥ 20`) guards against a renamed fragment or path-shape change silently emptying the sweep.
+- **`sendsEnrollment` uses `as never` casts** on the action/subject parameters because the caller (`obligationsOf`) already typed them via the guard mount; the cast is a type-system acknowledgement, not a runtime escape hatch.
+- The `jest.mock` of `@kernel/middlewares/authorizations` delegates to `authGuardsMock()` from `@tests/routes`, so the permission rules exercised here are the real kernel rules, not a separate copy.

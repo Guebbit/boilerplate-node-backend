@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/shared-rules/registry.ts
-sha256: 436b7b2c90357b961b53e45a37bd26fd07f54e80d012df8c72204c21dae694b9
-generated_at: 2026-11-08T03:27:41.861657+00:00
+sha256: 3e2ab265cb5ebd4ea364b47f7215980802b3137a1569fea9e4541eb59bdf9bb0
+generated_at: 2026-11-14T17:59:09.284430+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry that pairs every shared-rules YAML document with its Zod schema and an optional TypeScript generation spec. The `regenerate` script iterates this list to emit `shared/rules/schemas/<name>.schema.json` files and any declared `.generated.ts` modules; boot-time loaders read the same schemas for validation.
+Central registry that maps every shared-rules YAML file name (without extension) to its Zod schema and, optionally, a spec describing the TypeScript file to generate from that data. Both the schema-regeneration script and the boot-time config loaders consume this single list, so adding or removing a rule only requires touching this file.
 
 ## Key elements
 
-- **`SharedRuleEntry`** (exported interface) — one entry per rules file: a required `schema: z.ZodType` and an optional `generate?: GenerateSpec` describing the TypeScript file to emit.
-- **`SHARED_RULES`** (exported const) — a `Readonly<Record<string, SharedRuleEntry>>` keyed by file name (without `.yaml`). Contains 13 entries covering audit-actions, cookies, defaults, frontend-links, images, jobs, log-redaction, metrics, outbox, password-hash, rate-limits, and semantic-log-names.
-- **`GenerateSpec`** (type, imported from `./generate-spec`) — declares the output path, export name, shape (`'keyed-list'` or `'verbatim'`), source field, and a human-readable description.
+- **`SharedRuleEntry`** (exported interface) — pairs a `schema: z.ZodType` with an optional `generate: GenerateSpec`. The optional flag signals "this rule's data is consumed as typed code, not just validated YAML."
+- **`SHARED_RULES`** (exported `Readonly<Record<string, SharedRuleEntry>>`) — the complete lookup table. Keys are the rule file names sans `.yaml` (e.g. `'audit-actions'`, `'rate-limits'`). Each entry wires in the schema from the sibling module and, when applicable, declares:
+  - `generate.out` — absolute project path of the `.generated.ts` to emit.
+  - `generate.exports` — one or more `{ exportName, shape, field, description }` descriptors that tell the generator what to extract and how (`shape` is `'verbatim'` or `'keyed-list'`).
+- **Schema imports** — one named import per sibling rule module (e.g. `auditActionsSchema` from `./audit-actions`). This file is the *only* place all schemas are re-exported together.
+- **`GenerateSpec` type** — imported from `./generate-spec`; defines the shape of the optional `generate` property.
 
 ## Relationships
 
-- **Imports schemas** from every sibling in `shared-rules/`: `audit-actions`, `cookies`, `defaults`, `frontend-links`, `images`, `jobs`, `log-redaction`, `metrics`, `outbox`, `password-hash`, `rate-limits`, `semantic-log-names`.
-- **Imports `GenerateSpec`** type from `./generate-spec`.
-- **Consumed by** `scripts/contracts/generate-shared-rule-schemas.ts`, which reads `SHARED_RULES` to write JSON schema files and invoke TypeScript generation for entries that declare a `generate` block.
-- **Referenced by** `src/infrastructure/config/shared-rules/load.ts` (boot-time loader) for the same schema validation at runtime.
+- **`scripts/contracts/generate-shared-rule-schemas.ts`** — reads `SHARED_RULES` at build time to regenerate each rule's JSON schema and to emit the `.generated.ts` files whose paths and export specs are declared in each entry's `generate` field.
+- **`src/infrastructure/config/shared-rules/generate-spec.ts`** — provides the `GenerateSpec` type that `SharedRuleEntry.generate` references.
+- **Sibling rule modules** (`audit-actions.ts`, `cookies.ts`, `defaults.ts`, `frontend-links.ts`, `images.ts`, `jobs.ts`, `log-redaction.ts`, `metrics.ts`, `outbox.ts`, `password-hash.ts`, `rate-limits.ts`, `semantic-log-names.ts`) — each exports a named Zod schema that this registry imports and exposes via `SHARED_RULES`.
 
 ## Notes
 
-- Three entries (`frontend-links`, `log-redaction`, `password-hash`) have **no** `generate` block — they are validated at boot but produce no `.generated.ts` file.
-- The only `shape: 'keyed-list'` entry is `audit-actions`; all others use `'verbatim'`.
-- The module doc explicitly restricts this file to **relative imports** (see `load.ts` for the convention).
-- `SHARED_RULES` is `Readonly`; do not mutate it at runtime.
+- Only **relative imports** are permitted in this directory (enforced by convention documented in `load.ts`). Do not use package-name imports here.
+- Three rules — `frontend-links`, `log-redaction`, `password-hash` — have **no `generate` spec**; they are validated at boot but never emitted as typed constants.
+- Generated output files are scattered across the codebase (`src/app/`, `src/kernel/`, `src/infrastructure/http/`, etc.), not colocated with this registry.
+- The key `'audit-actions'` uses the `keyed-list` shape (extracting a sub-field `actions` as a keyed object), while all other entries use `verbatim`.
+- The record is typed `Readonly` to discourage accidental mutation; treat it as a static catalog.

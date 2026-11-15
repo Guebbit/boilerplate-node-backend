@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/contract/webhooks.contract.test.ts
-sha256: 0554ee25b871d0daafd6344e2dfcd92fe7682ece4bb3d9e2d39d9e71cbb5216c
-generated_at: 2026-11-08T09:07:57.245086+00:00
+sha256: adab212e3f8d08d5c9ae3ad6a67899d147d2a3efa78ab42c33f389844d0c9dcd
+generated_at: 2026-11-14T22:48:55.302619+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests that validate the `/webhooks` admin HTTP surface—subscriptions CRUD, delivery log, replay, and the public event catalogue—against the bundled `openapi.yaml` schema. The file ensures that response shapes, status codes, error bodies, and field-level rules (e.g. secrets never returned in lists) stay in sync with the published API contract.
+Contract tests for the `/webhooks` admin API surface (subscription CRUD, delivery log, replay, public event catalogue) that validate runtime responses against the bundled `openapi.yaml`. Exists to catch drift between the OpenAPI spec and actual controller/serializer behavior.
 
 ## Key elements
 
-- **`subscriptionBody(overrides?)`** – Local factory that returns a minimal valid subscription payload pointed at `https://example.test/inbox` (a URL never actually called).
-- **`describe('GET /webhooks/subscriptions')`** – Asserts the list never exposes `secret`/`newSecret`, carries per-row `actions`, honours `?sort=url`, and 422s an unlisted sort field.
-- **`describe('GET /webhooks/subscriptions/:id')`** – Single-fetch shape parity with list rows; 404 for unknown, malformed, and foreign-tenant IDs; 403 for a caller lacking the read key.
-- **`describe('POST /webhooks/subscriptions')`** – Creation returns a one-time `whsec_…` secret; rejects `http://` URLs, empty `eventTypes`; 409 with `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` once `NODE_WEBHOOK_SUBSCRIPTION_CAP` is hit.
-- **`describe('PUT /webhooks/subscriptions/:id')`** – Full-replace semantics (omitted fields cleared); 422 when `enabled` is present (dedicated endpoints own that toggle); 422 for missing required fields; 404 for out-of-scope IDs.
-- **`describe('PATCH /webhooks/subscriptions/:id')`** – Partial-update semantics (omitted fields preserved); same `enabled`-field rejection as PUT.
-- *(Truncated portion)* – Additional suites covering the delivery log, replay, and the public event catalogue (`declaredWebhookEvents`).
+- **`subscriptionBody(overrides)`** – Local factory that returns a safe subscription payload pointing at a non-resolvable test host, so no test ever triggers a real delivery.
+- **`describe('GET /webhooks/subscriptions')`** – Verifies list shape (no `secret`/`newSecret`, `secretIds` is an array), per-row `actions` object, default vs. `?sort=url` ordering, and 422 on an unlisted sort field.
+- **`describe('GET /webhooks/subscriptions/:id')`** – Single-fetch shape parity with list rows; 404 for unknown *and* malformed IDs; 404 (not 403) for a subscription owned by another tenant (seeded directly via the repository).
+- **`describe('POST /webhooks/subscriptions')`** – 201 with one-time `whsec_…` secret; 422 for `http://` URL and empty `eventTypes`; 409 with `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED` when the env-configured cap is hit, and success after a delete frees a slot.
+- **`describe('PUT /webhooks/subscriptions/:id')`** – Full-replace semantics (omitted `description` is cleared); 422 when body includes `enabled`; 422 when a required field is missing; 404 for out-of-reach IDs.
+- **`describe('PATCH /webhooks/subscriptions/:id')`** – Partial-update semantics (omitted fields preserved); same `enabled`-field 422 guard; 404 for out-of-reach IDs.
+- **Remaining `describe` blocks** (truncated in view) cover delivery-log, replay, and the public event catalogue endpoints, exercising `declaredWebhookEvents` and `webhookDeliveryRepository`.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – Imported as a side-effect (`import '@tests/contract'`); wires up OpenAPI schema validation so every HTTP response is checked against `openapi.yaml`.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises and tears down an isolated MongoDB instance for each run.
-- **`tests/support/http.ts`** – Provides the `api()` supertest wrapper and `authenticateAsRole()` for role-scoped bearer tokens.
-- **`tests/support/environment.ts`** – `setEnvironment()` lets tests override process env (e.g. `NODE_WEBHOOK_SUBSCRIPTION_CAP`) without touching real config.
-- **`tests/support/webhook-events.ts`** – Exports `declaredWebhookEvents` used to cross-check the event catalogue endpoint against the canonical list.
-- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` is used directly to seed a foreign-tenant document (404 test) and to verify persistence; `webhookDeliveryRepository` is available for delivery-log/replay suites.
-- **`src/infrastructure/adapters/ssrf-exemptions.ts`** – `registerSsrfExemptOrigin` / `clearSsrfExemptOrigins` allow test URLs to pass the SSRF guard during request construction without a real outbound call.
+- **`tests/support/contract.ts`** – Imported as a side-effect (`import '@tests/contract'`); installs a global interceptor or supertest wrapper that runs each response body through the OpenAPI schema validator.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` called at module top to prepare/tear down the in-memory (or seeded) database per test run.
+- **`tests/support/http.ts`** – Provides `api()` (a supertest-like helper bound to the app) and `authenticateAsRole(role)` which returns a `{ bearer }` token.
+- **`tests/support/environment.ts`** – `setEnvironment({...})` lets a test override process env vars (used for `NODE_WEBHOOK_SUBSCRIPTION_CAP`).
+- **`tests/support/webhook-events.ts`** – Exports `declaredWebhookEvents`, the canonical event list the event-catalogue tests assert against.
+- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` and `webhookDeliveryRepository` are used directly to seed cross-tenant records that the API must 404 on.
+- **`src/infrastructure/adapters/ssrf-exemptions.ts`** – `registerSsrfExemptOrigin` / `clearSsrfExemptOrigins` manage the SSRF allow-list so tests can exercise URL-validation paths with fixture domains.
 
 ## Notes
 
-- **No real deliveries ever occur.** The subscription URL (`example.test`) is a placeholder; these tests exercise the admin read/write path only.
-- **`enabled` is intentionally rejected on PUT and PATCH.** Enabling/disabling a subscription is owned by dedicated endpoints; sending the field is a contract violation (422).
-- **Path aliases** (`@tests/*`, `@infrastructure/*`) are used throughout; resolve them via `tsconfig` paths when navigating from this file.
-- **The `enabled` default is `true`** on creation; the one-time secret (`whsec_…` prefix) is returned only on the POST response and never in subsequent GET/PUT/PATCH payloads.
+- The test file **never performs a real webhook delivery**; every target URL uses a non-resolvable test domain by design.
+- `PUT` is a full replace (absent fields are nulled/cleared), while `PATCH` is a partial update—tests explicitly assert this distinction.
+- The `enabled` field is deliberately **rejected** (422) on both PUT and PATCH; enabling/disabling has dedicated endpoints (implied by the `actions.enable`/`actions.disable` booleans).
+- Cross-tenant access returns **404, not 403**—tests confirm the API does not leak existence of other shops' subscriptions.
+- The one-time secret (`whsec_…`) appears **only** in the 201 POST response; subsequent reads expose `secretIds` (array) but never the plaintext.
+- `setEnvironment` mutates process-level state; the cap test relies on this being isolated by the test runner (or restored by `contract.ts` teardown).

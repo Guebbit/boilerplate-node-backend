@@ -1,32 +1,35 @@
 ---
 source: src/modules/observability/tests/unit/get-observability-metrics.test.ts
-sha256: 2ec0be6ea8986276588f638cf5abdb7432c9960c468289e9c7ab85e71219408f
-generated_at: 2026-11-08T06:42:56.672134+00:00
+sha256: 75516643fa0128ca436585f9f1c532c94f178bf1fcdaede8c95662f1fcbe633b
+generated_at: 2026-11-14T20:30:51.142884+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/observability/tests/unit/get-observability-metrics.test.ts
 
 ## Purpose
-
-Unit test for the `GET /observability/metrics` Prometheus scrape handler. It verifies two contract guarantees: a successful collection returns the registry's negotiated content type and exposition body, and a failed collection still returns a 500 with a syntactically valid (empty) exposition so scrapers don't log a secondary format error.
+Unit tests for the `GET /observability/metrics` Prometheus scrape handler. Covers the happy path (valid exposition body + registry content type) and the failure path (typed 500 with a comment-line body), plus side effects: structured error logging and span failure marking.
 
 ## Key elements
-
-- **`fakeResponse()`** — factory returning a minimal Express `Response` double (via `asStub<Response>`) that records `headers`, `status`, and `body` so assertions can inspect what the handler actually wrote.
-- **Partial mock of `@infrastructure/observability/metrics-registry`** — spreads `jest.requireActual` then overrides only `getPrometheusMetrics` with `jest.fn()`. The real `metricsRegistry` singleton stays live.
-- **Mock of `@infrastructure/adapters/logger`** — replaces the module with `{ logger: { info, warn, error } }` as `jest.fn()`s.
-- **`describe('GET /observability/metrics')`** — three `it` cases: happy path (content type + body + no status set), failure path (500 + `# metrics unavailable\n`), and failure logging (asserts `logger.error` receives the `Error` object under the `error` key).
+- **`fakeResponse()`** – builds a minimal Express `Response` double that records `setHeader`, `status`, and `send` calls so assertions can inspect them without a full HTTP stack.
+- **`jest.mock` for `metrics-registry`** – partial mock: only `getPrometheusMetrics` is stubbed; `metricsRegistry` is kept real (see Notes).
+- **`jest.mock` for `tracer`** – replaces `recordErrorOnActiveSpan` with a spy.
+- **`jest.mock` for `logger`** – replaces the logger object with `info`/`warn`/`error` spies.
+- **Test cases** (four):
+  - *happy path* – asserts `Content-Type` equals `metricsRegistry.contentType`, body is the mocked exposition string, and no status code is set.
+  - *failed collection* – asserts `status(500)`, same content type, and body is the literal `'# metrics unavailable\n'`.
+  - *logging* – asserts `logger.error` receives the Error **object** under the `error` key, not a flattened string.
+  - *span marking* – asserts `recordErrorOnActiveSpan` is called with the Error instance.
 
 ## Relationships
-
-- **`src/modules/observability/controllers/get-observability-metrics.ts`** — the system under test; imported and invoked as `getObservabilityMetrics(req, res)`.
-- **`src/infrastructure/observability/metrics-registry.ts`** — `getPrometheusMetrics` is the jest.fn() the tests mock; `metricsRegistry.contentType` is read as the expected header value.
-- **`src/infrastructure/adapters/logger.ts`** — mocked so the failure-path test can assert `logger.error` was called with the correct argument shape.
-- **`tests/support/stub.ts`** — provides the `asStub<T>()` type-assertion helper used to satisfy Express's `Response` type on the hand-rolled fake.
+- **`@modules/observability/controllers/get-observability-metrics`** – the system under test; imported directly and called synchronously (the handler is async internally but the call is fire-and-forget, flushed via microtask ticks before assertions).
+- **`@infrastructure/observability/metrics-registry`** – `getPrometheusMetrics` is mocked; `metricsRegistry` (real) is used to assert the content type.
+- **`@infrastructure/observability/tracer`** – `recordErrorOnActiveSpan` is spied on to verify the failure is propagated to tracing.
+- **`@infrastructure/adapters/logger`** – spied on to verify structured error logging.
+- **`tests/support/stub`** – `asStub` is used to cast plain objects into typed parameters without `as unknown as` chains.
 
 ## Notes
-
-- The real `metricsRegistry` is **deliberately kept unmocked**: every module that imports a counter calls `new Counter({ registers: [metricsRegistry] })` at import time, so a stub registry would throw before the first assertion. It also means the content-type assertion checks the value the client library actually negotiates.
-- The async handler is not `await`ed directly. Tests instead drain the microtask queue with one or two extra `await Promise.resolve()` calls (three in the failure path, where the catch block adds another tick).
-- The logger assertion passes the `Error` object itself (not `.message`) so that `redactFormat` → `serializeError` can include the name and, outside production, the stack. Flattening to a string here would silently discard both.
+- **`metricsRegistry` must stay real.** Stubbing it would break every module that calls `new Counter({ registers: [metricsRegistry] })` at import time, throwing before any test runs. It also ensures the content-type assertion reflects what the client library actually negotiates.
+- **Content type is asserted via the live registry**, never hardcoded, so a client-library format change is caught immediately.
+- **The error is passed as an `Error` instance**, not `.message` — the production code hands it to `serializeError`, which preserves name and (non-prod) stack. Asserting a string would encode a different contract.
+- **Async flushing** uses successive `await Promise.resolve()` calls rather than `await`-ing the handler directly, because the controller is not `async`-annotated at its call site.

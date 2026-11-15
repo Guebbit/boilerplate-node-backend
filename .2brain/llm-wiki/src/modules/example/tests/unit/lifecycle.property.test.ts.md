@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/tests/unit/lifecycle.property.test.ts
-sha256: c0e7e76937eef682b0b21ee7755b26894d4bc47a20e9dcd310b21ef1b3947617
-generated_at: 2026-11-08T05:56:09.446081+00:00
+sha256: b299acb07a1f87862d60d2414893178fc04461fb535cf91dec2fcbad0ef4b06e
+generated_at: 2026-11-14T20:01:50.297354+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (via `fast-check`) that pin the public invariants of the example lifecycle: only legal events are ever offered, every offered event actually changes status, and permission gating behaves correctly. The event table itself is private to the domain module; these tests exercise the contract a client sees through `canApply` and `exampleActionsFor`.
+Property-based tests (via `fast-check`) for the lifecycle domain module. Instead of hand-picking fixture cases, the suite generates random combinations of status and permission keys and asserts the invariants a client relies on: opened events are always legal from the current status, no event is a no-op, and a caller without edit permission gets no actions. The file is `@module` — it exports nothing.
 
 ## Key elements
 
-- **`RUN`** — Shared `fast-check` runner config: fixed seed `20_261_022`, run count from `PROPERTY_RUNS`, `endOnFailure: true`. One place to change seed or iteration count.
-- **`EVENTS`** — `readonly` list of all `ExampleEvent` values (`'publish' | 'archive' | 'unarchive'`) used to iterate in assertions.
-- **`anyStatus()`** — Arbitrary that generates every `ExampleStatus` value.
-- **`anyPermits()`** — Arbitrary that generates a `{ update: boolean; delete: boolean }` record.
-- **Five `it()` blocks** (each an `fc.assert` property):
-  1. Opened events are always legal per `canApply`.
-  2. Opened events never leave the status unchanged (`statusAfter` ≠ input status).
-  3. With `update: false`, no event is offered regardless of `delete`.
-  4. With `update: true`, the offered set matches `canApply` exactly for each event.
-  5. The `update`/`delete` keys in the result echo the input unchanged.
+- **`RUN`** — Shared fast-check config: fixed seed `20_261_022`, `numRuns` taken from `PROPERTY_RUNS`, and `endOnFailure: true` (first counterexample stops the property).
+- **`EVENTS`** — `readonly ExampleEvent[]` listing every lifecycle event (`publish`, `archive`, `unarchive`); used to filter which events `exampleActionsFor` "opens."
+- **`anyStatus()`** — Generator that picks a random `ExampleStatus` via `fc.constantFrom`.
+- **`anyPermits()`** — Generator producing a `{ update: boolean; delete: boolean }` record.
+- **`describe("the lifecycle, over every status and every set of keys")`** — Five property tests:
+  1. Opened events are always legal (`canApply` is true) from the current status.
+  2. No opened event maps back to the same status via `statusAfter` (no no-ops).
+  3. With `update: false`, every action flag is `false` regardless of `delete`.
+  4. With `update: true`, every action flag exactly matches `canApply`.
+  5. `actions.update` and `actions.delete` echo the input permits unchanged.
 
 ## Relationships
 
-- **`src/modules/example/domain/lifecycle.ts`** — The implementation under test; `canApply`, `exampleActionsFor`, and `statusAfter` originate here.
-- **`src/modules/example/domain/index.ts`** — Barrel re-export; the test imports the three functions and `ExampleEvent` type from `../../domain`.
-- **`src/types/index.ts`** — Provides the `ExampleStatus` enum used to enumerate statuses.
-- **`tests/support/knobs.ts`** — Supplies `PROPERTY_RUNS`, the shared iteration-count knob for all property tests in the repo.
+- **`src/modules/example/domain/index.ts`** — Re-exports the public API under test: `canApply`, `exampleActionsFor`, `statusAfter`, and the `ExampleEvent` type.
+- **`src/modules/example/domain/lifecycle.ts`** — The implementation the properties constrain (the "event table" mentioned in the file's doc comment).
+- **`src/types/index.ts`** — Source of `ExampleStatus`, the enum the generator enumerates.
+- **`tests/support/knobs.ts`** — Provides `PROPERTY_RUNS`, the single knob controlling how many random cases each property executes.
 
 ## Notes
 
-- The seed is intentionally fixed so a counterexample reproduces deterministically and can be written back as an ordinary `it()` (per the module doc comment).
-- `endOnFailure: true` means the first failing shrink stops the property; subsequent properties still run.
-- The `delete` permission appears in the permits object but never influences which lifecycle events are offered — only `update` gates them. The tests confirm this implicitly (test 3 passes any `delete` value; test 4 varies `delete` but the assertion depends only on `canApply`).
-- Import path is relative (`../../domain`), not a package alias, which is the convention for in-module unit tests.
+- The internal event table in the domain is private; these tests deliberately only exercise the public surface (`canApply`, `exampleActionsFor`, `statusAfter`).
+- Seeding is intentional: a failing run is reproducible. The doc comment notes that fast-check will "write back" a counterexample as an ordinary `it()` assertion on the next run.
+- `endOnFailure: true` means the suite stops at the first shrinking counterexample rather than collecting many failures — keep this in mind when reading CI output.

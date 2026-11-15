@@ -1,7 +1,7 @@
 ---
 source: shared/cases/log-redaction.cases.yaml
-sha256: d4e93e641bb0b1d28c08260daa8ced127e2ee834f7fe1f903ba2ce4daf7e4ff3
-generated_at: 2026-11-08T03:05:13.030829+00:00
+sha256: da325d19ab9afd1c91791a0a5e8843a7dcc97e835e80f7ba015e5600a5ace324
+generated_at: 2026-11-14T17:44:08.222918+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A shared, implementation-agnostic spec of which log keys must be redacted and which must pass through unmodified. It is executed by both the BEnode logger and the PHP twin logger against their respective redaction pipelines, so that the two implementations stay behaviorally identical without duplicating test logic.
+Behavioral spec (pinned test cases) for how log output is scrubbed before it leaves the process. Both the BEnode backend and its PHP twin run this file against their own loggers, so the YAML is the single source of truth for redaction rules. Each `redact` case is paired with a `keep` case that defines the boundary.
 
 ## Key elements
 
-- **`cases`** — ordered list of `{name, key, expect}` triples. `expect` is either `redact` or `keep`.
-- **Redact cases** cover plain words (`password`, `key`), camelCase/snake_case variants (`newPassword`), kebab-case headers (`x-api-key`, `x-hub-signature`), `__Host-*` cookies (`device`, `oauth_state`, `oauth_deletion_challenge`), and compound keys (`webhookSecret`, `Antibot-Challenge-Token`).
-- **Keep (boundary) cases** guard against over-matching: `idempotencyKey` must survive despite containing the bare key `key`; `linkCount` must survive despite the `linkurl` rule; `statusCode` and `code` are explicitly readable.
+- **`kind: key`** – Declares whether the *value* under a given key name is replaced or left intact. Covers passwords, API keys, cookies (`__Host-device`, `__Host-oauth_state`, etc.), OAuth tokens, and compound fragments (`webhookSecret`, `x-hub-signature`). Also pins keys that must *not* be eaten (e.g. `idempotencyKey`, `statusCode`, `code`).
+- **`kind: message`** – Pins replacement of address-shaped tokens (email, IPv4, IPv6) embedded in free-text log lines. The expected output uses the placeholder `{hash:X}`, where `X` is the canonical form (lowercased, port stripped). Also pins what is *not* an address (npm scopes, `@2x` suffixes, clock times, ObjectIds, version strings, `Class::method`).
+- **`kind: traceUrl`** – Pins how a request target recorded in an OTel span is scrubbed. Listed secrets become the literal string `REDACTED` (the OTel `url.query` marker, no brackets). Emails/IPs in *unlisted* parameters become `{hash:X}` digests, same as `message`.
+- **`{hash:X}` placeholder** – Represents the keyed digest of `X`; the digest algorithm and key live in the backend, not here. The file only asserts *what* gets hashed and *how* it is canonicalised before hashing.
 
 ## Relationships
 
-- **`shared/cases/crypto.cases.yaml`** — sibling spec in the same `shared/cases/` directory; both files follow the identical `cases` shape and are consumed by the same test harness in both language runtimes.
+- **`shared/cases/crypto.cases.yaml`** – The `{hash:X}` placeholder references a keyed digest whose algorithm, key, and canonicalisation rules are specified in the crypto cases file. Log-redaction cases depend on that definition to be deterministic; both files must agree on how `X` is normalised (lowercasing, port stripping) before the digest is computed.
 
 ## Notes
 
-- The header comment states a deliberate convention: *every `redact` case sits next to the `keep` case that bounds it.* When adding a new redact rule, place its corresponding keep/boundary case immediately adjacent so the pairing is visible at a glance.
-- The keep cases are not "optional extras"—they exist to catch substring/fragment over-matching bugs in whichever language's redaction engine is being tested. Removing them would silently weaken the contract.
-- Because both BEnode and PHP execute this file, a change here is a **cross-implementation** change: both runtimes must be updated in the same PR.
+- The file is **not** executed directly; it is consumed by test runners in each backend. Changing a `name` or `expect` value changes the contract both backends must honour.
+- `{hash:X}` is a *placeholder in expected output*, not a runtime template. The actual digest value differs per environment (key-dependent); tests resolve it via the shared crypto helper.
+- `REDACTED` (no brackets) is the OTel `url.query` convention for fully-withheld values; it is distinct from the `{hash:…}` pseudonymisation used for identifiable-but-derivable data.
+- Canonicalisation before hashing: lowercased, port stripped. A plus-tag (`+`) and Unicode local/domain parts are preserved as part of the address.
+- The boundary cases (`idempotencyKey` ≠ `key`, `linkCount` ≠ `linkurl`, `@types/node` ≠ address, `999.1.1.1` ≠ IPv4) exist to prevent over-matching; adding a new redaction rule requires adding a sibling `keep` case.

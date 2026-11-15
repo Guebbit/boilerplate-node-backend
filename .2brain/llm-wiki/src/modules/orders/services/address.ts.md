@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/address.ts
-sha256: 3ea33b5bf648a563c60c6300e6db19efee2baf293ec6555b31b84ac3dfb8f09e
-generated_at: 2026-11-08T06:55:44.676445+00:00
+sha256: 1276a127ead85008c22b28a59daae7a1d86f040c5fd2f4e0ecbcb8c4f453fd6b
+generated_at: 2026-11-14T20:42:02.756007+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the staff-facing `PUT /orders/{id}/shipping-address` endpoint: correcting the destination of order units that have not yet been dispatched. It exists because nothing else in the system can change an address after checkout, and each shipment retains its own frozen copy (Solidus model), so a held `incorrect_address` order has no other path to fix its delivery.
+Implements the staff-facing `PUT /orders/{id}/shipping-address` handler: it replaces the shipping address on units that have not yet left, since no other code path can change an address after checkout. It is intentionally narrow — it writes the new address, emits one timeline entry, and records one audit row, and nothing else.
 
 ## Key elements
 
-- **`correctShippingAddress(orderId, address, context)`** — the sole export. Loads the order via `orderRepository.findByIdScoped`, then guards in sequence: 404 (unknown order), 409 (`canCorrectAddress` fails — all units dispatched or no shipping address), 422 (country not in the shop's ship-to list). On success it runs `withTransaction(withTimeline(...))` to atomically replace the address and append a timeline row, then records an audit entry and returns the updated `OrderDocument`.
-- **`locked()`** — internal helper producing the 409 `ORDER_ADDRESS_LOCKED` response.
-- **`unsupportedCountry()`** — internal helper producing the 422 `ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED` response.
+- **`correctShippingAddress(orderId, address, context)`** — the sole export. Loads the order scoped to the caller, validates correctability, country, and status, then performs the write inside a transaction + timeline wrapper. Returns the updated `OrderDocument` (200) or a 404 / 409 / 422 reject.
+- **`locked()`** (module-private) — builds the canonical 409 `ORDER_ADDRESS_LOCKED` response used when no units remain to ship or the order has no shipping address (pickup / digital).
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `infrastructure/http/response.ts` | Consumes `generateReject`, `generateSuccess`, and the `ResponseReject` / `ResponseSuccess` types for all return paths. |
-| `infrastructure/i18n` (`index.ts` / `context.ts`) | Calls `t()` for user-facing error messages. |
-| `infrastructure/observability/audit.ts` | Calls `recordAudit` after a successful write. |
-| `infrastructure/runtime/database.ts` | Wraps the write in `withTransaction` so the address update and timeline row commit atomically. |
-| `modules/orders/audit.ts` | Reads `ordersAuditActions.ADMIN_ORDER_ADDRESS_CORRECTED` as the audit action key. |
-| `modules/orders/domain/index.ts` (→ `withdrawal.ts`) | Calls `canCorrectAddress(order)` to decide whether the order still has mutable shipping units. |
-| `modules/orders/model.ts` | Imports the `OrderDocument` type used as the success payload. |
-| `modules/orders/repository.ts` | Calls `orderRepository.findByIdScoped` (read) and `orderRepository.replaceShippingAddress` (write). |
-| `modules/orders/services/timeline.ts` | Composes `withTimeline` to append an `address_corrected` row alongside the DB write. |
-| `modules/shop/index.ts` (→ `service.ts`) | Calls `shipToCountries()` to validate the target country against the shop's supported set. |
-| `modules/orders/services/index.ts` | Barrel that re-exports this service for route handlers. |
-| `types/auth-context.ts` | Source of the `CallerContext` type passed into the function. |
+| `src/modules/orders/repository.ts` | Imports `orderRepository` for both the scoped read and the conditional status-guarded write (the write returns `null` on a concurrent status race). |
+| `src/modules/orders/domain/index.ts` | `canCorrectAddress` — domain guard that decides whether the order is still in a state where redirection is valid. |
+| `src/modules/orders/services/timeline.ts` | `withTimeline` wraps the repository call and appends an `{ type: 'address_corrected', actor }` row atomically. |
+| `src/modules/orders/audit.ts` | Provides the `ordersAuditActions` constants used to label the audit entry. |
+| `src/infrastructure/observability/audit.ts` | `recordAudit` writes the observability audit row (who, action, target — never the address payload). |
+| `src/infrastructure/runtime/database.ts` | `withTransaction` scopes the write so the address swap and timeline insert are atomic. |
+| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` shape every HTTP response. |
+| `src/infrastructure/i18n/index.ts` | `t()` localises all user-facing messages. |
+| `src/modules/shop/index.ts` | `shipToCountries()` supplies the allowed-country list for the 422 validation (same list checkout enforces). |
+| `src/types/auth-context.ts` | `CallerContext` and `OrderAddress` types. |
 
 ## Notes
 
-- The address value itself is **never** written to the audit log or the timeline; only the actor id and the action type are recorded. The corrected address remains encrypted under the order id in the document store.
-- `replaceShippingAddress` receives `order.status` as a guard parameter — if a concurrent dispatch or status change has moved the order since the initial read, the repository returns `null`, which the service maps to the same 409 `locked()` response (optimistic concurrency).
-- The 422 country check mirrors checkout's validation: redirecting an order to a country outside the shop's ship-to list would invalidate the VAT already charged.
-- `withTransaction` and `withTimeline` are composed (outer → inner), so the timeline write participates in the same DB transaction as the address update; both roll back together on failure.
+- **No address in audit or timeline.** The audit row and timeline entry record *who* acted and *what* they did; the new address value appears only in the encrypted order document.
+- **Per-shipment address copies.** Already-dispatched parcels retain the address they were sent to. Only units still in the "unsent" pool receive the correction.
+- **Double 409 guard.** `canCorrectAddress` is checked before the transaction; the repository write re-checks status inside the transaction and returns `null` on a concurrent dispatch or status change. Both paths surface the same `locked()` 409.
+- **Country check mirrors checkout.** A redirect to a non-shippable country would invalidate the VAT charged at checkout, so the same `shipToCountries` list is enforced here (422).
+- **Authorization is upstream.** The route is expected to require `update:Order`; this service does not re-check permissions.

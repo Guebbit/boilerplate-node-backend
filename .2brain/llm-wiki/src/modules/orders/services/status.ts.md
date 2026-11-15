@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/status.ts
-sha256: 9c8ee93cf144eb85c20b29b95d779a02f3d31bbdf7812de38738a2a88f78baab
-generated_at: 2026-11-08T07:01:41.895682+00:00
+sha256: ee390f0215ddd3ef34367ff6e8a2400a9cc0969c48686c94c96250e485016ec6
+generated_at: 2026-11-14T20:47:28.812815+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single status writer for the `orders` module. Other modules (`payments`, `delivery`, `returns`) **report** facts they have already recorded; this file decides whether the reported move still applies to the order's current status, writes it conditionally, and announces the resulting event. It is never the entry point for a human request — that path lives in `override` or `cancel`.
+The single writer of order status in the application. Other modules (`payments`, `delivery`) **report** a fact they have already recorded; this file decides whether the status move still applies (conditional write against the current status), executes it inside a transaction, appends a timeline entry, and announces the change via the outbox. It never acts on a human request — every call here is a system reporting another module's completed act.
 
 ## Key elements
 
-- **`markPaid`** — Reports that a payment settled. Special-cased beyond `markSystemMove` because it stamps `paidAt` in the same write and must retake released inventory units before committing. Returns `null` if the order is no longer payable or the retake comes up short, routing the caller into the refund path.
-- **`markProcessing`** — Reports fulfillment started (`processing → shipped` precondition). Thin wrapper around `markSystemMove`.
-- **`markShipped`** — Reports the last unit left the warehouse. Called by `delivery` inside its own transaction after writing the shipment record.
-- **`markReopened`** — Reports a lost parcel; moves `shipped → processing`. Leaves **no** timeline row (the loss event does).
-- **`markReshipped`** — Reports a replacement under legal guarantee; moves `delivered → processing`. Leaves **no** timeline row (the return receipt does).
-- **`markSystemMove`** (internal) — Shared helper for the four non-paid moves: reads `from`/`to` from `ORDER_EVENTS`, builds the conditional repository write wrapped in `withTimeline`, and pairs it with `statusChangedEvent` via `announceMove`.
-- **`announceMove`** (internal) — Routes the write+announce through the caller's transaction (`announceWithin`) or opens its own (`announceInTransaction`).
-- **`MOVE_ROW`** (internal const) — Maps each event name to its `timeline.type` string; `reopen` and `reship` are `undefined`.
-- **`deliveredRow`** (internal, truncated) — Builds the timeline entry for a `delivered` transition, carrying the frozen `withdrawUntil` date.
+- **`markPaid(orderId, paymentMethod?, by?, session?)`** — Reports that a payment settled. The only destination that stamps extra data (`paidAt`, `paymentMethod`) in the same write, so it does not use the shared `markSystemMove` path. Handles late-payment stock recovery: retakes released units, commits on success, releases on race loss, returns `null` (triggering refund) if units are short. `@internal` friend-only to `payments`.
+- **`markProcessing(orderId, session?, actor?)`** — Reports fulfillment started. Called by `delivery`'s `POST /orders/{id}/process`.
+- **`markShipped(orderId, session?, actor?)`** — Reports the last unit left the warehouse. Called by `delivery`'s shipping act inside its own transaction.
+- **`markReopened(orderId, session?, actor?)`** — Reports a shipment was lost; order returns to `processing`. Reached via `reopenForFulfillment` from `delivery`.
+- **`markSystemMove(orderId, event, session?, actor?)`** — Shared helper for `process`/`ship`/`reopen`/`reship`. Reads the `from`/`to` pair from `ORDER_EVENTS`, performs a conditional `updateStatusIfIn`, wraps with timeline, and announces.
+- **`announceMove(session, write, announce)`** — Transaction wrapper: uses the caller's session if provided (`announceWithin`), otherwise opens its own (`announceInTransaction`). Ensures the conditional write and the outbox announcement are atomic.
+- **`settleRetaken(orderId, retake, movePaid, session)`** — Post-payment tail: commits stock if the `paid` write won, or releases retaken units if a racing move lost the order.
+- **`MOVE_ROW`** — Maps event names to timeline row types; `reopen` and `reship` intentionally leave no row (the causing loss/return carries its own).
+- **`Retaken`** — Type narrowing of `inventoryService.retakeReleasedForOrder` return, excluding `'short'`.
 
 ## Relationships
 
-- **`@kernel/outbox`** — Consumes `announceInTransaction`, `announceWithin`, and the `OutboxAnnouncements` type to guarantee exactly-once event emission per move.
-- **`@modules/inventory`** — Calls `inventoryService.retakeReleasedForOrder`, `commitForOrder`, and `releaseForOrder` inside `markPaid`'s write to hold/commit/release stock atomically with the status write.
-- **`../domain` (index)** — Imports `ORDER_EVENTS`, `isPayable`, `isDigitalOnlyOrder`, `UNDELIVERABLE_EVENT`, `conformityUntilFrom`, `deliveryClockFor`, `withdrawUntilFrom`, and related types. The `from`/`to` transition sets come from here.
-- **`../repository`** — Calls `orderRepository.updateStatusIfIn`, `markPaid`, and `findInSession` for the conditional writes.
-- **`../events`** — References `ORDER_STATUS_CHANGED` and `ORDER_CANCELED` event constants.
-- **`../model`** — Uses `OrderDocument` as the return type of every public function.
-- **`./announce`** — Calls `statusChangedEvent` to build the outbox announcement payload.
-- **`./cancel`** — Imports `CANCEL_CAUSES` and `afterCancel` (visible in the import list; likely used in the truncated `delivered`/cancel-adjacent logic).
-- **`../config`** — Reads `withdrawalPeriodDays` for deadline calculations.
+- **`src/kernel/outbox.ts`** — Provides `announceInTransaction`, `announceWithin`, and the `OutboxAnnouncements` type. Every status move is announced through the outbox; the caller wakes the relay after its own commit.
+- **`src/modules/inventory/index.ts` / `src/modules/inventory/services/index.ts`** — Exposes `inventoryService` for `retakeReleasedForOrder`, `commitForOrder`, and `releaseForOrder`. Stock holds transition (`held → committed` or back) in the same transaction as the status write.
+- **`src/modules/orders/domain/index.ts`** — Barrel re-exporting the domain constants and helpers this file consumes: `ORDER_EVENTS`, `isPayable`, `isDigitalOnlyOrder`, `NO_FULFILLMENT`, `settlementFor`, `conformityUntilFrom`, `deliveryClockFor`, `withdrawUntilFrom`, and related types.
+- **`src/modules/orders/domain/lifecycle.ts`** — Source of `ORDER_EVENTS` (the `from`/`to` transition table) and `OrderEventName`.
+- **`src/modules/orders/domain/rules.ts`** — Source of `isPayable`, `isDigitalOnlyOrder`, `NO_FULFILLMENT`, `settlementFor`.
+- **`src/modules/orders/domain/projections.ts`** — Source of `conformityUntilFrom`, `deliveryClockFor`, `withdrawUntilFrom`, `DeliveryClock`, `StampedPaymentStatus`, `StampedReturnStatus`.
+- **`src/modules/orders/domain/fulfillment.ts`** — Source of fulfillment-related helpers consumed indirectly through the domain barrel.
+- **`src/modules/orders/config.ts`** — Provides `withdrawalPeriodDays` used for timeline/retention calculations.
 
 ## Notes
 
-- **Only one status writer.** The module docblock and `docs/theory/tactical-ddd.md §1` establish that no other code path writes `order.status` directly. Any new move must go through this file.
-- **Idempotency via conditional writes.** Every move uses `updateStatusIfIn` (or `markPaid`), so a redelivered webhook or retried delivery scan that races the first attempt simply matches no rows and announces nothing.
-- **`markPaid` is not a `markSystemMove`.** It stamps `paidAt` in the same `$set`, which the shared helper has no slot for, and it must interleave inventory retake/commit/release around the write.
-- **`reopen` / `reship` produce no timeline entry.** The causal event (loss report, return receipt) owns its own timeline row; adding one here would duplicate history.
-- **`null` return is meaningful.** It means "this call did not move the order." Callers (e.g. `payments`) use that to trigger refunds or skip further work — it is not an error.
-- **`paymentMethod` parameter is `'card' | undefined` only.** Offline methods are recorded on the payment row, not re-stamped on the order.
+- **Conditional writes are the concurrency guard.** Two callers racing the same fact (redelivered webhook, retried delivery scan) both call in; only one `updateStatusIfIn` matches, the other gets `null` and announces nothing. No explicit locking.
+- **`markPaid` bypasses `markSystemMove` on purpose.** It needs an extra `$set` slot (`paidAt`, optional `paymentMethod`) that the shared helper's shape has no room for.
+- **`reopen` and `reship` write no timeline row.** The `MOVE_ROW` map returns `undefined` for them; the timeline entry belongs to the loss or return that *caused* the reopen.
+- **Late-payment stock logic is in the write path, not a separate step.** `markPaid` calls `retakeReleasedForOrder` *before* the `paid` write so the retake and status change share one transaction. If the retake is `short`, the write is skipped entirely and the caller refunds.
+- **`@internal` on `markPaid`.** It is friend-only to `payments` (via `friends/payments.ts`) and moves an order to `paid` without the usual guard checks. Other modules should not import it directly.
+- **Session semantics:** when a caller passes a `session`, the outbox relay is the caller's responsibility to wake post-commit. When no session is passed, `announceInTransaction` opens and commits its own transaction including the relay wake.

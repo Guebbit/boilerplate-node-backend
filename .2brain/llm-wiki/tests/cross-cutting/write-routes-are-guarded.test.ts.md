@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/write-routes-are-guarded.test.ts
-sha256: 92ed0ec9020ad05fd65384800c78b5101285a1d56688ad526cfbe9cff7358ef3
-generated_at: 2026-11-08T09:34:07.051216+00:00
+sha256: a588a4490d0024ee25f3de4cff61cde7488d4be3cff98b7343f2e8d20475ff7a
+generated_at: 2026-11-14T23:09:21.225632+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-App-wide invariant test that asserts every write route (POST, PUT, PATCH, DELETE) across **all** routed modules is protected by an identity guard and a `requirePermission` key by default. It exists because per-module `routes.test.ts` files only cover their own module—a module without its own test would be unguarded. This file states the property once for every module at once, so new modules inherit the guarantee automatically.
+App-wide invariant test: every write route (POST, PUT, PATCH, DELETE) across every routed module must be authenticated and behind a `requirePermission` key unless explicitly listed in `WRITE_EXCEPTIONS`. It exists because per-module `routes.test.ts` suites only enforce authorization locally; a new module without its own test file would be guarded by nothing. This file states the property once, for all modules, so new modules inherit the guarantee automatically.
 
 ## Key elements
 
 - **`WRITE_METHODS`** — `Set` of the four state-changing HTTP methods this guard applies to.
-- **`WriteException`** — interface with `requiresAuth: boolean` and `reason: string`, describing a single route's exemption from the default.
-- **`WRITE_EXCEPTIONS`** — `Record<string, WriteException>` keyed by `` `${module} ${METHOD} ${path}` ``. Lists every write route deliberately exempt from the `requirePermission` key (or, for a few, from authentication itself). Each entry carries a human-readable reason documenting the decision.
-- **Jest mocks** (cache, route-flag, upload, rate-limit) — pulled from `@tests/routes` mock factories so middleware side-effects don't interfere with guard inspection.
+- **`WriteException`** (interface) — shape of a single exception entry: `requiresAuth: boolean` and `reason: string`.
+- **`WRITE_EXCEPTIONS`** — `Record<string, WriteException>` keyed by `` `${module} ${METHOD} ${path}` ``. Every write route that deliberately skips the identity guard, the permission key, or both. Each entry carries a human-written justification.
+- **`jest.mock` blocks** — stub out the `cache`, `route-flag`, `upload`, and `rate-limit` middlewares using helper factories re-exported from `@tests/routes` so the test can inspect guard wiring without real middleware side-effects.
+- **Imports from `@tests/routes`** — `effectiveRouteTable`, `guardsOn`, `identityGuardIndex` (the inspection API used to read a module's router and classify its middleware).
+- **Imports from `@tests/routed-modules`** — `ROUTED_MODULES`, the list of every module that exposes an Express `Router`.
+- **Imports from `@tests/paths`** — `MODULES_ROOT`, filesystem root used to locate module routers on disk.
 
 ## Relationships
 
-- **`tests/support/routes.ts`** — supplies `effectiveRouteTable`, `guardsOn`, `identityGuardIndex` (used to inspect which guards sit on a route) and the four mock factories referenced in the `jest.mock` calls.
-- **`tests/support/routed-modules.ts`** — supplies the `ROUTED_MODULES` list that the test iterates over to cover every module.
-- **`tests/support/paths.ts`** — supplies `MODULES_ROOT`, the filesystem root used to discover module directories.
+- **`tests/support/routes.ts`** — Primary dependency. Supplies the route-table inspection helpers (`effectiveRouteTable`, `guardsOn`, `identityGuardIndex`) and the four middleware mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) that this file reuses to isolate guard wiring from real middleware side-effects.
+- **`tests/support/routed-modules.ts`** — Provides `ROUTED_MODULES`, the enumeration of all modules this test iterates over.
+- **`tests/support/paths.ts`** — Provides `MODULES_ROOT`, the filesystem root this test uses to resolve module directories from disk.
 
 ## Notes
 
-- `requiresAuth: false` is reserved for routes where no session can exist yet (login, signup) or where a token *in the request* is itself the credential (reset links, refresh cookies, 2FA challenge tokens). All other exceptions are `requiresAuth: true`: authenticated but deliberately keyless because the write is scoped to the caller's own resource (cart, wishlist, address book, profile, etc.).
-- The exception list is intentionally large and is **not** a short staff-action allowlist. Adding a new keyless write route requires adding an entry here with a reason.
-- Per-module `routes.test.ts` files still matter for mount order, cache tags, and upload fields; this file does not replace them. It only covers the one cross-cutting property they would each need to restate.
+- `WRITE_EXCEPTIONS` is intentionally **long**, not a short allowlist. Most writes in the app are user-scoped (cart, wishlist, address book, session management) and need a session but not a permission key; only a handful need no session at all (login, signup, token-confirmed links).
+- `requiresAuth: false` is reserved for two cases only: the route runs before a session can exist, or a token *in the request* is itself the credential. Every other exception is `requiresAuth: true` (authenticated but keyless).
+- Adding a new write route to an existing module means either accepting the default (auth + permission key) or adding a `WRITE_EXCEPTIONS` entry with a `reason`. Omitting both will cause this test to fail.
+- A new routed module that forgets to register itself in `ROUTED_MODULES` will simply not be covered by this test — the safety net is only as wide as the enumeration.
+- The file content is truncated in the snapshot above; additional exception entries and the actual `describe`/`it` test body follow.

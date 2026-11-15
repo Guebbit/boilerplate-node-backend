@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/providers/registry.ts
-sha256: e5958cd2cd8625afdf7244bfbf2b7b049523110f0a8b9df51d2626d3626626bc
-generated_at: 2026-11-08T07:23:46.595847+00:00
+sha256: e009528dc26fe4a149d45956a2344539ce78c86ceef6edd147b8ab87b9f781bb
+generated_at: 2026-11-14T21:03:21.998609+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a single, process-wide registry of payment provider implementations. It exists as an isolated module (importing only the registry helper and a type) so that test doubles can register themselves at preload without pulling in the full provider stack (config, orders, etc.) that `./index` would otherwise load.
+A standalone payment-provider registry that can be imported in isolation without pulling in the full `./index` module (which loads the payments config chain: config store, `ibantools`). It exists so test doubles can register themselves at preload time without triggering that dependency tree, and so production PSPs can self-register with a single call in their own file.
 
 ## Key elements
 
-- **`paymentProviderRegistry`** — A `SharedProviderRegistry<PaymentProvider>` instance scoped to `'payments'`. Shared across module instances so a double registered before a test resets modules still resolves correctly.
-- **`registerPaymentProvider(provider)`** — Registers (or overrides, in tests) a `PaymentProvider` under its own `provider.name`. That name is the same value selected by the `NODE_PAYMENT_PROVIDER` env var and persisted on each payment record, guaranteeing lookup and persistence always agree.
+- **`paymentProviderRegistry`** — A shared registry instance (`createSharedProviderRegistry<PaymentProvider>('payments')`) keyed to the `'payments'` namespace. Shared across module instances so a double registered before a module reset is still visible after it.
+- **`registerPaymentProvider(provider: PaymentProvider): void`** — Registers (or, in tests, overrides) a provider under its own `provider.name`. That name is the value `NODE_PAYMENT_PROVIDER` selects and the value persisted on each payment, keeping the two in lockstep.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/provider-registry.ts`** — Supplies `createSharedProviderRegistry`, the generic registry factory this file wraps.
-- **`src/modules/payments/providers/index.ts`** — Source of the `PaymentProvider` interface (imported type-only here). Production PSP implementations are registered via `registerPaymentProvider` from their own files; `./index` re-exports the public surface.
-- **`scenarios/support/doubles/payments/register.ts`** — The test double for the `fake` provider; calls `registerPaymentProvider` at preload so tests get a working provider without the production module graph.
-- **`src/modules/payments/services/refunds.ts`, `external-refunds.ts`, `refund-sync.ts`, `controllers/post-payment-webhook.ts`** — Consumers that resolve a concrete provider from `paymentProviderRegistry` by name to dispatch webhook processing or refund operations.
-- **`src/modules/payments/repository.ts`** — Persists the provider name alongside each payment; the registry is the runtime counterpart that maps that name back to an implementation.
-- **`src/modules/payments/tests/contract/api.contract.test.ts`** — Contract tests that rely on a registered (likely `fake`) provider being resolvable from the registry.
+- **`src/infrastructure/runtime/provider-registry.ts`** — Runtime dependency: provides `createSharedProviderRegistry`, the only runtime import in this file.
+- **`src/modules/payments/providers/index.ts`** — Type-only dependency: supplies the `PaymentProvider` interface. Deliberately kept separate from the runtime path so importing this file never loads the config chain that `index` pulls in.
+- **`scenarios/support/doubles/payments/register.ts`** — The test-double registration entry point that calls `registerPaymentProvider` to install the `fake` provider without touching production module state.
 
 ## Notes
 
-- **Registration is additive and name-keyed.** A production PSP ships its own file containing exactly one `registerPaymentProvider` call. There is no central "provider list" to edit — adding or swapping a PSP never touches this file.
-- **Test override semantics.** In tests, calling `registerPaymentProvider` with the same `name` replaces the prior entry, enabling per-test substitution without monkey-patching.
-- **Shared-instance guarantee.** Because the registry is created via `createSharedProviderRegistry`, it survives Jest/Vitest module resets. A double registered in a global setup or preload hook remains available even after individual test files re-import modules.
+- **No runtime imports beyond the registry helper.** This is intentional; the file's only runtime dependency is `createSharedProviderRegistry`. The `PaymentProvider` import is type-only.
+- **Production registers nothing here.** A real PSP adds its own file containing a single `registerPaymentProvider` call. This file never contains a concrete implementation.
+- **Idempotent / overridable.** Calling `registerPaymentProvider` twice with the same `name` replaces the prior entry, which is the mechanism tests use to swap the fake in and out.

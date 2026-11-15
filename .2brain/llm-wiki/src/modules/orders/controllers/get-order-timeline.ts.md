@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/get-order-timeline.ts
-sha256: a7041fad628ff374886d7a8cdcc8960a9616d852bc6a764ae2b64ab61b7d23ae
-generated_at: 2026-11-08T06:45:55.081871+00:00
+sha256: 6926092ec6c45efdb17bba5eae7eb6f3bb191a96a8132317808b422273bad429
+generated_at: 2026-11-14T20:32:15.475347+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller handler for `GET /orders/:id/timeline`. It resolves the order under the caller's visibility scope (same rules as `GET /orders/:id`), then returns the order's timeline entries filtered for that caller—staff see all rows with actor info, buyers see only buyer-visible types with no actor exposed.
+Controller for `GET /orders/:id/timeline`. Returns a paginated, newest-first list of events that happened to a given order, filtered by what the caller is allowed to see. The order is resolved through the same visibility scope as `GET /orders/:id`, so an invisible order produces the same 404.
 
 ## Key elements
 
-- **`getOrderTimeline(request, response)`** — the sole export. Validates the `:id` param, confirms the order is visible to the caller via `orderService.getForCaller`, then fetches and returns `{ items: OrderTimelineEntry[] }` via `orderService.readTimeline`. Returns `404` with a localized message if the order is missing or invisible to the caller.
+- **`getOrderTimeline(request, response)`** — the sole export. Validates the order id, parses optional pagination query params, fetches the order for the caller (404 if not visible), then reads the timeline page via `orderService.readTimeline` and returns it as `OrderTimelineResponse`.
+- **`timelineQuerySchema`** — a Zod schema built by extending `GetOrderTimelineQueryParams` with optional `page` / `pageSize` (both from the coercing infra pair). The result is `.partial()`, so all keys are optional but a stray key still triggers a 422.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** — calls `orderService.getForCaller(id, authContext)` for visibility check and `orderService.readTimeline(id, authContext)` to fetch the filtered entries.
-- **`src/modules/orders/routes.ts`** — registers this handler on the `GET /orders/:id/timeline` route.
-- **`src/infrastructure/http/ids.ts`** — uses `requireId` to extract and validate the `:id` param (early-return on failure).
-- **`src/infrastructure/http/response.ts`** — uses `successResponse` for the 200 payload and `rejectResponse` for the 404 path.
-- **`src/infrastructure/http/controller.ts`** — wraps the promise chain with `catchAs` to convert unexpected rejections into a structured error response.
-- **`src/infrastructure/i18n/index.ts`** — uses `t` to localize the `orders.not-found` message.
-- **`src/types/index.ts`** — imports the `OrderTimelineEntry` type used to type the response payload.
+- **`src/modules/orders/services/index.ts`** — the imported `orderService` is used for two calls: `getForCaller` (visibility check, 404 if the caller cannot see the order) and `readTimeline` (actual paginated data fetch). All business logic lives in that module.
+- **`src/infrastructure/http/controller.ts`** — `parseBody` validates the query object against the schema; `catchAs` wraps the promise chain into a standard error response.
+- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates the `:id` param, short-circuiting with a 404 if absent.
+- **`src/infrastructure/http/request.ts`** — `readInput(request, { surface: 'list' })` gathers the GET query-string into the object passed to schema parsing.
+- **`src/infrastructure/http/response.ts`** — `successResponse` and `rejectResponse` emit the final HTTP envelope.
+- **`src/infrastructure/http/schemas.ts`** — supplies `pageSchema` and `pageSizeSchema` (the "coercing infra pair" that coerces string → number with a default).
+- **`src/infrastructure/i18n/index.ts`** — provides the `t` translation function used for the 404 message key.
+- **`src/modules/orders/routes.ts`** — registers `getOrderTimeline` on the `GET /orders/:id/timeline` route.
+- **`src/types/index.ts`** — supplies the `OrderTimelineResponse` type used in the success-response generic.
 
 ## Notes
 
-- The handler performs **two** service round-trips (`getForCaller` then `readTimeline`). The first is a pure visibility gate; the order object itself is discarded. Both calls require the `authContext` from the request.
-- `requireId` with `{ notFound: 'orders.not-found' }` handles the case where `:id` is missing entirely (400-style rejection), while the `getForCaller` null-check handles the case where the id exists but the order is invisible (404). These are distinct failure modes.
-- The function is a union-return type (`Promise<void> | void`) because of the early `return` after a failed `requireId`; callers (i.e., Express) can ignore this.
+- Staff callers see every timeline row and its actor; buyers see only buyer-visible event types and never the actor. That filtering is handled inside the service layer, not in this controller.
+- Despite the name `parseBody`, no request body is read here — `readInput` with `surface: 'list'` collects query-string params for this GET endpoint.
+- The 404 path is duplicated: `requireId` handles a missing/invalid `:id` param, and the service call handles an order the caller cannot see. Both emit the same i18n message key.

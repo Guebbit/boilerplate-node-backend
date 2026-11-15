@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/metric-names.test.ts
-sha256: 17531db29ba95d42bf0321b58884176344a733550d93c8d5375551f5c6479b29
-generated_at: 2026-11-08T09:28:02.609699+00:00
+sha256: b5b32ea4107e6adbd688d6d730ccd5a01fcd4ab4d703cf22d359d8eea83c22ef
+generated_at: 2026-11-14T23:04:33.650854+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting test that verifies every metric name the observability overview controller reads by string literal actually corresponds to a metric declared and registered by a module. It works by parsing **source text** (regex over `.ts` files) rather than importing the modules, so it never boots Mongoose or opens a database. The problem it guards: renaming a counter compiles and passes all unit tests, but the overview endpoint silently reports the metric as absent.
+Cross-cutting test that verifies metric-name consistency across three sites that agree by convention rather than by type: module metric declarations, the `get-observability-metrics-overview` controller (which reads names as string literals), and generated infrastructure metrics. It exists because a counter rename compiles, lints, and passes every unit test, yet silently breaks the overview endpoint and external dashboards. All assertions are made by reading **source text** (never by importing the modules) so the test cannot boot Mongoose or trigger side effects.
 
 ## Key elements
 
-- **`withoutComments(source)`** — Strips block and line comments from source text before regex matching. Exists because `account/metrics.ts` has a convention note that sits exactly where the declaration regex expects the first field.
-- **`metricFiles()`** — Discovers every `src/modules/<name>/metrics.ts` on disk; returns module name + path pairs.
-- **`declarations()`** — Flattens all metric names extracted from module `metrics.ts` files (via `new Counter|Gauge|Histogram|Summary({ name: '…' })`) plus names from the generated `infrastructureMetricData` export.
-- **`namesReadByLiteral()`** — Extracts metric names the overview controller passes to `readCounter('…')`.
-- **`shopMetricNames()`** — Reads the `SHOP_METRIC_NAMES` array literal from the controller source; these names are optional *as a group* (all-or-nothing).
-- **`describe('metric names')`** — Three `it` blocks:
-  1. **Canary** — Asserts minimum counts so the other tests can't pass vacuously over empty lists.
-  2. **Name resolution** — Every `readCounter` literal must match a declared name, with the shop-metric group treated as an atomic optional set.
-  3. **Shared-registry registration** — The number of `new Counter|Gauge|…(` occurrences must equal the number of `registers: [metricsRegistry]` occurrences per file, ensuring no metric is registered on a private registry.
+- **`withoutComments(source)`** — strips block and line comments so a comment between `new Counter({` and `name:` (present in `account/metrics.ts`) cannot hide a declaration from the regex sweep.
+- **`metricFiles()`** — discovers every per-module metric declaration file on disk under `MODULES_ROOT`; no hard-coded list.
+- **`declarations()`** — returns `{ module, name }` for every metric found via `new (Counter|Gauge|Histogram|Summary)({ name: '…'` in those files, plus all names from `infrastructureMetricData` (generated from `shared/rules/metrics.yaml`).
+- **`namesReadByLiteral()`** — extracts every string passed to `readCounter('…')` in the overview controller source.
+- **`shopMetricNames()`** — extracts the `SHOP_METRIC_NAMES` array literal from the same controller.
+- **Test: "finds the metrics and the readers…"** — canary assertions that each discovery function returned a non-trivial count; prevents silent empty-list passes if a file moves or a call shape changes.
+- **Test: "resolves every name the overview endpoint reads by string"** — every name from `readCounter` must appear in `declarations()`, with a carve-out: if *no* shop metric is declared the whole group is considered undeployed and skipped.
+- **Test: "registers every metric on the shared registry"** — per module, the count of `new …(` declarations must equal the count of `registers: [metricsRegistry]` entries, catching a counter registered on a private registry (invisible to `/metrics`).
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — Imports `MODULES_ROOT` to construct absolute paths to module directories and the overview controller file.
-- **`@infrastructure/observability/metrics.generated`** — Imports `infrastructureMetricData` to include infrastructure-level metric names in the declaration set (these are data-driven via `shared/rules/metrics.yaml`, not declared in a single module's `metrics.ts`).
+- **`tests/support/paths.ts`** — imported as `@tests/paths`; supplies `MODULES_ROOT`, the base directory from which the test discovers per-module metric declaration files.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — graph-adjacent (both are cross-cutting convention tests) but has no direct import or runtime interaction with this file.
 
 ## Notes
 
-- All extraction is regex-over-source-text; it is intentionally *not* a type-level or runtime check. A refactor that renames the `readCounter` call shape, the `registers:` array syntax, or the `SHOP_METRIC_NAMES` constant will silently break the extraction (caught only by the canary).
-- The `withoutComments` helper is load-bearing: without it, `account/metrics.ts` causes the regex to skip the `low_stock_total` counter entirely.
-- Infrastructure metrics are attributed to a synthetic `"infrastructure"` module so they appear in the declared-name set even though no single module "owns" them.
-- The test does **not** assert snake_case style, `_total` suffix, or `help` string quality — those are reviewer concerns, not invariants the code enforces.
-- Duplicate-name collisions are **not** checked here; `prom-client` throws at runtime on registration, so a duplicate can never reach a running process.
+- The test deliberately **does not** assert one-owner-per-name: `prom-client` already throws on duplicate registration, so that invariant is guaranteed by the library.
+- Shop metrics are treated as an **all-or-nothing group** at the endpoint level; the test mirrors that semantics rather than requiring each individually.
+- Infrastructure metrics are attached to a synthetic `module: 'infrastructure'` owner because they are data-driven (YAML → generated TS) and shared across all modules; no single declaration file owns them.
+- The canary test is load-bearing: without it, a typo in a regex or a renamed controller file would make every subsequent test pass over an empty list and prove nothing.

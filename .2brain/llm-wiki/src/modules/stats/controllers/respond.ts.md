@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/controllers/respond.ts
-sha256: 48b838bc2da7ea389b54042e4d4a18c1a99d9f124293fb9fdd2d658d80e29cb1
-generated_at: 2026-11-08T08:23:56.727393+00:00
+sha256: 3ea7884e693c68539340781d5db4fa0271f8c44c52a1de41fb18a432a7131c6d
+generated_at: 2026-11-14T22:01:11.965368+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the single shared handler factory (`statsHandler`) that every stats read endpoint uses. It encodes the common flow—read the query string, validate it, resolve the period against the shop's zone, run a caller-supplied composer, and return the composer's figures alongside the period ceilings—so individual endpoints only differ in their schema and composer.
+Shared handler factory for every stats read endpoint. It standardises the read pipeline—validate the query, resolve the period against the shop's zone, run a caller-supplied composer, and send the result with the period ceilings attached—so that individual stats routes differ only in their schema and composer function.
 
 ## Key elements
 
-- **`LIMITS`** — module-level constant bundling `MAX_RANGE_DAYS` and `MAX_BUCKETS` into a `StatsLimits` object, appended to every successful response so clients don't need a separate copy.
-- **`periodFields`** (exported) — Zod schema for the two required date strings (`from`, `to`) every period read shares. Intended for composition into endpoint-specific schemas.
-- **`intervalField`** (exported) — Zod preprocessor + optional enum for the `interval` query param; blank strings are coerced to `undefined`.
-- **`statsHandler`** (exported) — Generic factory. Accepts an operation `name`, a Zod schema (must include `from`/`to`, optional `interval`), and a `run` composer. Returns an Express handler that:
-  1. Reads the query via `readInput` on the `search` surface and validates with `parseBody`.
-  2. Calls `resolvePeriod`; on refusal sends a `422` with an i18n message.
-  3. Awaits `run(period, query, request)` and wraps the result with `LIMITS` in `successResponse`.
-  4. Catches composer errors via `catchAs`.
+- **`LIMITS`** — Module-level constant (`{ maxRangeDays, maxBuckets }`) sourced from `@modules/stats/domain`. Appended to every successful response so client forms never store their own copy of the ceilings.
+- **`periodFields`** — Zod object schema for the two mandatory date strings (`from`, `to`). Intended as the base fields any stats query schema must include.
+- **`intervalField`** — Zod field for the optional `interval` enum. Uses `blankToUndefined` preprocessing so an empty query param is treated as absent rather than an empty string.
+- **`statsHandler(name, schema, run)`** — The exported factory. Returns an Express handler that:
+  1. Reads the query via `readInput(request, { surface: 'list' })` and validates it with the provided Zod schema (`parseBody`).
+  2. Calls `resolvePeriod(query)`; on refusal sends a 422 with the i18n error message.
+  3. Awaits `run(period, query, request)`, wraps the result with `limits: LIMITS` via `successResponse`, and routes unexpected rejections through `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — provides `namedHandler` (log-line wrapping), `parseBody` (Zod validation + 400 response), and `catchAs` (error-to-response mapping).
-- **`@infrastructure/http/request`** — `readInput` extracts the query-string parameters on the `search` surface.
-- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the outgoing JSON.
-- **`@infrastructure/http/schemas`** — `blankToUndefined` preprocesses empty query values for `intervalField`.
-- **`@infrastructure/i18n`** — `t` translates the refusal message (`stats.range.*`) before the 422 is sent.
-- **`../services/range`** — `resolvePeriod` turns the raw `from`/`to` strings into a concrete `Period` or a typed refusal; `Period` is the type the composer receives.
-- **`../domain`** — exports `MAX_BUCKETS` and `MAX_RANGE_DAYS`, the only source of the ceiling values.
-- **`src/types`** — `StatsInterval` enum and `StatsLimits` interface used in the schema and response shape.
-- **`src/modules/stats/controllers/get-stats.ts`** — sibling controller that composes `periodFields` / `intervalField` into its own schema and passes a specific composer to `statsHandler`.
+- **`src/infrastructure/http/controller.ts`** — Provides `namedHandler`, `parseBody`, and `catchAs`; `statsHandler` delegates all handler lifecycle concerns to these.
+- **`src/infrastructure/http/request.ts`** — `readInput` extracts the query surface (`'list'`) from the Express request.
+- **`src/infrastructure/http/response.ts`** — `successResponse` and `rejectResponse` are the only two ways this file writes to the response.
+- **`src/infrastructure/http/schemas.ts`** — `blankToUndefined` is used to normalise empty `interval` params before Zod validation.
+- **`src/infrastructure/i18n/index.ts`** — `t` resolves refusal reason strings into localised error messages for the 422 response.
+- **`src/modules/stats/domain/index.ts`** — Exports `MAX_BUCKETS` and `MAX_RANGE_DAYS` that populate `LIMITS`.
+- **`src/modules/stats/services/range.ts`** — `resolvePeriod` validates the date pair and returns either a `Period` or a refusal reason.
+- **`src/types/index.ts`** — `StatsInterval` and `StatsLimits` are the shared type contracts used in the schema and response shape.
+- **`src/modules/stats/controllers/get-stats.ts`** — A consumer that calls `statsHandler` with its own schema and composer to build a concrete stats route.
 
 ## Notes
 
-- `readInput` is called with `{ surface: 'search' }`, so this handler reads **query-string** parameters, not a JSON body.
-- The `run` callback receives the raw Express `request`, giving composers access to headers, shop context, etc., without the factory needing to know what they require.
-- `LIMITS` is a module constant, not re-computed per request; if `MAX_RANGE_DAYS` or `MAX_BUCKETS` ever become dynamic (per-tenant, per-plan), this will need revisiting.
-- The `name` parameter is used both for the log line (via `namedHandler`) and for the `catchAs` error tag—it is not user-facing.
+- All stats routes are GET; the `surface: 'list'` option ensures only query params are read (bodies are never parsed, per `app/security.ts`).
+- The factory is generic over the schema but constrains it to include `from` and `to` as `string` at minimum—any route using it must extend `periodFields`.
+- The `run` composer receives the raw Express `Request` as its third argument, giving individual routes access to headers/locale etc. without the factory needing to know about them.

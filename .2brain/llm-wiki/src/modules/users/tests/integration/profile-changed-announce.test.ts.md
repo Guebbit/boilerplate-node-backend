@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/profile-changed-announce.test.ts
-sha256: 96278620b501481545310d3efa6dbf63fdae7269247b1284be1550b81bf4f618
-generated_at: 2026-11-08T08:55:23.887867+00:00
+sha256: 61285291eb84b274d8304eff708d241a560e1c86bfc506e849793caccd8a75a6
+generated_at: 2026-11-14T22:36:12.002475+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the `user.profile_changed` outbox event — the event behind the `user.updated` webhook. They assert when the event is written, which field names appear in its `changed` array, and that it never leaks actual field values.
+Integration tests for the `user.profile_changed` outbox event (the event behind the `user.updated` webhook). Verifies that the event is written in the save's own transaction only when a real profile field actually changed, that it names the changed fields without carrying their values, and that no-op writes and preference-only updates produce no event.
 
 ## Key elements
 
-- **`changedRows()`** — helper that queries `outboxEventModel` for rows named `user.profile_changed` (lean, in order).
-- **`payloads()`** — helper that maps `changedRows()` results to their `payload` objects.
-- **`describe('user.profile_changed')`** block with six cases:
-  - Admin edit via `userService.updateById` writes one event listing the moved fields.
-  - Owner self-edit via `userService.updateOwnProfile` writes one event.
-  - Re-sending identical values (no-op) produces no second event.
-  - Preference-only change (`locale`) produces **no** event.
-  - Email change + restore each produce an event with `changed: ['email']`.
-  - Serialized outbox rows contain none of the actual field values (privacy invariant).
+- **`changedRows()`** — Queries `outboxEventModel` for rows where `name === 'user.profile_changed'`; returns lean documents.
+- **`payloads()`** — Maps the above rows to their `payload` objects, in insertion order.
+- **`describe('user.profile_changed')`** — Six cases covering:
+  - Admin edit emits one event listing only the fields that moved (`username`, `website`).
+  - Owner's own edit emits an event for the changed field.
+  - Re-sending identical values does **not** emit a second event (accounts for random-IV phone encryption).
+  - A preference-only change (`locale`) emits **no** event.
+  - Email change confirmation and its undo each emit their own `['email']` event, both within `withTransaction`.
+  - No event payload ever contains an actual field value (asserted via regex over serialised rows).
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** — the system under test; calls to `updateById`, `updateOwnProfile`, `applyEmailChange`, `restorePreviousEmail` drive the event writes.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` is the read path used to assert on written rows.
-- **`src/modules/users/model.ts`** — `userModel` loads user documents passed to `updateOwnProfile` / `applyEmailChange`.
-- **`src/modules/users/tests/factories.ts`** — `createUser` seeds a known user before each scenario.
-- **`tests/support/callers.ts`** — `callerContextAs` simulates admin vs. customer caller identity.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` provisions an isolated database for the suite.
+- **`src/kernel/outbox.ts`** — Source of `outboxEventModel`; the tests read directly from this collection to assert event presence, count, and payload shape.
+- **`src/modules/users/services/index.ts`** — Provides the `userService` imported by the tests as the admin-path entry point for triggering profile updates.
+- **`src/modules/users/friends/account.ts`** — Provides `accountUserService`, which the tests use for owner-initiated profile edits and the email-change/restore flows.
+- **`src/modules/users/model.ts`** — Provides `userModel`, used to load user documents that are passed into the account-service calls.
+- **`src/infrastructure/runtime/database.ts`** — Source of `withTransaction`, which wraps the email-change and restore service calls so the tests confirm the event lands in the same transaction.
+- **`src/modules/users/tests/factories.ts`** — Source of `createUser`, which provisions a fresh user per test case.
+- **`tests/support/callers.ts`** — Source of `callerContextAs('admin')`, which injects an admin caller context into the service calls.
+- **`tests/support/setup-test-db.ts`** — Source of `setupTestDb()`, which initialises the ephemeral database before the suite runs.
 
 ## Notes
 
-- **Phone storage uses a random IV**, so the persisted ciphertext differs on every write even when the plaintext is identical. The no-op test (third case) accounts for this: re-sending the same phone number does not create a second event because the *value* comparison is on the decrypted number, not the stored bytes.
-- The "never carries a value" test asserts over the **full serialized row**, not just the payload — guarding against accidental leakage into `aggregateId` or other columns.
-- The event is expected to be written **inside the same transaction as the save**; these tests read the outbox after the service call resolves, relying on that atomicity.
+- The phone field is encrypted with a random IV, so two writes of the *same* number produce different stored strings. The no-op test sends the same number back and asserts only **one** event was written, relying on the service comparing the decrypted value.
+- The "never carries a value" test serialises every row to JSON and regex-scans for the secret username, phone digits, and email — a deliberate guard against future regressions that embed raw data in the payload.
+- Events are expected to be written in the **same transaction** as the document save (per the module doc comment); the email-change tests make this explicit by wrapping the service calls in `withTransaction`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/consent-record.ts
-sha256: 55567287a5b6ded5c665c222b6dc9ea4992fe4a18cf6c25cc7ad987f08f5f544
-generated_at: 2026-11-08T04:00:21.797382+00:00
+sha256: 19cc7de2bfca532190469f913fbec645b334b7f66af6019793190b1be36d8bec
+generated_at: 2026-11-14T18:30:16.166114+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Data-protection record module that stamps, at account-creation time, which terms version was in force, when the user accepted them, and what analytics choice (if any) the signup carried. These fields are later read by controllers to display "who agreed to what, and when."
+Defines the consent "stamp" shapes an account carries for terms acceptance and analytics choice. Each exported function produces the exact object (timestamp + version/value) that a signup, provider sign-in, or first-password flow writes onto the account record, so the controller can later answer "who agreed to what, and when."
 
 ## Key elements
 
-- **`termsVersion(): string`** — Returns the configured `NODE_TERMS_VERSION` label (default `"1"`) from `accountConfig()`.
-- **`termsAcceptance(): { termsAcceptedAt, termsVersion }`** — Returns a timestamped snapshot of the current terms version; called by any path that presents terms before creating the account.
-- **`analyticsAnswer(analyticsConsent?: boolean): { analyticsConsent?, analyticsConsentAt? }`** — Returns `{}` when the consent checkbox was absent (no question asked), otherwise a timestamped boolean record.
+- **`termsVersion()`** — Reads `NODE_TERMS_VERSION` from `accountConfig()` and returns it as a string (defaults to `"1"`).
+- **`termsAcceptance()`** — Returns `{ termsAcceptedAt: Date; termsVersion: string }`, capturing the current moment paired with the version in force at that moment.
+- **`analyticsAnswer(analyticsConsent: boolean | undefined)`** — Returns `{ analyticsConsent, analyticsConsentAt: Date }` when a boolean is supplied; returns `{}` when the argument is `undefined` (i.e. the user was never asked).
 
 ## Relationships
 
-- **`src/modules/account/config.ts`** — Sole import: provides `accountConfig()` which supplies `NODE_TERMS_VERSION`.
-- **`src/modules/account/services/signup.ts` / `oauth.ts`** — Consumers; the JSDoc states "every path that shows the terms before it creates the account stamps this," pointing to these signup flows as callers of `termsAcceptance` and `analyticsAnswer`.
-- **`src/app/config-routes.ts`** — Publishes `termsVersion()` so `GET /shop` can print the in-force label (shop group reads from the foundation; no reverse dependency).
+- **`src/modules/account/config.ts`** — Source of `accountConfig`; this module reads `NODE_TERMS_VERSION` through it.
+- **`src/app/config-routes.ts`** — Consumes `termsVersion()` so `GET /config` can expose the current terms label.
+- **`src/modules/account/services/signup.ts`** — Calls `termsAcceptance()` and `analyticsAnswer()` during account creation to stamp the record.
+- **`src/modules/account/services/oauth.ts`** — Stamps `termsAcceptance()` on provider-based sign-in.
+- **`src/modules/account/services/password-reset.ts`** — Stamps `termsAcceptance()` when a staff-created account sets its first password.
+- **`src/modules/account/services/index.ts`** — Barrel for the account services that import this module.
+- **`scenarios/users.ts`** — Test scenarios that exercise the signup/sign-in paths which invoke these stamping helpers.
 
 ## Notes
 
-- `analyticsAnswer` returns a plain empty object (not `null`/`undefined`) when consent is absent. Downstream code must treat "no key" as "nobody was asked," which is distinct from an explicit `false`.
-- The module is intentionally dependency-light (one import) so the shop/route layer can reference the version string without pulling in the full services barrel.
+- `analyticsAnswer` intentionally returns an **empty object** (not a null/undefined) when the user was not asked. Downstream code must treat the *absence of keys* as "no record yet," not as `false`.
+- All three functions are pure "create the stamp" helpers; they do **not** read or mutate an existing account record. The caller is responsible for persisting the returned object.
+- The terms version is a single config value, not a per-account field — every account stamped under the same `NODE_TERMS_VERSION` shares the same label.

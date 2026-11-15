@@ -1,42 +1,39 @@
 ---
 source: src/modules/delivery/services/split.ts
-sha256: 85e787e7044abe151c283911b03fe6cb2299ce6ab53fceb2af7bcab961301c5e
-generated_at: 2026-11-08T05:40:35.300699+00:00
+sha256: a08360ceab55fe876e2ea100f99076d25e549584d2a64fc3f2352f09bf92d7eb
+generated_at: 2026-11-14T19:51:14.752143+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/services/split.ts
 
 ## Purpose
-
-Implements the short-stock split: when a preorder fulfillment order is held for `awaiting_stock` and only partial inventory arrives, this file moves the arrived units into a new `open` fulfillment order (ready to ship) while the remainder stays on hold. If the arrival covers everything, the hold simply ends without creating a second order. It is invoked exclusively by `releaseAllocated` when `inventory` allocates stock to a paid preorder; no HTTP route reaches it directly.
+Implements the "short-stock split": when a preorder line requested more units than arrived in stock, the arrived units are moved into a new `open` fulfillment order (which can ship immediately) while the remainder stays `on_hold` with `awaiting_stock`. Without this split the partial stock could never ship because a manual release of `awaiting_stock` is refused. Called exclusively by `releaseAllocated` when inventory allocates stock to a paid preorder; no HTTP route reaches it.
 
 ## Key elements
-
-- **`Split` (interface)** — Result type. `released` is the order that may ship now; `held` (optional) is the order still waiting. When `held` is absent, the allocation covered the full remainder.
-- **`splitForAllocation` (export)** — Public entry point. Looks up the fulfillment order, verifies the parent order isn't canceled, then delegates to `splitAct` inside a transaction via `runAct`. Returns `Split | undefined`; all failure paths resolve to `undefined` rather than throwing.
-- **`splitAct` (private)** — Core transactional logic. Validates status/hold-reason, checks the allocation against remaining lines, then either (a) releases the existing order in place (full coverage) or (b) shrinks the held order's lines and creates a sibling fulfillment order for the arrived units. Reports progress and announces release in both branches.
-- **`withoutAllocated` (private)** — Subtracts allocated quantities from each held-order line; drops lines whose quantity reaches zero.
-- **`allocatedLines` (private)** — Builds the new order's lines from the allocated quantities, copying product titles from the held order and zeroing `shippedQuantity`/`canceledQuantity`.
+- **`Split`** (exported interface) — result shape: `released` (the order that may now ship) and optional `held` (the shrunk order still waiting; absent when the allocation covered everything).
+- **`withoutAllocated`** (private) — subtracts the allocated quantity from each line of the held order, dropping lines that reach zero.
+- **`allocatedLines`** (private) — builds the new order's lines from the allocated units, copying `title` from the held order, initializing `shippedQuantity`/`canceledQuantity` to 0.
+- **`splitAct`** (private) — the transactional core. Validates status/hold-reason, checks the allocation against remaining lines. Two paths:
+  - *Covers-all:* the hold is simply released (status updated, `holdReason`/`holdNote` unset) on the existing order.
+  - *Partial:* shrinks the held order via `claim`, then `create`s a new sibling fulfillment order (next sequential `number`, same `kind`, dates, `sourceShipmentId`).
+- **`splitForAllocation`** (exported function) — public entry point. Loads the fulfillment order, verifies the parent order isn't canceled, then runs `splitAct` inside a Mongoose session via `runAct`. Returns `undefined` on any refusal.
 
 ## Relationships
-
-- **`../domain` (fulfillment.ts / index.ts)** — Provides `checkShipLines`, `remainingOfLine`, `statusOfLines` for line validation and status derivation, plus the `FulfillmentLine` and `ProductQuantity` types.
-- **`../repository.ts`** — All persistence: `findById`, `findInSession`, `claim` (optimistic revision), `findByOrderId`, `create`.
-- **`../model.ts`** — `FulfillmentOrderDocument` type used throughout.
-- **`./act.ts`** — `runAct` wraps the transaction; `refuse` / `refuseMissing` produce the refusal envelopes.
-- **`./announce.ts`** — `announceReleased` emits the `fulfillment_order.released` event after the split commits.
-- **`./progress.ts`** — `reportProgress` updates the order's progress tracking.
-- **`@modules/orders` (orders/index.ts → services/index.ts)** — `orderService.getById` is used to guard against a canceled parent order before entering the transaction.
-- **`@types` (types/index.ts)** — `FulfillmentHoldReason`, `FulfillmentOrderStatus` enum values.
-- **`release-allocated.ts`** — The sole caller of `splitForAllocation`.
-- **`tests/unit/fulfillment.test.ts`** — Unit tests exercising the split paths.
+- **`src/modules/delivery/domain/index.ts`** (`checkShipLines`, `remainingOfLine`, `statusOfLines`, `FulfillmentLine`, `ProductQuantity`) — validation helpers and shared types for line arithmetic.
+- **`src/modules/delivery/domain/fulfillment.ts`** (`plainLine`) — strips non-persisted fields before re-serializing a line into the shrunk order.
+- **`src/modules/delivery/repository.ts`** (`fulfillmentOrderRepository`) — all persistence: `findInSession`, `claim` (optimistic-concurrency update), `create`, `findByOrderId`.
+- **`src/modules/delivery/services/act.ts`** (`runAct`, `refuse`, `refuseMissing`) — transaction wrapper and error-refusal helpers.
+- **`src/modules/delivery/services/announce.ts`** (`announceReleased`) — notifies the order of the release within the same transaction.
+- **`src/modules/delivery/services/progress.ts`** (`reportProgress`) — updates the order's progress summary in the same transaction.
+- **`src/modules/delivery/services/release-allocated.ts`** — the sole caller of `splitForAllocation`.
+- **`src/modules/orders/index.ts`** (`@modules/orders`) — provides the order service used to verify the parent order is not canceled before splitting.
+- **`src/types/index.ts`** (`FulfillmentHoldReason`, `FulfillmentOrderStatus`) — domain enum values used in status checks.
+- **`src/modules/delivery/model.ts`** (`FulfillmentOrderDocument`) — the persisted document type carried through the split.
 
 ## Notes
-
-- **No route entry.** The file's module doc states explicitly that no HTTP route reaches it; it is an internal service call only.
-- **`undefined` ≠ error.** `splitForAllocation` resolves to `undefined` for every failure case (order missing, canceled, wrong status, over-allocation, concurrent revision bump). Callers must check for `undefined` rather than catching exceptions.
-- **Full-coverage shortcut.** When the allocation covers every remaining line, no new fulfillment order is created — the existing order is claimed with `holdReason`/`holdNote` unset. The `Split.held` field is simply absent.
-- **`sourceShipmentId` carry-over.** The new (released) order inherits the held order's `sourceShipmentId` so that if a lost parcel is later located, the link to all still-owed units is preserved.
-- **Line removal.** A held-order line whose entire quantity was allocated is filtered out entirely (not left at quantity 0), because the domain invariant is that a line carries at least one unit.
-- **Numbering.** The new order's `number` is `max(existing siblings) + 1` within the same `orderId`; it does not reuse the held order's number.
+- **No route calls this.** The only caller is `releaseAllocated`; the admin UI has no "split" button. An admin can still manually hold the newly-created `open` order to re-ship everything together.
+- **Fast path avoids a write.** When the allocation covers every remaining line (`covers` is true), the existing order is updated in place — no second document is created.
+- **`sourceShipmentId` propagation.** The new order inherits `sourceShipmentId` from the held order so a later lost-parcel recovery can locate all outstanding parts across split siblings.
+- **Optimistic concurrency.** Both the shrink (`claim` on the held order) and the full-release path use the held order's `revision` number; a concurrent modification causes a 409 refusal rather than a silent overwrite.
+- **Numbering.** The new order's `number` is `max(siblings) + 1` computed within the same session, avoiding gaps if the held order is the only sibling.

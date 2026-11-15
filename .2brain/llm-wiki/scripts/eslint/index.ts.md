@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/index.ts
-sha256: 43408c8a62929edbda40bd839fa1c84922f10edb36bc0789a9f95a656cc65424
-generated_at: 2026-11-08T02:50:52.066016+00:00
+sha256: 4949050c3a04120167f8a7ca0b2af68cec1ad238c639abb07d4169e612703ca6
+generated_at: 2026-11-14T17:35:13.115604+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that assembles the project's custom ESLint rules into a single rule table (rule name → implementation). It exists so `eslint.config.ts` can register all repo-specific rules in one place without importing each rule file individually.
+Aggregates all project-local ESLint rule implementations into a single default export (a rule-name-to-rule object) so that `eslint.config.ts` can register the whole set with one plugin import. It is the entry point for this repo's custom lint rules.
 
 ## Key elements
 
-- **Default export** — an object mapping six kebab-case rule names (`barrel-allowed-sources`, `comment-links`, `controller-chain-must-catch`, `friend-members`, `no-hardcoded-user-text`, `no-persistence-imports`) to their implementation objects. The keys are the names used in `eslint.config.ts` and in inline `eslint-disable` comments.
-- **Imports** — one `import` per sibling rule module in `scripts/eslint/`, each providing a single rule implementation object.
+- **`export default` (object literal)** — Maps each rule's kebab-case name (e.g. `'no-persistence-imports'`) to its implementation function. This is the "plugin rule table" that ESLint's flat config consumes.
+- **Imports** — Five sibling rule modules, each providing one rule implementation that is referenced by name in the object literal:
+  - `barrelAllowedSources` from `./barrel-allowed-sources`
+  - `commentLinks` from `./comment-links`
+  - `controllerChainMustCatch` from `./controller-chain-must-catch`
+  - `noHardcodedUserText` from `./no-hardcoded-user-text`
+  - `noPersistenceImports` from `./no-persistence-imports`
 
 ## Relationships
 
-- **`eslint.config.ts`** — consumes this file's default export as the rule table for the plugin. This file is the sole bridge between the rule implementations and the ESLint config.
-- **`scripts/eslint/barrel-allowed-sources.ts`**, **`comment-links.ts`**, **`controller-chain-must-catch.ts`**, **`friend-members.ts`**, **`no-hardcoded-user-text.ts`**, **`no-persistence-imports.ts`** — each exports one rule; this file re-exports them under their kebab-case names.
+- **`eslint.config.ts`** — Primary consumer. Imports this file's default export as a plugin and activates the individual rules by their string names.
+- **`scripts/eslint/barrel-allowed-sources.ts`**, **`comment-links.ts`**, **`controller-chain-must-catch.ts`**, **`no-hardcoded-user-text.ts`**, **`no-persistence-imports.ts`** — Each provides one rule implementation that this index re-exports under its canonical name. No logic lives here; it is purely wiring.
 
 ## Notes
 
-- The rule names in the default export are kebab-case (matching ESLint's naming convention for plugin rules), while the imported symbols are camelCase.
-- Rules live in this repo rather than a published plugin package because they encode this repo's specific layering and naming conventions and have exactly one consumer.
-- The JSDoc at the top of the file documents *why* each rule is custom rather than achievable via `no-restricted-imports`, `eslint-plugin-boundaries`, or a cross-cutting test. Worth reading before adding a new rule to the table.
-- Each rule is expected to be unit-tested with `RuleTester` in `tests/unit/scripts/eslint/`.
+- The file contains no runtime logic beyond the object literal — all rule behavior lives in the sibling files.
+- The JSDoc at the top of the file is the canonical *rationale* for why each rule is custom rather than a built-in or `eslint-plugin-boundaries` rule. If a rule's "why" isn't obvious, start there.
+- One file per rule (enforced by convention) so each can be unit-tested independently with ESLint's `RuleTester` in `tests/unit/scripts/eslint/`.
+- These rules are intentionally **not** published as a standalone plugin package; they encode this repo's layering and naming conventions and have exactly one consumer.

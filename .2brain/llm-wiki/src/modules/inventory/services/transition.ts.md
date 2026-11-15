@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/transition.ts
-sha256: aa21103072098d606f06ea12f085974c525fddefc93c11093ceaab94f98e2223
-generated_at: 2026-11-08T06:04:09.636895+00:00
+sha256: 31663b1d35ca684410bd2d0ae0d95bc2896905e0917fbf72ea5aa3de0cc9f0bd
+generated_at: 2026-11-14T20:07:38.190478+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single chokepoint through which every stock counter change and its ledger row pass. It encapsulates the read-modify-write of a product's counters, the audit-row insert, and the (optional) catalogue cache sync, so that higher-level services (`reserve`, `hold`, `release`, `return`, `top-up`, `admin`, `allocate`) never touch the repositories directly.
+The single chokepoint through which every stock-counter mutation and its corresponding ledger row pass. It encapsulates the read-guard-apply-record-sync pipeline so that higher-level services (reserve, allocate, returns, top-up, admin) never touch the repositories directly for a counter move.
 
 ## Key elements
 
-- **`applyTransition(reason, productId, quantity, context?, session?)` → `Promise<boolean>`** — The core primitive. Ensures a level row exists (`insertIfAbsent`), computes the signed delta via `counterDeltaFor`, applies it conditionally, writes a `stockMovement` audit row, and (outside a session) refreshes the catalogue cache. Returns `false` when the counters refused the movement. Marked `@internal`; never exported outside the services barrel.
-- **`applyToEveryLine(reason, lines, context, session?)`** — Loop wrapper that calls `applyTransition` per line. Throws on the first refusal so the caller's transaction rolls back all lines (all-or-nothing). Also guards against shipping units that are still a preorder claim.
-- **`refreshStockCache(productId)`** — Reads the current level, pushes `{onHand, reserved, backorderLimit, backordered}` into the products catalogue via `productService.syncStockCache`, then invalidates the `products` cache tag. Never rejects; failures are logged and swallowed.
-- **`refreshStockCacheForProducts(productIds)`** — Deduplicates IDs and calls `refreshStockCache` sequentially. Intended as the post-commit step a caller owes after a transactional batch.
+- **`applyTransition`** (`@internal`) — Core write path. Ensures a level row exists (`insertIfAbsent` on `stockLevelRepository` for first-time products), computes the counter delta via `counterDeltaFor`, applies it conditionally through `stockLevelRepository.applyDelta`, records a movement row via `stockMovementRepository.create`, and (when no transaction session is active) syncs the catalogue cache. Returns `true`/`false` to signal whether the counters actually moved.
+- **`applyToEveryLine`** — Iterates over an order's lines, calling `applyTransition` for each. Throws on the first refusal so the caller's transaction rolls back atomically. Special-cases `ship` on a `backorder` kind to reject pre-shipping an unclaimed preorder allowance.
+- **`refreshStockCache`** — Reads the current level row, pushes `onHand`/`reserved`/`backorderLimit`/`backordered`/`version` into the products module via `productService.syncStockCache`, then invalidates the `products` cache tag. Swallows all errors (logs and resolves) so a cache failure never blocks the caller's remaining work.
+- **`refreshStockCacheForProducts`** — Deduplicates a list of product IDs and calls `refreshStockCache` sequentially. Intended to be called by a service after its transaction commits, since cross-module cache writes cannot participate in the caller's session.
 
 ## Relationships
 
-- **`../domain` (`domain/index.ts` / `domain/transitions.ts`)** — Provides `counterDeltaFor` (reason + quantity → signed per-counter deltas) and the `HoldKind` union.
-- **`../repository`** — `stockLevelRepository` (find, `insertIfAbsent`, `applyDelta`) and `stockMovementRepository` (`create`) are the only persistence calls in this file.
-- **`../module.ts`** — Its `PRODUCT_DELETED` listener deletes the level row; the "no row" branches in `applyTransition` exist to handle the aftermath (a `release`/`expire`/`commit` against a deleted product still returns `true` so sweeps can proceed).
-- **`@modules/products`** — `productService.syncStockCache` keeps the catalogue's denormalised counters in step; called only when no `session` is active.
-- **`@infrastructure/adapters/cache`** — `invalidateCacheTagsLogged(['products'])` clears response-cache tags after a successful sync.
-- **`@infrastructure/adapters/logger`** — Used solely in `refreshStockCache`'s `.catch` to log non-fatal sync failures.
-- **Sister services (`reserve.ts`, `holds.ts`, `returns.ts`, `top-up.ts`, `admin.ts`, `allocate.ts`)** — All import `applyTransition` or `applyToEveryLine` from the barrel; they decide *what* may move, this file decides *how* it moves.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Exercises the shipping path through `applyToEveryLine` with `kind: 'backorder'`.
+- **`src/modules/inventory/repository.ts`** — Reads/writes via `stockLevelRepository` (`findByProductId`, `insertIfAbsent`, `applyDelta`) and `stockMovementRepository` (`create`). All data access for this file goes through these two repositories.
+- **`src/modules/inventory/domain/index.ts`** (re-exporting `transitions.ts`) — Provides `counterDeltaFor` (maps a reason + quantity + hold-kind to signed counter deltas) and the `HoldKind` type.
+- **`src/modules/products/index.ts`** — This file imports `productService` from `@modules/products` and calls its `syncStockCache` method to keep the catalogue's cached counter copy consistent.
+- **`src/infrastructure/adapters/cache.ts`** — Calls `invalidateCacheTagsLogged(['products'])` after a successful sync.
+- **`src/infrastructure/adapters/logger.ts`** — Logs the non-fatal error when the catalogue cache refresh fails.
+- **`src/modules/inventory/module.ts`** — Its `PRODUCT_DELETED` listener removes a product's level row; this file's "no row" guard treats that as a legitimate state (see Notes).
 
 ## Notes
 
-- **Session vs. non-session split:** When a `ClientSession` is supplied the cache sync is *skipped* (it writes outside this module and cannot roll back). The caller is responsible for calling `refreshStockCacheForProducts` after `session.commitTransaction()`.
-- **`kind` is not persisted** on the movement row; it only steers which counter a `release`/`expire` restores (e.g. `backordered` for a preorder claim).
-- **No-row semantics differ by reason:** `reserve`/`backorder`/`owed` → refuse (`false`); `release`/`expire`/`commit` → succeed trivially (`true`) so order sweeps can continue past a deleted product; `receive`/`adjust` → insert the row first (in practice both check product existence upstream).
-- **`refreshStockCache` never rejects.** By design, a failed cache sync must not prevent the caller from completing its remaining duties (returning a hold, issuing a refund). The next transition on that product corrects the cache.
-- Stryker mutation-testing is disabled around the `.catch` logger in `refreshStockCache` to prevent the mutation-killing noise from a deliberately swallowed error.
+- **Transaction vs. non-transaction split.** When a `ClientSession` is passed to `applyTransition`, the catalogue cache sync is deliberately skipped (it is a cross-module write that cannot roll back). The caller is responsible for invoking `refreshStockCacheForProducts` after commit.
+- **"No row" is not an error.** For `reserve`, `backorder`, and `owed` the absence of a row means "nothing available" → returns `false`. For `release`, `expire`, and `commit` it means "nothing to give back" → returns `true` (trivially moved) so an order sweep can continue past a since-deleted line. `receive` and `adjust` insert the row first.
+- **`kind` is not persisted.** The `context.kind` field only steers which counter a `release`/`expire` credits (backordered vs. reserved); it is stripped before the ledger row is written.
+- **`applyTransition` is `@internal`.** It never leaves the barrel (`services/index.ts`); external callers go through the named transition services (reserve, allocate, returns, etc.).

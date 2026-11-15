@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/secrets.ts
-sha256: da9979bc439854d8e36fa869446960f12ed65f4c66a8d69d5ce89129e974e49b
-generated_at: 2026-11-08T09:05:15.088721+00:00
+sha256: 278e987ce1d4f886241783d453d2f2e2530bc82a9e4e2b6c7360b06b8dcd8fe7
+generated_at: 2026-11-14T22:44:55.438009+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the secret-ring lifecycle for webhook subscriptions: minting, encrypting at rest, determining which secrets are still valid, and retiring superseded ones. It wraps the versioned-secret encryption primitives with webhook-specific binding and a time-based overlap window so a rotation never causes a verification gap.
+Implements the secret-ring lifecycle for webhook subscriptions: minting, encrypting/decrypting at rest, determining which entries are still live or retiring, and dropping entries. Plaintext secrets exist only transiently (mint response, signing a delivery) and are never persisted in the subscription document.
 
 ## Key elements
 
-- **`generatePlaintextSecret`** (internal) — produces a Standard-Webhooks-compatible secret: `whsec_` + 32 random bytes, base64-encoded.
-- **`ringSecretBinding(entryId)`** — builds the `SecretBinding` (`purpose: 'webhook-secret'`, `aad: entryId`) shared by encrypt/decrypt and re-encryption jobs.
-- **`encryptRingSecret(plaintext, entryId)`** — encrypts a plaintext secret under the webhook key ring, bound to the entry's id.
-- **`decryptRingSecret(stored, entryId)`** — reverses the above; throws on malformed input, wrong key, or tag mismatch.
-- **`mintRingSecret()`** — generates a new `WebhookSecretRingEntry` (random UUID, ciphertext, `createdAt`) and returns it alongside the plaintext exactly once for the caller to surface over HTTP.
-- **`liveRingEntries(ring, now?)`** — returns the entries still valid at `now`; the newest never expires, an older one remains live while its successor is within the overlap window.
-- **`retiringRingSecrets(ring, now?)`** — for each live-but-superseded entry, returns `{ id, retiresAt }` (successor's `createdAt` + overlap).
-- **`activeRingSecrets(ring, now?)`** — decrypts all live entries in ring order (oldest first), the set a delivery attempt signs with.
-- **`removeRingSecret(ring, id)`** — filters one entry out by id (the drop step after consumers have switched).
+- **`ringSecretBinding(entryId)`** – Builds the `SecretBinding` (HKDF purpose + AAD) used for encrypting/decrypting a single ring entry. The AAD is `webhooks:secrets.ciphertext:<entryId>`.
+- **`encryptRingSecret(plaintext, entryId)`** / **`decryptRingSecret(stored, entryId)`** – Thin wrappers around `encryptVersionedSecret` / `decryptVersionedSecret` that inject the key ring from config and the binding.
+- **`mintRingSecret()`** – Generates a `whsec_`-prefixed 256-bit base64 secret, encrypts it, and returns the new `WebhookSecretRingEntry` alongside the plaintext (caller must surface it exactly once).
+- **`liveRingEntries(ring, now)`** – Filters a ring (oldest-first) to entries still in force: the newest never expires; an older entry is live only while its successor's age is within the overlap window.
+- **`retiringRingSecrets(ring, now)`** – Returns the superseded live entries with their computed `retiresAt` timestamp (successor `createdAt` + overlap).
+- **`activeRingSecrets(ring, now)`** – Decrypts all live entries, preserving oldest-first order (matching the `webhook-signature` header convention where the newest signature is listed last).
+- **`removeRingSecret(ring, id)`** – Drops a single entry by id (the "drop" half of rotation).
 
 ## Relationships
 
-- **`@infrastructure/security/versioned-secret`** — provides `encryptVersionedSecret`, `decryptVersionedSecret`, and the `SecretBinding` type; this file is a thin webhook-domain wrapper around them.
-- **`src/modules/webhooks/config.ts`** — supplies `getWebhookEncryptionKeyRing()` (the AES-256-GCM key ring from `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`) and `getWebhookSecretOverlapMs()` (the overlap window from `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`).
-- **`src/modules/webhooks/model.ts`** — defines `WebhookSecretRingEntry`, the shape of each ring element used throughout this file.
-- **`src/modules/webhooks/services/attempt.ts`** — consumes `activeRingSecrets` to obtain the plaintexts for HMAC signing during delivery.
-- **`src/modules/webhooks/services/reencrypt.ts`** — rewraps stored ciphertexts under a new key ring, reusing `ringSecretBinding` for the AAD.
-- **`src/modules/webhooks/tests/unit/secrets.test.ts`** — unit tests for every exported function.
-- **`src/modules/webhooks/tests/integration/*.test.ts`** — integration tests exercise mint → rotate → drop flows through the subscription lifecycle, fan-out, sweep, and re-encryption paths.
+- **`src/infrastructure/security/versioned-secret.ts`** – Provides `encryptVersionedSecret`, `decryptVersionedSecret`, and the `SecretBinding` type that this file wraps.
+- **`src/modules/webhooks/config.ts`** – Supplies `getWebhookEncryptionKeyRing()` (the versioned AES-256-GCM key ring) and `getWebhookSecretOverlapMs()` (the rotation overlap window from `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`).
+- **`src/modules/webhooks/model.ts`** – Defines `WebhookSecretRingEntry`, the shape stored in a subscription document's `secrets` array.
+- **`src/modules/webhooks/services/attempt.ts`** – Calls `activeRingSecrets` to obtain plaintext secrets for signing a delivery.
+- **`src/modules/webhooks/services/reencrypt.ts`** – Re-encrypts stored ciphertexts under a new key ring using the same `ringSecretBinding`.
+- **`src/modules/webhooks/services/actions.ts` / `subscriptions.ts`** – Orchestrate mint, rotate (add + schedule drop), and drop via the exported ring operations.
+- **Test files** (`secrets.test.ts`, `delivery.test.ts`, `reencrypt.test.ts`, `fan-out.test.ts`, `sweep.test.ts`, etc.) – Unit- and integration-test each exported function.
 
 ## Notes
 
-- The AAD is the **entry's own `id`**, not the parent subscription's `_id`, because the first secret is minted before the subscription document has a persisted id.
-- `activeRingSecrets` preserves ring order (oldest first), which matches the order a `webhook-signature` header lists its `t=` values: the soonest-to-retire secret appears first, the newest last.
-- The overlap window is the *only* thing bounding how long a superseded secret can still sign; there is no hard revocation before the window elapses.
-- Plaintext exists only in memory: during mint (returned once over HTTP) and during a single delivery attempt for signing. It is never persisted.
+- The plaintext format is `whsec_` + base64(32 random bytes), matching the Standard Webhooks spec so any compatible consumer library can verify signatures.
+- The AAD binds the ciphertext to a specific ring-entry `id` (not the subscription `_id`, which may not exist yet at first mint). This means you must pass the same `entryId` to `decryptRingSecret` that was used at encryption time.
+- Ring order is invariant: always oldest-first. `activeRingSecrets` preserves this order because the `webhook-signature` header lists signatures oldest→newest, and consumers are expected to switch to the last one.
+- `liveRingEntries` uses the *successor's* `createdAt` to decide expiry, not the entry's own age. A ring with only one entry is always fully live.
+- The overlap window is configured via `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`; it bounds how long a leaked, superseded secret remains valid for signing.

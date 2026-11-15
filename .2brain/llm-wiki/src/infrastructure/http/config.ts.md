@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/config.ts
-sha256: ae4628fdfbe54e8f4f83c2ac4a9bf55c2d7bab20bfb024f207dddb7de588f8e8
-generated_at: 2026-11-08T03:28:31.163629+00:00
+sha256: df284935b29830b16edeec9d85926464e95c9b0aef1c3a864f7fa82a2c6622ae
+generated_at: 2026-11-14T17:59:40.173360+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares all HTTP-layer configuration objects for a deployment: the site's own and frontend URLs, rate-limiter Redis settings, upload limits and staging, response-cache bounds, and idempotency-ledger retention. Each object is built with the shared `defineConfig` / field helpers so that validation, defaults, and environment-variable binding are uniform across the codebase.
+Declares every deployment-specific setting the HTTP layer needs at runtime: the site's own addresses and CORS origins, the rate-limiter's Redis connection and window, upload size/staging limits, response-cache bounds, idempotency retention, SSE stream caps, and a factory for per-budget rate-limit ceilings. All values are typed, validated, and carry documented defaults so the server can boot without a full environment.
 
 ## Key elements
 
-- **`siteConfig`** – `NODE_URL`, `NODE_FRONTEND_URL`, `NODE_CORS_ORIGIN`. The only config here with `productionOnly` required checks; `NODE_FRONTEND_URL` is mandatory in production because every user-facing link (reset, verify, OAuth landing) depends on it.
-- **`rateLimitConfig`** – Redis connection (`URL`, `PASSWORD`, `PREFIX`) and the shared `NODE_RATE_LIMIT_WINDOW_MS` (defaults to `MINUTE_MS`).
-- **`uploadConfig`** – `NODE_MAX_UPLOAD_BYTES`, `NODE_UPLOAD_STAGING_PATH` (defaults to OS tmpdir), and two placeholder-image URLs.
-- **`responseCacheConfig`** – `NODE_REDIS_CACHE_DEV_TTL_MAX` and `NODE_REDIS_CACHE_MAX_BYTES`; defaults pulled from `sharedDefaults`.
-- **`idempotencyConfig`** – Single field `NODE_IDEMPOTENCY_RETENTION_HOURS`; default from `sharedDefaults`.
-- **`rateLimitBudgetConfig(name, budgets)`** – Factory that produces a config object with one `int` field per `RateLimitBudget`, keyed by the budget's `environmentVariable`. Used to generate per-module budget slices without hand-writing each one.
+- **`siteConfig`** — `NODE_URL`, `NODE_FRONTEND_URL`, `NODE_CORS_ORIGIN`. The last two are `productionOnly`, meaning the built-in `localhost` defaults fail validation in a production build.
+- **`rateLimitConfig`** — `NODE_RATE_LIMIT_WINDOW_MS`, `NODE_RATE_LIMIT_REDIS_URL`, `NODE_RATE_LIMIT_REDIS_PASSWORD`, `NODE_RATE_LIMIT_REDIS_PREFIX`. Redis credentials are marked `sensitive`.
+- **`uploadConfig`** — `NODE_MAX_UPLOAD_BYTES`, `NODE_UPLOAD_STAGING_PATH`, `NODE_PENDING_IMAGE_URL`, `NODE_PENDING_THUMBNAIL_URL`. Defaults for max bytes and pending-asset paths come from `sharedDefaults.uploads`.
+- **`responseCacheConfig`** — `NODE_REDIS_CACHE_DEV_TTL_MAX`, `NODE_REDIS_CACHE_MAX_BYTES`. Defaults sourced from `sharedDefaults.responseCache`.
+- **`idempotencyConfig`** — `NODE_IDEMPOTENCY_RETENTION_HOURS`. Default from `sharedDefaults.idempotency`.
+- **`sseConfig`** — `NODE_SSE_MAX_STREAMS_PER_USER` (default 12), `NODE_SSE_MAX_STREAMS` (default 2000). Enforced per-process, independent of the request rate limiter.
+- **`rateLimitBudgetConfig(name, budgets)`** — factory that builds a `defineConfig` slice with one `int` field per `RateLimitBudget`, keyed by the budget's `environmentVariable`. Used by app modules to expose their own per-budget ceilings through the same validation pipeline.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** – Provides `defineConfig`, the builder every export in this file calls.
-- **`src/infrastructure/config/fields.ts`** – Provides the `csv`, `int`, and `text` field validators used to declare each shape member.
-- **`src/domain-primitives/time.ts`** – Supplies `MINUTE_MS` as the default for the rate-limit window.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** – Consumes `rateLimitConfig` and `rateLimitBudgetConfig` to read the shared window, Redis target, and per-budget caps.
-- **`src/infrastructure/adapters/limits-redis.ts`** – Consumes `rateLimitConfig` for the Redis URL, password, and key prefix.
-- **`src/infrastructure/http/middlewares/upload.ts` / `src/infrastructure/http/uploads.ts`** – Consume `uploadConfig` for byte limits, staging directory, and placeholder URLs.
-- **`src/infrastructure/http/middlewares/cache.ts`** – Consumes `responseCacheConfig` for TTL and size bounds.
-- **`src/infrastructure/http/middlewares/idempotency-model.ts`** – Consumes `idempotencyConfig` for ledger retention.
-- **`src/infrastructure/http/frontend-link.ts`** – Reads `siteConfig` (`NODE_FRONTEND_URL`) to construct absolute frontend URLs.
-- **`src/infrastructure/http/origins.ts`** – Reads `siteConfig` (`NODE_CORS_ORIGIN`) to build the allowed-origins list.
-- **`src/modules/account/oauth/config.ts` / `src/modules/account/session/config.ts`** – Read `siteConfig` (`NODE_FRONTEND_URL`) for OAuth redirect and session links.
-- **`src/kernel/module-config.ts`** – Calls `rateLimitBudgetConfig` with per-module budget arrays to materialize typed rate-limit slices.
-- **`src/app/config.ts`** – Aggregates or re-exports the top-level config objects for application bootstrap.
+- **Imports from `src/infrastructure/config/define.ts`** (`defineConfig`) and **`src/infrastructure/config/fields.ts`** (`csv`, `int`, `text`) to build each config object.
+- **Imports `MINUTE_MS` from `src/domain-primitives/time.ts`** as the default rate-limit window.
+- **Consumed by `src/infrastructure/http/middlewares/rate-limit.ts`**, **`src/infrastructure/http/middlewares/cache.ts`**, **`src/infrastructure/http/middlewares/idempotency-model.ts`**, **`src/infrastructure/http/middlewares/upload.ts`**, **`src/infrastructure/http/sse.ts`**, **`src/infrastructure/http/origins.ts`**, **`src/infrastructure/http/frontend-link.ts`**, **`src/infrastructure/http/uploads.ts`**, and **`src/infrastructure/adapters/limits-redis.ts`**, which read the exported config objects at module init or request time.
+- **`src/modules/account/oauth/config.ts`** and **`src/kernel/module-config.ts`** reference this file for site URLs or to aggregate configs into the kernel.
 
 ## Notes
 
-- `NODE_FRONTEND_URL` and `NODE_CORS_ORIGIN` carry `productionOnly: true` on their `required` check: the check inspects the raw environment variable, so the developer-friendly defaults do **not** satisfy it. In production, omitting these variables will cause startup to fail.
-- `sharedDefaults` (from `defaults.generated`) is the source of truth for numeric defaults (upload size, cache bounds, idempotency retention) shared across infrastructure; editing the generated file, not this file, changes those defaults.
-- `rateLimitBudgetConfig` is the only *factory* export; everything else is a singleton config object. Callers must invoke it with a distinct `name` per module to avoid collisions.
+- `NODE_FRONTEND_URL` and `NODE_CORS_ORIGIN` carry `productionOnly: true` on their `required` constraint. The `localhost` defaults exist only to let a developer run locally; the production check reads the raw environment variable, so the default value does **not** satisfy it—deployments must set these explicitly.
+- Several defaults are pulled from `@infrastructure/config/defaults.generated` (`sharedDefaults`), a generated file that keeps numeric limits in sync across packages. Do not hard-code those values manually.
+- `rateLimitBudgetConfig` is a **factory**, not a static export. Callers pass in their module's budget list (typically from `AppModule.rateLimits` or the `INFRASTRUCTURE_RATE_LIMITS` env var) to produce a per-module config slice.
+- SSE caps are enforced per process and are deliberately **not** counted by the request-rate limiter, since a held stream occupies no request slot.

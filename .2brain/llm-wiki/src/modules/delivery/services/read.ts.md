@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/read.ts
-sha256: afbdbe3b0d0af6e86d6cd5b01a9da0edce9b5483d23ff28f6410d230b07b5ea9
-generated_at: 2026-11-08T05:38:32.099832+00:00
+sha256: 70fde40f746319ed406c71d3c480d81a0ba268ccbd6bd8dec4990b364df669fd
+generated_at: 2026-11-14T19:49:42.913723+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Read-only service layer for fulfillment orders and shipments. Serves the order-page `GET` endpoints (`/orders/:id/fulfillment-orders`, `/shipments`), the narrow reads the `returns` module needs (shipped quantities, remainder options), and the two bulk sections of the account data export. Fulfillment orders and shipments carry no ownership of their own; access is always scoped through the parent order.
+Read-only service functions for a delivery order's fulfillment data. It serves three consumers: the order page's fulfillment/shipment listings, the `returns` module's narrow queries (what has shipped, what a remainder cancel would remove), and the account export's two data sections. Ownership is always the order's, resolved through `orderService.callerScope`.
 
 ## Key elements
 
-- **`listFulfillmentOrdersForOrder(orderId, authContext?)`** — Lists fulfillment orders for an order. Calls `ensureFulfillmentOrders` first (safety net for paid orders missing fulfillment orders). Returns `[]` for unpaid orders; never a 404 for absence.
-- **`listShipmentsForOrder(orderId, authContext?)`** — Lists shipments for an order. Reads `restorableIds` once to flag which shipments can restore a lost parcel.
-- **`getShipment(shipmentId, authContext?)`** — Single shipment by id. Scopes via the parent order; a missing or unseen shipment returns the same 404.
-- **`getFulfillmentOrder(fulfillmentOrderId, authContext?)`** — Single fulfillment order by id. Same scope-through-order pattern.
-- **`shippedQuantities(orderId)`** — Sums `shippedQuantity` per product across all fulfillment orders. Used by `returns` to gate what can be returned.
-- **`RemainderOption`** — Interface: `{ fulfillmentOrderId, number, lines[] }` describing what a remainder cancel would take.
-- **`remainderOptions(orderId, shipped)`** — Returns fulfillment orders still having unshipped units. Returns `[]` if nothing has shipped and fewer than two live groups remain (last group is canceled as the whole order instead).
-- **`findShipmentsForOrders(orderIds)`** — Bulk shipment read for the account export. Short-circuits on empty array.
-- **`findFulfillmentOrdersForOrders(orderIds)`** — Bulk fulfillment-order read for the account export. Same short-circuit.
+- **`listFulfillmentOrdersForOrder`** — Returns all fulfillment orders for an order, each enriched with its `actions` via `presentFulfillmentOrder`. Empty array (not 404) when none exist yet.
+- **`listShipmentsForOrder`** — Returns all shipments for an order, each enriched via `presentShipmentFor`. Resolves `restorableIds` in one pass for the lost-parcel `deliver` flag.
+- **`orderIdOfFulfillmentOrder`** — Unscoped lookup of the parent order's id from a fulfillment order id. Returns `undefined` if not found. Used by notices that must name the order regardless of reader scope.
+- **`getShipment`** — Single shipment by id, scoped through the parent order. Missing or unseen both return 404.
+- **`getFulfillmentOrder`** — Single fulfillment order by id, scoped through the parent order. Missing or unseen both return 404.
+- **`shippedQuantities`** — Sums `shippedQuantity` per product across all fulfillment orders of an order. Used by `returns` to gate what can be returned.
+- **`RemainderOption`** (interface) — Shape for a fulfillable-remainder entry: id, number, and remaining per-product lines with frozen title.
+- **`remainderOptions`** — Lists fulfillment orders that still have cancellable units. Before shipping, a group is cancellable only if another group stays live; after shipping, every group with remaining lines qualifies.
+- **`findShipmentsForOrders`** / **`findFulfillmentOrdersForOrders`** — Batch document-level lookups for the account export. Return raw documents (not presenters) and short-circuit on empty input.
 
 ## Relationships
 
-- **`../repository`** — Reads from `fulfillmentOrderRepository` and `shipmentRepository` for all list/get/bulk operations.
-- **`../domain` (fulfillment)** — Uses `remainderLines`, `remainingOfLine`, and the `ProductQuantity` type for remainder/shipped-quantity math.
-- **`../model`** — Types `FulfillmentOrderDocument` / `ShipmentDocument` for the export reads.
-- **`../presenter`** — Calls `presentFulfillmentOrder` to shape list output.
-- **`./actions`** — Pulls `standingOn`, `fulfillmentOrderActions`, `presentShipmentFor`, `viewFulfillmentOrder` to attach per-record action menus and scope-aware views.
-- **`./ensure`** — `ensureFulfillmentOrders` is invoked before listing to guarantee a paid order has fulfillment orders (safety net behind the `paid` event listener).
-- **`./found`** — `restorableIds` and `viewShipmentOf` supply the lost-parcel flag and the single-shipment view.
-- **`@infrastructure/http/response`** — Wraps all returns in `generateSuccess` / `generateReject`.
-- **`@infrastructure/i18n`** — Localises 404 messages via `t(...)`.
-- **`@modules/orders`** — Uses `orderService.getById` + `callerScope` for ownership checks and to re-fetch the order after `ensure` may have mutated its status.
-- **`services/index.ts`** — Re-exports this module's public API to consumers.
+- **`src/modules/orders/index.ts`** — Every scoped read resolves the caller's access via `orderService.getById(orderId, orderService.callerScope(authContext))`. This is the sole authorization gate in the file.
+- **`src/modules/delivery/repository.ts`** — `fulfillmentOrderRepository` and `shipmentRepository` provide the actual data fetches (`findByOrderId`, `findById`, `findByOrderIds`).
+- **`src/modules/delivery/services/actions.ts`** — `standingOn` derives the caller's standing; `fulfillmentOrderActions`, `presentShipmentFor`, and `viewFulfillmentOrder` build the action lists and final view objects.
+- **`src/modules/delivery/services/found.ts`** — `restorableIds` computes which lost shipments can be redelivered; `viewShipmentOf` assembles the single-shipment view.
+- **`src/modules/delivery/presenter.ts`** — `presentFulfillmentOrder` shapes the fulfillment-order response.
+- **`src/modules/delivery/domain/index.ts` / `src/modules/delivery/domain/fulfillment.ts`** — `remainderLines` and `remainingOfLine` determine which lines still have cancellable units; `ProductQuantity` is the shared type for `shippedQuantities`.
+- **`src/modules/delivery/model.ts`** — `FulfillmentOrderDocument` / `ShipmentDocument` are the raw repository return types used by the export functions.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` wrap all return values.
+- **`src/infrastructure/i18n/index.ts` / `src/infrastructure/i18n/context.ts`** — `t` localizes the 404 messages.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`, `lost.test.ts`, `reship.test.ts`** — Exercise the domain helpers (`remainderLines`, `remainingOfLine`) that `remainderOptions` depends on.
 
 ## Notes
 
-- **Ownership is always the order's.** Fulfillment orders and shipments have no independent owner; every read funnels through `orderService.callerScope(authContext)`. A missing or out-of-scope parent order yields the same 404 as a missing child.
-- **`ensureFulfillmentOrders` can change order status.** The list handler re-fetches the order after `ensure` completes (`fresh ?? order`) because the ensure step may transition the order (e.g. mark it fulfilled). The stale `order` captured before the call is only the fallback.
-- **`remainderOptions` semantics:** before anything ships, a group is cancelable alone only if *another* group stays live. Once any shipment exists, every group with remaining lines is a valid remainder target.
-- **Export reads live here, not on `deliveryService`.** `deliveryService` is reserved for this module's own subscription/admin surface; the export calls these two bulk functions directly.
-- **Absent ≠ 404 for lists.** A paid order with zero fulfillment orders returns `[]` (or triggers `ensure`), not an error. The 404 is reserved for "the order itself is missing or not yours."
+- **404 unification**: `getShipment` and `getFulfillmentOrder` return the *same* 404 message whether the record doesn't exist or the caller lacks scope. This is deliberate—do not add a separate 403 path.
+- **Empty ≠ 404 for lists**: `listFulfillmentOrdersForOrder` returns `[]` when the order exists but has no fulfillment orders yet. Only a missing *order* is a 404.
+- **`remainderOptions` early-exit**: Before anything has shipped, a single live group is *not* a remainder (the whole order must be canceled as an order). The `shipped` boolean from `order.fulfillment.shipped` controls this.
+- **Export functions bypass the service handle**: `findShipmentsForOrders` and `findFulfillmentOrdersForOrders` return raw documents rather than presenter-shaped objects. They are the sanctioned exception to the "go through `deliveryService`" rule, existing so the account export can batch-read without triggering per-record action computation.
+- **`orderIdOfFulfillmentOrder` is unscoped** by design—it exists for system notices (e.g., emails) that must name the order regardless of the reader's permissions.

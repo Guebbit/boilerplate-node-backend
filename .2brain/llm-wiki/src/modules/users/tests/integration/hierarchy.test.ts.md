@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/hierarchy.test.ts
-sha256: d9c9c0b8aa53ee3fdff9042c3d720ec58b7b869e8bf0924b31f780cd747c1ed6
-generated_at: 2026-11-08T08:54:36.830216+00:00
+sha256: 0284b02cc614df0e0cfac6378fe3a98a0c3dd1d43c188b59acbb05bcdf00ff07
+generated_at: 2026-11-14T22:34:42.013352+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the "who may change whom" rules enforced by `userService`. Covers three axes: activate/deactivate, protection of accounts that hold a staff role (only `assign:Role` holders may modify them, self excepted), and granting/revoking a role. Driven at the service layer so each case names the caller's role and the target's held role explicitly; the route-level cross-cutting matrix lives elsewhere.
+Integration tests for the role-hierarchy rules enforced by `userService`: which caller roles may activate/deactivate, edit, delete, restore, or assign/revoke roles on accounts that hold a staff role, and what error codes result when they may not. Tests are driven through the service layer (not the HTTP route) so each case explicitly names the caller's role and the target's held role.
 
 ## Key elements
 
-- **`accountHolding(role, name?)`** – Creates a user with the given tenant role via `createUser`; returns the persisted user.
-- **`stored(id)` / `activeOf(id)` / `usernameOf(id)`** – Read-back helpers over `userRepository.findById` used to assert that a refusal left the record unchanged.
-- **`heldRole(id)`** – Queries `accessService.rolesOf(id, DEPLOYMENT_TENANT_ID)` to confirm the tenant role after an operation.
-- **`refusalCode(result)`** – Asserts `success === false`, then returns the first error `code` from the `ResponseReject` shape.
-- **`describe('activate and deactivate')`** – Verifies moderator/admin can toggle `active`, 409 on repeat, 404 on missing id, and 403 (`ROLE_MANAGEMENT_REQUIRED`) when a non-role-manager targets a protected account.
-- **`describe('the protection of staff accounts')`** – Table-driven matrix of caller-role × held-role combinations for `updateById`; also asserts audit emission on refusal, self-edit exemption, platform-operator special case, multi-scope protection, and application to soft/hard delete + restore.
-- **`describe('handing out a staff role')`** – Confirms only `admin` (role-manager) can grant or revoke a tenant role; non-managers get 403 and nothing is written; resending the already-held role is a no-op success.
+- **`accountHolding(role, name?)`** — creates a user via `createUser` factory and returns it; distinct email per call.
+- **`stored(id)` / `activeOf(id)` / `usernameOf(id)`** — read back the persisted account (or a single field) to assert a refusal left state unchanged.
+- **`heldRole(id)`** — queries `accessService.rolesOf` with `DEPLOYMENT_TENANT_ID` to read the tenant role.
+- **`refusalCode(result)`** — asserts `result.success === false` and returns `errors[0].code` from a `ResponseReject`.
+- **`someoneElse(role)`** — shorthand for `callerContextAs(role, 'someone-else')` (non-own-account caller).
+- **`describe('activate and deactivate')`** — moderator/admin permissions on the `active` flag, 409 on repeat, 404 on missing id, refusal on protected accounts.
+- **`describe('the protection of staff accounts')`** — parameterised matrix (`it.each`) of caller-role × held-role → allow/refuse; verifies no state change + audit event on refusal; tests self-edit, platform-operator protection, dual-scope roles, and soft/hard-delete + restore.
+- **`describe('the role door')`** — `assignUserRole` / `revokeUserRole` access, last-write-wins on reassignment, 409 on idempotent repeat with no audit write, refusal without role management.
+- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit port with `auditPortMock()` from `tests/support/ports`; individual tests call `observePort(auditPort.emitAuditEvent)` to spy.
 
 ## Relationships
 
-- **`@modules/users/services` (userService)** – The system under test; all operations are called through it.
-- **`@modules/users/tests/factories`** – `createUser` and `userRepository` provide the fixture creation and the read-back assertions.
-- **`@modules/access/index` → `@modules/access/services`** – `accessService.rolesOf` is used to verify role grants/revokes.
-- **`@modules/access/tests/factories`** – `seedMembership` adds a platform-scope `operator` membership to test multi-scope protection.
-- **`@kernel/access/tenant`** – `DEPLOYMENT_TENANT_ID` scopes the `rolesOf` lookup.
-- **`@infrastructure/http/response`** – `ResponseReject` type is used to cast failed results and extract `.errors[0].code`.
-- **`@infrastructure/observability/audit`** – Fully mocked via `jest.mock`; `observePort(auditPort.emitAuditEvent)` provides a spy to assert the `security.forbidden` audit record.
-- **`tests/support/callers`** – `callerContextAs(role, callerId)` builds the caller context passed to every `userService` call.
-- **`tests/support/ports`** – Supplies `observePort` (spy wrapper) and `auditPortMock` (the factory consumed by `jest.mock`).
-- **`tests/support/setup-test-db`** – `setupTestDb()` initialises the in-memory database before any test runs.
+- **`src/modules/users/services/index.ts`** — the system under test; every assertion exercises a `userService` method.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser` (account seeding) and `userRepository` (direct state reads).
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` grants a platform-scope role to test cross-scope protection.
+- **`src/modules/access/index.ts`** — exports `accessService`, used to verify the target account's current role after an operation.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` scopes the role query to the deployment tenant.
+- **`tests/support/callers.ts`** — `callerContextAs(role, id?)` builds the caller identity for each service call.
+- **`tests/support/ports.ts`** — `observePort` wraps the mocked audit function for per-test spying; `auditPortMock` is the jest mock factory.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the test database before all tests.
+- **`src/infrastructure/http/response.ts`** — `ResponseReject` type used to extract error codes from failed results.
+- **`src/infrastructure/observability/audit.ts`** — mocked at module level; `emitAuditEvent` is the function under observation.
 
 ## Notes
 
-- The audit port is **replaced**, not spied: `jest.mock` swaps the entire module with `auditPortMock()`. Individual test calls then get a real spy via `observePort`.
-- `callerContextAs(role, 'someone-else')` is the conventional way to indicate "a different user than the target"; passing the target's own id exercises the self-edit exception.
-- The test file explicitly defers route-level cross-cutting account-protection checks to a separate suite; don't look for HTTP status-code matrix coverage here.
-- `seedMembership` with `scope: null` and `role: 'platform'` models a platform-scope operator; the tests verify that protection applies in **either** scope (tenant or platform).
+- The audit port is **replaced** (module-level `jest.mock`), not spied on at the real implementation level. Per-test spying uses `observePort` on the mock.
+- The module docstring explicitly states this suite complements (does not replace) a separate route-level cross-cutting account-protection suite.
+- `it.each` matrix: a caller is allowed to edit any account whose held role is *strictly below* their own in the hierarchy (support > unverified/customer; moderator > support/customer; admin > all tenant roles). Equal or higher held roles trigger `ROLE_MANAGEMENT_REQUIRED`.
+- Platform-operator membership (`seedMembership(id, null, 'platform', 'operator')`) elevates protection so only `admin` may edit, regardless of tenant role.
+- The file is truncated in the provided snapshot; the final test in "the role door" is incomplete.
+- All refusal tests verify **both** the error code **and** that persisted state is unchanged (and, where relevant, that no audit event was emitted).

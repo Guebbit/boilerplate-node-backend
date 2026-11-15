@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/module.ts
-sha256: 8fef811bfcf4f1ffc91cd2b4e11a42ca8e9d6384b7bc182a6ea709dab77012d3
-generated_at: 2026-11-08T05:08:14.550970+00:00
+sha256: a349b53f97573d701519c45a516f88409e0024985a85849f906e76550ca70463
+generated_at: 2026-11-14T19:24:29.929659+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest that wires the audit-logs feature into the application. It registers the persistence sink (so `emitAuditEvent` call sites elsewhere can write rows), mounts the `GET /audit` router, and declares config, locales, and a personal-data export handler. It is the single place where the audit collection becomes *enabled*; importing the file for a type alone does not trigger persistence.
+Module registration entry point for the **audit-logs** module. It wires the module's HTTP router, config slice, and personal-data collectors into the kernel's `AppModule` contract, and — via its `onRegistered` hook — plugs the audit log service's record method in as the persistence sink that `@infrastructure/observability/audit` calls on every `emitAuditEvent`. It exists so that enabling/disabling the module is a single toggle: unregistered → no sink → audit events are dropped silently.
 
 ## Key elements
 
-- **`onRegistered`** – Calls `registerAuditSink(auditLogService.record)` to attach the audit-logs service as the global sink. Runs only after the module is confirmed enabled, not at import time.
-- **Default export (`AppModule`)** – The module manifest:
+- **`onRegistered`** (module-local, not exported) — calls `registerAuditSink` with the audit log service's record method. Runs once after the kernel confirms the module is enabled, not at import time, so that merely importing this file (e.g. in a type-level test) never starts writing rows.
+- **`export default { … } satisfies AppModule`** — the manifest object:
   - `name: 'audit-logs'`
-  - `mounts` – Attaches `router` (from `./routes`) at basePath `/audit`.
-  - `config` – Exposes `auditLogsConfig.slice` for the config system.
-  - `locales` – Points at a `locales/` directory relative to this file.
-  - `personalData` – Declares an `auditLog` section that calls `auditLogService.findOwnAuditEntries(userId)` for GDPR/data-subject requests.
+  - `mounts` — attaches the module's router (from `./routes`) at `/audit`.
+  - `config` — exposes `auditLogsConfig.slice` (from `./config`).
+  - `onRegistered` — the hook above.
+  - `locales` — directory path for i18n strings.
+  - `personalData` — two collectors (`auditLog`, `consultations`) that delegate to the audit log service for GDPR-style subject access.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** – Imports `registerAuditSink`; this module is the *consumer* of that infrastructure, installing its own service as the sink. All write-side call sites in the codebase go through `@infrastructure/observability/audit`, never through this module directly.
-- **`src/kernel/registry.ts`** – Imports the `AppModule` type; the default export satisfies that contract.
-- **`src/modules.ts`** – Aggregates/imports this module's default export so the kernel knows to register it.
-- **`src/modules/audit-logs/routes.ts`** – Provides the `router` object mounted at `/audit`; gated on the `read:AuditLog` permission.
-- **`src/modules/audit-logs/service.ts`** – Provides `auditLogService.record` (the sink callback) and `auditLogService.findOwnAuditEntries` (the personal-data collector).
-- **`src/modules/audit-logs/config.ts`** – Provides `auditLogsConfig` whose `.slice` is exposed via the manifest.
-- **`src/infrastructure/observability/audit.ts` (read path)** – The observability module exposes `GET /observability/audit` across all shops using the same underlying collection; this module's docs explain why one collection serves both readers.
+- **`src/infrastructure/observability/audit.ts`** — imports `registerAuditSink`; at runtime the module's `onRegistered` injects the audit log service's record method as the sink that this infrastructure layer calls. The write path for every `emitAuditEvent` in the codebase flows through this single registration.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type used in the `satisfies` check; defines the shape every module manifest must conform to.
+- **`src/modules/audit-logs/service.ts`** — provides `auditLogService`, which serves as both the persistence sink (its record method) and the backend for the personal-data collectors.
+- **`src/modules/audit-logs/routes.ts`** — provides the router mounted at `/audit` for shop-scoped, `read:AuditLog`-gated query endpoints.
+- **`src/modules/audit-logs/config.ts`** — provides `auditLogsConfig`; the module's configuration slice for the kernel's config registry.
+- **`src/modules.ts`** — upstream consumer: this file is imported there so the kernel can discover and register the module.
 
 ## Notes
 
-- Retention is enforced by a **TTL index** on the collection (defined in `./model`), not by any TypeScript logic. Changing the retention window requires no code changes in this file or its neighbors.
-- The write side is **fire-and-forget**: `emitAuditEvent` never imports this module. Deleting or disabling this module stops persistence silently without breaking callers.
-- The `onRegistered` hook exists specifically to avoid side-effects at import time — a test or type-only import of this file will *not* start writing audit rows.
-- Two read endpoints share one collection: `GET /audit` (this module, per-shop) and `GET /observability/audit` (observability module, cross-shop). See `docs/modules/audit-logs.md` for the rationale.
+- **Retention is not code.** The audit collection is pruned by a MongoDB TTL index (see `./model`), not by any TypeScript in this file. Changing the retention window requires only an index change — no code diff.
+- **Two readers, one collection.** The shop-scoped `GET /audit` endpoint (this module) and the cross-shop operator-facing `GET /observability/audit` endpoint (the observability module) both read the same collection. Don't split it; see `docs/modules/audit-logs.md` for the rationale.
+- **Write side is decoupled.** Nothing imports this file to write audit events. All `emitAuditEvent` call sites talk to `@infrastructure/observability/audit` directly; this file only installs the sink. Deleting the module stops persistence without breaking producers.
+- **`onRegistered` timing matters.** The sink is registered post-confirmation (not at import time) specifically so that type-check imports or unit-test imports don't silently start persisting rows.

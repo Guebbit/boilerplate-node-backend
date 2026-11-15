@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/domain/lifecycle.ts
-sha256: a4b9d1b9afd27adbc716acd31a9b287404c570ed06772850b5ed7af1b3fc3fe9
-generated_at: 2026-11-08T07:57:39.030133+00:00
+sha256: cd4aa4c4d961ccd35c5fa37dd77187ae537d7571def012e6937124dd51c128be
+generated_at: 2026-11-14T21:33:19.761989+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the return lifecycle as a set of status-transition guards and helper predicates. Each exported array enumerates the *source* statuses from which a particular write operation may proceed, and these arrays are consumed directly as conditional-write predicates (via `repository.ts`'s `claimStatus`), making them the concurrency guard that ensures exactly one staff action wins a race. The file is a pure, side-effect-free module: it imports only type definitions and exports constants and small functions.
+Defines the return-state machine: which status each move may start from and where it lands. The table doubles as the guard for the conditional writes in `repository.ts` (`claimStatus`), making concurrent approvals/declines a database-level race where exactly one wins.
 
 ## Key elements
 
-- **`ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy`** — Re-exported type aliases from `@types` for convenience by downstream importers.
-- **`DECIDABLE_RETURN_STATUSES`** — `[requested]`. The only status from which `decide.ts` may approve or decline.
-- **`RECEIVABLE_RETURN_STATUSES`** — `[approved]`. The only status from which `receive.ts` may record goods arrival.
-- **`CLOSABLE_RETURN_STATUSES`** — `[received]`. The only status from which `close.ts` may finalize (issue refund / complete remedy).
-- **`CANCELABLE_RETURN_STATUSES`** — `[approved]`. The only status from which `cancel.ts` may void an approved-but-not-received return.
-- **`initialStatusFor(reason, byStaff?)`** — Returns the opening status: `approved` for withdrawals or staff-initiated returns, `requested` otherwise. Used by `create.ts`.
-- **`QUANTITY_HOLDING_RETURN_STATUSES`** — `[requested, approved, received, closed]`. Statuses whose goods still "occupy" a unit against the order line's returnable quantity.
-- **`BACK_RETURN_STATUSES`** — `[received, closed]`. Statuses in which the goods are considered back at the shop (relevant to refund/delivery calculations).
-- **`handsUnitsBack(returned)`** — Predicate: `true` when the remedy is `replace` or `repair`, meaning the buyer retains a unit.
-- **`holdsReturnedGoods(returned)`** — Composite predicate: `true` when the return is of kind `return`, its status is in `QUANTITY_HOLDING_RETURN_STATUSES`, *and* it did not hand a unit back. Used to decide whether a prior return reduces the quantity available for a new return.
+- **`ReturnEvent`** — union of the five moves: `approve`, `decline`, `receive`, `cancel`, `close`.
+- **`RETURN_EVENTS`** — const table mapping each event to `{ from, to }` statuses. Satisfies `Record<ReturnEvent, LifecycleEvent<ReturnStatus>>`.
+- **`returnLifecycle`** — the lifecycle instance built via `defineLifecycle`, checked once at load. Exposes the validated state machine for runtime queries.
+- **`initialStatusFor(reason, byStaff?)`** — determines the *birth* status (not a move): `approved` for withdrawals or staff-opened returns; `requested` otherwise.
+- **`QUANTITY_HOLDING_RETURN_STATUSES`** — readonly array of statuses where goods have not yet come back and still count against an order line's returnable quantity.
+- **`BACK_RETURN_STATUSES`** — readonly array (`received`, `closed`) marking statuses where goods count as returned.
+- **`handsUnitsBack(returned)`** — predicate: true when the remedy is `replace` or `repair`, meaning the unit goes back to the buyer and stays returnable.
+- **`holdsReturnedGoods(returned)`** — predicate: true when a `return`-kind record is in a quantity-holding status and did not hand the unit back to the buyer.
+- **Re-exports** — `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy` (pass-through from `@types`).
 
 ## Relationships
 
-- **`src/types/index.ts`** — Sole import source; supplies the four domain types this file re-exports and references.
-- **`src/modules/returns/domain/index.ts`** — Barrel file that re-exports this module's public surface for other domain and service files.
-- **`src/modules/returns/services/decide.ts`** — Reads `DECIDABLE_RETURN_STATUSES` as the precondition for approve/decline writes.
-- **`src/modules/returns/services/receive.ts`** — Reads `RECEIVABLE_RETURN_STATUSES` as the precondition for the goods-received write.
-- **`src/modules/returns/services/close.ts`** — Reads `CLOSABLE_RETURN_STATUSES` as the precondition for the close write.
-- **`src/modules/returns/services/cancel.ts`** — Reads `CANCELABLE_RETURN_STATUSES` as the precondition for the cancel write.
-- **`src/modules/returns/services/create.ts`** — Calls `initialStatusFor` to determine the opening status of a new return.
-- **`src/modules/returns/domain/accounting.ts`** — Consumes `QUANTITY_HOLDING_RETURN_STATUSES`, `BACK_RETURN_STATUSES`, and `holdsReturnedGoods` for returnable-quantity and refund calculations.
-- **`src/modules/returns/domain/refund-amount.ts`** — Uses `BACK_RETURN_STATUSES` / `handsUnitsBack` to determine whether a delivery refund or remedy adjustment applies.
-- **`src/modules/returns/domain/status-projection.ts`** — References the status constants to project display status from the raw record.
-- **`src/modules/returns/tests/unit/domain.test.ts`** — Unit-tests the transition guards and predicate functions.
+- **`src/domain-primitives/lifecycle.ts`** — provides `defineLifecycle` and the `LifecycleEvent` type that shape `RETURN_EVENTS`.
+- **`src/modules/returns/repository.ts`** — `claimStatus` performs the conditional writes that this table guards; the `from` arrays are the WHERE-clause status sets.
+- **`src/modules/returns/services/*.ts`** (`cancel`, `close`, `create`, `decide`, `options`, `proof`, `read`, `receive`) — each service corresponds to one lifecycle event (or the birth step) and reads the table / `returnLifecycle` to validate transitions before calling the repository.
+- **`src/modules/returns/domain/accounting.ts`** — consumes `QUANTITY_HOLDING_RETURN_STATUSES` and `holdsReturnedGoods` to compute returnable-quantity deductions.
+- **`src/modules/returns/domain/refund-amount.ts`** — uses `BACK_RETURN_STATUSES` to decide whether delivery-refund logic applies.
+- **`src/modules/returns/domain/index.ts`** — barrel file re-exporting this module's public surface.
 
 ## Notes
 
-- **Arrays are the guard, not documentation.** The module docblock explicitly states that membership in these arrays *is* the conditional-write predicate enforced in the database. Adding or removing a status from an array changes runtime concurrency behavior, not just docs.
-- **`RECEIVABLE_RETURN_STATUSES` and `CANCELABLE_RETURN_STATUSES` both contain only `approved`,** but they authorize different operations. Do not conflate them or "unify" them.
-- **`initialStatusFor` short-circuits on `byStaff`:** a staff-opened return is `approved` regardless of reason (even non-withdrawal reasons), because opening it *is* the decision.
-- **`handsUnitsBack` inspects `remedy`, not `status`.** A `received`/`closed` return whose remedy is `replace` or `repair` does **not** count as "goods back" for guarantee-quantity purposes.
-- **`canceled` is intentionally absent** from both `QUANTITY_HOLDING_RETURN_STATUSES` and `BACK_RETURN_STATUSES`: a canceled return is treated as never having spoken for any unit.
+- The transition table is the authoritative guard, not documentation. If a status pair is missing from `from`, the write simply fails at the database level.
+- Birth status is deliberately *not* modeled as an event — it is set at insertion time by `initialStatusFor`, called from `create.ts` (and the withdrawal/cancel-remainder paths).
+- `canceled` is excluded from both `QUANTITY_HOLDING_RETURN_STATUSES` and `BACK_RETURN_STATUSES` on purpose: a canceled return is treated as if it never happened, so its units are neither held nor counted as returned.
+- A withdrawal is born `approved` (EU consumer right, no staff decision needed); every other reason starts `requested` unless staff opened it, in which case opening it is the approval.

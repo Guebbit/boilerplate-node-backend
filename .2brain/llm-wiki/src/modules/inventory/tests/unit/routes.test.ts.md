@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/unit/routes.test.ts
-sha256: 9cbd4531a16a190cbb20af8e488080a1a080ad767d0500a5f2f052663d9a3aa8
-generated_at: 2026-11-08T06:08:30.199970+00:00
+sha256: dd1a1b96c3eff22baf6ae5069989321c1f76c7b365643a502fe1d12954eae2a2
+generated_at: 2026-11-14T20:10:33.309322+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards the inventory router against accidental exposure of staff-only endpoints. It asserts the exact route table, confirms every route sits behind both `getAuth` and `requirePermissionGuard`, and verifies no unguarded (public) route exists at all.
+Verifies the inventory module's route table is correctly composed: the right endpoints exist in the documented order, every route is protected by an identity guard followed by a permission guard, and no route is accidentally public. It acts as a structural safety net so that adding or reordering a route requires an explicit test update.
 
 ## Key elements
 
-- **`describe('inventory routes')`** — top-level suite; three test cases inside.
-- **`it('mounts exactly the documented endpoints…')`** — snapshots the ordered list of route signatures (8 routes: levels, preorders, movements, receive, adjust, sweep) via `routeSignatures(router)`.
-- **`it.each(…)('%s is reachable only by an authenticated admin')`** — parameterized over all 8 signatures; uses `guardsOn` to collect the middleware chain and asserts `getAuth` is present, the identity guard appears before `requirePermissionGuard`, and that ordering is strict.
-- **`it('has no public endpoint at all')`** — filters the signature list for any route whose guard chain lacks `requirePermissionGuard`; expects an empty array.
+- **`describe('inventory routes')`** — single test suite with three cases:
+  - *Exact endpoint list/order* — asserts `routeSignatures(router)` matches the eight expected signatures verbatim.
+  - *Guard ordering (per route)* — `it.each` over every signature; asserts `getAuth` is present, its index is ≥ 0, and it appears **before** `requirePermissionGuard`.
+  - *No public endpoint* — filters signatures lacking `requirePermissionGuard` and asserts the list is empty. Comment notes this is a positional check: it catches a route mounted above the gate.
 
 ## Relationships
 
-- **`src/modules/inventory/routes.ts`** — the system under test. This file imports its exported `router` instance; every assertion inspects that router's mount order and middleware stacks.
-- **`tests/support/routes.ts`** — provides the three helper utilities (`routeSignatures`, `guardsOn`, `identityGuardIndex`) that flatten the Express router into inspectable strings and ordered guard arrays. Without these, the tests would need to walk the internal Express route table manually.
+- **`src/modules/inventory/routes.ts`** — the unit under test; this file imports its exported `router` instance.
+- **`tests/support/routes.ts`** — provides the three introspection helpers used here: `routeSignatures`, `guardsOn`, and `identityGuardIndex`.
 
 ## Notes
 
-- The file deliberately does **not** test request-level behavior (status codes, payloads). Its scope is purely structural: mount order, guard presence, and guard ordering.
-- The "no public endpoint" test is intentionally positional — it will pass even if a public route is added *below* the guard, so the real safety net is the `it.each` ordering check.
-- Route signatures are hard-coded in two places (the snapshot test and the `it.each` array). Adding a new route requires updating **both** lists, or one test will fail.
+- The module doc-block states the customer-facing inventory surface is deliberately *not* a route (shoppers see stock via `available` on the product page). Any new route therefore defaults to "staff-only" and must carry both guards.
+- The "no public endpoint" test is intentionally written as a positional filter over `guardsOn`, not a simple "all routes have `getAuth`" check — it will fail if a route is inserted above the shared `router.use(getAuth, isAuthOrCredential)` gate.
+- Adding or removing a route requires updating **both** the `toEqual` list and the `it.each` array; forgetting one will surface as a mismatch rather than a silent gap.

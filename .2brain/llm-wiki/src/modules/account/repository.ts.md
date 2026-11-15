@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/repository.ts
-sha256: 3e75414d48dbf3c2a6d9050b8046e42fa3bdef06d1b91a78e90b7865854b95b9
-generated_at: 2026-11-08T04:14:59.218452+00:00
+sha256: 2759a9f56f84ccdf881d731c2beb7f66678f6c14bcb3325ef636211cccccf9c6
+generated_at: 2026-11-14T18:40:31.828807+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Data-access layer for the `accountexports`, `sessions`, and (partially, per the import) `verificationtokens` collections. It exposes plain lean reads and atomic writes only — no paging, no full-text search — so the shared repository factory in `create-repository` adds no behaviour here. The file is consumed by the account services (exports, sessions, erasure, revocation, logout, etc.) as their sole path to Mongo for these collections.
+Low-level query functions for three Mongoose collections (`accountexports`, `sessions`, `verificationtokens`). It exposes plain lean reads and atomic writes only—no pagination, no compound search—so it bypasses the shared repository factory entirely. Services in the account module call into this file instead of touching Mongoose models directly.
 
 ## Key elements
 
-- **`accountExportRepository`** (exported object) — the typed API for the `accountexports` collection:
-  - `findByUserId` / `findById` — single-row lookups (by owner or by id, the latter used by the export worker).
-  - `insert` — creates a row; the unique index on `userId` enforces "at most one live export" under race.
-  - `settleBuilding` — conditional `findOneAndUpdate` that moves a row out of `building` exactly once; accepts a `ClientSession` so the caller can join a transaction.
-  - `deleteById` / `deleteByUserId` — single-row and account-wide deletion; the latter returns the `file` names so the caller can clean up the disk after commit.
+- **`AccountExportRow`** / **`SessionRow`** — `Lean<…>` view types returned to callers.
+- **`accountExportRepository`** — exported object bundling export-row queries:
+  - `findByUserId` / `findById` — single-document lookups.
+  - `insert` — creates a row; unique index on `userId` enforces one live export per account under concurrency.
+  - `settleBuilding` — atomic `findOneAndUpdate` gated on `status: 'building'` so only the first of N racing workers transitions the row; accepts a `ClientSession` for transactional commit.
+  - `deleteById` / `deleteByUserId` — single or bulk removal; `deleteByUserId` returns the `file` names of deleted rows for post-commit disk cleanup.
   - `findExpired` — batch of rows past `expiresAt`, bounded by `limit` for the reaper loop.
-- **Session functions** (exported individually, not grouped under an object):
-  - `insertSession` — creates a row and sets `purgeAt = expiresAt` (DB-side TTL).
-  - `findSessionByHash` — lookup by credential digest regardless of state.
-  - `supersedeSession` — atomic claim for rotation; stamps `supersededAt`, shortens `purgeAt` to the reuse-detection window. Returns `boolean` (did *this* call win?).
-  - `touchSession` — throttled `lastUsedAt` update; `minIntervalMs` skips the write when the row was stamped more recently.
-  - `listLiveSessions` — unexpired, un-superseded rows for an account, optionally filtered by mode, newest first.
-  - `removeSessionByHash` / `removeSessionFamily` / `removeSessionFamilyExcept` — targeted and family-scoped deletions.
-- **`FamilyActivity`** (exported interface) — shape returned by the family-activity query (last active, stamped, started).
-- **Types** — `AccountExportRow`, `SessionRow`, `NewSessionRow` (all `Lean<…>` or `Omit<…>` variants of the Mongoose documents).
+- **`NewSessionRow`** — insert shape (omits `_id`, `purgeAt`, `supersededAt`, `__v`).
+- **Session queries** (not grouped under a single exported object):
+  - `insertSession` — sets `purgeAt = expiresAt` so the TTL index deletes the row at the same moment it stops being valid.
+  - `findSessionByHash` — lookup by credential digest; row may be live, superseded, or expired.
+  - `supersedeSession` — claim-and-stamp for rotation using an aggregation-pipeline update (`$min` of `expiresAt` and `at + retentionMs`); returns `true` only for the winner.
+  - `touchSession` — idempotent `lastUsedAt` stamp with optional `minIntervalMs` throttle to avoid write-per-request.
+  - `listLiveSessions` — active sessions for an account (optionally filtered by `mode`), sorted newest first; checks `expiresAt > now` because the TTL monitor lags.
+  - `removeSessionByHash` — single-row logout; idempotent.
+  - `removeSessionFamily` — delete all rows in a `familyId` scoped to the owner.
+  - `removeSessionFamilyExcept` — delete family rows except the one matching `keepHash` (post-rotation cleanup).
+- **`FamilyActivity`** — small interface describing the clock fields a live family exposes (`lastActiveAt`, `stampedAt?`, `startedAt`).
+- The file was truncated after `FamilyActivity`; additional session-family queries (e.g. a "continue session" lookup) and the `verificationtokens` section follow.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `toObjectId` (string → `Types.ObjectId`) and the `Lean<T>` type alias used throughout this file.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — exports `isDuplicateKey`, imported here so callers can inspect the `11000` error raised by `insert`.
-- **`src/modules/account/model.ts`** — source of all Mongoose models (`accountExportModel`, `sessionModel`, `erasureLedgerModel`, `verificationTokenModel`) and their document/kind types.
-- **`src/modules/account/session-mode.ts`** — provides the `SessionMode` union used to filter `listLiveSessions`.
-- **Services (consumers)** — `export.ts` / `export-job.ts` / `export-rows.ts` call the `accountExportRepository` functions; `sessions.ts` / `tokens.ts` call the session functions; `erasure-ledger.ts` calls `deleteByUserId` inside a transaction; `logout.ts` and `revocation.ts` call the removal helpers. (These relationships are implied by the docstrings and the dependency graph; the services are not imported *by* this file.)
+- **`src/infrastructure/persistence/create-repository.ts`** — imports the `toObjectId` helper and the `Lean` type utility used throughout for lean-document typing.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — imports `isDuplicateKey` (referenced in the `insert` doc-comment as the error callers should catch).
+- **`src/modules/account/model.ts`** — imports all Mongoose models (`accountExportModel`, `sessionModel`, `verificationTokenModel`, `erasureLedgerModel`) and their document type aliases.
+- **`src/modules/account/session-mode.ts`** — imports the `SessionMode` type for filtering.
+- **`src/modules/account/services/*`** (export, export-job, export-rows, logout, sessions, tokens, revocation, erasure-ledger, previous-email-cleanup) — consumers that call the exported functions rather than the models directly.
+- **`src/modules/account/presenter.ts`** — likely maps the row types returned here into wire-format responses.
 
 ## Notes
 
-- **Race-safety pattern** — `settleBuilding` and `supersedeSession` both use a conditional filter (`status: 'building'` / `supersededAt: { $exists: false }`) so that exactly one concurrent caller succeeds; all others get `null`/`false`. Callers must handle the "lost the race" branch.
-- **Aggregation-pipeline update** — `supersedeSession` computes the new `purgeAt` from the row's own `expiresAt` via `$min`, requiring `{ updatePipeline: true }` in the Mongoose options.
-- **TTL lag** — the DB TTL monitor is async; queries that mean "live" re-check `expiresAt > now` rather than trusting absence of the row.
-- **Explicit type annotation** on `accountExportRepository` exists to satisfy TS7056 (implicit `any` from the object-literal inference); the comment in the source calls this out explicitly.
-- **`deleteByUserId` returns file names** so the *caller* performs disk cleanup after the transaction commits — the repository itself never touches the filesystem.
-- The file is for `accountexports`, `sessions`, and `verificationtokens`; the `verificationtokens` portion is in the truncated tail and not detailed here.
+- The explicit structural type annotation on `accountExportRepository` (rather than a plain object literal) exists to satisfy a TypeScript check (`TS7056`); the comment calls out that every module's repository does the same.
+- `supersedeSession` uses an aggregation-pipeline update (`updatePipeline: true`) because `purgeAt` is a function of the row's own `expiresAt`; a plain `$set` cannot express that.
+- `settleBuilding` and `supersedeSession` are the two critical race-safety points: the former gates on `status: 'building'`, the latter on `supersededAt: { $exists: false }`. Both return a nullable/boolean result so the caller can detect "I lost the race."
+- `touchSession`'s throttle filter uses `$or` with `$exists: false` to handle rows that have never been stamped.
+- The file deliberately does **not** use the shared repository factory (`create-repository.ts` provides only `toObjectId`/`Lean` here, not the factory), because there is no pagination or multi-criteria search.

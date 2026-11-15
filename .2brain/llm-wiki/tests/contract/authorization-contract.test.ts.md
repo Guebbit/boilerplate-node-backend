@@ -1,7 +1,7 @@
 ---
 source: tests/contract/authorization-contract.test.ts
-sha256: ed9be3569f9f3cdd7bd1f90d9ec82f00b9f61990ad17084d4365ee667a6fc316
-generated_at: 2026-11-08T09:18:45.464343+00:00
+sha256: bc4bc5bce4a7a27e7455959f30bc9a9e672942f195bfdfcd4af08aed1b15b05d
+generated_at: 2026-11-14T22:57:00.990478+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A contract-derived authorization sweep that asserts, over HTTP, two invariants for every mounted route: (1) any route behind an identity guard returns **401** to a callerless request, and (2) any route behind `requirePermission` returns **403** to exactly the tenant personas whose role file does not grant the required permission. Instead of 40+ hand-written 401/403 assertions scattered across per-module contract files, this file derives expected outcomes from the authorization model (`holds` + `PRESET_ROLES`) and tests them in one table-driven pass per route.
+A contract-derived authorization sweep that asserts, for **every** mounted route, that (a) an unauthenticated request receives a 401, and (b) each tenant persona's response (403 vs. not-403) agrees with the `holds` predicate from the ability model for the route's declared permissions. It centralises the "does this guard fire correctly" question in one table-driven place rather than repeating 401/403 assertions across ~40 per-module contract files.
 
 ## Key elements
 
-- **`TENANT_PERSONAS`** — Readonly list of every persona a human can log in as: `'unverified'`, `'customer'`, plus all `tenant`-scope `PRESET_ROLES` (excluding `'system'`, which is a job actor, never assigned to an account).
-- **`fillParams(path)`** — Replaces `:param` path segments with `PLACEHOLDER_ID` (a 24-zero hex string) so requests are syntactically valid but hit no real resource.
-- **`request(method, path)`** — Type-safe dispatcher that calls `api().get/post/put/delete/patch`, avoiding an unsafe indexed supertest call.
-- **`describe("every route requiring a caller…")`** — Table-driven (`it.each`) over routes where `identityGuardIndex(route.guards) >= 0`. Asserts unauthenticated response is **401**.
-- **`describe("every guarded route agrees with the role file…")`** — Table-driven over routes with `permissions.length > 0`. For each `TENANT_PERSONAS` entry, computes `allowed` via `holds(caller, action, subject)` (all stacked permissions must hold), then asserts **not 403** if allowed, **exactly 403** if not.
-- **`setupTestDb()`** — Ensures a clean test database is available before assertions run.
+- **`PLACEHOLDER_ID` / `fillParams`** — Replaces `:param` segments with a syntactically valid but nonexistent 24-char hex id. Safe because the identity/permission guard runs before per-field validation.
+- **`request(method, path)`** — Type-safe supertest dispatcher (switch over `HttpMethod`) that avoids an unsafe indexed call on the API object.
+- **`TENANT_PERSONAS`** — `['unverified', 'customer', …preset tenant roles minus `system`]`. Derived from `PRESET_ROLES` so a new YAML role is automatically included.
+- **`describe` "every route requiring a caller"** — Filters routes via `identityGuardIndex` (covers both `isAuth` and `isAuthOrCredential`), asserts 401 with no bearer.
+- **`describe` "every guarded route agrees with the role file"** — Filters routes with `permissions.length > 0`; for each persona computes `allowed = route.permissions.every(ask => holds(caller, …))`, issues the request with a real bearer, and asserts `response.status === 403 ⟺ !allowed`. Stacked permission guards (e.g. product + translation) require **all** to be held.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/kernel/ability.ts` | Imports `holds` — the same predicate `requirePermissionGuard` uses — to derive expected allow/deny per role, keeping the test in sync with the model. |
-| `src/kernel/permissions.ts` | Imports `PRESET_ROLES` to enumerate tenant personas at runtime, so a newly added YAML role is automatically included. |
-| `tests/support/contract-routes.ts` | Imports `everyMountedRoute()` — the single source of "which routes exist and what guards/permissions they declare." |
-| `tests/support/callers.ts` | Imports `callerAs(role)` to construct the caller object passed to `holds`. |
-| `tests/support/http.ts` | Imports `api` (supertest instance) and `authenticateAsRole` (returns a bearer token for the given role). |
-| `tests/support/routes.ts` | Imports `identityGuardIndex` to detect whether a route's guard array includes an identity guard (`isAuth` / `isAuthOrCredential`). |
-| `tests/support/contract.ts` | Side-effect import (`import '@tests/contract'`) — sets up shared contract assertions or matchers. |
-| `tests/support/setup-test-db.ts` | Calls `setupTestDb()` once at module scope to guarantee a clean DB. |
-| `tests/cross-cutting/step-up-auth-routes.test.ts` | Sibling concern: that file verifies routes that *lost* their guard (spec-driven); this file verifies guards that are *present* answer correctly (guard-driven). Together they cover both failure modes. |
+| `src/kernel/ability.ts` | Imports `holds` to derive the expected allow/deny per role+permission. |
+| `src/kernel/permissions.ts` | Imports `PRESET_ROLES` to build `TENANT_PERSONAS`. |
+| `tests/support/callers.ts` | Imports `callerAs` to construct the caller object passed to `holds`. |
+| `tests/support/contract-routes.ts` | Imports `everyMountedRoute` — the single source of the route list under test. |
+| `tests/support/contract.ts` | Side-effect import (`import '@tests/contract'`); registers shared contract helpers. |
+| `tests/support/http.ts` | Imports `api` (supertest agent) and `authenticateAsRole` (obtains a real bearer token). |
+| `tests/support/routes.ts` | Imports `identityGuardIndex` to identify which routes carry an identity guard. |
+| `tests/support/setup-test-db.ts` | Imports `setupTestDb`; called once at module top to prepare the test database. |
 
 ## Notes
 
-- **401 vs. 403 split is intentional.** The identity-guard block only checks 401 (no caller at all). The permission block only checks 403 (caller present, role insufficient). A route that is missing its identity guard entirely will silently drop out of this file's route list — that gap is caught by `tests/cross-cutting/identity-guards-follow-the-spec.test.ts`.
-- **"Allowed" does not mean 200.** The test asserts `not.toBe(403)` for allowed personas because the placeholder ID or empty body may still produce 404/422. It would be a defect if an allowed role got 403.
-- **Stacked permissions.** A route that requires multiple permissions (e.g. product write + translation write) is open only if `holds` returns true for *every* permission. The test uses `route.permissions.every(…)`.
-- **`system` role is excluded** from `TENANT_PERSONAS` because it is a job-execution actor, never assigned to a human account.
-- **Platform-scope routes.** Because no tenant persona holds a `platform.` key, every platform route will be 403 for all `TENANT_PERSONAS` entries — this is expected and asserted in the same loop.
-- **Module doc comment** explicitly cross-references `ownership-contract.test.ts` (same roles, different rows) and `request-contract.test.ts` (bodies instead of auth) as complementary sweeps.
+- **Complementary coverage, not redundant.** This file selects routes by the guard that is *present* (via `identityGuardIndex` / `permissions`). `tests/cross-cutting/identity-guards-follow-the-spec.test.ts` selects routes by the *spec* and would catch a route that lost its guard entirely (it would drop out of this file's list silently). A module's own contract file re-asserts 401/403 only when it also checks an error `code` or a side-effect on a row.
+- **Allowed ≠ 200.** The second `describe` block asserts `status === 403 ⟺ !allowed`; an "allowed" request may still return 404 (placeholder id) or 422 (empty body). The test's invariant is purely about the 403 boundary.
+- **`system` role excluded.** It is the actor a background job runs as and is never assigned to an account, so it is filtered out of `TENANT_PERSONAS`.
+- **Platform routes.** A tenant-scope role never holds a `platform.` key, so for any platform route every persona in `TENANT_PERSONAS` is expected to 403 — the loop handles this without special-casing.
+- **Sibling sweeps.** `ownership-contract.test.ts` covers the "correct role, wrong tenant row" axis; `request-contract.test.ts` is the mirror image covering request *bodies* rather than authorization.

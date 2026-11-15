@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/admin-user-grant-atomicity.test.ts
-sha256: 12ceab22d1aea86e5b049895dd90f9706bb0dac8c44d4d404b0887f4b77c1cbc
-generated_at: 2026-11-08T08:53:31.618157+00:00
+sha256: 84aaf8d6d1fd7c8086fc2bc6c3cdad4aa9c26abd1626e9b1c80006de2eed0493
+generated_at: 2026-11-14T22:33:30.460195+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests proving that a `userService.create` or `userService.updateById` call and its associated role-grant write are a single atomic unit: a refusal produces no write but does emit an audit event, and an infrastructure failure during the role write leaves the user record unchanged (no half-made account, no need for a compensating delete).
+Integration tests that verify the atomicity guarantee between user creation/role assignment and the underlying role-grant (membership) write. If the membership write fails, no partial user row should remain. Also asserts that a role-escalation attempt is rejected and audited without any write.
 
 ## Key elements
 
-- **`failMembershipWrites()`** – Spies on `membershipModel.findOneAndUpdate` (from `@modules/access/tests/factories`) and makes it reject with `"mongo is down"`, simulating an infrastructure-level write failure on the access side.
-- **`jest.mock('@infrastructure/observability/audit', …)`** – Replaces `emitAuditEvent` with a bare `jest.fn()` and wraps `recordAudit` so that, when a context is present, it calls the real `buildAuditEvent` and then emits through the spy. This lets tests assert on audit events without a real sink.
-- **`describe('userService.create')`**
-  - *Escalation refusal*: a `moderator` requesting `role: 'admin'` gets `{ success: false, status: 403 }`; `userRepository.create` is never called; `emitAuditEvent` receives a `ROLE_ASSIGNED / failure` event with the target role in metadata.
-  - *Role write failure*: both `membershipModel` write and `userRepository.deleteOne` are forced to reject; the test asserts no user row exists afterward (no compensating delete path is needed).
-- **`describe('userService.updateById')`**
-  - *Refused grant audited*: a `moderator` changing an existing user's role to `admin` gets 403; audit event includes the target user's `id`.
-  - *Role write failure rolls back*: the membership write rejects; the user's pre-update username is still persisted (the whole update is rolled back).
+- **`failMembershipWrites`** – Spies on `membershipModel.findOneAndUpdate` and returns a stub whose `exec` rejects with `"mongo is down"`, simulating an infrastructure failure at the access layer.
+- **`jest.mock('@infrastructure/observability/audit', …)`** – Replaces `emitAuditEvent` with a spy function so `observePort` can track calls; delegates `recordAudit` to the real `buildAuditEvent` to construct the event payload.
+- **`describe('userService.create')`** – Two tests:
+  - *Role-escalation refusal*: a `moderator` requesting `role: 'admin'` gets a 403, `userRepository.create` is never called, and an audit event with `action: ROLE_ASSIGNED`, `outcome: 'failure'` is emitted.
+  - *Membership-write failure*: with both the membership write **and** `deleteOne` forced to reject, the service rejects and `findOne` confirms no row was persisted.
+- **`describe('the role door')`** – One test: `assignUserRole` on an existing customer, with the membership write failing, results in neither a role change nor an `updatedAt` bump on the user record.
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** – `userService.create` and `userService.updateById` are the functions under test.
-- **`src/modules/users/repository.ts`** – `userRepository` is spied on to assert that no write (or compensating delete) occurred.
-- **`src/modules/access/tests/factories.ts`** – Supplies `membershipModel` (the write target that is forced to fail) and `accessAuditActions` (audit action constants used in assertions).
-- **`src/infrastructure/observability/audit.ts`** – Mocked at module level; `emitAuditEvent` is the observation point for audit assertions.
-- **`src/modules/users/tests/factories.ts`** – Provides `createUser` (seeds a user in the test DB) and re-exports `userRepository`.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the in-memory MongoDB used by the repository.
-- **`tests/support/callers.ts`** – `callerContextAs(role)` fabricates the caller identity for privilege simulation.
-- **`tests/support/ports.ts`** – `observePort` wraps a `jest.fn()` from the mocked namespace into a spy usable in assertions.
-- **`tests/support/stub.ts`** – `asStub` creates a partial mock for `findOneAndUpdate`'s return shape.
+- **`src/modules/users/services/index.ts`** – Provides `userService`, the unit under test (`create`, `assignUserRole`).
+- **`src/modules/users/repository.ts`** – The persistence layer whose `create` and `deleteOne` methods are spied on to assert no partial writes occurred.
+- **`src/modules/users/tests/factories.ts`** – Supplies `createUser` (seeds a real row via the test DB) and re-exports `userRepository` for assertions and `deleteOne` mocking.
+- **`src/modules/access/tests/factories.ts`** – Exports `membershipModel` (spied in `failMembershipWrites`) and `accessAuditActions` (asserted in the audit spy).
+- **`src/modules/access/audit.ts`** – Owner of the `membershipModel` write that is forced to fail; also defines the audit action constants referenced in assertions.
+- **`src/infrastructure/observability/audit.ts`** – Mocked to replace `emitAuditEvent` with a spy; the real `recordAudit`/`buildAuditEvent` are preserved for event construction.
+- **`tests/support/setup-test-db.ts`** – Initialises a real database for the integration run.
+- **`tests/support/callers.ts`** – `callerContextAs('moderator' | 'admin')` builds the authenticated caller context passed to service calls.
+- **`tests/support/ports.ts`** – `observePort` wraps the mocked `emitAuditEvent` spy so test bodies can assert on emitted events.
+- **`tests/support/stub.ts`** – `asStub` creates a minimal object (with `exec`) whose return value is a rejected promise, typed against the real model return.
 
 ## Notes
 
-- The atomicity boundary is the **access** module's membership write, not the users repository: the service checks the grant *before* any user write, so the test forces the *access-side* write to fail to exercise the rollback path.
-- The `jest.mock` factory spreads `...actual` to preserve `buildAuditEvent` and other exports while only replacing `emitAuditEvent` and `recordAudit`. The `recordAudit` wrapper is a no-op when `context` is falsy, matching the real module's guard.
-- `afterEach(() => jest.restoreAllMocks())` is called once at the top level; the `jest.mock` factory is **not** restored by this — it persists for the whole file (intentional, since every test needs the audit spy).
-- The delete-failure assertion in the `create` test is deliberately pessimistic: it forces `deleteOne` to reject as well, verifying that the code path does not *rely* on a compensating delete to clean up a half-created account.
+- The audit mock is mandatory because `observePort` (in `tests/support/ports.ts`) requires a plain spy at the top level of the mocked module; a real async function would not be observable.
+- The "leaves no row" test intentionally also rejects `deleteOne`, encoding the design decision that the atomicity guarantee must hold even if a compensating delete itself fails.
+- `afterEach(jest.restoreAllMocks)` restores all spies; the audit mock persists across tests via `jest.mock` (module-level), while individual `jest.spyOn` calls are torn down per test.
+- The `membershipModel` write lives in the **access** module, not the users module — the failure is injected at that boundary to test the cross-module transactional contract.

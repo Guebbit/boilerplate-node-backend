@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/list.ts
-sha256: b68addbe75bc7a5419b80a857f996af9578e539afa9896af8f7332c36a0facf4
-generated_at: 2026-11-08T07:27:14.583867+00:00
+sha256: 248d77696a30b52769262fd0abcd47f0050abbeb31e9e969e68d3ff7650ea38c
+generated_at: 2026-11-14T21:07:52.462901+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Staff-facing read endpoints for the Payments page: a paginated payment list, a paginated refund list, and a "needs-attention" feed. All three return `display:Payment`-shaped rows (each carries provider IDs). The file exists so the UI never touches the repository or domain logic directly — it composes pagination, order enrichment, canonical-reference parsing, and attention classification in one place.
+Provides the three read-side query functions behind the staff Payments page: a paginated payment list with order context, a cross-payment refund list, and a "needs attention" digest of problems that require a human. All three return `display:Payment`-shaped rows carrying provider identifiers.
 
 ## Key elements
 
-- **`listPayments(filters, authContext?)`** – Returns one page of `Payment` rows with order number/email. Normalizes a `transferReference` via `parseReference`; an unparseable reference short-circuits to an empty page (no error). Builds an `$and` label array from `displayStatusFilter` and `openDisputeFilter`, passes them to `paymentRepository.searchStaff`, then batch-hydrates order metadata through `orderService.findManyByIds`.
-- **`listRefunds(filters)`** – Returns one page of `RefundListItem` rows (newest first) from `paymentRepository.searchRefunds`. Maps each `RefundRow` through the private `refundRow` helper.
-- **`listAttention()`** – Runs six repository queries in parallel (`Promise.all`) to collect stale refunds, final-refused refunds, manual refunds, reversed refunds, over-refunded payments, and open disputes. Deduplicates refund IDs that appear in the "exceeding" set, maps each group to `PaymentAttentionItem` objects, and returns them in a fixed priority order. Capped at `ATTENTION_LIMIT` (100) per source.
-- **`staffRow(payment, order, authContext?)`** – Private mapper: spreads `withActions(payment, undefined, authContext)` and conditionally adds `orderNumber`/`email`.
-- **`refundAttention(row, kind)`** – Private mapper for refund-based attention rows; sets `since` to `reversedAt` for `reversed_refund` kind, `createdAt` otherwise; includes `refundDueBy` via `dueByOf`.
-- **`exceedingRows(payments)`** – Flattens payments whose running refund total exceeds the paid amount into `refund_exceeds_remaining` rows with an `exceedsBy` delta.
-- **`disputeRows(payments)`** – Flattens `needs_response` disputes into `dispute_needs_response` rows; computes `alreadyRefunded` via `refundedForGood` (sum of succeeded, non-reversed refunds).
-- **`refundedForGood(payment)`** – Sums `toMinorUnits` of settled, non-reversed refunds and returns a decimal string.
-- **`dueByOf(kind, refund)`** – Returns `{ refundDueBy }` only for `refused_refund` / `reversed_refund` kinds when `refundDueBy` yields a date.
+- **`listPayments(filters, authContext?)`** — Returns one page of payments. Canonicalises a `transferReference` via `parseReference` (invalid codes short-circuit to an empty page), builds label sub-filters (`displayStatusFilter`, `openDisputeFilter`), delegates to the repository for a staff search, then batch-resolves order numbers/emails via `orderService`.
+- **`listRefunds(filters)`** — Returns one page of refunds across all payments (newest first) by calling the repository's refund search and mapping each `RefundRow` through `refundRow`.
+- **`listAttention()`** — Aggregates six parallel repository queries (stale refunds past a threshold, final refusals, manual refunds, reversed refunds, over-refunded payments, open disputes) and merges them into a single `PaymentAttentionItem[]`. Deduplicates over-refunded rows against the other refund buckets.
+- **`staffRow(payment, order?, authContext?)`** — Internal mapper that spreads `withActions` and conditionally adds `orderNumber`/`email`.
+- **`refundRow(row)`** — Internal mapper turning a `RefundRow` into a `RefundListItem` with optional fields spread in conditionally.
+- **`refundAttention(row, kind)`** — Builds a `PaymentAttentionItem` from a single refund; sets `since` to `reversedAt` for reversed refunds, `createdAt` otherwise; attaches `refundDueBy`/`refundDueRule` via `dueByOf`.
+- **`exceedingRows(payments)`** — Flags refunds where the running total exceeds the payment amount (kind `refund_exceeds_remaining`), reporting the overshoot via `exceedsBy`.
+- **`disputeRows(payments)`** — Builds attention items for disputes in `needs_response` status, including the `alreadyRefunded` amount from `refundedForGood`.
+- **`refundedForGood(payment)`** — Sums succeeded, non-reversed refund amounts on a payment.
+- **`ATTENTION_LIMIT`** (100) — Cap per attention source query.
 
 ## Relationships
 
-- **`src/modules/payments/repository.ts`** – Primary data source: `paymentRepository.searchStaff`, `.searchRefunds`, `.findOpenRefundRows`, `.findOverRefunded`, `.findWithOpenDisputes`. Also consumes the `RefundRow` / `RefundFilters` types.
-- **`src/modules/orders/index.ts`** – Calls `orderService.findManyByIds` to hydrate order number and email for list rows (one batch call, no per-row fetch).
-- **`src/modules/payments/domain/index.ts`** – Imports `parseReference`, `displayStatusFilter`, `openDisputeFilter`, `exceedsBy`, `exceedsRemaining`, `refundDueBy` for reference normalization, query labels, and attention classification.
-- **`src/modules/payments/config.ts`** – Reads `paymentAttentionMinutes()` to compute the stale-refund cutoff.
-- **`src/domain-primitives/money.ts`** – Uses `addMoney`, `toMinorUnits`, `toDecimalString`, `padDecimal`, `NO_MONEY` for all monetary arithmetic and formatting.
-- **`src/domain-primitives/time.ts`** – Uses `MINUTE_MS` to convert the config's minute threshold into a millisecond cutoff.
-- **`src/infrastructure/persistence/search.ts`** – Uses `normalizePagination` and `buildPaginatedMeta` to shape request/response pagination metadata.
-- **`src/modules/payments/model.ts`** – Consumes `PaymentDocument` and `RefundRecord` as the stored document shapes.
+- **`src/modules/payments/repository.ts`** — Exports `paymentRepository` (used for all data access: staff search, refund search, open-refund queries, over-refunded and open-dispute lookups) and the `RefundFilters`/`RefundRow` types consumed here.
+- **`src/modules/orders/index.ts`** — Exports `orderService`, which this file calls (`findManyByIds`) to batch-resolve order numbers and emails for the payment list.
+- **`src/modules/payments/domain/index.ts`** — Re-exports the domain helpers used here: `displayStatusFilter`, `openDisputeFilter`, `parseReference`, `refundDueBy`, `exceedsBy`, `exceedsRemaining`.
+- **`src/modules/payments/domain/transfer-reference.ts`** — Source of `parseReference` for canonicalising transfer-reference codes.
+- **`src/modules/payments/domain/display-status.ts`** — Source of `displayStatusFilter`.
+- **`src/modules/payments/domain/disputes.ts`** — Source of `openDisputeFilter` and dispute-related types.
+- **`src/modules/payments/domain/lifecycle.ts`** — Source of `refundDueBy` and refund-status helpers used by the attention logic.
+- **`src/domain-primitives/money.ts`** — `addMoney`, `NO_MONEY`, `padDecimal`, `toDecimalString`, `toMinorUnits` for all monetary arithmetic and formatting.
+- **`src/domain-primitives/time.ts`** — `MINUTE_MS` constant for the stale-refund cutoff calculation.
+- **`src/infrastructure/persistence/search.ts`** — `buildPaginatedMeta` and `normalizePagination` for pagination metadata.
+- **`src/modules/payments/config.ts`** — `paymentAttentionMinutes()` determines the staleness threshold for the attention list.
+- **`src/modules/payments/model.ts`** — Type definitions `PaymentDocument` and `RefundRecord` used throughout.
+- **`src/modules/payments/services/index.ts`** — Re-exports this module's public functions (`listPayments`, `listRefunds`, `listAttention`) as part of the services barrel.
 
 ## Notes
 
-- **Silent empty page on bad reference.** If `parseReference` returns `null` (i.e. the input is not a valid RF reference), `listPayments` resolves an empty page immediately — there is no error or warning signal. A staff member who mistypes a code sees zero results with no hint.
-- **Deduplication in `listAttention`.** Refund IDs appearing in the `exceeding` (over-refunded) set are excluded from the `stale_refund` and `refused_refund` buckets, but **not** from the `reversed_refund` bucket. Reversed rows are mapped unconditionally.
-- **`since` semantics differ by kind.** For `reversed_refund` the timestamp is `reversedAt` (when the provider took the refund back); for all other refund kinds it is `createdAt`. This is intentional — a reversal is a problem from the bounce, not from the original request.
-- **`ATTENTION_LIMIT` (100)** caps each individual repository query, not the combined result. The total attention feed can exceed 100 rows.
-- **`withActions` is called with `undefined` for the order param**, meaning list rows always show the same `actions.refund` availability as the order-detail panel — they do not reflect per-order state.
+- An invalid `transferReference` (unparseable code) returns an **empty page**, not an error — there is no "did you mean" feedback to staff.
+- The `listAttention` function issues **six concurrent** repository queries; each is capped at `ATTENTION_LIMIT` (100). Over-refunded refund IDs are collected into a `Set` and excluded from the stale/refused/reversed buckets to avoid duplicates.
+- `reversed_refund` attention rows set `since` to `reversedAt` (when the bounce happened), not `createdAt`.
+- The `alreadyRefunded` field on dispute rows is only included when the total exceeds zero minor units (`NO_MONEY`).
+- `staffRow` intentionally does **not** set `pay` to true — the payer's own "pay" action is excluded from the staff list row.
+- `./scope` (`callerScope`) and `./view` (`withActions`) are sibling service files not listed in the graph neighbors; they handle caller scoping and per-row action availability respectively.

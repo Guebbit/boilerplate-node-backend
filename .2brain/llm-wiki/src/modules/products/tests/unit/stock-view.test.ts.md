@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/unit/stock-view.test.ts
-sha256: b58c8cfb9f87537c2a771975e13e3072f71745cf0fa884f928aaeec41185c888
-generated_at: 2026-11-08T07:54:43.506929+00:00
+sha256: a6529016da8153f3427860c29a9af4eef99b4a44aeb485b864cdb0e35cdad2a0
+generated_at: 2026-11-14T21:31:36.775639+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `stock-view` service, verifying two behaviors: role-based visibility of exact stock counters (`canSeeStock`) and the redaction that strips those counters from a product object for unauthorized callers (`redactStock`).
+Unit tests for the stock-visibility contract in the products module: which caller roles may see raw stock counters (`onHand`, `reserved`, `available`) and what `redactStock` strips (or preserves) from a product when the caller lacks the `read:StockLevel` permission.
 
 ## Key elements
 
-- **`product` fixture** — A fully-populated `Product` literal (id, title, price, flags, and the three counters `onHand`/`reserved`/`available`) used as the input for both test suites.
-- **`describe('canSeeStock')`** — Table-driven test asserting that `manager`, `warehouse`, and `admin` callers return `true`; `editor`, `support`, `customer`, `unverified`, a stranger, and `undefined` all return `false`.
-- **`describe('redactStock')`** — Four tests covering:
-  - Identity passthrough (`toBe`) when the caller is authorized.
-  - Structural equality (`toEqual`) of the redacted copy: only the three counters are removed, all flags and other fields remain.
-  - Immutability: the original `product` object is not mutated.
-  - Version preservation: `editRevision` is carried into the redacted copy so the ETag survives.
+- **`product`** – module-level fixture: a fully populated `Product` (counters, flags, `NO_PRODUCT_ACTIONS`).
+- **`describe('canSeeStock')`** – parameterised (`it.each`) role assertions: `manager`, `warehouse`, `admin` → `true`; `editor`, `support`, `customer`, `unverified` → `false`. Also covers `strangerCaller()` and `undefined` → `false`.
+- **`describe('redactStock')`** – four cases:
+  - Identity passthrough when `canSeeStock` is `true` (same reference, `toBe`).
+  - Counter removal + flag/field retention when `false` (`toEqual` on a copy missing `onHand`/`reserved`/`available`).
+  - Non-mutation of the input object.
+  - `editRevision` carried onto the redacted copy so the ETag survives (asserted via `versionOf`).
 
 ## Relationships
 
-- **`src/modules/products/services/stock-view.ts`** — The module under test; source of `canSeeStock` and `redactStock`.
-- **`tests/support/callers.ts`** — Provides `callerAs(role)` and `strangerCaller()` to construct the caller identities used in the access-control tests.
-- **`src/types/index.ts`** — Supplies the `Product` type annotation for the fixture.
-- **`src/infrastructure/persistence/versioning.ts`** — Provides `versionOf()`, used to assert that the `editRevision` value is preserved on the redacted copy.
+- **`src/modules/products/services/stock-view.ts`** – the system under test; imports `canSeeStock` and `redactStock`.
+- **`tests/support/callers.ts`** – provides `callerAs(role)` and `strangerCaller()` to fabricate caller identities without hitting auth infrastructure.
+- **`src/modules/products/domain/index.ts`** – the direct import target (`from '../../domain'`); re-exports `NO_PRODUCT_ACTIONS` to populate the fixture's `actions` field.
+- **`src/modules/products/domain/actions.ts`** – the originating definition of `NO_PRODUCT_ACTIONS`, reached through the barrel in `domain/index.ts`.
+- **`src/infrastructure/persistence/versioning.ts`** – exports `versionOf`, used to assert the revision number survives redaction.
+- **`src/types/index.ts`** – supplies the `Product` type for the fixture.
 
 ## Notes
 
-- The authorized-path assertion uses `toBe` (reference identity), confirming `redactStock` returns the *same* object rather than a copy when the caller is allowed to see stock.
-- The version test reveals that "version" is stored as the `editRevision` field on the product and read through the `versionOf` helper — not a top-level `version` or `etag` property.
-- `redactStock` is pure: it never mutates its input, always producing a new object for unauthorized callers.
+- `redactStock(product, true)` returns the **same reference** (`toBe`), while `redactStock(product, false)` returns a **new object** (`toEqual`). Downstream code can safely cache the un-redacted product but must treat the redacted result as a distinct allocation.
+- The version-preservation test uses `editRevision` (not a `version` field) – the ETag mechanism reads whatever `versionOf` extracts, so the test only needs to confirm the numeric value is intact.
+- Role list in the `it.each` table is the de-facto permission matrix; adding a new role that should *not* see stock requires a new row here.

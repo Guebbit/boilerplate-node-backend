@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/raw-body-paths.test.ts
-sha256: 6572195f37cbba5ca5406fd4ba20422013271ab8a032df201ac24aebe53576b3
-generated_at: 2026-11-08T09:30:52.581345+00:00
+sha256: f0aded4a11c31723784444c25b66cfcf958790d220f5e9b5dfd8f9e5c9a27ac3
+generated_at: 2026-11-14T23:06:37.682380+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting test that verifies every module's `rawBodyPaths` entries resolve to a route actually mounted on that module's own router. It exists because a typo in a declared path produces no runtime error—it silently prevents the JSON parser from keeping the raw body, so `express.json()` re-encodes it before the module reads it, and every downstream signature check fails against the wrong bytes.
+Cross-cutting guard that ensures every module's `rawBodyPaths` entries resolve to a route actually mounted on that module's own router. A typo or stale entry here silently disables signature verification (because `express.json()` re-encodes the body before the module reads it), so this test catches the failure at build time rather than in production.
 
 ## Key elements
 
-- **Canary test (`finds at least one module declaring a raw-body path`)** — asserts the sweep isn't vacuous. If the `payments` module is deployed (checked via `isDeployed`), at least one module must declare a `rawBodyPaths` entry; otherwise only `enabledModules.length > 0` is required.
-- **Resolution test (`resolves every declared path to a route mounted on the same module's router`)** — walks every enabled module, collects declared `rawBodyPaths`, and asserts each one matches (or is a segment-boundary prefix of) a route in `module.mounts[0].routes`. Dangling paths are reported as a human-readable array and asserted empty.
+- **`describe('rawBodyPaths')`** — the sole test suite; no exported helpers.
+- **Test 1 — canary ("finds at least one module declaring a raw-body path")** — asserts the sweep isn't vacuous. Falls back to asserting `enabledModules.length > 0` when the `payments` module is not deployed, since an empty declaration set is the *correct* answer in that case.
+- **Test 2 — route-resolution check** — for every path in each module's `rawBodyPaths`, verifies the path (or a prefix of a mounted route) exists among that module's first mount's routes. Reports all dangling paths in a single `dangling` array rather than failing on the first hit.
 
 ## Relationships
 
-- **`src/modules.ts`** — provides `enabledModules`, the iterable list of active modules the test walks.
-- **`tests/support/paths.ts`** — provides `isDeployed`, used in the canary test to conditionally tighten the assertion when `payments` is active.
-- **`tests/support/routes.ts`** — provides `routeSignatures`, which extracts `"METHOD /path"` strings from a module's route definitions so the test can compare declared paths against actually mounted routes.
+- **`src/modules.ts`** → imports `enabledModules`; iterates each module's `rawBodyPaths` and `mounts[0].routes`.
+- **`tests/support/paths.ts`** → imports `isDeployed` to determine whether the `payments` module is active, gating the canary assertion.
+- **`tests/support/routes.ts`** → imports `routeSignatures` to extract `"METHOD /path"` strings from a module's route table, from which the path segment is split out.
 
 ## Notes
 
-- **Prefix semantics:** a declared path like `/webhook` is considered to cover `/webhook/:provider`. The check is `route === path || route.startsWith(path + '/')`, i.e. segment-boundary matching, not a simple string-prefix.
-- **Silent failure mode:** the bug this test guards against has zero observable error at request time. The body is simply re-encoded by `express.json()` and the module receives JSON rather than the original bytes the caller signed. The test is the only safeguard.
-- The canary test is deliberately conditional on `payments` deployment so that a config where `payments` is excluded doesn't produce a false positive.
+- **Prefix semantics:** a declared path `/webhook` is considered to "cover" a mounted route `/webhook/:provider` because the JSON-parser allowlist matches at a segment boundary. The test encodes this with `route.startsWith(`${path}/`)`.
+- **Only the first mount is inspected.** Modules that declare `rawBodyPaths` but mount routers in a different position are not validated by this test.
+- **Failure mode this prevents:** a path typo causes `express.json()` to parse and re-serialize the body before the handler runs, so every downstream HMAC/signature check compares against wrong bytes. There is no runtime error—just silent auth failures.
+- The canary test deliberately distinguishes "nothing declares a path" (valid when `payments` is undeployed) from "the sweep itself broke" (invalid), preventing a silent pass when `enabledModules` is empty or the filter logic is broken.

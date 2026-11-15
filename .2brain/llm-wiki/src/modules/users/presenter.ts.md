@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/presenter.ts
-sha256: 4a638a4b14e97c45f048df2d8a226be6fcf87823b9ea3402c6f17a23d4ef6258
-generated_at: 2026-11-08T08:47:28.540929+00:00
+sha256: 83e318a0a9772014d0bbb5b49102717fd12aaecb125de42b2c60ca19aac2e793
+generated_at: 2026-11-14T22:24:28.706764+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The presentation (shaping) layer that converts a stored `UserWire` record into the public `Account` or `User` contract. It enforces the "persistence wall": controllers reach account data only through `userService.toAccount`, which delegates here, never importing `./model` directly. This module is pure mapping — it contains no business rules, lookups, or `actions` logic (those live in `./services`).
+Pure mapping layer that turns a stored `UserWire` document into the three API contract shapes (`Account`, `User`, `UserListItem`). It is the single point where a persisted account becomes a wire-ready object; it contains no business logic, no lookups, and no side effects—only field selection, `Date → ISO string` conversion, and the one permitted PII decryption (phone).
 
 ## Key elements
 
-- **`presentAccount(document, role)`** *(exported)* — Returns the `Account` shape for self-service views (`/account`, signup response). Shared fields only; no `actions` block, no staff flags.
-- **`presentUser(document, role, actions)`** *(exported)* — Returns the `User` shape for staff reads/writes. Adds the caller-supplied `actions` block, `purgeAt`, and `purchaseHoldFlaggedAt` on top of shared fields.
-- **`sharedFields(document, role)`** *(private)* — Maps the fields common to both contracts. ISO-stringifies the four `Date` fields redeclared in `UserWire`; omits any optional field that is absent. Performs the **only** PII decryption (phone) in the codebase.
-- **`presentPurchaseHold(document)`** *(private)* — Emits the `purchaseHold` object only when a hold is still active (via `activeHoldOf`); otherwise contributes nothing. The identity of who set the hold is deliberately excluded (audit rows cover that).
-- Both exports wrap their result in `carryVersion(document, …)` to stamp the persisted version.
+- **`presentAccount(document, role)`** — Returns the self-service `Account` shape (e.g. `/account`, signup confirmation). Includes shared fields plus version stamp; no `actions`, no staff-only flags.
+- **`presentUser(document, role, actions)`** — Returns the staff-facing `User` shape. Adds the caller-assembled `actions` block, `purgeAt`, and `purchaseHoldFlaggedAt` on top of shared fields.
+- **`presentUserListItem(document, role, actions)`** — Returns the lean `UserListItem` row for the staff list table. Omits phone, website, pending email; represents a hold only as a boolean `purchaseHeld` flag. **Does not decrypt any PII.**
+- **`sharedFields(document, role)`** *(internal)* — Assembles the common field set for `presentAccount` and `presentUser`. The sole call site for `decryptPii` (phone). ISO-stringifies all `Date` fields.
+- **`presentPurchaseHold(document)`** *(internal)* — Emits the `purchaseHold` detail object only when `activeHoldOf` returns a live hold; omits the setter's identity (audited elsewhere).
 
 ## Relationships
 
-- **`src/types/index.ts`** — Source of the `Account`, `User`, and `UserActions` type contracts this module produces.
-- **`src/infrastructure/persistence/versioning.ts`** — Provides `carryVersion`, attached to every returned object.
-- **`src/infrastructure/security/pii-encryption.ts`** — Provides `decryptPii`; used here (and only here) to decrypt the stored phone number before it reaches the wire.
-- **`src/modules/users/model.ts`** — Provides the `UserWire` input type and `phoneAad` (the AAD binding for phone decryption).
-- **`src/modules/users/services/purchase-hold.ts`** — Provides `activeHoldOf`, the single query this module runs to decide whether to surface a hold.
-- **`src/modules/users/services/index.ts`** — The calling side: `userService.toAccount` is the documented entry point that routes controller requests into this presenter, keeping controllers away from `./model`.
+- **`src/infrastructure/persistence/versioning.ts`** — `carryVersion` wraps the return of `presentAccount` and `presentUser` to stamp the persistence version onto the response.
+- **`src/infrastructure/security/pii-encryption.ts`** — `decryptPii` is called inside `sharedFields` to decrypt the stored phone value before it reaches the wire.
+- **`src/modules/users/model.ts`** — Provides the `UserWire` type and the `phoneAad` helper (AAD for the phone decryption). The presenter imports from here but, per the "persistence wall" convention, controllers never import `./model` directly.
+- **`src/modules/users/services/purchase-hold.ts`** — Provides `activeHoldOf`, used by `presentPurchaseHold` and `presentUserListItem` to decide whether a hold is still in force.
+- **`src/modules/users/services/index.ts` / `src/modules/users/services/read.ts`** — The service layer that calls `presentAccount` / `presentUser` / `presentUserListItem` and assembles the `actions` argument. Controllers receive the shaped result through this service boundary.
+- **`src/modules/users/friends/account.ts`** — Downstream consumer in the account module that relies on this presenter (via the service) to shape its responses.
+- **`src/types/index.ts`** — Source of the `Account`, `User`, `UserActions`, and `UserListItem` contract types that shape the output.
+- **`src/modules/users/tests/integration/service.test.ts`** — Integration tests that exercise the presenter output through the service.
 
 ## Notes
 
-- **Phone decryption is single-point.** `sharedFields` is the only place a stored `phone` value is decrypted (using `NODE_PII_ENCRYPTION_KEY` and an AAD of the user's `id`). If you add a new read path, route it through here.
-- **`role` is caller-supplied, never document-derived.** The caller resolves the tenant role from the membership store and passes it in; `null` is printed as a simple field omission.
-- **Accepts `UserWire`, not `UserDocument`.** This intentionally lets lean/search-result rows (which lack password, tokens, 2FA material) flow through the same mapper without needing document methods.
-- **Omitted fields are truly absent** (not `undefined`): every optional field uses the spread-omit pattern (`...(x === undefined ? {} : { x })`), so JSON serialization produces no nulls.
+- **One decryption site.** `decryptPii` appears only in `sharedFields`. `presentUserListItem` deliberately never decrypts—keep it that way when adding fields to the list row.
+- **`role` is always caller-supplied.** The document carries no role of its own; the caller reads it from the membership store and passes it in. `null` omits the field entirely (same pattern as every optional field).
+- **`actions` is pre-assembled.** This file only spreads it in; the rules that decide what a caller may do live in `./services/actions`. Don't add conditional action logic here.
+- **Pure / no side effects.** Safe to call multiple times with the same input; no caches, no I/O, no `new Date()` beyond the `activeHoldOf` boundary check (which is itself a pure comparison).
+- **`UserWire` over `UserDocument`.** The parameter type is the lean wire shape so that both hydrated documents and `search()`-normalized rows satisfy it without pulling in document methods.

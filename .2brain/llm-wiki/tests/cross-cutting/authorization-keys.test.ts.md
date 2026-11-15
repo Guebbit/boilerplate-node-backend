@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/authorization-keys.test.ts
-sha256: d4e236c2c9fc979919fefa37cfcd2cdcf18173f638763d468cbaba08cd5f5c98
-generated_at: 2026-11-08T09:24:23.367692+00:00
+sha256: 42709ea4beb6c8aefc6fc434d32a08ca3400c6ab0f25ccf376bace57895bcf02
+generated_at: 2026-11-14T23:01:49.713777+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Conformance test that validates the internal consistency of the shared permission artefacts (rules, sets, preset roles) loaded by `src/kernel/permissions.ts`. It answers "are the files they both read not nonsense?" — ensuring no preset role silently grants nothing, no rule is orphaned, and naming conventions are enforced so that rule IDs stored in credentials remain stable.
+Conformance test that validates the internal consistency of the permission system's data declarations (rules, sets, roles, audiences). It proves that the two shared artefacts read by both permission backends are not internally contradictory: every referenced rule exists, every role only names rules within its own scope, and naming conventions hold. It complements a separate conformance suite that verifies the two backends *agree*; this file ensures the data they both read is sane in the first place.
 
 ## Key elements
 
-- **`declared`** — `Set` of all rule IDs, used to check uniqueness and completeness.
-- **`audiences` / `roles`** — combined `RoleLookup[]` (preset roles + audience-derived roles) fed into parameterised `it.each` cases.
-- **`describe('the declared rules')`** — asserts rule-ID uniqueness, `action:Subject` id format, PascalCase subjects / lowercase actions, absence of reserved words (`self`, `any`), valid `deniedCode` references, and `IMPLIED_ACTIONS` shape.
-- **`describe('the permission sets')`** — asserts set-name uniqueness and casing, that every bundled rule belongs to the set's own module, and that no declared rule is left un-bundled.
-- **`describe('the preset roles')`** — asserts every role's permissions reference declared rules within the role's own scope; pins that exactly two tenant roles are unrestricted (`admin`, `system`); documents that `operator` is unrestricted in platform scope *only* because platform has one declared rule today.
-- **`describe('assertDeclared')`** — verifies the runtime guard rejects undeclared and near-miss `(action, subject)` pairs, and returns the matching rule for a valid one.
+- **`declared`** — `Set<string>` of every rule ID, used for uniqueness and coverage checks.
+- **`audiences`** — `RoleLookup[]` derived from `AUDIENCE_NAMES` / `AUDIENCE_ROLES`, treated as roles alongside `PRESET_ROLES`.
+- **`roles`** — combined list (`PRESET_ROLES` + `audiences`) iterated by `it.each` to apply per-role invariants.
+- **`describe("the declared rules")`** — asserts rule IDs are unique, follow `action:Subject` format, use PascalCase subjects / lowercase actions, avoid reserved words (`self`, `any`), and that `deniedCode` references a code in `ERROR_CODES`.
+- **`describe("the permission sets")`** — asserts set names are unique PascalCase, every rule in a set belongs to that set's module, and no declared rule is left outside all sets.
+- **`describe("the preset roles")`** — asserts each role holds only declared rules from its own scope; pins that exactly two tenant roles (`admin`, `system`) are unrestricted; pins that `operator` is unrestricted in platform scope (because platform currently declares exactly one rule).
+- **`describe("assertDeclared")`** — verifies the runtime guard throws on undeclared or near-miss rules and resolves correctly for valid ones.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — the module under test. All data constants (`PERMISSION_RULES`, `PERMISSION_SETS`, `PRESET_ROLES`, `AUDIENCE_ROLES`, `IMPLIED_ACTIONS`) and functions (`assertDeclared`, `findRule`, `isUnrestrictedRole`, `ruleId`) are imported from here; this file is the design-time mirror of that module's invariants.
-- **`@api/error-codes`** — provides `ERROR_CODES`, checked against to confirm every rule's `deniedCode` is a real, declared error code.
+- **`src/kernel/permissions.ts`** — sole module under test. Provides every constant (`PERMISSION_RULES`, `PERMISSION_SETS`, `PRESET_ROLES`, `AUDIENCE_NAMES`, `AUDIENCE_ROLES`, `IMPLIED_ACTIONS`), every helper (`assertDeclared`, `findRule`, `isUnrestrictedRole`, `ruleId`), and the `RoleLookup` type. The test asserts structural invariants *on* that module's exported data.
+- **`@api/error-codes`** — imported solely to cross-check that each rule's `deniedCode` is a key actually present in `ERROR_CODES`.
 
 ## Notes
 
-- Naming conventions (PascalCase subject, lowercase action) are enforced *here* because rule IDs are persisted in credentials; a rename is a breaking change, so the test makes that a hard failure.
-- `system` is unrestricted not by independent logic but by a YAML alias to `admin`'s sets; the test pins that so a silent de-alias is caught.
-- `operator`'s "unrestricted in platform" status is explicitly noted as a *derived, time-sensitive* fact (true only while platform declares exactly one rule). The test exists to make adding a second platform rule a deliberate, noticed change rather than a silent loss of the invariant.
-- This file is the **design-time** guard; `assertDeclared` is the **runtime** guard. They encode the same rule at different points in the lifecycle.
+- **`system` role is a YAML alias of `admin`.** It is unrestricted for the identical reason and "can never drift" — the test asserts both appear in the unrestricted list but the underlying grant is the same object.
+- **"Unrestricted" is a derived property, not a token.** It means "holds every rule declared in its scope." The `operator` / platform test explicitly pins that platform has exactly one declared rule *today*; adding a second platform rule would silently flip `isUnrestrictedRole('operator','platform')` to false and break this test intentionally.
+- **Case convention is load-bearing.** Rule IDs are stored in credentials, so `action` must be lowercase and `subject` PascalCase. The test enforces this to prevent a silent mismatch between what is stored and what is looked up.
+- **Near-miss rejection.** `assertDeclared('read','Products')` must throw rather than fuzzy-match `Product` — the test guards against a convenience that would mask a typo in a credential.

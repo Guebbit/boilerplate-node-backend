@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/password-reset-request.ts
-sha256: dde70ec0cfcf7372dee593f1c77f1080fd46f66c2845b65f28c1f72ba5d826b6
-generated_at: 2026-11-08T04:20:00.405972+00:00
+sha256: ccbfff4ceb5c2ded0493ac745f692b1351cad23dadc59fdab6651558ed393cfd
+generated_at: 2026-11-14T18:47:03.179957+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the *request* side of password resets: issuing a one-time reset token for an email address and queueing the reset-link email. It also issues the initial password-setup link for admin-created accounts that have no password yet. Spending (validating and acting on) the link lives in the sibling `./password-reset` module.
+Handles the two email-delivery paths that hand a user a password-reset/setup link: the public "I forgot my password" request (always returns 200, never reveals whether the address is registered) and the one-time setup link sent to an admin-created account. It does **not** consume the link — that lives in `./password-reset`.
 
 ## Key elements
 
-- **`RESET_REQUEST_SECONDS`** (exported const, `60`) — cooldown window between two reset mails for the same account.
-- **`requestPasswordReset(email, context)`** (exported) — Public entry point for `POST /account/password/reset`. Looks up the user by email, issues the single live reset token, queues the email, records a metric and an audit row. Always resolves (never rejects); returns `true`/`false` indicating whether mail was queued.
-- **`requestAccountSetup(user)`** (exported) — Issues the same reset-token type/TTL for an admin-created user and sends a setup-specific email. No `CallerContext`; no audit here (already recorded as `ADMIN_USER_CREATED` by the caller in `users/services/create.ts`).
-- **`issueResetToken(user)`** (internal) — Atomic upsert of the account's single `PASSWORD_RESET_TOKEN_TYPE` token; replaces any prior one. Returns the plaintext token for the email link.
-- **`resetRecentlySent(user)`** (internal) — Reads the live token's `sentAt` via `tokenSentAt` and compares against `RESET_REQUEST_SECONDS` using `cooldownRemaining`.
-- **`mailResetLink(user, context)`** (internal) — Composes the locale-aware email (`resetRequestEmail`) and fire-and-forget queues it via `sendAccountMail`.
-- **`passwordResetTokenTtlMs()`** (internal) — Reads `NODE_PASSWORD_RESET_TTL_MS` from `accountConfig`.
+- **`RESET_REQUEST_SECONDS`** (exported const, `60`) — cooldown window between two reset mails to the same account.
+- **`resetRecentlySent`** (internal) — checks whether the account's live reset token was minted within the cooldown window via `tokenSentAt` + `cooldownRemaining`.
+- **`issueResetToken`** (internal) — atomically upserts the account's single live `PASSWORD_RESET_TOKEN_TYPE` token (TTL from `accountConfig().NODE_PASSWORD_RESET_TTL_MS`); previous token is invalidated in the same write.
+- **`mailResetLink`** (internal) — composes the reset email (locale-resolved), queues it via `sendAccountMail`, and returns a boolean for whether mail was actually sent.
+- **`requestPasswordReset`** (exported) — public entry point. Looks up the user by email, calls `mailResetLink`, and always resolves to a `boolean` (never rejects). Records the `AUTH_PASSWORD_RESET_REQUESTED` audit row and the `authPasswordResetTotal` metric unconditionally.
+- **`requestAccountSetup`** (exported) — issues a token and sends the setup-link email for an admin-created account with no password. Only caller is the `USER_SETUP_REQUESTED` event in the `users` module; no audit is recorded here (the `ADMIN_USER_CREATED` audit already fired at creation time).
 
 ## Relationships
 
-- **`services/tokens.ts`** — `issueToken` performs the atomic upsert; `tokenSentAt` retrieves the `sentAt` timestamp used for the cooldown check.
-- **`services/mail.ts`** — `sendAccountMail` enqueues the composed email (fire-and-forget; never rejects).
-- **`../emails.ts`** — Provides `resetRequestEmail`, `setupRequestEmail`, `greetableName`, and `recipientLocale` for composing locale-aware mail.
-- **`../cooldown.ts`** — `cooldownRemaining` computes whether `sentAt` is still within `RESET_REQUEST_SECONDS`.
-- **`../config.ts`** — `accountConfig()` supplies the TTL and other tunables.
-- **`../token-types.ts`** — `PASSWORD_RESET_TOKEN_TYPE` constant identifies which token slot is used.
-- **`../audit.ts`** — `accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED` is the action recorded.
-- **`@infrastructure/observability/audit.ts`** — `recordAudit` persists the audit row.
-- **`../metrics.ts`** — `authPasswordResetTotal` Prometheus counter, incremented with `status: 'success' | 'failure'`.
-- **`@infrastructure/adapters/logger.ts`** — `logger.error` is the only observability path when the lookup or mailing throws.
-- **`@modules/users`** — `userService.findByEmail` resolves the account; `UserDocument` type is used throughout.
-- **`services/index.ts`** — Re-exports this module's public API for consumers of the account services barrel.
+- **`src/modules/account/config.ts`** — reads `NODE_PASSWORD_RESET_TTL_MS` from `accountConfig()` to set token expiry.
+- **`src/modules/account/cooldown.ts`** — delegates to `cooldownRemaining` to enforce the 60-second pacing rule.
+- **`src/modules/account/emails.ts`** — calls `resetRequestEmail`, `setupRequestEmail`, `greetableName`, and `recipientLocale` to build the mail body before enqueuing.
+- **`src/modules/account/services/mail.ts`** — enqueues the composed mail via `sendAccountMail` (fire-and-forget; never rejects).
+- **`src/modules/account/token-types.ts`** — uses `PASSWORD_RESET_TOKEN_TYPE` so the reset token and the setup token share the same single-slot type.
+- **`src/modules/account/services/tokens.ts`** — calls `issueToken` (upsert) and `tokenSentAt` (read `sentAt`) for the live token.
+- **`src/modules/users/index.ts`** — imports the `UserDocument` type.
+- **`src/modules/users/friends/account.ts`** — imports `accountUserService` and calls `findByEmail` to resolve the account from the submitted address.
+- **`src/modules/users/model.ts`** — provides the `UserDocument` type consumed by the service functions.
+- **`src/infrastructure/observability/audit.ts`** — calls `recordAudit` on every invocation, success or failure.
+- **`src/modules/account/audit.ts`** — supplies the `AUTH_PASSWORD_RESET_REQUESTED` action constant.
+- **`src/modules/account/metrics.ts`** — increments `authPasswordResetTotal` with a `success`/`failure` label.
+- **`src/infrastructure/adapters/logger.ts`** — logs an error (and swallows it from the caller) when the async chain rejects.
+- **`src/modules/account/services/index.ts`** — re-exports this module as part of the account services barrel.
+- **`src/modules/users/index.ts`** / **`src/modules/users/friends/account.ts`** — `requestAccountSetup` is invoked by the `users` module's `USER_SETUP_REQUESTED` event handler, making the `users` module an upstream caller.
 
 ## Notes
 
-- **Anti-enumeration by design.** `requestPasswordReset` always resolves `false` (not an error) for unknown emails, DB failures, or cooldown skips. The HTTP layer returns a uniform `200`. The audit row is recorded unconditionally so the trail itself can't distinguish "no account" from "attempt blocked."
-- **Single live token.** `issueToken` upserts one token per `(userId, tokenType)` pair. There is never a list of pending reset tokens for a user; a new request invalidates the previous link.
-- **Cooldown anchor is the token's `sentAt`.** There is no separate rate-limit store; the check reads the token's own timestamp. If no token exists, `cooldownRemaining` is treated as `0` (not recently sent).
-- **`void sendAccountMail(...)`** is intentionally fire-and-forget with an eslint disable. The mail queue logs its own failures; this file's `catch` block covers the *lookup/token* path only.
-- **`requestAccountSetup` has no audit of its own.** The `ADMIN_USER_CREATED` row in `users/services/create.ts` is the only audit for that flow; do not double-record here.
-- **The boolean return is not client-facing.** It exists for the metric increment and for unit-test assertions; controllers ignore it.
+- **Silent pacing, not 429.** A request inside the cooldown window returns the same 200 with no mail and no new token. The existing (still-valid) link is left untouched. A `429` would let an attacker enumerate registered addresses.
+- **Audit fires unconditionally.** Even a DB-lookup failure or an unregistered address produces an `AUTH_PASSWORD_RESET_REQUESTED` row, so the audit log cannot be used for enumeration either.
+- **Token value never leaves this file.** The plaintext token is interpolated into the email body and never stored elsewhere or returned to the caller.
+- **`requestAccountSetup` has no `CallerContext`.** It is only invoked from the `users` module's event handler, so there is nothing to audit and no locale fallback beyond the user's stored preference.
+- **The boolean return of `requestPasswordReset` is for tests/metrics only.** It is never surfaced to the client; the HTTP response is always 200.

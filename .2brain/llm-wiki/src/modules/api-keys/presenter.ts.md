@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/presenter.ts
-sha256: a8fd56a3f400f3d6acbdcf550c1df427f70683a94689d906632d957785e2cc62
-generated_at: 2026-11-08T05:03:23.535252+00:00
+sha256: be23ee9702b23a3938b21671c7c2f739e85c40658b996e5ef9617bc20b726631
+generated_at: 2026-11-14T19:20:48.537784+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Maps a stored API-key credential into the wire shape declared in `openapi.yaml`. It exists as the single translation point between the persistence layer (Mongoose document / stored row) and the API contract type `ApiKey`, so that the rest of the codebase never has to know how the document is shaped internally.
+The single mapping point from a stored credential document to the wire shape declared in `openapi.yaml`. It isolates the "document → API contract" translation so that neither the model schema nor the service layer has to re-derive the `ApiKey` shape.
 
 ## Key elements
 
-- **`apiKeyStatus(key, minterCanSignIn, now)`** – Pure status resolver. Returns `'revoked' | 'expired' | 'active' | 'suspended'` in that precedence order. Takes only the `revokedAt`/`expiresAt` slice of a stored row, a boolean for whether the minter can sign in, and an injectable `Date` for testability.
-- **`presentApiKey(document)`** – Adapts an `ApiKeyDocument` to `StoredApiKey` by calling `document.toJSON()` and casting the result. The actual field renames (`_id` → `id`) and drops (`hash`) are already handled by the schema transform in `model.ts`; this function merely narrows the overload on `toJSON()`.
+- **`apiKeyStatus(key, minterCanSignIn)`** — Resolves the effective status of a stored key by priority: `revoked` → `expired` → `suspended` / `active`. The last branch depends on whether the minter can still sign in (not banned, soft-deleted, or erased).
+- **`presentApiKey(document)`** — Calls `document.toJSON()` and casts the result to `StoredApiKey`. The actual field renaming (`_id` → `id`) and `hash` removal happen inside the Mongoose schema transform in `model.ts`; this function only narrows the return type.
 
 ## Relationships
 
-- **`src/types/index.ts`** – Source of the `ApiKey` contract type (the `openapi.yaml` wire shape). `apiKeyStatus`'s return type is `ApiKey['status']`.
-- **`src/modules/api-keys/model.ts`** – Supplies `ApiKeyDocument`. Its schema-level `toJSON` transform performs the `_id`/`hash` adjustments that `presentApiKey` relies on.
-- **`src/modules/api-keys/repository.ts`** – Supplies the `StoredApiKey` shape that both exports return / consume.
-- **`src/modules/api-keys/services/api-keys.ts`** – The `mint()` function there layers a plaintext `secret` onto the same shape this module produces. A secret is minted at creation time and never persisted, so it can only originate from that service, not from the document.
+- **`src/modules/api-keys/model.ts`** — Supplies `ApiKeyDocument`, whose `toJSON()` overloads carry the field-level transforms that `presentApiKey` relies on.
+- **`src/modules/api-keys/repository.ts`** — Supplies the `StoredApiKey` type (the post-transform shape this module returns).
+- **`src/types/index.ts`** — Supplies the `ApiKey` wire type; `apiKeyStatus` returns `ApiKey['status']`.
+- **`src/modules/api-keys/services/api-keys.ts`** — Its `mint()` function produces the same `ApiKey` shape but overlays the plaintext `secret`, which by design never exists in a stored document.
 
 ## Notes
 
-- Status precedence is intentional and mirrors the resolver's refusal order: **revoked → expired → suspended/active**. An unban (restoring `minterCanSignIn`) re-activates a suspended key but cannot override revocation or expiry.
-- The `now` parameter defaults to `new Date()` but is injectable specifically so tests can pin the clock without mocking globals.
-- `presentApiKey` is a thin cast, not a field-by-field mapper. If the wire contract gains a field that the schema doesn't produce, the fix belongs in `model.ts`'s transform, not here.
+- The `as StoredApiKey` cast in `presentApiKey` is a type-narrowing over the schema's own `toJSON()` overload, not a redefinition of the wire type. Don't treat it as a runtime check.
+- `apiKeyStatus` takes only `revokedAt` and `expiresAt` from `StoredApiKey` (via `Pick`), so callers can pass a partial row without pulling the full document.
+- A credential's `secret` is minted at issuance and never persisted; it therefore cannot appear in anything this module produces.

@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/audit-actions.test.ts
-sha256: 266f87475d9dfef5cf448fa4ca2cadd9e29336486541d8ebbb2df5085e7c4ea7
-generated_at: 2026-11-08T09:23:44.483152+00:00
+sha256: b6171aedd2796fa31fba6f2e2637bc4afc2780f03051796c1b4ad101b08c74f7
+generated_at: 2026-11-14T23:01:22.960408+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting test that validates the audit-action vocabulary across every module structurally—uniqueness, dotted-naming convention, discoverability, and explicit opt-out—without hardcoding any action string. This avoids reintroducing the cross-module coupling the domain split was designed to remove, while still catching the silent failures (duplicate actions, malformed names, unguarded modules) that no single module's own tests would see.
+Cross-cutting test that validates the audit-action vocabulary across all modules without hard-coding a list of action names. It asserts two structural invariants: the file-discovery sweep actually finds modules, and no two modules declare the same action string. This replaces what would otherwise be a single brittle enumeration (which would reintroduce the cross-domain coupling the module split eliminates).
 
 ## Key elements
 
-- **`EXPECTED_NON_AUDITING`** — Array of module names whose `module.yaml` declares a `noAudit` reason. Derived at load time from descriptors; adding/removing an excuse never edits this file.
-- **`moduleFolders()`** — Returns every directory under `MODULES_ROOT`.
-- **`listAuditFiles()`** — Returns `{ module, file }` pairs for each `<module>/audit.ts` that exists on disk (discovered, not listed).
-- **`readActions(file)`** — Dynamically imports a module's audit file and returns its exported string-map by shape (the sole object whose values are all strings). A module that fails to import fails the test rather than contributing nothing.
-- **Five assertions:**
-  1. Every module that has an `audit.ts` exports at least one action (with a canary ensuring the sweep itself is non-empty).
-  2. No two modules claim the same action string.
-  3. Every action matches `/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/` (dotted lower snake_case, 2–4 segments).
-  4. Every module folder is either auditing or explicitly excused via `noAudit`.
-  5. No module in `EXPECTED_NON_AUDITING` actually has an `audit.ts` (staleness guard).
+- **`listAuditFiles()`** — Scans `MODULES_ROOT` directories for a sibling `audit.ts` file; returns `{ module, file }` pairs. Discovery-based, so new modules are picked up automatically.
+- **`readActions(file)`** — Dynamically `import()`s a module's `audit.ts` and locates the exported record-of-strings by shape (the only non-string-typed export whose values are all strings). Returns the action map, or `{}` if none is found.
+- **`describe('audit actions across modules')`** — Two `it` blocks:
+  - *finds an audit vocabulary in every module that emits one* — Canary check (module directory count > 0, at least one audit file found, each file exports ≥ 1 action) followed by per-file assertion.
+  - *never lets two modules claim the same action string* — Collects all action strings into a `Map<action, module>`; fails with a descriptive collision list if a duplicate is found.
 
 ## Relationships
 
-- **`scripts/docs/module-descriptor.ts`** — Provides `readAllModuleDescriptors(MODULES_ROOT)`, from which `EXPECTED_NON_AUDITING` is derived at module-load time. The test depends on the descriptor's `noAudit` field being the single source of truth for opt-outs.
-- **`tests/support/paths.ts`** — Provides the `MODULES_ROOT` constant (imported as `@tests/paths`), the filesystem root under which all modules and their `audit.ts` files are discovered.
+- **`tests/support/paths.ts`** — Supplies `MODULES_ROOT`, the directory under which per-module subdirectories live. This is the sole cross-file import; everything else is `node:fs` / `node:path`.
 
 ## Notes
 
-- The naming regex is intentionally identical to the BE repository's bound, so a renamed action satisfies both repos' guards.
-- `readActions` finds the export by shape (object of strings) because the const name varies per module (`accountAuditActions`, `cartAuditActions`, …). Adding a second non-string export to an `audit.ts` file will cause the action map to be silently missed.
-- The canary in test 1 asserts `readdirSync(MODULES_ROOT).length > 0` rather than a literal count, specifically to avoid a stale integer that would go unnoticed when a domain is added or removed.
-- The test imports audit files for real (dynamic `import`), so a TypeScript/bundle error in any `audit.ts` surfaces here instead of being invisible.
+- Action *shape* (dotted `noun.noun`, 2–4 segments, lower snake_case) is intentionally **not** asserted here. That enforcement lives in `eslint.config.ts` (per-file rule) and in schema validation at `regenerate` time for `rules.yaml` / `security.*` actions.
+- `readActions` imports the module for real rather than parsing source text, so a broken import fails loudly instead of silently yielding an empty set.
+- The canary assertion (`readdirSync(MODULES_ROOT).length > 0`) is deliberately a disk read, not a hardcoded count, to avoid the line going stale when modules are added or removed.

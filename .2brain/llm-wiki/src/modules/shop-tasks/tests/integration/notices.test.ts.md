@@ -1,7 +1,7 @@
 ---
 source: src/modules/shop-tasks/tests/integration/notices.test.ts
-sha256: 32734130e7b96af0b9a1ad1d44ed79f41ad7d67a610bd07c51ef42e05cd05a5a
-generated_at: 2026-11-08T08:18:44.109573+00:00
+sha256: 5722dd475066ee676bd0edaca02e1ea227fff345c3a597c3f9baf5f5a1a1fcc7
+generated_at: 2026-11-14T21:56:29.146122+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that verifies each shop domain event produces the correct buyer-facing notification in the inbox. It exercises the full production wiring—module registration, domain-event emission, outbox settlement, and notification delivery—without calling any subscriber directly, so the subscription wiring in the module entry-point is itself under test.
+Integration tests that verify which notifications land in a buyer's inbox for each shop-task event (product deletion, cart merge refusal, stock-alert fulfillment, preorder delay, order hold, shipment loss). The tests drive the system exactly as production does—real modules registered, real service calls at one end, inbox assertions at the other—so the subscription wiring in `shop-tasks/module.ts` itself is under test rather than bypassed.
 
 ## Key elements
 
-- **`heldFor(userId?)`** – Builds a `fulfillment_order.hold_noticed` fact payload for fixture assertions.
-- **`lostFor(userId?)`** – Builds a `shipment.lost` fact payload for fixture assertions.
-- **`inboxOf(userId)`** – Fetches a user's notification list (newest-first) via `notificationsService.list`.
-- **`moved(days)`** (inner helper) – Creates a paid preorder with fulfillment orders, then shifts the product's release date to *days* from now and settles the outbox.
-- **`describe('a deleted product')`** – Verifies cart-line and wishlist notifications on hard and soft product deletion, including the dual-notification case and the no-op case.
-- **`describe('a guest-cart merge')`** – Verifies the single `cart-merge-refused` notification lists only fully-refused lines, and that partially-accepted or fully-accepted merges produce no notification.
-- **Hard-deleted user test** – Confirms that removing a user erases their inbox.
-- **`describe('a back-in-stock request')`** – Verifies the `stock-alert` notification fires after `inventoryService.receive` + `stockAlertService.onBuyableAgain`.
-- **`describe('a late preorder')`** – Verifies the `fulfillment-delayed` notification carries the shifted date and product title.
+- **`heldFor(userId)`** – builds a `fulfillment_order.hold_noticed` domain-event payload; omits `userId` to simulate an erased account.
+- **`inboxOf(userId)`** – thin wrapper over `notificationsService.list(userId)` returning the `items` array, newest first.
+- **`lostFor(userId)`** – builds a `shipment.lost` domain-event payload with line items, owed items, and expected replacement date.
+- **`moved(days)`** (inside the late-preorder describe block) – creates a paid preorder 30 days out, generates its fulfillment orders, then shifts the product's `releaseDate` to `days` days out; returns the placed order for assertions.
+- **`beforeEach`** – calls `resetDomainEvents()` then `registerModules(enabledModules)` so every test starts from a clean, fully wired module registry.
+- **Test suites** – one `describe` per event type: *deleted product* (hard/soft, cart + wishlist, bystander isolation), *guest-cart merge* (refused lines, sold-out, quantity change, clean merge), *hard-deleted user*, *back-in-stock request*, *late preorder* (delayed / earlier-date / same-date), plus top-level tests for order holds and lost shipments.
 
 ## Relationships
 
-- **`src/modules.ts`** – Provides `enabledModules`, the array passed to `registerModules` in `beforeEach`.
-- **`src/kernel/registry.ts`** – `registerModules` wires all enabled modules (including shop-tasks) so their event subscriptions are active.
-- **`src/kernel/events.ts`** – `resetDomainEvents` clears the event bus between tests; `emitDomainEvent` is imported for potential direct emission in untruncated sections.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes queued async notification writes after each domain action.
-- **`src/modules/products/index.ts` / `services/index.ts`** – `productService` drives deletions and release-date updates that trigger the events under test.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds products with specific titles, stock, and release dates.
-- **`src/modules/cart/index.ts` / `services/index.ts`** – `cartService.addItemById` and `cartService.merge` create the cart state whose removal/merge produces notifications.
-- **`src/modules/notifications/index.ts` / `services/index.ts`** – `notificationsService.list` is the assertion target (the buyer's inbox).
-- **`src/modules/notifications/tests/factories.ts`** – `countNotifications` imported for potential inbox-size assertions.
-- **`src/modules/delivery/tests/factories.ts`** – `paidPreorderOrder` and `fulfillmentOrdersOf` set up preorder and fulfillment-order rows.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** – `inventoryService.receive` triggers the back-in-stock flow.
+- **`src/kernel/events.ts`** – `resetDomainEvents()` clears the event bus between tests; `emitDomainEvent` is what the real modules call internally to publish domain events.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges()` is called after every triggering action to drain the outbox so notifications are persisted before assertions.
+- **`src/kernel/registry.ts`** – `registerModules(enabledModules)` wires the production module graph; no subscribers are mocked.
+- **`src/modules.ts`** – provides the `enabledModules` array that defines which modules are active in this test environment.
+- **`src/modules/products/services/index.ts`** – the product service is the trigger surface: its remove and update methods are the actions that fire the deletion and date-change events under test.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` builds the product fixtures each suite needs.
+- **`src/modules/cart/services/index.ts`** – the cart service sets up cart state and triggers the merge-refusal path; `addItemById` and `merge` are the entry points exercised here.
+- **`src/modules/inventory/services/index.ts`** – the inventory service's receive action restocks a product to trigger the buyable-again / stock-alert flow.
+- **`src/modules/notifications/services/index.ts`** – the primary assertion surface; `inboxOf` delegates to this service's list method.
+- **`src/modules/notifications/tests/factories.ts`** – provides `countNotifications` for auxiliary inbox assertions.
+- **`src/modules/delivery/tests/factories.ts`** – `paidPreorderOrder` and `fulfillmentOrdersOf` build the preorder and fulfillment-order fixtures for the late-preorder suite.
 
 ## Notes
 
-- The test suite deliberately avoids calling subscribers directly; the module's `module.ts` wiring is part of what is asserted. If a subscription is removed or misnamed, these tests will fail.
-- `settleOutboxNudges()` must be called after every domain action that enqueues a notification—forgetting it silently yields empty inboxes.
-- The guest-cart merge test explicitly locks the params contract: only the `lines` key is expected (`Object.keys(params)` assertion), guarding against accidental extra fields.
-- `countNotifications` is imported but not used in the visible (truncated) portion; it may appear in later test blocks.
-- The file is truncated in the source view; the "late preorder" describe block continues beyond what is shown.
+- Every assertion on inbox content is preceded by `settleOutboxNudges()`; omitting it will cause flaky "empty inbox" failures because the outbox is asynchronous.
+- Tests intentionally do **not** mock any subscriber or call a handler directly—the point is to verify the `module.ts` subscription wiring end-to-end.
+- The cart-merge-refused test asserts the exact shape of `params` (`Object.keys(params)` equals `['lines']`) to pin down that no extra fields (reason, quantity) leak into the notification contract.
+- `setupTestDb()` is called once at module scope; the per-test isolation relies on `resetDomainEvents` + fresh rows rather than a transaction rollback.

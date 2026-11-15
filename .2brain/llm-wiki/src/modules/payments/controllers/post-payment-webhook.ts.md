@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-webhook.ts
-sha256: ea1487ba17f8297b1c48923789bbb6e6fe91ae5726e85731df38a20a33c2f699
-generated_at: 2026-11-08T07:19:06.351488+00:00
+sha256: 7fc445ba1ac973fb77c8ab6f3bec6ad71059f248ba8613eb61742fff07128d1c
+generated_at: 2026-11-14T20:59:27.087586+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `POST /payments/webhook/:provider`. It receives payment-status callbacks from external providers, verifies the signature (delegated to the provider adapter), and hands the parsed event to the payment service for a single idempotent apply. It deliberately uses no session authentication; the raw-body signature is the sole credential.
+Single HTTP handler for `POST /payments/webhook/:provider`. Receives payment-event deliveries from external providers, validates the raw-body signature via the service layer, and applies the event idempotently. It is the only place in the codebase that turns a provider's signed HTTP POST into a state change.
 
 ## Key elements
 
-- **`postPaymentWebhook(request, response)`** – The single export. Resolves the provider from the path param, calls `provider.parseWebhook(rawBody, headers)`, then `paymentService.applyWebhookDelivery(event, provider.name)`. Returns **204** on success, **404** for an unregistered provider name, **400** for a `WebhookRejected` error, or **500** for any unexpected fault (so the provider retries).
-- **`rawBody` guard** – If `request.rawBody` is absent (parser-ordering regression), the handler short-circuits with a 400 and an error log.
-- **Security-event recording** – When a `WebhookRejected` carries `signatureFailure === true`, `recordSecurityEvent` is called with `SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE`; other rejection reasons (malformed JSON, missing event id, timestamp drift) are logged but not flagged as attacks.
+- **`postPaymentWebhook(request, response)`** (exported) — The sole handler. Reads `request.rawBody` (populated by an Express `verify` hook), delegates to the payment service's `receiveWebhook` method, and maps the result or thrown error to an HTTP status.
+- **`sentNoBody(headers)`** (internal) — Checks whether the request carried no body at all (no `Transfer-Encoding`, `Content-Length` absent or `0`). Used to distinguish a caller's empty request (plain 400, no alarm) from a body that *was* sent but failed to buffer (logged as an infrastructure error).
+- **Error dispatch (`.catch` block):**
+  - `WebhookProviderUnknownError` → **404** (`t('payments.webhook-not-configured')`).
+  - `WebhookRejected` → **400** (`t('payments.webhook-unverified')`). The error's `message` carries the specific reason; its `signatureFailure` flag additionally triggers a security-event record.
+  - Anything else → **500** via `catchAs`, so the provider retries.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** – `noContentResponse` (204 success) and `rejectResponse` (400/404 error bodies).
-- **`@infrastructure/http/controller`** – `catchAs` wraps unexpected errors into a 500 with structured logging.
-- **`@infrastructure/http/request`** – `callerContextOf` extracts IP/user-agent for the security-event record.
-- **`@infrastructure/observability/security-events`** – `recordSecurityEvent` emits an audit trail entry on signature-failure rejections.
-- **`@infrastructure/adapters/logger`** – Structured error/warn logs for the no-raw-body case and for `WebhookRejected` rejections.
-- **`@infrastructure/i18n`** – `t()` localises the two user-facing error headlines (`payments.webhook-unverified`, `payments.webhook-not-configured`).
-- **`../providers/registry`** – `paymentProviderRegistry.resolve(name)` maps the `:provider` path param to an installed adapter.
-- **`../providers` (index)** – Exports the `WebhookRejected` error class used for the 400 branch.
-- **`../services`** – `paymentService.applyWebhookDelivery` performs the idempotent state transition.
-- **`../audit`** – Provides the `paymentsAuditActions` enum values consumed by the security-event call.
-- **`../routes`** – Mounts this handler at `POST /payments/webhook/:provider`.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/payments/services/index.ts` | The payment service is called here (`receiveWebhook`); all signature verification, provider resolution, and idempotent application are delegated to that module. |
+| `src/modules/payments/services/errors.ts` | Defines `WebhookProviderUnknownError`, which this controller catches to return 404. |
+| `src/modules/payments/providers/index.ts` | Source of the `WebhookRejected` error class; this controller catches it, inspects its `signatureFailure` flag, and returns 400. |
+| `src/modules/payments/providers/webhook-signature.ts` | Signature verification logic lives in this module; this file never performs crypto directly. |
+| `src/modules/payments/routes.ts` | Registers this handler on the `POST /payments/webhook/:provider` route. |
+| `src/modules/payments/audit.ts` | Provides the audit-action constant used when recording a security event for an invalid signature. |
+| `src/infrastructure/observability/security-events.ts` | Provides `recordSecurityEvent`, called only when a `WebhookRejected` error carries the `signatureFailure` flag. |
+| `src/infrastructure/http/controller.ts` | Provides `catchAs` to format the 500 response. |
+| `src/infrastructure/http/request.ts` | Provides `callerContextOf` to extract caller metadata attached to a security event. |
+| `src/infrastructure/http/response.ts` | Provides `noContentResponse` (204) and `rejectResponse` (400 / 404). |
+| `src/infrastructure/i18n/index.ts` | Provides `t()` for the two localised error strings. |
+| `src/infrastructure/adapters/logger.ts` | Used to log the missing-raw-body infrastructure error and rejected-webhook warnings. |
+| `src/modules/payments/tests/integration/webhook-no-body.test.ts` | Integration test exercising the no-body / empty-body 400 path. |
+| `src/modules/payments/tests/integration/webhook-rate-limit.test.ts` | Integration test for rate-limiting behaviour on this endpoint. |
 
 ## Notes
 
-- The raw body is captured by Express's `json` `verify` hook (configured in `app/security.ts`), **not** by this file. If that ordering is broken, every webhook 400s with a misleading "unverified" message; the guard here only detects the symptom.
-- Signature verification itself lives inside each provider adapter's `parseWebhook` method (see `providers/webhook-signature.ts`); this controller never inspects the signature.
-- A non-2xx response triggers provider-side retries. The only intentional 400 is a genuinely unverifiable body; all other failures are left as 500 so retries are semantically correct.
-- `error.message` on `WebhookRejected` is the human-readable reason (e.g. "Signature timestamp outside tolerance") and is logged verbatim rather than replaced with a fixed string.
+- **Raw body is load-bearing.** The Express `json` middleware's `verify` hook (configured in `app/security.ts`) stashes the raw buffer on `request.rawBody` for this route only. If that ordering is changed, every signature check silently fails — the controller logs an explicit error in that case, but the caller still receives a 400.
+- **204, not 200, for success.** Any authentic event — including ones this module deliberately ignores — gets `204 No Content`. A non-2xx tells the provider the delivery failed and triggers a retry.
+- **400 vs 500 is deliberate.** 400 means "your signature/body is wrong, stop retrying." 500 means "our transient fault, please retry." Mapping a genuine internal error to 400 would suppress a needed retry.
+- **Provider is taken from the URL path**, never from an environment variable. A de-provisioned provider can still deliver in-flight events; each adapter verifies its own signature scheme. An unrecognised name gets a clean 404.
+- **Security events ≠ all rejections.** The security-event record fires only when the `WebhookRejected` error has its `signatureFailure` flag set. A provider sending a malformed JSON body or a missing event-id is logged at warn level but is not treated as an attack.
+- **Idempotency is the service's job.** The controller applies no locking or deduplication itself; the payment service guarantees "applied once" via conditional writes.

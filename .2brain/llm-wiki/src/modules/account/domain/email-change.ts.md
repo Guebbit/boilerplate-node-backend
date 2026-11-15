@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/domain/email-change.ts
-sha256: a656d130402d7bea9880b5818108943cfb1bc37e40d8b6445d48e745ffb46b2e
-generated_at: 2026-11-08T04:08:45.494201+00:00
+sha256: fc06e213ef2c557847062b7eb50b9633555595dcbbe25fbd084fa0aca8b85eaa
+generated_at: 2026-11-14T18:35:35.572204+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A pure, I/O-free finite-state-machine model of the email-change flow. It encodes the four states an account can be in (derived from two optional fields on the User document, never stored separately), the six events that can occur, and the transition table that maps each (state, event) pair to the next state. It exists so the service layer has a single, testable source of truth for "what is allowed and where the account ends up" without coupling to persistence or transport.
+Defines the email-change state machine as a pure transition table with no I/O. It encodes every legal (state, event) → next-state edge in one place so callers can derive the account's email-change status from two optional User fields and determine where an event leads, without touching the database or network.
 
 ## Key elements
 
-- **`EMAIL_CHANGE_STATES` / `EmailChangeState`** — the four states: `idle`, `pending`, `changed`, `changedPending`.
-- **`EMAIL_CHANGE_EVENTS` / `EmailChangeEvent`** — the six events: `request`, `resend`, `confirm`, `cancel`, `undo`, `lapse`.
-- **`EmailChangeFields`** — the two optional fields (`pendingEmail`, `previousEmail`) the state is read from.
-- **`emailChangeStateOf(fields)`** — derives the current `EmailChangeState` from a `{ pendingEmail, previousEmail }` pair.
-- **`TRANSITIONS`** (internal) — a `Record<State, Partial<Record<Event, State>>>` table; a missing entry means the event is a no-op in that state.
-- **`emailChangeNext(state, event)`** — looks up the transition table; returns the next state or `undefined` (no-op).
-- **`undoRestoresPreviousEmail(state)`** — returns `true` only when state is `changed`, distinguishing an undo that restores the old address from one that merely cancels a pending request.
+- **`EMAIL_CHANGE_STATES` / `EmailChangeState`** – The four states: `idle`, `pending`, `changed`, `changedPending`. Derived from the presence/absence of `pendingEmail` and `previousEmail`.
+- **`EMAIL_CHANGE_EVENTS` / `EmailChangeEvent`** – The six events: `request`, `resend`, `confirm`, `cancel`, `undo`, `lapse`.
+- **`EmailChangeFields`** – Interface for the two optional fields (`pendingEmail`, `previousEmail`) the state is read from.
+- **`emailChangeStateOf(fields)`** – Maps a `{ pendingEmail, previousEmail }` pair to one of the four states.
+- **`emailChangeNext(state, event)`** – Looks up the transition table; returns the next state or `undefined` when the event does not apply to that state (callers treat that as a no-op, not an error).
+- **`undoRestoresPreviousEmail(state)`** – Returns whether the state is `changed`, i.e. the undo link restores the old address rather than discarding a pending one.
+- **`TRANSITIONS`** (module-private) – The full state×event matrix; missing entries mean "no-op."
 
 ## Relationships
 
-- **`domain/index.ts`** — barrel file that re-exports this module's public API for import by the rest of the codebase.
-- **`services/email-change.ts`** — the service layer that calls `emailChangeStateOf`, `emailChangeNext`, and `undoRestoresPreviousEmail` to decide what I/O (sending links, updating the User document) to perform for each incoming HTTP request.
-- **`services/verification.ts`** — owns the proof-link verification logic that ultimately triggers the `confirm` event; this module supplies the state transition it must apply.
-- **`tests/unit/email-change-domain.test.ts`** — unit-tests the transition table and helper functions in isolation (no service or I/O dependencies).
+- **`src/modules/account/domain/index.ts`** – Barrel file; re-exports the public symbols of this module so consumers can import from the domain root.
+- **`src/modules/account/services/email-change.ts`** – Service layer that performs the I/O (sending proof/undo links, persisting field changes). It calls `emailChangeStateOf` to read current state, `emailChangeNext` to validate transitions, and `undoRestoresPreviousEmail` to decide whether an undo link restores or discards the previous address.
+- **`src/modules/account/services/verification.ts`** – Handles proof-link verification (the `confirm` / `resend` events). Feeds its results back into the email-change flow; the domain table here defines which states accept those events.
+- **`src/modules/account/tests/unit/email-change-domain.test.ts`** – Unit tests exercising every cell of the transition table and the helper functions.
 
 ## Notes
 
-- **Missing entries are no-ops, not errors.** `emailChangeNext` returning `undefined` means the caller should silently ignore the event (safe to repeat), not throw. This is an intentional design choice documented in the `TRANSITIONS` comment.
-- **State is never persisted.** It is always derived on the fly from `pendingEmail` / `previousEmail`. The file's doc header calls this out explicitly; do not add a stored `state` field.
-- **`changedPending` + `lapse` → `pending`**, not `idle`. The undo window closes, the old address is forgotten, but the pending request from the second change is still awaiting confirmation.
+- A missing entry in `TRANSITIONS` is a **no-op**, not an error. All events are idempotent by design—repeating one is always safe, so callers should not branch on `undefined` vs. a valid state for error handling.
+- The state is **never stored**; it is always derived from the two optional fields at read time. This file is the single source of truth for the derivation and the edge list.
+- `changedPending` is the only state that has six of six events mapped; `idle` has only one (`request`).
+- See `docs/modules/account.md#proving-an-address` for the broader narrative around why the table exists.

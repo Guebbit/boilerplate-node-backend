@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/public-events.test.ts
-sha256: 1c37aabf5d8fade7c234b4fd66c09db84dae9618073909a56464c3a13815d24f
-generated_at: 2026-11-08T07:13:20.232440+00:00
+sha256: 98b17d9d7173500e4bd977fd785bf45f32e8e833b78b90661438d6dd896344d5
+generated_at: 2026-11-14T20:57:42.687102+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that verify the orders module's `publicEvents` registry: for each domain event, they assert exactly what a webhook subscriber receives (event name + payload shape) when the module's manifest projects a domain event outward.
+Verifies that the orders module's public-event projections (the `publicEvents` registry on the module manifest) emit the correct webhook `eventType` strings and payload shapes for each domain event, and that the AsyncAPI contract stays in sync with the code.
 
 ## Key elements
 
-- **`describe('the orders module's public events')`** — the single top-level block; every test pulls a projection function via `ordersModule.publicEvents[<DOMAIN_EVENT>]` and calls `.toPublicEvent(...)`.
-- **ORDER_CREATED test** — expects `{ eventType: 'order.created', data: { orderId } }`.
-- **ORDER_STATUS_CHANGED test** — projects `order.paid` only when `to === 'paid'`; returns `undefined` for any other target status (e.g. `'shipped'`).
-- **ORDER_CANCELED tests (×2 + cause variant)** — projects `order.canceled` with `orderId` and `cause`; explicitly asserts the `refund` field is **not** present in the public payload (regardless of `true`/`false`). A separate case names `'lost'` as the cause.
-- **AsyncAPI enum sync test** — reads `orders/asyncapi.webhooks.yaml` from disk, parses it, and asserts the `cause` enum in `OrderCanceledPayload` is deep-equal to `Object.keys(CANCEL_CAUSES)`.
-- **ORDER_REDACTED test** — expects `{ eventType: 'order.redacted', data: { orderId } }`.
+- **`ORDER_CREATED` projection test** — asserts the subscriber receives `{ eventType: 'order.created', data: { orderId } }`.
+- **`ORDER_STATUS_CHANGED` projection test** — asserts only the `to: 'paid'` transition produces a public event (`order.paid`); any other transition produces no public event (asserted via `toBeUndefined()`).
+- **`ORDER_CANCELED` projection tests** — asserts the payload includes `cause` but deliberately omits `refund` (refund policy is a `payments` concern). Covers both `refund: true` and `refund: false`, and the `'lost'` cause specifically.
+- **Contract-sync test** — reads the module's AsyncAPI YAML file, parses the `OrderCanceledPayload.cause.enum`, and asserts it equals `Object.keys(CANCEL_CAUSES)`. Guards against the YAML copy drifting from the code's list.
+- **`ORDER_REDACTED` projection test** — asserts the subscriber receives `{ eventType: 'order.redacted', data: { orderId } }`.
 
 ## Relationships
 
-- **`src/modules/orders/module.ts`** — imports `ordersModule` to access the `publicEvents` registry under test.
-- **`src/modules/orders/events.ts`** — imports the domain-event symbols (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED`, `ORDER_REDACTED`) used as keys into that registry.
-- **`src/modules/orders/services/cancel.ts`** — imports `CANCEL_CAUSES` as the single source of truth for the cause enum cross-checked against the AsyncAPI YAML.
-- **`tests/support/paths.ts`** — imports `MODULES_ROOT` to resolve the path to `asyncapi.webhooks.yaml`.
+- **`src/modules/orders/module.ts`** — the system under test; the file imports its default export (`ordersModule`) and calls `.publicEvents[eventKey].toPublicEvent(...)` in every test.
+- **`src/modules/orders/events.ts`** — supplies the domain-event constants (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED`, `ORDER_REDACTED`) used as registry keys.
+- **`src/modules/orders/services/cancel.ts`** — supplies `CANCEL_CAUSES`, the source-of-truth list compared against the AsyncAPI enum.
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT` so the contract-sync test can locate the YAML file on disk.
+- **`tests/support/stub.ts`** — provides `asStub<never>()`, which casts a plain object to satisfy the `never`-typed input slot on the projection signature.
 
 ## Notes
 
-- Every call to `.toPublicEvent(...)` casts its argument `as never`. This is intentional: the registry slot type is `never` so a single generic registry can hold projections from every module without widening.
-- The `refund` field is deliberately absent from the public payload; the comment clarifies that refund *policy* is the payments module's concern, and subscribers hear `payment.refunded` separately when money actually moves.
-- The AsyncAPI enum test is the only test that reads a file from disk (`asyncapi.webhooks.yaml`). It guards against the YAML enum drifting from the code constant without any shared import being possible (YAML can't import TS).
+- The projection input slot is typed `never` so a single registry type can hold projections for every module. `asStub<never>()` is the escape hatch; don't expect runtime type safety at the call site.
+- The contract-sync test is a *file I/O* test (reads YAML from disk), not a pure unit test — it will fail if the file is missing or the schema path changes.
+- `refund` is intentionally absent from the public `order.canceled` payload; subscribers learn of actual money movement via a separate `payment.refunded` event.

@@ -1,7 +1,7 @@
 ---
 source: shared/rules/metrics.yaml
-sha256: 2871e52bcb31e1bfa4ea408f0a3db70c9f6d8b9b3e748b6dc342a372e0a2bf3e
-generated_at: 2026-11-08T03:09:53.326397+00:00
+sha256: 682d2d4412a03aa78c317aa7a52defa52b4f0c12983873ac478b7f22c058925a
+generated_at: 2026-11-14T17:46:17.192822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declarative source of truth for every infrastructure-level metric (name, kind, help text, label names, and histogram buckets). It is consumed by a code-generation step that emits `src/infrastructure/observability/metrics.generated.ts`; the generated file is what the runtime actually imports. Dashboards and alert rules are written against the metric names declared here, so any rename in this file is a breaking change for monitoring.
+Single source of truth for every **infrastructure-level** metric name, kind, help text, labels, and (for histograms) buckets. It is data, not code: `npm run regenerate` compiles it into `src/infrastructure/observability/metrics.generated.ts`, and dashboards/alerts are written against the names declared here. Module-specific metrics deliberately stay in their own `metrics.ts`.
 
 ## Key elements
 
-- **`metrics` map** — each key is the camelCase constant name used in generated code; each value carries:
-  - `name` — Prometheus exposition name (snake_case; counters end `_total`).
+- **`metrics` map** — one entry per metric, keyed by the camelCase constant the TypeScript code uses.
+- **Entry fields**
+  - `name` — Prometheus metric name (snake_case; counters end in `_total`).
   - `kind` — `counter`, `gauge`, or `histogram`.
-  - `help` — human-readable description surfaced to scrapers.
-  - `labelNames` — ordered label dimensions (omitted when the metric has none).
-  - `buckets` — histogram bucket boundaries, present only on `kind: histogram`.
-- **Coverage areas** — HTTP request counting/duration, cache hits/misses, outbox publish/retry/dead states, security & auth events, database operation duration, dead-letter queues, rate-limit fallbacks and refusals, process health (uptime, heap, unhandled rejections), and crontab job success/run timestamps.
+  - `help` — human-readable description used in the generated registry.
+  - `labelNames` — (optional) label dimensions.
+  - `buckets` — (histogram only) upper-bound boundaries in the unit stated in the name (ms for `http_request_duration_milliseconds`, s for `db_client_operation_duration_seconds`).
+- **Coverage** — HTTP (requests, duration, errors, in-flight), database (duration, timeouts), cache (requests, invalidation failures), outbox (published, retried, dead, pending), security (events, stale credentials), rate-limiting (fallback, refusals), queue (dead-lettered), process (uptime, heap limit, unhandled rejections), and crontab jobs (last success, last run).
 
 ## Relationships
 
-- **`shared/rules/outbox.yaml`** — declares the outbox event types and dispatch configuration; the four `outboxEvents*` metrics here are the observability surface for the lifecycle defined in that file (written → published / retried / dead → pending gauge).
-- **`shared/rules/jobs.yaml`** — defines the crontab job registry; `jobLastSuccessTimestampSeconds` and `jobLastRunTimestampSeconds` expose per-`task` gauges whose label values correspond to the job identifiers declared there.
+- **`shared/rules/jobs.yaml`** — defines the crontab jobs whose identity appears as the `task` label on `jobLastSuccessTimestampSeconds` / `jobLastRunTimestampSeconds`. Changing a job name in `jobs.yaml` requires the matching label value to remain consistent here.
+- **`shared/rules/outbox.yaml`** — configures the outbox pipeline that drives the four `outbox_*` metrics (published, retried, dead, pending). The metric names and labels are stable references used by dashboards regardless of outbox tuning.
 
 ## Notes
 
-- This file is **never read at runtime**. It is a build-time input; the only entry point is `npm run regenerate`. Editing it without regenerating leaves the generated TS stale.
-- The `jobLast*` metrics intentionally label by `task`, not `job`, because the Prometheus scrape target adds its own `job="api"` label; using `job` would cause a collision and force a rename to `exported_job`, breaking any existing rules.
-- Histogram bucket units are embedded in the metric name (`_milliseconds`, `_seconds`); do not add a separate `unit` field.
-- A module's *own* metrics (defined in its `metrics.ts`) are intentionally excluded from this file; it covers only cross-cutting infrastructure metrics.
+- **Not read at boot.** The file is a build-time input; the generated TS is what ships. Editing this file has no effect until `npm run regenerate` is run.
+- **Label-name collision guard.** `jobLastSuccessTimestampSeconds` and `jobLastRunTimestampSeconds` use `task` (not `job`) as their label because Prometheus scraping adds its own `job="api"` label; a clash would be silently renamed to `exported_job`, breaking any rule that filters on `job`.
+- **Counter naming convention.** Every counter's Prometheus name ends in `_total`; the camelCase key does not (e.g. key `httpRequestsTotal` → name `http_requests_total`).
+- **Buckets belong only to histograms.** Counters and gauges have no `buckets` field.

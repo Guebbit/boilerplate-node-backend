@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/browser-events.test.ts
-sha256: 7f892d72c4d01b03301c8fd1aa433dad104197de7dbbc6e3a80af77847d31fd0
-generated_at: 2026-11-08T09:24:31.616057+00:00
+sha256: 6a898e8ada6d7123b8c541f760be22e3287b571d50b6926719f4281ffb165a4c
+generated_at: 2026-11-14T23:01:58.847576+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting consistency test that verifies, for every deployed module, the set of browser-event names declared in its `openapi.browser-events.yaml` fragment exactly matches the keys registered on `AppModule.browserEvents` in its manifest. Exists because the two declarations are independent and a drift in either direction (missing or extra event) would silently break analytics or drop accepted requests.
+Cross-cutting consistency test that verifies, for every deployed module, the browser event names declared in its `openapi.browser-events.yaml` fragment exactly match the keys on its `AppModule.browserEvents` manifest field. It guards against the two declarations silently diverging (a name only in the fragment is silently dropped; a name only on the manifest is unreachable).
 
 ## Key elements
 
-- **`declaredBy(moduleName)`** – Reads a module's `openapi.browser-events.yaml` from `MODULES_ROOT`, parses the YAML, and returns the flat array of `event.enum` values across all schema properties. Returns `undefined` if the file does not exist.
-- **Canary test (`finds an owner…`)** – Guards against the table below being vacuously true because the fragment simply stopped being read. If `products` is deployed, at least one owner must appear.
-- **`it.each` block** – For each module that has *either* a fragment *or* manifest entries, asserts `Object.keys(appModule.browserEvents)` equals `declaredBy(name)`, both sorted. Skipped entirely (via the `owners.length > 0` guard) when no module declares events, because `it.each` throws on an empty table.
+- **`declaredBy(moduleName)`** — Reads `<MODULES_ROOT>/<name>/openapi.browser-events.yaml`, parses it, and returns the flat list of event names from all `components.schemas.*.properties.event.enum` arrays. Returns `undefined` if the file does not exist.
+- **`describe('browser events: …')`** — Filters `enabledModules` down to "owners" (modules where either `browserEvents` is set on the manifest *or* a fragment file exists).
+- **Canary `it`** — Asserts `owners.length > 0` is equivalent to `isDeployed('products')`. Serves as a sentinel: if this passes but per-owner checks are skipped, the cause is "none deployed," not "fragment unread."
+- **`it.each` per-owner test** — For each owner, asserts `Object.keys(appModule.browserEvents ?? {}).toSorted()` equals `declaredBy(name) ?? [].toSorted()`. Conditionally registered (guarded by `owners.length > 0`) because `it.each` rejects an empty table.
 
 ## Relationships
 
-- **`src/modules.ts`** → imports `enabledModules`; iterates only modules that are currently enabled in the build, so the test scope tracks the active module set.
-- **`tests/support/paths.ts`** → imports `MODULES_ROOT` (filesystem base for locating each module's YAML fragment) and `isDeployed` (used by the canary to conditionally assert).
+- **`src/modules.ts`** — Provides `enabledModules`, the iterable of deployed `AppModule` instances that the test filters and iterates over.
+- **`tests/support/paths.ts`** — Provides `MODULES_ROOT` (base directory for locating each module's fragment YAML) and `isDeployed` (used in the canary assertion).
 
 ## Notes
 
-- The test is intentionally *asymmetric-tolerant*: a name present only in the fragment is "silently dropped" by the relay; a name present only on the manifest is "unreachable." The assertion enforces exact-set equality, so either drift fails.
-- `declaredBy` assumes the YAML shape `{ components: { schemas: Record<string, { properties: { event: { enum: string[] } }> } } }` — a module that deviates from this internal schema will crash the parse rather than fail gracefully.
-- The `it.each` guard (`if (owners.length > 0)`) is a Jest-specific workaround: `it.each([])` throws, so the conditional prevents a suite-level error in environments where no module declares browser events.
+- The `it.each` is wrapped in `if (owners.length > 0)`; without this guard, an empty owner list would cause `it.each` to throw at collection time.
+- Both sides are compared with `.toSorted()` to make the assertion order-independent.
+- The canary test is deliberately tied to the `products` module as a known event-declaring module; if `products` is not deployed, the entire `it.each` block is absent and only the canary runs.

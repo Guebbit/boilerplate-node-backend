@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/external-refunds.test.ts
-sha256: 7a56f3dab38ca3f8da73b68f340b277bfae27ddb63f6ca2180691d2d47e93fe3
-generated_at: 2026-11-08T07:32:16.124968+00:00
+sha256: 71b5bc47b76504df2efd403ef47a797780cb682b05dda5a9a5c31a6565a78e79
+generated_at: 2026-11-14T21:14:20.375936+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the "external refund" path: refunds that originate in the payment provider's own dashboard and are discovered via a webhook event. Verifies one-time import with correct records, matching (not re-importing) of the app's own refunds, rejection of pending/failed/foreign-currency events, overshoot handling, and the hold-and-cancel workflow when an external refund leaves no remaining amount for an in-flight refund of the app.
+Integration test (real Mongo, fake provider) for refunds that originate in the payment provider's dashboard. Verifies that such external refunds are imported idempotently as settled `external` records with the correct follow-ups (status stamp, outbox event, buyer email), that our own refunds are *matched* to incoming events rather than double-imported, and that an external refund which overshoots the remaining balance causes our in-flight refund to be held unsent and surfaced for staff cancellation.
 
 ## Key elements
 
-- **`paidOrder()`** – Seeds a user, product (50.00 × 2 = 100.00), order, inventory reservation, and a card payment; returns `orderId` and `providerRef`.
-- **`deliver(providerRef, refundRef)`** – Triggers `paymentService.applyWebhookDelivery` with the `"fake"` provider, simulating the provider's refund-event webhook.
-- **`refundedEvents()`** – Counts `PAYMENT_REFUNDED` rows in the outbox collection to assert exactly one domain event was published.
-- **`overtaken()`** – Composite setup: pays 100.00, forces a 50.00 in-app refund to fail transiently, then adds an 80.00 external refund via the fake dashboard and delivers it.
-- **`describe('a refund made in the dashboard')`** – Five cases: idempotent single import (duplicate delivery ignored), two partial refunds, pending-then-succeeded transition, skipping failed/foreign-currency events, and recording a refund larger than the original payment.
-- **`describe('a refund that is ours')`** – Two cases: matching by provider-echoed record id (no second row created); settling a timed-out in-app refund from the provider event without duplicating it.
-- **`describe('an open refund of ours an outside refund left no room for')`** – Verifies the held refund is never re-sent, appears in `listAttention` with `refund_exceeds_remaining`, is cancellable by staff, and clears attention after cancellation.
+- **`paidOrder()`** – builds a user, product, order (2 × 50.00), reserves inventory, pays 100.00 by card; returns `{ orderId, providerRef }`.
+- **`paymentOf` / `refundsOf` / `refundedOf` / `stampOf`** – small read helpers over the payment repository and order service for assertions.
+- **`deliverRefund(providerRef, refundRef)`** – wraps `deliver()` to inject a provider refund event into the module.
+- **`refundedEvents()`** – counts `PAYMENT_REFUNDED` rows in the outbox collection.
+- **`overtaken()`** – shared setup: our 50.00 refund fails (transient), then an 80.00 external refund arrives.
+- **Suite "a refund made in the dashboard"** – covers idempotent import (event delivered twice → one record), multiple partial refunds, pending/failed/foreign-currency skipping, and overshoot beyond the paid amount.
+- **Suite "a refund that is ours"** – confirms the provider-echoed record ID triggers a *match* (status flip to `succeeded`) rather than a new import; also the timeout-then-succeed case.
+- **Suite "an open refund of ours an outside refund left no room for"** – verifies retry does not re-send the held refund, the attention list reports the overshoot, and staff can cancel the held record.
 
 ## Relationships
 
-- **`scenarios/support/doubles/payments/fake.ts`** – Source of `addFakeExternalRefund`, `fakePaymentProvider`, `refundRefOfRecord`, `setFakeRefundFailure`, `setFakeRefundTimeout`, and `setFakeRefundOutcome`; acts as the stand-in for the provider's dashboard.
-- **`src/modules/payments/services/index.ts`** – `paymentService.applyWebhookDelivery`, `retryOpenRefunds`, `listAttention`, `cancelRefund`, `getForOrder` are the units under test.
-- **`src/modules/payments/repository.ts`** – `paymentRepository.findByOrderId` used by all query helpers.
-- **`src/modules/payments/events.ts`** – `PAYMENT_REFUNDED` constant used to filter outbox assertions.
-- **`src/modules/payments/module.ts`** – Registered via `registerCheckoutModules([paymentsModule])` in `beforeEach`.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard` and `refundOrderPayment` create the in-app payment/refund prerequisites.
+- **`src/modules/payments/services/index.ts`** – the SUT; tests exercise its external-refund import, matching, hold, retry, attention-list, and cancel flows.
+- **`src/modules/payments/repository.ts`** – read to assert on refund records and `amountRefunded` after each scenario.
+- **`src/modules/payments/events.ts`** – supplies the `PAYMENT_REFUNDED` constant used to count outbox rows.
+- **`src/modules/payments/module.ts`** – registered in `beforeEach` via `registerCheckoutModules`.
+- **`src/modules/payments/tests/factories.ts`** – `payByCard` and `refundOrderPayment` create the initial payment and our-side refund actions.
+- **`src/modules/payments/tests/deliver.ts`** – `deliver()` injects provider webhook events into the module.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` processes pending outbox entries; `outboxEventModel` queried for event counts.
+- **`src/kernel/events.ts`** – `resetDomainEvents()` called in `afterEach` to clean up domain-event state.
+- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is mocked; assertions verify the `payments.refund-issued` template fires exactly once.
 - **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` build the order fixture.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` supplies the line-item product.
-- **`src/modules/inventory/index.ts`** – `inventoryService.reserveForOrder` completes the order lifecycle before payment.
-- **`src/modules/orders/index.ts`** – `orderService.getById` reads the stamped `paymentStatus`.
-- **`src/kernel/outbox.ts`** – `outboxEventModel.countDocuments` and `settleOutboxNudges` drive event-persistence assertions.
-- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach` prevents cross-test leakage.
-- **`src/infrastructure/adapters/mailer.ts`** – Mocked (`jest.mock`) to assert the `payments.refund-issued` buyer email is enqueued exactly once.
+- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** – order service used to read the `paymentStatus` stamp for assertions.
+- **`src/modules/inventory/index.ts` / `src/modules/inventory/services/index.ts`** – inventory reservation set up before payment so the order is in a realistic state.
+- **`scenarios/support/doubles/payments/fake.ts`** – the fake provider dashboard: `fakePaymentProvider`, `addFakeExternalRefund`, `refundRefOfRecord`, `setFakeRefundFailure`, `setFakeRefundTimeout`, `setFakeRefundOutcome`.
 
 ## Notes
 
-- **Real Mongo**: `setupTestDb()` connects to a test database; no in-memory store. The "fake" is only the provider adapter (the dashboard lever), not the data layer.
-- **Idempotency key convention**: imported external refunds carry `idempotencyKey: 'import:<providerRefundRef>'`, which is what makes duplicate webhook deliveries no-ops.
-- **Retry timing override**: the "held" and "timed-out" tests set `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` via `withEnvironmentOverrides` so the retry loop fires immediately in-test.
-- **`eventually()` helper**: outbox nudge settling is asynchronous; assertions on outbox counts and mailer calls are wrapped in `eventually` to poll until the background flush completes.
-- **Currency guard**: a successful external refund in a currency other than the payment's currency (e.g. USD on a EUR payment) is silently skipped—no record, no event.
+- The test uses **real MongoDB** (`setupTestDb`); only the mailer and the provider are faked.
+- Idempotency is enforced by the `idempotencyKey` `import:<refundRef>`; delivering the same event twice must yield exactly one refund record.
+- "Overshoot" (external refund > amount paid) is **still recorded**; the system does not clamp the refunded total.
+- Pending and failed external refunds are ignored entirely—no record is created.
+- A currency mismatch (e.g. USD on a EUR payment) is treated as "not ours" and skipped.
+- `withEnvironmentOverrides` zeroes `NODE_PAYMENT_REFUND_RETRY_MINUTES` to make retry/timeout assertions deterministic.
+- The "matched, never imported" guarantee is checked by asserting the refunds array length stays 1 after the provider event for our own refund arrives.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/controllers/get-tasks.ts
-sha256: 3438535b11a1b330dc827473f62243707be2224f1af8cbeade0ae015ddddde89
-generated_at: 2026-11-08T08:32:04.072794+00:00
+sha256: 678666e8cdf0b9c6e5498a1b95c40569c25da571b92cab6664bf3f162a7c2f2e
+generated_at: 2026-11-14T22:06:17.824671+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /tasks` and `POST /tasks/search`, exposing the staff task queue in both query-string and DTO-body spellings. It is built on the shared `createSearchController` factory so the two routes share one validation/search pipeline. The response is scoped to the caller's jurisdiction and is deliberately never Redis-cached.
+Single-export controller that serves `GET /tasks` and `POST /tasks/search` for staff, searching and paginating tasks within the caller's jurisdiction. It is deliberately **never Redis-cached** because the result set is scoped to one person's permissions, not a shared shop-wide answer.
 
 ## Key elements
 
-- **`searchTasksQuerySchema`** — Zod schema extending the orval-generated `SearchTasksBody` with `page` (from `pageSchema`), `pageSize` (from `pageSizeSchema`), and `overdue` (`optionalBooleanSchema`). Coercion happens here because the GET form arrives as query text, not typed JSON.
-- **`getTasks`** (named export) — The actual search controller created via `createSearchController`. Bound to entity `'tasks'`, validated against `searchTasksQuerySchema`, and delegates to `taskService.search(parsed, callerContextOf(request))`, returning `Promise<TasksResponse>`.
+- **`searchTasksQuerySchema`** — Zod schema extending the orval-generated `SearchTasksBody` with `page`, `pageSize`, and `overdue` fields. These are coerced from query-string text (GET form) into typed values.
+- **`getTasks`** *(exported)* — The controller produced by `createSearchController`. Declares `entity: 'tasks'`, binds `searchTasksQuerySchema`, and delegates to `taskService.search(parsed, callerContextOf(request))`, returning `Promise<TasksResponse>`.
 
 ## Relationships
 
-- **`src/modules/tasks/service.ts`** — Calls `taskService.search` to perform the actual lookup; this controller is a thin HTTP-to-service bridge.
-- **`src/infrastructure/surfaces/create-search-controller.ts`** — Provides the `createSearchController` factory that wires up routing, schema validation, and error handling for both GET and POST variants.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf(request)` to extract the authenticated caller's jurisdiction context passed into the service call.
-- **`src/infrastructure/http/schemas.ts`** — Provides the reusable `pageSchema`, `pageSizeSchema`, and `optionalBooleanSchema` used to build `searchTasksQuerySchema`.
-- **`src/modules/tasks/routes.ts`** — Registers `getTasks` on the router for the `/tasks` and `/tasks/search` endpoints.
-- **`src/types/index.ts`** — Source of the `TasksResponse` return type.
+- **`src/infrastructure/surfaces/create-search-controller.ts`** — Supplies the `createSearchController` factory that wires schema validation, route-method dispatch, and response shaping around the `runSearch` callback.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, which extracts the authenticated caller's identity/jurisdiction passed to the service.
+- **`src/infrastructure/http/schemas.ts`** — Provides the reusable Zod primitives `pageSchema`, `pageSizeSchema`, and `optionalBooleanSchema` used to build `searchTasksQuerySchema`.
+- **`src/modules/tasks/services/index.ts`** — Source of `taskService`; the `search` method performs the actual data lookup.
+- **`src/modules/tasks/routes.ts`** — Mounts `getTasks` at the `GET /tasks` and `POST /tasks/search` paths.
+- **`src/types/index.ts`** — Declares the `TasksResponse` type that `runSearch` resolves to.
 
 ## Notes
 
-- The docstring explicitly states this endpoint is **never Redis-cached** because the result is per-person (jurisdiction-scoped), not a shared shop-wide value. Do not add caching at this layer.
-- `overdue` is coerced from a string boolean (e.g. `"true"`/`"false"`) to a real boolean via `optionalBooleanSchema`; downstream code can rely on a typed `boolean | undefined`.
-- The module uses only a named export (`getTasks`); there is no default export.
+- The `overdue` field is an **optional boolean** parsed from a query string (e.g. `?overdue=true`), not a JSON body field. If adding new query params, follow the same pattern of extending `SearchTasksBody` with string-coerced schemas rather than redefining the body shape.
+- Because `createSearchController` handles both GET and POST, the same schema validates both the query string and the JSON body—keep field types compatible with both encodings.
+- See `docs/modules/tasks.md` for broader module context (per the file's doc comment).

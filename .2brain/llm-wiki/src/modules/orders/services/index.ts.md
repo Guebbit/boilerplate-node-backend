@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/index.ts
-sha256: 053601204b64133e0cba07c12174353876890ce5b185c7669fbe2abbe67df4d7
-generated_at: 2026-11-08T06:58:01.369334+00:00
+sha256: 08b2234a997fca39d7c26a3335fe609a70ab5b84d3399ab9770f7670d5e60374
+generated_at: 2026-11-14T20:43:40.280866+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel and facade for the entire Order service layer. It re-exports every sub-service (read, write, status, fulfillment, cancellation, timeline, stats, retention, etc.) into a single `orderService` object, which is the **only** entry point a controller or cross-module caller may use. This enforces the project's layering rule: one file per flow, one public surface.
+Barrel module that aggregates every order-service function from ~20 sub-files and re-exports them as a single `orderService` object. It is the **only** import surface a controller or cross-module caller may use to reach Order business logic, enforcing the "one door in, one door out" layering rule described in `docs/theory/layers.md`.
 
 ## Key elements
 
-- **`orderService`** — the exported const object aggregating ~70 named functions. Every external caller imports and calls through this single object rather than reaching into individual sub-files.
-- **Re-exported types** — `OrderBrief`, `PlaceOrderInput`, `PlaceOrderLine`, `PlaceOrderOutcome`, `CancelCause`, `OrderExport`, and stats read-model types, so callers never import from sub-files directly.
-- **Config re-exports** — `orderFrontendLink`, `orderPagePath`, `withdrawalPeriodDays` from `../config`, re-published here because the module barrel is restricted to services/domain/events/emails/model sources (see `local/barrel-allowed-sources`).
-- **Sub-service imports (grouped by concern):**
-  - *Read / scope:* `search`, `getById`, `getForCaller`, `callerScope`, `ownerScope`, `ownLiveScope`, `findOwnOrders`, `orderBriefsByIds`, etc.
-  - *Write (single door):* `placeOrder` (from `place.ts`), `create`, `updateById`.
-  - *Lifecycle / status:* `markPaid`, `markShipped`, `markDelivered`, `markFulfillmentComplete`, `markUndeliverable`, `overrideStatus`, etc.
-  - *Fulfillment / stock:* `shipStock`, `topUpStock`, `releaseStock`, `extendHold`, `isPayableNow`, `refreshShelf`.
-  - *Cancellation:* `cancelOnRequestById`, `withdrawById`, `expireReservationById`, `cancelForPaymentMismatchById`.
-  - *Retention / PII:* `detachUserId`, `eraseUserOrders`, `anonymizeDueOrders`, `startOrderPiiClock`.
-  - *Timeline:* `appendTimeline`, `readTimeline`, `scrubTimelineText`, `collectTimelineOf`, etc.
-  - *Stats / analytics:* `paidBuckets`, `productTotals`, `pipeline`, `cancellationCohort`, etc.
-  - *Misc:* `reencryptOrders`, `freezeOrderLines`, `correctShippingAddress`, `openOrderExport`, `extendGuarantee`.
+- **`orderService`** (const object) — flat namespace of every public order operation: reads, writes, cancellation, fulfillment, timeline, retention/PII, stats, scope helpers, and action decorators. This is the sole value export consumed externally.
+- **Type re-exports** — `OrderBrief`, `PlaceOrderInput`, `PlaceOrderLine`, `PlaceOrderOutcome`, `PlaceOrderShipping`, `CancelCause`, `OrderExport`, `PaidBucket`, `ProductTotal`, `CategoryTotal`, `ProductSeriesRead`, `AwaitingTransfers`, `PipelineRead`.
+- **Config re-exports** — `orderFrontendLink`, `orderPagePath`, `withdrawalPeriodDays` pulled from `../config`. Re-exported here (rather than from `../index.ts`) to satisfy the barrel-allowed-sources rule.
+- **Sub-module imports** — functions are sourced from `./read`, `./digest`, `./crud`, `./remove`, `./place`, `./notify`, `./cancel-mail`, `./purchase-hold`, `./retention`, `./scope`, `./actions`, `./snapshot`, `./reencrypt`, `./cancel`, `./status`, `./guarantee`, `./fulfillment`, `./override`, `./address`, `./export`, `./timeline`, `./stats`.
 
 ## Relationships
 
-- **`src/modules/cart/services/checkout.ts`** and **`src/modules/cart/controllers/post-checkout.ts`** — call `orderService.placeOrder` (the sole write door) and `orderService.considerPurchaseHold` when a cart is converted to an order.
-- **`src/modules/cart/services/reorder.ts`** — reads prior orders via `orderService.getById` / `orderService.findManyByIds` to reconstruct lines for a new order.
-- **`src/modules/delivery/services/act.ts`** — drives status transitions through `orderService.markProcessing`, `markShipped`, `markDelivered`, `markFulfillmentComplete`, `markUndeliverable`.
-- **`src/modules/delivery/services/cut.ts`** — interacts with stock via `orderService.shipStock`, `orderService.topUpStock`, `orderService.releaseStock`, `orderService.releaseTopUp`.
-- **`src/modules/delivery/services/deliver.ts`** — finalises delivery state via `orderService.markDelivered` and `orderService.markFulfillmentComplete`.
-- **`src/modules/delivery/services/cancel-remainder.ts`** — calls `orderService.releaseStock` / `orderService.releaseTopUp` to free stock on partial fulfilment.
-- **`src/modules/delivery/services/digest.ts`** — reads `orderService.ordersDigest` / `orderService.shippingMethodsOf` for reporting.
-- **`src/modules/delivery/services/ensure.ts`** — checks order readiness via `orderService.isPayableNow` and scope helpers.
-- **`scenarios/flows/shop-history.ts`** — consumer of read paths (`orderService.search`, `orderService.findOwnOrders`, `orderService.readTimeline`) to render a buyer's order history.
-- **`src/modules/cart/tests/integration/checkout-stock-divergence.test.ts`** and **`src/modules/cart/tests/integration/stock.test.ts`** — integration tests that exercise `orderService` placement and stock methods end-to-end.
+- **`src/modules/cart/services/checkout.ts` / `reorder.ts`** — depend on this module's `orderService` to perform order creation and post-creation recording during cart checkout flows.
+- **`src/modules/cart/controllers/post-checkout.ts`** — consumes `orderService` for post-creation follow-up operations after a checkout is finalized.
+- **`src/modules/delivery/services/digest.ts`** — imports from this module to build delivery-facing order summaries.
+- **`src/modules/delivery/services/act.ts`, `deliver.ts`, `cut.ts`, `board.ts`, `announce.ts`, `ensure.ts`, `cancel-remainder.ts`** — invoke fulfillment, status, and stock-management functions exposed through `orderService`.
+- **`src/modules/delivery/module.ts`** — delivery module registration; wires delivery services that in turn depend on `orderService`.
+- **`src/modules/cart/tests/integration/checkout-stock-divergence.test.ts`, `stock.test.ts`** — integration tests that exercise `orderService` fulfillment and stock functions end-to-end.
+- **`scenarios/flows/shop-history.ts`** — scripted flow that drives `orderService` read paths to assert shop-history behavior.
 
 ## Notes
 
-- **Single write door.** The file header states explicitly that `place.ts` (`orderService.placeOrder`) is the *only* function that creates a new order. Do not add parallel creation paths.
-- **Scope is mandatory for reads.** The header notes that `scope.ts` gates every read; callers must use `getForCaller` / `ownerScope` / `ownLiveScope` rather than raw `getById` when the actor's permissions matter.
-- **Barrel restriction.** Config getters are re-exported *from here* instead of `../index.ts` because the module's public barrel may only publish services, domain, events, emails, or model symbols. Do not add non-service exports to this file.
-- **One-file-per-flow convention.** The header references `docs/theory/layers.md`: each sub-concern lives in its own file under `./`; this index only aggregates. Do not implement new logic in this file.
+- Controllers must **not** import the sub-files (`./place`, `./cancel`, etc.) directly; the barrel is the enforced boundary. Bypassing it breaks the layering contract.
+- The `orderService` object is intentionally flat (no sub-namespaces), so callers use dot-access (`orderService.placeOrder`). Adding a nested structure here would be a breaking change for every consumer.
+- Config getters are re-exported from this file rather than `../index.ts` due to the `local/barrel-allowed-sources` restriction; adding new config re-exports should follow the same pattern.
+- `place.ts` is documented as the **only** write path for creating a new order; all other mutations go through `cancel`, `status`, `fulfillment`, `retention`, or `timeline` sub-modules.

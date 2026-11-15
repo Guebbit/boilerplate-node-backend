@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/module.yaml
-sha256: 27c7d181716c2b882a96f4a42ebd1ec0ea42005b7495fde2339b38d753c679fb
-generated_at: 2026-11-08T07:22:26.084619+00:00
+sha256: 980c1bbf68ff1e2b075478734157d6db5f8ffb9d9e6562ec29448510ae86fe7b
+generated_at: 2026-11-14T21:01:47.359167+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module declaration for the **payments** supporting subdomain (group: *shop*). It registers the module's cross-module dependencies, its rate-limit budgets, and its scheduled background jobs, so the runtime can wire up payment handling ("an order's money, behind a provider port") without hard-coding those concerns into handler code.
+Module manifest for the **payments** subdomain (group `shop`, subdomain `supporting`). It declares the module's identity, its cross-module dependencies, its rate-limit budgets, and its scheduled background jobs. The runtime reads this file to wire the module into the process; it contains no executable logic itself.
 
 ## Key elements
 
-- **`dependsOn`** – Declares three upstream modules the payments handlers read from or write to: `access` (the `ownOrderFlag` audit flag), `orders` (freezing an order's total on payment; opening a refund on a refunding cancel), and `shop` (the zone a pay-by deadline is printed in).
-- **`rateLimits`** – Five budgets, all audited:
-  - `paymentWebhook` – bounds deliveries to `POST /payments/webhook/{provider}` (default 60 / shared window).
-  - `paymentsConfirmAttempts` – bounds attempts on `POST /payments/:id/confirm` regardless of outcome (5 / 1 h).
-  - `paymentsConfirmDeclines` – bounds genuine DECLINE responses on the same route (3 / 1 h).
-  - `paymentsConfirmDeclinesBlock` – bounds declines per address block across accounts (10 / 1 h), catching card-testing spread.
-  - `paymentsIntentSync` – pools `POST /payments` and `POST /payments/:id/sync` calls (30 / 1 h).
-- **`jobs`** – Two cron jobs:
-  - `reapPayments` (`reap:payments`, daily 02:15) – deletes never-settled payment attempts past their retention window.
-  - `sweepPaymentEffects` (`sweep:payment-effects`, every 5 min) – retries unanswered refunds and settles payments whose webhook never arrived.
+- **`summary` / `subdomain` / `group`** — Identifies the module as "An order's money, behind a provider port" within the `shop` group.
+- **`dependsOn`** — Three module-level dependencies:
+  - `access` — supplies the `ownOrderFlag` audit flag for money steps on the caller's own order.
+  - `orders` — a payment freezes an order's total; a refunding cancel reopens the refund.
+  - `shop` — provides the zone in which a transfer's pay-by deadline is printed.
+- **`rateLimits`** — Five named budgets (all overridable via `NODE_*` env vars):
+  - `paymentWebhook` (60/addr-block, shared window) — refusals on `POST /payments/webhook/{provider}`; **not audited** (a forged flood would bury the audit trail; refusal metric + signature-failure alert still fire).
+  - `paymentsConfirmAttempts` (5/hour) — all outcomes on `POST /payments/:id/confirm`; **audited**.
+  - `paymentsConfirmDeclines` (3/hour) — genuine DECLINE responses only, excluding race-condition 409s; **audited**.
+  - `paymentsConfirmDeclinesBlock` (10/hour per address block) — cross-account card-testing detector; **audited**.
+  - `paymentsIntentSync` (30/hour) — pooled budget for `POST /payments` and `POST /payments/:id/sync`; **audited**.
+- **`jobs`** — Two cron-scheduled tasks:
+  - `reapPayments` (`15 2 * * *`) — deletes never-settled payment attempts past retention.
+  - `sweepPaymentEffects` (`*/5 * * * *`) — retries unanswered refunds; settles payments whose webhook never arrived. Runs well inside the 30-minute reservation hold a stuck `commit` would otherwise outlive.
 
 ## Relationships
 
-- **`src/modules/payments/openapi.yaml`** – The OpenAPI spec in the same directory defines the endpoints referenced by every rate-limit bound (e.g. `POST /payments/:id/confirm`, `POST /payments/webhook/{provider}`); the budgets here gate those routes at the transport layer.
-- **`src/modules/payments/authorization.yaml`** – Sibling file in the same module that likely holds the authorization/permission rules guarding the payment routes; the `audited: true` flag on each budget and the `access` dependency (`ownOrderFlag`) point to authorization logic defined there.
-- **`src/modules/invoicing/module.yaml`** – Adjacent money-flow module; the `orders` dependency (freezing totals, opening refunds) is the shared seam between payments and invoicing.
+- **`src/modules/invoicing/module.yaml`** — The payments module's `sweepPaymentEffects` job settles payments whose webhook never arrived and retries refunds; invoicing is the downstream consumer of those settled/refunded states.
+- **`src/modules/payments/authorization.yaml`** — Same-module sibling that defines the authorization (permission) rules for the payment endpoints whose rate limits are declared here.
+- **`src/modules/payments/openapi.yaml`** — Same-module sibling that provides the OpenAPI contract for the payment routes referenced by the rate-limit budgets (`POST /payments`, `POST /payments/:id/confirm`, `POST /payments/webhook/{provider}`, etc.).
 
 ## Notes
 
-- The three 1-hour payment-velocity budgets (`paymentsConfirmAttempts`, `paymentsConfirmDeclines`, `paymentsConfirmDeclinesBlock`) intentionally use a **fixed** `windowMs: 3600000` rather than the shared browsing window — the one-hour duration is semantically part of the budget, not a reuse of the shared window.
-- `paymentsConfirmDeclines` counts only genuine provider DECLINE responses, deliberately excluding other 409 results (e.g. a race condition) on the confirm route.
-- `paymentWebhook` uses `windowMs: shared`, meaning it rides the global shared-window duration rather than a fixed one; its counter is consumed on success only.
-- `sweepPaymentEffects` runs every 5 minutes specifically to stay well inside the 30-minute reservation hold that a stuck `commit` would otherwise outlive.
-- Each rate-limit's `environmentVariable` exposes a `NODE_*` override for ops; `defaultMax` is the fallback when the variable is unset.
+- The three confirm-velocity budgets are **fixed at one hour** by design: the duration is semantically part of the budget, not a side-effect of the shared browsing window (unlike `paymentWebhook`, which uses the shared window).
+- `paymentWebhook` is the only budget with `audited: false`; the rationale is that a forged flood would itself overwhelm the audit log. Monitoring is delegated to a refusal counter and a signature-failure alert.
+- `paymentsConfirmDeclines` explicitly excludes non-DECLINE 409s (e.g. race conditions), so the budget is not inflated by benign concurrent requests.
+- `sweepPaymentEffects` cadence (5 min) is chosen to stay comfortably inside the 30-minute reservation hold; the comment in the file calls this out as intentional.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/model.ts
-sha256: bb7186575851c14d4f23b8a34f40287fb48214779e727d3607c5faf1269f3f6f
-generated_at: 2026-11-08T07:21:56.684758+00:00
+sha256: 9a569be9f074a5b18ce6e7e4da0f2606d21585a987e2386879bf4e62c427e333
+generated_at: 2026-11-14T21:00:55.432772+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and TypeScript document interfaces for the payment collection — one document per order (enforced by a unique index on `orderId`). It is the single source of truth for the payment's shape: status lifecycle, embedded refund and dispute sub-documents, and the serialization/typing contracts that every other file in the module reads from or writes to.
+Defines the Mongoose schema and document interfaces for the `payments` collection — one document per order, made a database fact by a unique index on `orderId`. It is the single source of truth for the payment lifecycle status (`PaymentStatus`), refund attempt records, dispute records, and the provider reference, so that the enum values on the wire and in the database cannot drift apart.
 
 ## Key elements
 
-- **`RefundLine`** — minimal `{ productId, quantity }` pair identifying goods a refund pays back; plain IDs, no cross-module references.
-- **`RefundRecord`** — one embedded sub-document per refund attempt. Carries amount, currency, status, idempotency key, retry metadata (`attempts`, `attemptedAt`, `nextAttemptAt`), settlement markers (`settledByHand`, `settledAt`), and reversal markers (`reversedAt`, `reversedAfterSettling`).
-- **`DisputeRecord`** — one embedded sub-document per bank dispute, keyed by `disputeRef`. Holds provider-reported status, amount, evidence deadline, and an `observedAt` fence for out-of-order updates.
-- **`RefundSettlement`** — narrow record of what a settle write records beyond status (provider ref, hand-settle flag, attempt fence, allowed source statuses via `from`).
-- **`PaymentDocument`** — the full document interface: `orderId`, optional `userId`, amount/currency, `status`, `provider`, `providerRef`, method, transfer fields, `amountRefunded`, `refunds[]`, `disputes[]`, timestamps.
-- **`PaymentModel`** — `Model<PaymentDocument>` alias; the type repository and services receive.
-- **`refundSchema` / `disputeSchema`** — Mongoose `Schema` instances for the embedded sub-documents, using `moneyPath` for decimal money fields and enum constraints from the shared `@types` package.
-- **Main payment schema** (truncated in view) — wires the above together, applies `moneyPlugin` and `applySerialization`, and declares the unique index on `orderId` and the unique index on `providerRef`.
+- **`PaymentDocument`** — the main document interface: `orderId` (unique), `userId?`, `amount`, `currency`, `status`, `provider`, `providerRef?`, `cardLast4?`, `method`, `amountRefunded`, `refunds[]`, `disputes[]`, `handledCancelEvents[]`, plus hand-recorded fields (`reference`, `receivedAt`, `transferReference`, `payBy`).
+- **`RefundRecord`** — embedded sub-document per refund attempt. Carries its own `idempotencyKey`, `attempts`, `attemptedAt` (fence token), `nextAttemptAt`, `settledByHand`, `settledAt`, `reversedAt`, `reversedAfterSettling`, and optional `lines` / `shipping` for credit-note input.
+- **`RefundLine`** — `{ productId, quantity }`; the minimal product-line data `invoicing` needs to look up a VAT rate. No cross-module reference.
+- **`DisputeRecord`** — embedded, unique per `disputeRef`. Holds `kind`, `status`, `reason`, `fundsWithdrawn`, `evidenceDueBy`, `observedAt` (out-of-order fence), `dashboardUrl`.
+- **`RefundSettlement`** — the payload a settlement write records: `providerRefundRef?`, `settledByHand?`, `attempt?` (fence token), `from?` (allowed source statuses for a hand settle).
+- **`PaymentModel`** — `Model<PaymentDocument>` type alias; the actual Mongoose model is registered at the bottom of the file.
+- **`refundSchema`** — the `Schema<RefundRecord>` instance with `moneyPath`, enums, and validation constraints.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/money-field.ts`** — provides `moneyPath` (schema-level decimal path builder) and `moneyPlugin` (document-level money helpers) used by every money field in this schema.
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, which attaches the wire-serialization transforms to the document.
-- **`src/modules/payments/repository.ts`** — the only file that issues Mongoose queries/mutations against the `PaymentModel` exported here; this file owns the schema, repository owns the reads/writes.
-- **`src/modules/payments/presenter.ts`** — maps a `PaymentDocument` to the public wire shape; the "never published" and "staff only" annotations in this file define what presenter must strip.
-- **`src/modules/payments/index.ts`** — module barrel; re-exports the model so services and external consumers import from the module root.
-- **Services** (`intent`, `refund-settlement`, `disputes`, `effects`, `announce`, `external-refunds`, `list`, `notify`, `offline`) — each reads or writes specific fields defined here (e.g. `refund-settlement.ts` matches on `attemptedAt` and `idempotencyKey`; `disputes.ts` overwrites `DisputeRecord` entries keyed by `disputeRef`); they rely on this file's types for their input/output contracts.
-- **`scenarios/flows/backdate.ts`** — constructs or seeds `PaymentDocument` instances for test/flow simulation.
+- **`src/infrastructure/persistence/money-field.ts`** — provides `moneyPath` and `moneyPlugin`, used to type monetary fields as decimal strings with non-negative validation.
+- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, applied to the schema so documents serialize consistently (money, dates, enums) when they leave the process.
+- **`src/modules/payments/repository.ts`** — owns all queries against this model; the model file contains no query logic (noted in the `PaymentModel` doc comment).
+- **`src/modules/payments/services/refund-settlement.ts`** — reads/writes `RefundRecord` fields (`status`, `settledAt`, `providerRefundRef`, `attemptedAt`) when settling or failing a refund attempt.
+- **`src/modules/payments/services/disputes.ts`** — upserts `DisputeRecord` entries on the document when the provider reports a dispute.
+- **`src/modules/payments/services/external-refunds.ts`** — opens new `RefundRecord` entries on the hand-settled or provider-refused paths.
+- **`src/modules/payments/services/intent.ts`** — creates the initial payment document and transitions `status` through the provider lifecycle.
+- **`src/modules/payments/services/effects.ts`** — applies side-effect writes such as `amountRefunded` increments and `handledCancelEvents` appends to the document.
+- **`src/modules/payments/services/notify.ts`** — reads document state to decide what notifications to emit.
+- **`src/modules/payments/services/offline.ts`** — handles offline/hand-settled payment recording against this document.
+- **`src/modules/payments/services/announce.ts`** — publishes domain events derived from document transitions.
+- **`src/modules/payments/services/list.ts`** — reads documents for staff-facing list views.
+- **`src/modules/payments/presenter.ts`** — shapes the document into the wire payload, stripping fields marked "never published" (`providerRef`, `lines`, `attempts`).
+- **`src/modules/payments/index.ts`** — barrel export; re-exports the model, interfaces, and `PaymentModel` type.
+- **`scenarios/flows/backdate.ts`** — test/flow scenario that manipulates `createdAt` / `settledAt` timestamps on the document to simulate time passage.
 
 ## Notes
 
-- **One payment per order is structural**, not just logical: the unique index on `orderId` means a retry after a decline re-confirms the same document.
-- **`providerRef` is never published.** It is the provider-side handle for real money and is indexed/unique precisely because webhooks look up by it. All API endpoints use the document's own `_id`.
-- **Several fields are explicitly "never published" or "staff only"** (`idempotencyKey`, `lines`, `shipping`, `providerRefundRef`, `failureReason`, `attempts`, `attemptedAt`, `nextAttemptAt`, `settledByHand`, entire `disputes` array, `providerRef`). The presenter is responsible for stripping them; the schema itself stores them.
-- **`attemptedAt` is a fence token, not a timestamp of last activity.** A settle or fail write must match on it so a slow stale attempt cannot clobber a newer one.
-- **`amountRefunded` increments the moment a refund is opened** (not when it settles), which is the guard against two racing partial refunds exceeding the original amount.
-- **`userId` is unset (not deleted) on account erasure**, mirroring the `orders` convention. No PII beyond the ID is stored on the payment.
-- **Embedded sub-documents use `_id: false` for `RefundLine`** but retain Mongoose-generated `_id` for `RefundRecord` and `DisputeRecord` (the latter also keyed by `disputeRef`).
-- **`currency` is stored per-document** (not read from config at query time) because the default currency env var can change after the payment was made.
+- **Fence-token pattern**: `attemptedAt` on a `RefundRecord` acts as a compare-and-swap token. A settle or failure write must match on the same `attemptedAt` value, so a slow stale attempt cannot overwrite a newer one. The same pattern appears in `RefundSettlement.attempt`.
+- **`amountRefunded` is incremented at refund-open time**, not at settlement. This is what prevents two racing partial refunds from exceeding the original payment.
+- **`handledCancelEvents`** is an idempotency log for `order.canceled` outbox events. A redelivered event finds its id here and is a no-op, even if staff voided the original refund in the meantime.
+- **`reversedAt` is set once and never cleared.** Once a refund is reversed, the sweep will not resend it; a redelivered provider report finds nothing left to change.
+- **`userId` is unset (not nulled) when the account is erased**, mirroring the `orders` convention. No other PII is stored on the payment document.
+- **`providerRef` is unique-indexed** and is the webhook's sole lookup key. Two payments answering to one reference would settle the wrong order, which is why uniqueness is enforced at the DB level.
+- **Enum values come from `@types`** (the shared contract), not from local string literals, so the DB enum and the wire vocabulary stay in lockstep.

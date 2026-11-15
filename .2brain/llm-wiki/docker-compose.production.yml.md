@@ -1,7 +1,7 @@
 ---
 source: docker-compose.production.yml
-sha256: b32f605755ae2c8b1745906a7d1a31a30e7534992312fb83940f7c98ed147e70
-generated_at: 2026-11-08T02:16:59.513867+00:00
+sha256: e9f00457d59525565eb5cbd3aaaf8df00701a25a647feb9a81f403d61ec9bfca
+generated_at: 2026-11-14T17:09:36.634333+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Production deployment stack for a single-client API. Unlike `docker-compose.yml` (development), it runs a pre-built image (`docker/Dockerfile.production`), bind-mounts no source, exposes no database port to the host, and ships only the services the application requires. It is operated per-client via `COMPOSE_PROJECT_NAME`, which namespaces containers, networks, and volumes.
+The production deployment stack for a single client's API. It runs the image built by `docker/Dockerfile.production` (no source bind-mounts, no dev tooling), starts only the four services the application needs (app, cron, setup, plus bundled or managed data services), and enforces container hardening. It is the counterpart to `docker-compose.yml` (development): no hot reload, no observability estate by default, no database port exposed to the host.
 
 ## Key elements
 
-- **`x-logging` anchor** — shared `json-file` log driver with 10 MB × 5 rotation, merged into every service via `logging: *logging`. Driver is overridable via `CONTAINER_LOG_DRIVER` for Podman.
-- **`x-hardening` anchor** — `read_only`, `cap_drop: [ALL]`, `no-new-privileges`, and a `noexec` tmpfs at `/tmp` (64 MB). Merged into `app`, `cron`, and `setup`.
-- **`x-data-hardening` anchor** — `cap_drop: [ALL]` plus selective `cap_add` (CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER) and `no-new-privileges`. Merged into `database`, `mongo-rs-init`, `cache`, `queue`. `read_only` is intentionally absent.
-- **`app` / `cron` / `setup`** — the three application containers, all from `APP_IMAGE` (no default tag; set by `docker/deploy.sh`). `setup` is one-shot (`db:sync` + `access:bootstrap`) and gates startup of the other two.
-- **`database` / `cache` / `queue`** — bundled MongoDB (with `mongo-rs-init`), Redis, and RabbitMQ. All behind `profiles: [bundled]` so they can be replaced by managed URIs.
-- **Monitoring profile** (`profiles: [monitoring]`) — Prometheus, Alertmanager, node_exporter, Loki, Alloy. No host ports, no Grafana. Off by default.
-- **Secrets** — file-based via `secrets:`; each service receives only the files it needs. Optional integrations (SMTP, payments, OAuth) remain in the client `.env`.
-- **`APP_IMAGE`** — required, no default. Prevents accidental `latest` drift.
+- **`x-logging` / `x-hardening` / `x-data-hardening` (YAML anchors)** — shared configuration blocks merged into services. `x-logging` caps `json-file` logs at 10 MB × 5 files (CIS 2.12/5.x). `x-hardening` applies `read_only`, `cap_drop: [ALL]`, `no-new-privileges`, and a `noexec` tmpfs on `/tmp` to app/cron/setup. `x-data-hardening` is the lighter variant for official data images (Mongo, Redis, RabbitMQ) that need `CHOWN`, `SETUID`, `SETGID`, etc., but omits `read_only`.
+- **`setup` service** — one-shot: runs `db:sync` + `access:bootstrap`, then exits. `app` and `cron` depend on it completing before serving traffic.
+- **`app` / `cron` services** — long-running API and scheduler, both using the `APP_IMAGE` image. `APP_IMAGE` has **no default**; `docker/deploy.sh` must set it.
+- **`database` / `cache` / `queue` services** — bundled MongoDB (replica set), Redis, and RabbitMQ. Gated behind `profiles: [bundled]` so a managed backing service can be substituted by removing `bundled` from `COMPOSE_PROFILES` and setting `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL`.
+- **`mongo-rs-init`** — runs `docker/mongo-init.js` once to initialise the replica set; gated behind the same `bundled` profile.
+- **Monitoring profile (`monitoring`)** — Prometheus, Alertmanager, node_exporter, Loki, Alloy. Off by default; no host ports published; scrapes `app` using the shared `metrics_token` secret file.
+- **`COMPOSE_PROJECT_NAME`** — doubles as the client identifier: namespaces containers/networks/volumes **and** selects that client's config. Unset → nothing starts.
+- **Secrets as files** — credentials live one-per-file under `clients/<name>/secrets/` (mode 0644, dir 0700), injected via `file`-type secrets rather than env vars. Each service receives only its own secret. Compose refuses to start if a required secret file is missing.
 
 ## Relationships
 
-- **`docker-compose.yml`** — the development counterpart; this file is explicitly contrasted against it in comments (no hot-reload, no full observability estate, no source mounts).
-- **`docker/Dockerfile.production`** — the image definition that `APP_IMAGE` must point to; builds the artifact these services run.
-- **`docker/deploy.sh`** — the operator entrypoint: sets `APP_IMAGE`, runs `COMPOSE_PROJECT_NAME`, handles build/start/health-check/rollback.
-- **`docker-compose.proxy.yml`** — sits in front of this stack (reverse-proxy / TLS layer) per the project layout.
-- **`docker/mongo-init.js`** — referenced by the `mongo-rs-init` service for replica-set initialisation and role creation.
-- **`scenarios/apply.ts`** — the demo seeder; this file's comments note it refuses `NODE_ENV=production`, so the production `setup` service deliberately never calls it.
-- **`env-example`** — the template copied to `clients/<name>/.env`; provides the `${...}` values this file interpolates.
-- **`docs/getting-started-production.md`** — walkthrough for first deploy, secrets setup, and monitoring/alerts configuration.
-- **`docs/tools/configuration.md`** — documents the `NODE_X_FILE` secret-file convention used here.
-- **`docs/tools/security.md`** — CIS benchmark references (2.12, 5.x) cited inline for the hardening anchors.
-- **`docs/tools/backups.md`** — the `restic_password` / `restic_repository_env` secrets and backup/restore-drill services referenced here.
+- **`docker-compose.yml`** — the development stack (hot reload, full observability). This file is its production counterpart; they share the same app image recipe but differ in mounts, ports, and service set.
+- **`docker-compose.proxy.yml`** — proxy/reverse-proxy layer that sits in front of this stack's `app` service.
+- **`docker/Dockerfile.production`** — builds the image (`APP_IMAGE`) that `app`, `cron`, and `setup` run.
+- **`docker/deploy.sh`** — the operational entry point: sets `APP_IMAGE`, runs `docker compose up` against this file, health-checks, and supports `--rollback`. All the CLI examples in this file's header assume `deploy.sh` is the caller.
+- **`docker/mongo-init.js`** — executed by the `mongo-rs-init` service to initialise the bundled MongoDB replica set.
+- **`env-example`** — the per-client configuration template; supplies the `${...}` values this file substitutes (via `--env-file`) and the `env_file:` entries the containers receive at runtime.
+- **`scenarios/apply.ts`** — the demo data seeder. Explicitly refuses to run under `NODE_ENV=production`; the `setup` service therefore never calls it, and a production database starts empty.
+- **`docs/getting-started-production.md`** — step-by-step first-deploy guide referencing this file's `COMPOSE_PROJECT_NAME`, secrets layout, and monitoring profile.
+- **`docs/tools/configuration.md`** — documents the `NODE_*_FILE` secrets-as-files pattern this file enforces.
+- **`docs/tools/security.md`** — rationale and CIS benchmark mapping for the hardening anchors.
+- **`docs/tools/backups.md`** — backup/restore procedures that depend on the `restic_password` and `restic_repository_env` secret files defined here.
 
 ## Notes
 
-- **`APP_IMAGE` has no default.** Running `docker compose up` without it (or without going through `deploy.sh`) will fail. There is no `latest` fallback by design.
-- **`COMPOSE_PROJECT_NAME` is mandatory.** Unset, no containers are created. It doubles as the client selector for the `.env` file path.
-- **Dual env-file usage.** `--env-file` feeds `${...}` substitution in this YAML; `env_file:` inside a service definition feeds the container's environment. Both must point at the same `clients/<name>/.env` or config silently diverges.
-- **`depends_on` uses `required: false`** so that `app`/`cron`/`setup` can start even when `COMPOSE_PROFILES` omits `bundled` (i.e. managed backing services).
-- **`setup` is not a long-running service.** It exits after `db:sync` + `access:bootstrap`. A crash here is a deploy failure, not a runtime error.
-- **Secret files must exist on the host** for the listed services or Compose refuses to start them. Empty files read as "unset" and let a managed-service URL stand in.
-- **`clients/` is in `.dockerignore` and `.gitignore`.** Secrets and per-client config are mounted at runtime only; they never enter the image layer.
-- **Monitoring publishes no host ports.** Prometheus and Alertmanager have unauthenticated web UIs reachable only on the internal compose network.
-- **The `tmpfs` at `/tmp` is `noexec,nosuid`.** A named volume mounted over `/tmp` would re-enable `exec`; the comment warns against doing so.
+- **The per-client env file is read twice.** `--env-file` resolves `${...}` substitutions *in this YAML file*; `env_file:` inside each service is what the *container* receives. Configuring only one channel silently gives every client identical app config.
+- **`APP_IMAGE` has no default.** A `latest` tag was historically overwritten by every build, destroying rollback. `deploy.sh` sets it explicitly; running `docker compose up` without it will fail.
+- **One stack per client.** Never one stack serving multiple organisations. `COMPOSE_PROJECT_NAME` is both the namespace and the config selector.
+- **`clients/` is in `.dockerignore` and `.gitignore`** — secret files and per-client config are mounted at runtime, never baked into the image.
+- **Bundled vs. managed data services:** removing `bundled` from `COMPOSE_PROFILES` and setting the `NODE_*_URI` variables lets a client use a managed MongoDB/Redis/RabbitMQ without editing this file. `depends_on` entries use `required: false` so app/cron/setup still start when bundled containers are absent.
+- **Monitoring is opt-in.** No host ports are published for Prometheus/Alertmanager/Loki — their web UIs have no auth and are reachable only on the internal compose network.
+- **`cron` and `setup` carry the full app secret set** even though they use few of the keys: every script validates the entire configuration before running and refuses a missing key.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/cookie-hardening.test.ts
-sha256: 2d5581c1fc2b342bf034f11ad20ba46b8f3150f742e6e03ed2d78c4a785c260f
-generated_at: 2026-11-08T04:35:09.494130+00:00
+sha256: fd0960a1e61400ad4746003ba2820e255eef2846d8963ba08ae6fff97ff68ffe
+generated_at: 2026-11-14T19:01:55.547037+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin the cookie-security contract for the account module: the refresh cookie must carry the `__Host-` prefix with the correct attribute set, `/account/refresh` must be POST-only, and every endpoint that authenticates via cookie alone (refresh, logout, the two SSE streams) must reject a foreign `Origin` with 403 before performing any session mutation.
+Integration tests that verify the session cookie is `__Host-` prefixed with the correct security attributes, and that every endpoint a cookie alone authenticates (refresh, logout, the two SSE streams) rejects a foreign `Origin` with a 403 before touching session state.
 
 ## Key elements
 
 - **`FRONTEND`** — the single allowed origin (`https://shop.example`), injected via `NODE_CORS_ORIGIN` in `beforeEach`.
-- **`login()`** — helper that creates a verified user, POSTs `/account/login`, and returns `{ user, response, cookie }` where `cookie` is the extracted `__Host-session` value.
-- **`describe('the refresh cookie')`** — asserts Set-Cookie flags: `Secure`, `HttpOnly`, `Path=/`, absence of `Domain=`, and absence of a separate `jwt` cookie.
-- **`describe('POST /account/refresh')`** — three cases: accepts the frontend origin and no-`Origin`; returns 403 for a foreign origin *and* verifies no session row was rotated (`supersededAt` stays null, row count unchanged); returns 405 with `Allow: POST` for a GET.
-- **`describe('POST /account/logout')`** — 204 for the frontend origin; 403 for a foreign origin with the session row still present.
-- **`describe('the SSE streams a cookie alone authenticates')`** — `it.each` over `/observability/events` and `/notifications/stream`, asserting 403 on a foreign origin.
+- **`login()`** — local helper: creates a verified user via `createUser`, POSTs `/account/login`, and returns `{ user, response, cookie }` where `cookie` is the extracted `__Host-session` header value.
+- **`describe('the refresh cookie')`** — asserts the `Set-Cookie` header carries `Secure`, `HttpOnly`, `Path=/`, has no `Domain`, and that no `jwt` cookie is set.
+- **`describe('POST /account/refresh')`** — three tests: (1) accepts the frontend origin *and* a missing `Origin`; (2) returns 403 for a foreign origin and leaves session rows unrotated (`supersededAt` stays null); (3) returns 405 for `GET` with `Allow: OPTIONS, POST`.
+- **`describe('POST /account/logout')`** — 204 from the frontend origin; 403 + session rows intact from a foreign origin.
+- **`describe('the SSE streams…')`** — `it.each` over `/observability/events` and `/notifications/stream`; both return 403 for a foreign origin regardless of a valid cookie.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — `api()` is the HTTP client used for every request in this file.
-- **`tests/support/cookies.ts`** — `setCookie()` reads a named `Set-Cookie` entry from a response; `cookieHeader()` extracts the raw cookie string for replay.
-- **`tests/support/environment.ts`** — `setEnvironment()` sets `NODE_CORS_ORIGIN` per test to control the allowed-origin list.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provides a clean database for the integration run.
-- **`src/modules/users/tests/factories.ts`** — `createUser()` builds a test user; `PLAIN_PASSWORD` is the known password.
-- **`src/modules/account/tests/factories.ts`** — `sessionRowsOf(userId)` queries the `sessions` table so tests can assert (or disprove) rotation and revocation.
+- **`tests/support/http.ts`** — provides `api()`, the Supertest-style request builder used for every call.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the database once at module load.
+- **`tests/support/environment.ts`** — `setEnvironment()` swaps `NODE_CORS_ORIGIN` per test.
+- **`tests/support/cookies.ts`** — `setCookie(response, name)` reads a `Set-Cookie` value; `cookieHeader(response, name)` extracts the raw cookie string for replay.
+- **`src/modules/users/tests/factories.ts`** — `createUser({ verifiedAt })` provisions a verified user; `PLAIN_PASSWORD` is the known hash input.
+- **`src/modules/account/tests/factories.ts`** — `sessionRowsOf(userId)` queries the session table directly for rotation assertions.
 
 ## Notes
 
-- Only **one** origin is configured (`NODE_CORS_ORIGIN` is a single value, not a comma-separated list), so the tests exercise exactly the allowed-vs-foreign binary.
-- The "no Origin" refresh test re-extracts the cookie from the `set-cookie` response header via a `split(';', 1)[0]` fallback rather than reusing the `cookie` variable — this mirrors the production expectation that the *next* refresh call uses the cookie as the browser would send it (value only, no attributes).
-- Foreign-origin rejection is asserted to happen **before** any write: tests check both row count and `supersededAt` to confirm no partial mutation leaked through.
+- `setupTestDb()` runs at module scope (outside `beforeEach`), so the DB is prepared once per file, not per test.
+- The "no Origin" refresh test re-extracts the cookie from the *response* `Set-Cookie` header (post-rotation) rather than reusing the original `cookie` variable, ensuring it tests the freshly minted session.
+- The SSE-stream test is the only `GET`-based endpoint covered here; the 403 is expected to fire before the server inspects the cookie at all.

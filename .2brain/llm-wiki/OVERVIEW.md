@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-11-08T10:45:45.183171+00:00
+generated_at: 2026-11-15T00:27:05.001513+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -7,31 +7,30 @@ model: ollama:qwen3.8:27b
 
 ## What This Is
 
-A TypeScript/Node.js API application with a modular domain structure (users, products), a MongoDB data layer, and a comprehensive Docker-based deployment pipeline. It ships with an observability stack (Prometheus, Grafana, Loki, Tempo, OpenTelemetry, Alertmanager, Gatus), backup/restore tooling, and a VitePress documentation site. Multiple `docker-compose` files define dev, test, production, proxy (Traefik), and backup-server topologies.
+A TypeScript/Node.js HTTP API service built around **users** and **products** modules. It is containerized with Docker, backed by MongoDB (including replica-set initialization), and wrapped in a full observability stack. The project ships with its own VitePress documentation site, backup/restore tooling, and deployment drills.
 
-## Main Areas
+## Main Areas and How They Relate
 
-| Area | Path | Role |
-|---|---|---|
-| **Domain modules** | `src/modules/` | Business logic per aggregate (users, products, …). Each module contains tests and factories. |
-| **Infrastructure** | `src/infrastructure/` | Cross-cutting HTTP controller/response layer, structured logger, i18n. |
-| **Shared types** | `src/types/` | Central type definitions; the single most-connected file in the graph (≈ 630 dependents). |
-| **Container & ops** | `docker/` | Dockerfiles, entrypoints, cron jobs, backup scripts, and all observability configs. |
-| **Tests** | `tests/` | Shared test harness: DB setup, environment helpers, caller fakes, per-module factories. |
-| **Docs site** | `docs/` | VitePress site covering getting-started, API reference, theory (auth, data protection), and ops tooling. |
-| **Top-level config** | repo root | `docker-compose*.yml` (5 variants), lint config, security and install notes. |
+| Area | Location | Role |
+|------|----------|------|
+| **Application core** | `src/` | Domain modules (`users`, `products`), shared types (`src/types/`), HTTP layer, i18n, logging, adapters. `src/types/index.ts` is the central type hub (imported by ~648 files). |
+| **Tests** | `tests/` | Integration test suite with dedicated support infrastructure (test DB setup, HTTP helpers, factory objects per module). |
+| **Container & deployment** | `docker/`, `docker-compose*.yml` | Dockerfiles, MongoDB entrypoint/replica-set init, SuperCronic scheduling, deploy/restore-drill scripts. Multiple compose files separate dev, test, production, proxy (Traefik), and backup-server topologies. |
+| **Observability** | `docker/observability/` | Prometheus (+ alert rules), Grafana dashboards/datasources, Loki, Tempo, OpenTelemetry Collector, Alertmanager, Gatus (black-box checks), and Umami (analytics). Config templates and validation scripts included. |
+| **Backup & DR** | `docker/backup/` | Scripted backup, maintenance, restore-drill, and server-maintenance routines. |
+| **Documentation site** | `docs/` | VitePress site covering getting-started guides, API reference (errors, responses, write-methods), operational reference, and design-theory pages (authorization, data protection, API standards). |
+| **Repo tooling** | root files | `CLAUDE.md` (AI-assistant guidance), `commitlint.config.cjs` (conventional-commit enforcement), `SECURITY.md`, `INSTALL.md`. |
 
-### How they relate
-
-`src/types` is the common vocabulary consumed by every module and the HTTP layer. `src/infrastructure` wraps module logic in a uniform controller/response/serialization shell. `docker/` packages the built server together with MongoDB, a reverse proxy, and the observability stack into reproducible topologies. `tests/` mirrors the `src/modules` structure and exercises the same types and infrastructure. `docs/` is generated from the same source tree and documents the contracts those layers expose.
+**Relationship in one line:** `src/` is the API → `tests/` verifies it → `docker/` packages and runs it → `docker/observability/` monitors it → `docs/` explains it to humans and operators.
 
 ## Where to Start Reading
 
-1. **`README.md`** / **`CLAUDE.md`** – project intent, conventions, and setup at a glance.
-2. **`docs/getting-started.md`** (then `getting-started-production.md`) – how to run and deploy.
-3. **`src/types/index.ts`** – the shared type surface; understanding it makes every module readable.
-4. **`src/infrastructure/http/controller.ts`** and **`response.ts`** – how module handlers are mounted and how responses are shaped.
-5. **`docker-compose.yml`** + **`docker/Dockerfile`** – the dev topology and container build.
-6. **`src/modules/users/`** (or `products/`) – a concrete module to trace the full request → handler → data flow.
+1. **`README.md`** – project purpose, quick-start, and pointer to the docs site.
+2. **`CLAUDE.md`** – conventions and context tailored for AI-assisted work.
+3. **`src/types/index.ts`** – the shared type surface; understanding it unlocks the module APIs.
+4. **`src/infrastructure/http/response.ts`** – canonical HTTP response shape (imported by ~313 files).
+5. **`docs/getting-started.md`** → **`docs/getting-started-production.md`** – local vs. production setup.
+6. **`docs/reference/ops.md`** and **`docs/reference/tests.md`** – operational and testing workflows.
+7. **`docker-compose.yml`** + **`docker/Dockerfile`** – how the pieces are wired together at runtime.
 
-> All 2 500+ files in the graph are reachable from the nodes above; treat this list as the skeleton and drill into a single module when you need detail.
+> **Note:** The repository contains 2 500+ additional files beyond those listed here (the dependency graph truncates at 2 506). The modules under `src/modules/` likely extend beyond `users` and `products`; explore that directory tree for the full domain surface.

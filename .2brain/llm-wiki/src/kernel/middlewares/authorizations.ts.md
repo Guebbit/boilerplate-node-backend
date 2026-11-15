@@ -1,7 +1,7 @@
 ---
 source: src/kernel/middlewares/authorizations.ts
-sha256: 3a68d4ed62f81939f660cb92ecb9cc3c8c0f5b06f52203fe1c1771c55a5c61f0
-generated_at: 2026-11-08T03:53:49.958067+00:00
+sha256: 0bc6cbc8fd85d379b4d0b53b7a1ee40d0e8eefd1b3684ed09c7559ac3e1dc75d
+generated_at: 2026-11-14T18:21:59.924658+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,45 +9,48 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware guards that sit between authentication (credential resolution) and route handlers. They populate `request.authContext`, enforce permission rules declared per-route, gate requests by session recency, and—critically—audit every refusal before the response is sent. The file exists so that identity and authorization concerns are handled in one place, keeping route handlers free of token-parsing, role-checking, and audit plumbing.
+Express middleware guards for identity and permission checks. Built on `kernel/authentication.ts`'s credential resolver, these guards authenticate a caller (via bearer header or session cookie), verify that the caller's role holds a declared permission rule, and optionally gate on how recently the caller proved their identity. Every rejection is audited before the response is sent, so a denied request always leaves a trail.
 
 ## Key elements
 
-- **`getTokenBearer`** (exported) – Extracts the bearer token from the `Authorization` header; returns `undefined` if absent or not a `Bearer` scheme.
-- **`errorLocaleKeyFor`** – Maps a `FORBIDDEN`-style error code to its `generic.error-*` i18n key (single rule for both default and per-rule `deniedCode` overrides).
-- **`auditRefusal`** – Records an audit event (`outcome: 'failure'`) with route + method, so every denied request is locatable.
-- **`securityActionFor`** – Classifies a credential miss (`invalid_signature`, `malformed`, `revoked` on an API key) into a named security-event action; returns `undefined` for benign stale credentials.
-- **`noteMiss`** – Increments `staleCredentialsTotal` or fires `recordSecurityEvent` depending on the miss reason.
-- **`applySession`** – Copies the resolved user into `request.authContext`, sets `request.sessionVia` (`'bearer' | 'cookie'`), and resolves `request.caller` via `callerInScope`.
-- **`resolveOptionsOf`** – Reads the `Session-Passive: true` header to mark a request as a keep-alive/poll.
-- **`continueWithSession`** – Awaits a `Resolution`, calls `noteMiss` on failure, applies the session on success, and delegates "nobody" / dead-user refusal to a callback.
-- **`takesNoSignIn`** – Checks the generated `OPERATION_ROUTES` table to see whether the request's method+path maps to a `security: []` operation (login, refresh, etc.).
-- **`refuseDeadBearer`** – Sends the RFC 6750 401 (`WWW-Authenticate: Bearer error="invalid_token"`) for a dead bearer; skips if the operation takes no sign-in; uses `SESSION_IDLE` code for idle staff sessions.
-- **`continueWithCookie`** – The cookie-mode path: reads the session cookie, enforces `requireAllowedOrigin` on unsafe methods (CSRF layer on top of `SameSite=Lax`), resolves via `resolveCookie`, and clears the cookie on a dead session.
-
-The module docstring also describes **`getAuth`**, **`isAuth`**, **`requirePermission`**, **`requirePermissionViaCookie`**, **`requireFreshAuth`**, and **`requireFreshAuthWhen`** (the latter two gate on recency of proof-of-auth); these are further down in the file (truncated here).
+- **`getTokenBearer`** – Extracts the bearer token from the `Authorization` header, or returns `undefined`.
+- **`getAuth`** *(described in module doc; full impl below truncation)* – Populates `request.authContext` when a credential is present; does not reject.
+- **`isAuth`** – Rejects (401) when no valid session is resolved.
+- **`requirePermission`** – Rejects (403) when the caller's role does not hold the declared rule. Takes an action-and-subject pair, never a raw role name.
+- **`requirePermissionViaCookie`** – SSE-only variant that authenticates via session cookie instead of `Authorization` header.
+- **`requireFreshAuth` / `requireFreshAuthWhen`** – Gate an already-authenticated caller on how recently they re-proved identity (window from `reauthWindowSeconds` in config).
+- **`applySession`** (internal) – Writes the resolved user onto `request.authContext`, sets `request.sessionVia`, and resolves `request.caller` once via `callerInScope`.
+- **`continueWithSession`** (internal) – Shared async flow for bearer and cookie paths; calls `noteMiss` on refusal, applies the session on success, and delegates "dead" refusals.
+- **`continueWithCookie`** (internal) – Cookie path of `getAuth`; adds the CSRF `Origin` check for unsafe methods before resolving.
+- **`refuseDeadBearer`** (internal) – Sends a 401 with `WWW-Authenticate: Bearer` for expired/revoked/malformed tokens; exempts open operations.
+- **`auditRefusal`** (internal) – Records an audit event (route + method in metadata) before a rejection response is sent.
+- **`noteMiss`** (internal) – Increments `staleCredentialsTotal` or records a security event (forged signature, revoked API key, etc.) depending on the miss reason.
+- **`errorLocaleKeyFor`** (internal) – Maps an error code to its locale key using the single `generic.error-<kebab-case>` convention.
+- **`takesNoSignIn`** (internal) – Checks the generated `OPERATION_ROUTES` table to see if the matched operation declares `security: []`.
 
 ## Relationships
 
-- **`@kernel/authentication`** – Source of all credential resolution primitives (`resolveBearer`, `resolveCookie`, `watchCookie`, `resolveCredential`, `cookieAuthenticatesRequests`, `clearDeadSessionCookie`) and the `Resolution` / `ResolveMissReason` types.
-- **`@kernel/permissions`** – Provides `assertDeclared` (boot-time rule validation), `callerInScope` / `callerForSubject` (subject resolution), `ruleId`, `staffRoleWithheld`, and the `ActionOn` / `PermissionSubject` / `StepUpTier` types used by `requirePermission`.
-- **`@kernel/ability`** – `holds` is the actual permission-check predicate against a caller's resolved abilities.
-- **`@kernel/cookies`** – `bearerOf` and `readSessionCookie` extract raw credential values from the request.
-- **`@kernel/config`** – `reauthWindowSeconds` sets the recency window for `requireFreshAuth` / `requireFreshAuthWhen`.
-- **`@infrastructure/http/response`** – `rejectResponse` and `ResponseErrorItem` shape every 401/403 error body.
-- **`@infrastructure/http/request`** – `callerContextOf` extracts the audit identity (actor, tenant) from the request for audit records.
-- **`@infrastructure/http/middlewares/origin`** – `requireAllowedOrigin` is invoked inside `continueWithCookie` to enforce the Origin check on unsafe methods before a cookie can authenticate.
-- **`@infrastructure/http/middlewares/rate-limit`** – `apiKeyLimiter` is applied to API-key-authenticated requests to throttle credential brute-force.
-- **`@infrastructure/observability/audit`** – `recordAudit`, `buildAuditEvent`, `coreAuditActions` produce the audit trail for every refusal and security event.
-- **`@infrastructure/observability/security-events`** – `recordSecurityEvent` and `staleCredentialsTotal` (Prometheus counter) track attack indicators and stale-credential volume.
-- **`@infrastructure/i18n`** – `t` localizes user-facing error messages (e.g. `account.session-idle`).
-- **Module route files** (`account/routes.ts`, `addresses/routes.ts`, …) – Consumers of the exported guards (`getAuth`, `isAuth`, `requirePermission`, etc.) mounted on their Express routers.
+- **`src/kernel/authentication.ts`** – Primary dependency: `resolveBearer`, `resolveCookie`, `resolveCredential`, `clearDeadSessionCookie`, `cookieAuthenticatesRequests`, `API_KEY_TOKEN_PREFIX`, and the `Resolution`/`ResolveMissReason` types drive all credential resolution here.
+- **`src/kernel/permissions.ts`** – `assertDeclared` (boot-time rule validation), `callerInScope`, `callerForSubject`, `ruleId`, `staffRoleWithheld`, and the `ActionOn`/`PermissionSubject`/`StepUpTier` types power `requirePermission`.
+- **`src/kernel/ability.ts`** – `holds` is called to test whether a resolved caller satisfies a rule.
+- **`src/kernel/cookies.ts`** – `bearerOf` and `readSessionCookie` extract raw credentials from headers/cookies.
+- **`src/kernel/config.ts`** – `reauthWindowSeconds` sets the freshness window for `requireFreshAuth`.
+- **`src/infrastructure/http/middlewares/origin.ts`** – `requireAllowedOrigin` enforces CSRF on unsafe methods authenticated by cookie.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** – `apiKeyLimiter` throttles API-key-authenticated requests.
+- **`src/infrastructure/http/request.ts`** – `callerContextOf` extracts the caller identity for audit/security records.
+- **`src/infrastructure/http/response.ts`** – `rejectResponse` and `ResponseErrorItem` shape all 401/403 error bodies.
+- **`src/infrastructure/i18n/index.ts`** – `t` localizes user-facing error messages.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit`, `coreAuditActions`, `buildAuditEvent` write the refusal trail.
+- **`src/infrastructure/observability/security-events.ts`** – `recordSecurityEvent` and `staleCredentialsTotal` track credential-refusal metrics and named attack events.
+- **`src/modules/account/routes.ts`**, **`src/modules/addresses/routes.ts`** – Consumers that mount these guards on their route handlers.
 
 ## Notes
 
-- **Guard signature convention:** a guard always takes an *action* and a *subject* (e.g. `requirePermission(request, 'addresses', 'read')`), never a raw role string. `assertDeclared` at boot rejects any rule that no module owns, turning a typo into a startup failure.
-- **Audit-before-respond:** every refusal path calls `auditRefusal` (or `noteMiss` → `recordSecurityEvent`) *before* writing the HTTP response. A denied request without an audit record is treated as a bug.
-- **Cookie CSRF placement:** the Origin check lives inside `continueWithCookie` rather than in each route, so no future route can accidentally expose a cookie-authenticated endpoint without the check.
-- **`Session-Passive` header:** can only ever *increase* the idle window (a client marking itself passive); it cannot be forged to reduce it, so the resolver applies it as a one-directional hint.
-- **Dead-bearer 401 vs. no-auth 401:** a presented-but-dead bearer gets an explicit 401 with `WWW-Authenticate` (RFC 6750 §3.1) so the client can refresh; a request with no credential at all on an open operation simply passes through as a guest.
-- **Locale key rule:** `errorLocaleKeyFor` is the *only* mapping from error code → i18n key. A new `deniedCode` override on a `PermissionKey` needs only the matching `generic.error-<kebab>` key in locale files—no code change.
+- **Action-and-subject, not role name.** Guards always take a declared rule (`ActionOn` + `PermissionSubject`). `assertDeclared` validates at boot that a module actually owns the rule, so a typo in a route mount is a crash, not a silently-unreachable route.
+- **CSRF is centralized.** The `Origin` check for cookie-authenticated unsafe methods lives inside `continueWithCookie`, the single point where cookie credentials are resolved—no route can be added that a cookie reaches without passing it.
+- **`Session-Passive: true`** header can only make a session *more* idle; it cannot escalate. Used by pollers/keep-alives to avoid counting as user activity.
+- **Dead cookie clearing.** If the resolver refuses a cookie token (revoked, expired, foreign mode), `clearDeadSessionCookie` is called immediately so subsequent requests skip the lookup.
+- **Audit-before-respond.** `auditRefusal` runs before `rejectResponse` is sent, guaranteeing the trail exists even if the response pipeline short-circuits.
+- **Locale key convention is singular.** `FORBIDDEN` → `generic.error-forbidden`. A new `deniedCode` override on a `PermissionKey` needs only the matching JSON key; no code change.
+- **Open-operation exemption.** `takesNoSignIn` reads the generated `OPERATION_ROUTES` table (fewest-parameters-first), so a new `security: []` operation is exempt automatically without touching this file.
+- **File is large; the visible portion covers session/bearer/cookie resolution and refusal paths.** The permission-check and freshness-gate exports (`requirePermission`, `requireFreshAuth`, etc.) are declared in the module doc and follow the same audit-before-respond pattern.

@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/repo-references.ts
-sha256: cf698c7a58bd13f18de3630bb9e18f580eeb8b63edf83c39e1c4fa0210a68c7a
-generated_at: 2026-11-08T02:49:50.847634+00:00
+sha256: 703faf56cc0fb935bc580c6afea703998324720825f7ac037c32b26e5d27175c
+generated_at: 2026-11-14T17:34:58.926998+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared path-resolution machinery that answers one question — "does a path cited in a comment or docs page actually exist in this repo?" — so that the two callers (`check-references.ts` for Markdown pages and `scripts/eslint/comment-links.ts` for source comments) agree on what counts as a real path instead of each maintaining its own allowlist and resolution logic. The callers keep their own token-extraction and repo-specific policies (VitePress routing, paired-repo tokens) on top of the primitives here.
+Shared path-resolution primitives that answer one question: *does a path cited in a doc page or source comment still exist in this repo?* Extracted so that `check-references.ts` (markdown docs) and `comment-links.ts` (TypeScript comments) agree on what counts as a real path, while each caller keeps its own policy for relative-URL and bare-token resolution.
 
 ## Key elements
 
-- **`ALLOWED`** — Array of `{ prefix, reason }` entries for paths that legitimately do not exist in a clean checkout (generated files, `tmp/` artifacts, `node_modules/`, `.env`, build output, etc.). Each entry documents *why* the path is exempt.
-- **`allowed(token)`** — Returns `true` if the token matches an `ALLOWED` prefix (directory or contents) or ends with one of the generated-file suffixes (`.generated.ts`, `asyncapi.public.yaml`).
-- **`NOT_A_PATH`** — Regex of characters (`whitespace`, `! " ' ( ) * , < = > ? [ ] \` | } …`) that mark a span as prose, a glob, a type annotation, or a command rather than a literal path citation.
-- **`trackedTargets(root)`** — Runs `git ls-files`, then builds two `Set<string>` values: `targets` (every suffix-tail of every tracked file and every intermediate directory) and `roots` (top-level entries at the repo root). Filters out `.2brain/` mirror pages. Returns `{ targets, roots }` for O(1) membership tests.
-- **`resolves(targets, token)`** — Checks whether the token (or the token with one of the known file extensions or `/index.{ts,js}` appended) appears in the `targets` set.
-- **`claimsAPath(roots, token)`** — Heuristic to decide if a token is even *claiming* a repo path: the last segment must match a filename pattern, or the first segment must be a known top-level directory. Prevents false positives on MIME types, container image names, lint rule IDs, and language constructs like `try/catch`.
-- **`readAliases()`** — Reads `tsconfig.json` (stripping JSONC comments), extracts `compilerOptions.paths`, and returns `{ prefix, target }` pairs (e.g. `@modules/` → `src/modules/`).
-- **`throughAliases(aliases, token)`** — Rewrites an `@alias/…` token to its concrete path, or returns `undefined` if no alias claims it (i.e. it's an npm package reference).
-- **`gitEnvironment`** — Re-exported from `scripts/git-base.ts` so callers import it from this module.
+- **`ALLOWED`** — array of `{ prefix, reason }` entries for paths that are legitimately absent in a clean checkout (generated files, `node_modules`, build output, env files, etc.).
+- **`allowed(token)`** — returns true if the token is covered by `ALLOWED` or ends in a known generated suffix (`.generated.ts`, `asyncapi.public.yaml`).
+- **`NOT_A_PATH`** — regex of characters (whitespace, quotes, brackets, ellipsis, angle brackets, etc.) that mark a span as prose, glob, type, or command rather than a real path.
+- **`trackedTargets(root)`** — runs `git ls-files`, then builds two `Set<string>`s: `targets` (every path tail and every directory on the way) and `roots` (top-level entries). Excludes `.2brain/` mirrors.
+- **`resolves(targets, token)`** — checks whether the token (or the token + any of the `SPELLINGS` extensions/index suffixes) appears in the `targets` set.
+- **`claimsAPath(roots, token)`** — gates whether a token is even a repo-path claim: last segment must match `FILENAME` *or* first segment must be a known root entry. Prevents false positives on MIME types, container image names, lint rules, etc.
+- **`readAliases()`** — reads and parses `tsconfig.json` (strips JSONC comments first) and returns the `compilerOptions.paths` table as `{ prefix, target }` pairs.
+- **`throughAliases(aliases, token)`** — rewrites an `@alias/…` token to its concrete path; returns `undefined` for unclaimed `@scope/name` (i.e. npm packages). Distinguishes wildcard (`@modules/*`) from bare (`@types`) aliases.
+- **`FILENAME`**, **`SPELLINGS`**, **`GENERATED_SUFFIXES`** — module-private constants used by the functions above.
+- **Re-export: `gitEnvironment`** — re-exported from `../git-base` for callers that import it from here.
 
 ## Relationships
 
-- **`scripts/docs/check-references.ts`** — Primary consumer for Markdown docs pages. Uses `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases` as building blocks; adds its own VitePress-routing and paired-repo token policies on top.
-- **`scripts/eslint/comment-links.ts`** — Primary consumer for `.ts`/`.tsx` source comments. Consumes the same primitives; handles the TypeScript-specific half of path checking.
-- **`scripts/git-base.ts`** — Provides `gitEnvironment()` (env vars for `git` subprocess calls) and `REPO_ROOT` via `scripts/modules-on-disk.ts`; both are imported here and re-exported.
-- **`scripts/modules-on-disk.ts`** — Source of the `REPO_ROOT` constant used to locate `tsconfig.json` in `readAliases()`.
-- **`tests/unit/scripts/docs/repo-references.test.ts`** — Unit tests for the exports in this file.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Likely exercises `ALLOWED` entries (e.g. `mutation.json`, `summary.md`, `stryker-incremental.json`) when verifying that CI wave scripts reference valid paths.
+- **`scripts/docs/check-references.ts`** — primary consumer; builds its markdown-page resolution policy (VitePress routing, paired-repo bare tokens) on top of `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases`.
+- **`scripts/eslint/comment-links.ts`** — second consumer; applies the same primitives to `.ts`/`.tsx` source comments with its own token-extraction rules.
+- **`scripts/git-base.ts`** — provides `gitEnvironment()` (imported and re-exported here); the env map is passed to `git ls-files` inside `trackedTargets`.
+- **`scripts/modules-on-disk.ts`** — supplies the `REPO_ROOT` constant used by `readAliases` to locate the project's `tsconfig.json` at runtime.
+- **`tests/unit/scripts/docs/repo-references.test.ts`** — unit tests exercising `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases`.
+- **`tests/unit/scripts/docs/code-citations.test.ts`** — integration-level tests for the citation pipeline that builds on this module.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises mutation-CI wave logic that references paths validated through this module's allowlist.
 
 ## Notes
 
-- `ALLOWED` entries are *arguments*, not mute buttons — the doc comment explicitly states a path with no reason to be absent should surface as a finding.
-- `trackedTargets` precomputes a `Set` of path tails specifically to avoid tens of millions of `endsWith` comparisons during a full sweep; do not replace with per-token string matching.
-- `claimsAPath` is deliberately conservative: a bare slash (`try/catch`, `text/event-stream`) is *not* a path. Only a real filename in the last segment or a known top-level directory in the first segment qualifies.
-- `readAliases` strips `//` comments line-by-line before `JSON.parse` because `tsconfig.json` is JSONC. The parsing is intentionally narrow (first array element of each `paths` entry).
-- `throughAliases` distinguishes wildcard aliases (prefix match, keeps trailing slash) from bare aliases (exact match) to avoid `@types` swallowing `@typescript-eslint/parser`.
-- The `.2brain/` directory is excluded from `trackedTargets` because it mirrors every source file as `<path>.md`, which would let a stale mirror page vouch for a deleted source file.
+- Each `ALLOWED` entry is "an argument, not a mute button": a path with no legitimate reason to be absent belongs in findings, not here.
+- `trackedTargets` is a precomputed `Set` (hash lookup) rather than per-token `endsWith` scans, because a full sweep asks thousands of questions against thousands of files × ~10 candidate spellings.
+- `readAliases` strips `//` comments via regex before `JSON.parse` because `tsconfig.json` is JSONC.
+- `throughAliases` keeps a trailing slash on wildcard prefixes (`@modules/`) so `@modules/foo` matches but `@modulesX` does not; bare aliases (`@types`) require an exact token match to avoid claiming `@typescript-eslint/parser`.
+- The `FILENAME` regex is applied to the **last** path segment only, so a suffix convention like `.visual.cy.ts` embedded in a longer token is not mistaken for a filename.
+- `.2brain/` mirror pages (each source file mirrored as `<path>.md`) are excluded from `trackedTargets` to prevent a stale mirror from vouching for a deleted source file.

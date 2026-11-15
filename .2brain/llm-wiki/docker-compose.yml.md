@@ -1,7 +1,7 @@
 ---
 source: docker-compose.yml
-sha256: a369342a790eabb0db2ce40c56f54c7d8bc694372a1964404bc175e42dcee74b
-generated_at: 2026-11-08T02:17:46.134434+00:00
+sha256: d22a772c19d33e445c1207eaac596a278ce79640491ad6c1b4c8f226d9e72457
+generated_at: 2026-11-14T17:10:22.313401+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the full local development stack (app, database, caches, queue, scheduler, and optional observability/analytics services) for a single `docker compose up`. It wires the Node.js `app` service to its dependencies, injects every runtime environment variable with sensible defaults, and ensures a fresh boot yields a populated, browsable stack via `db:bootstrap`.
+Local development stack definition. Spins up the Node.js API, its data dependencies (MongoDB, two Redis instances, RabbitMQ), and an external job scheduler as a single `compose up`. It is the canonical way to get a populated, browsable dev environment in one command, with opt-in observability and analytics profiles.
 
 ## Key elements
 
-- **`x-logging` YAML anchor** — Shared log-driver override (`json-file` default, `k8s-file` for Podman) applied to every service so Promtail can tail the log files on disk.
-- **`services.app`** — The main Node.js container: builds from `docker/Dockerfile`, bind-mounts `.` into `/app` with an anonymous volume for `node_modules`, runs `db:bootstrap` then `dev` or `dev:cluster`, and exposes `${NODE_HOST}:${NODE_PORT}` (loopback by default).
-- **`services.app.environment`** — All runtime config: Mongo/Redis/RabbitMQ URLs, cluster worker count, per-IP and per-account rate-limit budgets, OTel endpoint, Loki/Umami/Faro host URLs, analytics provider and ingest host. Every value is `${VAR:-default}` so a shell env or `.env` can override without editing this file.
-- **`services.app.depends_on`** — Waits for `database` to report healthy (not just started) and for `redis`, `limits`, `rabbitmq` to be started.
-- **`services.app.healthcheck`** — Liveness probe hitting `/livez` via `node -e "fetch(...)"` (the Alpine image ships no `curl`).
-- **`services.app.command`** — `sh -c 'npm run db:bootstrap && …'` — runs idempotent index sync + one-time seeder, then starts the server in clustered or single-process mode based on `NODE_ENABLE_CLUSTERING`.
-- **`services.app.volumes`** — Bind mount `.: /app:Z` for hot reload; anonymous volume at `/app/node_modules` so host `node_modules` are not shadowed.
-- **Scheduler service (supercronic)** — External cron runner using the same image as `app`; runs `scripts/ops/reap-*` and `sweep:*` jobs on a schedule defined in `docker/crontab`.
+- **`x-logging` anchor** — YAMl anchor (`&container-logging`) that pins the log driver to `json-file` (overridable via `CONTAINER_LOG_DRIVER`). Must stay a file-based driver because Alloy tails log files; podman's default `journald` writes no file and silently breaks Loki.
+- **`app` service** — The Node.js API.
+  - Builds from `docker/Dockerfile` (build context is repo root).
+  - Bind-mounts `./app` into the container with `:Z` for hot reload; an anonymous volume shields `node_modules`.
+  - `command` runs `npm run db:bootstrap` (schema sync + one-time seeder) then `dev:docker` or `dev:docker:cluster` based on `NODE_ENABLE_CLUSTERING`.
+  - Healthcheck hits `/livez` via `node -e` + `fetch` (image is alpine, no curl).
+  - `depends_on` gates `database` on `service_healthy`; other deps on `service_started`.
+  - Rate-limit env vars (`NODE_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_MAX`, `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`) are declared here with defaults matching `.env` so a live E2E run can raise them from the shell without editing `.env`.
+  - Observability URLs (`NODE_LOKI_HOST`, `NODE_UMAMI_HOST`, `NODE_FARO_COLLECTOR_URL`) are host-facing (browser-reachable) and set here because this file is what starts those containers.
+  - `NODE_UMAMI_INGEST_HOST` is a service-name URL (`http://umami:3000`) because the API dials it from inside the compose network.
+- **Scheduler service** (truncated) — Runs `supercronic` with the same image as `app`; schedule lives in `docker/crontab`. Chosen over in-process `node-cron` to keep scheduling as deployment config and to stay portable to Kubernetes `CronJob` / systemd timers.
+- **`limits` Redis** — Dedicated instance for rate-limit counters and single-use claims; never evicted. Distinct from the general `redis` instance.
 
 ## Relationships
 
-- **`docker/Dockerfile`** — Referenced by `build.dockerfile`; supplies the base image, installed dependencies, and all `scripts/*` entry points the `command` and scheduler service invoke.
-- **`docker-compose.production.yml`** — Production overlay that reuses this file's service definitions while pinning `NODE_ENV=production`, stripping the seeder, and adjusting restart/logging policy.
-- **`docker-compose.test.yml`** — Test overlay; likely narrows services and disables the seeder/observability profiles.
-- **`docker/crontab`** — Read by the supercronic scheduler service to determine which ops scripts to run and when.
-- **`docs/tools/health-checks.md`** — Documents the `/livez` vs `/readyz` distinction that the healthcheck and `depends_on` logic rely on.
-- **`docs/reference/ops.md`** — Explains the scheduled-jobs architecture (supercronic) that the scheduler service implements.
-- **`src/infrastructure/persistence/lease.ts`** — Consumer of the `limits` Redis instance (`NODE_RATE_LIMIT_REDIS_URL`), which this file declares as a separate container from the primary `redis`.
-- **`scenarios/support/development-doubles.ts`** — E2E test doubles that depend on the rate-limit and analytics settings exposed here (raising `NODE_RATE_LIMIT_MAX` etc. in the shell before `compose:restart`).
+- **`docker/Dockerfile`** — Build target for the `app` (and scheduler) services. The compose file supplies the build context (`.`) and points to this path.
+- **`docker/crontab`** — Schedule file consumed by the `supercronic` scheduler service.
+- **`docker-compose.production.yml`** — Production variant; this file is the development counterpart (different env, logging, profiles, and restart policies).
+- **`docker-compose.test.yml`** — Test-stack variant; shares the same service topology but typically overrides ports, credentials, and disables seeding.
+- **`src/infrastructure/persistence/lease.ts`** — The app code that dials the `limits` Redis instance (`NODE_RATE_LIMIT_REDIS_URL`) defined here for single-use claims and rate-limit counters.
+- **`scenarios/support/development-doubles.ts`** — E2E test helpers that depend on the seeded data produced by `db:bootstrap` and on the rate-limit overrides this file exposes.
+- **`docs/getting-started.md`** — Points new developers at this file as the entry point for a local stack.
+- **`docs/reference/ops.md`** — Documents the external-scheduler pattern (supercronic / `docker/crontab`) that this file implements.
+- **`docs/tools/health-checks.md`** — Explains the liveness-vs-readiness distinction this file's healthcheck follows (`/livez`, never used as a `depends_on` gate).
 
 ## Notes
 
-- **Logging driver is the single most common "silent failure"**: Podman defaults to `journald`, which writes no file Promtail can tail. The `x-logging` anchor with `${CONTAINER_LOG_DRIVER:-json-file}` is the fix; forgetting to set the variable under Podman yields blank Grafana log panels with no error.
-- **Rate-limit variables are deliberately split into three decoupled buckets** (global, per-account credential, per-address credential). Raising only the global one does not widen the credential budgets, and vice-versa. The comments explicitly warn never to raise them in a deployed environment.
-- **`NODE_ENV` is pinned to `development`** in this file (overriding any `.env`), which is the gate that lets `db:bootstrap`'s seeder run. The production overlay must change it.
-- **`NODE_MONGODB_HOST` is intentionally *not* set here** so that `NODE_DB_URI` from `.env` can point at an external Mongo. Adding it here would shadow that path.
-- **Analytics host uses the service name (`umami:3000`)**, not `localhost`, because the API dials it from inside the compose network. The *declarative* health-endpoint URLs (`NODE_UMAMI_HOST`, `NODE_LOKI_HOST`, etc.) use `localhost` because they describe what a browser reaches.
-- **The seeder is not idempotent**: it skips a non-empty database and exits 0. Use `scenario:apply:reset` to rebuild demo data.
-- **`NODE_CLUSTER_WORKERS=0` means "one worker per CPU core."** On a many-core dev box this can spawn a large number of Node processes; set it to `1` for a leaner E2E run.
+- **Logging driver matters.** If you switch the runtime from Docker to Podman, the `x-logging` anchor is the only thing preventing silent log loss. Do not remove it or override it with `journald` without also updating Alloy's tail path.
+- **Env vars here shadow `.env`.** Any variable explicitly listed under `environment:` cannot be changed via `.env` alone—edit the compose file or use a shell override. The rate-limit trio is declared here *specifically* to keep it shell-overridable for E2E runs.
+- **Seeder is one-shot and idempotent-skip.** `db:bootstrap` seeds a fresh DB but exits 0 on an already-populated one. To re-seed, use `scenario:apply:reset`. The seeder also hard-refuses when `NODE_ENV=production`.
+- **`NODE_CLUSTER_WORKERS` defaults to 0** (= one worker per core). On many-core machines this can be heavy for a single developer; set `NODE_CLUSTER_WORKERS=1` for lighter E2E runs.
+- **Analytics default is `none`.** The `analytics` profile must be active *and* `NODE_ANALYTICS_PROVIDER` set to `umami` or `posthog` before `emitAnalyticsEvent` delivers.
+- **Port binding defaults to `127.0.0.1`.** Set `NODE_HOST=0.0.0.0` (or a LAN IP) to reach the stack from another device.

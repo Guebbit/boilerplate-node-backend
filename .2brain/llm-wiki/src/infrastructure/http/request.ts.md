@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/request.ts
-sha256: abd321be93978827547681c16d8ec11c2475fb48f05285f5e98f1f1d16fdbeb6
-generated_at: 2026-11-08T03:34:15.598634+00:00
+sha256: 342dba2817090530a67a0ce4b3bc047214022c75543afa23365174fb2033decc
+generated_at: 2026-11-14T18:05:51.359193+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the multi-source input-binding rules for HTTP routes. A single value may arrive as a route param, query-string key, or JSON/multipart body field, and this module centralises the precedence, decoding, and OR-resolution logic so controllers call one entry point (`readInput`) instead of re-assembling extraction rules per endpoint. This is what lets `GET /products?text=x` and `POST /products/search {text}` share a handler.
+Owns the multi-source input-binding rules for HTTP endpoints. A value may arrive as a route param, query-string key, or body field, and one controller often serves both an operation and its aliases (e.g. `GET /products?text=x` and `POST /products/search {text}`). This module centralises those rules behind a single `readInput` entry point and the string-transport decoders (boolean, number, JSON, CSV) so controllers never re-assemble binding logic.
 
 ## Key elements
 
-- **`readInput<TId>`** — the single entry point. Takes an Express `Request` and a `RequestInputDeclaration`, returns a flat `Record<string, unknown>` (with typed ids) ready for downstream schema validation. Handles source precedence, per-source decoding, `anyTrue` OR-resolution, and drops explicit `undefined` keys.
-- **`RequestInputDeclaration<TId>`** — the per-route config object: `surface` (which sources to read and in what order), plus optional field lists (`ids`, `booleans`, `anyTrue`, `numbers`, `stringArrays`, `csvLists`, `jsonFields`) that declare how specific keys should be decoded on string transports.
-- **`RequestSurface` / `SURFACE_SOURCES`** — closed enum (`search`, `list`, `write`, `create`, `delete`, `path`) mapped to an ordered `readonly RequestInputSource[]`. Precedence is a property of the surface, not an ad-hoc per-controller choice.
-- **`RequestInputSource`** — `'params' | 'body' | 'query'`.
-- **`parseFormBoolean`** *(exported)* — decodes a string-transported value via `parseBooleanWord`; returns the original value unchanged if unrecognisable so the validator rejects it. Also used by `schemas.ts` for multipart booleans.
-- **`parseFormNumber`** *(internal)* — decodes a string to a finite number; leaves empty strings and non-numeric strings untouched.
-- **`parseFormJson`** *(internal)* — decodes a string as JSON via `getJson`; returns the original on failure or when `getJson` yields `undefined`.
-- **`parseFormCsvList`** *(exported)* — splits a comma-separated string (or array of them) into trimmed tokens; returns `undefined` for a fully-blank value.
-- **`bodyRecordOf`** *(exported)* — safely narrows `request.body` (typed `any` by Express) to a `Record<string, unknown>`, collapsing non-object bodies to `{}`. Typed by `Pick<Request, 'body'>` so callers like `uploads.ts` that lack a full `Request` can use it.
+- **`readInput`** — the sole public entry point. Given an Express `Request` and a `RequestInputDeclaration`, returns a flat `Record<string, unknown>` (plus typed ids) with the correct source precedence, string-transport decoding applied, and absent keys left absent.
+- **`RequestInputDeclaration`** — the contract a controller passes to `readInput`. Declares `surface` (which dictates source precedence), plus optional field lists: `ids`, `booleans`, `anyTrue`, `numbers`, `stringArrays`, `csvLists`, `jsonFields`.
+- **`RequestSurface` / `SURFACE_SOURCES`** — a closed enum of six surfaces (`search`, `list`, `write`, `create`, `delete`, `path`) and the hardcoded, highest-first source order for each. Adding a seventh requires a deliberate, reviewable change.
+- **`parseFormBoolean`** (exported) / **`parseFormNumber`** / **`parseFormJson`** (private) / **`parseFormCsvList`** (exported) — decode a string-transported value into its typed form. All return the input untouched when they can't recognise it, so downstream validation reports the error.
+- **`bodyRecordOf`** (exported) — safely collapses `request.body` to a plain `Record<string, unknown>` (returns `{}` for arrays, scalars, `undefined`). Typed by `Pick<Request, 'body'>` so callers that only carry the body (e.g. `uploads.ts`) can call it.
+- **`RequestInputSource`** — the three possible sources: `'params' | 'body' | 'query'`.
 
 ## Relationships
 
-- **`src/infrastructure/config/fields.ts`** — imports `parseBooleanWord`, the shared word-to-boolean mapper used by `parseFormBoolean`.
-- **`src/infrastructure/object-guards.ts`** — imports `isPlainObject` (used by `bodyRecordOf`) and `stripUndefined`.
-- **`src/infrastructure/http/schemas.ts`** — imports `parseFormBoolean` to decode multipart boolean fields before applying `z.boolean()`.
-- **`src/infrastructure/http/uploads.ts`** — calls `bodyRecordOf` with a `Pick<Request, 'body'>` (it does not hold a full `Request`).
-- **`src/infrastructure/surfaces/create-search-controller.ts`**, **`create-list-controller.ts`**, **`create-update-controller.ts`**, **`create-delete-controller.ts`** — the primary consumers; each declares a `RequestInputDeclaration` and calls `readInput` to obtain the flat input record before schema validation.
+- **`src/infrastructure/config/fields.ts`** — provides `parseBooleanWord`, the underlying word→boolean parser used by `parseFormBoolean`.
+- **`src/infrastructure/object-guards.ts`** — provides `isPlainObject` (used in `bodyRecordOf`) and `stripUndefined`.
+- **`src/infrastructure/http/schemas.ts`** — consumes the exported `parseFormBoolean` to decode boolean fields inside multipart schemas before validation.
+- **`src/infrastructure/http/uploads.ts`** — calls `bodyRecordOf` (it only has `Pick<Request, 'body'>` available, which is why the signature is that narrow).
+- **`src/infrastructure/surfaces/create-delete-controller.ts`** — calls `readInput` with `surface: 'delete'`; uses `anyTrue` for `hardDelete`.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — calls `readInput` with `surface: 'list'` (query-only).
+- **`src/infrastructure/surfaces/create-search-controller.ts`** — calls `readInput` with `surface: 'search'` (body-before-query).
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — calls `readInput` with `surface: 'write'` (params-before-body).
+- **`src/infrastructure/http/ids.ts`** — related to the `ids` field in `RequestInputDeclaration`; id resolution uses a `||` chain across sources rather than ranked precedence.
 
 ## Notes
 
-- **`??` vs. `=== undefined` in decoders.** `parseFormBoolean` uses `??` because `parseBooleanWord` only ever returns `boolean | undefined`. `parseFormJson` must use `parsed === undefined` because valid JSON can decode to `null`, `0`, or `''` — `??` would incorrectly fall back to the raw string in those cases.
-- **`Number('')` is `0`.** `parseFormNumber` explicitly guards empty/whitespace strings to avoid turning "field not sent" into zero.
-- **Decoding is per-source, not on the merged result.** A JSON body's `{"active": false}` must not pass through `parseFormBoolean`; only string transports (params, query, multipart) get decoded. The `decode` helper is applied independently to each source before precedence selection.
-- **`anyTrue` fields escape normal ranking.** They are OR'd across all sources the surface reads (any `true` wins) rather than resolved by highest-source-wins. This exists for flags like `hardDelete` where a default-shaped `false` in a lower-priority source must not shadow an explicit `true` in a higher one.
-- **`readInput` returns `unknown` values by design.** It is a decode layer, not a validation layer. Unrecognised values are passed through intact so the downstream Zod schema can produce its own error message.
-- **Explicit `undefined` keys are dropped** before the result is returned, preventing them from leaking into Mongoose filter clauses as `{ key: undefined }`.
-- The full precedence and design rationale lives in `docs/theory/request-input.md` (referenced in the module docblock and type comments).
+- **Absent ≠ empty.** An absent key is never filled with a default (`false`, `0`, `[]`). This is what lets a partial update omit a field without wiping it.
+- **`anyTrue` escapes precedence.** Fields listed in `anyTrue` are OR'd across all sources (any `true` wins) rather than ranked, because a default-shaped `false` from one source would otherwise outrank a meaningful `true` from another. They are implicitly added to the boolean decode set.
+- **Decoding is per-source, not on the merged result.** A JSON body's `false` is already a boolean; a query string's `"false"` is a string. The decoder checks `typeof value === 'string'` before acting.
+- **`parseFormJson` uses `=== undefined`, not `??`.** Valid JSON can decode to `null`, `0`, or `''`; `??` would incorrectly fall back to the raw string.
+- **`readInput` returns `unknown` values.** It decodes the transport; it does not validate. Unrecognisable values pass through intact for the schema layer to reject.
+- **`SURFACE_SOURCES` is intentionally closed.** The precedence ordering is a property of the surface, not a per-controller choice. A new combination must be added to the record and reviewed against the spec.

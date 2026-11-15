@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/services/protection.ts
-sha256: 1965899ec651df46508991e2d5b82e92d8503b10fe226ec5069da5c29a02c55f
-generated_at: 2026-11-08T03:58:09.214582+00:00
+sha256: 3acd588e792556384c5a92ed86cf8bebdfed8109601214793c725002644a3bc6
+generated_at: 2026-11-14T18:28:24.340889+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Enforces two shop-level protection rules: (1) an account that holds a staff role may only be changed by a holder of `assign:Role` (or itself), and (2) a money step performed by the order's own buyer is flagged in the audit trail as self-dealing. All guards, refusal envelopes, and audit-flag helpers live here so that order, payment, and return services share one implementation.
+Implements the "protecting people" rule: an account that holds a staff role may only be modified by a caller holding `assign:Role`. Provides the gate check, the standardised 403 refusal envelope, and the audit-trail side-effect in one composable unit.
 
 ## Key elements
 
-- **`ROLE_PROTECTED_REASON`** – string constant (`'role_protected'`) used as `metadata.reason` on `security.forbidden` audit rows.
-- **`SHOP_REFUSAL_REASONS`** – readonly array of shop-level refusal reasons; lets the platform operator's incident view filter them out.
-- **`holdsStaffRole(userId)`** – async; single membership lookup to determine if one user holds a staff role.
-- **`staffHoldersAmong(userIds)`** – async; batched sibling (2 queries total) returning a `Set` of user-ids that hold a staff role. Used by the inactivity reaper and list pages.
-- **`mayChangeAccount(caller, account)`** – pure synchronous predicate implementing the rule: allow if account has no staff role, is the caller's own, or caller holds `assign:Role`.
-- **`canChangeAccount(context, accountId)`** – async guard; short-circuits for system actors, self, and `assign:Role` holders without a DB lookup; otherwise calls `holdsStaffRole` then delegates to `mayChangeAccount`.
-- **`roleManagementRequired()`** – builds the `403 ROLE_MANAGEMENT_REQUIRED` response envelope (i18n'd message).
-- **`roleProtectedRefusal(context, accountId)`** – combines `canChangeAccount` → on denial, writes a `security.forbidden` audit row (target type `user`) and returns the 403 envelope; on allow, returns `undefined`.
-- **`isOwnThing(context, ownerId)`** – synchronous; true when the caller is non-system and `ownerId` matches the caller's id.
-- **`ownOrderFlag(context, ownerId)`** – returns `{ ownOrder: true }` for the buyer's own order, `{}` otherwise; attached to audit metadata so reviewers see self-dealing at a glance.
+- **`ROLE_PROTECTED_REASON`** — `'role_protected'`, the `metadata.reason` written on a `security.forbidden` row when a refusal is due to a staff role.
+- **`SHOP_REFUSAL_REASONS`** — readonly array of shop-level refusal reasons (currently only `ROLE_PROTECTED_REASON`); distinguishes shop business from the platform operator's incident view.
+- **`holdsStaffRole(userId)`** — fresh DB lookup (via `membershipsOf`) to determine whether a user holds any staff role. Reads the target's rows, not the caller's session.
+- **`staffHoldersAmong(userIds)`** — batched sibling; two queries (tenant + platform) return a `Set<string>` of staff-holding ids. Used by the inactivity reaper and list pages.
+- **`canChangeAccount(context, accountId)`** — core predicate. Returns `true` immediately for system actors or `assign:Role` holders; otherwise fetches the target's staff status and delegates to the domain function `mayChangeAccount`.
+- **`roleManagementRequired()`** — builds the `403 ROLE_MANAGEMENT_REQUIRED` response envelope (i18n-localised message).
+- **`roleProtectedRefusal(context, accountId)`** — service-facing composite: calls `canChangeAccount`; on denial, writes an `auditForbidden` row and returns the 403 envelope. On allow, returns `undefined` so the caller proceeds.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** – imports `holds` to evaluate `assign:Role` on the caller.
-- **`src/kernel/access/tenant.ts`** – imports `DEPLOYMENT_TENANT_ID` for the tenant-scoped role query in `staffHoldersAmong`.
-- **`src/infrastructure/i18n/index.ts`** / **`context.ts`** – imports `t` for the i18n'd 403 message.
-- **`src/infrastructure/http/response.ts`** – imports `generateReject` and `ResponseReject` to build the refusal envelope.
-- **`src/infrastructure/observability/forbidden.ts`** – imports `auditForbidden` to record the failed attempt.
-- **`src/modules/access/services/memberships.ts`** – imports `membershipsOf` and `rolesOfMany` for role lookups.
-- **`src/modules/access/services/index.ts`** – re-exports the public surface of this module.
-- **`src/modules/access/tests/unit/protection.test.ts`** – unit tests for the guards and helpers.
-- **`src/modules/orders/services/cancel.ts`**, **`src/modules/payments/services/offline.ts`**, **`src/modules/payments/services/refunds.ts`**, **`src/modules/payments/services/refund-settlement.ts`**, **`src/modules/returns/services/decide.ts`** – money-step services that call `ownOrderFlag` / `isOwnThing` to tag their audit rows.
-- **`src/modules/audit-logs/service.ts`** – consumer of the `security.forbidden` rows and `ownOrder` metadata this module produces.
+- **`@kernel/ability`** (`holds`) — checks the caller's `assign:Role` ability synchronously.
+- **`@kernel/access/tenant`** (`DEPLOYMENT_TENANT_ID`) — supplies the tenant scope for the platform-level role query in `staffHoldersAmong`.
+- **`@infrastructure/i18n`** (`t`) — localises the refusal message in `roleManagementRequired`.
+- **`@infrastructure/observability/forbidden`** (`auditForbidden`) — records the denial before the response is sent.
+- **`@infrastructure/http/response`** (`generateReject`, `ResponseReject`) — constructs and types the 403 envelope.
+- **`../domain`** (`mayChangeAccount`) — pure domain predicate that takes the caller's `assign:Role` flag and the target's staff flag; this file supplies both inputs.
+- **`./memberships`** (`membershipsOf`, `rolesOfMany`) — data-access layer for membership and role lookups.
+- **`@types`** (`CallerContext`) — shape of the authenticated request context passed in.
 
 ## Notes
 
-- `mayChangeAccount` is the **single source of truth** for the protection rule; `canChangeAccount` and `roleProtectedRefusal` are thin async wrappers around it.
-- A missing `CallerContext` is **not** a pass. The doc comment explicitly rejects fail-open: a path with no request behind it (e.g. self-erasure) must not call `canChangeAccount` at all.
-- `ownOrderFlag` is **informational, not a denial** – a staff member acting on their own order is still allowed; the flag merely makes self-dealing visible in audit.
-- `staffHoldersAmong` issues exactly two queries (tenant + platform) regardless of list size; avoid calling it in a per-row loop.
-- The module is marked `@module` (no named export) and is consumed via the barrel in `services/index.ts`.
+- `holdsStaffRole` intentionally reads the **target's** membership rows, not the caller's session, because the question is "does the *owner* hold a staff role?", not "is the caller a staff member?"
+- `canChangeAccount` requires `context` (not optional). A missing caller would force a fail-open "yes" answer, which is treated as a protection failure by convention.
+- The caller's own account receives no self-exception: a staff member without `assign:Role` cannot edit their own account.
+- `roleProtectedRefusal` audits **before** returning the refusal, ensuring a `security.forbidden` row exists even if the client disconnects immediately.
+- System actors (sweeps, reaper) bypass the check entirely — they act on behalf of nobody.

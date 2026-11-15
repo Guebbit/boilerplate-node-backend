@@ -13,9 +13,10 @@ graph LR
     Demo_Orchestration_Domain_Flow_Execution["Demo Orchestration & Domain Flow Execution"]
     Ephemeral_Runtime_Substrate_Dev_Doubles["Ephemeral Runtime Substrate & Dev Doubles"]
     Scenario_Seeder_Infrastructure_Adapter_Surface -- "calls" --> Demo_Orchestration_Domain_Flow_Execution
-    Demo_Orchestration_Domain_Flow_Execution -- "calls" --> Scenario_Seeder_Infrastructure_Adapter_Surface
-    Demo_Orchestration_Domain_Flow_Execution -- "Provisions ephemeral runtime and boots the app with registered doubles" --> Ephemeral_Runtime_Substrate_Dev_Doubles
-    Ephemeral_Runtime_Substrate_Dev_Doubles -- "calls" --> Scenario_Seeder_Infrastructure_Adapter_Surface
+    Demo_Orchestration_Domain_Flow_Execution -- "Reads environment config and rate-limit settings from the shared config store" --> Scenario_Seeder_Infrastructure_Adapter_Surface
+    Demo_Orchestration_Domain_Flow_Execution -- "Resolves ephemeral Mongo, installs demo clock, and assembles the listening API" --> Ephemeral_Runtime_Substrate_Dev_Doubles
+    Ephemeral_Runtime_Substrate_Dev_Doubles -- "Injects fake PSP, mail transport, OAuth, and SSRF exemption into infrastructure registries" --> Scenario_Seeder_Infrastructure_Adapter_Surface
+    Ephemeral_Runtime_Substrate_Dev_Doubles -- "Registers the lazy fake PSP wrapper into the payment provider registry" --> Demo_Orchestration_Domain_Flow_Execution
 ```
 
 ## Details
@@ -34,9 +35,9 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
 - `scenarios/apply.ts`
   - `scenarios.apply.filter() callback` (L91-L91) - Function
 - `scenarios/support/doubles/payments/fake.ts`
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.refund` (L421-L488) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.retrieveRefund` (L490-L499) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds` (L501-L512) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.refund` (L430-L497) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.retrieveRefund` (L499-L508) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds` (L510-L521) - Method
 - `scenarios/support/doubles/payments/register.ts`
   - `scenarios.support.doubles.payments.register.loadFakePaymentProvider` (L17-L18) - Class
   - `scenarios.support.doubles.payments.register.loadFakePaymentProvider.then() callback` (L18-L18) - Function
@@ -53,9 +54,14 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.adapters.image.worker.REENCODABLE_MIMES` (L28-L33) - Class
   - `src.infrastructure.adapters.image.worker.REENCODABLE_MIMES.filter() callback` (L31-L31) - Function
   - `src.infrastructure.adapters.image.worker.REENCODABLE_MIMES.map() callback` (L32-L32) - Function
+- `src/infrastructure/adapters/log-scrub.ts`
+  - `src.infrastructure.adapters.log-scrub.scrubError.frames` (L60-L63) - Class
+  - `src.infrastructure.adapters.log-scrub.scrubError.frames.filter() callback` (L62-L62) - Function
+  - `src.infrastructure.adapters.log-scrub.ADDRESS` (L88-L97) - Class
+  - `src.infrastructure.adapters.log-scrub.ADDRESS.<function>` (L88-L97) - Function
 - `src/infrastructure/adapters/logger.ts`
-  - `src.infrastructure.adapters.logger.SENSITIVE_KEYS` (L98-L98) - Class
-  - `src.infrastructure.adapters.logger.SENSITIVE_KEYS.map() callback` (L98-L98) - Function
+  - `src.infrastructure.adapters.logger.SENSITIVE_KEYS` (L100-L100) - Class
+  - `src.infrastructure.adapters.logger.SENSITIVE_KEYS.map() callback` (L100-L100) - Function
 - `src/infrastructure/adapters/pdf.ts`
   - `src.infrastructure.adapters.pdf.refuseNonDataRequest` (L212-L218) - Class
   - `src.infrastructure.adapters.pdf.refuseNonDataRequest.answer.catch() callback` (L217-L217) - Function
@@ -77,6 +83,8 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.config.define.configProblems.checks.merged() callback` (L302-L302) - Function
   - `src.infrastructure.config.define.assertConfigIn.clauses` (L316-L322) - Class
   - `src.infrastructure.config.define.assertConfigIn.clauses.filter() callback` (L322-L322) - Function
+- `src/infrastructure/config/fields.ts`
+  - `src.infrastructure.config.fields.locale.transform() callback` (L450-L454) - Function
 - `src/infrastructure/config/shared-rules/cookies.ts`
   - `src.infrastructure.config.shared-rules.cookies.cookies.refine() callback` (L42-L42) - Function
   - `src.infrastructure.config.shared-rules.cookies.cookiesSchema.cookies.refine() callback.every() callback` (L46-L46) - Function
@@ -94,8 +102,8 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.config.shared-rules.metrics.metricDataSchema` (L13-L35) - Class
   - `src.infrastructure.config.shared-rules.metrics.refine() callback` (L29-L29) - Function
   - `src.infrastructure.config.shared-rules.metrics.metricDataSchema.refine() callback` (L33-L33) - Function
-  - `src.infrastructure.config.shared-rules.metrics.metricsSchema.refine() callback.names` (L46-L46) - Class
-  - `src.infrastructure.config.shared-rules.metrics.metricsSchema.refine() callback.names.map() callback` (L46-L46) - Function
+  - `src.infrastructure.config.shared-rules.metrics.metricsSchema.refine() callback.names` (L43-L43) - Class
+  - `src.infrastructure.config.shared-rules.metrics.metricsSchema.refine() callback.names.map() callback` (L43-L43) - Function
 - `src/infrastructure/config/shared-rules/rate-limits.ts`
   - `src.infrastructure.config.shared-rules.rate-limits.camelCaseOf` (L39-L40) - Class
   - `src.infrastructure.config.shared-rules.rate-limits.camelCaseOf.namespace.replaceAll() callback` (L40-L40) - Function
@@ -106,33 +114,37 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.config.store.overrideEnvironment.before` (L116-L118) - Class
   - `src.infrastructure.config.store.overrideEnvironment.before.map() callback` (L117-L117) - Function
 - `src/infrastructure/http/middlewares/cache.ts`
-  - `src.infrastructure.http.middlewares.cache.CachedResponse` (L36-L40) - Interface
+  - `src.infrastructure.http.middlewares.cache.CachedResponse` (L39-L44) - Interface
+- `src/infrastructure/http/middlewares/idempotency.ts`
+  - `src.infrastructure.http.middlewares.idempotency.DoNotRetrySubject` (L135-L140) - Interface
+  - `src.infrastructure.http.middlewares.idempotency.OutcomeUnknownFacts` (L146-L155) - Interface
+  - `src.infrastructure.http.middlewares.idempotency.Claim` (L180-L189) - Interface
 - `src/infrastructure/http/middlewares/upload.ts`
-  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected` (L271-L275) - Class
-  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected.paths.filter() callback` (L272-L274) - Function
-  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected.map() callback` (L293-L293) - Function
-  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.failed` (L407-L407) - Class
-  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.failed.results.find() callback` (L407-L407) - Function
+  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected` (L293-L297) - Class
+  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected.paths.filter() callback` (L294-L296) - Function
+  - `src.infrastructure.http.middlewares.upload.validateUploadedImages.then() callback.rejected.map() callback` (L315-L315) - Function
+  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.failed` (L429-L429) - Class
+  - `src.infrastructure.http.middlewares.upload.quarantineUploadedImages.then() callback.failed.results.find() callback` (L429-L429) - Function
 - `src/infrastructure/http/preconditions.ts`
-  - `src.infrastructure.http.preconditions.tagsOf` (L28-L28) - Class
-  - `src.infrastructure.http.preconditions.tagsOf.map() callback` (L28-L28) - Function
+  - `src.infrastructure.http.preconditions.tagsOf` (L29-L29) - Class
+  - `src.infrastructure.http.preconditions.tagsOf.map() callback` (L29-L29) - Function
 - `src/infrastructure/http/request.ts`
   - `src.infrastructure.http.request.parseFormCsvList.tokens` (L77-L80) - Class
   - `src.infrastructure.http.request.parseFormCsvList.tokens.entries.flatMap() callback` (L78-L78) - Function
   - `src.infrastructure.http.request.parseFormCsvList.tokens.map() callback` (L79-L79) - Function
   - `src.infrastructure.http.request.parseFormCsvList.tokens.filter() callback` (L80-L80) - Function
-  - `src.infrastructure.http.request.readInput.undecoded` (L288-L288) - Class
-  - `src.infrastructure.http.request.readInput.undecoded.stated.find() callback` (L288-L288) - Function
+  - `src.infrastructure.http.request.readInput.undecoded` (L289-L289) - Class
+  - `src.infrastructure.http.request.readInput.undecoded.stated.find() callback` (L289-L289) - Function
 - `src/infrastructure/http/response.ts`
   - `src.infrastructure.http.response.ResponseNeutral` (L20-L25) - Interface
   - `src.infrastructure.http.response.ResponseSuccess` (L31-L38) - Interface
   - `src.infrastructure.http.response.ResponseErrorItem` (L41-L53) - Interface
   - `src.infrastructure.http.response.ResponseReject` (L59-L70) - Interface
-  - `src.infrastructure.http.response.ProblemDetails` (L304-L317) - Interface
+  - `src.infrastructure.http.response.ProblemDetails` (L348-L361) - Interface
 - `src/infrastructure/http/sse.ts`
-  - `src.infrastructure.http.sse.openSseStream.reverifyTimer` (L65-L71) - Class
-  - `src.infrastructure.http.sse.openSseStream.reverifyTimer.setInterval() callback` (L65-L71) - Function
-  - `src.infrastructure.http.sse.openSseStream.reverifyTimer.setInterval() callback.then() callback` (L67-L69) - Function
+  - `src.infrastructure.http.sse.openSseStream.reverifyTimer` (L120-L126) - Class
+  - `src.infrastructure.http.sse.openSseStream.reverifyTimer.setInterval() callback` (L120-L126) - Function
+  - `src.infrastructure.http.sse.openSseStream.reverifyTimer.setInterval() callback.then() callback` (L122-L124) - Function
 - `src/infrastructure/observability/audit-changes.ts`
   - `src.infrastructure.observability.audit-changes.auditChanges.changedFields` (L83-L83) - Class
   - `src.infrastructure.observability.audit-changes.auditChanges.changedFields.fields.named.filter() callback` (L83-L83) - Function
@@ -147,8 +159,8 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.runtime.busy.ServiceBusyError` (L13-L19) - Class
   - `src.infrastructure.runtime.busy.ServiceBusyError.constructor` (L15-L18) - Constructor
 - `src/infrastructure/runtime/otel-sdk.ts`
-  - `src.infrastructure.runtime.otel-sdk.redactUrlSecrets.secrets` (L70-L70) - Class
-  - `src.infrastructure.runtime.otel-sdk.redactUrlSecrets.secrets.QUERY_SECRETS.filter() callback` (L70-L70) - Function
+  - `src.infrastructure.runtime.otel-sdk.redactUrlSecrets.query` (L125-L129) - Class
+  - `src.infrastructure.runtime.otel-sdk.redactUrlSecrets.query.map() callback` (L128-L128) - Function
 - `src/infrastructure/runtime/provider-registry.ts`
   - `src.infrastructure.runtime.provider-registry.ProviderRegistry` (L17-L34) - Interface
   - `src.infrastructure.runtime.provider-registry.ProviderRegistry.register` (L23-L23) - Method
@@ -158,6 +170,13 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.infrastructure.runtime.provider-registry.registryOver.register` (L42-L44) - Method
   - `src.infrastructure.runtime.provider-registry.registryOver.names` (L45-L45) - Method
   - `src.infrastructure.runtime.provider-registry.registryOver.resolve` (L46-L46) - Method
+- `src/infrastructure/runtime/span-scrub.ts`
+  - `src.infrastructure.runtime.span-scrub.scrubSpan.events` (L30-L36) - Class
+  - `src.infrastructure.runtime.span-scrub.scrubSpan.events.span.events.map() callback` (L30-L36) - Function
+  - `src.infrastructure.runtime.span-scrub.scrubSpan.type` (L37-L39) - Class
+  - `src.infrastructure.runtime.span-scrub.scrubSpan.type.events.find() callback` (L39-L39) - Function
+- `src/modules/account/globals.d.ts`
+  - `src.modules.account.globals.d.'express-serve-static-core'.Request` (L15-L22) - Interface
 - `src/modules/account/oauth/providers/github.ts`
   - `src.modules.account.oauth.providers.github.identityOf.primary` (L80-L80) - Class
   - `src.modules.account.oauth.providers.github.identityOf.primary.emails.find() callback` (L80-L80) - Function
@@ -179,10 +198,14 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.modules.account.repository.sessionFamilyActivity.then() callback.stamps.rows.flatMap() callback` (L372-L373) - Function
   - `src.modules.account.repository.sessionFamilyActivity.then() callback.stamps` (L372-L374) - Class
   - `src.modules.account.repository.NewVerificationToken` (L481-L488) - Interface
-  - `src.modules.account.repository.spendVerificationToken` (L562-L566) - Class
-  - `src.modules.account.repository.spendVerificationToken.then() callback` (L566-L566) - Function
-  - `src.modules.account.repository.userIdsWithLiveVerificationToken` (L608-L615) - Class
-  - `src.modules.account.repository.userIdsWithLiveVerificationToken.then() callback` (L615-L615) - Function
+  - `src.modules.account.repository.spendVerificationToken` (L565-L573) - Class
+  - `src.modules.account.repository.spendVerificationToken.then() callback` (L573-L573) - Function
+  - `src.modules.account.repository.userIdsWithLiveVerificationToken` (L615-L622) - Class
+  - `src.modules.account.repository.userIdsWithLiveVerificationToken.then() callback` (L622-L622) - Function
+- `src/modules/account/services/oauth.ts`
+  - `src.modules.account.services.oauth.then() callback.then() callback` (L201-L216) - Function
+- `src/modules/account/services/verification.ts`
+  - `src.modules.account.services.verification.then() callback.then() callback.then() callback` (L380-L385) - Function
 - `src/modules/account/session/account-view.ts`
   - `src.modules.account.session.account-view.modelVersion` (L44-L44) - Class
   - `src.modules.account.session.account-view.modelVersion.PERMISSION_RULES.map() callback` (L44-L44) - Function
@@ -193,25 +216,25 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.modules.orders.domain.totals.LineItemTotals` (L28-L35) - Interface
   - `src.modules.orders.domain.totals.OrderTotalInput` (L68-L80) - Interface
 - `src/modules/orders/emails.ts`
-  - `src.modules.orders.emails.OrderLines` (L33-L57) - Interface
-  - `src.modules.orders.emails.WithdrawalNotice` (L63-L73) - Interface
-  - `src.modules.orders.emails.withdrawalNotice.excludedNote.titles.excluded.map() callback` (L146-L146) - Function
-  - `src.modules.orders.emails.orderConfirmEmail.data.lines.order.items.map() callback` (L259-L267) - Function
+  - `src.modules.orders.emails.OrderLines` (L39-L63) - Interface
+  - `src.modules.orders.emails.WithdrawalNotice` (L66-L76) - Interface
+  - `src.modules.orders.emails.withdrawalNotice.excludedNote.titles.excluded.map() callback` (L149-L149) - Function
+  - `src.modules.orders.emails.orderConfirmEmail.data.lines.order.items.map() callback` (L262-L270) - Function
 - `src/modules/orders/model.ts`
-  - `src.modules.orders.model.OrderDocumentItem` (L72-L96) - Interface
-  - `src.modules.orders.model.OrderReference` (L99-L103) - Interface
-  - `src.modules.orders.model.OrderDocument` (L112-L225) - Interface
-  - `src.modules.orders.model.OrderNumberCounterDocument` (L663-L665) - Interface
-  - `src.modules.orders.model.OrderEventDocument` (L687-L707) - Interface
+  - `src.modules.orders.model.OrderDocumentItem` (L74-L98) - Interface
+  - `src.modules.orders.model.OrderReference` (L101-L105) - Interface
+  - `src.modules.orders.model.OrderDocument` (L114-L234) - Interface
+  - `src.modules.orders.model.OrderNumberCounterDocument` (L670-L672) - Interface
+  - `src.modules.orders.model.OrderEventDocument` (L694-L714) - Interface
 - `src/modules/payments/emails.ts`
   - `src.modules.payments.emails.paymentReceivedEmail.data.lines.order.items.map() callback` (L42-L47) - Function
   - `src.modules.payments.emails.TransferInstructions` (L139-L146) - Interface
 - `src/modules/payments/model.ts`
-  - `src.modules.payments.model.RefundLine` (L31-L36) - Interface
-  - `src.modules.payments.model.RefundRecord` (L43-L113) - Interface
-  - `src.modules.payments.model.DisputeRecord` (L120-L141) - Interface
-  - `src.modules.payments.model.RefundSettlement` (L147-L157) - Interface
-  - `src.modules.payments.model.PaymentDocument` (L162-L217) - Interface
+  - `src.modules.payments.model.RefundLine` (L32-L37) - Interface
+  - `src.modules.payments.model.RefundRecord` (L44-L122) - Interface
+  - `src.modules.payments.model.DisputeRecord` (L129-L150) - Interface
+  - `src.modules.payments.model.RefundSettlement` (L156-L166) - Interface
+  - `src.modules.payments.model.PaymentDocument` (L171-L232) - Interface
 - `src/modules/payments/presenter.ts`
   - `src.modules.payments.presenter.StaffFields` (L18-L21) - Interface
   - `src.modules.payments.presenter.staffFieldsOf.refunds.raw.refunds.map() callback` (L29-L32) - Function
@@ -221,17 +244,17 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.modules.payments.providers.errors.PaymentProviderError` (L28-L40) - Class
   - `src.modules.payments.providers.errors.PaymentProviderError.constructor` (L33-L39) - Constructor
 - `src/modules/payments/providers/index.ts`
-  - `src.modules.payments.providers.index.ProviderPaymentState` (L46-L67) - Interface
-  - `src.modules.payments.providers.index.PreparedPayment` (L70-L78) - Interface
-  - `src.modules.payments.providers.index.RefundedByProvider` (L85-L93) - Interface
-  - `src.modules.payments.providers.index.ProviderWebhookEvent` (L143-L159) - Interface
-  - `src.modules.payments.providers.index.PaymentProvider.refund` (L244-L248) - Method
-  - `src.modules.payments.providers.index.PaymentProvider.retrieveRefund` (L256-L256) - Method
+  - `src.modules.payments.providers.index.ProviderPaymentState` (L44-L65) - Interface
+  - `src.modules.payments.providers.index.PreparedPayment` (L68-L76) - Interface
+  - `src.modules.payments.providers.index.RefundedByProvider` (L83-L91) - Interface
+  - `src.modules.payments.providers.index.ProviderWebhookEvent` (L141-L157) - Interface
+  - `src.modules.payments.providers.index.PaymentProvider.refund` (L258-L262) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.retrieveRefund` (L270-L270) - Method
 - `src/modules/payments/repository.ts`
-  - `src.modules.payments.repository.paymentRepository.findStaleInFlight` (L1158-L1170) - Method
+  - `src.modules.payments.repository.paymentRepository.findStaleInFlight` (L1184-L1196) - Method
 - `src/modules/payments/services/errors.ts`
-  - `src.modules.payments.services.errors.RefundLeftOpenError` (L46-L58) - Class
-  - `src.modules.payments.services.errors.RefundLeftOpenError.constructor` (L51-L57) - Constructor
+  - `src.modules.payments.services.errors.RefundLeftOpenError` (L36-L48) - Class
+  - `src.modules.payments.services.errors.RefundLeftOpenError.constructor` (L41-L47) - Constructor
 - `src/modules/payments/services/external-refunds.ts`
   - `src.modules.payments.services.external-refunds.ourRecord` (L37-L46) - Class
   - `src.modules.payments.services.external-refunds.ourRecord.payment.refunds.find() callback` (L42-L45) - Function
@@ -259,18 +282,18 @@ The data-seeding runner and the infrastructure adapters it exercises. apply.ts i
   - `src.modules.payments.services.refund-sync.rereadRefund.then() callback` (L77-L77) - Function
   - `src.modules.payments.services.refund-sync.rereadRefund.catch() callback` (L78-L86) - Function
 - `src/modules/payments/services/refunds.ts`
-  - `src.modules.payments.services.refunds.keepPending` (L394-L402) - Class
-  - `src.modules.payments.services.refunds.keepPending.then() callback` (L402-L402) - Function
-  - `src.modules.payments.services.refunds.sendToProvider` (L414-L472) - Class
-  - `src.modules.payments.services.refunds.sendToProvider.refuse` (L420-L423) - Class
-  - `src.modules.payments.services.refunds.sendToProvider.refuse.then() callback` (L421-L423) - Function
-  - `src.modules.payments.services.refunds.sendToProvider.then() callback` (L470-L470) - Function
+  - `src.modules.payments.services.refunds.keepPending` (L430-L438) - Class
+  - `src.modules.payments.services.refunds.keepPending.then() callback` (L438-L438) - Function
+  - `src.modules.payments.services.refunds.sendToProvider` (L450-L508) - Class
+  - `src.modules.payments.services.refunds.sendToProvider.refuse` (L456-L459) - Class
+  - `src.modules.payments.services.refunds.sendToProvider.refuse.then() callback` (L457-L459) - Function
+  - `src.modules.payments.services.refunds.sendToProvider.then() callback` (L506-L506) - Function
 - `src/modules/returns/emails.ts`
   - `src.modules.returns.emails.ReturnNoticeInput` (L31-L53) - Interface
 - `src/modules/returns/model.ts`
   - `src.modules.returns.model.ReturnLine` (L31-L42) - Interface
-  - `src.modules.returns.model.ReturnDocument` (L45-L107) - Interface
-  - `src.modules.returns.model.ReturnOrderLockDocument` (L211-L214) - Interface
+  - `src.modules.returns.model.ReturnDocument` (L45-L116) - Interface
+  - `src.modules.returns.model.ReturnOrderLockDocument` (L223-L226) - Interface
 
 ### Demo Orchestration & Domain Flow Execution
 The run-server entry point that assembles the demo profile into a listening, loopback-only API instance, plus the domain services and mutation-testing orchestration that the seeded flows drive. run-server.ts resolves the ephemeral Mongo, installs the demo clock, force-disables external services, sets throwaway secrets and loopback binding, and polls until the server is accepting connections. The fake payment provider's refund mechanics and lazy registration are the test levers that let e2e and mutation waves exercise the full payment lifecycle. The domain services — order numbering, order stats, and delivery preorder — are the business logic that the scenario flows and mutation waves validate. The waves.ts orchestrator sequences mutation-testing rounds against this substrate.
@@ -278,20 +301,20 @@ The run-server entry point that assembles the demo profile into a listening, loo
 **Related Classes/Methods**:
 
 - `scenarios.support.doubles.payments.register.lazyFakePaymentProvider`:26-50
-- `scenarios.support.doubles.payments.fake.FakeRefund`:227-232
+- `scenarios.support.doubles.payments.fake.FakeRefund`:228-233
 - `src.modules.orders.services.order-numbering.allocateOrderNumber`:46-52
 - `src.modules.delivery.domain.preorder.BoardFacts`:191-195
 
 **Source Files:**
 
 - `scenarios/run-server.ts`
-  - `scenarios.run-server.waitUntilListening.poll` (L149-L157) - Class
-  - `scenarios.run-server.waitUntilListening.poll.then() callback` (L152-L156) - Function
+  - `scenarios.run-server.waitUntilListening.poll` (L150-L158) - Class
+  - `scenarios.run-server.waitUntilListening.poll.then() callback` (L153-L157) - Function
 - `scenarios/support/doubles/payments/fake.ts`
-  - `scenarios.support.doubles.payments.fake.FakeRefund` (L227-L232) - Interface
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.prepare` (L379-L396) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.confirm` (L398-L407) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.retrieve` (L409-L416) - Method
+  - `scenarios.support.doubles.payments.fake.FakeRefund` (L228-L233) - Interface
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.prepare` (L380-L397) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.confirm` (L401-L416) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.retrieve` (L418-L425) - Method
 - `scenarios/support/doubles/payments/register.ts`
   - `scenarios.support.doubles.payments.register.lazyFakePaymentProvider` (L26-L50) - Class
   - `scenarios.support.doubles.payments.register.lazyFakePaymentProvider.prepare` (L28-L31) - Method
@@ -310,9 +333,9 @@ The run-server entry point that assembles the demo profile into a listening, loo
   - `scripts.mutation.ci.waves.nextWave.results.previous.shards.map() callback` (L198-L198) - Function
   - `scripts.mutation.ci.waves.nextWave.results.flatMap() callback` (L203-L203) - Function
 - `src/modules/delivery/domain/lost.ts`
-  - `src.modules.delivery.domain.lost.withRestoration.dropped` (L165-L173) - Class
-  - `src.modules.delivery.domain.lost.withRestoration.dropped.back.filter() callback` (L166-L166) - Function
-  - `src.modules.delivery.domain.lost.withRestoration.dropped.map() callback` (L167-L173) - Function
+  - `src.modules.delivery.domain.lost.withRestoration.dropped` (L153-L161) - Class
+  - `src.modules.delivery.domain.lost.withRestoration.dropped.back.filter() callback` (L154-L154) - Function
+  - `src.modules.delivery.domain.lost.withRestoration.dropped.map() callback` (L155-L161) - Function
 - `src/modules/delivery/domain/preorder.ts`
   - `src.modules.delivery.domain.preorder.SweepFacts` (L136-L140) - Interface
   - `src.modules.delivery.domain.preorder.BoardFacts` (L191-L195) - Interface
@@ -332,28 +355,28 @@ The run-server entry point that assembles the demo profile into a listening, loo
   - `src.modules.orders.services.order-numbering.allocateOrderNumber` (L46-L52) - Class
   - `src.modules.orders.services.order-numbering.allocateOrderNumber.then() callback` (L51-L51) - Function
 - `src/modules/orders/services/stats.ts`
-  - `src.modules.orders.services.stats.PaidBucket` (L39-L44) - Interface
-  - `src.modules.orders.services.stats.ProductTotal` (L76-L82) - Interface
-  - `src.modules.orders.services.stats.CategoryTotal` (L121-L126) - Interface
-  - `src.modules.orders.services.stats.categoryTotals` (L133-L159) - Class
-  - `src.modules.orders.services.stats.categoryTotals.then() callback` (L152-L158) - Function
-  - `src.modules.orders.services.stats.categoryTotals.then() callback.rows.map() callback` (L153-L158) - Function
-  - `src.modules.orders.services.stats.ProductSeriesRead` (L162-L165) - Interface
-  - `src.modules.orders.services.stats.AwaitingTransfers` (L254-L259) - Interface
-  - `src.modules.orders.services.stats.PipelineRead` (L262-L265) - Interface
+  - `src.modules.orders.services.stats.PaidBucket` (L40-L45) - Interface
+  - `src.modules.orders.services.stats.ProductTotal` (L77-L83) - Interface
+  - `src.modules.orders.services.stats.CategoryTotal` (L122-L127) - Interface
+  - `src.modules.orders.services.stats.categoryTotals` (L134-L160) - Class
+  - `src.modules.orders.services.stats.categoryTotals.then() callback` (L153-L159) - Function
+  - `src.modules.orders.services.stats.categoryTotals.then() callback.rows.map() callback` (L154-L159) - Function
+  - `src.modules.orders.services.stats.ProductSeriesRead` (L163-L166) - Interface
+  - `src.modules.orders.services.stats.AwaitingTransfers` (L255-L260) - Interface
+  - `src.modules.orders.services.stats.PipelineRead` (L263-L266) - Interface
 - `src/modules/payments/providers/index.ts`
-  - `src.modules.payments.providers.index.ProviderRefundState` (L99-L106) - Interface
-  - `src.modules.payments.providers.index.ProviderRefund` (L112-L121) - Interface
-  - `src.modules.payments.providers.index.PaymentProvider` (L171-L309) - Interface
-  - `src.modules.payments.providers.index.PaymentProvider.prepare` (L189-L193) - Method
-  - `src.modules.payments.providers.index.PaymentProvider.confirm` (L203-L203) - Method
-  - `src.modules.payments.providers.index.PaymentProvider.retrieve` (L211-L211) - Method
-  - `src.modules.payments.providers.index.PaymentProvider.listRefunds` (L266-L266) - Method
+  - `src.modules.payments.providers.index.ProviderRefundState` (L97-L104) - Interface
+  - `src.modules.payments.providers.index.ProviderRefund` (L110-L119) - Interface
+  - `src.modules.payments.providers.index.PaymentProvider` (L174-L323) - Interface
+  - `src.modules.payments.providers.index.PaymentProvider.prepare` (L192-L196) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.confirm` (L214-L214) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.retrieve` (L222-L222) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.listRefunds` (L280-L280) - Method
 - `src/modules/payments/providers/webhook-signature.ts`
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs` (L86-L89) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs.map() callback` (L86-L89) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp` (L91-L91) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp.pairs.find() callback` (L91-L91) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs` (L99-L102) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs.map() callback` (L99-L102) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp` (L104-L104) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp.pairs.find() callback` (L104-L104) - Function
 - `src/modules/payments/services/effects.ts`
   - `src.modules.payments.services.effects.reconcileOne` (L102-L106) - Class
   - `src.modules.payments.services.effects.reconcileOne.then() callback` (L104-L105) - Function
@@ -367,30 +390,30 @@ The run-server entry point that assembles the demo profile into a listening, loo
   - `src.modules.payments.services.notify.mailRefundUndeliverable.then() callback.refund` (L132-L132) - Class
   - `src.modules.payments.services.notify.mailRefundUndeliverable.then() callback.refund.payment.refunds.find() callback` (L132-L132) - Function
 - `src/modules/payments/services/settlement.ts`
-  - `src.modules.payments.services.settlement.Settlement` (L63-L80) - Interface
-  - `src.modules.payments.services.settlement.then() callback` (L316-L320) - Function
-  - `src.modules.payments.services.settlement.confirmableOrder` (L547-L550) - Class
-  - `src.modules.payments.services.settlement.confirmableOrder.then() callback` (L550-L550) - Function
-  - `src.modules.payments.services.settlement.settleFound` (L569-L595) - Class
-  - `src.modules.payments.services.settlement.settleFound.then() callback` (L582-L594) - Function
-  - `src.modules.payments.services.settlement.settleFound.then() callback.then() callback` (L586-L592) - Function
-  - `src.modules.payments.services.settlement.confirmPayment` (L612-L642) - Class
-  - `src.modules.payments.services.settlement.confirmPayment.then() callback` (L618-L642) - Function
-  - `src.modules.payments.services.settlement.confirmPayment.then() callback.settleFound() callback` (L627-L635) - Function
-  - `src.modules.payments.services.settlement.confirmPayment.then() callback.settleFound() callback.then() callback` (L630-L634) - Function
-  - `src.modules.payments.services.settlement.confirmPayment.then() callback.precheck` (L638-L638) - Method
-  - `src.modules.payments.services.settlement.syncPayment` (L654-L678) - Class
-  - `src.modules.payments.services.settlement.syncPayment.then() callback` (L659-L678) - Function
-  - `src.modules.payments.services.settlement.syncPayment.then() callback.settleFound() callback` (L672-L675) - Function
-  - `src.modules.payments.services.settlement.syncPayment.then() callback.settleFound() callback.then() callback` (L673-L674) - Function
-  - `src.modules.payments.services.settlement.settleFromProvider` (L830-L840) - Class
-  - `src.modules.payments.services.settlement.settleFromProvider.then() callback` (L839-L839) - Function
+  - `src.modules.payments.services.settlement.Settlement` (L66-L83) - Interface
+  - `src.modules.payments.services.settlement.then() callback` (L319-L323) - Function
+  - `src.modules.payments.services.settlement.confirmableOrder` (L550-L553) - Class
+  - `src.modules.payments.services.settlement.confirmableOrder.then() callback` (L553-L553) - Function
+  - `src.modules.payments.services.settlement.settleFound` (L572-L598) - Class
+  - `src.modules.payments.services.settlement.settleFound.then() callback` (L585-L597) - Function
+  - `src.modules.payments.services.settlement.settleFound.then() callback.then() callback` (L589-L595) - Function
+  - `src.modules.payments.services.settlement.confirmPayment` (L615-L645) - Class
+  - `src.modules.payments.services.settlement.confirmPayment.then() callback` (L621-L645) - Function
+  - `src.modules.payments.services.settlement.confirmPayment.then() callback.settleFound() callback` (L630-L638) - Function
+  - `src.modules.payments.services.settlement.confirmPayment.then() callback.settleFound() callback.then() callback` (L633-L637) - Function
+  - `src.modules.payments.services.settlement.confirmPayment.then() callback.precheck` (L641-L641) - Method
+  - `src.modules.payments.services.settlement.syncPayment` (L657-L681) - Class
+  - `src.modules.payments.services.settlement.syncPayment.then() callback` (L662-L681) - Function
+  - `src.modules.payments.services.settlement.syncPayment.then() callback.settleFound() callback` (L675-L678) - Function
+  - `src.modules.payments.services.settlement.syncPayment.then() callback.settleFound() callback.then() callback` (L676-L677) - Function
+  - `src.modules.payments.services.settlement.settleFromProvider` (L861-L871) - Class
+  - `src.modules.payments.services.settlement.settleFromProvider.then() callback` (L870-L870) - Function
 - `src/modules/payments/services/view.ts`
-  - `src.modules.payments.services.view.getRefund` (L104-L116) - Class
-  - `src.modules.payments.services.view.getRefund.then() callback` (L109-L116) - Function
+  - `src.modules.payments.services.view.getRefund` (L117-L129) - Class
+  - `src.modules.payments.services.view.getRefund.then() callback` (L122-L129) - Function
 - `src/modules/returns/services/cancel-remainder.ts`
-  - `src.modules.returns.services.cancel-remainder.rowFor.byProduct` (L87-L87) - Class
-  - `src.modules.returns.services.cancel-remainder.rowFor.byProduct.order.items.map() callback` (L87-L87) - Function
+  - `src.modules.returns.services.cancel-remainder.rowFor.byProduct` (L88-L88) - Class
+  - `src.modules.returns.services.cancel-remainder.rowFor.byProduct.order.items.map() callback` (L88-L88) - Function
 - `src/modules/returns/services/options.ts`
   - `src.modules.returns.services.options.optionLines.titles` (L64-L66) - Class
   - `src.modules.returns.services.options.optionLines.titles.order.items.map() callback` (L65-L65) - Function
@@ -406,21 +429,21 @@ The core disposable infrastructure: the in-process mongod replica set, the webho
 
 - `scenarios.support.ephemeral-mongo.EphemeralMongo`:35-38
 - `scenarios.support.doubles.webhook-sink.trustSinkCertificateAuthority`:28-37
-- `scenarios.support.doubles.payments.fake.fakePaymentProvider`:374-570
+- `scenarios.support.doubles.payments.fake.fakePaymentProvider`:375-579
 
 **Source Files:**
 
 - `scenarios/run-server.ts`
-  - `scenarios.run-server.then() callback.process.once() callback` (L169-L179) - Function
-  - `scenarios.run-server.then() callback.then() callback` (L245-L247) - Function
+  - `scenarios.run-server.then() callback.process.once() callback` (L170-L180) - Function
+  - `scenarios.run-server.then() callback.then() callback` (L246-L248) - Function
 - `scenarios/support/doubles/payments/fake.ts`
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider` (L374-L570) - Class
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds.filter() callback` (L504-L504) - Function
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds.map() callback` (L505-L511) - Function
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.cancel` (L514-L534) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook` (L547-L569) - Method
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook.catch() callback` (L563-L566) - Function
-  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook.then() callback` (L569-L569) - Function
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider` (L375-L579) - Class
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds.filter() callback` (L513-L513) - Function
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.listRefunds.map() callback` (L514-L520) - Function
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.cancel` (L523-L543) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook` (L556-L578) - Method
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook.catch() callback` (L572-L575) - Function
+  - `scenarios.support.doubles.payments.fake.fakePaymentProvider.parseWebhook.then() callback` (L578-L578) - Function
 - `scenarios/support/doubles/payments/register.ts`
   - `scenarios.support.doubles.payments.register.lazyFakePaymentProvider.cancel` (L46-L47) - Method
   - `scenarios.support.doubles.payments.register.lazyFakePaymentProvider.parseWebhook` (L48-L49) - Method
@@ -444,18 +467,16 @@ The core disposable infrastructure: the in-process mongod replica set, the webho
   - `scripts.mutation.mutate-scope.isMutable.exclude.every() callback` (L50-L50) - Function
 - `src/app/routes.ts`
   - `src.app.routes.app.use() callback` (L39-L42) - Function
-  - `src.app.routes.installRoutes.servedModules` (L49-L49) - Class
-  - `src.app.routes.installRoutes.servedModules.enabledModules.map() callback` (L49-L49) - Function
 - `src/modules/delivery/domain/lost.ts`
   - `src.modules.delivery.domain.lost.LostShipmentFacts` (L16-L20) - Interface
   - `src.modules.delivery.domain.lost.RestorableFulfillmentOrder` (L23-L28) - Interface
   - `src.modules.delivery.domain.lost.Restoration` (L31-L38) - Interface
-  - `src.modules.delivery.domain.lost.planRestoration.shipped.shipment.lines.map() callback` (L126-L126) - Function
-  - `src.modules.delivery.domain.lost.planRestoration.owedFulfillmentOrderIds.linked.map() callback` (L128-L128) - Function
-  - `src.modules.delivery.domain.lost.withRestoration.known` (L154-L154) - Class
-  - `src.modules.delivery.domain.lost.withRestoration.known.lines.map() callback` (L154-L154) - Function
-  - `src.modules.delivery.domain.lost.OwedDate` (L178-L182) - Interface
-  - `src.modules.delivery.domain.lost.owedDateOf.at.ahead.map() callback` (L203-L203) - Function
+  - `src.modules.delivery.domain.lost.planRestoration.shipped.shipment.lines.map() callback` (L114-L114) - Function
+  - `src.modules.delivery.domain.lost.planRestoration.owedFulfillmentOrderIds.linked.map() callback` (L116-L116) - Function
+  - `src.modules.delivery.domain.lost.withRestoration.known` (L142-L142) - Class
+  - `src.modules.delivery.domain.lost.withRestoration.known.lines.map() callback` (L142-L142) - Function
+  - `src.modules.delivery.domain.lost.OwedDate` (L166-L170) - Interface
+  - `src.modules.delivery.domain.lost.owedDateOf.at.ahead.map() callback` (L191-L191) - Function
 - `src/modules/orders/domain/purchase-hold.ts`
   - `src.modules.orders.domain.purchase-hold.purchaseHoldUntil.counted` (L39-L42) - Class
   - `src.modules.orders.domain.purchase-hold.purchaseHoldUntil.counted.cancelTimes.map() callback` (L40-L40) - Function
@@ -467,61 +488,65 @@ The core disposable infrastructure: the in-process mongod replica set, the webho
   - `src.modules.orders.domain.tax.orderTaxBreakdown.sortedGroups` (L257-L257) - Class
   - `src.modules.orders.domain.tax.orderTaxBreakdown.sortedGroups.toSorted() callback` (L257-L257) - Function
 - `src/modules/orders/repository.ts`
-  - `src.modules.orders.repository.setProjection.changes` (L435-L439) - Class
-  - `src.modules.orders.repository.setProjection.changes.filter() callback` (L437-L437) - Function
-  - `src.modules.orders.repository.setProjection.changes.map() callback` (L438-L438) - Function
+  - `src.modules.orders.repository.setProjection.changes` (L438-L442) - Class
+  - `src.modules.orders.repository.setProjection.changes.filter() callback` (L440-L440) - Function
+  - `src.modules.orders.repository.setProjection.changes.map() callback` (L441-L441) - Function
 - `src/modules/orders/services/digest.ts`
-  - `src.modules.orders.services.digest.ordersDigest` (L29-L45) - Class
-  - `src.modules.orders.services.digest.ordersDigest.then() callback` (L45-L45) - Function
+  - `src.modules.orders.services.digest.ordersDigest` (L29-L50) - Class
+  - `src.modules.orders.services.digest.ordersDigest.then() callback` (L50-L50) - Function
 - `src/modules/orders/services/place.ts`
-  - `src.modules.orders.services.place.order` (L228-L248) - Class
-  - `src.modules.orders.services.place.order.announceInTransaction() callback` (L229-L246) - Function
-  - `src.modules.orders.services.place.order.announceInTransaction() callback.then() callback` (L233-L236) - Function
-  - `src.modules.orders.services.place.order.announceInTransaction() callback.then() callback.then() callback` (L235-L235) - Function
+  - `src.modules.orders.services.place.order` (L233-L253) - Class
+  - `src.modules.orders.services.place.order.announceInTransaction() callback` (L234-L251) - Function
+  - `src.modules.orders.services.place.order.announceInTransaction() callback.then() callback` (L238-L241) - Function
+  - `src.modules.orders.services.place.order.announceInTransaction() callback.then() callback.then() callback` (L240-L240) - Function
 - `src/modules/orders/services/stats.ts`
-  - `src.modules.orders.services.stats.productSeries` (L172-L192) - Class
-  - `src.modules.orders.services.stats.productSeries.then() callback` (L189-L192) - Function
-  - `src.modules.orders.services.stats.productSeries.then() callback.buckets.rows.map() callback` (L191-L191) - Function
-  - `src.modules.orders.services.stats.cancellationCohort` (L233-L251) - Class
-  - `src.modules.orders.services.stats.cancellationCohort.then() callback` (L248-L251) - Function
+  - `src.modules.orders.services.stats.productSeries` (L173-L193) - Class
+  - `src.modules.orders.services.stats.productSeries.then() callback` (L190-L193) - Function
+  - `src.modules.orders.services.stats.productSeries.then() callback.buckets.rows.map() callback` (L192-L192) - Function
+  - `src.modules.orders.services.stats.cancellationCohort` (L234-L252) - Class
+  - `src.modules.orders.services.stats.cancellationCohort.then() callback` (L249-L252) - Function
 - `src/modules/payments/controllers/post-payment-confirm.ts`
   - `src.modules.payments.controllers.post-payment-confirm.postPaymentConfirm.then() callback.declined` (L38-L40) - Class
   - `src.modules.payments.controllers.post-payment-confirm.postPaymentConfirm.then() callback.declined.result.errors.some() callback` (L40-L40) - Function
 - `src/modules/payments/controllers/post-payment-webhook.ts`
-  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook` (L37-L89) - Class
-  - `src.modules.payments.controllers.post-payment-webhook.then() callback` (L53-L53) - Function
-  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook.then() callback` (L54-L65) - Function
-  - `src.modules.payments.controllers.post-payment-webhook.then() callback.then() callback` (L61-L61) - Function
-  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook.then() callback.then() callback` (L62-L64) - Function
-  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook.catch() callback` (L66-L88) - Function
+  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook` (L43-L92) - Class
+  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook.then() callback` (L62-L64) - Function
+  - `src.modules.payments.controllers.post-payment-webhook.postPaymentWebhook.catch() callback` (L65-L91) - Function
 - `src/modules/payments/providers/errors.ts`
   - `src.modules.payments.providers.errors.PaymentInFlightError` (L15-L21) - Class
   - `src.modules.payments.providers.errors.PaymentInFlightError.constructor` (L17-L20) - Constructor
 - `src/modules/payments/providers/index.ts`
-  - `src.modules.payments.providers.index.PaymentProvider.cancel` (L282-L282) - Method
-  - `src.modules.payments.providers.index.PaymentProvider.parseWebhook` (L308-L308) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.cancel` (L296-L296) - Method
+  - `src.modules.payments.providers.index.PaymentProvider.parseWebhook` (L322-L322) - Method
 - `src/modules/payments/providers/webhook-signature.ts`
-  - `src.modules.payments.providers.webhook-signature.WebhookRejected` (L33-L46) - Class
-  - `src.modules.payments.providers.webhook-signature.WebhookRejected.constructor` (L39-L45) - Constructor
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided` (L94-L94) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.map() callback` (L94-L94) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.pairs.filter() callback` (L94-L94) - Function
+  - `src.modules.payments.providers.webhook-signature.WebhookRejected` (L42-L55) - Class
+  - `src.modules.payments.providers.webhook-signature.WebhookRejected.constructor` (L48-L54) - Constructor
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided` (L107-L110) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.pairs.filter() callback` (L108-L108) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.map() callback` (L109-L109) - Function
+- `src/modules/payments/services/errors.ts`
+  - `src.modules.payments.services.errors.WebhookProviderUnknownError` (L54-L60) - Class
+  - `src.modules.payments.services.errors.WebhookProviderUnknownError.constructor` (L56-L59) - Constructor
 - `src/modules/payments/services/intent.ts`
   - `src.modules.payments.services.intent.rejectStrayIntent` (L44-L71) - Class
   - `src.modules.payments.services.intent.rejectStrayIntent.catch() callback` (L51-L58) - Function
   - `src.modules.payments.services.intent.rejectStrayIntent.then() callback` (L59-L71) - Function
-  - `src.modules.payments.services.intent.cancelOpenIntent` (L157-L164) - Class
-  - `src.modules.payments.services.intent.cancelOpenIntent.then() callback` (L161-L162) - Function
+  - `src.modules.payments.services.intent.cancelOpenIntent` (L164-L171) - Class
+  - `src.modules.payments.services.intent.cancelOpenIntent.then() callback` (L168-L169) - Function
 - `src/modules/payments/services/list.ts`
-  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId` (L105-L105) - Class
-  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId.orders.map() callback` (L105-L105) - Function
+  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId` (L106-L106) - Class
+  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId.orders.map() callback` (L106-L106) - Function
 - `src/modules/payments/services/refunds.ts`
-  - `src.modules.payments.services.refunds.sendOpenedRefund.then() callback.refund` (L1251-L1251) - Class
-  - `src.modules.payments.services.refunds.sendOpenedRefund.then() callback.refund.payment.refunds.find() callback` (L1251-L1251) - Function
+  - `src.modules.payments.services.refunds.sendOpenedRefund.then() callback.refund` (L1365-L1365) - Class
+  - `src.modules.payments.services.refunds.sendOpenedRefund.then() callback.refund.payment.refunds.find() callback` (L1365-L1365) - Function
+- `src/modules/payments/services/settlement.ts`
+  - `src.modules.payments.services.settlement.receiveWebhook` (L694-L706) - Class
+  - `src.modules.payments.services.settlement.receiveWebhook.then() callback` (L701-L706) - Function
+  - `src.modules.payments.services.settlement.receiveWebhook.then() callback.then() callback` (L705-L705) - Function
 - `src/modules/payments/services/view.ts`
-  - `src.modules.payments.services.view.cancelableRefunds` (L217-L222) - Class
-  - `src.modules.payments.services.view.cancelableRefunds.payment.refunds.filter() callback` (L220-L220) - Function
-  - `src.modules.payments.services.view.cancelableRefunds.map() callback` (L221-L221) - Function
+  - `src.modules.payments.services.view.cancelableRefunds` (L230-L235) - Class
+  - `src.modules.payments.services.view.cancelableRefunds.payment.refunds.filter() callback` (L233-L233) - Function
+  - `src.modules.payments.services.view.cancelableRefunds.map() callback` (L234-L234) - Function
 - `src/modules/returns/domain/statement.ts`
   - `src.modules.returns.domain.statement.Statement` (L31-L35) - Interface
 - `src/modules/returns/services/create.ts`

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/audit.ts
-sha256: 53bc4c6f01611339a4003268732eeec0ecc9e0de6df00e8be033b4e4bfcd6970
-generated_at: 2026-11-08T07:55:24.160866+00:00
+sha256: e296abccaafc03d9e943004548f5df33a61ac7ec4cd7689586b36a7a676bb875
+generated_at: 2026-11-14T21:32:02.709795+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the set of audit action strings the returns module emits and registers them in the infrastructure audit type map via module augmentation. It exists so that every audit log entry the returns domain produces is type-safe and discoverable from the infrastructure layer.
+Declares the set of audit action strings the returns module emits and registers them into the shared `AuditActionMap` type via module augmentation, giving every returns service a single, type-safe vocabulary of audit events.
 
 ## Key elements
 
-- **`returnsAuditActions`** — `as const` object mapping human-readable keys to the literal action strings (e.g. `ADMIN_RETURN_APPROVED` → `'admin.return.approved'`). The `admin.` prefix denotes actions only staff can trigger; `RETURN_REQUESTED` is the sole non-admin action.
-- **Module augmentation of `@infrastructure/observability/audit`** — adds a `returns` key to `AuditActionMap` whose value type is the union of all action strings, giving callers compile-time checking of valid returns actions.
+- **`returnsAuditActions`** — `as const` object of action strings (e.g. `admin.return.approved`, `return.requested`). Each key is the event name; each value is the wire-level string logged to the audit trail.
+- **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — adds a `returns` key to `AuditActionMap` whose value is the union of all `returnsAuditActions` values, so downstream code can reference actions by type rather than by raw string.
 
 ## Relationships
 
-- **`services/decide.ts`**, **`services/receive.ts`**, **`services/close.ts`**, **`services/cancel.ts`** — each imports `returnsAuditActions` from this file to tag its audit log entry (approved/declined, received, closed, canceled respectively).
-- **`controllers/get-return.ts`** — imports `ADMIN_RETURN_VIEWED` to record that staff opened a return's detail.
-- **`tests/integration/service.test.ts`** — asserts the correct action string is emitted by the services above.
-- **`@infrastructure/observability/audit`** (external) — the augmentation target; the returns action strings become part of the shared `AuditActionMap`.
+- **`src/modules/returns/controllers/get-return.ts`** — emits `ADMIN_RETURN_VIEWED` when staff open a return detail.
+- **`src/modules/returns/services/decide.ts`** — emits `ADMIN_RETURN_APPROVED` or `ADMIN_RETURN_DECLINED` on a staff decision.
+- **`src/modules/returns/services/receive.ts`** — emits `ADMIN_RETURN_RECEIVED` when goods are confirmed received.
+- **`src/modules/returns/services/proof.ts`** — emits `ADMIN_RETURN_PROOF_RECORDED` after carrier proof is stored.
+- **`src/modules/returns/services/close.ts`** — emits `ADMIN_RETURN_CLOSED` for manual closure.
+- **`src/modules/returns/services/cancel.ts`** — emits `ADMIN_RETURN_CANCELED` when an approved return is voided.
+- **`src/modules/returns/services/outcome.ts`** — emits `RETURN_REQUESTED` when a customer initiates a return.
+- **`src/modules/returns/tests/integration/service.test.ts`** — asserts the correct audit action is recorded for each service flow.
 
 ## Notes
 
-- The comment links to `modules/account/audit.ts` for the rationale: actions are declared per-module via augmentation rather than a single shared enum, keeping each domain's vocabulary local and the infrastructure map a union of all modules.
-- `ADMIN_RETURN_CLOSED` and `ADMIN_RETURN_CANCELED` both carry an optional free-text note (the "why"), per their JSDoc comments.
-- Because the object is `as const`, the inferred type is a union of literal strings — do not widen it when passing actions to the audit emitter.
+- Actions prefixed `admin.` are staff-only; the single non-prefixed action (`return.requested`) is customer-initiated.
+- The file intentionally uses a local `as const` object + module augmentation rather than a shared enum, matching the pattern in `modules/account/audit.ts` (per the header comment).
+- Because of `as const`, the union type of all action strings is derived automatically—adding a new key to the object is the only step needed to widen `AuditActionMap['returns']`.

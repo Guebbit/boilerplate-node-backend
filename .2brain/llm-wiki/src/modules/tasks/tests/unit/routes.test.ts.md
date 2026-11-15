@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/unit/routes.test.ts
-sha256: 8a043eec675e2e5a954eb2410eac527d610e30e196e7c598d4ccc67d851eaf6f
-generated_at: 2026-11-08T08:41:49.547923+00:00
+sha256: b76b1a7071010bb104c6245b90a9077e80e5be26d58b503f6adc553bdc4bd0ab
+generated_at: 2026-11-14T22:18:00.293429+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that the tasks router exposes exactly the documented endpoints in the documented order, that the single public route (`POST /`) sits above the auth/permission gate while every other route sits below it, and that caching, rate-limiting, and the human-challenge gate are applied to the correct routes with the correct ordering. Assertions are deliberately positional because the routes below `router.use` are keyed by position.
+Unit tests that pin the exact route table, guard placement, caching policy, rate-limiting, and human-challenge gate of the tasks module's router. Because `router.use` makes guard boundaries positional and invisible to per-route inspection, these assertions are intentionally order-sensitive and sweep-based rather than per-route.
 
 ## Key elements
 
-- **`routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`** (imported from `@tests/routes`) — helpers that introspect the router instance: list signatures, extract guard names for a route, find the index of the first identity guard, and return the full middleware chain.
-- **`jest.mock` for cache & rate-limit middlewares** — replaces both with mock factories (`cacheMock`, `securityMock`) obtained via `jest.requireActual('@tests/routes')`, so the chain contains identifiable placeholder names rather than real middleware.
-- **`describe('what is mounted')`** — asserts the exact 12-element signature array in order.
-- **`describe('the positional guard')`** — asserts `POST /` has no identity guard or `requirePermissionGuard`; asserts every other route has `getAuth`, an identity guard at index ≥ 0, and `requirePermissionGuard`. Includes a "sweep" test that iterates all non-`POST /` routes.
-- **`describe('caching')`** — asserts `GET /` gets `privateNoCache` (no `setCache*`), and `POST /search` gets `noStore`.
-- **`describe('submission rate limiting')`** — asserts the three `submission*` limiters appear on `POST /` before `postTask`, and on no other route.
-- **`describe('human-challenge gate (rung 3)')`** — asserts `humanChallengeGate` appears on `POST /` after `submission-block`, and on no other route.
+- **Route-table test** — asserts `routeSignatures(router)` equals a fixed 12-entry array in documented order.
+- **Positional guard tests** — verify `POST /` is the sole unguarded (public) route above the `getAuth` + `requirePermissionGuard` gate; every other route carries both.
+- **Ordering pin** — asserts `routeSignatures(router)[0] === 'POST /'` so the gate cannot be moved above the contact form.
+- **Caching tests** — confirms `GET /` uses `privateNoCache` (browser-revalidated, no Redis) and `POST /search` uses `noStore`; neither uses any `setCache` variant.
+- **Rate-limit tests** — asserts `POST /` carries exactly three limiters (`submissions`, `submission-identity`, `submission-block`) *before* `postTask`, and no other route references a `submission*` limiter.
+- **Human-challenge gate tests** — asserts `humanChallengeGate` sits on `POST /` after `submission-block`, and on no other route.
+- **Mocks** — `jest.mock` stubs for the cache and rate-limit middleware modules, both delegating to `cacheMock()` / `securityMock()` factories exported by `tests/support/routes.ts`.
 
 ## Relationships
 
-- **`src/modules/tasks/routes.ts`** — the system under test; provides the `router` instance whose middleware chains and route table are asserted here.
-- **`tests/support/routes.ts`** — provides all four introspection helpers and the two mock factories (`cacheMock`, `securityMock`) that the `jest.mock` calls delegate to via `jest.requireActual`.
+- **`src/modules/tasks/routes.ts`** — the module under test; this file imports its `router` export and asserts against its full middleware graph.
+- **`tests/support/routes.ts`** — supplies the four introspection helpers (`routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) and the two mock factories (`cacheMock`, `securityMock`) consumed by the `jest.mock` stubs. All assertions and mock wiring in this file are built on that neighbor.
 
 ## Notes
 
-- The ordering assertion and the guard assertion form a **pair**: either one alone would pass even if `router.use` were mistakenly mounted at index 0; together they pin the gate position.
-- The "sweep" test for `requirePermissionGuard` filters `routeSignatures` to everything except `POST /` rather than listing routes, so a newly added route below the gate is covered automatically while one added above it fails the test.
-- Mocks are wired through `jest.requireActual('@tests/routes')` — the test support module doubles as the mock-factory source, which is an unconventional but intentional coupling.
+- Assertions are **positional by design**: `router.use(getAuth, isAuthOrCredential)` means a guard applied via `use` is invisible to per-route queries unless you inspect the chain at the correct index. Per-route middleware checks alone would pass even if the gate were misplaced.
+- The `jest.mock` factories are reached via `jest.requireActual('@tests/routes')`, keeping `tests/support/routes.ts` as the single source of truth for both the introspection helpers and the mock definitions used here.
+- Rate-limiting dimensions (address, identity, address-block) are asserted as an exact triple, not a "contains" check, to catch accidental addition or reordering.
+- The human-challenge gate is labeled "rung 3" in comments, implying a layered-defense model (rung 1 = rate limit, rung 2 = identity, rung 3 = challenge) that is not enforced elsewhere in this file.

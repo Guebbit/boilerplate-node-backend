@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/tests/integration/task-alerts.test.ts
-sha256: 39188f14c3d61ff63d1b7fe43233068aa499c653c6a84b44687abd7fb7759fd9
-generated_at: 2026-11-08T06:35:50.318601+00:00
+sha256: c1e97bb0a0359be4d599b25d7861859b136093f616fd711565eecca0bae76805
+generated_at: 2026-11-14T20:27:22.689580+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the full notification pipeline for task events, driving the system the way production does: real modules registered, tasks created or assigned through `taskService`, and assertions made against both the in-app notification bell and the email queue. It proves three invariants: (1) only staff in the task's work-set see a bell entry, (2) contact messages produce **no** per-person staff-notice mail (only the support mailbox gets the full message), and (3) system tasks produce per-person staff-notice mail but **never** touch the contact mailbox.
+Integration test suite that exercises task-alert notifications the way production drives them: real modules are registered, a contact message or system task is filed through the task service, and the test asserts both the in-app "bell" entries and the queued emails that result. It locks down *who* is notified (only members of the working role-set), *what* each channel carries (staff-notice mails get a category and a link, never the visitor's words; the support mailbox gets the full message), and *when* each channel fires (contact messages → mailbox only; system tasks → bell + per-person mail, never the mailbox).
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a `jest.fn()` so tests assert on the queue (envelopes, templates, data) rather than a real SMTP delivery.
-- **`staff(role, email, locale?)`** — helper that creates a user via `createUser` with an authenticator app armed, returning a ready-to-act staff member.
-- **`bellOf(role, userId)`** — settles the outbox, then calls `notificationsService.listVisible` with a `callerInScope` context to read the user's notification bell.
-- **`fileContact(category?)`** — creates a contact task through `taskService.create`, then awaits `settleOutboxNudges` so the notification outbox is flushed before assertions.
-- **`noticeMails()` / `mailboxMails()`** — filter `mockEnqueueEmail.mock.calls` by template (`notifications.staff-notice` vs. `tasks.contact`).
-- **`handOver()`** — creates a system task and two admin users (giver, taker) for the assignment scenario.
-- **Three `describe` blocks** — *"a contact message"*, *"a system task"*, *"a task handed to a colleague"* — each covering bell visibility, email content, idempotency, edge cases (spam, missing category, self-assignment, re-assignment).
+- **`staff(role, email, locale?)`** – helper that creates a user via `createUser` with `authenticatorEnabledAt` set, simulating a 2FA-armed staff member.
+- **`bellOf(role, userId)`** – drains the outbox, then queries the notification service for the given user in the deployment tenant and returns the `items` array.
+- **`fileContact(category?)`** – creates a contact-message task through the task service, then awaits `settleOutboxNudges()` so the outbox event has been processed before assertions run.
+- **`noticeMails()`** – filters the mocked mailer calls where the template is `notifications.staff-notice`.
+- **`mailboxMails()`** – filters the mocked mailer calls where the template is `tasks.contact`.
+- **`handOver()`** – creates a system task and two admin users (giver, taker) for the assignment tests.
+- **`jest.mock('@infrastructure/adapters/mailer')`** – replaces the mailer with a jest mock so tests inspect the queue rather than sending mail.
+- **`describe('a contact message')`** – verifies audience scoping, no per-person mail, full-message mailbox mail with Reply-To, uncategorised label, single mailbox mail even with no armed staff, spam suppression, and idempotent duplicate events.
+- **`describe('a system task')`** – verifies audience by route-set, per-person mail (not mailbox), `work`-parameter link propagation into bell, mail, due-soon, and overdue reminders.
+- **`describe('a task handed to a colleague')`** – verifies assignee-only bell notification, no mail on re-assigning to self, and re-notification on hand-back.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/notifications/services/index.ts` | **Primary SUT.** `notificationsService.listVisible`, `.onTaskOpened`, `.onTaskDueSoon`, `.onTaskOverdue` are the methods under test. |
-| `src/modules/tasks/index.ts` | `taskService.create` / `.assign` drive the task lifecycle that triggers notifications. |
-| `src/infrastructure/adapters/mailer.ts` | Mocked at module level; `enqueueEmail` is the assertion surface for all email claims. |
-| `src/kernel/outbox.ts` | `settleOutboxNudges` must be awaited after any task mutation before reading the bell or mail queue. |
-| `src/kernel/events.ts` | `resetDomainEvents` clears the in-memory event bus between tests. |
-| `src/kernel/registry.ts` + `src/modules.ts` | `registerModules(enabledModules)` wires the real module graph for every test. |
-| `src/kernel/permissions.ts` | `callerInScope` builds the scoped caller context used by `listVisible`. |
-| `src/kernel/access/tenant.ts` | `DEPLOYMENT_TENANT_ID` scopes every caller and event fact to the deployment tenant. |
-| `src/modules/users/tests/factories.ts` | `createUser` fixture for all staff and visitor users. |
-| `src/modules/tasks/tests/factories.ts` | `createSystemTask` fixture for the hand-over scenarios. |
-| `src/types/index.ts` | `TaskCategory` enum used when filing contacts and in assertions. |
-| `tests/support/callers.ts` | `asRole`, `callerContextAs` build raw caller objects for `bellOf` and `taskService.assign`. |
-| `tests/support/environment.ts` | `setEnvironment` sets `NODE_SUPPORT_EMAIL` (the support-mailbox address) per test. |
+- **`src/infrastructure/adapters/mailer.ts`** – mocked at module scope; the test inspects its call history to assert which emails were queued and with what envelope/data.
+- **`src/modules/notifications/services/index.ts`** – the service under test; the file invokes it to trigger notifications (task-opened, due-soon, overdue) and to query the per-user bell list.
+- **`src/modules/tasks/index.ts`** – provides the task service used to create contact messages and assign/reassign tasks.
+- **`src/modules/tasks/services/index.ts`** – the internal service layer backing the task service; exercised indirectly through the public `taskService` API.
+- **`src/modules/tasks/tests/factories.ts`** – `createSystemTask` produces a system-task fixture for the assignment and system-task suites.
+- **`src/modules/users/tests/factories.ts`** – `createUser` builds every user fixture.
+- **`src/kernel/registry.ts`** – `registerModules` wires the real modules before each test so events flow through the full pipeline.
+- **`src/modules.ts`** – supplies the `enabledModules` array passed to the registry.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes the outbox so notifications are created before assertions run.
+- **`src/kernel/events.ts`** – `resetDomainEvents` clears the event bus between tests.
+- **`src/kernel/permissions.ts`** – `callerInScope` builds the scoped caller identity used when querying the bell.
+- **`src/kernel/access/tenant.ts`** – `DEPLOYMENT_TENANT_ID` identifies the tenant context for all service calls.
+- **`src/types/index.ts`** – `TaskCategory` enum used to tag contact messages.
+- **`tests/support/callers.ts`** – `asRole` and `callerContextAs` build caller identities for service invocations.
+- **`tests/support/environment.ts`** – `setEnvironment` sets `NODE_SUPPORT_EMAIL` which becomes the mailbox recipient.
 
 ## Notes
 
-- **Outbox timing matters.** Any assertion on the bell or mail queue that follows a task mutation must come after `settleOutboxNudges()`; the `fileContact` helper bakes this in, but direct `notificationsService.onTask*` calls in the system-task and hand-over blocks rely on the service writing synchronously (no outbox hop) — if the implementation changes to use the outbox there, those tests will need the same settle step.
-- **Idempotency is explicit.** The *"is told once however often the event is delivered"* test calls `onTaskOpened` twice with identical facts and expects exactly one bell entry; this guards against duplicate event replay.
-- **Spam short-circuit.** A task created with a `website` field is treated as spam and must produce **zero** mail and **zero** bell entries — no outbox nudge at all.
-- **Template names are the contract.** `notifications.staff-notice` and `tasks.contact` are the two mail templates the test distinguishes; renaming either template silently breaks these filters.
-- **Locale-aware links.** The `staff` helper defaults to `en`, but one test creates a support user with `locale: 'it'` to confirm the bell still works across locales; link assertions expect the `/en/` prefix (from the moderator's locale).
+- The mailer mock is hoisted to module scope; `mockReset()` in `beforeEach` means assertions always see only the calls from the current test.
+- `settleOutboxNudges()` is an async drain — forgetting to await it (as `fileContact` does) will cause "bell is empty" false negatives.
+- Contact messages intentionally produce **zero** staff-notice mails; the full visitor message goes only to the contact mailbox. This is a deliberate privacy boundary the tests guard.
+- System tasks produce per-person staff-notice mails (with a `link` derived from the `work` parameter or a default path) and **never** the contact mailbox.
+- The `staff()` helper sets `authenticatorEnabledAt`; without it the user is treated as "unarmed" and excluded from per-person notification (tested explicitly in the "nobody can be told by name" case).
+- Duplicate delivery idempotency is verified by calling the notification handler twice with the same fact and asserting the bell has exactly one entry.

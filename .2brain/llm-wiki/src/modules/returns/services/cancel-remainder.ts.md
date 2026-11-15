@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/cancel-remainder.ts
-sha256: 549b39e88ee40647e8d59be24db9d15e1130e295b1c919e63ca37676fe8fe692
-generated_at: 2026-11-08T08:01:48.594165+00:00
+sha256: fdb244ee970eb174f0239422ebec6c0207169880902fe89682c835479aad0c04
+generated_at: 2026-11-14T21:36:44.550246+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the "cancel the unshipped remainder" flow (`POST /returns` with `kind: cancellation`). Unlike a full order cancellation, this targets a single fulfillment order and creates a Return row that is **closed at creation time** (no open→close lifecycle). It moves money, returns stock, and adjusts the shipping rule atomically under the order's lock row, then fires the provider refund and post-commit side effects.
+Implements the "remainder cancel" flow: canceling the unshipped lines of a specific fulfillment order as a `Return` of `kind: 'cancellation'` that is **closed at creation time**. It exists because a whole-order cancel is impossible once anything has shipped; the remainder must be unwound one fulfillment order at a time, moving money, stock, and the shipping rule atomically. The `returns` module owns this because it is the only module that already reaches all four concerns (delivery, inventory, payments, order).
 
 ## Key elements
 
-- **`createCancellation`** (exported) — Entry point. Validates input shape (requires `fulfillmentOrderId`, rejects caller-supplied `lines`), loads the order scoped to the caller, runs `refuseCaller`, then `cancelUnderLock` and `announceCanceled`.
-- **`refuseCaller`** — Pre-write gate. Enforces that a buyer must name `withdrawal`; checks the refund key first (403 before anything else); validates the statement window via `checkStatement` and `cancelRefusalOf`. Returns either a refusal outcome or the `Statement` to persist.
-- **`cancelUnderLock`** — The single transaction (`withTransaction`): locks the order row, calls `deliveryService.cancelRemainder`, computes the refund breakdown via `cancellationRefundOn`, releases stock through `orderService.releaseStock` (using `kind: 'backorder'` when the fulfillment order was held for stock), writes the closed Return row, enqueues `requested` and `closed` outbox events, and opens a refund record via `paymentService.openReturnRefund` when the amount is non-zero.
-- **`rowFor`** — Builds the `Partial<ReturnDocument>` for the new Return: status `'closed'`, `kind: 'cancellation'`, lines enriched with product title/price from the order, `returnPostage` from `returnPostagePayer()`.
-- **`refund`** — Post-commit: calls `paymentService.sendOpenedRefund` if a refund record was opened. A provider refusal is intentionally left for the payment sweep; the Return is already closed.
-- **`announceCanceled`** — Post-commit side-effect chain: `nudgeOutbox`, audit via `recordOpened`, optional `reportCanceled` callback (lost-parcel analytics), `inventoryService.refreshStockCacheForProducts`, `syncReturnStatus`, then `refund`. Returns the `opened` outcome.
-- **`Canceled`** (interface) — Bundle returned by the transaction: the created Return, the canceled lines, the opened refund record (or `null`), and an optional `reportCanceled` closure.
+- **`createCancellation`** (exported) — The single public entry point (`POST /returns` with `kind: 'cancellation'`). Validates the caller, runs the transaction, then triggers post-commit side effects. Returns a `CreateReturnOutcome`.
+- **`rowFor`** — Builds the `Partial<ReturnDocument>` to persist: status `closed`, kind `cancellation`, line items mapped from the order's own items, refund amounts, postage payer.
+- **`cancelUnderLock`** — The single DB transaction: locks the order row, calls into delivery to mark lines canceled, releases stock (with backorder awareness), writes the Return, enqueues `requested`/`closed` outbox events, and opens a refund record via payments when the amount is non-zero.
+- **`refund`** — Post-commit: sends the already-recorded refund through the payment service. A refusal is left to the payment sweep; nothing blocks on it.
+- **`announceCanceled`** — Post-commit orchestration: nudges the outbox, records the audit row, calls `reportCanceled` (lost-parcel analytics), refreshes the inventory stock cache, syncs the order's return-status projection, then fires the refund.
+- **`refuseCaller`** — Pre-transaction authorization gate: enforces buyer-vs-staff reason rules, checks the refund key (403 first), validates the buyer's statement (14-day withdrawal window), and re-checks line eligibility. Returns a refusal outcome or the `Statement` to write.
+- **`Canceled`** (internal interface) — The value returned by `cancelUnderLock` once committed: the created Return doc, the canceled lines, the optional opened refund record, and an optional `reportCanceled` callback.
 
 ## Relationships
 
-- **`src/modules/delivery/services/act.ts` / `index.ts`** — Calls `deliveryService.cancelRemainder` inside the transaction to mark fulfillment lines canceled and recompute the order summary.
-- **`src/modules/inventory/services/index.ts`** — Calls `inventoryService.refreshStockCacheForProducts` after commit to invalidate cached stock levels for the affected products.
-- **`src/modules/orders`** (`orderService`, `isBuyer`, `OrderDocument`) — Loads the order scoped to the caller, releases stock via `orderService.releaseStock`, and reads order fields (items, currency, `orderNumber`) for the Return row.
-- **`src/modules/orders/domain/rules.ts`** — Indirectly referenced through the order service for stock-release rules.
-- **`src/domain-primitives/money.ts`** — Uses `NO_MONEY` and `toMinorUnits` to decide whether a refund is owed.
-- **`src/infrastructure/runtime/database.ts`** — Provides `withTransaction` for the atomic lock-then-write block.
-- **`src/infrastructure/persistence/create-repository.ts`** — Uses `toObjectId` to cast the `fulfillmentOrderId` string to an ObjectId for the Return row.
-- **`src/infrastructure/http/response.ts`** — Imports `generateReject` (used in refusal paths).
-- **`src/infrastructure/i18n/index.ts`** — Imports the `t` translation helper.
-- **`src/kernel/outbox.ts`** — Calls `nudgeOutbox` after commit to flush enqueued events (`requested`, `closed`).
-- **Siblings in `./`** — `cancel-right` (`cancelRefusalOf`), `cancellation-refund` (`cancellationRefundOn`), `projection` (`syncReturnStatus`), `outcome` (all outcome constructors), `repository`, `domain` (`checkStatement`).
+- **`src/modules/delivery/index.ts`** — Re-exports `deliveryService` and `ActRefusal`; this file calls `cancelRemainder` on it inside the transaction and receives the `reportCanceled` callback.
+- **`src/modules/delivery/services/act.ts`** — The implementation behind `deliveryService.cancelRemainder`; marks lines canceled and recomputes the order summary within the shared session.
+- **`src/modules/delivery/services/index.ts`** — Intermediate barrel for the delivery service exports consumed above.
+- **`src/modules/inventory/index.ts`** — Re-exports `inventoryService`; this file calls `refreshStockCacheForProducts` post-commit.
+- **`src/modules/inventory/services/index.ts`** — The implementation behind the stock-cache refresh call.
+- **`src/modules/orders/domain/rules.ts`** — Source of `isBuyer` (authorization) and `orderService.releaseStock` (returning units or backorder allowance to inventory within the transaction).
+- **`src/domain-primitives/money.ts`** — Provides `NO_MONEY` (zero-check before opening a refund) and `toMinorUnits` (currency comparison).
+- **`src/infrastructure/http/response.ts`** — Provides `generateReject` for shaping refusal HTTP responses.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Provides `t` for localized refusal messages.
+- **`src/infrastructure/persistence/create-repository.ts`** — Provides `toObjectId` to coerce fulfillment-order IDs for storage.
+- **`src/infrastructure/runtime/database.ts`** — Provides `withTransaction`, the single transaction boundary for the whole cancel.
+- **`src/kernel/outbox.ts`** — `nudgeOutbox()` is called post-commit to flush queued events.
+- **`src/infrastructure/adapters/logger.ts`** — Indirectly used through the audit/`recordOpened` path for structured logging of the cancellation.
 
 ## Notes
 
-- The Return is **closed on creation** (`decidedAt === closedAt === now`); there is no "open" phase. This distinguishes it from the standard return/withdrawal flow.
-- The refund provider call (`sendOpenedRefund`) happens **after** the transaction commits. If the provider refuses, the refund record stays open and is picked up by the payment sweep — the Return's status is unaffected.
-- Buyer callers are restricted to reason `withdrawal`; staff may supply any reason (or `withdrawal` with the buyer's stated day/channel for audit).
-- The refund-key check (`cancelRefusalOf`) runs **before** window/statement validation so an unauthorized caller receives a 403 without leaking which specific rule would have failed.
-- `fulfillmentOrderId` is **required**; caller-supplied `lines` are **rejected** (`badCancellation`). The system determines which lines to cancel from the fulfillment order's own state.
-- Stock release uses `kind: 'backorder'` when `canceled.waitingForStock` is true (preorder/prealloc context) vs. plain shelf units otherwise.
-- The file is truncated in the graph snapshot; the tail of `createCancellation` (the `if` branch after `orderService.getForCaller`) is not visible here.
+- **Closed-on-write invariant.** Unlike other Return kinds, a cancellation Return never transitions to `closed` later — `rowFor` sets both `decidedAt` and `closedAt` to the same timestamp. The refund record is opened in the same transaction but *sent* post-commit; a provider refusal leaves the refund open for the sweep rather than reopening the Return.
+- **Backorder vs. shelf stock.** If the fulfillment order was `waitingForStock`, `releaseStock` is called with `kind: 'backorder'` on every line. Forgetting this distinction would corrupt shelf inventory counts.
+- **Authorization order is deliberate.** `refuseCaller` checks the refund key (`403`) *before* the reason/statement checks, so an unauthorized caller never learns which other rule would also fail.
+- **`reportCanceled` is optional and called post-commit.** It is a callback produced by the delivery cancel specifically for lost-parcel order cancels (audit + analytics). It is not a repository write.
+- **`input.lines` must be absent.** The exported entry point rejects the request if the caller supplies `lines`; the lines are always derived from the fulfillment order's own state to prevent tampering.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/password-hashing.test.ts
-sha256: b58c27a2c462ef741c6a6572511f97450f29ae43a5683ee8743f2aad06abf2a8
-generated_at: 2026-11-08T04:39:37.677665+00:00
+sha256: 22ffa8584cde048d25966f2372b2e7cbf5720eaa02452e1bbe0b69a48fd181e5
+generated_at: 2026-11-14T19:06:50.402614+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify three password-hashing guarantees *inside* the account login/change flows: (1) an unknown address still triggers one argon2id verification (decoy, so a miss costs the same as a wrong password), (2) the full password is compared rather than a truncated 72-byte prefix, and (3) a long all-lowercase passphrase is accepted as a valid password with no composition-rule rejection.
+Integration tests that pin down three password-hashing guarantees in the account login/change flows: an unknown address still triggers a real argon2id verification (decoy, timing-attack mitigation), passwords longer than 72 bytes are compared in full (no silent truncation), and a long all-lowercase passphrase is a valid password (length is the sole shape constraint).
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/security/password-hash')`** — module-level mock factory that spreads the real module and replaces only `verifyPassword` with a pass-through `jest.fn`. All other exports (e.g. `hashPassword`) remain real.
-- **`setupTestDb()`** — initialises a throwaway database before the suite runs.
-- **`describe('login with an unknown address')`** — asserts `verifyPassword` is called exactly once and that the second argument matches the argon2id parameter string (`$argon2id$v=19$m=19456,t=2,p=1$`).
-- **`describe('a long password')`** — creates a user whose password shares its first 72 bytes with a sibling string; asserts only the exact match logs in.
-- **`describe('the password shape')`** — changes a password to `PASSPHRASE_PASSWORD` (long, all-lowercase) via `passwordChangeWithCurrent`, then logs in with it to confirm no composition rule blocks it.
+- **Module-level `jest.mock` of `@infrastructure/security/password-hash`** — spreads the real module and swaps only `verifyPassword` for a `jest.fn` that delegates to the real implementation. This makes the call observable without altering behavior.
+- **`setupTestDb()`** — one-time database setup before all tests.
+- **`describe('login with an unknown address')`** — calls `accountService.login` with a nonexistent email; asserts `verifyPassword` was called exactly once with an argon2id parameter string matching `m=19456,t=2,p=1`.
+- **`describe('a long password')`** — creates a user whose password shares a 72-byte prefix with a second candidate; asserts the prefix-matching candidate fails while the real one succeeds.
+- **`describe('the password shape')`** — uses `PLAIN_PASSWORD` → `PASSPHRASE_PASSWORD` (a long lowercase string) through `passwordChangeWithCurrent`, then logs in with the new passphrase; both must succeed.
 
 ## Relationships
 
-- **`src/infrastructure/security/password-hash.ts`** — the module under test. `verifyPassword` is mocked; the rest of the module stays real. The test observes calls via `observePort` from `tests/support/ports.ts`.
-- **`src/modules/account/services/index.ts`** — provides `accountService` (`.login`, `.passwordChangeWithCurrent`), the system under test.
-- **`src/modules/users/tests/factories.ts`** — supplies `createUser` and the password constants `PASSPHRASE_PASSWORD`, `PLAIN_PASSWORD`.
-- **`tests/support/callers.ts`** — provides `testCallerContext` (auth/caller identity) passed to `passwordChangeWithCurrent`.
-- **`tests/support/ports.ts`** — provides `observePort`, a helper for asserting on mocked port functions without `jest.spyOn`.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` for the integration DB lifecycle.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/services/index.ts` | Source of `accountService`, the system under test for both the login and password-change flows. |
+| `src/infrastructure/security/password-hash.ts` | Mocked at module level; `verifyPassword` is the only member replaced (pass-through wrapper for observation). |
+| `tests/support/ports.ts` | Provides `observePort`, the call-recording utility used to assert on `verifyPassword` invocations. |
+| `tests/support/callers.ts` | Provides `testCallerContext`, the caller argument required by the password-change flow. |
+| `src/modules/users/tests/factories.ts` | Provides `createUser` for provisioning test users and the `PLAIN_PASSWORD` / `PASSPHRASE_PASSWORD` fixtures. |
+| `tests/support/setup-test-db.ts` | Provides `setupTestDb` to initialise the ephemeral database the service talks to. |
 
 ## Notes
 
-- The mock is written as a `jest.mock` factory (not `jest.spyOn`) because `jest.spyOn` cannot redefine a namespace-import getter under the project's SWC transform. `observePort` in `tests/support/ports.ts` exists for the same reason and is the idiomatic way to assert on port calls in this codebase.
-- The decoy-hash assertion checks the *parameter string* of the argon2id output, not just that a hash was produced — this pins the exact cost parameters (m, t, p) used for the dummy verification.
-- The "long password" test deliberately constructs a 72-byte common prefix (`'L0ng-pass!'.repeat(8)` = 72 bytes) to guard against accidental truncation in any intermediate step.
+- The mock deliberately uses `jest.requireActual` + spread rather than `jest.spyOn`. A comment in the source and `tests/support/ports.ts` explain that under the mutation-testing SWC transform, `jest.spyOn` cannot redefine a namespace-import getter, so a full module factory mock is required.
+- The argon2id regex in the unknown-address test asserts the *exact* cost parameters (`m=19456,t=2,p=1`). If those parameters change in `password-hash.ts`, this test breaks — it is an intentional coupling to the security policy.
+- The 72-byte prefix test is a regression guard for the classic bcrypt truncation bug; it would pass under argon2id by construction but documents the intent explicitly.

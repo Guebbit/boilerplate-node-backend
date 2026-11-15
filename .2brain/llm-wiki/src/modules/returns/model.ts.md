@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/model.ts
-sha256: d9259baa30a8f460e8fd0fa2d6f9e184d537db01a5018eb20f3e492c6ec791dc
-generated_at: 2026-11-08T07:59:59.586594+00:00
+sha256: 79901d95f26aa3f445d27631aa4e37adb866dc28c642e72b01de10fb67fb709a
+generated_at: 2026-11-14T21:35:01.264615+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, TypeScript interfaces, and compiled models for a **Return** — the record of a customer's request to send goods back (or cancel an unshipped remainder). It also defines a lightweight `ReturnOrderLock` collection used as a write-conflict primitive to serialise parallel return openings against the same order. The schema encodes the full lifecycle (`requested → approved → received → closed`, with `declined` and `canceled` branches) and all decision-making fields so that queries and business rules (in `./services`) can operate on a single document.
+Defines the Mongoose schema, compiled model, and TypeScript interfaces for the **Return** document (a request to send goods back) and a **ReturnOrderLock** helper document. This file is purely declarative: it owns the data shape, indexes, and serialization contract, while all queries live in `repository.ts` and business rules in `services/`.
 
 ## Key elements
 
-- **`ReturnLine`** — embedded interface: one product line coming back (`productId`, `quantity`, frozen `title`/`unitPrice`, optional `restocked`). Stored as an array with `_id: false`.
-- **`ReturnDocument`** — the full document interface: identity (`orderId`, `orderNumber`, `currency`), state (`status`, `reason`, `kind`), timing (`requestedAt`, `decidedAt`, `receivedAt`, `closedAt`, `canceledAt`), money fields (`handlingDeduction`, `refundAmount`, `shippingRefund`), decision metadata (`openedBy`, `policyExceptions`, `declineReason`, `remedy`, `returnPostage`), and the `lines` array.
-- **`returnSchema`** — the Mongoose schema with enum constraints, `moneyPath` for all monetary fields, and three compound indexes (`orderId+createdAt`, `status+createdAt`, `status+receivedAt`). Registered via `moneyPlugin` (Decimal128).
-- **`applyReturnTransform`** — built from `applySerialization`; maps `_id → id`, drops `__v`, and **omits `shippingRefund`** from all serialised output.
-- **`returnModel`** — the compiled `Model<ReturnDocument>` registered as `'Return'`.
-- **`ReturnOrderLockDocument` / `returnOrderLockModel`** — a minimal `{ _id: orderId, openings: number }` collection. Never read back; its only purpose is to create a write-write conflict under Mongo's snapshot isolation so two concurrent `POST /returns` calls for the same order serialise correctly.
+- **`ReturnLine`** — embedded line-item interface (productId, quantity, frozen title/unitPrice, optional `restocked`). Stored with `_id: false`; lines are never addressed individually.
+- **`ReturnDocument`** — full document interface covering the lifecycle (`requested → approved → received → closed`, `→ declined`, `→ canceled`), reasons, kind (`return` | `cancellation`), postage payer, remedy, refund/deduction amounts, proof-of-sending fields, and all status timestamps.
+- **`returnLineSchema`** / **`returnSchema`** — Mongoose schemas. Money fields (`unitPrice`, `handlingDeduction`, `refundAmount`, `shippingRefund`) use `moneyPath`. Enums are drawn from `@types`. Three indexes are defined: by `(orderId, createdAt)`, `(status, createdAt)`, and `(status, receivedAt)`.
+- **`applyReturnTransform`** — wraps `applySerialization` to rename `_id`→`id`, drop `__v`, and **omit `shippingRefund`** from every serialized output.
+- **`returnModel`** — the compiled model, registered as `"Return"`.
+- **`ReturnOrderLockDocument` / `returnOrderLockModel`** — a one-row-per-order counter (`openings`) used as a write-write conflict detector so two concurrent `POST /returns` cannot both read "zero returns yet" under snapshot isolation. Never read back; only its `$inc` write matters.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/money-field.ts`** — supplies `moneyPath` (schema-field factory for Decimal128 money) and `moneyPlugin` (hydrates/serialises to string). All monetary paths in `returnSchema` and `returnLineSchema` use these.
-- **`src/infrastructure/persistence/serialize.ts`** — supplies `applySerialization`, which `applyReturnTransform` wraps to add the `shippingRefund` omission.
-- **`src/modules/returns/repository.ts`** — the sole consumer of `returnModel` and `returnOrderLockModel` for queries and the lock `$inc`.
-- **`src/modules/returns/services/create.ts`** — writes a new `ReturnDocument` and performs the lock `$inc` before insertion.
-- **`src/modules/returns/services/decide.ts`**, **`close.ts`**, **`receive.ts`**, **`cancel.ts`**, **`cancel-remainder.ts`** — update document fields (status, timestamps, money, remedy) through the repository.
-- **`src/modules/returns/services/read.ts`**, **`notify.ts`**, **`outcome.ts`**, **`personal-data.ts`** — read `ReturnDocument` instances, typically passing them through `applyReturnTransform` for wire output.
-- **`src/modules/returns/presenter.ts`** — consumes `ReturnDocument` / `ReturnLine` shapes to build API responses.
-- **`src/modules/returns/index.ts`** — barrel re-export of the public API from this file.
+- **`src/infrastructure/persistence/money-field.ts`** — provides `moneyPath` (schema field factory) and `moneyPlugin` (Decimal128 storage) used by every monetary field in `returnSchema`.
+- **`src/infrastructure/persistence/serialize.ts`** — `applySerialization` is called to build `applyReturnTransform`, which the repository's lean reads apply.
+- **`src/modules/returns/repository.ts`** — the sole consumer of `returnModel` and `returnOrderLockModel` for all read/write queries; applies `applyReturnTransform` on lean output.
+- **`src/modules/returns/services/create.ts`** — writes new `ReturnDocument`s and `$inc`s the lock row.
+- **`src/modules/returns/services/decide.ts`, `src/modules/returns/services/close.ts`, `src/modules/returns/services/cancel.ts`, `src/modules/returns/services/cancel-remainder.ts`, `src/modules/returns/services/proof.ts`, `src/modules/returns/services/outcome.ts`, `src/modules/returns/services/read.ts`, `src/modules/returns/services/notify.ts`, `src/modules/returns/services/personal-data.ts`** — each mutates or reads specific fields on the return document as defined here.
+- **`src/modules/returns/presenter.ts`** — shapes the serialized return (post-transform) for API responses.
+- **`src/modules/returns/index.ts`** — barrel re-export for the module.
 
 ## Notes
 
-- **Keyed by `orderId`, never `userId`.** The module docblock explicitly states this is the Art. 17(3)(b)/(e) retention exemption: after account erasure the record has no personal link, same treatment as the `invoicing` module.
-- **`shippingRefund` is internal.** It exists to prevent double-refunding delivery on multi-return orders. `applyReturnTransform` strips it from every serialised response; it should never appear in API payloads or the `Return` type contract.
-- **`note` and `declineMessage` are free text, never rendered as HTML.** `note` is customer-authored and untrusted.
-- **Withdrawal is born `approved`.** A `reason: 'withdrawal'` return skips the `requested` state entirely; `decidedAt` is set to the opening moment.
-- **Money fields are Decimal128 in storage, string on the wire.** Lean reads return decimal text; always go through `moneyPlugin` / `moneyPath` — do not cast to `Number`.
-- **`ReturnOrderLock` is fire-and-forget.** There is no read path for it. Its existence is purely to force a write-write conflict under snapshot isolation; the `openings` counter is never surfaced to any consumer.
+- **Keyed by `orderId`, never `userId`.** After account erasure the return record persists with no personal link; this is the Art. 17(3)(b)/(e) retention exemption shared with `invoicing`.
+- **`shippingRefund` is internal bookkeeping** (prevents double-refunding delivery on multi-return orders) and is stripped from every wire response via `applyReturnTransform`. Never expose it manually.
+- **`note` and `declineMessage` are free-text fields** that must never be rendered as HTML. `declineMessage` is unset by the reaper; `declineReason` (a code) survives.
+- **Money is stored as Decimal128**; lean reads return decimal strings. Do not treat these fields as numeric in application logic without explicit conversion.
+- **The lock document is not a business entity.** It has no indexes beyond the default `_id`, no timestamps, and should not appear in any query or serialization path.

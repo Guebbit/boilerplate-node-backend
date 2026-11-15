@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/cancel.ts
-sha256: c0d7f16e4ca5c2ab56f17d39cd2cc7f3ab0b0a205790d37311055f20fffe684d
-generated_at: 2026-11-08T06:56:27.942048+00:00
+sha256: f1af396ae55d4e4c48c048a975fda6b816674721cd52cdce96fe88eb411c797f
+generated_at: 2026-11-14T20:42:32.172770+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Atomic order cancellation: the status move, stock release, and `order.canceled` outbox event are committed in a single transaction so a failed release rolls back the status too. The refund is deliberately *outside* the transaction (it is a provider-side operation that cannot roll back); instead a `refund` flag rides on the outbox event, which the `payments` module later acts on. The file also owns the cause taxonomy that drives mail, analytics, lifecycle column, and refund rules.
+Executes an order cancellation as a single atomic transaction: the conditional status move to `canceled`, the release (or committed-release) of the order's stock claim, and the `order.canceled` outbox row all commit or roll back together. The refund is deliberately excluded from the transaction (it is an external-provider action that cannot roll back); instead it is carried as a `refund` flag on the outbox event, which the `payments` module consumes to open its own refund record.
 
 ## Key elements
 
-- **`CancelCause`** (exported type) — seven-literal union: `customer`, `operator`, `withdrawal`, `reservation_expired`, `erasure`, `payment_mismatch`, `lost`.
-- **`CauseRules`** (interface) — per-cause decisions: lifecycle column (`by`), mail kind, analytics event, and whether refund is caller-selectable (`refundIsChoice`).
-- **`CANCEL_CAUSES`** (exported const) — the single table mapping each `CancelCause` to its `CauseRules`. Adding a cause means adding a row here.
-- **`giveBackStock(orderId, session)`** (private) — releases a `held` reservation via `inventoryService.releaseForOrder`; if none matched, releases a `committed` one via `inventoryService.releaseCommittedForOrder`. Runs inside the cancel's transaction.
-- **`moveToCanceled(id, from, scope, refund, cause, actorId)`** (private) — the one atomic step: conditional `updateStatusIfIn`, timeline write, stock release, and outbox row via `announceInTransaction`. After commit, refreshes the inventory stock cache (a write that cannot roll back).
-- **`afterCancel(order, cause, refund, context?)`** (exported) — post-commit side effects only: records the audit row (`recordAudit`) and emits the analytics event (`emitAnalyticsEvent`), then returns a 200 `generateSuccess` response.
-- **`cancel(id, cause, authContext, refundChoice?, context?, onBuyersBehalf?)`** (private) — the orchestrator every "door" calls. Resolves the refund boolean, computes the write scope via `cancelScope`, reads permitted `from` statuses from the lifecycle table (`statusesLeadingTo`), and delegates to `moveToCanceled`. Not exported; callers state intent by picking a cause.
+- **`CancelCause`** (exported type) — discriminated union of every reason an order can be canceled (`customer`, `operator`, `withdrawal`, `reservation_expired`, `erasure`, `payment_mismatch`, `lost`).
+- **`CANCEL_CAUSES`** (exported const) — single lookup table mapping each cause to its rules: which lifecycle actor performs the move, which mail template fires, which analytics event is emitted, and whether the refund is caller-decidable (`refundIsChoice`).
+- **`afterCancel`** (exported) — post-commit side effects: records the audit row, emits the analytics event, and returns the HTTP success response. Does **not** trigger the refund or the customer mail (those ride the outbox event).
+- **`moveToCanceled`** (internal) — the core atomic write. Runs `orderRepository.updateStatusIfIn` + `giveBackStock` inside one Mongoose session, then announces `ORDER_CANCELED` via the outbox. Accepts an optional `within` session to join a caller-owned transaction. Refreshes the inventory stock cache only after commit.
+- **`giveBackStock`** (internal) — releases a `held` reservation, or (for paid orders) releases a `committed` hold without restocking. Both calls are conditional on the hold's state, so calling them speculatively is safe.
+- **`attemptCancel`** (internal) — builds the write scope from the caller's permissions and the cause's lifecycle column, resolves the refund decision, and delegates to `moveToCanceled`. Returns a `CancelAttempt` (order or `null`).
+- **`CancelAttempt`** (internal interface) — the pre-reporting result: the order (or `null` if the conditional match failed) plus the `refund` flag and scope for downstream reporting.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — imports `SYSTEM_ACTOR` and `systemCallerContext` to build a caller context for system-initiated cancels (audit + analytics).
-- **`src/kernel/outbox.ts`** — imports `announceInTransaction`, the wrapper that commits the status write and the `ORDER_CANCELED` event atomically.
-- **`src/modules/inventory/index.ts`** — imports `inventoryService`; calls `releaseForOrder`, `releaseCommittedForOrder`, and `refreshStockCacheForOrder`.
-- **`src/modules/inventory/services/index.ts`** — the concrete service behind `inventoryService`; provides the transactional release and post-commit cache refresh.
-- **`src/modules/orders/domain/index.ts`** — imports `buyerIdOf`, `statusesLeadingTo`, and the `OrderActor` type; the lifecycle table drives which `from` statuses are valid per cause.
-- **`src/modules/orders/domain/lifecycle.ts`** — the table that `statusesLeadingTo` reads (re-exported through the domain index).
-- **`src/modules/orders/analytics.ts`** — imports `ordersAnalyticsEvents` for the per-cause analytics event name.
-- **`src/modules/orders/audit.ts`** — imports `ordersAuditActions` for the audit action string.
-- **`src/infrastructure/http/response.ts`** — imports `generateReject`, `generateSuccess`, and the response types to build the HTTP result.
-- **`src/infrastructure/i18n/index.ts`** — imports `t` for localized error messages.
-- **`src/infrastructure/observability/analytics/index.ts`** — imports `emitAnalyticsEvent` and `buildAnalyticsBase` for the post-commit analytics call.
-- **`src/infrastructure/observability/audit.ts`** — imports `recordAudit` for the post-commit audit row.
-- **`src/modules/access/index.ts`** — imports `ownOrderFlag` to annotate the audit metadata with whether the caller owned the order.
+- **`@kernel/outbox`** — `announceInTransaction` / `announceWithin` wrap the write so the `ORDER_CANCELED` row commits atomically with the status and stock changes.
+- **`@modules/inventory`** (`inventoryService`) — `releaseForOrder`, `releaseCommittedForOrder`, and `refreshStockCacheForOrder` are the stock-side half of the cancel.
+- **`@kernel/permissions`** — `SYSTEM_ACTOR` and `systemCallerContext` supply the caller identity for system-initiated causes.
+- **`@modules/access`** — `ownOrderFlag` is included in the audit metadata to mark whether the caller acted on their own order.
+- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit row in `afterCancel`.
+- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` / `buildAnalyticsBase` fire the analytics event.
+- **`../analytics` / `../audit`** — `ordersAnalyticsEvents` and `ordersAuditActions` provide the specific event and action identifiers.
+- **`../domain`** — `buyerIdOf` (for audit metadata), `statusesLeadingTo` (to build the `from` list for the conditional update), `OrderActor` type.
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` build the HTTP envelope.
+- **`@infrastructure/i18n`** — `t` for any user-facing strings.
+- **`./read`**, **`./timeline`**, **`./scope`** — sibling service helpers (`getById`, `withTimeline`, `cancelScope`, `actorOf`) used inside the write path.
 
 ## Notes
 
-- **Refund is a promise, not a fact.** The `refund` boolean is written on the outbox event payload; the actual money movement happens later in `payments`. A `paid` order's hold is `committed`, not `held`, so `releaseForOrder` will not match it — `giveBackStock` falls through to `releaseCommittedForOrder`.
-- **Conditional write, not read-then-write.** The status move uses `updateStatusIfIn` with the caller's scope and `fulfillment.shipped: { $ne: true }` in the same filter. A racing shipment or double-click resolves at the storage layer; the follow-up read on `null` only distinguishes 404 from 409.
-- **`lost` bypasses `cancel()`.** It is written by `markUndeliverable` and carries `refund: false` because the returns transaction already refunded.
-- **`refundIsChoice` is `true` only for `operator`.** A customer canceling a `paid` order always refunds; the system causes refund whatever was paid. The `refundChoice` parameter is ignored by every other cause.
-- **Stock cache refresh is post-commit.** `refreshStockCacheForOrder` runs after the transaction commits because that cache write is not part of the MongoDB session and cannot roll back.
-- **The module has no default export** (`@module` directive). All public surface is the named exports listed above plus the types.
+- The refund is **not** performed here. The `refund: boolean` flag on the outbox payload is the only record; the `payments` module acts on it via the outbox relay (retries until the refund record exists).
+- `giveBackStock` distinguishes `held` vs `committed` holds: a paid order's hold is *committed* (units reserved at purchase), so releasing it does **not** restock — units leave the shelf at shipment, not at cancellation.
+- The `within` parameter allows a caller (e.g., the withdrawal/returns flow) to fold the cancel into its own transaction; the caller then commits, nudges the relay, and refreshes the stock cache.
+- The conditional write (`updateStatusIfIn`) embeds both the caller's scope and the `from` status list in a single filter, so a racing `shipped` transition or a double-click resolves at the storage layer — at most one write matches.
+- The `lost` cause is written by `markUndeliverable` (the remainder-cancel path), **not** by the public `cancel()` entry point; it carries `refund: false` because the prior cancel already refunded.
+- The stock-cache refresh (`refreshStockCacheForOrder`) runs **after** commit because that cache write is not transactional and cannot roll back.

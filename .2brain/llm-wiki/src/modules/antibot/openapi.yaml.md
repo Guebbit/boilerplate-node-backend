@@ -1,7 +1,7 @@
 ---
 source: src/modules/antibot/openapi.yaml
-sha256: 35722ef053bb37df46dd08c0be1566a0f0030dfab619cf51cdfcfc6196f64c46
-generated_at: 2026-11-08T05:00:35.342419+00:00
+sha256: 1089d120c7ca215852315de48adc91d012ad185600d3eeeb5de51856dea66660
+generated_at: 2026-11-14T19:20:23.705210+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the antibot module. It declares the single `GET /antibot/challenge` endpoint, the module's custom error codes, and the JSON schemas that describe the challenge payload and the config published to the browser. It exists so clients, tests, and documentation all agree on the wire shape without importing TypeScript.
+OpenAPI 3.1.0 contract for the antibot module. It defines the single self-hosted challenge endpoint (`GET /antibot/challenge`), the `AntibotConfig` schema that `GET /config` publishes so clients know what anti-bot posture is active, and the ALTCHA-specific challenge shapes. It exists so the API surface of the module is declarative, versioned, and consumable by codegen or documentation tooling.
 
 ## Key elements
 
-- **`GET /antibot/challenge`** (`getAntibotChallenge`) – Returns an ALTCHA challenge when the active provider is self-hosted; returns the shared `NotFound` response when the provider is `none` or vendor-hosted. No auth (`security: []`).
-- **`x-error-codes`** – Two module-specific error codes: `ANTIBOT_NO_CHALLENGE` (404) and `ANTIBOT_VERIFICATION_FAILED` (403).
-- **`AntibotConfig`** – The object `GET /config` exposes to the browser: active `provider`, render `parameters`, and `rungs` summary. All fields are public by design.
-- **`AntibotRungs`** – Flat status for every anti-abuse rung: `identityBudgets` (rung 1, always `true`) and `emailPolicy` (rung 2: `off` / `disposable` / `mx`).
-- **`AntibotChallenge`** – ALTCHA-specific shape: `parameters` + an HMAC `signature` proving server origin.
-- **`AntibotChallengeParameters`** – KDF parameters the solver needs: `algorithm`, `nonce`, `salt`, `cost`, `keyLength`, `keyPrefix`, and optional `keySignature`, `memoryCost`, `parallelism`, `expiresAt`.
-- **Tag `Antibot`** with `x-family: Core` – custom extension grouping this operation in the module's tag taxonomy.
+- **`GET /antibot/challenge`** (`operationId: getAntibotChallenge`) — Returns an ALTCHA challenge object. Only fires when the active provider is the self-hosted `altcha`; `none` or vendor-hosted providers yield 404 by design. `security: []` — no auth required.
+- **`x-error-codes`** — Module-level error vocabulary: `ANTIBOT_NO_CHALLENGE` (404) and `ANTIBOT_VERIFICATION_FAILED` (403, referenced by downstream verifiers, not a path in this file).
+- **`AntibotConfig`** — The deployment-level config shape (provider name, public widget parameters, rung summary). Published via `GET /config`.
+- **`AntibotRungs`** — Flat summary of all anti-bot rungs: `identityBudgets` (rung 1, always `true`) and `emailPolicy` (rung 2: `off` | `disposable` | `mx`).
+- **`AntibotChallenge`** / **`AntibotChallengeParameters`** — The ALTCHA-specific schema (KDF parameters + HMAC signature). Deliberately typed so swapping providers would require a schema change rather than silently passing through unknown shapes.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** – The `404` response on `/antibot/challenge` is a `$ref` into the root contract's `NotFound` component, keeping the error envelope consistent across all modules.
-- **`src/modules/antibot/module.ts`** – The implementation module whose HTTP surface this spec describes. The module reads the `provider` / `parameters` fields (defined in `AntibotConfig`) at runtime and populates `AntibotChallenge` when issuing a challenge.
+- **`shared/contracts/openapi.root.yaml`** — The 404 response on `/antibot/challenge` `$ref`s the shared `NotFound` response from that root spec.
+- **`src/modules/antibot/module.ts`** — The runtime implementation that fulfils this contract; the module reads this file (or a generated artifact) as its source of truth for request/response shapes and the `AntibotConfig` it exposes.
 
 ## Notes
 
-- A `404` from `/antibot/challenge` is **not** an error condition; it is the correct response when no self-hosted provider is configured. Clients should treat it as "no challenge required."
-- `AntibotConfig` is published by the shared `GET /config` endpoint, not by this module's own route. The schema lives here only because the module owns the fields.
-- `identityBudgets` is hard-coded `true` in the schema description — there is no deployment flag to disable rung 1.
-- The challenge schema is intentionally narrow to ALTCHA. Adding a second self-hosted provider requires extending `AntibotChallenge` rather than leaving the response free-form.
-- `expiresAt` is a Unix-seconds timestamp, not an ISO date, matching ALTCHA's own convention.
+- **404 is not an error.** Returning 404 from `/antibot/challenge` is the correct, truthful response when the deployment uses `none` or a vendor-hosted provider. Clients should treat it as "no self-hosted challenge available" rather than a failure.
+- **`AntibotConfig.parameters` is public by contract.** The schema comment explicitly states everything in that map reaches the browser; do not place secrets there.
+- **`identityBudgets` has no off switch.** It is typed as a bare `boolean` with a description that it is always `true`; the field exists for shape-completeness, not configurability.
+- **`ANTIBOT_VERIFICATION_FAILED` (403) is declared here but not consumed by any path in this file.** It is intended for the form-submission verifier (likely in another module) to reference, keeping error-code names centralised in the antibot namespace.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/reap-inactive.test.ts
-sha256: 23bd8f32897acc98828e3b2a2aa11afb5879e2f3cc62d0e18ecbed29a2a41612
-generated_at: 2026-11-08T04:40:38.656377+00:00
+sha256: 5eac5dfae03d081b329d0d0bc6c3808efb3cd19bed46deccb763c36aad7e72cf
+generated_at: 2026-11-14T19:07:27.028711+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `reapInactiveAccounts` that verify the staged inactivity lifecycle (minimise → warn → soft-delete → hard-delete) against a real MongoDB instance. Each stage fires only after its own grace period elapses, and the suite asserts that no single run advances an account more than one stage.
+Integration test for `reapInactiveAccounts` that verifies the staged inactivity lifecycle (minimise → warn → soft-delete → hard-delete) against a real database. It asserts that each stage fires only after the grace period following the prior stage, that no two stages advance in a single run, and that the reaper's own bookkeeping fields (`inactivityWarnedAt`, `inactivityMinimisedAt`, `deletedAt`, `deletedBy`) are written correctly.
 
 ## Key elements
 
-- **`setupTestDb()`** – initialises the test database before the suite runs.
-- **`daysAgo(n)`** – returns a `Date` n days in the past; used to backdate accounts.
-- **`users()`** – returns the raw Mongoose `users` collection (bypasses service layer) so tests can read and seed reaper fields directly.
-- **`backdate(id, fields)`** – sets `createdAt` to 400 days ago plus any extra fields the test case needs (e.g. `inactivityWarnedAt`, `deletedAt`).
-- **`stateOf(id)`** – reads the reaper-relevant fields (`inactivityWarnedAt`, `inactivityMinimisedAt`, `deletedAt`, `deletedBy`) off an account; returns `null` if the document is gone.
-- **`beforeEach`** – sets `NODE_MAIL_TRANSPORT` to `'outbox'` so no real mail is sent.
-- **Five `it` blocks** covering: warn-once with no same-run deletion; soft-delete after warning grace; hard-delete after soft-delete grace; minimisation on its own dial; and no-op when both dials are `0`.
+- **`daysAgo(days)`** – Returns a `Date` `days` days before now; used to backdate accounts.
+- **`users()`** – Returns the raw `users` collection via `mongoose.connection.collection`, letting the suite read exactly what the reaper wrote without going through a model.
+- **`backdate(id, fields?)`** – Sets `createdAt` to 400 days ago plus any extra fields (e.g. `inactivityWarnedAt`, `deletedAt`, `deletedBy`) to simulate a prior reaper stage.
+- **`stateOf(id)`** – Fetches the four reaper-managed fields from the raw document; returns `null` if the document was hard-deleted.
+- **`describe('reapInactiveAccounts')`** – Six tests covering: warn-once semantics, soft-delete after grace, staff-role race between read and delete, hard-delete of a reaper soft-delete, minimise-on-own-dial, and no-op when both dials are off.
 
 ## Relationships
 
-- **`src/modules/account/services/reap-inactive.ts`** – imports and exercises `reapInactiveAccounts`, the function under test.
-- **`src/modules/users/tests/factories.ts`** – provides `createUser` to seed a valid account in the test DB.
-- **`tests/support/environment.ts`** – provides `setEnvironment` to switch mail transport to the outbox.
-- **`tests/support/setup-test-db.ts`** – provides `setupTestDb` for test-database initialisation and teardown.
+- **`src/modules/account/services/reap-inactive.ts`** – The module under test; provides `reapInactiveAccounts({ inactiveDays, minimiseDays })`.
+- **`src/modules/access/index.ts`** / **`src/modules/access/services/index.ts`** – Provides `accessService`; its `holdsStaffRole` method is mocked in the race-condition test to simulate a role change landing between the reaper's candidate read and the delete gate.
+- **`src/modules/users/tests/factories.ts`** – Supplies `createUser`, the fixture factory for creating test accounts with a given role.
+- **`tests/support/environment.ts`** – `setEnvironment` configures `NODE_MAIL_TRANSPORT` to `'outbox'` so no real mail is sent during warns.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb` initialises a real MongoDB connection so the suite can inspect raw collection state.
 
 ## Notes
 
-- The suite reads and writes account state through the **raw Mongoose collection** (`mongoose.connection.collection('users')`) rather than through service-layer methods, so it observes exactly what the reaper persisted.
-- "Dials" are the `inactiveDays` (warn/soft/hard) and `minimiseDays` (minimise) parameters passed to `reapInactiveAccounts`. Most tests set `minimiseDays: 0` to isolate the warn → soft → hard chain.
-- Grace periods in the tests are 31 days (e.g. warning 31 days ago triggers soft-delete), matching the production default rather than being arbitrary.
-- The module doc-comment cross-references `users/tests/integration/reaper.test.ts` for the candidate-selection tests; this file focuses solely on stage ordering and idempotency.
+- The suite reads collection state through the **raw driver** (`mongoose.connection.collection`) rather than a Mongoose model, specifically to verify the exact field values the reaper persisted and to detect hard deletion (document absent → `null`).
+- The module doc-comment references `users/tests/integration/reaper.test.ts` as the source of candidate-selection logic; this file tests only the *stage-ordering* and *grace-period* behavior.
+- `backdate` defaults `createdAt` to 400 days ago, which is beyond the `inactiveDays: 365` threshold used in most tests.
+- The staff-role race test relies on `jest.spyOn` against `accessService.holdsStaffRole`; `afterEach` calls `jest.restoreAllMocks()` to prevent cross-test leakage.

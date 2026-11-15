@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/cut.ts
-sha256: 735f86726ad5b0fd9d7fdf761490b65e68fc66e3735ac0123bbe638d4da9c92f
-generated_at: 2026-11-08T05:34:35.919948+00:00
+sha256: 4432e754e4d56a3344c333c6b5bcfc114963efc5467dc5816b3c79a1d84fd682
+generated_at: 2026-11-14T19:45:00.122876+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the single write path that turns a portion of a fulfillment order into a shipment inside the act's transaction. Every way a shipment is produced—staff shipping, digital fulfillment, and admin-status-override—funnels through `cutShipment`, so the claim, shipment write, and stock decrement happen once, consistently, with optimistic concurrency on the fulfillment order's revision.
+Implements the "cut" — the single write path that creates a shipment from a fulfillment order inside the act's transaction. All shipping paths (staff shipping, digital fulfillment, admin status override) funnel through `cutShipment`. It uses optimistic concurrency (revision claim) so two acts racing the same remainder cannot both land.
 
 ## Key elements
 
-- **`CutInput`** (interface) — Parameters for one cut: the fulfillment-order snapshot, the lines being shipped, optional `trackingCode`, `forced` / `delivered` flags, timestamp, and `takeStock` (whether this call should also decrement inventory).
-- **`Cut`** (interface) — Return shape: the created `ShipmentDocument` plus the re-read `FulfillmentOrderDocument`.
-- **`destinationFor`** (internal) — Resolves the order's shipping address via `orderService` and encrypts it with the pre-allocated shipment `_id`; returns `undefined` for digital fulfillments or orders with no address.
-- **`cutShipment`** (exported function) — The core operation:
-  1. Computes `shippedLines` with `withShipped`.
-  2. Claims the fulfillment order by revision (409 / `ActRefusal` on conflict).
-  3. Pre-allocates a shipment `_id` so the destination ciphertext is id-bound.
-  4. Sequentially reads the destination, allocates a per-order shipment number, and writes the shipment.
-  5. Optionally calls `orderService.shipStock` when `takeStock` is true.
+- **`CutInput`** (interface) — Parameters for a cut: the snapshot-read fulfillment order, the lines to ship, optional tracking code, `forced`/`delivered` flags, timestamp, and `takeStock`.
+- **`Cut`** (interface) — Return shape: the newly written `ShipmentDocument` and the claimed (updated) `FulfillmentOrderDocument`.
+- **`destinationFor`** (private) — Resolves the order's shipping address via `orderService`, then encrypts it under the shipment's pre-allocated `_id`. Returns `undefined` for digital or address-less orders.
+- **`writeShipment`** (private) — Builds and inserts the shipment document via `shipmentRepository.create`, mapping line titles from the fulfillment order and setting status to `'delivered'` or `'shipped'`.
+- **`cutShipment`** (exported) — Orchestrates the full cut: claims the fulfillment order by revision, allocates a shipment id, resolves destination, fetches the next shipment number, writes the shipment, and optionally decrements stock. Rejects with `ActRefusal` on revision mismatch.
 
 ## Relationships
 
-- **`../domain`** (`src/modules/delivery/domain/index.ts` → `fulfillment.ts`) — Imports `statusOfLines`, `withShipped`, and the `ProductQuantity` type for line math and status derivation.
-- **`../repository.ts`** — Uses `fulfillmentOrderRepository.claim` (optimistic lock) and `shipmentRepository.nextNumber` / `.create` for the shipment write.
-- **`../model.ts`** — Typed imports of `FulfillmentOrderDocument` and `ShipmentDocument`.
-- **`../pii.ts`** — Calls `encryptDestination` to bind the address ciphertext to the shipment id.
-- **`./act.ts`** — Imports `refuse` to throw the standard `ActRefusal` when the claim fails.
-- **`@modules/orders`** (`src/modules/orders/index.ts` → `src/modules/orders/services/index.ts`) — Calls `orderService.readOrder`, `orderService.shippingAddressOf`, and `orderService.shipStock`.
-- **`@types`** (`src/types/index.ts`) — Imports `FulfillmentOrderKind` to distinguish physical vs. digital.
-- **Callers** (`ship.ts`, `fulfill.ts`, `override-sync.ts`) — Each constructs a `CutInput` and invokes `cutShipment` within its own act transaction.
-- **Tests** (`tests/unit/fulfillment.test.ts`, `tests/unit/lost.test.ts`) — Exercise the digital-fulfillment and lost-item paths that flow through this cut.
+- **`src/modules/delivery/domain/fulfillment.ts`** and **`src/modules/delivery/domain/index.ts`** — Provide `withShipped` (merges shipped lines into the order's lines), `statusOfLines` (derives order status), and the `ProductQuantity` type.
+- **`src/modules/delivery/repository.ts`** — `fulfillmentOrderRepository.claim` performs the optimistic revision check; `shipmentRepository.create` and `.nextNumber` persist the shipment.
+- **`src/modules/delivery/pii.ts`** — `encryptDestination` encrypts the address bound to the shipment id.
+- **`src/modules/delivery/model.ts`** — `FulfillmentOrderDocument` and `ShipmentDocument` type the documents read and written.
+- **`src/modules/delivery/services/act.ts`** — `refuse` produces the `ActRefusal` thrown on revision conflict.
+- **`src/modules/orders/index.ts`** and **`src/modules/orders/services/index.ts`** — `orderService` is used to read the order (for the address) and to `shipStock` (decrement inventory).
+- **`src/types/index.ts`** — `FulfillmentOrderKind` enum to distinguish physical from digital orders.
+- **Callers** — `src/modules/delivery/services/ship.ts`, `src/modules/delivery/services/fulfill.ts`, and `src/modules/delivery/services/override-sync.ts` each invoke `cutShipment` within their own act transaction.
+- **Tests** — `src/modules/delivery/tests/unit/fulfillment.test.ts` and `src/modules/delivery/tests/unit/lost.test.ts` exercise the cut path as part of broader fulfillment scenarios.
 
 ## Notes
 
-- **Concurrency control:** The claim is revision-based; if two acts race on the same remainder, the second receives a 409 `ActRefusal`. No retry logic lives here.
-- **Sequential I/O inside the transaction:** `destinationFor` → `nextNumber` → `create` are chained one-after-the-other deliberately; a Mongoose `ClientSession` does not support parallel operations.
-- **`takeStock` flag:** Set to `false` by the override-sync path because the override has already decremented stock; the digital-fulfillment path sets it to `true`.
-- **Hold clearing:** The claim unconditionally unsets `holdReason` and `holdNote`—shipping is treated as implicitly releasing a hold.
-- **Shipment `_id` is pre-allocated** (not generated by the repository) so that `encryptDestination` can embed it in the ciphertext before the insert.
+- Operations inside the transaction are strictly **sequential**; the comment notes that a Mongoose session does not tolerate parallel operations.
+- The destination ciphertext is bound to the shipment's own `_id` (allocated *before* the write), so re-encryption under a different id is not possible.
+- `takeStock` is `false` when an admin override already handled inventory; the caller is responsible for that distinction.
+- Claiming the fulfillment order **unsets** `holdReason` and `holdNote` — shipping is treated as ending any active hold.
+- Line titles are copied from the fulfillment order at cut time; if a line is missing the title defaults to `''` rather than throwing.

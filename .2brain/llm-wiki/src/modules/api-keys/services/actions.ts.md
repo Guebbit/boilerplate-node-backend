@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/services/actions.ts
-sha256: a2c3bd6e2dfb6a5183e7c016eda2a868cb3ce150cbb0bd50248bc4c27358986b
-generated_at: 2026-11-08T05:03:58.101833+00:00
+sha256: 708e04afeb8b96dc2b24d6c142a2ec46846a0c87954d8f8df2308cd57d7fc1ab
+generated_at: 2026-11-14T19:20:56.699235+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the single action a caller may take on an API-key record (revoke) by mapping the `delete:ApiKey` ability key and the credential's `revokedAt` state into a per-row `ApiKeyActions` object. The ability is resolved once per request, then applied row-by-row, so a list page costs one permission lookup rather than one per credential.
+Centralizes the decision of *which actions a caller may perform* on an API-key record. The only action available is **revoke**, gated by the caller's `delete:ApiKey` permission and the credential's own `revokedAt` state. By resolving the ability once per page (not once per row), it keeps client-side permission logic out of the UI layer.
 
 ## Key elements
 
-- **`actionsForRows(context: TenantCallerContext)`** — Returns a row-level function `(row: Pick<StoredApiKey, 'revokedAt'>) => ApiKeyActions`. Internally calls `permitsOnRows` once with the `['delete']` action list and a single `ApiKey` subject, then per row computes `{ revoke: permits({}).delete && !row.revokedAt }`.
-- Only one action is exposed: `revoke`. There are no other keys in `ApiKeyActions` consumed here.
+- **`actionsForRows(context: TenantCallerContext)`** — Returns a row-level function `(row: Pick<StoredApiKey, 'revokedAt'>) => ApiKeyActions`. Internally calls `permitsOnRows(caller, 'ApiKey', ['delete'])` once, then the returned closure checks `permits({}).delete && !row.revokedAt` to produce `{ revoke: boolean }`.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Provides `permitsOnRows`, the kernel-level ability builder that this module delegates permission checks to.
-- **`src/modules/api-keys/repository.ts`** — Supplies the `StoredApiKey` type; this file only reads the `revokedAt` field from it.
-- **`src/modules/api-keys/services/api-keys.ts`** — The main API-keys service; expected caller of `actionsForRows` to attach actions to list/detail responses.
-- **`src/types/auth-context.ts`** — Defines `TenantCallerContext`, the caller shape passed into `actionsForRows`.
-- **`src/types/index.ts`** — Re-exports `ApiKeyActions` and `TenantCallerContext` under the `@types` alias.
-- **`src/modules/api-keys/tests/unit/actions.test.ts`** — Unit tests covering the `actionsForRows` logic.
+- **`src/kernel/ability.ts`** — Source of `permitsOnRows`, the generic ability-checking utility this file delegates all permission logic to.
+- **`src/modules/api-keys/repository.ts`** — Supplies the `StoredApiKey` type; this file only depends on its `revokedAt` field.
+- **`src/types/index.ts` / `src/types/auth-context.ts`** — Define `ApiKeyActions` and `TenantCallerContext`, the input/output types consumed here.
+- **`src/modules/api-keys/services/api-keys.ts`** — Upstream service that calls `actionsForRows` when assembling API-key list responses.
+- **`src/modules/api-keys/tests/unit/actions.test.ts`** — Unit tests covering the revoke-permission and already-revoked branches.
 
 ## Notes
 
-- A revoked credential (`revokedAt` is truthy) always yields `revoke: false`, even if the caller holds the `delete:ApiKey` permission. The comment in the source explains the alternative (sending the delete request as an accepted no-op) was deliberately rejected.
-- The row parameter is a `Pick` of `StoredApiKey`, not the full entity — callers only need to pass `revokedAt`.
-- `permitsOnRows` is called with an empty subject object `{}` (no specific id), reflecting that the action set is the same for every row in the module.
+- The design intent (stated in the header doc) is a *tactical DDD* pattern: the server is the single authority for "what can this caller do here," so no client re-derives permissions. See `docs/theory/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do`.
+- A revoked key is never offered a revoke action (it would be an accepted no-op). The control is hidden, not disabled.
+- The row parameter only needs `revokedAt` — the file deliberately avoids pulling in the full `StoredApiKey` shape.

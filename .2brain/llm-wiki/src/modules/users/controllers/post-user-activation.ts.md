@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/post-user-activation.ts
-sha256: 37f7416ecb3f87624922dd13cbc29a7a6df987e3a5766a88e888ec59f4da60cd
-generated_at: 2026-11-08T08:44:29.230444+00:00
+sha256: f079306d97aba834d4ad5aeb8c82ba2e226cd372154ba8144bd02315fa35d904
+generated_at: 2026-11-14T22:20:39.569150+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `POST /users/:id/activate` and `POST /users/:id/deactivate`. It extracts the user id, builds caller context, delegates the actual state change to `userService`, and shapes the JSON response. All business rules (404, 403 for staff, 409 on repeat, audit logging) are owned by the service layer, not here.
+Thin HTTP controller layer for `POST /users/:id/activate` and `POST /users/:id/deactivate`. It extracts the user id, calls the appropriate `userService` method, and serializes the result into a 200 response with ETag/Location headers. All business rules (404, 403 for staff, 409 for a repeat, audit logging) live in the service, not here.
 
 ## Key elements
 
-- **`switchHandler(name, move)`** – Internal factory that returns a `namedHandler`. It resolves `:id` via `requireId`, builds a caller context via `callerContextOf`, calls the supplied service method, maps a success through `userService.toUserContract`, short-circuits on `refused`, and funnels errors into `catchAs`.
-- **`postActivate`** – Exported handler for `POST /users/:id/activate`; wraps `switchHandler` with `userService.activate`.
-- **`postDeactivate`** – Exported handler for `POST /users/:id/deactivate`; wraps `switchHandler` with `userService.deactivate`.
+- **`switchHandler(name, move)`** (internal) — Factory that builds a single Express handler. Steps: validate `:id` via `requireId`, extract `callerContextOf`, invoke the service `move`, check `refused` for service-level denials, map the result through `userService.toUserContract`, set resource headers (`answerAsResource`), and send `successResponse`. Errors fall through to `catchAs`.
+- **`postActivate`** (exported) — `switchHandler('activateUserById', …)` → calls `userService.activate`. Lets a deactivated account sign in again.
+- **`postDeactivate`** (exported) — `switchHandler('deactivateUserById', …)` → calls `userService.deactivate`. Locks the account out and ends its sessions.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** – Provides `namedHandler` (wraps the async function with logging/error shape), `refused` (checks whether the service result is a refusal and writes the error response), and `catchAs` (final `.catch` that serializes unexpected errors).
-- **`@infrastructure/http/ids`** – `requireId` validates and extracts the `:id` param; returns `null` and sends 404 if absent.
-- **`@infrastructure/http/request`** – `callerContextOf` pulls the authenticated caller's identity/role from the request for downstream authorization and audit.
-- **`@infrastructure/http/response`** – `successResponse` sends the 200 JSON body.
-- **`src/modules/users/routes.ts`** – Registers `postActivate` / `postDeactivate` on the router for the respective paths.
-- **`src/modules/users/services`** – `userService.activate` / `userService.deactivate` perform the state transition and return a discriminated result (success data vs. refusal); `userService.toUserContract` maps the internal entity to the public user shape.
+- **`@infrastructure/http/controller`** — supplies `namedHandler` (wraps handler with operationId for logging), `refused` (short-circuits on 403/409 from the service), and `catchAs` (catches thrown errors into an HTTP error response).
+- **`@infrastructure/http/ids`** — `requireId` validates the `:id` route param and writes a 404 if missing/invalid.
+- **`@infrastructure/http/preconditions`** — `answerAsResource` sets `ETag` and `Location` headers.
+- **`@infrastructure/http/request`** — `callerContextOf` reads the authenticated caller's identity/permissions from the request for the service call.
+- **`@infrastructure/http/response`** — `successResponse` writes the JSON body and status code.
+- **`../services/index` (`userService`)** — owns all domain logic: 404, 403 (staff self-operation), 409 (repeat), audit row, and the `toUserContract` projection.
+- **`../routes`** — registers `postActivate` / `postDeactivate` on the `/users/:id/activate|deactivate` paths.
 
 ## Notes
 
-- The controller contains **no business logic**. If you're debugging a 403 or 409, go to `userService`, not here.
-- `requireId` failure causes an early `Promise.resolve()` (i.e., the handler ends after the 404 is written). No further service call is made.
-- `refused(response, result)` is the mechanism by which service-level rejections (403/409) are surfaced without throwing; if it returns `true`, the handler stops and no 200 is sent.
-- Both operations share one code path via the `switchHandler` factory; the only differences are the `operationId` string and which service method is called.
+- The controller is intentionally stateless: it never touches the database directly and contains no business rules. If a new guard (e.g. "can't deactivate yourself") is needed, it belongs in `userService`, not here.
+- Early-return pattern: when `requireId` fails the handler returns `Promise.resolve()` rather than `undefined`, so the Express chain stays consistent without an unhandled-rejection risk.
+- `toUserContract` is called with `context.caller`, meaning the serialized user shape can differ per caller (e.g. masking fields for non-admin staff).

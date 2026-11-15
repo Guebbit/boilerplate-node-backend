@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/request-logger.ts
-sha256: 8f053cf45079942206ae843dbbb28d985f4182c6d853f753d6475fa3e5ba5e4d
-generated_at: 2026-11-08T03:32:43.645557+00:00
+sha256: 008dd7d774984f6f538d626ecd415e7f1c94b679a7677ff8d86d62c6fe761c67
+generated_at: 2026-11-14T18:04:06.669816+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware that emits exactly one structured access-log line per HTTP request. Duration is measured with `process.hrtime.bigint()` for sub-millisecond precision, and the log severity is derived from the response status code so that server errors (5xx) surface at `error` level while client errors (4xx) surface at `warn`.
+Express middleware that emits a single structured access-log line per HTTP request. It measures duration with `process.hrtime.bigint()` for sub-millisecond precision and derives log severity from the response status (5xx → `error`, 4xx → `warn`, otherwise `info`) so that server-side failures are as loud as the error they accompany.
 
 ## Key elements
 
-- **`requestLogger`** (exported const) — The sole middleware function. Records a start timestamp, attaches a one-shot `response.once('finish', …)` handler that computes elapsed ms, resolves the route label, picks the log level, and calls `logger.log(…)`. Immediately calls `next()`.
-- **Log level mapping** — `statusCode ≥ 500` → `error`; `≥ 400` → `warn`; otherwise → `info`. The distinction is deliberate: 5xx is the server's fault, 4xx is the caller's.
-- **Structured fields** — Each log entry carries `requestId`, `clientRequestId`, `traceId`, `method`, `route` (matched template, not concrete path), `statusCode`, and `durationMs` (rounded to 2 dp).
+- **`requestLogger`** (exported const) — the middleware function. Captures a `bigint` start timestamp, hooks `response.once('finish', …)`, then on finish computes elapsed ms, resolves the route label, selects the severity level, and calls `logger.log(level, message, meta)`. Calls `next()` immediately so it does not block the pipeline.
+- Log metadata always includes: `requestId`, `clientRequestId`, `method`, `route` (matched template, not raw path), `statusCode`, and `durationMs` (rounded to 2 dp).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Imports the shared `logger` singleton; calls `logger.log(level, message, fields)` to emit the access-log entry.
-- **`src/infrastructure/observability/metrics-http.ts`** — Imports `getRouteLabel(request)` to resolve the matched Express route template (e.g. `/users/:id`) for the log line.
-- **`src/infrastructure/observability/tracer.ts`** — Imports `getActiveSpanContext()` to extract the current `traceId` and correlate the log entry with distributed traces.
-- **`src/app/request-context.ts`** — The source of `request.requestId` and `request.clientRequestId` that this middleware reads from the request object when emitting the log entry.
-- **`tests/unit/infrastructure/http/middlewares/request-logger.test.ts`** — Unit tests covering the middleware's timing, severity mapping, and log-payload shape.
+- **`src/infrastructure/adapters/logger.ts`** — imported as `logger`; the single sink for the access-log entry.
+- **`src/infrastructure/observability/metrics-http.ts`** — imported as `getRouteLabel`; converts the request into a normalized route template so the log line matches the label used by metrics.
+- **`src/app/request-context.ts`** — not imported directly, but the middleware reads `requestId` and `clientRequestId` off the `Request` object, which are expected to have been attached upstream by the request-context middleware.
+- **`tests/unit/infrastructure/http/middlewares/request-logger.test.ts`** — unit tests covering the middleware's logging behavior, severity mapping, and duration calculation.
 
 ## Notes
 
-- Hooks into `response.once('finish')`, **not** `'close'`. `finish` fires only when the response has been fully sent; `close` can also fire on aborted/destroyed sockets, which would log a phantom entry.
-- `getRouteLabel(request)` is read **inside** the `finish` callback (i.e. after `next()` has run), because that is when Express has populated the matched route on the request. Reading it before `next()` would yield an empty or wrong label.
-- Duration is computed as a `BigInt` nanosecond delta, converted to a float ms value, and rounded to 2 decimal places in the structured `durationMs` field. The human-readable message uses `.toFixed(1)`.
-- The middleware is intentionally side-effect-light: it performs no mutation of the response and does not interfere with downstream error handling.
+- The log is emitted on `response` `'finish'`, **not** `'close'`. This guarantees the entry only fires for responses that were actually sent; a premature socket abort (e.g. client disconnect) will not produce a spurious log line.
+- `getRouteLabel(request)` is called **inside** the `finish` callback, not before `next()`, because Express only populates `req.route` / the matched path after the router middleware chain runs.
+- Severity split: 4xx is the caller's fault (`warn`), 5xx is ours (`error`). They deliberately do not share a level so alerting rules can distinguish the two.
+- Duration is rounded to 2 decimal places in the structured metadata (`Math.round(durationMs * 100) / 100`) but formatted with 1 decimal in the human-readable message string.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/erase-cancel-failure.test.ts
-sha256: 3c67b6240296c62507e7d41f698c2628332175418e9f6d62afadaaae0c7a3683
-generated_at: 2026-11-08T07:04:12.842849+00:00
+sha256: af22298d1a285446013d47c4b1ad8f49f72bcec830e9bc88a1ebeb6d98600fc7
+generated_at: 2026-11-14T20:50:30.003272+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that when canceling an erased account's unpaid order fails (e.g., a payment race or write conflict), the erasure operation still completes successfully: the account is removed, the order is detached from the user, and the delete call resolves. The assumption is that the reservation sweep will eventually cancel the orphaned order when its hold times out.
+Integration test verifying that a failed cancellation of an unpaid order does **not** block or roll back an account erasure. It simulates a cancel failure (e.g. a racing payment or write conflict) and asserts the erasure still completes: the user record is deleted, the order is detached from the user, and the operation resolves `true`. The design contract is that a later reservation-sweep job cancels the orphaned order once its hold times out.
 
 ## Key elements
 
-- **`jest.mock('@modules/orders/services/cancel', …)`** — Overrides `cancelForErasureById` to always reject with `"the write conflicted"`, simulating a failed cancel while keeping the rest of the module intact.
-- **`describe('erasing an account whose unpaid order cannot be canceled')`** — Contains the single test case.
-- **Test: `'still erases the account, detaches the order, and resolves'`** — Creates a user, product, and order; calls `eraseAsScheduled(user)`; then asserts `result.success === true`, the user is gone from the repository, the reloaded order has `userId` set to `undefined`, and the order status remains `OrderStatus.pending`.
-- **`setupTestDb()`** — Initialises the in-memory test database before the suite runs.
-- **`beforeEach` / `afterEach`** — Registers checkout modules per test and resets domain events after each test.
+- **`jest.mock('@modules/orders/services/cancel', …)`** – Overrides only `cancelForErasureById` to reject with `'the write conflicted'`; all other cancel functions remain real.
+- **`setupTestDb()`** – Initializes a real test database (integration-level, not unit-mocked).
+- **`beforeEach → registerCheckoutModules()`** – Wires the full checkout domain (orders, products, payments) into the DI container.
+- **`afterEach → resetDomainEvents()`** – Clears the in-memory domain-event bus so events don't leak between tests.
+- **Single test case** – Creates a user, a product (onHand 10), and a pending single-item order; calls `eraseAsScheduled(user)`; then asserts:
+  - result is `true`
+  - `userRepository.findById(user.id)` is `toBeNull()`
+  - reloaded order's `userId` is `toBeUndefined()` (detached)
+  - reloaded order's `status` is `OrderStatus.pending` (not canceled)
 
 ## Relationships
 
-- **`src/modules/users/tests/factories.ts`** — Source of `createUser`, `eraseAsScheduled` (the system under test), and `userRepository` (used to assert the user is deleted).
-- **`src/modules/orders/tests/factories.ts`** — Provides `createOrder`, `toOrderItem`, and `readOrder` for setting up and inspecting order state.
-- **`src/modules/products/tests/factories.ts`** — Provides `createProduct` to seed an inventory item.
-- **`src/modules/users/repository.ts`** — The `userRepository` imported via the users factories is the actual repository instance checked in the assertion (`findById`).
-- **`src/kernel/events.ts`** — `resetDomainEvents` is called in `afterEach` to clear any queued domain events between tests.
-- **`src/types/index.ts`** — Supplies the `OrderStatus` enum used in the status assertion.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires up module registrations required for the erasure pipeline to run.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the test database before any tests execute.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/users/tests/factories.ts` | Provides `createUser`, `eraseAsScheduled`, and `userRepository` (the SUT entry point and deletion assertion). |
+| `src/modules/orders/tests/factories.ts` | Provides `createOrder`, `toOrderItem`, `readOrder` for order setup and post-erasure read-back. |
+| `src/modules/products/tests/factories.ts` | Provides `createProduct` to build the ordered line item. |
+| `src/modules/users/repository.ts` | `findById` used to confirm the user row is actually gone. |
+| `src/kernel/events.ts` | `resetDomainEvents()` clears the event bus after each test. |
+| `src/types/index.ts` | Source of the `OrderStatus` enum imported for the final status assertion. |
+| `tests/support/checkout-modules.ts` | `registerCheckoutModules` registers the order/payment/product modules for the test. |
+| `tests/support/setup-test-db.ts` | `setupTestDb` configures and connects the in-process test database. |
 
 ## Notes
 
-- The mock only replaces `cancelForErasureById`; all other exports from the cancel service are preserved via `jest.requireActual`. This keeps the test focused on the single failure path.
-- The order's status is asserted to remain `pending` (not `canceled` or `failed`), confirming that the detach logic removes the user link without mutating the order's lifecycle state.
-- The design intent (per the module docstring) is that a missed cancel is tolerable because the reservation sweep provides a safety-net cancellation after the hold expires.
+- The mock targets **only** `cancelForErasureById`, leaving other cancel paths intact; this isolates the erasure-path failure specifically.
+- The order is expected to remain in `pending` status after erasure—intentionally **not** canceled. Correctness is deferred to the reservation-sweep job, which is out of scope for this test.
+- Despite living under `tests/integration/`, the file still uses `jest.mock` for the cancel service; it is "integration" in the sense of exercising a real database and full module wiring, not in the sense of zero mocks.

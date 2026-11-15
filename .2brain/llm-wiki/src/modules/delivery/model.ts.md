@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/model.ts
-sha256: 005db966569761eff32bd3503a734aca3858013903c1d2a40876f177d6c22e3f
-generated_at: 2026-11-08T05:30:58.246562+00:00
+sha256: b20453cea8e53354138d631b156ae8ba76357d192b6c51ffd267919e3439db4a
+generated_at: 2026-11-14T19:41:23.498205+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two MongoDB collections for the delivery module — **FulfillmentOrder** (a group of an order's lines that should leave together, created when the order is paid) and **Shipment** (a concrete parcel that left, with one tracking code and one timestamp) — including their Mongoose schemas, embedded sub-document schemas, compound indexes, and the compiled models used by the repository and services.
+Defines the two Mongoose schemas and compiled models for the delivery module: **FulfillmentOrder** (a group of an order's lines that should leave together, created when the order is paid) and **Shipment** (what actually left, with one tracking code). Both are keyed by a unique `{ orderId, number }` pair. The file also declares the TypeScript document interfaces, embedded sub-schemas, indexes, and serialization transforms consumed by the repository and service layers.
 
 ## Key elements
 
-- **`FulfillmentOrderDocument`** / **`ShipmentDocument`** – TypeScript interfaces describing the full shape of each record (status enums, hold/loss fields, date promises, revision counter, embedded line arrays).
-- **`FulfillmentOrderLine`** – type alias for `FulfillmentLine` from `./domain`; carries `shippedQuantity` and `canceledQuantity` to track partial fulfillment.
-- **`ShipmentLineDocument`** – simpler embedded line (no shipped/canceled tracking); frozen at the moment of the cut.
-- **`fulfillmentLineSchema`**, **`destinationSchema`**, **`shipmentLineSchema`** – embedded Mongoose schemas (`_id: false`).
-- **`fulfillmentOrderSchema`** – top-level schema with five compound/sparse indexes (unique `{orderId, number}`, status+holdReason+lines.productId, status+holdReason+expectedAt, sourceShipmentId, expectedAt, lines.productId).
+- **`FulfillmentOrderDocument` / `ShipmentDocument`** – TypeScript interfaces describing the full shape of each record (status, lines, hold/loss fields, dates, revision, etc.).
+- **`FulfillmentOrderLine`** – type alias re-exporting `FulfillmentLine` from `./domain`.
+- **`fulfillmentLineSchema`** – embedded sub-schema; tracks `shippedQuantity` and `canceledQuantity` per line.
+- **`destinationSchema`** – embedded sub-schema built from `postalAddressPaths`; stored encrypted per shipment.
+- **`shipmentLineSchema`** – embedded sub-schema for what physically left (productId, title, quantity).
+- **`fulfillmentOrderSchema`** – top-level schema with five indexes (unique `{orderId, number}`, status+hold+productId, status+hold+expectedAt, sparse `sourceShipmentId`, expectedAt, productId).
 - **`shipmentSchema`** – top-level schema with two indexes (unique `{orderId, number}`, `fulfillmentOrderId`).
-- **`fulfillmentOrderModel`** / **`shipmentModel`** – compiled Mongoose models registered as `"FulfillmentOrder"` and `"Shipment"`.
-- **`applyFulfillmentOrderTransform`** / **`applyShipmentTransform`** – serialization helpers (from `@infrastructure/persistence/serialize`) that rename `_id`→`id` and drop `__v` for lean reads.
-- **`FulfillmentOrderModel`** / **`ShipmentModel`** – exported type aliases for the generic `Model` type, consumed by the repository.
+- **`fulfillmentOrderModel` / `shipmentModel`** – compiled Mongoose models registered as `'FulfillmentOrder'` and `'Shipment'`.
+- **`applyFulfillmentOrderTransform` / `applyShipmentTransform`** – serialization normalizers (rename `_id`→`id`, drop `__v`) produced via `applySerialization`.
+- **`FulfillmentOrderModel` / `ShipmentModel`** – typed `Model<…>` aliases for use in repositories.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** – provides `applySerialization`, used to build the two `apply*Transform` helpers.
-- **`src/modules/delivery/domain/fulfillment.ts`** (via `./domain`) – source of the `FulfillmentLine` and `WaitCause` types consumed here.
-- **`src/modules/delivery/repository.ts`** – imports the compiled models and the `*Model` type aliases to issue all read/write queries.
-- **`src/modules/delivery/services/*`** (`cut.ts`, `fulfill.ts`, `deliver.ts`, `found.ts`, `board.ts`, `act.ts`, `actions.ts`, `announce.ts`) – read and write the two collections through the repository; the `revision` field and unique `{orderId, number}` indexes enforce their optimistic-concurrency and idempotency guarantees.
-- **`src/modules/delivery/presenter.ts`** – maps `FulfillmentOrderDocument` / `ShipmentDocument` into presentation shapes for the UI.
-- **`src/modules/delivery/index.ts`** – public barrel; re-exports the models and document types to the rest of the application.
-- **`scenarios/flows/backdate.ts`** – integration-flow test that seeds and asserts against both collections.
+- **`postal-address-paths.ts`** – provides `postalAddressPaths`, the field map used to build `destinationSchema`.
+- **`serialize.ts`** – provides `applySerialization`, used to derive the two `apply*Transform` functions.
+- **`./domain` (fulfillment.ts, index.ts)** – source of the `FulfillmentLine` type (aliased as `FulfillmentOrderLine`) and the `WaitCause` union used in `cause`.
+- **`./services/*`** (act, actions, announce, board, cut, deliver, found) – import the models/documents to apply business rules (cutting shipments, announcing holds, finding lost-parcel obligations, etc.).
+- **`scenarios/flows/backdate.ts`** – test scenario that exercises backdate logic against these schemas.
 
 ## Notes
 
-- **`status` on FulfillmentOrder is derived**, not set directly: it is recomputed from `lines` and hold state on every write (see `statusOfLines` in domain). Writing `status` directly is a bug.
-- **`holdNote` vs `holdMessage`** (and the analogous `lostNote` / `lostMessage` pair) serve different audiences: `*Note` is internal staff text and is *reaped* (purged) with the hold/loss; `*Message` is buyer-facing copy and is *never* reaped. Do not swap them.
-- **`promisedAt`** starts as `agreedAt` and is the buyer's current commitment; `expectedAt` is the system's current ship estimate. The 16 CFR 435.2 consent-reminder clock is measured from `promisedAt`, not `expectedAt`.
-- **`revision`** is a monotonically increasing counter incremented on every write. Shipment creation and cancellation both use a `findAndUpdate` that matches on `revision` to prevent two racing operations from claiming the same remainder.
-- **`sourceShipmentId`** links a fulfillment order back to the lost shipment that created it (or the parent order a short-stock split carved it from). The sparse index on this field exists solely for the "lost parcel turns up" recovery path.
-- **`destination`** on Shipment stores a *copy* of the order's shipping address at cut-time, encrypted under the shipment's `_id`. It is independently wiped when the order's address is redacted; it is absent for digital fulfillments and pickup methods.
+- **Optimistic concurrency:** `FulfillmentOrderDocument.revision` is incremented on every write; a shipment or cancel "claims" the order by matching the revision value, preventing two racers from landing on the same remainder.
+- **Hold vs. loss messaging:** `holdNote`/`lostNote` are staff-internal and are "reaped" (scrubbed) over time; `holdMessage`/`lostMessage` are buyer-facing, mailed, and never reaped. A release drops the message along with the hold.
+- **`defaulted` flag:** when `true`, the promise came from the 30-day regulatory default, not a catalogue date. A later catalogue change does not retroactively update the order.
+- **`sourceShipmentId` (sparse index):** links a fulfillment order back to the lost shipment whose units it still owes. When the parcel turns up, the `found` service uses this to locate and close every outstanding order.
+- **`cause` enum is inline** (`['preorder', 'backorder']`) rather than imported from `@types`, unlike most other status enums in the file.
+- **`destination` is encrypted** per-shipment under the shipment's own `_id` and is wiped when the parent order's address is redacted.

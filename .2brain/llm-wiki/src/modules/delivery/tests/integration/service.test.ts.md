@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/integration/service.test.ts
-sha256: 3e786d0e3cb74b26ffcedfc5aee8b548fa620791640064f49a34184ea4337540
-generated_at: 2026-11-08T05:44:44.795903+00:00
+sha256: d3482826ca4cee6584620f8d384b23f1f3eeb77d56e30c0411ee238bd6029153
+generated_at: 2026-11-14T19:54:33.418935+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the delivery service and its domain rules. Validates shipping-rate pricing, fulfillment-order creation/idempotency, the full "ship" act (shipment write, order status transition, tracking email), and resilience paths (buyer-lookup failure, mail-queue failure, cancel-race) against a real MongoDB instance with only the mail adapter mocked.
+Integration test suite for the delivery module's service layer, covering shipping-rate pricing, fulfillment-order lifecycle (creation, idempotency, race conditions), and the ship action (shipment write, order-status transition, tracking email). It runs against a real MongoDB instance and asserts email side-effects through a mocked queue rather than a real transport.
 
 ## Key elements
 
-- **`wireDelivery()`** — resets domain events, calls `deliveryModule.subscribe()`, then marks events as wired. Simulates app-boot wiring so outbox-delivered events reach the module's listeners.
-- **`processingOrderOf(quantities, extras, email)`** — factory helper that creates a user, N products, and an order in `processing` status with the given line quantities.
-- **`shipFrom(orderId, input, number)`** — convenience wrapper that resolves the Nth fulfillment order for an order and calls `deliveryService.shipFulfillmentOrder` as the admin caller.
-- **`describe('rates')`** — unit-level assertions on `priceShipping`, `findShippingMethod`, and `SHIPPING_METHODS` (threshold, no-threshold, pickup, unknown-id, tracked-flag).
-- **`describe('the fulfillment orders of a paid order')`** — idempotent creation, cancel-race safety, status-gating (no orders for `pending`/`delivered`), listener-driven creation via `markPaid`, and buyer-vs-admin visibility of actions.
-- **`describe('shipping a whole fulfillment order')`** — happy-path shipment write + order transition + single email; fallback greeting when buyer lookup fails; mail-queue failure still succeeds; double-ship rejection.
-- **`admin` / `asAdmin()` / `asCustomer()`** — caller-context constants for every act; tests always act as admin unless specified.
-- **Module-level mock** — `jest.mock('@infrastructure/adapters/mailer')` replaces `enqueueEmail` with a jest mock for all tests in this file.
+- **`wireDelivery()`** — Resets domain events, subscribes `deliveryModule` listeners, and marks the event bus as wired; must be called before any test that depends on event-driven behaviour (e.g. the `paid` listener).
+- **`processingOrderOf(quantities, extras, email)`** — Factory helper that creates a user, N products at 10.00, and an order in `processing` status with the given line quantities.
+- **`shipFrom(orderId, input, number)`** — Locates the Nth physical fulfillment order for the order and calls `deliveryService.shipFulfillmentOrder` as the admin caller.
+- **`describe('rates')`** — Unit-level checks on `priceShipping`, `findShippingMethod`, and `SHIPPING_METHODS` (free-above-threshold, no-threshold methods, pickup, unknown-id, tracked-method uniqueness).
+- **`describe('the fulfillment orders of a paid order')`** — Verifies idempotent creation, the paid→cancel race (read-then-write), absence for unpaid/delivered orders, event-driven creation via `markPaid`, and that listing returns empty before payment.
+- **`describe('shipping a whole fulfillment order')`** — End-to-end ship: shipment record, order status → `shipped`, fulfillment-order → `closed`, exactly one `enqueueEmail` call with correct template/tracking, fallback-name policy when user lookup fails, and resilience when the email queue throws.
+- **`mockEnqueueEmail`** — The single mock for all email assertions; cleared and inspected per test.
+- **`jest.mock('@infrastructure/adapters/mailer', …)`** — Module-level mock replacing `enqueueEmail` with a jest.fn.
 
 ## Relationships
 
-- **`@modules/delivery/services/index.ts`** — `deliveryService` is the primary SUT (subject under test): `shipFulfillmentOrder`, `ensureFulfillmentOrders`, `listFulfillmentOrdersForOrder`, `listShipmentsForOrder`.
-- **`@modules/delivery/domain/index.ts`** (re-exports `rates.ts`) — `priceShipping`, `findShippingMethod`, `SHIPPING_METHODS` are exercised directly in the `rates` describe block.
-- **`@modules/delivery/repository.ts`** — `fulfillmentOrderRepository.findByOrderId` used for direct DB assertions bypassing the service.
-- **`@modules/delivery/model.ts`** — `fulfillmentOrderModel` imported (likely for collection-level queries or type reference).
-- **`@modules/delivery/module.ts`** — `deliveryModule.subscribe()` wires the paid-event listener that triggers fulfillment-order creation.
-- **`@modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf`, `shipmentsOf` helpers read persisted fulfillment/shipment documents.
-- **`@infrastructure/adapters/mailer.ts`** — `enqueueEmail` is mocked; assertions verify recipient, template name, and payload (tracking code, greeting fallback).
-- **`@infrastructure/adapters/logger.ts`** — `logger.error` is spied/mocked to suppress noise when the mail queue throws.
-- **`@infrastructure/observability/audit.ts`** — `registerAuditSink` / `AuditEntry` imported for audit-trail assertions (visible in truncated portion).
-- **`@kernel/events.ts`** — `resetDomainEvents` / `markDomainEventsWired` manage the event-bus lifecycle between tests.
-- **`@kernel/outbox.ts`** — `settleOutboxNudges()` flushes the async outbox so listener-driven writes are observable before assertions.
-- **`@modules/inventory/index.ts`** — `inventoryService` imported (likely for stock-level assertions in the truncated portion).
+- **`src/modules/delivery/services/index.ts`** — `deliveryService` is the system under test; every act in the suite calls its methods.
+- **`src/modules/delivery/domain/index.ts`** — `findShippingMethod`, `priceShipping`, and `SHIPPING_METHODS` are imported from here and asserted in the `rates` block.
+- **`src/modules/delivery/model.ts`** — `fulfillmentOrderModel` imported for direct document inspection.
+- **`src/modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf` and `shipmentsOf` used as read helpers in assertions.
+- **`src/infrastructure/adapters/mailer.ts`** — Entirely mocked; `enqueueEmail` is the assertion surface for email side-effects.
+- **`src/kernel/events.ts`** — `resetDomainEvents` (in `afterEach`) and `markDomainEventsWired` (in `wireDelivery`) manage the event-bus lifecycle per test.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` awaited after event-driven operations so outbox entries flush before assertions.
+- **`src/infrastructure/observability/audit.ts`** — `registerAuditSink` and `AuditEntry` imported for audit-sink assertions.
+- **`src/modules/inventory/index.ts`** — `inventoryService` imported; used in the truncated portion for stock-related shipping tests.
 
 ## Notes
 
-- Tests run against **real MongoDB** (`setupTestDb`); only the mailer is mocked. No in-memory DB or service mocks for the delivery domain.
-- After any event-driven action (e.g. `markPaid`), you **must** `await settleOutboxNudges()` before asserting on side-effects; the outbox is asynchronous.
-- `wireDelivery()` must be called in tests that rely on the `paid` listener; tests that call `ensureFulfillmentOrders` directly do not need it.
-- `afterEach` calls `jest.restoreAllMocks()` and `resetDomainEvents()`; the module-level `jest.mock` for mailer persists across tests, so use `mockClear()` / `mockImplementation` per-test as needed.
-- The file is **truncated** in the snapshot — additional describe blocks (partial shipping, withdrawal clock, digital fulfillment, holds) are indicated by the module doc comment but not visible here.
+- **Real DB, mocked transport.** The file calls `setupTestDb()` (real Mongo) but mocks the mailer module. There is no DB mock; test isolation relies on per-test data creation, not truncation.
+- **Event wiring is manual.** Tests that depend on domain-event listeners must call `wireDelivery()` explicitly; without it, `markPaid` or other triggers will not reach the delivery module.
+- **Outbox is not synchronous.** After any event-driven act, `await settleOutboxNudges()` is required before asserting on downstream effects (email, order status).
+- **Race-condition test.** The "canceled between read and write" test spies on `orderService.recordFulfillmentProgress` to simulate a lost order and asserts the service resolves cleanly (no throw) rather than propagating the error.
+- **Fallback greeting.** When `userService.getById` rejects, the shipping email uses the order's email address as the greeting (`username ?? email` policy).
+- **`afterEach` restores all mocks and resets domain events**, so each test starts with a clean event bus and no lingering mock state.

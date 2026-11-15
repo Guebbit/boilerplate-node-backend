@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/permission-vocabulary-render.ts
-sha256: 057e85b4dbb7fc3248db79cfba675ddb7edfb425282199cdb7656a820470c476
-generated_at: 2026-11-08T02:43:46.817085+00:00
+sha256: a58337b8f779b7fed54c76279564ac7a4b778d151901b8ddfec78b1e02d45fa9
+generated_at: 2026-11-14T17:28:17.963083+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure (no-filesystem) half of the permission-vocabulary code generator. It parses a shared `authorization-keys.yaml` document into a structured `PermissionVocabulary` and then renders the TypeScript module that exports the resulting closed lists, union types, and the subject-to-actions pair map. Because it performs no I/O, unit tests can exercise it in isolation.
+The pure (I/O-free) half of the permission-vocabulary generator. It reads the closed authorization lists from a shared YAML document (`authorization-keys.generated.yaml`), validates them, and renders the TypeScript module that re-exports those lists as `as const` arrays plus derived union types. Keeping it free of filesystem calls lets unit tests exercise the full parse → validate → render pipeline in isolation.
 
 ## Key elements
 
-- **`PermissionVocabulary`** (interface) — the shape returned by the reader: `actions`, `subjects`, `ruleIds`, `setNames`, `scopes`, `stepUpTiers`, and `pairs` (per-subject action lists).
-- **`readPermissionVocabulary(yamlText)`** (exported) — parses the YAML string, extracts every closed list, and validates: non-empty string lists, no duplicate entries, and referential integrity (each rule's `action`, `scope`, and optional `stepUp` must appear in the corresponding declared list). Throws descriptive `Error`s on any violation.
-- **`renderPermissionVocabulary(vocabulary)`** (exported) — turns a `PermissionVocabulary` into the full text of the generated `.ts` file: each list as an `as const` array + its element union type, the `PERMISSION_PAIRS` object, and the `ActionOn<S>` generic type.
-- **`stringList`, `mappingKeys`, `fieldOfEach`, `assertUnique`** (internal) — small validators that extract and guard individual fields from the parsed YAML.
-- **`renderList`** (internal) — emits the `const` + `type` pair for one closed list.
+- **`PermissionVocabulary`** (interface) — the shape of every closed list: `actions`, `subjects`, `ruleIds`, `setNames`, `scopes`, `stepUpTiers`, and `pairs` (subject → actions map).
+- **`readPermissionVocabulary(yamlText: string): PermissionVocabulary`** — parses the YAML, extracts each list, enforces non-emptiness, uniqueness, and cross-references (every rule's action/scope/stepUp must appear in its declared list). Throws descriptive `Error`s on any violation.
+- **`renderPermissionVocabulary(vocabulary: PermissionVocabulary): string`** — emits the full text of the generated TypeScript file (six `as const` arrays + their union types + `PERMISSION_PAIRS` + `ActionOn<S>`).
+- **`stringList`, `mappingKeys`, `fieldOfEach`, `assertUnique`** (private helpers) — targeted extractors that throw early with a message naming the offending key and the source file.
+- **`renderList`** (private helper) — renders one `as const` array + its `(typeof …)[number]` union, given a name, type name, description, and items.
 
 ## Relationships
 
-- **`scripts/contracts/generate-permission-vocabulary.ts`** — the impure driver that reads the YAML file from disk and writes the rendered output; it calls into `readPermissionVocabulary` and `renderPermissionVocabulary` from this module.
-- **`tests/unit/scripts/contracts/permission-vocabulary-render.test.ts`** — unit tests that feed YAML strings through `readPermissionVocabulary` and assert on `renderPermissionVocabulary` output, covering both happy-path rendering and each validation/error path.
+- **`scripts/contracts/generate-permission-vocabulary.ts`** — the file-system half; it reads the YAML from disk and hands the text to `readPermissionVocabulary`, then writes the result of `renderPermissionVocabulary` to the output file. This module is its "pure" counterpart (no `fs` import).
+- **`src/infrastructure/object-guards.ts`** — supplies `isPlainObject`, used inside `mappingKeys` to safely treat a parsed YAML value as a record.
+- **`tests/unit/scripts/contracts/permission-vocabulary-render.test.ts`** — unit tests that drive `readPermissionVocabulary` and `renderPermissionVocabulary` directly with in-memory strings, covering valid documents, missing lists, duplicates, and undeclared cross-references.
 
 ## Notes
 
-- The file header states it is **deliberately excluded from `SHARED_FILES`** and is kept identical across the two paired repos by hand ("Convenience is not necessity" — see `docs/tools/pairing-and-ports.md`). Do not add it to an auto-sync list.
-- Validation is fail-fast and order-sensitive: referential checks (rule → declared action/scope/tier) happen *after* extraction but *before* `ruleIds` uniqueness is asserted.
-- The generated output includes a `DO NOT EDIT` banner and names the regenerate command (`npm run gen:api`) and source file (`shared/authorization-keys.yaml`) so downstream editors know the provenance.
-- `subjects` are deduplicated via a `Set` in first-seen order; `pairs` is built as a plain `Record<string, string[]>` keyed by subject.
+- **Shared script, not in `SHARED_FILES`.** The header comment and `docs/tools/pairing-and-ports.md` ("Convenience is not necessity") state it is kept identical across the two paired repos *by hand*, deliberately excluded from the automated sync list.
+- **No filesystem access.** The only I/O dependency is the `yaml` parse call; all functions accept and return strings/objects, so tests never touch disk.
+- **Error messages are stable and reference `authorization-keys.generated.yaml` by name**, even though this file never reads that path — the message is meant for the operator looking at the source document.
+- **`pairs` initialization** uses `[] as string[]` to sidestep TypeScript inferring `never[]` from an empty array literal (see inline comment).
+- **Generated output is marked `DO NOT EDIT`** and carries a regenerate hint (`npm run gen:api`); the file header of this module points to `docs/tools/permission-vocabulary.md` for the full contract.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/config.ts
-sha256: 4b1c38b70470549ccfe62b6c6dd7df9964273792fb2fc22dbb2ebe0e789cd8d9
-generated_at: 2026-11-08T04:00:11.830002+00:00
+sha256: 02a85a9ea9fd30c7fcd61b6593f0a029b11beeb19b787a1c9afe90fa280f771b
+generated_at: 2026-11-14T18:30:03.847045+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `account` module's runtime configuration (frontend link templates, token TTLs, export/ledger retention, deletion grace, legal-identity fields) and provides small helper functions that resolve those values into concrete URLs or timestamps. It is the single source of truth for every tunable the account module needs, keeping infrastructure generic while encoding account-specific semantics here.
+Central configuration surface for the `account` module: declares every tunable (frontend link templates, token TTLs, export/grace periods, legal-identity fields) in one `defineConfig` block, and exposes small pure helpers that resolve a link or a duration from the resolved config so callers never touch `process.env` directly.
 
 ## Key elements
 
-- **`AccountLinkKind`** — union of five token-bearing link kinds: `verify`, `reset`, `restore`, `email-change`, `email-undo`.
-- **`accountConfig`** — the `defineConfig` object exposing all `NODE_*` env-var fields (link templates, TTLs, retention days, legal identity, terms version). Each field has a type-constrained default and optional min/max.
-- **`LINK_ENV_VAR`** — internal map from each `AccountLinkKind` to its env-var name; used by `accountFrontendLink`.
-- **`accountFrontendLink(kind, { locale, token })`** — resolves a token-bearing frontend URL via `frontendLink`; the token is placed in the URL fragment.
-- **`accountExportLink(locale)`** — resolves the signed-in export-download page URL (no token).
-- **`deletionPurgeAt(requestedAt)`** — returns the earlier of `requestedAt + grace days` and `requestedAt + 1 calendar month` (GDPR Art. 12(3) ceiling).
-- **`exportRetentionMs()`** — export TTL in milliseconds (read at call time).
-- **`erasureLedgerRetentionMs()`** — erasure-ledger row retention in milliseconds; must outlast the oldest backup snapshot.
+- **`AccountLinkKind`** (type) — union of the six token-bearing link kinds: `'verify' | 'reset' | 'setup' | 'restore' | 'email-change' | 'email-undo'`.
+- **`accountConfig`** — the `defineConfig` instance. Fields include eight `NODE_FRONTEND_LINK_*` templates, `NODE_PASSWORD_RESET_TTL_MS`, `NODE_EMAIL_VERIFY_TTL_MS`, `NODE_INACTIVE_ACCOUNT_DAYS`, `NODE_INACTIVE_MINIMISE_DAYS`, `NODE_ACCOUNT_EXPORT_TTL_DAYS`, `NODE_ACCOUNT_DELETION_GRACE_DAYS` (max 31), `NODE_ERASURE_LEDGER_RETENTION_DAYS`, `NODE_TERMS_VERSION`, and the full `NODE_LEGAL_*` block (name, street, city, zip, country are required).
+- **`LINK_ENV_VAR`** (internal const) — maps each `AccountLinkKind` to its env-var name; used to index into the resolved config at call time.
+- **`accountFrontendLink(kind, { locale, token })`** — resolves the template for `kind`, then delegates to `frontendLink`, injecting the token into the URL fragment.
+- **`accountExportLink(locale)`** — builds the "your export is ready" link; carries no token (the download route requires a fresh session).
+- **`accountTermsLink(locale)`** — builds a link to the frontend Terms page, used in the setup (first-contact) mail.
+- **`deletionPurgeAt(requestedAt)`** — returns the earlier of `requestedAt + grace days` and `oneCalendarMonthLaterUtc(requestedAt)`, enforcing GDPR Art. 12(3)'s one-month ceiling regardless of the configured grace.
+- **`exportRetentionMs()`** — `NODE_ACCOUNT_EXPORT_TTL_DAYS × DAY_MS`, read at call time so env changes apply immediately.
+- **`erasureLedgerRetentionMs()`** — `NODE_ERASURE_LEDGER_RETENTION_DAYS × DAY_MS`; must outlive the oldest backup snapshot.
 
 ## Relationships
 
-- **`@infrastructure/config/define`** (`defineConfig`) and **`@infrastructure/config/fields`** (`text`, `int`, `email`, `country`) — provide the config-building API and field-type constructors.
-- **`@infrastructure/http/frontend-link`** (`frontendLink`, `FRONTEND_LINK_RULES`) — `frontendLink` turns a template string + params into a URL; `FRONTEND_LINK_RULES` supplies the default route templates. This file owns *which* kinds exist; frontend-link is kind-agnostic.
-- **`@domain-primitives/time`** (`DAY_MS`, `HOUR_MS`, `oneCalendarMonthLaterUtc`) — time-unit constants for TTL defaults and the calendar-month cap in `deletionPurgeAt`.
-- **`src/modules/account/emails.ts`**, **`services/password-reset-request.ts`** — consume `accountFrontendLink` to build the confirmation/reset URLs placed in outbound mail.
-- **`services/account-deletion.ts`** — calls `deletionPurgeAt` to compute the erasure deadline.
-- **`services/export.ts` / `export-job.ts` / `export-rows.ts`** — call `exportRetentionMs` and `accountExportLink`.
-- **`services/erasure-ledger.ts`** — calls `erasureLedgerRetentionMs` to decide when to prune ledger rows.
-- **`services/operator-identity.ts`** — reads the `NODE_LEGAL_*` fields to render the operator's legal notice.
-- **`consent-record.ts`** — reads `NODE_TERMS_VERSION` for consent versioning.
-- **`jobs.ts`** — reads retention values to schedule reaper/cleanup passes.
-- **`module.ts`** — registers/exposes this config as part of the account module's public surface.
+- **Imports** `defineConfig` from `@infrastructure/config/define`, field constructors from `@infrastructure/config/fields`, and `frontendLink` / `FRONTEND_LINK_RULES` from `@infrastructure/http/frontend-link`. It is the *only* place in the module that knows the link kinds; `frontend-link.ts` is kind-agnostic.
+- **Consumed by** account services and emails: `emails.ts` calls the three `*Link` helpers to compose mail bodies; `account-deletion.ts` calls `deletionPurgeAt`; `export-job.ts` / `export.ts` read `exportRetentionMs`; `erasure-ledger.ts` reads `erasureLedgerRetentionMs`; `operator-identity.ts` reads the `NODE_LEGAL_*` fields; `password-reset-request.ts` resolves the `'reset'` link; `consent-record.ts` reads `NODE_TERMS_VERSION`; `jobs.ts` reads TTL fields for reaper scheduling; `module.ts` registers `accountConfig` with the module registry.
+- **Imports** `DAY_MS`, `HOUR_MS`, `oneCalendarMonthLaterUtc` from `@domain-primitives/time` for duration arithmetic and the calendar-month cap.
 
 ## Notes
 
-- Tokens ride in the URL **fragment** (`#token=…`), not the path or query. Browsers never transmit fragments to servers (RFC 3986 §3.5), so they appear in no access log, proxy log, or `Referer` header.
-- The module-level doc comment says "four token-bearing kinds" but `AccountLinkKind` and `LINK_ENV_VAR` actually define **five** (`email-undo` was added later). The type-level JSDoc correctly says five.
-- `NODE_ACCOUNT_DELETION_GRACE_DAYS` has a code-level `max: 31`, but the comment explicitly notes nothing on the wire is bounded by it; the real ceiling is the one-calendar-month cap applied inside `deletionPurgeAt`.
-- `NODE_ERASURE_LEDGER_RETENTION_DAYS` (default 220) is chosen to outlast the 6-monthly-snapshot backup window (~7 months) so restoring an old snapshot cannot resurrect an account the ledger has already forgotten.
-- `NODE_INACTIVE_MINIMISE_DAYS` defaults to 1095 (3 years) and `NODE_INACTIVE_ACCOUNT_DAYS` to 0 (disabled) — both gate inactivity-based account minimisation, not deletion.
+- Tokens ride in the URL **fragment** (`#token=…`), not the path or query, so browsers never transmit them in `Host`, `Referer`, or access logs (RFC 3986 §3.5). Do not move them to the query string.
+- `NODE_ACCOUNT_DELETION_GRACE_DAYS` has a hard `max: 31` in code, but `deletionPurgeAt` still clamps to one calendar month via `oneCalendarMonthLaterUtc` — the `min` of the two is the effective deadline.
+- `NODE_INACTIVE_ACCOUNT_DAYS` defaults to `0` (disabled); `NODE_INACTIVE_MINIMISE_DAYS` defaults to 1095 (3 years).
+- `NODE_LEGAL_PHONE` is optional here but required by the `shop` module's own validation (CRD Art. 6(1)(c)); keep it optional in this file.
+- The config is read **at call time** (each helper calls `accountConfig()` inside the function body), so changing an env var at runtime takes effect on the next call without a restart.

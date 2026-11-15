@@ -1,7 +1,7 @@
 ---
 source: src/serve.ts
-sha256: 64e7b9614221f9e83c73267b62bf12261ed32c056416e7803f171a10b4e7eb64
-generated_at: 2026-11-08T09:15:58.106070+00:00
+sha256: bbd5666c614d69d25cbb9cd818c8e533de7897f09861d8b44a21c155afdb06f1
+generated_at: 2026-11-14T22:55:16.198570+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Process-level entry point that builds the app via `createApp()`, starts listening, and wires graceful shutdown to OS signals. Exists to separate "build the app" from "serve traffic," so callers that only need an app instance (tests, scenarios) can import `createApp` without triggering a listen or registering signal handlers.
+The single process entry point that calls `start()` to begin serving traffic. It exists so that "build the app" and "serve the app" are separate concerns: `createApp()` in `app.ts` remains agnostic about whether its caller wants to listen on a port, while this file is the one place that actually starts the server and wires shutdown signals.
 
 ## Key elements
 
-- **`import '@infrastructure/runtime/mongoose-boot'`** — side-effect-only import; must execute before any Mongoose model is loaded to set connection defaults.
-- **`const { start, stop } = createApp()`** — composes the application (from `src/app.ts`) and extracts the lifecycle hooks this process will drive.
-- **`registerSignalHandlers(stop)`** — binds SIGTERM/SIGINT to the app's `stop` for graceful shutdown; is a no-op under Jest.
-- **`void start().catch((error) => failBoot(error, stop))`** — begins listening; on boot failure, tears down whatever already came up and exits non-zero.
+- **`start` / `stop`** — obtained from `createApp()` at module load; `start` begins listening, `stop` performs graceful shutdown.
+- **`registerSignalHandlers(stop)`** — hooks SIGTERM/SIGINT to invoke `stop`; described as a no-op under jest.
+- **`start().catch(…)`** — kicks off listening; on failure delegates to `failBoot(error, stop)` to tear down partially-started services and exit non-zero.
 
 ## Relationships
 
-- **`src/app.ts`** — Provides `createApp()`, which returns the `{ start, stop }` pair this file drives. This file is the *only* place in production that calls `start()`.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Imported purely for its side effect (setting Mongoose defaults) before any model code loads. Import order relative to other imports is load-bearing.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Supplies `registerSignalHandlers` (wires SIGTERM/SIGINT to the `stop` callback) and `failBoot` (clean teardown + non-zero exit on startup failure).
+- **`src/app.ts`** — provides `createApp()`, the sole factory for the app instance this file serves.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — imported purely for its side effect (setting Mongoose defaults); must execute before any model is loaded.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — supplies `registerSignalHandlers` (signal → `stop`) and `failBoot` (error → teardown + non-zero exit).
 
 ## Notes
 
-- `cluster.ts` (worker branch) and the `dev:docker` script (`tsx src/serve.ts`) both invoke this file rather than importing `./app` directly, because they need the signal handlers and boot-failure handling that live here.
-- The shebang (`#!/usr/bin/env node`) makes this directly executable; the `dev:docker` path uses `tsx` instead, but the module surface is the same.
-- Do not add environment-variable gates or conditional serving logic here; the file is intentionally thin and its only job is the build → start → signal-shutdown sequence.
+- Import order matters: the `mongoose-boot` import is intentionally first so its side effects land before `createApp()` (transitively) loads any Mongoose models.
+- `main.ts` and the worker branch of `cluster.ts` import **this file** rather than `./app` directly, so they share the same build-then-serve contract.
+- Callers that build the app *without* serving (e.g. `tests/support/http.ts`, `scenarios/apply.ts`) import `createApp()` from `app.ts` and never touch this file.

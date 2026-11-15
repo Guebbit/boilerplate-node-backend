@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/fulfillment.ts
-sha256: afac19d602dd958118812c83d94596994114467fa9ee4ceae946376b010bec1a
-generated_at: 2026-11-08T06:48:39.285419+00:00
+sha256: 14f037a50cfe1dfb785b19471e009bf2c0caca39b2b080561b6e8e289c51cc7a
+generated_at: 2026-11-14T20:34:21.414572+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `FulfillmentSummary` record that the `delivery` module writes onto an order, plus pure helper functions that `orders` uses to interpret that record. Because the dependency arrow runs `delivery → orders` (not the reverse), `orders` cannot ask `delivery` directly; instead `delivery` reports state through this one small record (written only via `orderService.recordFulfillmentProgress`), and everything `orders` needs to know about the goods is read off it here.
+Pure domain logic that interprets the fulfillment summary a `delivery` module writes onto an order. Because the dependency arrow points `orders → delivery` (not the reverse), `orders` cannot inspect fulfillment orders directly; instead `delivery` reports a small record (`FulfillmentSummary`) and this file derives every question `orders` asks about the goods—settlement moves, the user-facing fulfillment status, and the listing filter—from that single record. No I/O.
 
 ## Key elements
 
-- **`FulfillmentSummary`** (interface) — the shape of the goods state: `shipped`, `remaining`, `onHold`, `awaitingStock`, `undelivered`, `lastDeliveredAt?`.
-- **`NO_FULFILLMENT`** — frozen zero-state constant used as the default when an order has no fulfillment orders yet.
-- **`shipsAwaitedStock(to, summary?)`** — pure guard: `true` if moving to `shipped`/`delivered` would ship units whose stock has not arrived. Used by the override flow to refuse invalid moves.
-- **`fulfillmentStatusOf(status, summary?)`** — derives the order's `OrderFulfillmentStatus` from its stored status + summary using a first-match-wins table (per-status trait value → `partially_fulfilled` → `on_hold` → trait value).
-- **`FulfillmentFilter`** (type) — `Readonly<Record<string, unknown>>`; keeps the domain free of any Mongo-driver import.
-- **`fulfillmentStatusFilter(wanted)`** — builds the Mongo `$and`/`$or` filter behind `GET /orders?fulfillmentStatus=`. Derived from the same `ORDER_STATUS_TRAITS` table that `fulfillmentStatusOf` reads, so the filter and the serialized value for a row cannot disagree.
-- **`PARTIALLY_SHIPPED` / `EVERY_UNIT_HELD`** (internal constants) — reusable sub-filters for the two summary-refined cases.
-- **`everyRemainingUnitHeld`** (private, non-exported) — checks `!shipped && remaining > 0 && remaining === onHold`.
+- **`FulfillmentSummary`** (interface) — The shape of the record `delivery` writes: `shipped`, `remaining`, `onHold`, `awaitingStock`, `undelivered`, `lastDeliveredAt?`.
+- **`NO_FULFILLMENT`** (const) — Frozen zero-value used as default when an order has no fulfillment orders yet.
+- **`shipsAwaitedStock(to, summary?)`** — Returns `true` if moving to `shipped`/`delivered` would ship units whose stock hasn't arrived. Serves as the single consistency guard the override service consults.
+- **`SettlementMove`** (type) — Union: `'ship' | 'deliver' | 'complete' | 'undeliverable'`.
+- **`settlementFor(status, summary)`** — Given the order's current status and the summary, returns the forward status move the summary makes due, or `undefined`.
+- **`fulfillmentStatusOf(status, summary?)`** — Derives the `OrderFulfillmentStatus` value (`partially_fulfilled`, `on_hold`, etc.) from status + summary. Consults `ORDER_STATUS_TRAITS` first; only refines when the trait says `followsSummary`.
+- **`FulfillmentFilter`** (type) — `Readonly<Record<string, unknown>>`, keeping the domain free of any Mongo driver import.
+- **`fulfillmentStatusFilter(wanted)`** — Builds the Mongo filter behind `GET /orders?fulfillmentStatus=`. Derived from the same `ORDER_STATUS_TRAITS` table that `fulfillmentStatusOf` reads, so the filter and the serialized value on a row cannot disagree.
+- **`everyRemainingUnitHeld(summary)`** (private) — True when nothing shipped, units remain, and every remaining unit is on hold.
 
 ## Relationships
 
-- **`src/modules/orders/domain/status-traits.ts`** — imports `ORDER_STATUS_TRAITS` and `statusesWhere`; the per-status `fulfillment` trait (value + `followsSummary`) drives both `fulfillmentStatusOf` and `fulfillmentStatusFilter`.
-- **`src/types/index.ts`** — imports `OrderStatus` and `OrderFulfillmentStatus` used throughout.
-- **`src/modules/orders/domain/index.ts`** — barrel re-export; this module's public API surfaces through the domain index.
-- **`src/modules/orders/services/override.ts`** — calls `shipsAwaitedStock` as a consistency guard before allowing a status override.
-- **`src/modules/orders/services/read.ts`** — passes `fulfillmentStatusFilter` into the order-listing query.
-- **`src/modules/orders/tests/unit/fulfillment.test.ts`** / **`src/modules/orders/tests/integration/fulfillment-filter.test.ts`** — unit and integration tests for the helpers and the Mongo filter respectively.
+- **`src/modules/orders/domain/lifecycle.ts`** — Imports `isAwaitingGoods` to expand the `awaiting_shipment` aggregate filter.
+- **`src/modules/orders/domain/status-traits.ts`** — Imports `ORDER_STATUS_TRAITS` and `statusesWhere` as the single source of truth for per-status fulfillment values and which statuses follow the summary.
+- **`src/modules/orders/domain/index.ts`** — Barrel file; re-exports the symbols from this module to the rest of the `orders` package.
+- **`src/modules/orders/domain/withdrawal.ts`** — Sibling domain file in the same barrel; reads the same summary for withdrawal-related logic.
+- **`src/modules/orders/services/fulfillment.ts`** — The service that writes the summary (via `orderService.recordFulfillmentProgress`); this file is the read-side interpretation of whatever that write produces.
+- **`src/modules/orders/services/override.ts`** — Calls `shipsAwaitedStock` to gate the override door; the override menu uses the same answer to hide the move.
+- **`src/modules/orders/services/status.ts`** — Calls `fulfillmentStatusOf` to expose the derived fulfillment status on the order.
+- **`src/modules/orders/services/read.ts`** — Consumes `fulfillmentStatusFilter` to build the `?fulfillmentStatus=` listing query.
+- **`src/modules/orders/model.ts`** / **`src/modules/orders/repository.ts`** — The `Order` model carries the `FulfillmentSummary` field; the repository persists and retrieves it.
+- **`src/modules/orders/tests/integration/fulfillment-filter.test.ts`** — Integration tests for `fulfillmentStatusFilter`.
+- **`src/modules/orders/tests/integration/service-status.test.ts`** — Integration tests exercising the status service (which depends on `fulfillmentStatusOf`).
 
 ## Notes
 
-- **Pure / no I/O.** All exports are side-effect-free functions or data. The only "I/O" shape (the Mongo filter) is plain JSON, so the module never imports a driver.
-- **Write path is external.** This file never mutates the summary; `delivery` recomputes it in the same transaction as its own writes, guaranteeing a stale read cannot overwrite a newer one.
-- **`NO_FULFILLMENT` is frozen** — treat as immutable; do not spread-and-mutate.
-- **`everyRemainingUnitHeld` is deliberately non-exported**; only `fulfillmentStatusOf` and `fulfillmentStatusFilter` expose the `on_hold` logic externally.
-- **Filter ↔ serializer invariant.** `fulfillmentStatusFilter` and `fulfillmentStatusOf` are both derived from `ORDER_STATUS_TRAITS`. Adding a new `OrderStatus` or `OrderFulfillmentStatus` requires updating `status-traits.ts` first; both sides pick it up automatically.
+- **No driver import in the domain.** `FulfillmentFilter` is deliberately typed as a plain record so the domain layer never references Mongoose/Mongo types; the repository or service layer is responsible for handing the object to the driver.
+- **`awaiting_shipment` is an aggregate.** No single row stores that value; it is computed at query time by listing every status that `isAwaitingGoods` names.
+- **Digital fulfillment** is modeled as a shipment born delivered, so `lastDeliveredAt` is set and `undelivered` is `0`—`settlementFor` returns `'complete'` for it.
+- **`NO_FULFILLMENT` is frozen** (`Object.freeze`); treat it as immutable and safe to share.
+- **Recomputation invariant.** The summary is recomputed inside the same transaction as the write that changed fulfillment orders, so a stale read can never overwrite a newer one (per the module doc-comment).

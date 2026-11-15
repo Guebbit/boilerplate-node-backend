@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/dependency-groups.ts
-sha256: 576b08bd569e6acd73f5e46b1f530f536a8b40b5fe84e4929024595a603f2b44
-generated_at: 2026-11-08T02:46:41.902498+00:00
+sha256: 98c498355e730bb80a975f1643e70a1bc3b7c2f9eceb8dea319186ecf95de790
+generated_at: 2026-11-14T17:31:18.366894+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The hand-maintained half of `docs/tools/package-dependencies.md`. It classifies npm packages into named families (with a purpose blurb and a "read more" link) so the generated dependency map can render grouped tables. The other half of that page—which packages exist and who imports them—is computed by the generator, not stored here.
+The hand-curated half of `docs/tools/package-dependencies.md`. It defines *which family* each npm package belongs to, *why* it exists in that family, and where to read more — while leaving the mechanical parts (which packages are actually installed, who imports them) to the auto-generated companion. Without this file, the dependency docs would be a flat, unexplained list.
 
 ## Key elements
 
-- **`DependencyGroup`** (interface) — one family entry: `name`, `purpose`, `readMore`, and `match` (list of exact names or `prefix*` patterns).
-- **`RUNTIME_GROUPS`** — 8 families for production dependencies (HTTP core, Security/auth, Persistence, Cache/messaging, Email/rendering, Observability, i18n, Declared config).
-- **`DEV_GROUPS`** — 11 families for devDependencies (TS toolchain, type defs, testing, deeper testing, linting, architecture, code-shape audit, commit hygiene, contracts/codegen, docs site, maintenance).
-- **`matchesGroup(packageName, patterns)`** — returns `true` if `packageName` equals an exact pattern or starts with a `prefix*` pattern (strips the trailing `*`).
+- **`DependencyGroup`** (interface) — one row of the docs table: `name`, `purpose` (prose), `readMore` (link(s) to other wiki pages), `match` (array of package-name patterns).
+- **`RUNTIME_GROUPS`** — 8 families of production dependencies (HTTP core, Security/auth, Persistence, Cache/messaging, Email/rendering/media, Observability, i18n, Declared config).
+- **`DEV_GROUPS`** — 12 families of dev-only dependencies (TS toolchain, type defs, testing, deeper testing, linting, architecture, code-shape audit, commit hygiene, contracts/codegen, docs site, maintenance).
+- **`matchesGroup(packageName, patterns)`** — returns a boolean: whether `packageName` is named by one of `patterns` (exact match or `prefix*` wildcard, e.g. `@opentelemetry/*`).
 
 ## Relationships
 
-- **`scripts/docs/generate-dependency-map.ts`** — consumes `RUNTIME_GROUPS`, `DEV_GROUPS`, and `matchesGroup` to classify every package in `package.json` into a group table. Packages matching no group and imported by >1 module land in an "Ungrouped" table; packages imported by exactly one module are listed under that module instead. This file is the sole source of group names, purposes, and links; the generator never hard-codes them.
+- **`scripts/docs/generate-dependency-map.ts`** — the sole consumer. It derives the installed packages and their import graph, then calls `matchesGroup` to bucket each package into a `RUNTIME_GROUPS` or `DEV_GROUPS` entry. Packages that match no group and are imported by >1 module are dumped into an "Ungrouped" table; packages imported by exactly one module are listed under that module instead. This file provides the *semantics*; the generator provides the *facts*.
 
 ## Notes
 
-- Matching is **first-listed-wins** per group array, but a package can only land in one group because the generator iterates groups in order. Patterns like `@opentelemetry/*` match any package starting with `@opentelemetry/`.
-- Unmatched, multi-importer packages do **not** fail the build; they surface in an "Ungrouped" table ("visible beats silent"). Unmatched single-importer packages are intentionally omitted from this file's scope.
-- The `readMore` field is a Markdown link (or `—` when there is no dedicated doc). It is rendered verbatim into the generated page.
-- `mongodb` is listed under Persistence with the note that it is imported only as a type (version pin for `mongoose`'s `.connection.db`); this is a classification decision, not a runtime dependency assertion.
+- **Patterns vs. exact names.** Only two families use wildcard patterns (`@opentelemetry/*`, `@types/*`). Everything else is an exact string match — adding a new scoped sub-package (e.g. a new `@eslint/*` plugin) requires an explicit entry.
+- **"Ungrouped" is a feature, not a failure.** A package that matches no group and is imported by multiple modules surfaces in the docs page's Ungrouped table. This is intentional: visible beats silent, so contributors notice the gap.
+- **Single-import packages are deliberately absent.** If a package is imported by exactly one module and matches no group, the generator lists it under that module. Restating it here would duplicate ownership.
+- **Inline comments in `match` arrays** explain *why* a seemingly-unrelated package is grouped there (e.g. `@babel/plugin-transform-modules-commonjs` is babel-jest's one plugin; `@sinonjs/fake-timers` backs both the demo clock and jest fake timers). These are load-bearing context for anyone editing the list.
+- **Do not add a package list here.** The generator derives the actual installed packages and their importers. This file only supplies the grouping taxonomy. Duplicating the package roster would drift.

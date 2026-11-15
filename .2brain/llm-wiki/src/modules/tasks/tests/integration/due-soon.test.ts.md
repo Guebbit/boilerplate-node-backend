@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/due-soon.test.ts
-sha256: 4dec72ba3ed8a238660e1aea47819bc07c2d6ce05aab1e134eec7f36c0ee6751
-generated_at: 2026-11-08T08:38:41.253111+00:00
+sha256: 2dc1226c97a2a191aef3c6acbe4f3cf0f7e1ac70c5e10edfcf0290487ceda78c
+generated_at: 2026-11-14T22:13:50.996393+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the `remindDueSoon` sweep against a real (in-memory) database. Verifies that an open task within three days of its deadline — with a life longer than that window — emits exactly one `task.due_soon` domain event, and that all other combinations (too early, too short a life, already closed, already overdue, opted-out, uncategorised, non-privacy contact) are left untouched.
+Integration test (real database) for the `remindDueSoon` sweep. Verifies that an open task within three days of its deadline—and with a life long enough to matter—is announced exactly once as a `task.due_soon` domain event, while closed, overdue, too-short-lived, suppressed, or out-of-window tasks are left untouched.
 
 ## Key elements
 
-- **`heard`** – module-level array that accumulates `task.due_soon` event payloads received during each test, reset in `beforeEach`.
-- **`taskDue(dueInDays, lifeDays)`** – helper that creates a system task via the factory, then sets its deadline and life in one call; returns the task id.
-- **`beforeEach` / `afterEach`** – reset the domain-event bus, subscribe a listener for `TASK_DUE_SOON`, and call `markDomainEventsWired()` so the outbox relay will deliver.
-- **`describe('remindDueSoon')`** – eight cases covering:
-  - positive reminder (kind, routeSet, work fields; idempotent second call returns 0; `dueSoonNotifiedAt` stamped).
-  - task due in 4 days is skipped, then picked up when `now` is advanced.
-  - task whose life is only 1 day is never reminded.
-  - closed task is skipped and never stamped.
-  - already-overdue task is not "due soon".
-  - a task reminded early is still eligible for `remindOverdue` later.
-  - privacy-category contact is reminded; order-category contact is not.
-  - uncategorised `TaskKind.contact` is never reminded.
-  - `noDueSoon: true` flag suppresses the reminder.
+- **`taskDue(dueInDays, lifeDays)`** — local helper that creates a system task via the factory and stamps its due-date and life window in one call; returns the task id.
+- **`heard`** — module-level array that collects every `task.due_soon` event fact captured by the manual listener; reset in `beforeEach`.
+- **`describe('remindDueSoon')`** — eight test cases covering: single announcement with correct payload fields (`taskId`, `kind`, `routeSet`, `work`); idempotency (second sweep returns 0); out-of-window skip (4 days); short-life skip (≤ 1 day); closed-task skip; overdue-task skip; overdue-after-early-warning still fires `remindOverdue`; privacy-category inclusion vs. ordinary-contact exclusion; uncategorised-contact exclusion; and `noDueSoon` suppression.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/tasks/service.ts` | System under test: calls `remindDueSoon()`, `remindOverdue()`, `create()`. |
-| `src/modules/tasks/events.ts` | Imports the `TASK_DUE_SOON` event constant for subscription. |
-| `src/kernel/events.ts` | Imports `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents`, and the `DomainEventMap` type. |
-| `src/kernel/outbox.ts` | Calls `settleOutboxNudges()` to flush pending outbox messages before asserting. |
-| `src/modules/tasks/tests/factories.ts` | Uses `createSystemTask`, `giveLife`, `closeDirectly` to seed state. |
-| `src/modules/tasks/model.ts` | Reads stored task to assert `dueSoonNotifiedAt`; writes `noDueSoon` flag. |
-| `src/modules/tasks/repository.ts` | Creates an uncategorised task directly (bypassing service validation). |
-| `src/types/index.ts` | Imports `TaskKind` and `TaskSource` enums. |
-| `tests/support/setup-test-db.ts` | Calls `setupTestDb()` at module load to provision the test database. |
+- **`src/modules/tasks/services/index.ts`** — imports `taskService`, the system under test; calls `remindDueSoon()` and `remindOverdue()`.
+- **`src/modules/tasks/tests/factories.ts`** — imports `createSystemTask`, `giveLife`, `closeDirectly` to seed and mutate task state.
+- **`src/kernel/events.ts`** — imports `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` and the `DomainEventMap` type to wire a manual listener and clean up between tests.
+- **`src/kernel/outbox.ts`** — imports `settleOutboxNudges` to flush the async outbox relay before asserting on `heard`.
+- **`src/modules/tasks/events.ts`** — imports the `TASK_DUE_SOON` event-name constant used to subscribe.
+- **`src/modules/tasks/model.ts`** — imports `taskModel` to read back the `dueSoonNotifiedAt` stamp and to set the `noDueSoon` flag.
+- **`src/modules/tasks/repository.ts`** — imports `taskRepository` to create an uncategorised contact task that the service path would not produce.
+- **`src/types/index.ts`** — imports `TaskKind`, `TaskSource` for the uncategorised-task fixture.
+- **`tests/support/setup-test-db.ts`** — called once at module top to configure the real test database before any test runs.
 
 ## Notes
 
-- `markDomainEventsWired()` must be called in `beforeEach`; without it the outbox relay silently drops events because it only delivers when the bus reports itself wired.
-- `settleOutboxNudges()` is required after every `remindDueSoon` call that is expected to emit — the event travels through the outbox asynchronously, so assertions on `heard` will fail without the flush.
-- The test asserts the return value of `remindDueSoon()` (the count of tasks reminded) *before* calling `settleOutboxNudges()`, confirming the count is determined synchronously while event delivery is not.
-- The "still reminds after going overdue" test calls `remindOverdue()` (a different service method) to verify the two sweeps are independent, not mutually exclusive.
+- The suite calls `markDomainEventsWired()` in `beforeEach` because the outbox relay only delivers events where the bus has been explicitly marked wired; without it, `settleOutboxNudges()` would never dispatch.
+- `settleOutboxNudges()` must be awaited *before* asserting on `heard`; the outbox delivery is asynchronous.
+- Deduplication is verified implicitly: the second `remindDueSoon()` call resolves to `0`, and the test confirms `dueSoonNotifiedAt` is a `Date` on the stored document.
+- The privacy-vs-ordinary test exercises `taskService.create` with `category: 'privacy'` vs. `'order'`, confirming the service-level filter is independent of the reminder logic.

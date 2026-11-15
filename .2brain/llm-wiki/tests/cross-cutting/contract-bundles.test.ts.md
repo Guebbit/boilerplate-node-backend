@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-bundles.test.ts
-sha256: 1e76c153ec4b4fe270d2e9fe889b01116ea3f089ac7509b47fce54da5374e864
-generated_at: 2026-11-08T09:25:22.042235+00:00
+sha256: 41640637483f31fe5b03379fad806584701948fd52a8dcdbb5cf45091accf2be
+generated_at: 2026-11-14T23:02:14.759169+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates the structural integrity of every contract bundle in the repo. For authored (compiled) bundles it checks that source fragments are non-empty and that the shared-file guard in `SHARED_FILES` matches exactly what is built here. For the OpenAPI bundle it verifies each module document is standalone and that every documented path belongs to exactly one module or the root. For the AsyncAPI bundles it asserts referential integrity across channels, messages, and operations. It deliberately does **not** compare committed output to a fresh build—that is `npm run check`'s responsibility.
+Cross-cutting structural tests for the contract bundles that ship with the repo (OpenAPI, AsyncAPI, and generated client collections). Rather than asserting byte-for-byte equality of compiled outputs (that is `npm run check`'s job), these tests verify invariants of the *shape* and *internal consistency* of each bundle: that every module document is standalone-valid OpenAPI, that paths are attributed to exactly one module or the root, that AsyncAPI channels/messages/operations/servers cross-reference correctly, and that the shared-files guard and module-section list stay in lockstep with the rest of the codebase.
 
 ## Key elements
 
-- **`counted(groups)`** — helper that sums `items` or `children` lengths across Postman-style folder arrays (used for collection request counting).
-- **`bundleByName(name)`** — resolves a `ContractBundle` from `CONTRACT_BUNDLES` by name; throws if missing.
-- **`AUTHORED_BUNDLES`** — `CONTRACT_BUNDLES` filtered to non-generated bundles (everything except client collections).
-- **`describe('every contract bundle')`** — (1) asserts every fragment of every authored bundle is non-empty (canary against silently dropped domains); (2) cross-checks `SHARED_FILES` against the bundle's `shared` flag to ensure the frontend guard covers exactly the right set of files.
-- **`describe('MODULE_SECTIONS')`** — independently recomputes which enabled modules ship an `openapi.yaml` on disk and asserts `MODULE_SECTIONS` matches. Serves as a second computation that cannot be in the same circular import path as the bundler.
-- **`describe('the OpenAPI bundle')`** — (1) parses each module's standalone `openapi.yaml` and asserts `openapi`, `paths`, and non-empty `components.schemas` are present; (2) parses the committed root bundle, collects all paths, and asserts every path is claimed by exactly one module section or falls into a hardcoded root list (`/`, `/.well-known/security.txt`, `/config`, `/livez`, `/readyz`).
-- **`asyncDocument(name)`** — reads, parses, and type-casts a committed AsyncAPI bundle.
-- **`describe.each(['asyncapi', 'asyncapi-public'])`** — (1) asserts every channel has ≥ 1 message resolvable in `components.messages`, and every operation's `$ref` resolves to an existing channel whose message list includes the referenced message; (2) asserts server/channel binding is mutual (no orphan servers, no channel without a server).
+- **`counted`** – helper that tallies items across collection folder keys (`items` / `children`).
+- **`bundleByName`** – resolves a `ContractBundle` from `CONTRACT_BUNDLES` by name; throws if absent.
+- **`describe('every contract bundle')`** – asserts that every non-generated bundle's output path appears in `SHARED_FILES` exactly when `bundle.shared !== false`, tying the frontend cross-repo guard to the bundle registry.
+- **`describe('MODULE_SECTIONS')`** – independently recomputes which enabled modules have an `openapi.yaml` on disk and asserts set-equality with `MODULE_SECTIONS` (catches a stale section after a module is disabled).
+- **`describe('the OpenAPI bundle')`** – two tests: (1) every `MODULE_SECTIONS` entry parses as standalone OpenAPI with `paths` and at least one schema; (2) the union of per-module paths plus the known root routes exactly equals the committed bundle's `paths` map, with no duplicates.
+- **`asyncDocument`** – helper that reads and parses a committed AsyncAPI bundle by name, returning a typed shape for channels, operations, and components.
+- **`describe.each(['asyncapi','asyncapi-public'])`** – per-bundle structural checks: every channel has ≥1 message resolvable in `components.messages`; every operation's channel and messages resolve; every declared server is bound to at least one channel and vice-versa.
+- **`describe('the public AsyncAPI bundle')`** – (truncated) SSE-channel-specific assertions for the public variant.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-registry.ts`** — source of `CONTRACT_BUNDLES`, `bundleFragments`, `isGenerated`, `readCommittedBundle`, and the `ContractBundle` type. The test's central data model.
-- **`scripts/contracts/openapi-bundle.ts`** — provides `MODULE_SECTIONS` (the list of module names that contribute a section) and `moduleSpec` (resolves a section name to its file path on disk).
-- **`scripts/contracts/client-collections-bundle.ts`** — provides `allProbes`, used when validating generated client collections in memory.
-- **`scripts/pairing/spec-identity.ts`** — provides `SHARED_FILES`, the cross-repo guard list the test cross-checks against bundle `shared` flags.
-- **`src/modules.ts`** — provides `enabledModules`, used in the independent `MODULE_SECTIONS` recomputation.
-- **`scripts/modules-on-disk.ts`** — provides `REPO_ROOT` for all filesystem path construction.
+- **`scripts/contracts/bundle-registry.ts`** – source of `CONTRACT_BUNDLES`, `isGenerated`, `readCommittedBundle`, `assembleBundle`, and the `ContractBundle` type. The test iterates the registry and reads committed outputs via `readCommittedBundle`.
+- **`scripts/contracts/openapi-bundle.ts`** – provides `MODULE_SECTIONS` (the list of module OpenAPI specs) and `moduleSpec` (path resolver). The test validates `MODULE_SECTIONS` and reads individual module docs.
+- **`scripts/contracts/client-collections-bundle.ts`** – exports `allProbes`, imported here for the generated-bundle validation (collection contents are asserted in-memory rather than against a committed file).
+- **`scripts/pairing/spec-identity.ts`** – provides `SHARED_FILES`, the cross-repo file list the test cross-checks against the bundle registry.
+- **`src/modules.ts`** – provides `enabledModules`, the runtime truth the `MODULE_SECTIONS` test validates against.
+- **`scripts/modules-on-disk.ts`** – provides `REPO_ROOT` used to resolve absolute file paths for `existsSync` / `readFileSync` calls.
 
 ## Notes
 
-- **No byte-for-byte check here.** Committed bundles are `.gitignore`d and rebuilt by `postinstall`; equality against a fresh build is owned by `npm run check`. This file only validates structural content.
-- **Generated bundles (client collections) are tested by running the generator**, not by comparing a committed copy—there is no committed copy to compare against.
-- **Comments are not checked.** YAML parsing strips comments, and the file's docblock explicitly notes that comment placement is a design choice, not a testable invariant.
-- **Circular-import avoidance:** The `MODULE_SECTIONS` test deliberately does not import module code, because modules import the generated `@api/` client that the bundler itself produces. This test is the independent second computation.
-- **Root paths are a hardcoded list** (`/`, `/.well-known/security.txt`, `/config`, `/livez`, `/readyz`). Adding a new non-module route requires updating this assertion.
+- The file explicitly does **not** re-test byte-for-byte freshness of compiled bundles; that responsibility belongs to `npm run check` (invoked via `postinstall`). Duplicating it here would be a second Jest case over the same two function calls.
+- The `MODULE_SECTIONS` vs. `enabledModules` check exists because `openapi-bundle.ts` cannot import `enabledModules` directly: doing so would pull in module code that imports the generated `@api/` client, which the bundler itself must produce first. This test is the independent second computation.
+- `asyncapi.yaml` must be **absent** from `SHARED_FILES` (not merely exempt): the frontend carries `asyncapi.public.yaml` instead, and an entry for the full bundle would incorrectly demand queue channels in the frontend.
+- Generated bundles (e.g. Bruno collections) are validated by exercising the generator in memory rather than comparing a committed file, because the committed copies are `.gitignore`d and the meaningful invariant is "the generator still covers the contract."
+- The file is truncated in the snapshot; the public AsyncAPI describe block and any further cases are not visible.

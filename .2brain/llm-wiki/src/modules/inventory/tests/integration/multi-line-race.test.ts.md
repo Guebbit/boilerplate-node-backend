@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/multi-line-race.test.ts
-sha256: b64381afc861a4c23d961fabf45804fc499b250374b8b8e2a8d82db221635d6f
-generated_at: 2026-11-08T06:06:19.929086+00:00
+sha256: ce455fcabfda4c07a3eed055bc92960734e42b450f0e6f37f98b05c87b4302f6
+generated_at: 2026-11-14T20:09:05.281943+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that when two multi-line `reserveForOrder` calls race for the same two products listed in **opposite** order, exactly one hold stands (never both, never neither), the stock level reflects only the standing hold, and a refused hold leaves zero residual state. The dangerous interleaving—each order grabs its first line before either grabs the second—is forced deterministically via a write barrier.
+Integration test that fires two `reserveForOrder` calls for the **same two products in opposite line order**, then asserts that exactly one hold stands and the stock level reflects only the winner. The interleaving is forced deterministically (barrier on the repository write) so the race is reproducible on every run rather than scheduler-dependent.
 
 ## Key elements
 
-- **`holdLaterReservesUntilFirstWritesLand(firstWrites)`** — Spies on `stockLevelRepository.applyDelta`. Lets the first `firstWrites` reserve-writes complete, then gates all subsequent reserve-writes behind a promise barrier. Non-reserve writes pass through untouched. Returns no value; the spy is restored by `afterEach`.
-- **`describe('opposite-order multi-line holds…')` / `it('lets exactly one stand…')`** — Creates two products (5 units each), sets the barrier to 2, fires two `reserveForOrder` calls in `Promise.all` with product order swapped, then asserts:
-  - `standing === 1`
-  - `reservationModel` document count (held and total) equals `standing`
-  - Per-product `reserved === standing * 3` and `available === 5 - standing * 3`
+- **`holdLaterReservesUntilFirstWritesLand(firstWrites)`** — Spies on `stockLevelRepository.applyDelta` and holds every `reserve`-reason write after the first `firstWrites` until a Promise resolves (a manual barrier). Non-reserve writes pass through immediately. The spy is attached to a plain-object method so `jest.spyOn` is safe under the swc mutation harness.
+- **`describe` / `it` block** — Creates two products (5 units each) via `createProduct`, then races two 3-unit multi-line reservations. Asserts: exactly 1 of 2 holds is `held`, `reserved`/`available` levels match the winner, and the loser's record is `released` (never deleted).
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — Called once at module top level (`setupTestDb()`) to configure the test database connection.
-- **`src/modules/products/tests/factories.ts`** — Provides `createProduct` to seed two inventory-bearing products with known `onHand` counts.
-- **`src/types/index.ts`** — Supplies `StockMovementReason.reserve`, used to distinguish reserve writes inside the barrier spy.
-- **`src/modules/inventory/services/index.ts`** — Source of `inventoryService.reserveForOrder`, the system under test.
-- **`src/modules/inventory/repository.ts`** — Source of `stockLevelRepository`; the test spies on `applyDelta` (for the barrier) and calls `findByProductId` (for level assertions).
-- **`src/modules/inventory/model.ts`** — Source of `reservationModel`; used to count held/total reservation documents after the race.
+- **`src/modules/inventory/services/index.ts`** — Imports `inventoryService`; the test calls its `reserveForOrder` method twice to create the racing holds.
+- **`src/modules/inventory/repository.ts`** — Imports `stockLevelRepository`; the barrier spy wraps `applyDelta`, and `findByProductId` is used to read back and assert stock levels.
+- **`src/modules/inventory/model.ts`** — Imports `reservationModel`; `countDocuments` is used to verify held/released document counts after the race.
+- **`src/modules/products/tests/factories.ts`** — Imports `createProduct` to seed the two test products with `onHand: 5`.
+- **`src/types/index.ts`** — Imports `StockMovementReason` so the spy can filter to `reserve`-reason writes only.
+- **`tests/support/setup-test-db.ts`** — Imports and calls `setupTestDb()` at module scope to initialise the in-memory database.
 
 ## Notes
 
-- The barrier is a plain-object `Promise` resolved via a mutable `barrier.open` callback. The spy targets a method on a plain object (not a class) so that `jest.spyOn` works under the swc-based mutation-testing harness.
-- The test does **not** depend on OS thread scheduling: the barrier makes the interleaving identical on every run.
-- The "dangerous" path (both orders take their first line, then both fail on the second) is the scenario the canonical sorted-by-product-id order inside `reserveForOrder` is designed to prevent. The test asserts the invariant holds even under the adversarial interleaving.
-- `afterEach` calls `jest.restoreAllMocks()` to undo the `applyDelta` spy between runs.
+- `setupTestDb()` is called **at module top-level**, not in a `beforeAll`/`beforeEach`. Jest executes it once when the file loads.
+- The barrier's settle counter increments in `.finally()`, so a rejected write (e.g. write-conflict retry) still opens the barrier; without this, a single failure would hang the test forever.
+- The spy only intercepts writes where `reason === StockMovementReason.reserve`; all other `applyDelta` calls (releases, adjustments) pass through to the real implementation.
+- The test relies on `reserveForOrder` sorting lines by product id internally (canonical order). If that ordering were removed, both orders would take their first line before either's second and both would be refused despite sufficient stock.

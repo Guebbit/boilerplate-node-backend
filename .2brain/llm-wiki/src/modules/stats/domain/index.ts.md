@@ -1,7 +1,7 @@
 ---
 source: src/modules/stats/domain/index.ts
-sha256: 3d537df5229495d7a4a0ffaee02e316d143b528008d5ba51518555652fa62b77
-generated_at: 2026-11-08T08:24:17.417564+00:00
+sha256: 0635dfd8905b9d5b08b0c1602466d6cf8d96fc11c736cc64fb3d8bace8f9d16a
+generated_at: 2026-11-14T22:01:17.988327+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the stats domain layer. It re-exports the public API of `range` and `calendar` so that consumers (controllers, the module's top-level `index`) can import domain types and functions from a single path rather than reaching into individual files.
+Barrel file that exposes the public API of the stats **domain layer** — the pure rules governing a reporting range, the shop's calendar, and sales figures. Importers should reach for this path (or for `src/modules/stats/index.ts`) rather than importing individual sub-modules directly.
 
 ## Key elements
 
-- **`export * from './range'`** — re-exports all named exports of the reporting-range module (e.g., range types, boundary logic).
-- **`export * from './calendar'`** — re-exports all named exports of the shop-calendar module (e.g., open/close rules, day-level logic).
+- **`export * from './range'`** — re-exports the reporting-range types and helpers.
+- **`export * from './calendar'`** — re-exports the shop-calendar domain logic.
+- **`export * from './figures'`** — re-exports sales-figure domain logic.
+- **Module doc comment** — points to `docs/theory/domain-layer.md` for the architectural rationale behind the domain layer.
 
 ## Relationships
 
-- **`src/modules/stats/domain/range.ts`** — directly re-exported; this file is the sole public surface for its exports.
-- **`src/modules/stats/domain/calendar.ts`** — directly re-exported; same role as above.
-- **`src/modules/stats/index.ts`** — module-level barrel that re-exports this file (or its sub-modules), making the domain layer visible to the broader app.
-- **`src/modules/stats/controllers/respond.ts`** — controller layer; imports domain symbols (range/calendar) through this file rather than importing the leaf files directly.
+- **`src/modules/stats/domain/range.ts`**, **`calendar.ts`**, **`figures.ts`** — the three files whose public symbols are re-exported by this index; this file is their sole aggregation point.
+- **`src/modules/stats/index.ts`** — higher-level module entry that (re)exports the domain barrel, making the stats domain reachable from the module root.
+- **`src/modules/stats/controllers/respond.ts`** — controller-layer consumer that imports domain types/logic through this barrel (or the module root).
 
 ## Notes
 
-- This file contains **no logic of its own**—it is purely a re-export. Any name collision between `range.ts` and `calendar.ts` would surface here at compile time.
-- New domain sub-modules must be added to this barrel to become part of the public stats-domain API; importing them by relative path bypasses the intended entry point.
+- This file contains **no logic** — only `export *` statements and a doc comment. All actual domain rules live in the three sub-modules.
+- The doc comment explicitly references `docs/theory/domain-layer.md`; if the domain-layer conventions change, that doc is the source of truth, not the code here.

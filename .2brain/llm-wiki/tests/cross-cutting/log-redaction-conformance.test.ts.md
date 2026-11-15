@@ -1,28 +1,30 @@
 ---
 source: tests/cross-cutting/log-redaction-conformance.test.ts
-sha256: 7a6598f0ce3fd09b38304e63174101d20f356055d6908def6b91c0263eb72046
-generated_at: 2026-11-08T09:27:49.533821+00:00
+sha256: dc2057b98fea42765ff6d3935ddb805f533dd25e5ce4ab3e2b2e73ceca94e1e4
+generated_at: 2026-11-14T23:04:08.602044+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # tests/cross-cutting/log-redaction-conformance.test.ts
 
 ## Purpose
-
-Conformance test that verifies the TypeScript redaction walk answers the same shared YAML case file (`shared/cases/log-redaction.cases.yaml`) identically to the PHP twin. It guards against drift between the two implementations by asserting pass/fail on each key in `shared/rules/log-redaction.yaml`.
+Conformance test that pins the repo's log-redaction behavior (field redaction, URL-secret masking, and error-message masking) against a shared set of cases also consumed by the PHP twin. Ensures both implementations produce identical outputs for the same inputs, keeping the redaction contract language-agnostic.
 
 ## Key elements
-
-- **`redactionCase`** — A Zod schema extending the shared `caseBase` with two fields: `key` (the config key under test) and `expect` (`'redact'` or `'keep'`).
-- **`describeCases('log-redaction', redactionCase, …)`** — Iterates every case in the shared YAML file and, for each, calls `redactSensitiveFields({ [key]: 'value' })`, then asserts whether the value survived (`keep`) or was replaced (`redact`).
+- **`redactionCase`** — Zod discriminated-union schema (`kind: 'key' | 'traceUrl' | 'message'`) that validates each YAML case before the test body runs.
+- **`HASH_SPAN`** — Regex (`/\{hash:([^}]*)\}/g`) used in expected-output strings as a placeholder; at assertion time it is replaced by the actual `correlationDigest` of the captured address.
+- **Test body (inside `describeCases`)** — Three branches:
+  - `key`: calls `redactSensitiveFields` on a single-key object and asserts the value was either replaced or kept.
+  - `traceUrl`: calls `redactUrlSecrets` and compares to the expected string (with `{hash:…}` spans resolved).
+  - `message`: calls `serializeError(new Error(input))` and compares `.message`, proving the full serialization path applies the mask.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — Source of `redactSensitiveFields`, the function under test. This file does not re-implement redaction; it only invokes the adapter and checks the output.
-- **`tests/support/cases.ts`** — Provides `caseBase` (shared Zod base schema) and `describeCases` (YAML-driven test runner), which eliminate manual case wiring and keep the TS and PHP suites reading the same YAML fixtures.
+- **`src/infrastructure/adapters/logger.ts`** — source of `redactSensitiveFields` and `serializeError`; the units under test for the `key` and `message` cases.
+- **`src/infrastructure/runtime/otel-sdk.ts`** — source of `redactUrlSecrets`; the unit under test for the `traceUrl` case.
+- **`src/infrastructure/security/pseudonymise.ts`** — provides `correlationDigest`, used to resolve `{hash:…}` placeholders in expected outputs so the assertion compares against the real digest.
+- **`tests/support/cases.ts`** — provides `caseBase` (shared Zod base with fields like `id`, `description`) and `describeCases` (the runner that loads the YAML file, validates each entry, and calls the per-case callback).
 
 ## Notes
-
-- The test is intentionally minimal: it constructs a single-key object per case, so it exercises only the key-matching logic, not nested-object traversal.
-- The `as Record<string, unknown>` cast is needed because `redactSensitiveFields` returns a more specific type; the cast is safe here since the input is always a flat one-key object.
-- To add a new conformance case, edit `shared/cases/log-redaction.cases.yaml` — no changes to this file are required.
+- The YAML case file and the redaction key-list (`shared/rules/log-redaction.yaml`) live outside this repo's source tree; they are the single source of truth shared with the PHP twin. Changing the rules changes the test expectations without touching this file.
+- The `message` branch deliberately routes through `serializeError` rather than calling a lower-level mask function, so a regression in the serialization wiring (e.g., mask applied after serialization) would be caught here.
+- `{hash:…}` spans are a *test-only* convention: production code never emits them; they exist so the expected string can reference a digest without hard-coding the hash value.

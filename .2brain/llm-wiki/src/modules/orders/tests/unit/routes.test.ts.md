@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/routes.test.ts
-sha256: a78a1adb3d3f5d8a72a93a74f1ac42492ac48d99afe73f479668f2597080c232
-generated_at: 2026-11-08T07:13:41.432940+00:00
+sha256: aca67edadb43b09b65d0407f17106b26d766f25bbdd6879b006ef3eb9db830b2
+generated_at: 2026-11-14T20:58:06.759478+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Structural test for the orders Express router. It asserts the exact set and order of mounted endpoints, verifies which authorization and caching guards sit on each route, and checks middleware chaining (permission → budget → controller). The goal is to make any accidental route re-ordering, missing guard, or cache-policy drift a red test rather than a production bug.
+Locks down the orders router's surface: the exact set and order of mounted endpoints, the auth/permission guards on each route, the middleware chain ordering (budget, cache, flags), and the intentional gaps (e.g. `POST /:id/cancel` has no admin guard). It exists so that a refactoring of `routes.ts` cannot silently reorder paths, drop a guard, or change cache semantics without a test failing.
 
 ## Key elements
 
-- **`describe('order routes — what is mounted')`** — Asserts the full route-signature list (16 endpoints) and enforces that `/search` and `/export` are declared *before* `/:id` so they aren't swallowed by the parameterised route.
-- **`describe('order routes — authorization')`** — Parameterised checks that every route carries `isAuth`; that admin-write routes carry `requirePermissionGuard`; that `POST /:id/cancel` deliberately does **not** (owner-scope lives in the service); and that `POST /:id/status-override` is gated by its own distinct permission key.
-- **`describe('order routes — the export budget')`** — Confirms the `orders-export` budget middleware runs after `requirePermissionGuard` and before the controller.
-- **`describe('order routes — staff notes')`** — Verifies both timeline-note routes require `update:Order` and that `POST` carries the `orders-note` budget in the correct chain position.
-- **`describe('order routes — caching')`** — Ensures read routes use `privateNoCache` (never shared Redis), `POST /search` uses `noStore`, order creation/cancellation invalidate the `products` cache, and hard-delete is reachable only behind the `routeFlag(hardDelete)` guard.
-- **`jest.mock` blocks** (top of file) — Stub out `cache`, `route-flag`, and `rate-limit` middlewares using factory helpers exported from `@tests/routes` so the router can be introspected without a live Redis or flag service.
+- **`jest.mock` block (× 3)** — stubs `cache`, `route-flag`, and `rate-limit` infrastructure middlewares so the router can be imported in isolation; the mock factories are pulled from `@tests/routes` helpers.
+- **`describe('order routes — what is mounted')`** — asserts the full ordered signature list (16 routes), and that `/search` and `/export` are declared *before* `/:id` to avoid path-shadowing 404s.
+- **`describe('order routes — authorization')`** — parameterised checks that `isAuth` appears on every route (router-level guard), `requirePermissionGuard` appears on admin-only routes, `POST /:id/cancel` deliberately lacks `requirePermissionGuard`, and read endpoints remain open to any logged-in caller.
+- **`describe('order routes — the export budget')`** — verifies `orders-export` budget middleware sits after `requirePermissionGuard` and before the controller.
+- **`describe('order routes — staff notes')`** — confirms timeline-note writes require `update:Order` and that the `orders-note` budget is positioned correctly.
+- **`describe('order routes — caching')`** — asserts GET reads use `privateNoCache` (never shared Redis), POSTs use `noStore`, order-creation/cancel routes emit `invalidateCache([products])`, and `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while `DELETE /:id` is not.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — The module under test. This file imports its `router` export and introspects it via the helpers below.
-- **`tests/support/routes.ts`** — Supplies the introspection utilities (`routeTable`, `routeSignatures`, `guardsOn`, `chainOf`) and the middleware factory mocks (`cacheMock`, `routeFlagMock`, `securityMock`) that the `jest.mock` calls delegate to via `requireActual`.
+- **`src/modules/orders/routes.ts`** — the system under test; the file imports `{ router }` from it and every assertion inspects that router's middleware chain.
+- **`tests/support/routes.ts`** — provides the four inspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `chainOf`) and the three middleware mock factories (`cacheMock`, `routeFlagMock`, `securityMock`) used to stub infrastructure middlewares during import.
 
 ## Notes
 
-- Route order is a load-bearing invariant: because Express matches in declaration order, moving `/search` or `/export` after `/:id` silently breaks those endpoints. The two ordering tests exist specifically to catch that regression.
-- `POST /:id/cancel` lacking `requirePermissionGuard` is intentional, not a gap — authorization is enforced inside `orderService.cancelOnRequestById` via caller scoping. Adding the guard at the router level would remove the customer-facing cancel feature.
-- The `jest.mock` factories call `requireActual('@tests/routes')` to obtain the mock helpers, meaning the test file has a runtime dependency on `tests/support/routes.ts` being resolvable at `@tests/routes` in both module resolution and the jest `moduleNameMapper`.
-- Caching assertions reference RFC 9111 §3.5 semantics: order reads are user-scoped, so shared (Redis) caching is forbidden; only browser-level `private` caching is permitted.
+- The module doc-block explicitly calls out that `GET /:id/invoice` and `/credit-note` live in the `invoicing` module's own router (same `/orders` basePath) and are **not** expected here.
+- `POST /:id/cancel` lacking `requirePermissionGuard` is an intentional, documented decision (customer self-service cancel); the comment warns that adding the guard would silently remove the feature.
+- Route-ordering assertions (`/search` < `/:id`, `/export` < `/:id`) guard against a real Express shadowing bug where a one-segment path is swallowed by a parameterised path declared earlier.
+- The `chainOf` assertions encode middleware *position* (guard before budget before controller), not just presence — reordering middleware without changing the set will fail these tests.

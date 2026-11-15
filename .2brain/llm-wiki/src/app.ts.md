@@ -1,7 +1,7 @@
 ---
 source: src/app.ts
-sha256: 8fef2030bb934f4ad03a5c3a5d2309280cf9ad4f8a46d254f89b1d65329d5928
-generated_at: 2026-11-08T03:12:21.330903+00:00
+sha256: 426107c2e8a493a477a4543a9a9999beef10d9e88f5504d34bd6f49046c70b81
+generated_at: 2026-11-14T17:47:35.859822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Application factory. `createApp()` synchronously builds one Express instance — validates module config, registers domain-event handlers, mounts the middleware stack and every enabled route — and returns a `{ app, boot, start, stop }` lifecycle object. The file's sole structural purpose is preserving import order: OpenTelemetry must initialize before `express`, `http`, or `mongoose` are loaded, which only holds when a dynamic-import entry (e.g. `cluster.ts`) loads this module.
+Assembly point for the Express application. `createApp()` validates module config, registers enabled modules, mounts the middleware stack and routes in a fixed order, and returns a `{ app, boot, start, stop }` lifecycle object. It is the single place where infrastructure, modules, and the HTTP surface are wired together; calling it has side effects, importing it does not.
 
 ## Key elements
 
-- **`startTracing()`** — called at module top-level, before `express`/`mongoose` imports resolve. Must be the earliest side-effectful line.
-- **`createApp(options?: AppOptions): AppInstance`** — the exported factory. Reads `AppOptions.env` (process-wide override), builds the Express app, wires middleware, and closes over `activeServer` / `shutdownPromise` for the instance's lifecycle.
-- **`AppInstance`** — `{ app: Express; boot(); start(): Promise<Server>; stop() }`. `boot` connects infra (DB → cache → queue → workers → i18n → templates → validation messages) without binding a port. `start` = `boot` + optional `extension.afterBoot` + `listenOn` + `applyServerTimeouts` + `markServerListening`. `stop` is a memoised graceful shutdown.
-- **`AppOptions`** — `{ env?: EnvironmentOverrides; extension?: AppExtension }`. `env` is applied via `installEnvironment` before any config read; process-wide, last call wins.
-- **`AppExtension`** — `{ install?(app); afterBoot?() }`. Demo-profile only; production never passes one. `install` mounts extra routes before the 404 catch-all; `afterBoot` runs between `boot` and `listen`.
-- **Boot chain (inside `createApp`)** — `startDatabase → startCache → startQueue → registerWorkers → bootI18n → registerTemplateDirectories → refreshLocaleOverrides → startLocaleOverrideRefresh → registerValidationMessages`. Ordering is load-bearing: validation messages resolve copy through the i18n translator, so they must register last.
+- **`createApp(options?: AppOptions): AppInstance`** — Synchronously builds the Express app (module registration, middleware, routes) and returns the lifecycle handle. Callable more than once; each call is an independent instance with its own server/shutdown closure.
+- **`AppInstance`** — `{ app, boot, start, stop }`. `boot` starts DB → cache → queue → workers → rendering → locale override → validation messages. `start` calls `boot`, runs any `afterBoot` extension step, then listens. `stop` performs graceful shutdown, settling in-flight outbox nudges first.
+- **`AppOptions`** — `{ env?: EnvironmentOverrides, extension?: AppExtension }`. `env` is applied via `installEnvironment` before any config read; `extension` provides optional extra routes and a post-boot hook (used only by the demo profile).
+- **`AppExtension`** — `{ install?(app), afterBoot?() }`. `install` runs before the 404 catch-all; `afterBoot` runs between `boot` and `listen`.
+- **Middleware stack (in registration order)** — request-id → security → static → locale → request parsing → telemetry → routes → error handling. The order is load-bearing; see the in-file comment for the seven ordering constraints.
+- **`startTracing()`** — Called at module top-level before `express` is imported; the only ordering constraint the file exists to preserve.
 
 ## Relationships
 
-- **`src/app/config.ts`** — imports `APP_CONFIG_SLICES`, the per-module config fragments validated at build time.
-- **`src/app/security.ts`** — imports `installSecurity`, `installRequestParsing`, `applyServerTimeouts` (timeouts applied to the `Server` socket at listen time).
-- **`src/app/request-context.ts`** — imports `installRequestContext`, `requestIdMiddleware`.
-- **`src/app/telemetry.ts`** — imports `installTelemetry`.
-- **`src/app/routes.ts`** — imports `installRoutes` (mounted after static, before error-handling).
-- **`src/app/static-assets.ts`** — imports `installStatic`.
-- **`src/app/error-handling.ts`** — imports `installErrorHandling` (final middleware in the stack).
-- **`src/app/workers.ts`** — imports `registerWorkers`, called during `boot()` after the queue starts.
-- **`src/infrastructure/adapters/cache.ts`** — imports `startCache` (boot chain, step 3).
-- **`src/infrastructure/adapters/queue.ts`** — imports `startQueue` (boot chain, step 4).
-- **`src/infrastructure/adapters/mailer.ts`** — imports `registerTemplateDirectories` (boot chain, step 6).
-- **`src/infrastructure/adapters/logger.ts`** — imports `logger` for the start/stop log lines.
-- **`scenarios/apply.ts`** — calls `createApp` and invokes `boot()` (never `start()`) to drive real flows against its own loopback listener without binding `NODE_PORT`.
+- **`src/infrastructure/config/dotenv.ts`** — Imported first (side-effect import); ensures `.env` is loaded before the config store reads the environment.
+- **`src/app/config.ts`** — Exports `APP_CONFIG_SLICES`, passed to `registerModules` for per-module config validation.
+- **`src/app/workers.ts`** — `registerWorkers()` is called during `boot`.
+- **`src/app/boot-rendering.ts`** — `bootRendering()` is called during `boot` (files → templates → admin edits).
+- **`src/app/security.ts`** — Provides `installSecurity`, `installRequestParsing`, and `applyServerTimeouts` (applied after `listen`).
+- **`src/app/request-context.ts`** — Provides `installRequestContext` and `requestIdMiddleware`; runs before security so refused requests remain correlatable.
+- **`src/app/telemetry.ts`** — Provides `installTelemetry`, mounted after request parsing.
+- **`src/app/static-assets.ts`** — Provides `installStatic`; mounted before the rate limiter so static files don't consume request budget.
+- **`src/app/routes.ts`** — Provides `installRoutes`; mounted after all other middleware, before the error handler.
+- **`src/app/error-handling.ts`** — Provides `installErrorHandling`; final middleware in the chain.
+- **`src/infrastructure/adapters/cache.ts`** — `startCache()` called during `boot`.
+- **`src/infrastructure/adapters/queue.ts`** — `startQueue()` called during `boot`.
+- **`src/infrastructure/adapters/logger.ts`** — `logger` used for startup/shutdown log lines.
+- **`scenarios/apply.ts`** — Calls `createApp()` then `boot()` only (drives real flows against its own loopback listener; never calls `start()`).
 
 ## Notes
 
-- **Import-order contract.** `startTracing()` sits between the `dotenv` import and the `express` import. If this file is ever statically imported by the process entry (rather than dynamically imported by `cluster.ts`), the ESM/TS hoisting of `express`/`mongoose` will place them *above* the `startTracing()` call and tracing will silently miss them. The module docblock flags this as the one ordering invariant the file exists to preserve.
-- **`env` is process-wide.** Because config slices are process-level singletons, calling `createApp` twice with different `env` values means the *last* call wins. Read-at-import settings (e.g. a rate-limiter's budget) only see an override if it was installed before the first `import` of this file.
-- **`start()` is idempotent, `stop()` is memoised.** A second `start()` while already listening resolves immediately; concurrent `stop()` calls share one `shutdownPromise`. This lets a signal handler and a test's `afterAll` race safely.
-- **`refreshLocaleOverrides` is awaited for ordering, not correctness.** It never rejects; the await prevents a request between init and first refresh from seeing un-overridden copy.
-- **`NODE_HOST` default is "bind all interfaces."** The demo profile (`scenarios/run-server.ts`) sets it to loopback because its tokens are signed with a hard-coded public secret — binding 0.0.0.0 would let any LAN host mint one.
-- **`extension.install` runs before the 404 catch-all.** Mounting extra routes after `installRoutes` would be silently swallowed.
+- **OTel import ordering:** `startTracing()` must run before `express`, `http`, or `mongoose` are first imported. This only holds when the entry point (`cluster.ts`) imports this file *dynamically*; if this file were itself the static entry, the hoisted imports would run first and tracing would be silent.
+- **Idempotency:** Both `start()` and `stop()` are safe to call repeatedly. `start` checks `activeServer?.listening`; `stop` memoises its promise so concurrent callers (signal handler + test `afterAll`) share one shutdown.
+- **`env` is process-wide:** Because config slices are process-global, the last `createApp` call with an `env` option wins for all subsequent reads.
+- **This file does not listen.** `src/serve.ts` is the sole caller of `start()` in production; it wires the returned `Server` to process signals.
+- **Monolingual is valid:** If no translation provider is registered, the app logs an info line and continues; this is a supported deployment shape, not an error.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/openapi.yaml
-sha256: 784e768e6d888935cb394a711462d0f502c7617cde64459635e390a57d349b69
-generated_at: 2026-11-08T05:08:37.992259+00:00
+sha256: 9c0b91625a03ccd7fab604a9cb514aca3c4000735fcce71d1bbfeebb41b3f361
+generated_at: 2026-11-14T19:24:51.046779+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1 contract for the audit-logs module. It defines the single shop-scoped read endpoint (`GET /audit`), the shared `AuditEntryItem` row shape, and the `x-personal-data` extension that lets the account-export bundler include audit entries in `POST /account/export`. It is the machine-readable specification that `module.ts` implements and that codegen tooling consumes.
+OpenAPI 3.1.0 module contract for the **audit-logs** module. Defines the shop-facing read-only audit trail endpoint (`GET /audit`), the shared `AuditEntryItem` row schema, the GDPR Art. 15 consultation-history schemas, and declares this module's contribution to the account data export (`x-personal-data`).
 
 ## Key elements
 
-- **`tags[Audit]`** — Module tag (`x-family: Core`). Distinguishes shop-facing audit from platform-facing Observability audit.
-- **`x-personal-data.auditLog`** — Declares the audit-logs section of the account data export; the bundler merges it into `AccountExportResponse`. Removing this key removes the section from exports.
-- **`GET /audit` (`listAuditEntries`)** — Filtered, newest-first, paged read of a shop's action history. Accepts query filters: `actor`, `action`, `outcome`, `target`, `since` (exclusive lower bound), `ownOrder`, plus shared `page`/`pageSize`. Requires `read:AuditLog`.
-- **`AuditEntryItem`** — The single row shape used by `GET /audit`, `GET /observability/audit`, and the account export. Notable fields: `actorCredentialId` (API key, absent for human actors), `actorScope` (`tenant` | `platform`), `action` (dot-notation, e.g. `order.created`), `ip` (plain in shop view; HMAC digest in platform view), and an **open** `metadata` object (`additionalProperties: true`) carrying action-specific keys such as `ownOrder`, `changes`, and `changedFields`.
-- **`AuditEntriesResponse`** — Paged wrapper: `{ items: AuditEntryItem[], meta: PaginationMeta }`. No `sort` field (it is a log, always newest-first).
+- **`GET /audit`** — Paged, newest-first list of a shop's action history. Filterable by `actor`, `action`, `outcome`, `target`, `subject`, `since` (exclusive lower bound), and `ownOrder`. Requires `read:AuditLog` via bearer or API key.
+- **`AuditEntryItem`** — The single row shape used by `GET /audit`, `GET /observability/audit`, *and* the account export. Carries actor identity, scope (`tenant`/`platform`), action, outcome, optional IP/userAgent/requestId/traceId, target/subject IDs, a deliberately open `metadata` object, timestamp, and level.
+- **`AuditConsultations` / `AuditConsultation`** — GDPR Art. 15 "who looked at your data" list for the personal-data export. Deliberately omits the staff member's identity (CJEU C-579/21). Bounded by `windowDays` (= `NODE_AUDIT_RETENTION_DAYS`).
+- **`AuditEntriesResponse`** — Standard `{ items, meta }` wrapper referencing the shared `PaginationMeta`.
+- **`x-personal-data`** — Extension that the export bundler reads to splice `auditLog` and `consultations` sections into `AccountExportResponse`. Removing the module removes these sections.
+- **Tag `Audit`** (`x-family: Core`) — Groups the operation; described as the shop's action history, distinct from Observability's platform-operator audit.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — `$ref`s for `PageParam`, `PageSizeParam`, standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`), and `PaginationMeta`. All cross-module shared shapes live there; this file never re-declares them.
-- **`src/modules/audit-logs/module.ts`** — Runtime implementation that serves the operations and serializes `AuditEntryItem` via `applyAuditLogTransform` (one serializer feeds all three consumers listed above).
-- **`src/modules/audit-logs/authorization.yaml`** — Defines the `read:AuditLog` permission gate referenced in the operation's description.
-- **`src/modules/api-keys/openapi.yaml`** — The `actorCredentialId` field in `AuditEntryItem` identifies which API key performed an action; the api-keys module is the source of those credentials.
+- **`shared/contracts/openapi.root.yaml`** — `$ref`s its shared `PageParam`, `PageSizeParam` parameters, `Unauthorized`/`Forbidden`/`ValidationError` responses, and the `PaginationMeta` schema. This is the only cross-file reference in this contract.
 
 ## Notes
 
-- `metadata` is deliberately **open** (`additionalProperties: true`). A declared-properties object would be validated closed by the generated schema, so action-specific keys are kept dynamic.
-- `changes` (in `metadata`) records non-personal field diffs as `{ field: { from, to } }`; an absent side key means "was unset," never `null`. `changedFields` (string[]) records only the **names** of free-text/personal fields that changed — their values are never written to the trail, even on erasure.
-- `ip` in this shop-scoped view is the plain caller address. The platform trail (`GET /observability/audit`) returns an HMAC digest (`hmac:` + 12 hex chars) instead.
-- `since` is an **exclusive** lower bound (strictly after the given timestamp).
-- `ownOrder` filter maps to `metadata.ownOrder === true` on the entry; absent means "keep both."
+- `AuditEntryItem` is the *single* serializer target (`applyAuditLogTransform`) for three different consumers; schema changes ripple to all three.
+- `metadata` is `additionalProperties: true` on purpose — each action adds its own keys and a closed object would break the generated validator. Fixed-meaning keys documented inline: `ownOrder`, `changes` (non-personal field diffs with `{from, to}`), `changedFields` (personal/free-text fields by **name only**; values never enter the trail).
+- The platform trail returns a keyed digest for `ip` (`hmac:` + 12 hex chars); this shop-facing endpoint returns the raw caller address.
+- The `subject` filter answers "who looked at this person's data." Only staff reads of a person's record carry `subjectId`; guest orders and non-person actions do not.
+- `AuditConsultations` is bounded by retention (`windowDays`); the orders CSV export names no person.
+- `since` is a **strictly exclusive** lower bound (events *after* the timestamp, not including it).

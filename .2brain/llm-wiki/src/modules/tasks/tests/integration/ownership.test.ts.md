@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/tests/integration/ownership.test.ts
-sha256: e9c297153ec95ea55de9937250bf313ccb6e5df420f46ed2e85442512df5b61c
-generated_at: 2026-11-08T08:39:51.015306+00:00
+sha256: 589c4d87b21212d4bf47f3ec74205f033ca9fdd0ddb8d136e0b0110dca40947b
+generated_at: 2026-11-14T22:16:08.605095+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests verifying the ownership invariant for tasks: a signed-in visitor's messages are tied to their account, and the personal-data erasure hook removes exactly the set that the export hook lists. The file also covers that the `POST /tasks` endpoint records the authenticated sender's `subjectId` and that erasure scrubs staff references (assignee, note authors) from system tasks.
+Integration tests verifying two coupled guarantees: (1) a signed-in visitor's contact form submission is attributed to their account (`subjectId`), and (2) the personal-data erasure hook removes *exactly* the set of records the export (`collect`) hook lists. Covers edge cases around email verification, anonymous vs. authenticated senders, staff erasure, transactional rollback, and the collect/erase parity invariant.
 
 ## Key elements
 
-- **`collect` / `erase`** — extracted from `tasksModule.personalData[0]`; these are the export and erase hooks under test. `erase` is wrapped to throw if the module declares no hook.
-- **`ACCOUNT_ID` / `OTHER_ACCOUNT_ID`** — two fixed Mongo ObjectIds representing the subject account and a bystander account whose data must survive.
-- **`subject(emailVerified)`** — builds the `PersonalDataEraser` subject argument with a toggle for verified/unverified email.
-- **`fileTask`** — shorthand for `taskService.create` with an optional `subjectId`.
-- **`systemTask`** — shorthand for `taskRepository.create` with a `TaskSource.system` / `TaskKind.account_review` link.
-- **`storedMessages()`** — reads all tasks and returns their `message` fields sorted, used as the observable "what survived" check.
-- **`describe('POST /tasks records who sent it')`** — asserts `subjectId` is set for authenticated sends, absent for anonymous sends, and that a bad bearer token yields 401 with no row created.
-- **`describe('erasing the system tasks about a person')`** — verifies deletion of tasks whose link points at the account, and scrubbing of `assigneeId` / `notes[].authorId` when a staff member is erased.
-- **`describe('erasing a person's tasks')`** — covers: deletion by `subjectId` regardless of address; deletion by verified-email match (including tasks filed before the account existed); preservation of other accounts / unverified address matches; deletion across `open` and `spam` statuses; transactional rollback; and the collect/erase symmetry (removed set ≡ exported set).
+- **`collect`** — destructured from `tasksModule.personalData[0]`; the export hook used to enumerate a person's records.
+- **`erase`** — thin wrapper around `tasksModule.personalData[0].erase`; throws at runtime if the module omits the hook.
+- **`ACCOUNT_ID` / `OTHER_ACCOUNT_ID`** — fixed ObjectId strings for the victim and a bystander account.
+- **`subject(emailVerified)`** — builds a `PersonalDataEraser` subject object for the victim account.
+- **`fileTask(email, message, subjectId?)`** — creates a task via `taskService.create`.
+- **`storedMessages()`** — reads all task rows and returns their `message` values sorted.
+- **`systemTask(link, extra?)`** — inserts a system-level task directly via `taskRepository.create`.
+- **`FORM`** — a valid contact-form body (name, email, subject, message).
+- **`describe('POST /tasks records who sent it')`** — 3 HTTP-level tests (authenticated, anonymous, bad token).
+- **`describe('erasing the system tasks about a person')`** — 2 tests: deleting a task whose record *is* the account; nulling staff `assigneeId`/`notes[].authorId`.
+- **`describe('erasing a person's tasks')`** — 6 tests: verified vs. unverified email, cross-address, open/spam tasks, transactional rollback, and the collect/erase set-parity check.
 
 ## Relationships
 
-- **`src/modules/tasks/module.ts`** — source of `tasksModule.personalData`, from which `collect` and `erase` are destructured. The tests exercise the module's manifest, not internal functions directly.
-- **`src/modules/tasks/service.ts`** — `taskService.create` is used to file tasks the same way the HTTP endpoint would.
-- **`src/modules/tasks/repository.ts`** — `taskRepository` is used both to seed system tasks and to assert post-erase state (row existence, `assigneeId`, `notes`).
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps every erase call, testing that erasure participates in a multi-hook transaction and rolls back on failure.
-- **`src/kernel/registry.ts`** — supplies the `PersonalDataEraser` type used to type the `erase` wrapper and the `subject` argument.
-- **`src/types/index.ts`** — `TaskKind`, `TaskLinkType`, `TaskSource` enum values used when seeding system tasks.
-- **`src/modules/tasks/tests/factories.ts`** — `findAllTasks` is the quick assertion helper for the HTTP-level tests.
-- **`tests/support/http.ts`** — `api()` and `authenticateAs` drive the `POST /tasks` endpoint tests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once at module load to prepare a clean in-memory database.
+- **`src/modules/tasks/module.ts`** — source of the `personalData` manifest (`collect` + `erase` hooks under test).
+- **`src/modules/tasks/services/index.ts`** — `taskService` imported and used to create tasks through the service layer.
+- **`src/modules/tasks/repository.ts`** — `taskRepository` imported for direct data access (creating, reading, and inspecting task rows).
+- **`src/modules/tasks/tests/factories.ts`** — `findAllTasks` helper for post-HTTP assertions.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps every erasure call to verify atomicity/rollback.
+- **`src/kernel/registry.ts`** — `PersonalDataEraser` type constrains the `subject`/`session` parameters.
+- **`src/types/index.ts`** — `TaskKind`, `TaskLinkType`, `TaskSource` enums used in `systemTask`.
+- **`tests/support/http.ts`** — `api` (supertest-style) and `authenticateAs` for the HTTP-level describe block.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` called once at module top to prepare the test database.
 
 ## Notes
 
-- The file imports from `@tests/…` and `@modules/…` aliases (not relative paths); the resolver must be configured in `tsconfig` / test config.
-- `erase` is called **without** an HTTP round-trip; it invokes the module hook directly inside `withTransaction`. The collect/erase symmetry test compares the *message* arrays, not full documents.
-- The "unproven account" case (`emailVerified: false`) means the email-address match is **not** sufficient to erase—only the `subjectId` link applies. This is the subtlest invariant and is tested explicitly.
-- All assertions on stored state use `taskRepository` or `findAllTasks` directly (not the HTTP API), because the tests are validating persistence-level invariants after the erase hook runs.
+- **Email-verification semantics:** an *unverified* subject (`emailVerified: false`) is erased only by `userId` match; their email address is deliberately *not* used as an erasure key. A *verified* subject is erased by both. This distinction is exercised by the "keeps another address, another account, and the address match of an unproven account" test.
+- **Collect/erase parity:** the final test in the erasure block calls `collect` first, then `erase`, and asserts the diff of stored messages equals the exported set — the invariant documented in the file's JSDoc.
+- **Rollback test** injects a post-erase failure inside `withTransaction` and asserts the message survives, confirming erasure is not committed independently.
+- `setupTestDb()` runs at module scope (once), not in a `beforeEach` block; the test file relies on per-test data isolation via unique account IDs.
+- `storedMessages` uses `.toSorted()` (ES 2023), so the runtime must support that method.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/backorder-spill.test.ts
-sha256: bb655cfd7d50ce61086e88c363d5ab5baeb3a50d5f8aa86e63617e0d2b6478bd
-generated_at: 2026-11-08T06:05:12.666733+00:00
+sha256: 34fb59563f856208c8547b275333010c06bca5096ef6f7d172861e7e2a0385f4
+generated_at: 2026-11-14T20:08:25.851497+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the "backorder-spill" reservation path: a line whose quantity exceeds shelf stock is split between `stock` and `backorder` kinds within a single transaction, the overflow is claimed against a per-product cap, and a failure anywhere rolls the entire hold back. Validates the atomicity, partial-coverage, concurrency, and failure-rollback guarantees of `inventoryService.reserveForOrder` when `spill: true`.
+Integration test that verifies the "backorder spill" path of `inventoryService.reserveForOrder`: when a reservation line is marked `spill: true` and the shelf cannot fully cover it, the service splits the quantity into a `stock` portion and a `backorder` portion against the product's backorder cap — all inside one transaction. The seven cases cover full-shelf, partial-spill, full-backorder, refusal, multi-line rollback, concurrent racing, and mid-transaction failure rollback.
 
 ## Key elements
 
-- **`anOrderId()`** – returns a unique 24-char hex string (MongoDB-ObjectId-shaped) so holds are keyed distinctly per test.
-- **`productWith(shelf, limit)`** – creates a product via the factory, then sets a backorder limit on it; returns the product ID.
-- **`spilling(productId, quantity)`** – builds a line item object with `spill: true`.
-- **`levelOf(productId)`** – reads `reserved`, `available`, `backordered` from `stockLevelRepository` for assertions.
-- **`itemsOf(orderId)`** – reads the reservation's items (`quantity`, `kind`) from `reservationRepository`.
-- **`describe('reserving a line that may spill')`** – seven test cases:
-  1. Whole line fits on shelf → no backorder owed.
-  2. Partial shelf coverage → remainder claimed as backorder.
-  3. Empty shelf → entire line claimed as backorder.
-  4. Shelf + cap insufficient → refusal, nothing reserved.
-  5. Multi-line hold where second line fails cap → first line rolled back.
-  6. Two concurrent checkouts race for last unit → exactly one owes it.
-  7. `replaceItems` throws → hold and stock levels fully restored.
+- **`anOrderId()`** — returns a unique 24-char hex string so each hold is keyed by a syntactically valid order ID.
+- **`productWith(shelf, limit)`** — creates a product via `createProduct` with `onHand: shelf` and `allowBackorder: true`, then sets the backorder limit (or `null`) via `inventoryService.setBackorderLimit`.
+- **`spilling(productId, quantity)`** — builds a reservation line item with `spill: true as const`, the flag that distinguishes a spillable line.
+- **`levelOf(productId)`** — reads `stockLevelRepository` and returns `{ reserved, available, backordered }` for assertions.
+- **`itemsOf(orderId)`** — reads `reservationRepository.findByOrderId` and maps each item to `{ quantity, kind }`.
+- **`describe('reserving a line that may spill')`** — seven `it` blocks (see Purpose). The last two exercise failure-rollback (via `jest.spyOn` on `reservationRepository.pushItems`) and concurrent two-checkout racing (via `Promise.all`).
 
 ## Relationships
 
-- **`src/modules/inventory/services/index.ts`** – calls `inventoryService.setBackorderLimit` (setup) and `inventoryService.reserveForOrder` (the system under test).
-- **`src/modules/inventory/repository.ts`** – imports `reservationRepository` (read holds, mock `replaceItems`) and `stockLevelRepository` (assert counters).
-- **`src/modules/products/tests/factories.ts`** – uses `createProduct` to seed products with controlled `onHand` values.
-- **`tests/support/setup-test-db.ts`** – calls `setupTestDb()` at module load to provision a clean test database.
+- **`src/modules/inventory/services/index.ts`** — imports `inventoryService`; calls `reserveForOrder` and `setBackorderLimit` under test.
+- **`src/modules/inventory/repository.ts`** — imports `reservationRepository` and `stockLevelRepository`; used directly to assert post-condition state and in the spy-based failure test.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` to seed a product with a known `onHand` count.
+- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` at module top-level to provision the test database before any test runs.
 
 ## Notes
 
-- The module doc block points to `docs/modules/inventory-reservations.md#preorders` for the design rationale.
-- `anOrderId` pads with `'f'` to guarantee a 24-char string; this is a syntactic requirement, not a semantic one.
-- The concurrency test (case 6) uses `Promise.all` on two `reserveForOrder` calls; assertions accept *either* order winning the shelf unit, only checking that exactly one backorder unit is owed in total.
-- The rewrite-failure test spies on `reservationRepository.replaceItems` and asserts both stock counters and the hold document are fully restored after the rejection.
+- `setupTestDb()` is invoked as a **side-effect statement** (not inside a `beforeAll`), so the DB must be ready before the module is even imported by the runner.
+- The concurrent test (`Promise.all`) asserts that across both outcomes exactly one unit appears in `owed`, but does **not** assert *which* of the two checkouts won the shelf unit — only the aggregate.
+- The failure-rollback test spies on `reservationRepository.pushItems` specifically; if the service is refactored to call a different repository method for the write, this test will no longer inject the failure and will silently pass.
+- `anOrderId` pads to 24 hex chars (`padStart(24, 'f')`) to mimic a MongoDB ObjectId shape; the service likely validates format.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/actions.ts
-sha256: 596f2161de208604e739e8c6d4bb32ae223cbb0db2bbbf8aec7a5a0cf9f40011
-generated_at: 2026-11-08T08:48:15.022127+00:00
+sha256: e46c99de16f0a267e5add06f3d7b1411a84f72c8cabd17e4f61a13dbf42b6e32
+generated_at: 2026-11-14T22:25:53.480149+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes the `User.actions` flag block for a single account from the perspective of a single caller. It encodes, at the route level, whether the caller may update, delete, ban, or toggle purchase-hold state on the target account, factoring in the caller's ability rules, the target's staff protection, and the account's current lifecycle state. This lets a client render only the controls the server will actually accept.
+Computes the `User.actions` boolean block for a single account — the set of operations a given caller is permitted to perform against that account. It exists so that a client can render only the actions the server will actually accept, keeping the UI and the authorization boundary in lockstep. The function is pure: all external lookups (staff-role check, caller's rule set) are performed by the caller and passed in as plain values.
 
 ## Key elements
 
-- **`ActionsSubject`** — a `Pick` of `UserWire` narrowed to the fields the flag logic reads (`id`, `active`, `deletedAt`, `purgeAt`, `purchaseHold`, `purchaseHoldFlaggedAt`). Serves as the minimal input shape.
-- **`userActionsFor(user, ownerHoldsRole, caller, now?)`** — the sole runtime export. Pure: no I/O or lookups. Returns a `UserActions` object with the booleans `update`, `assignRole`, `delete`, `hardDelete`, `restore`, `setPurchaseHold`, `liftPurchaseHold`, `activate`, `deactivate`. The `now` parameter (defaults to `new Date()`) is used only to judge whether a scheduled purge has elapsed.
+- **`ActionsSubject`** — a `Pick` of `UserWire` containing only the fields the action flags depend on (`id`, `active`, `deletedAt`, `purgeAt`, `purchaseHold`, `purchaseHoldFlaggedAt`). Lets callers pass a minimal slice instead of the full wire type.
+- **`userActionsFor`** (exported const) — the sole logic entry point. Accepts an `ActionsSubject`, two booleans pre-resolved by the caller (`ownerHoldsRole`, `ownerHoldsTenantRole`), the `Caller` object, and an injectable `now` (defaulting to `new Date()` for the purge-window check). Returns a `UserActions` object with flags: `update`, `assignRole`, `revokeRole`, `delete`, `hardDelete`, `restore`, `placePurchaseHold`, `liftPurchaseHold`, `activate`, `deactivate`.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — `heldRules(caller)` resolves the caller's effective ability keys; the function then checks membership for `assign:Role`, `update:User`, `delete:User`, and `ban:User`.
-- **`src/modules/access/index.ts`** / **`src/modules/access/services/protection.ts`** — `mayChangeAccount` encodes the staff-account protection rule (a caller must hold `assign:Role` to act on a staff account). The index re-exports it; the implementation lives in `protection.ts`.
-- **`src/modules/users/model.ts`** — supplies the `UserWire` type from which `ActionsSubject` is derived.
-- **`src/modules/users/services/purchase-hold.ts`** — `hasPurchaseHoldToClear(user)` gates the `liftPurchaseHold` flag so it is only offered when a clearable hold actually exists.
-- **`src/modules/users/services/read.ts`** — the documented caller: it performs the two external lookups (owner's role, caller's keys) once per request and passes the results into `userActionsFor`.
-- **`src/types/index.ts`** / **`src/types/auth-context.ts`** — source of the `Caller` and `UserActions` types.
-- **`src/modules/users/tests/unit/actions.test.ts`** — unit tests covering the flag matrix.
+- **`src/kernel/ability.ts`** — imports `heldRules` to resolve the caller's held rule set into a `Set<string>` checked via `.has(...)`.
+- **`src/modules/access/domain/protection.ts`** / **`src/modules/access/index.ts`** — imports `mayChangeAccount` (re-exported through the access index) to gate staff-account protection; the function's `reachable` result drives every `update:*` / `delete:*` / `ban:*` flag.
+- **`src/modules/users/model.ts`** — imports `UserWire` to define `ActionsSubject`.
+- **`src/modules/users/services/purchase-hold.ts`** — imports `hasPurchaseHoldToClear` to decide whether `liftPurchaseHold` is surfaced.
+- **`src/types/auth-context.ts`** / **`src/types/index.ts`** — imports `Caller` and `UserActions` types used in the signature and return value.
+- **`src/modules/users/services/read.ts`** — upstream consumer; performs the staff-role and caller-key lookups once per request/page, then delegates to `userActionsFor`.
+- **`src/modules/users/tests/unit/actions.test.ts`** — unit-test coverage for the flag logic.
 
 ## Notes
 
-- The function is intentionally side-effect-free so it can be called multiple times per page render (e.g., for list rows) without re-querying. The two lookups it depends on are the caller's responsibility.
-- Ban-class operations (`setPurchaseHold`, `liftPurchaseHold`, `activate`, `deactivate`) all share the `ban:User` ability key; there is no separate `deactivate:User` rule.
-- `restore` is suppressed when `purgeAt` has already elapsed relative to `now`—the row is waiting on the purge job, not a human.
-- `active` defaults to `true` when the field is absent (`user.active ?? true`), so a missing field is treated as "account is live."
+- **Ban-class flags are unified.** `placePurchaseHold`, `liftPurchaseHold`, `activate`, and `deactivate` all key off `ban:User` rather than a distinct rule; an inactive account *is* a ban. Support does not hold `ban:User` separately.
+- **`assignRole` vs. `revokeRole`.** `assignRole` is the permission *grant* (anyone holding `assign:Role` passes staff protection); `revokeRole` additionally requires the target to hold a tenant-level role (`ownerHoldsTenantRole`).
+- **Restore window.** `restore` is suppressed once `purgeAt` has elapsed relative to `now` — the row is then awaiting the purge job with no rollback path.
+- **No I/O inside the function.** The two lookups (staff role, caller keys) must be resolved by the caller; this keeps `userActionsFor` trivially testable and safe to call multiple times per page.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/auth-races.test.ts
-sha256: 2c97cb0417d6e703c5577bc86c8a6637e3d3a4f982ec0ea0aff90457a548280d
-generated_at: 2026-11-08T04:34:25.783505+00:00
+sha256: d6b30f61145dcbd0b1cf9c41107ff6da0ff4fd530a5b80013ba25247ea2ef083
+generated_at: 2026-11-14T19:01:26.234023+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that fires genuinely concurrent HTTP requests (N in flight simultaneously) against the mounted account app and asserts **invariants** (e.g. "exactly one user row exists", "every issued token is distinct") rather than request orderings. It exists to prove that specific race conditions (R1, R4, R5) are closed and that a deliberate design decision—grace-period refresh-token rotation—holds under real concurrency, not just in a docblock.
+Integration tests that fire N genuinely concurrent requests (via supertest + `raceN`) at account endpoints to verify invariants under race conditions. Rather than asserting which request "won", each test checks a property that must hold regardless of scheduling: exactly one account exists, every token row survives, every refresh exchange returns a working token. The file exists because these invariants cannot be proven by serial tests or docblock assertions alone.
 
 ## Key elements
 
-- **`R1` describe** — N concurrent `POST /account/signup` for the same email. Asserts exactly one 201, N−1 409s, one surviving row, and that the survivor can still log in. Also verifies the serial duplicate path still returns 409.
-- **`R4` describe** — N concurrent `POST /account/login`. Asserts all N get 200, N distinct session rows are created (no clobbered writes), all N hashes are unique, and concurrent `DELETE /account/sessions` under contention removes every row.
-- **`issueSession()`** (local helper) — Creates a user, logs in, and returns the user plus the `__Host-session` cookie value for R5.
-- **`startAttempt()`** (local helper) — Initiates a fake-OAuth flow and returns the callback request as a thunk so multiple callbacks can overlap.
-- **OAuth describe** — N concurrent OAuth callback hits for one identity. Asserts exactly one account is created, each responder is either signed-in (302 + session cookie) or a known error redirect, and a retry successfully logs in.
-- **`R5` describe** — N concurrent `POST /account/refresh` presenting the *same* cookie. Asserts all N receive 200 and each gets a distinct rotated refresh cookie (grace-period sibling issuance).
-- **`setupTestDb()`** — Called at module top-level; resets the test database before the suite runs.
-- **`beforeAll` in OAuth describe** — Registers `fakeOAuthProvider` under the `'fake'` key.
+- **`describe('R1 — concurrent signups for one address')`** — Four tests: exactly one account created; status split is one 201 + N-1 409s; the surviving account can log in; serial duplicate still gets a friendly 409 (index is a backstop, not a replacement for the check-then-insert path).
+- **`describe('R4 — concurrent logins for one account')`** — Three tests: N concurrent logins produce N session rows (no clobbering write); each row has a distinct session hash; concurrent revocation (`DELETE /account/sessions`) leaves zero rows, not a partial survivor set.
+- **`describe('two simultaneous OAuth signups for one identity')`** — N parallel OAuth callbacks for the same identity produce exactly one account; losers get a 302 to `provider_error` or `account_exists` (never a 500); a retry after the race succeeds with a session cookie.
+- **`describe('R5 — concurrent refresh-token rotation, same cookie')`** — N simultaneous `POST /account/refresh` calls presenting the *same* cookie all return 200 with distinct new refresh tokens; no racer is rejected as "theft".
+- **`issueSession()`** (local helper) — Creates a user, logs in, extracts the `__Host-session` cookie value.
+- **`startAttempt()`** (local helper) — Begins an OAuth flow against the fake provider and returns a closure for the callback hop, so callbacks can overlap independently.
 
 ## Relationships
 
-- **`tests/support/race.ts`** — Supplies `raceN`, `RACE_SIZE`, `countStatus`, and `expectNoServerErrors`; the concurrency engine for every test in this file.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` clears/reseeds the test database.
-- **`tests/support/http.ts`** — `api()` factory for supertest requests against the mounted app.
-- **`tests/support/callers.ts`** — `testCallerContext` for request-context setup.
-- **`tests/support/cookies.ts`** — `cookieHeader` and `setCookie` helpers for reading/manipulating cookie headers in responses.
-- **`tests/support/rate-limit-harness.ts`** — `withReloadedRateLimits` guards against 429 responses interfering with race assertions.
-- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `userRepository` (used for post-race count/hash queries).
-- **`src/modules/users/repository.ts`** — Underlying Mongo repository that the unique `users_email` index and E11000 error path depend on.
-- **`src/modules/account/services/index.ts`** — `accountService` (imported; the service layer exercised by the HTTP endpoints).
-- **`src/modules/account/oauth/providers/index.ts`** — `registerOAuthProvider` to inject the fake provider for the OAuth race test.
-- **`scenarios/support/doubles/oauth-fake.ts`** — `fakeOAuthProvider`, the deterministic double used by the simultaneous-signup test.
-- **`src/modules/account/tests/factories.ts`** — `plantToken`, `sessionHashesOf`, `sessionRowsOf`, `tokenTypesOf` helpers for inspecting session/token state after a race.
+- **`tests/support/race.ts`** — Supplies `raceN`, `RACE_SIZE`, `countStatus`, `expectNoServerErrors`. `raceN` is the concurrency primitive every test in this file uses to fire N requests simultaneously.
+- **`tests/support/http.ts`** — Provides `api()`, the mounted-app supertest client used for every request.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to guarantee a clean database before any `describe` block runs.
+- **`tests/support/cookies.ts`** — `cookieHeader` and `setCookie` are used to construct/parse `Set-Cookie` values for OAuth state and session assertions.
+- **`tests/support/rate-limit-harness.ts`** — `withReloadedRateLimits` is imported (available for tests that need to reset rate-limit counters between runs).
+- **`src/modules/account/services/index.ts`** — `accountService` is imported for service-level assertions where the test needs to inspect internal state beyond HTTP.
+- **`src/modules/account/oauth/providers/index.ts`** — `registerOAuthProvider('fake', …)` wires the fake provider into the app before the OAuth race tests run.
+- **`scenarios/support/doubles/oauth-fake.ts`** — `fakeOAuthProvider` is the provider implementation registered in `beforeAll` for the OAuth race test.
+- **`src/modules/account/tests/factories.ts`** — `sessionHashesOf`, `sessionRowsOf`, `tokenTypesOf`, `plantToken` give direct database access to verify row counts and token distinctness.
+- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `userRepository` provide user creation and the repository used for count assertions.
+- **`src/modules/users/repository.ts`** — Reached indirectly through `userRepository` from the users factories; the `count({ email })` call is the core invariant check in R1 and the OAuth test.
+- **`tests/support/callers.ts`** — `testCallerContext` is imported for caller-context setup on requests.
 
 ## Notes
 
-- **Invariants over orderings:** No test asserts *which* request won. Which participant "wins" is non-deterministic (Mongod's business); the guarantee is the count/state after all N settle.
-- **Two independent guards for R1:** The `unique: true` index *and* the E11000→409 branch in `databaseErrorInterpreter` are each necessary. The index alone turns the duplicate into a 500; the interpreter alone (without the index) lets both inserts succeed.
-- **R5 is a design proof, not a bug fix:** It verifies the `NODE_TOKEN_ROTATION_GRACE_MS` grace-window behavior in `supersede` under real concurrency.
-- **Contended-every-run evidence:** The docblock records that at N=10, 20/20 runs produced at least one 409 (R1) and the read-modify-write pattern lost tokens in 20/20 runs—confirming the tests actually exercise the race rather than passing vacuously.
-- **`--runInBand` is irrelevant here:** Concurrency is achieved via `Promise.allSettled` within a single test, not via Jest's parallel workers.
-- **429 is explicitly asserted against** via `expectNoServerErrors`, so rate-limiting can never mask a pass.
+- **Two guards are load-bearing in R1.** `unique: true` on `users_email` *and* the E11000→409 branch in `databaseErrorInterpreter` are both required: the index alone turns the duplicate into a 500; the friendly-check alone lets two concurrent inserts both succeed. Removing either makes one of the R1 tests red.
+- **R5 is a proof-of-design, not a bug guard.** The grace window (`NODE_TOKEN_ROTATION_GRACE_MS`) in `account/repository.ts` `supersede` is an intentional policy; these tests lock in that policy under real concurrency.
+- **A green race test that never actually races is meaningless.** The file's docstring records observed hit rates (20/20 runs see ≥1 409 for signup; 20/20 see token loss with the old array-based sessions). If a run never contends, the test passes vacuously.
+- **`--runInBand` does not serialise the concurrency inside a test.** The N requests in a single test are genuinely parallel; Jest's parallelism model is irrelevant here.
+- **429 is explicitly asserted against** (`expectNoServerErrors`) so a rate-limit harness misconfiguration doesn't mask a real failure as a "pass".
+- The OAuth race test uses `Promise.all` to *initiate* callbacks (all start-hops complete first) and then `raceN` to fire the actual callback requests concurrently, ensuring the contention window is real.

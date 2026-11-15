@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/module.yaml
-sha256: 2c0d159010dc410c90e86d61105c5ddd1bb3242685648306d0056f7f2d610a93
-generated_at: 2026-11-08T05:08:21.607728+00:00
+sha256: 7c9fb065c56fdd901c475a3752b8bbf4e5f1cbf26a34ba2a9687feb656059852
+generated_at: 2026-11-14T19:24:36.038032+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module identity file for the audit-logs subdomain within the `foundation` group. It declares that this module *owns* the audit trail (its own read endpoint is authoritative), notes that the platform-operator's incident view lives elsewhere (observability), and records the single upstream dependency.
+Module declaration for the audit-logs domain. It declares the module's ownership boundary (the audit trail itself, including its own read endpoint), classifies it within the platform's taxonomy, and records its upstream dependency.
 
 ## Key elements
 
-- **`summary`** — One-line ownership statement: the module is the source of truth for the audit trail; the operator's read view is delegated to observability.
-- **`subdomain: generic` / `group: foundation`** — Classification within the platform's module hierarchy.
-- **`dependsOn: [access]`** — Depends on the `access` module. The inline comment clarifies *why*: access produces the refusal-reason rows that appear in the audit trail but are omitted from the operator's incident view.
-- **`noAudit`** — Exemption marker: this module is the *destination* of audit events, not a writer, so it is excluded from its own audit trail.
+- **`summary`** — States that this module owns the audit trail and its read endpoint; the platform operator's incident view is explicitly *not* here (it lives in `observability`).
+- **`subdomain: generic`** — Categorises the module under the generic subdomain.
+- **`group: foundation`** — Places the module in the foundation group.
+- **`dependsOn: [access]`** — Declares a dependency on the `access` module. The inline comment specifies the reason: the reasons written onto a refusal row originate there; the operator's incident view omits those details.
 
 ## Relationships
 
-- **`access` (upstream dependency)** — Provides refusal-reason data that the audit-logs module records. Without `access`, refusal rows would lack their reason field.
-- **`src/modules/audit-logs/openapi.yaml`** — The OpenAPI specification for this module's endpoints (including the read endpoint referenced in `summary`).
+- **`src/modules/audit-logs/openapi.yaml`** — The OpenAPI specification for this module's endpoints (the "own" read endpoint referenced in the summary). Together they define the module's public surface.
 
 ## Notes
 
-- The `noAudit` value is a convention, not a config flag consumed by code; it signals to tooling (or reviewers) that this module should not appear in its own log output.
-- The distinction between "this module's read endpoint" and "the platform operator's view in observability" is an architectural boundary: if you are looking for operator-facing incident queries, they are **not** defined here.
+- The module deliberately excludes the operator/incident view of audit events; that surface belongs to `observability`. Do not add operator-facing endpoints here.
+- The `dependsOn` entry on `access` is narrowly scoped to refusal-row reason data, not a general permission dependency.

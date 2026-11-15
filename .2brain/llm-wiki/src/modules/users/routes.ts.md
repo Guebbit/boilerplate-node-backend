@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/routes.ts
-sha256: 960584f79d4e19f95cf30c527f32cdcd2ce8170cc6d4e63e48ebf0b7eeecb2b7
-generated_at: 2026-11-08T08:48:04.413782+00:00
+sha256: b53a08008fe03717c20815a1dbe97c2c4e6afc3f134bf641db64a6a9715e17d3
+generated_at: 2026-11-14T22:25:42.226977+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the admin-only Express router for the `/users` namespace: search, CRUD, purchase-hold, activation/deactivation, and soft-delete restore. Wires each route to the correct permission gate, cache headers, upload handling, rate limiter, and the `requireFreshAuthWhen` guard for power-sensitive writes.
+Express router that mounts every admin-facing `/users` endpoint (search, CRUD, purchase-hold, activation, restore, hard-delete). It wires each route to the correct permission check, cache headers, upload handling, and conditional re-authentication so that individual controllers stay free of routing concerns.
 
 ## Key elements
 
-- **`router`** (exported) — the Express `Router` instance; all routes below are mounted on it.
-- **`changesPowers(request)`** — predicate for `requireFreshAuthWhen`. Returns `true` when the caller holds `assign:Role` *and* the payload actually changes who holds powers (role set/cleared on update, or a role named / deactivated flag on create). On update it calls `roleChangeRequested` to compare against the stored role; a read failure defaults to asking.
-- **`switchesAccount(request)`** — simpler predicate for activate/deactivate routes: asks for fresh auth only when the caller holds `assign:Role` (a role manager re-activating a deactivated admin or deactivating the last admin).
+- **`router`** – The exported Express `Router`. All user-management routes are attached here; the module exports nothing else.
+- **`changesPowers(request)`** – Guard predicate (returns `Promise<boolean>`) used by `requireFreshAuthWhen` on `POST /users`. Returns `true` only when the caller holds `assign:Role` **and** the body sets `role` or flips `active` to `false`, triggering a critical-tier fresh-session prompt.
+- **`switchesAccount(request)`** – Guard predicate for `POST /:id/activate` and `POST /:id/deactivate`. Returns `true` whenever the caller holds `assign:Role`, forcing a critical re-auth on any role-manager activation/deactivation toggle.
+- **Router-level middleware** – `getAuth` + `isAuthOrCredential` (not `isAuth`) so `sk_…` API keys are accepted; each individual route adds its own `requirePermission(…)`.
+- **Cache middleware usage** – `noStore` on `POST /search`, `privateNoCache` on `GET /` and `GET /:id`; all other responses inherit Express defaults.
+- **`routeFlag('hardDelete')`** – Attached only to `DELETE /:id/hard`, providing the hard-delete flag to the `deleteUsers` handler.
+- **`uploadLimiter` + `upload.image()`** – Rate-limit and multipart parsing applied to `POST /`, `PUT /:id`, and `PATCH /:id`.
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — source of `getAuth`, `isAuthOrCredential`, `requirePermission`, and `requireFreshAuthWhen`; every route composes these in its middleware chain.
-- **`@kernel/ability`** — `holds` is called inside both guards to test the caller's `assign:Role` ability.
-- **`@infrastructure/http/middlewares/cache`** — `noStore` applied to every POST response; `privateNoCache` on GET list and GET item so admin data never enters a shared CDN/Redis cache.
-- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` throttles the create/update/replace routes that accept multipart image uploads.
-- **`@infrastructure/http/middlewares/upload`** — `upload.image()` populates `request.body` before the controller runs; the guards read the body, so they are mounted *after* this middleware.
-- **`@infrastructure/http/middlewares/route-flag`** — `routeFlag('hardDelete')` sets the flag consumed by `deleteUsers` on the explicit `DELETE /:id/hard` path.
-- **Controllers** (`get-users`, `post-user`, `update-user`, `delete-users`, `post-user-restore`, `get-user`, `delete-purchase-hold`, `put-purchase-hold`, `post-user-activation`) — each route's terminal handler.
-- **`./services/update`** — `roleChangeRequested` is the single cross-module dependency inside the guards, used to compare the incoming role against the stored one.
+- **`src/modules/users/controllers/*`** – Each controller function (`getUsers`, `getUserItem`, `createUser`, `replaceUser`, `updateUser`, `deleteUsers`, `restoreUsers`, `postPlacePurchaseHold`, `postLiftPurchaseHold`, `postActivate`, `postDeactivate`) is the terminal handler for one or more routes defined here.
+- **`src/kernel/ability.ts`** – `holds(caller, 'assign', 'Role')` is called inside both guard predicates to decide whether fresh auth is required.
+- **`src/kernel/middlewares/authorizations.ts`** – Supplies `getAuth`, `isAuthOrCredential`, `requirePermission`, and `requireFreshAuthWhen`, which form the auth/permission chain on every route.
+- **`src/infrastructure/http/middlewares/cache.ts`** – `noStore` and `privateNoCache` set `Cache-Control` on the respective responses.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** – `uploadLimiter` throttles the three image-writing routes.
+- **`src/infrastructure/http/middlewares/upload.ts`** – Provides the `upload` middleware whose `image()` method parses multipart form data before the handler runs.
+- **`src/infrastructure/http/middlewares/route-flag.ts`** – `routeFlag('hardDelete')` supplies the flag that `deleteUsers` reads to choose hard vs. soft delete.
 
 ## Notes
 
-- **No router-wide permission key.** The comment explains that a single `requirePermission` at `router.use` would block whichever of the `manager` / `support` keys the other route needs; each route therefore declares its own key explicitly.
-- **Route ordering matters.** `POST /search` is registered before any `/:id` route so Express does not interpret `"search"` as an id parameter.
-- **`isAuthOrCredential`, not `isAuth`.** This module is reachable with an `sk_…` API key (partner sync is the documented use case); no controller reads `authContext`.
-- **Two hard-delete paths.** `DELETE /:id?hardDelete=true` and `DELETE /:id/hard` both call `deleteUsers`; the latter additionally runs `routeFlag('hardDelete')`. A second plain `DELETE` is a no-op (soft-delete is idempotent), so restore is a separate `POST /:id/restore`.
-- **Purchase-hold and activate/deactivate ride the `ban` permission**, not `delete` or `update`, because they change a buyer's standing without touching login credentials.
-- **`changesPowers` must stay after `upload.image()`.** For multipart creates the `active` flag arrives as the string `"false"`; the guard checks both `false` and `'false'` before validation coerces the type.
+- **Route order matters**: `POST /search` is declared before `GET /:id` to prevent the literal string `"search"` from being captured as an `:id` parameter.
+- **No single router-level permission key** is used. A previous design gated the whole router on one key, which blocked callers holding a different (but valid) permission. Each route now states its own `requirePermission(…)`.
+- **`changesPowers` reads `request.body`**, so it must appear *after* `upload.image()` in the middleware chain; multipart bodies are only populated once the upload middleware has run.
+- **`active` is checked as both `false` and `'false'`** because a multipart body delivers booleans as strings until the validator converts them.
+- The hard-delete endpoint (`DELETE /:id/hard`) is functionally identical to `DELETE /:id?hardDelete=true`; it exists so the destructive intent is visible in the path rather than hidden in a query string.

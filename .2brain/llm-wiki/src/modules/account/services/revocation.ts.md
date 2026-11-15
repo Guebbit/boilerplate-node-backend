@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/revocation.ts
-sha256: 70e7f1eae3b8e5419489bc87ce7eae22d6a87f1722bc4277cb331a5d9b417dd8
-generated_at: 2026-11-08T04:22:46.617682+00:00
+sha256: a788cf348e4230e47b0d06a6c2037b017ae217dd318facbd72bb25829671670e
+generated_at: 2026-11-14T18:51:02.892831+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single entry point (`revokeFor`) for ending a user's sessions. Given a `RevocationCause` from the domain table, it decides whether to bump the session epoch (the step that actually invalidates live ACCESS tokens) and then performs the housekeeping of deleting session rows and optional pending-token links. Every call-site that ends sessions funnels through this one function so the epoch/announce/delete ordering is handled in one place.
+Single entry point for ending an account's sessions. Given a `RevocationCause`, it decides (via the `REVOCATION` table in the domain) whether to bump the session epoch, what one-time tokens to purge, and whether to publish an `ACCOUNT_SESSIONS_REVOKED` event—then performs the row cleanup. The epoch bump is the operative step (it invalidates live ACCESS tokens); the deletion that follows is housekeeping.
 
 ## Key elements
 
-- **`revokeFor(cause, userId)`** — Public entry point. Runs `moveEpoch` then `settle` sequentially.
-- **`sessionsRevokedAnnouncement(userId, reason)`** — Builds the `OutboxAnnouncement` for `ACCOUNT_SESSIONS_REVOKED`; used inside the epoch transaction so subscribers (`api-keys`) hear of revocation atomically with the epoch bump.
-- **`PENDING_TOKEN_TYPES`** — Opt-in list of one-time token types a "pending" cause purges (password-reset, email-verify, email-change, MFA-challenge, deletion-restore). New token types must be added explicitly; the email-change undo token is deliberately excluded.
-- **`moveEpoch(cause, userId)`** — Bumps the session epoch via `userService.bumpSessionEpoch`. For announcing causes, the outbox row is written in the *same* transaction via `announceInTransaction`. No-ops when the cause's epoch strategy is `with-write`.
-- **`settle(cause, userId)`** — Deletes session rows (`sessionRepository.removeAll`) and, when the cause specifies it, pending token links (`removeTokens`). Failures are logged at `warn` level and **not** re-thrown.
+- **`revokeFor(cause, userId)`** (export) — The public API. Orchestrates `moveEpoch` then `settle`. Called by other services (account-deletion, logout, password, two-factor-enrollment, verification) after their own write has landed.
+- **`sessionsRevokedAnnouncement(userId, reason)`** (export) — Builds the `OutboxAnnouncement` payload for `ACCOUNT_SESSIONS_REVOKED`; consumed by subscribers (e.g. `api-keys`).
+- **`moveEpoch`** (internal) — If the cause's epoch strategy is `'with-write'`, does nothing (the caller already bumped it). Otherwise bumps via `accountUserService.bumpSessionEpoch`, and if the cause announces, does so inside the same transaction via `announceInTransaction` so subscribers see the event atomically with the epoch change.
+- **`settle`** (internal) — Deletes all session rows (`sessionRepository.removeAll`) and, when the cause marks `pending`, removes the curated set of one-time tokens via `removeTokens`. Failures are logged (`logger.warn`) but **not** re-thrown, because the epoch has already moved and the revocation is effective.
+- **`PENDING_TOKEN_TYPES`** (internal constant) — Explicit allow-list of token kinds purged by `pending` causes. New token types must be added here to be included.
 
 ## Relationships
 
-- **`domain/revocation.ts`** — Source of the `REVOCATION` table (per-cause epoch strategy, pending flag) and the `announces()` helper. This file interprets the table; the domain defines it.
-- **`kernel/outbox.ts`** — `announceInTransaction` provides the same-transaction write of the outbox row alongside the epoch bump.
-- **`events.ts`** — Supplies the `ACCOUNT_SESSIONS_REVOKED` event name and its payload shape.
-- **`repository.ts`** — `sessionRepository.removeAll(userId)` performs the row deletion in `settle`.
-- **`services/tokens.ts`** — `removeTokens(userId, PENDING_TOKEN_TYPES)` deletes the pending one-time-token links.
-- **`token-types.ts`** — Provides the five `VerificationTokenType` constants used in `PENDING_TOKEN_TYPES`.
-- **`@modules/users` (`userService`)** — `bumpSessionEpoch` is the actual epoch write.
-- **`@infrastructure/adapters/logger`** — `logger.warn` for non-fatal cleanup failures in `settle`.
-- **Callers** (reverse dependency): `account-deletion.ts`, `logout.ts`, `password.ts`, `two-factor-enrollment.ts`, `verification.ts`, `session/jwt.ts`, and `module.ts` all invoke `revokeFor` to end sessions for their respective causes.
+- **`src/modules/account/domain/revocation.ts`** — Source of truth: the `REVOCATION` table defines per-cause `epoch` strategy, `pending` flag, and `announces` predicate. This file is a pure executor of that table.
+- **`src/modules/account/events.ts`** — Provides `ACCOUNT_SESSIONS_REVOKED`, the event name stamped on the outbox row.
+- **`src/kernel/outbox.ts`** — `announceInTransaction` guarantees the event is written in the same DB transaction as the epoch bump.
+- **`src/modules/users/friends/account.ts`** — `accountUserService.bumpSessionEpoch` performs the actual epoch write (owned by the users module).
+- **`src/modules/account/services/tokens.ts`** — `removeTokens` deletes one-time verification/challenge rows.
+- **`src/modules/account/token-types.ts`** — Enumerates the token-type constants used in `PENDING_TOKEN_TYPES`.
+- **`src/modules/account/repository.ts`** — `sessionRepository.removeAll` deletes session rows.
+- **`src/infrastructure/adapters/logger.ts`** — Emits the `warn` on `settle` failure.
+- **`src/modules/account/services/account-deletion.ts`, `src/modules/account/services/logout.ts`, `src/modules/account/services/password.ts`, `src/modules/account/services/two-factor-enrollment.ts`, `src/modules/account/services/verification.ts`** — Upstream callers that invoke `revokeFor` with a specific cause after their own domain write.
 
 ## Notes
 
-- The **epoch bump is the critical step**; it is what invalidates live ACCESS tokens. Row/link deletion is cleanup that can fail without undoing the revocation.
-- Causes with `epoch: 'with-write'` (e.g., password change) bump the epoch inside their own write path and call `revokeFor` afterward purely for the housekeeping (`settle`). `moveEpoch` detects this and no-ops.
-- `settle` swallows errors (logs `warn` only). Rationale: the epoch has already moved, so the user is already logged out; a failed `DELETE` is retryable and not a user-facing failure.
-- `PENDING_TOKEN_TYPES` is intentionally **not** "all token types." Adding a new one-time token type requires an explicit opt-in here if it should be purged on revocation.
-- For announcing causes, the outbox row and the epoch bump are in the **same database transaction**; a downstream subscriber failure is handled by the relay's retry, not by this module.
+- **Opt-in purge list.** `PENDING_TOKEN_TYPES` is deliberately exhaustive. The email-change undo token is *excluded on purpose*: its flow ends sessions first, then spends the link in the restore transaction; purging it here would destroy the link before its action ran. Any new one-time token kind must be explicitly added here if it should be purged on revocation.
+- **`settle` never rejects.** A DB failure during row/token deletion is logged at `warn` level and swallowed. The epoch bump has already succeeded, so the revocation is functionally complete; the rows are stale but harmless (epoch check rejects them).
+- **`'with-write'` epoch strategy.** Causes that bump the epoch as part of their own domain write (e.g. password change) skip the `moveEpoch` step here and call `revokeFor` *after* their write, relying on it only for `settle`.
+- **Transactional announcement.** Announcing causes use `announceInTransaction` so the outbox row and the epoch bump commit atomically; a downstream subscriber failure is retried by the relay, not lost.

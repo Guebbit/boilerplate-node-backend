@@ -1,7 +1,7 @@
 ---
 source: src/modules/stock-alerts/module.yaml
-sha256: 3eb46d930e45f496ee939667ca120bbcd9c9a866b1c2936f2f75bbbdcaea22ce
-generated_at: 2026-11-08T08:28:55.469821+00:00
+sha256: 1d1ea83ee037e5b526ab2908a355a55219977f8215a9fd0be1250da8ae5671d2
+generated_at: 2026-11-14T22:03:45.534789+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **stock-alerts** feature (a buyer asks to be notified once when an unorderable product becomes orderable again). It declares the module's identity, subdomain classification, upstream dependencies, audit policy, and the single scheduled job that fulfils waiting alerts.
+Module manifest for the back-in-stock alerts feature. It declares the module's identity, organizational placement, dependencies, and the single scheduled job that fulfils waiting alerts, so the platform runner can register the module without inspecting implementation code.
 
 ## Key elements
 
-- **`summary`** — one-sentence description of the feature shown in module listings.
-- **`subdomain: supporting` / `group: shop`** — classifies the module under the shop group, supporting subdomain.
-- **`dependsOn`** — declares hard dependencies on `products` (the product announces when it is orderable again) and `users` (the email goes to the account's own address/language), each with an inline comment explaining the coupling.
-- **`noAudit`** — justification string explaining why this module skips audit logging (no money, stock, or identity changes).
-- **`jobs.sweepStockAlerts`** — the only job in the module:
-  - `name`: `sweep:stock-alerts`
-  - `schedule`: `35 * * * *` (minute 35 of every hour)
-  - `summary`: answers waiting requests for products that became orderable without an explicit write event (e.g. a passed preorder release date); idempotent because answered requests are deleted.
+- **`summary` / `subdomain` / `group`** — Identifies the module as a *supporting* feature in the *shop* group; one-sentence description of the buyer-facing flow.
+- **`dependsOn`** — Declares soft dependencies on `products` (the alert names a product; the product signals when it becomes orderable) and `users` (the notification email is sent to the account's own address and language).
+- **`jobs.sweepStockAlerts`** — The sole job. Schedule `35 * * * *` (minute 35 of every hour). Answers alerts for products that are now orderable again *without* a write event to hook onto (e.g., a preorder whose release date has passed). Idempotent: answered requests are deleted, so re-running the sweep is safe.
 
 ## Relationships
 
-- **`module.ts`** — the TypeScript implementation that this YAML manifests; the module file declares identity and dependencies, while `module.ts` provides the runtime logic (handlers, the sweep job body).
-- **`openapi.yaml`** — the OpenAPI spec for the buyer-facing endpoints (create / clear a stock alert); `module.yaml` supplies the module-level context (group, subdomain, dependencies) that the API routes belong to.
+- **`src/modules/stock-alerts/module.ts`** — The TypeScript implementation that the runner loads when this YAML registers the `sweepStockAlerts` job. The YAML names the job; the `.ts` file contains the logic.
+- **`src/modules/stock-alerts/openapi.yaml`** — The OpenAPI spec for the module's HTTP endpoints (submit an alert, cancel an alert, etc.). The YAML manifest does not define endpoints; it complements them by declaring the non-HTTP, schedule-driven side of the module.
 
 ## Notes
 
-- `noAudit` is a **justification string**, not a boolean flag. It documents *why* audit is omitted; the absence of an `audit` key elsewhere is what actually suppresses it.
-- The job relies on a **polling model** (hourly sweep) rather than event-driven triggers, because some stock changes (e.g. a release date passing) produce no write event to hook onto.
-- The inline `#` comments in `dependsOn` and in the job block are load-bearing documentation—read them when adding or removing a dependency.
+- The `dependsOn` entries are annotated with *why* the dependency exists (product signals availability; user provides email/language). These are informational comments, not enforced imports.
+- The job is deliberately scheduled rather than event-driven: the "release date passed" case produces no write to subscribe to, so a periodic sweep is the mechanism.
+- Idempotency is achieved by deleting answered records, not by marking them done.

@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/logger.ts
-sha256: 283896d5fadf4ad2d8f29036d2a65b8b8c89f598ea64a0d293eb891a893de194
-generated_at: 2026-11-08T03:20:52.654720+00:00
+sha256: 3d4b569d78b22d10e86e25c545d77492a4efbb347668f4cd0b678f128a9ef3dc
+generated_at: 2026-11-14T17:54:09.169103+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Adapter that wraps Winston behind a narrow `Logger` port so the rest of the codebase never imports Winston directly. It also owns the log-redaction policy: recursively scrubbing credential fields and applying a configurable mode (hash / redact / plain) to personal-data fields before any record reaches a transport.
+Structured-logging adapter that wraps Winston behind a narrow `Logger` port, applying credential redaction and personal-data pseudonymisation to every log record before it reaches a transport. It exists so the rest of the codebase depends on a small, swappable interface rather than Winston's full `Logger`, and so the redaction policy (sourced from a shared YAML file the PHP twin also reads) is enforced in exactly one place.
 
 ## Key elements
 
-- **`Logger`** (interface) — the port every other tier depends on. Exposes `debug`, `info`, `warn`, `error`, and a generic `log(level, message, meta?)`. Deliberately narrower than `winston.Logger` so a library swap only requires satisfying this.
-- **`LogFields`** (type) — `Record<string, unknown>`; the structured-meta shape accepted by every `Logger` method.
-- **`SENSITIVE_FIELDS`** (Set, exported) — exact field names that must never appear in clear text. Sourced from `shared/rules/log-redaction.yaml` plus every `secret: true` cookie in `cookies.generated.ts`. Compared after key normalisation.
-- **`SENSITIVE_KEY_FRAGMENTS`** (exported) — substring fragments (e.g. `token`, `secret`) that mark a key sensitive wherever it appears. Sourced from the same YAML file.
-- **`PERSONAL_FIELDS`** (Set, exported) — GDPR personal-data field names. Treated by `resolvePersonalFieldMode()` rather than blanket redaction.
-- **`resolvePersonalFieldMode()`** (exported) — reads `NODE_LOG_PERSONAL_FIELDS` via `loggingConfig()`; defaults to `'hash'`.
-- **`redactSensitiveFields()`** (exported) — recursively copies an object/array, replacing credential keys with `[REDACTED]`, applying the personal-field mode to matching string values, and guarding against circular references. Returns copies, never mutates.
-- **`serializeError()`** (exported) — flattens a non-enumerable `Error` (including `.cause`) into a plain object; omits `.stack` outside relaxed (dev/CI) environments.
-- **`redactEntries()`** (private) — per-object-entry loop that decides redact / hash / recurse for each key.
-- **`normalizeKey()`** (private) — lowercases and strips `_`/`-` so one list entry covers `new_password`, `newPassword`, `new-password`.
-- **`applyPersonalFieldMode()`** (private) — dispatches on the resolved mode; `hash` mode calls `correlationDigest()` (keyed HMAC) rather than a bare SHA-256.
+- **`Logger` (interface)** — the port every other tier imports. Four level methods (`debug`, `info`, `warn`, `error`) plus a generic `log(level, message, meta)`. Deliberately narrower than Winston's own type.
+- **`LogFields`** — `Record<string, unknown>` shape accepted as the first argument to level methods.
+- **`SENSITIVE_FIELDS` (exported `Set`)** — credential field names (from `log-redaction.yaml` + secret cookies from `cookies.generated`). Matched after `normalizeKey` so `Authorization`, `new_password`, `x-api-key`, etc. are all caught.
+- **`SENSITIVE_KEY_FRAGMENTS` (exported)** — substring fragments (e.g. `token`, `secret`) that make *any* key containing them sensitive.
+- **`normalizeKey`** — lowercases a key and strips `_` / `-` so one list entry covers camelCase, kebab-case, and snake_case spellings.
+- **`PERSONAL_FIELDS` (exported `Set`)** — personal-data field names (e.g. `email`, `ip`). Treated under a *different* policy than credentials: hashed by default rather than dropped, so logs stay correlatable.
+- **`resolvePersonalFieldMode`** — reads `NODE_LOG_PERSONAL_FIELDS` from runtime config; returns `hash` (default), `redact`, or `plain`.
+- **`applyPersonalFieldMode`** — in `hash` mode produces a keyed, truncated (`hmac:`-prefixed, 12-hex-char) digest via `correlationDigest`; in `redact` mode returns `[REDACTED]`; in `plain` mode returns the value unchanged.
+- **`redactSensitiveFields` (exported)** — recursive copy that replaces credential keys with `[REDACTED]` and applies the personal-field mode. Returns copies; never mutates.
+- **`redactCredentials` (exported)** — same walk but *skips* personal fields. Intended for stored audit rows that must keep `ip`/`email` readable yet never expose a password.
+- **`redactWalk` / `redactEntries`** — the shared recursive walker. Handles `Error` instances (non-enumerable props), circular references (`[Circular]`), arrays, and nested objects.
 
 ## Relationships
 
-- **`scenarios/support/ephemeral-mongo.ts`** — sits on `global-setup.ts`'s import chain. This file must import `../runtime/config` with a **relative** path (not the `@infrastructure` alias) because jest's `globalSetup` loads that chain outside normal module resolution.
-- **`scenarios/apply.ts`, `scenarios/run-server.ts`, `scenarios/support/demo.ts`, `scenarios/support/doubles/payments/fake.ts`, `scenarios/support/doubles/payments/levers.ts`** — consume the `Logger` interface and/or `redactSensitiveFields` for structured logging in scenario runners and test doubles.
-- **`scripts/db/*`, `scripts/ops/*`, `scripts/contracts/*`, `scripts/audit/*`** — operational and audit scripts that log through the same `Logger` port, inheriting the redaction policy automatically.
-- **`scripts/audit/compliance-rules.yaml`** — the shared YAML that `loadSharedRules` reads at import time; a malformed file fails the entire boot.
+- **`scenarios/support/ephemeral-mongo.ts`** — sits on this file's import chain when loaded as a jest `globalSetup` module. This is why the imports below are *relative* rather than using the `@infrastructure` alias (the alias resolves at `tsc`/`eslint` time but fails at jest's `globalSetup` runtime).
+- **`scenarios/apply.ts`, `scenarios/run-server.ts`, `scenarios/support/demo.ts`** — scenario entry points that consume the `Logger` port for run/apply lifecycle logging.
+- **`scenarios/support/doubles/payments/fake.ts`, `scenarios/support/doubles/payments/levers.ts`** — test doubles that log through the same port.
+- **`scenarios/support/ephemeral-mongod.ts`** — part of the same `globalSetup` import chain as `ephemeral-mongo.ts`; inherits the relative-import constraint.
+- **`scripts/db/*` (`bootstrap-access.ts`, `cache-clear.ts`, `index-sync.ts`, `sync-indexes.ts`)** — DB maintenance scripts that log through the `Logger` port.
+- **`scripts/contracts/*` (`openapi-bundle.ts`, `run-with-timeout.ts`)** — contract-checking scripts that log progress/errors via the port.
+- **`scripts/ops/prepare-job.ts`** — ops script consuming the port.
+- **`scripts/audit/compliance-rules.yaml`** — the audit-tier rule set; the `redactCredentials` path exists specifically so audit rows preserve personal fields while still scrubbing credentials, keeping the stored data consistent with what the audit rules expect.
 
 ## Notes
 
-- The relative-path import of `../runtime/config` is **load-bearing**: replacing it with the `@infrastructure` alias will compile under `tsc`/`eslint` but crash at jest's `globalSetup` runtime.
-- `SENSITIVE_FIELDS` and `PERSONAL_FIELDS` are intentionally **separate sets**. A credential must always be replaced, never hashed-and-kept. Merging them would blur that line.
-- The `hash` mode uses `correlationDigest` (a keyed HMAC truncated to 12 hex chars, prefixed `hmac:`), not a bare `sha256`. This is GDPR pseudonymisation (Art. 4(5)), not a security boundary.
-- `redactSensitiveFields` returns **copies**. Passing a live request object is safe; the original is never mutated.
-- Circular-reference detection uses a `WeakSet` passed down the call stack; only the current path counts, so shared (but non-circular) objects are handled correctly.
-- `Error` instances are serialised **before** the generic walk because their properties are non-enumerable and `JSON.stringify` would yield `{}`.
-- `stack` traces are included only when `isRelaxedEnvironment()` is true (local dev / CI) to avoid leaking absolute paths into production logs.
+- **Relative imports are intentional.** The `@infrastructure` alias would resolve at build time but breaks under jest's `globalSetup` loader (see `ephemeral-mongo.ts` comment). Do not "fix" these to aliases.
+- **Two distinct redaction policies.** `SENSITIVE_FIELDS` → always `[REDACTED]`. `PERSONAL_FIELDS` → mode-dependent (hash/redact/plain). They are separate `Set`s on purpose; merging them would let a credential be hashed-and-kept, which is the wrong default.
+- **Hashed values are keyed.** `correlationDigest` uses `pseudonymise('log', …)`, not a bare `sha256`. A bare hash of an IP or common email is brute-forceable; a keyed hash is not. The `hmac:` prefix distinguishes it from unkeyed digests in log parsers.
+- **`redactSensitiveFields` and `redactCredentials` return copies.** The caller may pass live request or Mongoose documents; mutating them would corrupt the in-flight object.
+- **`SENSITIVE_FIELDS` is a `Set`, not an array.** The recursive walk does O(1) key lookups; keeping it a `Set` is load-bearing.
+- **Redaction lists load at import time from `log-redaction.yaml`.** A malformed file throws at boot — there is no graceful fallback.

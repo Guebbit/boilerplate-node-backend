@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/guarded-steps-stay-unpublished.test.ts
-sha256: 4f4e3909f0c53f7709d10de35ad01f94cf4e7d0ae5ab4ecc3e274ccdcb609019
-generated_at: 2026-11-08T09:27:10.360615+00:00
+sha256: b50e603c9365e4af43b3f2dc855a9503117ab11bc9e27ed2b2bdb7200fedfe1a
+generated_at: 2026-11-14T23:03:32.727762+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting test that enforces an architectural rule: functions marked `@internal` in TSDoc (the "steps" that perform writes behind guard/door functions) must never be re-exported through a module's barrel (`src/modules/*/index.ts`), regardless of the re-export shape (`export *`, named re-export, renamed property, object-literal bundling, spread). It uses the TypeScript Compiler API to walk the real barrel files and a small in-memory fixture to verify detection across every carrying shape.
+Cross-cutting test that uses the TypeScript Compiler API to verify no `@internal`-tagged function ("step") escapes its module's barrel (`index.ts`), whether through direct re-export, `export *` chains, renamed aliases, object-literal bundling, spreads, or single-statement forwarding wrappers. It exists because no static tool can distinguish a "step" from a "door" by shape alone, so the convention is TSDoc `@internal` on the declaration, and this suite enforces the boundary.
 
 ## Key elements
 
-- **`barrels`** — Array of every `src/modules/*/index.ts` that exists on disk.
-- **`compilerOptions`** — Resolved from the repo's `tsconfig.json` (including `extends` and path aliases) so the compiler program resolves `@modules/*` correctly.
-- **`isTaggedInternal(declaration)`** — Returns `true` if the declaration carries a TSDoc `@internal` tag.
-- **`guardOver(program)`** — Core logic; returns `{ checker, target, leaksOf }`. Internally defines:
-  - `target` — Resolves alias symbols to their ultimate declaration.
-  - `referencedSymbol(value)` — Follows an identifier, a member expression, or a single-forward arrow/function expression to the symbol it ultimately names. A multi-statement wrapper (a "door") is *not* followed.
-  - `spreadSymbols(spread)` — Resolves `{ ...x }` to the exports of a namespace or properties of an object.
-  - `bundledSymbols(declaration)` — Collects all symbols an object literal carries by reference (shorthand, property, forwarder, spread).
-  - `leaksOf(barrel, module)` — Enumerates every `@internal` symbol a barrel publishes, as `"module: name"` strings.
-- **`KNOWN_STEPS`** — Hard-coded `['inventory','applyTransition']`, `['payments','performRefund']`, `['payments','settlePayment']`, filtered by `isDeployed`. Used by the first canary to prove the tag-reading machinery works.
-- **`taggedSteps()`** — Walks all top-level declarations under `src/modules` and returns names carrying `@internal`.
-- **`FIXTURE` / `fixtureGuard`** — Two in-memory files (a step + a barrel with five carrying shapes plus one door that must *not* be flagged), compiled via a custom `ts.CompilerHost`. Exercises `guardOver` on synthetic input.
-- **`describe` block** — Four tests: three canaries (tag reading, door resolution, fixture shapes) followed by the real assertion that no barrel in the repo leaks an `@internal` step.
+- **`barrels`** – List of every `src/modules/*/index.ts` file that exists on disk.
+- **`compilerOptions`** – Parsed from the repo's `tsconfig.json` (resolves path aliases, `extends`), with `noEmit: true`.
+- **`isTaggedInternal(declaration)`** – Returns `true` if any TSDoc tag on the declaration is `@internal`.
+- **`guardOver(program)`** – Core inspection factory. Returns `{ checker, target, leaksOf }`. Internally resolves alias chains, unwraps object-literal properties (shorthand, member-access, single-call forwarding, braced-return forwarding, spread), and flags any exported symbol whose ultimate declaration is `@internal`.
+- **`leaksOf(barrel, module)`** – Produces `"module: name"` (or `"module: obj.name"`) strings for every `@internal` symbol a barrel publishes.
+- **`KNOWN_STEPS`** – Hardcoded list of `@internal` functions (e.g. `settlePayment`, `applyTransition`) filtered by `isDeployed(module)`; used as canaries to prove the tag reader works.
+- **`taggedSteps()`** – Collects all top-level `@internal` declarations under `src/modules`.
+- **`FIXTURE` / `fixtureGuard`** – Two in-memory source files (`steps.ts`, `index.ts`) served through a custom compiler host, compiled with the repo's options. Exercises every object-literal shape that can smuggle a step out, plus one guarded door that must *not* be flagged.
+- **`describe('a step beneath a guarded door')`** – Four tests: canary (tag read), canary (known door resolves through real barrel), canary (fixture catches all five leak shapes), and the real assertion that no barrel leaks.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — Provides `isDeployed(module)`, used to filter `KNOWN_STEPS` and to skip the payments canary when the module is not present in the current checkout.
-- **`scripts/scaffold/templates-code.ts`** — Indirect: the scaffolded module code (barrels, service objects) is the surface this test audits. No direct import; the relationship is "producer of the artifact under constraint."
+- **`tests/support/paths.ts`** – Imports `isDeployed` (aliased as `@tests/paths`). Used to gate canary tests and to filter `KNOWN_STEPS` so a stripped/monorepo-partial checkout skips modules that are not present.
 
 ## Notes
 
-- The test uses the TypeScript Compiler API directly (`ts.createProgram`, `TypeChecker`) rather than shelling out to `tsc`. The fixture compiles against a hand-rolled `CompilerHost` that intercepts `fileExists`/`readFile`/`getSourceFile` to serve strings from the `FIXTURE` record.
-- The `aGuardedDoor` entry in the fixture (`Promise.resolve(id).then(…)`) is deliberately *excluded* from expected leaks: a wrapper that performs additional work (the `.then` callback) is classified as a door, not a passthrough, so `referencedSymbol` stops and does not flag it.
-- In a stripped or partial repo checkout, `isDeployed` returns `false` for absent modules, causing both the canary list and the payments-specific canary to shrink/skip silently. The final "no leaks" assertion still runs over whatever barrels are present.
-- The header comment references `scripts/audit/reachability/SKILL.md` for discovering *untagged* steps (a complementary concern) and `docs/theory/strategic-ddd.md` §5 for the design rationale.
+- The fixture uses a compiler host created via `ts.createCompilerHost` (overriding `fileExists`, `readFile`, `getSourceFile`, `directoryExists`) rather than writing temp files; the `/fixture` directory is faked in-memory.
+- `referencedSymbol` intentionally stops at wrappers that do anything beyond a single call/return (e.g. a `Promise.resolve(…).then(…)` chain). Such a wrapper is treated as a *door* guarding a step, not as the step itself, and is not followed.
+- `leaksOf` reports bundled leaks as `module: bundler.propName` (e.g. `payments: paymentService.settlePayment`), not just the bare name, so a failure message pinpoints the object property.
+- The test is cross-cutting: it has no per-module import; it reads the filesystem and compiles all barrels at once, so a single new module with a bad barrel will surface here automatically.
+- Finding an *untagged* step (missing `@internal`) is explicitly out of scope; the file's header points to `scripts/audit/reachability/SKILL.md` for that.

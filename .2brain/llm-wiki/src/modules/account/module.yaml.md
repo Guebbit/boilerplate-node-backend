@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/module.yaml
-sha256: 234e911b377338ba902ff834046c90a792ccb694aed5c667d545e425a669efc1
-generated_at: 2026-11-08T04:11:42.105627+00:00
+sha256: 86929f4500dff558325047aea6b6be79141c63c1ce88d5c3679749c0e7c133b8
+generated_at: 2026-11-14T18:38:09.921148+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module descriptor for the **account** subdomain (signup, login, sessions, 2FA, OAuth, account lifecycle). Declares the module's identity, kernel dependencies, every rate-limit budget the module enforces, and the scheduled maintenance jobs it runs. Consumed by the runtime to wire up limiters and cron; also serves as the canonical, human-readable source of *why* each budget exists.
+Module manifest for the **account** subdomain (group `foundation`). It declares the module's dependencies, its full set of rate-limit budgets, and its scheduled jobs. Everything an operator or the runtime needs to understand what the account module *is*, what it *depends on*, and what it *enforces* lives here.
 
 ## Key elements
 
-- **`summary` / `subdomain` / `group` / `dependsOn`** — Module metadata. Depends on `access` (role helpers) and `users` (the shared `User` document).
-- **`rateLimits`** — 17 named budgets, each with `name`, `namespace`, `environmentVariable`, `defaultMax`, `windowMs`, `bounds` (prose rationale), and `audited: true`. Covers:
-  - **Mail recipient** (`mail-recipient`) — per-mailbox daily cap (10/day).
-  - **Credential guessing** — five tiers: per account, per forged device cookie, per address, per address block, per signed-in session. All use a 15-minute window (900 000 ms) so the budget doesn't refill every minute.
-  - **Password-strength checks** — per caller and per address block, using the shared window.
-  - **Signup** — per email / address / block, spent by *success* (no account to key a failure on yet).
-  - **Password reset** — per email / address / block, also spent by success (`postResetRequest` always returns 200 to prevent enumeration).
-  - **MFA challenge** — guesses against one live challenge (5/10 min) and deliveries against one challenge (3/10 min).
-  - **MFA account send** — deliveries to a signed-in account (5/hour).
-- **`jobs`** — Four scheduled tasks with cron expressions and summaries:
-  - `reapInactiveAccounts` (02:05 daily) — minimise / warn / soft-delete / hard-delete inactive accounts.
-  - `reapPreviousEmails` (02:07 daily) — forget lapsed previous-email records.
-  - `reapAccountExports` (02:09 daily) — purge expired data-export artefacts.
-  - `reapScheduledDeletions` (every hour :13) — cascade-erase accounts past their deletion grace period.
+- **`summary` / `subdomain` / `group`** — Identifies the module as the "who is making this request" layer (signup, login, sessions, 2FA, OAuth, account lifecycle) under the `foundation` group.
+- **`dependsOn`** — Declares hard dependencies on `access` (roles, promotion) and `users` (the shared `User` document).
+- **`rateLimits`** — The bulk of the file. Each entry defines a named budget (`name`, `namespace`, `environmentVariable`, `defaultMax`, `windowMs`) plus a `bounds` description of *what attack it defeats* and *who it protects*. Key groups:
+  - **Mail** (`mailRecipient`) — per-mailbox daily cap; bounds the victim, not the sender.
+  - **Credential guesses** — layered budgets per identity, device cookie, address, address block, and signed-in account. All 15-minute windows; lockouts escalate (×2 per repeat, max ×8). A familiar-device cookie exempts the owner from the per-account budget.
+  - **Password-strength checks** — debounced-keystroke sized, per-address and per-block.
+  - **Signup / reset** — spent on *success* (no account key exists yet); per-identity, per-address, per-block tiers.
+  - **MFA** — `mfaChallenge` and `mfaSend` (10-min window pinned to `MFA_CHALLENGE_DELIVERED_TTL_MS`); `mfaAccountSend` (1-hour window for signed-in deliveries).
+  - All budgets are `audited: true`.
+- **`jobs`** — Four scheduled tasks (all run 02:00–02:13 server time, except the hourly deletion sweep):
+  - `reapInactiveAccounts` (02:05) — minimise / warn / soft-delete / hard-delete inactive accounts.
+  - `reapPreviousEmails` (02:07) — purge lapsed previous-email undo links.
+  - `reapAccountExports` (02:09) — delete expired data-export files and rows.
+  - `reapScheduledDeletions` (every hour :13) — cascade-delete accounts past their grace period, send goodbye mail.
 
 ## Relationships
 
-- **`shared/rules/rate-limits.yaml`** — Several budgets use `windowMs: shared`, meaning they inherit a common window value defined there rather than hard-coding one. The escalation/doubling logic referenced in the `credentialsIdentity` bounds comment also lives in `rate-limits.ts` (same shared package).
-- **`src/modules/account/asyncapi.internal.yaml`** — The `bounds` text names internal endpoints that this spec defines (e.g. `POST /account/login/2fa`, `POST /account/2fa/methods/{method}/send`), tying each budget to the concrete route it protects.
-- **`src/modules/account/module.ts`** — The TypeScript implementation that reads this YAML to register limiters, expose the `dependsOn` helpers, and schedule the four jobs at runtime.
+- **`shared/rules/rate-limits.yaml`** — Defines the shared rate-limit conventions this file references: the `shared` window value that several budgets resolve to, and the escalation/lockout semantics applied to the credential-guess budgets.
+- **`src/modules/account/asyncapi.internal.yaml`** — The internal API contract for the routes these budgets protect (login, 2FA send, password reset, signup, etc.). The `bounds` text in this file cites those route paths.
+- **`src/modules/account/module.ts`** — The TypeScript entry point that reads this manifest at module-load time to register dependencies, wire rate limiters, and schedule the `jobs` listed here.
 
 ## Notes
 
-- `windowMs: shared` is a sentinel, not a millisecond value; the actual number comes from the shared rules file. Mixing it with explicit numbers (900 000, 86 400 000, 600 000, 3 600 000) in the same `rateLimits` map is intentional.
-- Signup and reset budgets are **spent by success**, not failure, because those endpoints always return 200 to prevent account enumeration. This inverts the usual "count failures" assumption.
-- The `bounds` field is descriptive prose for operators and AI assistants; it is **not** parsed or enforced at runtime. Enforcement is purely `defaultMax` + `windowMs` + `namespace`.
-- MFA challenge windows are deliberately pinned to the longer challenge TTL (`MFA_CHALLENGE_DELIVERED_TTL_MS`) so a window can never expire before the challenge it bounds (enforced by `rate-limits.test.ts`).
-- All `environmentVariable` names use the `NODE_` prefix and are the override point for operators; `defaultMax` is the fallback.
+- `windowMs: shared` is **not** a literal millisecond count; it resolves to the shared browsing window defined in `shared/rules/rate-limits.yaml` (1 minute by default). Credential-guess budgets deliberately override this with an explicit `900000` (15 min) because a per-minute window "bounds nothing."
+- MFA challenge/send budgets are pinned to `MFA_CHALLENGE_DELIVERED_TTL_MS` (the longer of two challenge tiers) so the window never expires before the challenge it protects. A test in `rate-limits.test.ts` enforces this.
+- Signup and reset budgets are *spent by success*, not failure, because those endpoints return 204 regardless to prevent account enumeration.
+- `credentialsSignedIn` is keyed on the **account**, not the address: a stolen session that exhausts it locks out the owner's other sessions until the window ends. A fresh sign-in or password reset clears all sessions.
+- The `bounds` fields are normative design rationale, not just comments — they explain *why* each budget is sized as it is and what attack vector it targets.

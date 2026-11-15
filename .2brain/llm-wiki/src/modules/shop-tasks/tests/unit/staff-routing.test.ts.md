@@ -1,29 +1,36 @@
 ---
 source: src/modules/shop-tasks/tests/unit/staff-routing.test.ts
-sha256: 3a6ac1b08e9e12f31df541b786aafcf69feb4d6014744a3fd00e5ec4eb3bade0
-generated_at: 2026-11-08T08:19:58.981934+00:00
+sha256: 89e2d4764c5b4079eb62cf33a2eae92fc971c5762b083fbeb85755723bf4e072
+generated_at: 2026-11-14T21:59:14.473168+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/shop-tasks/tests/unit/staff-routing.test.ts
 
 ## Purpose
-Unit tests for the shop-staff routing module. Verifies that every route code references permission sets that actually exist in the kernel, that the ten summary codes resolve to the correct frontend screen paths, and that both the single-notice and digest emails render localized text with correct links in every served language.
+
+Unit tests for the shop's staff-notification routing: verifies that every declared route names real permission sets, that the ten summary codes link to the correct frontend pages, that notice/digest emails render fully translated (no leaked template keys, no raw `@` characters), and that email urgency is assigned only where staff must act immediately.
 
 ## Key elements
-- **`describe('SHOP_STAFF_ROUTES')`** — Parameterized over all 12 route codes; asserts each code's `sets` array is a subset of `PERMISSION_SETS`. Also pins the email urgency field (`'now'` vs `'none'`) for two representative codes and asserts the total code/page counts (12 / 10).
-- **`describe('summaryLinkOf')`** — Parameterized over all 10 summary codes; asserts `summaryLinkOf(code)` returns `{ template: <expected path>, parameters: {} }` using `FRONTEND_LINK_RULES.staffPages` as the source of truth.
-- **`describe('the mails')`** — Exercises `staffNoticeEmail` (single purchase-hold notice) and `staffDigestEmail` (10-line digest) in `en` and `it`. Checks: no raw i18n keys leak into subject/summary/text, links are locale-prefixed (`/{locale}/…`), digest line count equals 10, and `JSON.stringify(mail)` contains no `@` (no stray email addresses).
+
+- **`PAGES`** – alias for `FRONTEND_LINK_RULES.staffPages`; the canonical screen paths used as comparison targets for link assertions.
+- **`CODES`** – the full array of keys in `SHOP_STAFF_ROUTES` (13 entries: 3 "announced", 10 "counted").
+- **`describe('SHOP_STAFF_ROUTES')`** – validates that non-`per-notice` routes reference only sets present in `PERMISSION_SETS`; asserts email timing (`'now'` for purchase-hold / outcome-unknown, `'none'` for return-requested); asserts the 13-code / 10-summary invariant.
+- **`describe('summaryLinkOf')`** – table-driven check (10 cases) that `summaryLinkOf(code)` returns `{ template: PAGES[<key>], parameters: {} }`.
+- **`describe('the mails')`** – exercises `staffNoticeEmail` and `staffDigestEmail` in `en` and `it`: confirms rendered subject/summary contain no raw i18n key, links end with the correct locale-prefixed path, digest has exactly 10 lines each linking to its screen, and the serialized JSON contains no `@`.
 
 ## Relationships
-- **`src/modules/shop-tasks/staff-routing.ts`** — The module under test; supplies `SHOP_STAFF_ROUTES`, `SUMMARY_PAGES`, and `summaryLinkOf`.
-- **`src/modules/shop-tasks/emails.ts`** — Provides `staffDigestEmail`, used in the digest test block.
-- **`src/modules/notifications/index.ts`** — Provides `staffNoticeEmail`, used in the single-notice test block.
-- **`src/kernel/permissions.ts`** — Supplies `PERMISSION_SETS`, the authoritative list of permission-set names that routes must reference.
-- **`src/infrastructure/http/frontend-link.ts`** — Supplies `FRONTEND_LINK_RULES.staffPages` (`PAGES`), the canonical frontend screen paths used as expected values for link assertions.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Supplies `translator`, used to fetch the expected digest subject string by key.
+
+- **`src/modules/shop-tasks/staff-routing.ts`** – the module under test; supplies `SHOP_STAFF_ROUTES`, `SUMMARY_PAGES`, and `summaryLinkOf`.
+- **`src/kernel/permissions.ts`** – provides `PERMISSION_SETS`; the test cross-checks route declarations against this vocabulary.
+- **`src/infrastructure/http/frontend-link.ts`** – provides `FRONTEND_LINK_RULES` (the test reads `.staffPages` from it); the ground-truth screen paths for link and email assertions.
+- **`src/modules/notifications/index.ts`** (→ `src/modules/notifications/emails.ts`) – re-exports `staffNoticeEmail`, the per-notice mail builder tested for content and links.
+- **`src/modules/shop-tasks/emails.ts`** – exports `staffDigestEmail`, the 10-line digest builder tested for i18n completeness and per-line links.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** – exports `translator`, used to assert the digest subject matches the catalog entry for the active locale.
 
 ## Notes
-- The hard-coded counts (`toHaveLength(12)` for codes, `toHaveLength(10)` for summary pages) are a deliberate guard: adding or removing a route code without updating `SUMMARY_PAGES` (or vice-versa) will fail here.
-- The assertion `expect(JSON.stringify(mail)).not.toMatch(/@/)` is a leak-prevention check ensuring no email addresses are serialized into the mail payload.
-- `PAGES` is imported from `FRONTEND_LINK_RULES.staffPages`, not re-declared — the test and the routing module share the same source of truth for screen paths, so a path rename in the frontend-link config will shift both sides in lockstep.
+
+- `'per-notice'` is a sentinel value in `sets` meaning the route delegates permission naming to its producer; the test skips the set-existence check for those entries.
+- The locale list is hardcoded to `['en', 'it']`. Adding a new served locale requires extending it here or the digest/notice i18n coverage silently narrows.
+- The `@` assertion (`JSON.stringify(mail)`) is a guard against leaking raw email addresses into template output—intentionally broad, applied to the entire serialized mail.
+- The test imports `staffNoticeEmail` via the `@modules/notifications` barrel rather than directly from `emails.ts`, so a re-export change in that barrel will break this file.
