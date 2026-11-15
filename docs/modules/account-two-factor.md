@@ -281,7 +281,7 @@ where it sits among everything else this repo depends on.
 | `speakeasy`                         | unmaintained for years | the same RFCs, but a security-relevant dependency nobody patches  |
 | hand-rolled HMAC-SHA1 time-stepping | —                      | exactly the kind of crypto `CLAUDE.md` rules out writing by hand  |
 
-## Related pages
+## Read next
 
 - [`account`](./account.md) — the module this belongs to
 - [Sessions](./account-sessions.md) — the tokens a completed 2FA login mints, and `amr`

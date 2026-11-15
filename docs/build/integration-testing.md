@@ -1,9 +1,11 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
 # Integration Testing
+
+Are the units wired together? The real Express app and a real database, driven over HTTP.
 
 The layer that answers: **are the units actually wired together?** A service, its repository and its Mongoose model can each be individually correct (see [Unit Testing](./unit-testing.md)) while the router that's supposed to connect them to the outside world mounts the wrong middleware, or mounts nothing at all. This layer drives the real Express app, and the real database, to check the wiring and the behaviour that only shows up when the pieces meet.
 
@@ -87,7 +89,7 @@ mutation-specific cost this boundary also happens to avoid.
 | -------------------------- | ------------------------------------------------------------------------------- |
 | `npm run test:integration` | `scripts/testing/run-suite.ts integration` — sharded, in band within each shard |
 
-## Related pages
+## Read next
 
 - [Testing](./testing-and-docs.md) — suite overview
 - [Unit Testing](./unit-testing.md) — the layer below this one

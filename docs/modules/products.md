@@ -5,6 +5,8 @@ audience: [developer]
 
 # products
 
+The catalogue, its search surface and its cache.
+
 ::: tip At a glance
 **Owns** — the catalogue: what the shop sells. `onHand`/`reserved`/`available` sit on every product
 row too, but as a read-only mirror — [`inventory`](./inventory.md) owns the counters themselves.
@@ -63,6 +65,29 @@ flowchart LR
 
 <!-- module-graph:products:end -->
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
+
+<!-- permissions:start -->
+
+| Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |
+| ----------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------- |
+| `read:Product`    | `ProductStorefront` | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active, undeleted products — the storefront's own view.                     |
+| `display:Product` | `ProductDisplay`    | —       | —            | —          | ✅        | ✅          | —         | ✅       | —           | ✅      | —          | ✅         | Read every product regardless of publish state — what staff need to see a draft. |
+| `create:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a product to the catalogue.                                                  |
+| `update:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a product, including its price and its published state.                   |
+| `delete:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a product. Separate from update because the blast radius is.              |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## The story
 
 The catalogue is the model every other context conforms to rather than translates. A cart line, an
@@ -115,135 +140,21 @@ embedded a product still has to render months later. An admin can still ask for 
 means for the rest of the shop. The `active: 1, deletedAt: 1` index is what makes the public list
 cheap while the admin list can still see everything.
 
-## Product states
+## Product states {#product-states}
 
 Three independent questions, three fields. Stock is the third axis and is unchanged.
 
-| Field                 | Question                       | `false` / set means                        |
-| --------------------- | ------------------------------ | ------------------------------------------ |
-| `active`              | Can a shopper see it?          | hidden: 404 for shoppers, visible to staff |
-| `purchasable`         | Can it be bought, stock aside? | listed, "Not available right now"          |
-| `releaseDate`         | When does it ship from?        | a future date makes it a preorder          |
-| `available` (derived) | Is there stock?                | `0`: sold out                              |
-| `deletedAt`           | Was it removed?                | gone; carts and wishlists drop it          |
+Full detail: [Product states and backorder](./products-states.md#product-states).
 
-`purchasable` is ignored while `active` is `false`: hidden wins. `active` means visibility and
-nothing else, the same meaning it has on users and languages.
+### Preorder {#preorder}
 
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> OnSale: create
-    OnSale --> OffSale: purchasable = false
-    OffSale --> OnSale: purchasable = true
-    OnSale --> Hidden: active = false
-    OffSale --> Hidden: active = false
-    Hidden --> OnSale: active = true
-    Hidden --> OffSale: active = true<br/>(purchasable still false)
-    OnSale --> Removed: soft delete
-    OffSale --> Removed: soft delete
-    Hidden --> Removed: soft delete
-    Removed --> OnSale: restore (as it was)
-    Removed --> OffSale: restore (as it was)
-    Removed --> Hidden: restore (as it was)
-    Removed --> [*]: hard delete
-    note right of OnSale
-        stock decides in_stock / out_of_stock,
-        independent of these states
-    end note
-```
+See [Product states and backorder](./products-states.md#preorder).
 
-What each state does to the rest of the shop:
-
-| State    | Catalogue (shopper) | Cart / wishlist line       | New add | Checkout      | Admin order   | Placed orders |
-| -------- | ------------------- | -------------------------- | ------- | ------------- | ------------- | ------------- |
-| On sale  | listed              | `in_stock` / stock values  | ok      | stock decides | stock decides | untouched     |
-| Off sale | listed, flagged     | `unavailable`              | ok      | refused       | ok            | untouched     |
-| Hidden   | 404                 | `removed`, kept            | 404     | refused       | ok (staff)    | untouched     |
-| Removed  | 404                 | pulled (`product.deleted`) | 404     | n/a           | refused (409) | untouched     |
-
-Who sees a hidden product is settled by `display:Product` (`manager`, `warehouse`, `editor`,
-`admin`); an off-sale product is public, so `GET /products?purchasable=` is open to everyone. The
-line values and their precedence live in [cart](./cart.md#line-availability).
-
-### Preorder
-
-A preorder is a product sold before it is released. It is derived, never stored:
-
-```
-preorder = active && purchasable && releaseDate > now
-```
-
-The day the date passes the product stops being one, with no job to run (BigCommerce and
-WooCommerce auto-revert the same way). `releaseDate` is "ships from", a plain day (`YYYY-MM-DD`) on the shop's calendar at most
-one year ahead (Google's `availability_date` rule); a day in the past is accepted and means
-"released". `null` clears it; a `PUT` that omits it clears it too.
-
-**A promise date is a day, not an instant.** Staff type a day; the server stores the UTC instant of
-that day's midnight in the shop's zone (`NODE_SHOP_TIMEZONE`, published as `GET /shop` `timeZone`)
-and answers with the same day, so no client does zone maths and a screen, a mail and a day-grouping
-agree. There is no launch hour. The same holds for `restockDate`. The one-year limit and "a past
-day means released" are checked on the stored instant. Unchanged: withdrawal deadlines count UTC
-days, and an invoice prints in the zone frozen when it was issued.
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> ComingSoon: releaseDate set,<br/>purchasable = false
-    ComingSoon --> Preorder: purchasable = true
-    Preorder --> ComingSoon: purchasable = false
-    Preorder --> Preorder: releaseDate moved<br/>(product.release_date_changed)
-    Preorder --> OnSale: releaseDate passes<br/>(derived, no job)
-```
-
-| Piece                             | Owner       | What it does                                                          |
-| --------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `releaseDate`, derived `preorder` | `products`  | the catalogue fact; a preorder is never "running low"                 |
-| allowance and allocation          | `inventory` | `backorderLimit` caps how many can be ordered; receipts allocate them |
-| the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives    |
-
-A preorder's `available` (and with it `inStock`) counts the **allowance**, not the shelf: what is
-left of `backorderLimit` after the units already claimed, so the product reads sold out the day the
-allowance is full, and out of stock until staff set one (a new product's allowance is 0). The two
-numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved` by the same
-`syncStockCache` door, and never sent to a client.
-
-Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
-transaction and only when the stored instant actually changed (the payload carries the two instants). `delivery` listens: buyers who already paid
-were promised the old date, and consumer law decides what they must be told (see
-[delivery](./delivery.md#preorders-and-a-moved-date)). The edit form can [preview the
-count](./delivery.md#previewing-a-move-before-it-is-saved) first.
-
-### Industry mapping
-
-Not stored; how these states translate if a feed or JSON-LD is ever emitted.
-
-| Ours               | schema.org `availability` | Google feed           |
-| ------------------ | ------------------------- | --------------------- |
-| on sale, stock > 0 | `InStock`                 | `in_stock`            |
-| on sale, stock 0   | `OutOfStock`              | `out_of_stock`        |
-| off sale           | `OutOfStock`              | `out_of_stock`        |
-| hidden / removed   | (not emitted)             | removed from the feed |
-
-## Backorder
+## Backorder {#backorder}
 
 A released product the shop keeps selling while it is out of stock. Three fields and one derived flag:
 
-| Field            | Meaning                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `allowBackorder` | the switch, off by default                                                                     |
-| `restockDate`    | optional, at most a year ahead; without it the shop promises "within 30 days"                  |
-| `backorder`      | derived, never stored: switch on, released, visible and buyable, date not passed, cap has room |
-
-**A passed restock date reads sold out**, until staff set a new date or clear it. A missed date is
-evidence the shop lacks a basis to promise another one. Moving the date later tells the buyers who
-were promised it, by the same rule as a moved release date; a buyer promised the 30-day default is
-left alone, whatever the catalogue does.
-
-`product.buyable_again` is the signal [`stock-alerts`](./stock-alerts.md) listens to: it fires once when
-the product flips from not orderable to orderable, in the transaction of the write that caused it.
-A preorder whose release date passes is never written to, so no signal fires for it: the hourly
-`sweep:stock-alerts` job in `stock-alerts` answers its waiting requests instead.
+Full detail: [Product states and backorder](./products-states.md#backorder).
 
 ## The pipeline
 
@@ -381,31 +292,9 @@ snapshot resolver does the resolving, bound explicitly to the buyer's locale wit
 rather than read off the ambient request context, since the order being created is not always the
 buyer's own request.
 
-## Who can do what
+## Read next
 
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-The client does not re-derive these: every `Product` carries `actions { update, delete, restore, hardDelete }`, the server's answer for the caller (`update` needs `update:Product` and `update:Translation`; `restore` also needs the product to be soft-deleted). A caller answered from the cache shared with guests gets all `false`; see [Capabilities](../understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do).
-
-<!-- permissions:start -->
-
-| Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |
-| ----------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------- |
-| `read:Product`    | `ProductStorefront` | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active, undeleted products — the storefront's own view.                     |
-| `display:Product` | `ProductDisplay`    | —       | —            | —          | ✅        | ✅          | —         | ✅       | —           | ✅      | —          | ✅         | Read every product regardless of publish state — what staff need to see a draft. |
-| `create:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a product to the catalogue.                                                  |
-| `update:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a product, including its price and its published state.                   |
-| `delete:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a product. Separate from update because the blast radius is.              |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
-
-## Related pages
-
+- [Product states and backorder](./products-states.md) — a deeper page of this module
 - [Modules overview](./start.md) — the whole context map
 - [`locales`](./locales.md) — the `translations` collection and its own admin door
 - [Internationalisation](../understand/i18n.md) — the resolve/fallback mechanism translated content runs on

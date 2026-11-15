@@ -1,9 +1,11 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
 # Property-Based Testing
+
+For every input, does the rule hold? A library generates the inputs and shrinks a failure.
 
 An ordinary test says _"for this input, expect that output."_ A property says _"for **every** input, this must hold."_ The library generates the inputs, and when it finds one that breaks the rule it shrinks it to the smallest example that still fails.
 
@@ -97,7 +99,7 @@ That second one is worth internalising: a property that fails on your own assert
 
 The same technique and the same two rules apply in the paired frontend, over `boilerplate-vue-frontend/src/infrastructure/utils/formatters.ts` and `boilerplate-vue-frontend/src/infrastructure/utils/uploads.ts`.
 
-## Related pages
+## Read next
 
 - [Unit Testing](./unit-testing.md) — the example-based layer these sit beside
 - [Spec-Driven Fuzzing](./fuzz-testing.md) — the same idea aimed at HTTP endpoints instead of functions

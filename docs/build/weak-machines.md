@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -160,7 +160,7 @@ always beats the file — so a one-off run goes lower without editing anything. 
 the worker recycle limit only for more than one worker, so `JEST_WORKERS=1 npx jest <file>` runs in
 band by itself.
 
-## Related
+## Read next
 
 - [Testing — Quick Start](./testing-quickstart.md) — what to run day to day
 - [Integration Testing](./integration-testing.md) — the layer that needs this most

@@ -184,6 +184,19 @@ describe('the generated declarations', () => {
         expect(page.startsWith('---\ntype: concept\naudience: [developer]\n---\n')).toBe(true);
     });
 
+    it('shapes the docs page like a module page: lead, graph, permissions, then Read next', () => {
+        const page = contentOf(OPTIONS, 'docs/modules/field-notes.md');
+        const order = [
+            `# field-notes\n\n${OPTIONS.summary}`,
+            '<!-- module-graph:field-notes:start -->',
+            '<!-- permissions:start -->',
+            '## Read next'
+        ].map((marker) => page.indexOf(marker));
+
+        expect(order.every((at) => at >= 0)).toBe(true);
+        expect(order).toEqual(order.toSorted((a, b) => a - b));
+    });
+
     it('keeps the docs page graph markers `regenerate` fills', () => {
         const page = contentOf(OPTIONS, 'docs/modules/field-notes.md');
 

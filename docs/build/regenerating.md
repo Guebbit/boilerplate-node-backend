@@ -10,9 +10,14 @@ The cheat sheet for "I edited a fragment — now what?".
 [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains **why** the pipeline has
 this shape. This page is the short version you keep open while working.
 
+## Before you start
+
+- You edited a fragment, a shared contract file, a seed record or a probe: [I changed X — run Y](#i-changed-x-—-run-y) names which.
+- `npm install` has run once (it already generated everything once).
+
 ## The bundles, `api/` and the generated TypeScript are not committed
 
-`postinstall` runs the scenario registries, the authorization bundle, the shared-rules step and then
+`postinstall` runs the scenario registries, the authorization bundle, the permission vocabulary, the shared-rules step and then
 `contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/`npm ci`, so a
 fresh clone has all of it without anyone doing anything. The rest of this page still matters the
 moment you're actively editing a fragment mid-session — `postinstall` only fires on install, not on
@@ -21,25 +26,32 @@ a PR: `openapi.yaml`, both AsyncAPI bundles, `api/` and every `*.generated.ts`. 
 is a short list, because something reads it without our tools — see
 [The generated output and what is committed](#the-generated-output-and-what-is-committed).
 
-## The one command
+## Steps {#the-one-command}
 
 Whatever you edited — a path, a schema, an event name, a seed record, a probe:
 
-```bash
-npm run regenerate    # every generator, in dependency order, then the sync to the frontend
-```
+1. Regenerate everything, in dependency order, then sync to the frontend:
 
-Then the gate that would have caught you anyway:
+    ```bash
+    npm run regenerate
+    ```
 
-```bash
-npm run complete      # build + test + lint + format — the full gate (pre-commit runs the light gate)
-```
+2. Run the gate that would have caught you anyway:
+
+    ```bash
+    npm run complete      # build + test + lint + format — the full gate (pre-commit runs the light gate)
+    ```
 
 `regenerate` **writes**; `complete` only **verifies**. A gate failure saying `STALE` means the
 first one was not run.
 
 Over in the paired frontend the mirror command is `npm run regenerate` as well — run it after every
 pull, or the app ships a client for the previous contract.
+
+| Flag        | Effect                                                                          |
+| ----------- | ------------------------------------------------------------------------------- |
+| `--check`   | verify every step that can, write nothing (`npm run check` runs it)             |
+| `--no-sync` | regenerate without touching the paired frontend (what the pre-commit hook runs) |
 
 The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
 `sync:frontend`) and worth reaching for when you know exactly what changed. The
@@ -78,12 +90,13 @@ flowchart LR
     class B,B2,COL,G tool;
 ```
 
-The four client collections are **generated from `openapi.yaml`**, so the contract has to be
+The client collection (Bruno today) is **generated from `openapi.yaml`**, so the contract has to be
 assembled before they can be produced — and they also read `scenarios/subjects.ts`
 (`scripts/contracts/client-collections-bundle.ts` imports it) for their example ids and credentials:
 
-```
-openapi.yaml  ──►  api/  ──►  the four client collections
+```mermaid
+flowchart LR
+    O["openapi.yaml"] --> A["api/"] --> C["the client collection"]
 ```
 
 `scenarios/subjects.ts` is import-free, not generated, so nothing has to build it first. Nothing
@@ -129,8 +142,8 @@ npm run contracts:bundle -- bruno       # just contract.bruno.yml
 Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`.
 An unknown name exits with the list rather than doing nothing.
 
-The four collections are **only** produced by naming them: a full `contracts:bundle` assembles the
-authored documents and stops, because the collections are `.gitignore`d and nothing else reads them.
+The collection is **only** produced by naming it: a full `contracts:bundle` assembles the
+authored documents and stops, because the collection is `.gitignore`d and nothing else reads them.
 For the same reason `--check` refuses them outright — an uncommitted file cannot be stale.
 
 ::: tip A narrowed run really does narrow
@@ -224,7 +237,7 @@ The frontend holds **byte-identical copies** of the six shared files in `SHARED_
 (`scripts/pairing/spec-identity.ts`): the two bundles it consumes — `openapi.yaml` and
 `asyncapi.public.yaml` — `shared/authorization-keys.generated.yaml` (for its `actions:` list only) and three
 webhook-sink TLS PEMs, and never bundles or authors them. The
-four client collections stay here, and are not committed at all: they are derived from
+client collection stays here, and is not committed at all: it is derived from
 `openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
 in either repo reads them.
 
@@ -277,7 +290,7 @@ compile error. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.
 
-## Related pages
+## Read next
 
 - [OpenAPI Workflow](./openapi-workflow.md) — how to decide what the contract should say
 - [Contract Ownership & Fragmentation](./contract-fragmentation.md) — who owns what, and why the bundler never parses

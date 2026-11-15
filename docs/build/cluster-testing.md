@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -101,3 +101,9 @@ The fix is one shared in-flight connect promise (`connectPromise` in
 `src/infrastructure/adapters/managed-connection.ts`, which the limiter's Redis client goes through):
 one connection needs one `connect()`.
 Reverting it turns the first case red with `Expected 5, Received 30`.
+
+## Read next
+
+- [Broker testing](./broker-testing.md)
+- [Clustering & Shutdown](../understand/clustering.md)
+- [Testing — Quick Start](./testing-quickstart.md)

@@ -5,6 +5,8 @@ audience: [developer]
 
 # notifications
 
+A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.
+
 ::: tip At a glance
 **Owns** — the per-user inbox: one row per message, kept until its owner deletes it.
 **Depends on** — [`tasks`](./tasks.md) and [`webhooks`](./webhooks.md) for the event names it listens to; [`access`](./access.md) and [`users`](./users.md) to find who a work notice is for.
@@ -218,7 +220,7 @@ hard-delete transaction). A staff member's work notices are exported as a kind a
 | `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` | `200`   | Newest work notices kept per person |
 | `NODE_NOTIFICATIONS_STAFF_TTL_DAYS`     | `30`    | How many days a work notice lives   |
 
-## Related pages
+## Read next
 
 - [`shop-tasks`](./shop-tasks.md) — the shop's buyer messages, staff notices and daily digest
 - [`tasks`](./tasks.md) — `task.opened`, `task.overdue` and `task.assigned`

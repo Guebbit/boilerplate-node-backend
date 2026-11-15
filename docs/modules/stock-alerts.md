@@ -5,6 +5,8 @@ audience: [developer]
 
 # stock-alerts
 
+Back-in-stock requests: a signed-in buyer asks to be told once when a product they cannot order can be again.
+
 ::: tip At a glance
 **Owns** — back-in-stock requests: one row per user and product, used once, and the one mail they earn.
 **Depends on** — [`products`](./products.md), [`users`](./users.md).
@@ -106,7 +108,7 @@ finds nothing to delete and sends nothing. A mail that fails is logged; the inbo
 of its own deletion) or whose address is unverified is not mailed at all: the request is still answered and deleted, the inbox row
 stands.
 
-## Related pages
+## Read next
 
 - [`products`](./products.md) — owns the signal and the rule behind it
 - [`notifications`](./notifications.md) — writes the inbox row

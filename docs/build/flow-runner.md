@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -188,7 +188,7 @@ row:
   UNCHANGED — the shop's order history does not slide forward with every replay, only when the
   process restarts and the flows run again.
 
-## Related pages
+## Read next
 
 - [Demo profile](./demo-profile.md) — the control surface this feeds, and the named accounts
 - [Data](../reference/data.md#the-demo-records) — the file-by-file reference

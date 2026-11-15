@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -59,8 +59,8 @@ Two consequences, both non-negotiable:
 | `scripts/audit/compliance-frontend/SKILL.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                                                                                                                                                                       | `tmp/reports/audit-<run>/compliance-frontend/` |
 | `scripts/audit/reachability/SKILL.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                                                                                                                                                                    | `tmp/reports/audit-<run>/reachability/`        |
 | `scripts/audit/rate-limit-keys/SKILL.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                                                                                                                                                                    | `tmp/reports/audit-<run>/rate-limit-keys/`     |
-| `scripts/audit/test-honesty/SKILL.md`        | Which tests stay green when the behaviour they claim to check is broken? See [below](#test-honesty-a-test-is-innocent-once-it-has-failed).                                                                                                                                                                         | `tmp/reports/audit-<run>/test-honesty/`        |
-| `scripts/audit/code-shape/SKILL.md`          | Which functions, files and options don't earn their place, and which code is dead or copy-pasted? See [below](#code-shape-the-tools-count-the-model-judges).                                                                                                                                                       | `tmp/reports/audit-<run>/code-shape/`          |
+| `scripts/audit/test-honesty/SKILL.md`        | Which tests stay green when the behaviour they claim to check is broken? See [below](./ai-auditing-test-honesty.md#test-honesty-a-test-is-innocent-once-it-has-failed).                                                                                                                                            | `tmp/reports/audit-<run>/test-honesty/`        |
+| `scripts/audit/code-shape/SKILL.md`          | Which functions, files and options don't earn their place, and which code is dead or copy-pasted? See [below](./ai-auditing-code-shape.md#code-shape-the-tools-count-the-model-judges).                                                                                                                            | `tmp/reports/audit-<run>/code-shape/`          |
 | `scripts/audit/comments/SKILL.md`            | Which comments are missing, in the wrong form, wrong, bloated or unlinked, judged against [Code comments](./code-comments.md)?                                                                                                                                                                                     | `tmp/reports/audit-<run>/comments/`            |
 | `scripts/audit/ddd-drift/SKILL.md`           | Where has the code drifted from the DDD the docs describe — who drives whose state, who reads a sibling's table, where a rule lives — and which side is wrong? Mirrors `../boilerplate-vue-frontend/scripts/audit/ddd-drift/SKILL.md`; C1 (BE) and F2 (FE) are one rule seen from each side.                       | `tmp/reports/audit-<run>/ddd-drift/`           |
 | `scripts/audit/api-http/SKILL.md`            | Does the API follow the eight HTTP web standards: RFC 9110 meaning, RFC 9111 caching, RFC 9457 errors, RFC 5789 and 7396 PATCH, RFC 6585 statuses, the RateLimit and Idempotency-Key drafts? A whole-contract run splits into four parts, one helper agent each; REPORTED only, never turned into a Spectral rule. | `tmp/reports/audit-<run>/api-http/`            |
@@ -135,240 +135,25 @@ evidence: once its conclusions land as a fixed test, a commit message or a track
 has done its job. Audit paperwork that outlives the audit goes stale silently and misleads the next
 reader — the prompts are the durable asset here, not their output.
 
-## The two-pass method
+## Where the rest went
 
-`spec-drift` is the one worth understanding, because its **ordering is the method**. Spec
-drift is a test and an implementation sharing one wrong reading of the spec — CI is
-green, and the test proves only that the test agrees with the code.
+The long sections moved to sub-pages; each heading below keeps its old link target.
 
-You cannot find that by reading the test, because the test looks correct. You find it by deriving
-what the behaviour _should_ be **before** the implementation can contaminate you.
+### `code-shape`: the tools count, the model judges {#code-shape-the-tools-count-the-model-judges}
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
-flowchart TD
-    S["Pass 1 — spec only<br/><i>openapi.yaml, asyncapi.yaml, docs/</i>"] --> F["Freeze expectations<br/>to a file, one row per behaviour"]
-    F --> G["<b>Save it. Do not revise it.</b><br/>This is the control."]
-    G --> I["Pass 2 — open the code<br/>and the tests"]
-    I --> C{"spec says X<br/>code does Y<br/>test asserts Y"}
-    C -->|yes| M["MISMATCH —<br/>spec drift"]
-    C -->|no| O["OK, or spec-silent"]
+Moved: [`code-shape`: the tools count, the model judges](./ai-auditing-code-shape.md#code-shape-the-tools-count-the-model-judges).
 
-    classDef pass fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef ctrl fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
-    classDef ok fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class S,I pass;
-    class F,G ctrl;
-    class M bad;
-    class O,C ok;
-```
+### The two-pass method {#the-two-pass-method}
 
-Writing the expectations down before opening `src/` is not ceremony — it is the only thing keeping
-the control uncontaminated. Skip it and the audit degrades into a code review that agrees with
-whatever it just read.
+Moved: [The two-pass method](./ai-auditing-code-shape.md#the-two-pass-method).
 
-The freeze is procedural, not cryptographic: the file is gitignored, so nothing stops you editing it
-after the fact. Nothing except the fact that doing so destroys the only reason the second pass is
-worth running. If a pass-1 row turns out to be wrong, add a pass-2 row saying so — do not quietly
-rewrite the control to match what you just learned.
+### How to run one {#how-to-run-one}
 
-## `code-shape`: the tools count, the model judges
+Moved: [How to run one](./ai-auditing-code-shape.md#how-to-run-one).
 
-The other prompts look for gaps between prose and code. `code-shape` judges **shape**: does a
-function, a file or an option earn its place? Its rules, the names the literature gives each shape
-(Fowler's _Refactoring_, Ousterhout's _A Philosophy of Software Design_) and the legitimate reasons
-to keep one live in the prompt itself. `CLAUDE.md` § Function design states the short form.
+### `test-honesty`: a test is innocent once it has failed {#test-honesty-a-test-is-innocent-once-it-has-failed}
 
-It applies [the one rule](#the-one-rule) from the other side: three deterministic tools produce
-every candidate, and the model only judges them. A model counting call sites by text search misses
-an import alias or a re-export, and a wrong count is a wrong verdict.
-
-| Tool                                         | Lists                                                                                                     | Configured in     | Run with                           |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------- |
-| [knip](https://knip.dev)                     | unused files, exports, types and dependencies                                                             | `knip.config.ts`  | `npm run audit:unused`             |
-| [jscpd](https://github.com/kucherenko/jscpd) | copy-pasted blocks, exact and near-miss                                                                   | `.jscpd.json`     | `npm run audit:duplicates`         |
-| `generate-shallow-candidates.ts`             | small functions with 1–2 users, pass-throughs, optional parameters never passed, files with 1–2 importers | its own constants | `npm run audit:shallow -- <paths>` |
-
-The third is ours: knip and jscpd never count how often a _used_ function is called, and nothing
-maintained on npm reports these shapes. It reads the TypeScript checker, so an alias, a re-export,
-an `obj.fn` read off an object written `{ fn }` and a destructured name each count as a use of the one
-function. A recursive call is not a use. The `{ fn }` slot of an unexported, untyped local object is
-plumbing, because the later `obj.fn` read is the use; in a call argument, a returned, exported or
-interface-typed object the slot is a use, since that is how a handler is registered. A function an
-object a barrel publishes carries counts as published. A type-only re-export publishes nothing. Known
-limit: `obj.fn` on an interface-typed object is not followed, so only its `{ fn }` slot counts. No
-library does this: TypeScript's
-find-references and knip both miss `obj.fn`. It lives in `scripts/audit/code-shape/scripts/`.
-
-Two more shapes have no tool: Large Class (a service, controller or repository over 300 lines doing
-several jobs; verdict SPLIT) and Repeated Switches (two chains over the same union in different
-files; verdict LIFT). Their reviewers read the scope themselves and say how each row was found.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
-flowchart LR
-    K["knip"] --> R5["Dead Code"]
-    J["jscpd"] --> R6["Duplicated Code"]
-    S["shallow counter"] --> R1["Lazy Element"]
-    S --> R2["Middle Man"]
-    S --> R3["Classitis"]
-    S --> R4["Speculative Generality"]
-    R1 & R2 & R3 & R4 & R5 & R6 --> X{"Reconcile"}
-    X --> O["Report, one verdict<br/>per candidate"]
-    O --> H["Human decides"]
-
-    classDef tool fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef ai fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class K,J,S tool;
-    class R1,R2,R3,R4,R5,R6,X ai;
-    class O,H out;
-```
-
-Each shape gets its own reviewer, so one list never crowds out another. The reconcile step exists
-because the two directions disagree: jscpd says "extract", the shallow counter says "inline". It
-stops the report from telling you to do both to the same code.
-
-None of the three is a gate, by design:
-
-- **knip** — barrel exports are unused on purpose. `knip.config.ts` declares the barrels as entry
-  points, but a new false positive deserves a judgement, not a red build.
-- **jscpd** — two handlers can look alike because the contract makes them look alike, with no
-  shared logic to extract.
-- **The shallow counter** — a threshold cannot tell `isRefundable(order)` from `add(a, b)`.
-
-## How to run one
-
-Each prompt is an [Agent Skill](https://agentskills.io): a folder holding a `SKILL.md` an AI reads
-and follows, plus any `scripts/` it runs. The format is open, so the prompts are not tied to one
-tool:
-
-| Layer                          | What it holds                                                 |
-| ------------------------------ | ------------------------------------------------------------- |
-| `scripts/audit/<name>/`        | the prompt and its scripts — the only copy                    |
-| `.claude/skills/audit-<name>/` | a three-line pointer that registers it as a Claude Code skill |
-
-- **Claude Code** — `/audit-spec-drift orders`, `/audit-code-shape --diff`, and so on. The pointer
-  passes the argument through as the scope.
-- **Any other AI tool** — _"Read `scripts/audit/spec-drift/SKILL.md` and follow it, scope
-  `orders`."_ It needs to be able to read the repo; an audit that cannot open `openapi.yaml` has
-  nothing to compare against.
-
-The pointer's `allowed-tools` is Claude Code's permission list: it only skips prompts, and it does
-not keep an audit off the source (`Write` is allowed). What does is rule 1 of `RULES.md`: the audit
-changes nothing but its own report folder. A helper agent that is refused a file write returns the
-report as text, and the caller saves it.
-
-::: tip Which model
-Claude for `spec-drift` and `spec-gaps` — long-context reasoning over prose vs. code is exactly
-where small local models confabulate citations most confidently, and a fabricated `file:line` costs
-more than the finding was worth.
-
-`suite-bloat` is no exception: the rows that mattered came from reading the code, not from
-bookkeeping over `tmp/reports/mutation/mutation.json`.
-:::
-
-## `test-honesty`: a test is innocent once it has failed
-
-The fear it answers: tests written to raise a number, or to agree with whoever wrote the code, that
-stay green whatever the code does. Mutation testing finds some of them. This audit finds the rest,
-and names the shape — coverage padding, a mocked subject, a swallowed failure, a title that lies, an
-input that cannot discriminate.
-
-It applies [the one rule](#the-one-rule) with Stryker as the oracle. For each suspect test, the
-model writes down what the test's title claims, and the smallest `src/` change that would break
-that claim. Then it looks that change up in Stryker's report, which records per mutant which tests
-ran it and which failed on it. Stryker breaks the code in a sandbox copy; this audit never does.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
-flowchart LR
-    C["Candidate<br/><i>grep, survived mutants,<br/>git history</i>"] --> T["Break<br/>written from the title"]
-    T --> R{"Matching mutant<br/>in Stryker's report"}
-    R -->|survived this test| Y["CONFIRMED"]
-    R -->|killed by this test| N["CLEAN —<br/>dropped silently"]
-    R -->|no mutant can prove it| U["UNVERIFIED<br/>with a reason tag,<br/>not counted"]
-    T --> L{"Title names a rule<br/>src/ does not have"}
-    L -->|yes, even if CLEAN| LT["LIAR-TITLE —<br/>retitle"]
-    Y --> F["Report, with a<br/>suggested fix in prose"]
-    LT --> F
-
-    classDef ai fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    classDef gate fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef tool fill:#f3f4f6,stroke:#6b7280,color:#111827;
-    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef dead fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class C,T ai;
-    class R,L gate;
-    class Y,F,LT out;
-    class N dead;
-    class U tool;
-```
-
-Two things Stryker cannot prove get their own handling:
-
-- **A title that lies.** The test checks something real, but its title names a rule `src/` does not
-  have. There is no mutant to write, because the rule is not there, so it is a `LIAR-TITLE` finding
-  proven by reading, and it is reported even when the test is `CLEAN`.
-- **A break no mutator can make** (a changed number, a swapped constructor, a suite Stryker skips).
-  It is listed as `UNVERIFIED` with a reason tag and a diff that is never applied, and never
-  counted as a finding until someone runs it.
-
-The candidate list comes from `npm run audit:test-candidates`, a report-only ESLint config that
-flags tests whose every assertion is weak. The lint gate already refuses the other shapes (an
-`expect` under an `if`, a test with none, a duplicate title), so the audit does not repeat them.
-Its false positives are asserting helpers (`refused(...)`) and supertest's `.expect(200)`.
-
-The break comes from the title, never from the assertions. One chosen by reading the assertions
-proves only that they agree with themselves.
-
-Like every prompt here it only reports. The fix is a human's, written from the report's suggested
-fix and the spec it cites.
-
-## Reading the output
-
-### `spec-drift`'s verdicts
-
-The verdict table lives in `scripts/audit/spec-drift/SKILL.md` (`## Verdicts`): one home.
-Only `MISMATCH-CODE` and `TAUTOLOGY` are findings; `SPEC-CONFLICT` says prose is the stale layer.
-
-`TAUTOLOGY` is the quiet one. `expect(f(x)).toEqual(g(x))` where `g` is a sibling export, or a
-`Record<Enum, …>` whose totality TypeScript already enforces, is a test that cannot fail and
-therefore proves nothing. Stryker finds some of these; the audit finds the rest.
-
-### `compliance`'s verdicts
-
-`compliance-backend` and `compliance-frontend` share one registry
-(`scripts/audit/compliance-rules.yaml`) but use a different four verdicts, since a compliance rule
-either applies here or it doesn't — there is no code/test pair to compare:
-
-| Verdict              | Means                                                                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both`-responsibility rule broken on this side alone.                                              |
-| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                                                         |
-| **NOT-APPLICABLE**   | The rule's `applies_when` condition is false for this app today, with the reason cited.                                                                             |
-| **NEEDS-BOTH-SIDES** | A `both`-responsibility rule whose own-side half is fine but whose closure depends on the paired prompt's report — see the other side by rule `id`, never restated. |
-
-Every rule in scope gets exactly one row, `NOT-APPLICABLE` included — an audit that only reports
-violations can't be told apart from one that silently skipped half the registry.
-
-## Does it work?
-
-The first batch ran over six scopes — order lifecycle and money, inventory reservations, cart and
-checkout, payments, account and auth, and the per-operation `security:` blocks. Expectations were
-frozen and committed first, one commit per scope.
-
-It produced fixes, not a report nobody read: an order accepting a same-value `paid` write that
-should have 409'd, a shipping-absence case, account endpoints answering the wrong status, an
-admin-delete audit action that conflated hard and soft deletes, and a duplicated union-registration
-check. One of its own rollups was wrong and got corrected too, which is the honest version of this
-story.
-
-Run them before a refactor, after a contract change, or when a module's docs and tests have drifted
-apart — not on a schedule.
-
----
+Moved: [`test-honesty`: a test is innocent once it has failed](./ai-auditing-test-honesty.md#test-honesty-a-test-is-innocent-once-it-has-failed).
 
 ## Footnote: the tools we evaluated, and why none were adopted
 
@@ -393,7 +178,10 @@ Two notes worth keeping, because they outlived the tools:
   Meta run the idea in production internally, but it is not a product. If that changes, the
   prompt files here are the thing that would be replaced.
 
-## Related
+## Read next
+
+- [AI auditing: the two-pass method and code-shape](./ai-auditing-code-shape.md)
+- [AI auditing: test-honesty and reading the output](./ai-auditing-test-honesty.md)
 
 - [Mutation Testing](./mutation-testing.md) — the deterministic instrument this one complements
 - [Coverage & Confidence](./coverage-and-confidence.md) — what a score does and does not mean

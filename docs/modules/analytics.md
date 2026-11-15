@@ -5,6 +5,8 @@ audience: [developer]
 
 # analytics
 
+The relay a browser uses to report browsing events (a product viewed, a search made) once the visitor has agreed to be measured.
+
 ::: tip At a glance
 **Owns** — `POST /analytics/events`: the relay a browser uses to report the browsing events the
 server cannot see (a product page opened, a search made).
@@ -64,7 +66,7 @@ facts the server decides, and a relay for them would let a console forge them.
 **Rate limits.** Only the global burst brake (`app/security.ts`): the route writes nothing, and
 without consent it does no work beyond parsing the body.
 
-## Related pages
+## Read next
 
 - [Modules overview](./start.md) — the whole context map
 - [Product analytics](../understand/analytics.md) — the port, consent, and who sends which event

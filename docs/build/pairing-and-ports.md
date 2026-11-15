@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [developer]
 ---
 
@@ -176,7 +176,7 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-Seven files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+Eight files are on it, and the rule is one line: **produced here, copied there.** Each one is an
 _output_ on the frontend's side, which is what makes a fork answerable — there is one correct
 resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
 this list is worst at describing and best at catching: the next regeneration reverts it, and the
@@ -262,3 +262,9 @@ rejects it until that origin is added.
 The shipped `.env` is a development configuration: permissive CORS, seeded demo credentials, and
 datastores with default passwords. Do not do this on a public or shared network.
 :::
+
+## Read next
+
+- [Getting Started](./run-locally.md)
+- [Start a New Project](./new-project.md)
+- [Docker & Podman](./docker-and-podman.md)

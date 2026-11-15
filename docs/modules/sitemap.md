@@ -5,6 +5,8 @@ audience: [developer]
 
 # sitemap
 
+sitemap.xml for search engines: the shop pages and every public product, once per language.
+
 ::: tip At a glance
 **Owns** — `sitemap.xml`: the shop pages and every public product, once per language, built on request.
 **Depends on** — [`products`](./products.md). The languages come from the API's own served list (`@infrastructure/i18n`), so it works with no `locales` module (the deployed dictionaries plus the fallback language).
@@ -110,7 +112,7 @@ A product page's path is `products`' `NODE_FRONTEND_LINK_PRODUCT` (`productPageP
 - No image or news sitemaps, and no ping endpoint (Google retired sitemap ping in 2023).
 - No category pages: categories are tags on a product, not pages.
 
-## Related pages
+## Read next
 
 - [`products`](./products.md) — owns the catalogue the product files read
 - [`locales`](./locales.md) — switching a language on or off changes which languages are served

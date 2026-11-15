@@ -5,6 +5,8 @@ audience: [developer]
 
 # observability
 
+Health, metrics, the platform operator's audit read and the SSE stream.
+
 ::: tip At a glance
 **Owns** — the operator-facing surface: health, the metrics overview, the live SSE stream, the scrape endpoint, and the audit read.
 **Depends on** — [`audit-logs`](./audit-logs.md), whose collection one of its routes reads.
@@ -35,6 +37,23 @@ flowchart LR
 ```
 
 <!-- module-graph:observability:end -->
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule                         | Set                    | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                     |
+| ---------------------------- | ---------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------- |
+| `read:ObservabilitySnapshot` | `ObservabilityDisplay` | —       | —            | —          | —         | —           | —         | —        | —           | —       | ✅         | —          | Read health, metrics overview and the operational audit. |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
 
 ## The story
 
@@ -102,24 +121,7 @@ flowchart LR
     class AD,RT ui;
 ```
 
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-<!-- permissions:start -->
-
-| Rule                         | Set                    | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                     |
-| ---------------------------- | ---------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------- |
-| `read:ObservabilitySnapshot` | `ObservabilityDisplay` | —       | —            | —          | —         | —           | —         | —        | —           | —       | ✅         | —          | Read health, metrics overview and the operational audit. |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
-
-## Related pages
+## Read next
 
 - [`audit-logs`](./audit-logs.md) — the collection behind the audit route
 - [The Observability Layer](../understand/observability-layer.md) — what is measured and where

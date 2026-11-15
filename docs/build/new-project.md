@@ -15,7 +15,15 @@ the foundation is a later, bigger piece of work;
 today, forking and stripping is the whole story.
 :::
 
-## Right after you clone: the GitHub settings
+## Before you start
+
+- A clone of this repository, or a copy made from the template.
+- Admin rights on the new GitHub repository (for the settings in step 1).
+- A working local stack: [Getting Started](./run-locally.md).
+
+## Steps
+
+### 1 · Right after you clone: the GitHub settings {#right-after-you-clone-the-github-settings}
 
 A clone or a template copy takes the files and **none of the repository settings**. The protections
 below live in GitHub, outside git, so a fresh copy starts with all of them off. Switch them on once,
@@ -51,19 +59,7 @@ settings on your behalf would need a token with admin rights on your repository.
 unless the repository variable `SPEC_SIBLING_REPO` names another; a private frontend also needs a
 `SPEC_SIBLING_TOKEN` secret that can read it. A copy with no paired frontend deletes that job.
 
-## What "the demo" actually is
-
-Every module under `src/modules/` carries a `group` in its own `module.yaml` —
-`foundation` or `shop` (`docs/understand/strategic-ddd.md#4a-foundation-and-shop`). `foundation` ships
-with every deployment whatever the project becomes; `shop` is the pet-supply e-commerce domain this
-boilerplate demos itself with, and nothing else may depend on it —
-`.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on that, so "is the
-demo actually removable" is an enforced fact, not a claim.
-
-[The module index](../modules/start.md#every-module) lists every module under its group. It is
-generated from each module's own `module.yaml`, so it is never behind.
-
-## Removing it
+### 2 · Removing it {#removing-it}
 
 ```mermaid
 flowchart TD
@@ -120,6 +116,35 @@ branch, or after committing whatever you had in progress. It touches:
   the default scenario becomes `blank` once there is no catalogue left to make `shop` the more
   interesting choice.
 
+### 3 · Next: build your own domain
+
+Once `demo:remove` leaves you with a green `npm run complete`,
+the remaining `foundation` modules are what every deployment of this boilerplate keeps, whatever it
+becomes next.
+
+**The module to copy is `example`.** It is written for exactly that: it has its own group, so the
+strip leaves it, it depends only on `users`, and it carries every common capability, each in its own
+files. It is only an example, so delete it once you have your own domain. Do not start from a shop
+module: the strip deletes it, and its dependencies with it.
+
+**Or let the scaffolder start it for you.** `npm run scaffold:module -- <name>` writes a working
+`example`-shaped module, its docs page and its registry line, then regenerates —
+[Module scaffolder](./module-scaffolder.md) says what it writes and what it leaves to you.
+`docs/understand/modules.md#the-module-template` is the shape a new module follows; `docs/build/module-lifecycle.md#adding-a-module` walks through adding one from
+nothing, the same way this page walks through removing one.
+
+## What "the demo" actually is
+
+Every module under `src/modules/` carries a `group` in its own `module.yaml` —
+`foundation` or `shop` (`docs/understand/strategic-ddd.md#4a-foundation-and-shop`). `foundation` ships
+with every deployment whatever the project becomes; `shop` is the pet-supply e-commerce domain this
+boilerplate demos itself with, and nothing else may depend on it —
+`.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on that, so "is the
+demo actually removable" is an enforced fact, not a claim.
+
+[The module index](../modules/start.md#every-module) lists every module under its group. It is
+generated from each module's own `module.yaml`, so it is never behind.
+
 ## What it does not do
 
 After `demo:remove`, `regenerate`, `ts-check` and the cross-cutting suite pass (and so does the
@@ -140,24 +165,7 @@ still `Boilerplate API`: change it, then `npm run regenerate`.
 `docs/build/module-lifecycle.md`'s "residue" is what is left over: a test that names a removed
 module in a string or a table rather than an import. `ts-check` and the suites name each one.
 
-## Next: build your own domain
-
-Once `demo:remove` leaves you with a green `npm run complete`,
-the remaining `foundation` modules are what every deployment of this boilerplate keeps, whatever it
-becomes next.
-
-**The module to copy is `example`.** It is written for exactly that: it has its own group, so the
-strip leaves it, it depends only on `users`, and it carries every common capability, each in its own
-files. It is only an example, so delete it once you have your own domain. Do not start from a shop
-module: the strip deletes it, and its dependencies with it.
-
-**Or let the scaffolder start it for you.** `npm run scaffold:module -- <name>` writes a working
-`example`-shaped module, its docs page and its registry line, then regenerates —
-[Module scaffolder](./module-scaffolder.md) says what it writes and what it leaves to you.
-`docs/understand/modules.md#the-module-template` is the shape a new module follows; `docs/build/module-lifecycle.md#adding-a-module` walks through adding one from
-nothing, the same way this page walks through removing one.
-
-## Related pages
+## Read next
 
 - [Foundation and shop](../understand/strategic-ddd.md#4a-foundation-and-shop) — the `group` field, and
   why it is enforced rather than aspirational
