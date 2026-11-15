@@ -39,7 +39,21 @@ export default withMermaid(
                             { text: 'The moderator', link: '/use-the-shop/moderator' },
                             {
                                 text: 'When something goes wrong',
-                                link: '/use-the-shop/when-something-goes-wrong'
+                                link: '/use-the-shop/when-something-goes-wrong',
+                                items: [
+                                    {
+                                        text: 'Refunds',
+                                        link: '/use-the-shop/when-something-goes-wrong-refunds'
+                                    },
+                                    {
+                                        text: 'Returns',
+                                        link: '/use-the-shop/when-something-goes-wrong-returns'
+                                    },
+                                    {
+                                        text: 'Orders and delivery',
+                                        link: '/use-the-shop/when-something-goes-wrong-orders-and-delivery'
+                                    }
+                                ]
                             },
                             { text: 'What this demo models', link: '/use-the-shop/scope' },
                             {

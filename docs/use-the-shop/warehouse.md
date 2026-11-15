@@ -12,7 +12,7 @@ Sign in as the warehouse account (see [Test it yourself](./test-me.md)).
 <!-- IMG: the warehouse pick list · the pick list with orders ready to ship -->
 
 ::: tip When something goes wrong
-Odd cases that land on you: [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived).
+Odd cases that land on you: [fewer on the shelf than promised](./when-something-goes-wrong-orders-and-delivery.md#fewer-on-shelf), [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing), [shipped but not arrived](./when-something-goes-wrong-orders-and-delivery.md#shipped-not-arrived).
 :::
 
 ## The one rule
@@ -190,7 +190,7 @@ own report. → [Delivery](../modules/delivery.md)
 ::: tip A parcel that will not arrive
 If the carrier loses a parcel, or it is damaged on the way, press **Report lost / damaged** on the
 shipment instead of creating a new order: the units open again on the same order and you ship them with
-the normal button. → [A parcel lost or damaged](./when-something-goes-wrong.md#lost-parcel)
+the normal button. → [A parcel lost or damaged](./when-something-goes-wrong-orders-and-delivery.md#lost-parcel)
 :::
 
 ::: tip When the ordinary sequence does not fit
@@ -215,7 +215,7 @@ Dispose of the broken item or repair it. If it becomes sellable, record it with 
 ::: warning The shop pays for a lost parcel
 A buyer who posted the goods and shows proof of posting is owed the refund even if the parcel never
 arrives. Receive the return with a restock count of 0 on every line (see
-[The return parcel was lost](./when-something-goes-wrong.md#return-parcel-lost)).
+[The return parcel was lost](./when-something-goes-wrong-returns.md#return-parcel-lost)).
 :::
 
 → [Returns](../modules/returns.md#what-the-customer-gets-back)

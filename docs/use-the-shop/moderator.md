@@ -12,7 +12,7 @@ Sign in as the moderator, a real, narrower account, not the owner's. The passwor
 on [Test it yourself](./test-me.md).
 
 ::: tip When something goes wrong
-Odd cases that land on you: [a return the buyer never sent](./when-something-goes-wrong.md#buyer-never-sent-it), [a decline made by mistake](./support.md#declined-by-mistake), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong.md#late-transfer).
+Odd cases that land on you: [a return the buyer never sent](./when-something-goes-wrong-returns.md#buyer-never-sent-it), [a decline made by mistake](./support.md#declined-by-mistake), [a refund owed by hand](./when-something-goes-wrong-refunds.md#refund-owed-by-hand), [a transfer for a cancelled order](./when-something-goes-wrong-orders-and-delivery.md#late-transfer).
 :::
 
 Every role's full rights are in [the role table](./start.md#what-that-actually-grants).

@@ -12,7 +12,7 @@ Sign in as the shop manager, or as the admin, who can do this job too. The accou
 <!-- IMG: the shop manager's dashboard after signing in · the shop manager's dashboard with orders and the catalogue -->
 
 ::: tip When something goes wrong
-Odd cases that land on you: [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand).
+Odd cases that land on you: [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing), [fewer on the shelf than promised](./when-something-goes-wrong-orders-and-delivery.md#fewer-on-shelf), [a refund owed by hand](./when-something-goes-wrong-refunds.md#refund-owed-by-hand).
 :::
 
 ## An order's life

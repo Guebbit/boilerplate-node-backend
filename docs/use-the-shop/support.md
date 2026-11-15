@@ -12,7 +12,7 @@ Sign in as the support account (see [Test it yourself](./test-me.md)).
 <!-- IMG: the support desk's task list · the list of contact-form messages with owners and due dates -->
 
 ::: tip When something goes wrong
-When a buyer asks where their parcel is: [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing).
+When a buyer asks where their parcel is: [shipped but not arrived](./when-something-goes-wrong-orders-and-delivery.md#shipped-not-arrived), [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing).
 :::
 
 ## The contact form
