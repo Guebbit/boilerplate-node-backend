@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [developer]
 ---
 

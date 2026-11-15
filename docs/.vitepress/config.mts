@@ -215,6 +215,7 @@ export default withMermaid(
                         text: 'Change it',
                         items: [
                             { text: 'Adding & removing a module', link: '/build/module-lifecycle' },
+                            { text: 'Removing a module', link: '/build/module-removal' },
                             { text: 'Module scaffolder', link: '/build/module-scaffolder' },
                             { text: 'API', link: '/build/api-contracts' },
                             { text: 'OpenAPI Workflow', link: '/build/openapi-workflow' },
