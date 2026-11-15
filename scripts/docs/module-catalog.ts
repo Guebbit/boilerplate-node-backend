@@ -78,6 +78,20 @@ const titleOf = (file: string, fallback: string): string =>
     /^# (.+)$/m.exec(readFileSync(file, 'utf8'))?.[1] ?? fallback;
 
 /**
+ * The module a page belongs to: the LONGEST module name the stem starts with, so
+ * `shop-tasks-notices` is `shop-tasks`'s and not `shop`'s.
+ * @param stem - a page's file stem
+ * @param names - every module name
+ * @returns the owning module, or `undefined` for a module's own page or an unrelated one
+ */
+export const pageOwner = (stem: string, names: ReadonlySet<string>): string | undefined => {
+    if (names.has(stem)) return undefined;
+    return [...names]
+        .filter((name) => stem.startsWith(`${name}-`))
+        .toSorted((a, b) => b.length - a.length)[0];
+};
+
+/**
  * Every module's catalogue entry, read off `module.yaml` and the pages beside it.
  *
  * A page is a deeper page of module `m` when it is named `m-<topic>.md` and is not itself a
@@ -103,7 +117,7 @@ export const readCatalog = (modulesRoot: string, pagesRoot: string): CatalogEntr
         subdomain: descriptor.subdomain,
         summary: descriptor.summary,
         pages: stems
-            .filter((stem) => stem.startsWith(`${name}-`) && !names.has(stem))
+            .filter((stem) => pageOwner(stem, names) === name)
             .map((stem) => ({ stem, title: titleOf(path.join(pagesRoot, `${stem}.md`), stem) }))
     }));
 };

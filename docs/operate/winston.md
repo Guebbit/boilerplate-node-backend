@@ -1,16 +1,18 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # Winston & Audit Logs
 
+How the app writes its two log streams, and where each one ends up.
+
 ## Two log streams
 
-| Stream        | Purpose                                                               | Format                                          |
-| ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
-| `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
-| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
+| Stream        | Purpose                                                               | Format                                                                                                |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `logger`      | normal application logs (request access logs, errors, warnings)       | Pretty and coloured only in a relaxed environment on a terminal (`logger.ts:470-471`), JSON otherwise |
+| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                                                                           |
 
 Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/infrastructure/adapters/logger.ts`.
 
@@ -338,7 +340,7 @@ The private setting (`hash`) is the default deliberately: a boilerplate's defaul
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for what audit/security logs should capture
 - [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Alloy
 
-## Related pages
+## Read next
 
 - [Events & Logging](../understand/events-and-logging.md) — how these two streams relate to analytics, metrics and queue jobs
 - [OpenTelemetry](./opentelemetry.md)

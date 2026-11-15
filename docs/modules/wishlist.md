@@ -5,6 +5,8 @@ audience: [developer]
 
 # wishlist
 
+Saved products, one list per user. The smallest shop domain.
+
 ::: tip At a glance
 **Owns** — one wishlist per user, holding product references and nothing else.
 **Depends on** — [`products`](./products.md), [`cart`](./cart.md).
@@ -120,7 +122,7 @@ flowchart LR
     class C,P,U peer;
 ```
 
-## Related pages
+## Read next
 
 - [`cart`](./cart.md) — the same shape, with the hard part attached
 - [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure

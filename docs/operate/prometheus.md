@@ -1,14 +1,14 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # Prometheus
 
-## What it is
-
 Prometheus is the **metrics backend** of this boilerplate.
 It scrapes the app's `/observability/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
+
+## What it is
 
 Grafana reads Prometheus for all metric charts and dashboards.
 
@@ -217,7 +217,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 
 - [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) — needed to write queries in [Grafana](./grafana.md)'s Prometheus Explore view
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)

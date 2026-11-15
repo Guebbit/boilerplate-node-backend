@@ -256,7 +256,7 @@ Removing the adapter earlier is allowed, not guarded. Each open refund on it the
 `provider_removed`, which is final and can be marked returned by hand once the money went back
 another way. The reconcile sweep skips payments whose provider is not registered.
 
-## Related pages
+## Read next
 
 - [`payments`](./payments.md) — the module this belongs to
 - [Layers](../understand/layers.md) — what a port is, and why it sits where it does

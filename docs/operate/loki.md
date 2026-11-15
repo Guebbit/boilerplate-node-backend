@@ -1,11 +1,9 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # Loki
-
-## What it is
 
 [Grafana Loki](https://grafana.com/oss/loki/) is the **log store** of this boilerplate.
 It receives container logs shipped by **Alloy** and makes them searchable in Grafana.
@@ -14,9 +12,9 @@ It receives container logs shipped by **Alloy** and makes them searchable in Gra
 
 **Docker**
 
-```
-All containers → stdout → Docker JSON log files
-Docker JSON log files → Alloy → Loki → Grafana
+```mermaid
+flowchart LR
+    C["All containers"] -->|stdout| J["Docker JSON log files"] --> A["Alloy"] --> L["Loki"] --> G["Grafana"]
 ```
 
 - Alloy reads `/var/lib/docker/containers/*/*-json.log` on the host.
@@ -25,9 +23,9 @@ Docker JSON log files → Alloy → Loki → Grafana
 
 **Podman (rootless, k8s-file log driver)**
 
-```
-All containers → stdout → Podman k8s-file log files (CRI format)
-Podman log files → Alloy (CRI stage) → Loki → Grafana
+```mermaid
+flowchart LR
+    C["All containers"] -->|stdout| J["Podman k8s-file log files<br/>(CRI format)"] --> A["Alloy (CRI stage)"] --> L["Loki"] --> G["Grafana"]
 ```
 
 - Alloy reads `$HOME/.local/share/containers/storage/overlay-containers/*/userdata/*.log` on the host.
@@ -86,7 +84,7 @@ Config file: `docker/observability/loki.config.yaml`
 
 - [LogQL query language](https://grafana.com/docs/loki/latest/query/) — needed to write log queries in [Grafana](./grafana.md) Explore beyond the examples above
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)

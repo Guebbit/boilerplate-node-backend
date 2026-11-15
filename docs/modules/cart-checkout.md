@@ -204,7 +204,7 @@ the two outcomes leave the funnel with the endpoint that produced them.
 application: a rising failure ratio means money is not being taken, and it warrants a page rather
 than a dashboard glance.
 
-## Related pages
+## Read next
 
 - [`cart`](./cart.md) — the module this belongs to
 - [`orders`](./orders.md) — the status machine a checkout drops an order into

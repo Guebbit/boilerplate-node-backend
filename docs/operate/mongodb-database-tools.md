@@ -1,15 +1,15 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # MongoDB Database Tools
 
-## What it is
-
 The [Database Tools](https://www.mongodb.com/docs/database-tools/) are MongoDB's own command-line
 programs. The [`backup` container](./backups.md) uses two: `mongodump` (read the database into a
 stream) and `mongorestore` (write a stream back).
+
+## What it is
 
 | Fact        | Value                                                                                         |
 | ----------- | --------------------------------------------------------------------------------------------- |
@@ -39,3 +39,7 @@ stream) and `mongorestore` (write a stream back).
 - [mongodump](https://www.mongodb.com/docs/database-tools/mongodump/)
 - [mongorestore](https://www.mongodb.com/docs/database-tools/mongorestore/)
 - [Built-in roles: backup](https://www.mongodb.com/docs/manual/reference/built-in-roles/#backup)
+
+## Read next
+
+- [Backups](./backups.md)

@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [operator]
 ---
 
@@ -27,7 +27,7 @@ standard exists, and an equivalent is always noted.
 | [5 · Egress and cloud metadata](#egress-filtering-and-cloud-metadata)    | §7 cloud metadata, §13 missing egress controls  | **recipe below**     |
 | [6 · Network segmentation](#network-segmentation)                        | §13 flat network, exposed management interfaces | **recipe below**     |
 | [7 · Backups and restore](#backups-and-tested-restore)                   | §13 backup and DR gaps                          | documented elsewhere |
-| [8 · Object storage](#object-storage-for-uploads)                        | §11 storage exhaustion, §13 public buckets      | **recipe below**     |
+| [8 · Uploads and the host volume](#object-storage-for-uploads)           | §11 storage exhaustion, §13 public buckets      | **recipe below**     |
 | [9 · Clock](#clock)                                                      | §13 time drift                                  | **recipe below**     |
 | [10 · Encryption at rest](#encryption-at-rest)                           | MongoDB Security Checklist, encryption at rest  | **recipe below**     |
 
@@ -194,21 +194,20 @@ Two things worth repeating, because they are the failures everyone actually has:
   server finds the restic password on it. Point `BACKUP_REPOSITORY` at the append-only second machine
   and set `BACKUP_PRUNE=false`: it accepts new backups and refuses deletes.
 
-## Object storage for uploads
+## Uploads and the host volume {#object-storage-for-uploads}
 
-Uploads are written to the app server's own disk under `NODE_PUBLIC_PATH`. That is deliberate —
-[no third-party sub-processor](../understand/data-protection.md) — and it has two consequences a
-deployment inherits:
+Uploads live on the host's own volume under `NODE_PUBLIC_PATH`. That is deliberate:
+[no third-party sub-processor](../understand/data-protection.md), and one host per stack by decision (2026-09-30).
+No S3-compatible store ships and none is planned now. `ImageStore` (`src/infrastructure/adapters/image-store.ts`) is the port a second store would plug into.
+
+Two consequences a deployment inherits:
 
 - **A full disk takes the whole app down**, not just uploads. Until a per-account quota exists
   (tracked as an open item), a disk watermark alarm is the cheap backstop.
-- **Replicas do not share what they store.** More than one app container needs shared storage; the
-  durable answer is an S3-compatible `ImageStore` implementation — see
-  [scaling out](first-deploy.md).
+- **The volume must outlive the container**, and replicas on other hosts would not see it:
+  [Uploaded images do not outlive the container](./first-deploy-proxy-and-storage.md#uploaded-images-do-not-outlive-the-container).
 
-If a bucket is added: block public access at the bucket level, and keep serving through the app or
-a signed URL rather than making objects world-readable. The randomised 16-byte filenames make an
-object unguessable, not private.
+Back the volume up: [Uploaded images and the mail spool](./backups-restoring.md#uploaded-images-and-the-mail-spool).
 
 ## Clock
 
@@ -258,7 +257,7 @@ habits keep it honest:
 - Re-read the DNS and CI recipes when the provider changes. A DKIM selector or an OIDC issuer is
   provider-specific even though the shape is not.
 
-## Related pages
+## Read next
 
 - [Web Attacks & Defences](../understand/defences/index.md) — the rows each recipe answers
 - [Security](../understand/security.md) — the controls this app DOES implement

@@ -1,14 +1,14 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
 # OpenTelemetry
 
-## Why it is here
-
 OpenTelemetry (OTel) is the **trace** layer of this boilerplate.
 A trace is the timeline of a single request: HTTP in, every Mongoose query, every Redis call, the response out.
+
+## Why it is here
 
 We use OTel **auto-instrumentation**: there is no per-request code to write.
 
@@ -98,7 +98,7 @@ The API is reachable by anyone, so it never adopts a caller's `traceparent` as i
 - [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/) — signals, spans, context propagation
 - [OTel Collector configuration](https://opentelemetry.io/docs/collector/configuration/) — receivers, processors, exporters reference
 
-## Related pages
+## Read next
 
 - [Observability Reference](./observability-reference.md)
 - [Tempo](./tempo.md)
