@@ -43,8 +43,10 @@ export const validatePasswordChange = (
     password = '',
     passwordConfirm = ''
 ): ResponseErrorItem[] => {
-    // `password` carries the contract's own bounds (the one every set-password body shares);
-    // only the match between the two is ours to say.
+    /**
+     * `password` carries the contract's own bounds (the one every set-password body shares);
+     * only the match between the two is ours to say.
+     */
     const parseResult = z
         .object({
             password: SignupBody.shape.password,

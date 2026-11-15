@@ -78,13 +78,17 @@ export const sessionConfig = defineConfig({
                 skipWhen: selectsCookieMode
             }
         }),
-        // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
-        // read this repository — same failure shape as the two rings above, same fix.
+        /**
+         * A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
+         * read this repository — same failure shape as the two rings above, same fix.
+         */
         NODE_TOTP_ENCRYPTION_KEY: versionedKeyRing({
             required: { minLength: 16, minBytes: 32, placeholder: 'your-totp-encryption-key-here' }
         }),
-        // The familiar-device cookie's HMAC key. Unset on a developer machine means no cookie is
-        // ever set or honoured; in production, unset or the placeholder refuses to boot.
+        /**
+         * The familiar-device cookie's HMAC key. Unset on a developer machine means no cookie is
+         * ever set or honoured; in production, unset or the placeholder refuses to boot.
+         */
         NODE_DEVICE_COOKIE_SECRET: secret({
             minLength: 16,
             minBytes: 32,
@@ -98,11 +102,13 @@ export const sessionConfig = defineConfig({
         NODE_TOKEN_ROTATION_GRACE_MS: int({ default: 10_000, min: 0 }),
         NODE_TOKEN_REUSE_WINDOW_MS: int({ default: DAY_MS, min: 1 })
     },
-    // The one relationship between the two windows that must hold: a token has to outlive the
-    // grace window by some margin, or there is no interval in which reuse is detectable at all.
-    // Checked at BOOT because the failure is silent by nature: everything keeps working, every
-    // replay just answers a clean 401, and the defence is simply gone. Moot in `cookie` mode,
-    // which has no rotation to detect reuse of.
+    /**
+     * The one relationship between the two windows that must hold: a token has to outlive the
+     * grace window by some margin, or there is no interval in which reuse is detectable at all.
+     * Checked at BOOT because the failure is silent by nature: everything keeps working, every
+     * replay just answers a clean 401, and the defence is simply gone. Moot in `cookie` mode,
+     * which has no rotation to detect reuse of.
+     */
     check: (config) =>
         config.NODE_SESSION_MODE === 'cookie' ||
         config.NODE_TOKEN_REUSE_WINDOW_MS > config.NODE_TOKEN_ROTATION_GRACE_MS

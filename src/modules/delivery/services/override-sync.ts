@@ -50,7 +50,6 @@ const shipRemainder = (
 
 /**
  * Deliver every shipment still out, at the override's instant.
- * @param orderId - the order
  * @param at - the override's instant
  * @param session - the act's transaction
  */

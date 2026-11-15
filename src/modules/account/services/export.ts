@@ -70,7 +70,6 @@ export const settleInlineExports = (): Promise<void> =>
 /**
  * Whether a `building` row has waited past {@link EXPORT_BUILD_LIMIT_MS}.
  *
- * @param row - the row
  */
 const isStale = (row: AccountExportRow): boolean =>
     Date.now() - row.createdAt.getTime() > EXPORT_BUILD_LIMIT_MS;
@@ -119,8 +118,10 @@ const dispatch = (job: AccountExportJobPayload): Promise<void> =>
     }).then((published) => {
         if (published) return;
 
-        // Not awaited: the caller is told "queued" now, and the build outlives the response. Tracked
-        // so shutdown and tests can wait for it; the catch keeps a rejection from going unhandled.
+        /**
+         * Not awaited: the caller is told "queued" now, and the build outlives the response. Tracked
+         * so shutdown and tests can wait for it; the catch keeps a rejection from going unhandled.
+         */
         const running = runExportJob(job)
             .catch((error: unknown) => {
                 logger.error({

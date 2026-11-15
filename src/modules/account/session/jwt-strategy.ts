@@ -5,7 +5,7 @@
  * detection live in `./jwt.ts`; this file is the adapter that puts them behind
  * {@link SessionStrategy}, so nothing above it knows tokens are involved.
  *
- * @see docs/modules/account-sessions.md
+ * @see docs/modules/account-sessions.md#jwt-mode-two-tokens-two-lifetimes-two-homes
  */
 
 import type { RememberTier } from '@types';
@@ -286,8 +286,10 @@ const unlessOtherMode =
 /** The `jwt` adapter. */
 export const jwtStrategy: SessionStrategy = {
     mode: 'jwt',
-    // The refresh cookie opens the two SSE streams and nothing else: every other route takes the
-    // access token as a bearer.
+    /**
+     * The refresh cookie opens the two SSE streams and nothing else: every other route takes the
+     * access token as a bearer.
+     */
     cookieAuthenticates: false,
 
     issue: (request, response, userId, { amr, remember, provedAt }) =>

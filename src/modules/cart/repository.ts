@@ -4,7 +4,7 @@
  * takes: upsert a line, remove a line, clear all lines (plain and version-guarded for checkout),
  * and the two cleanup writes owed to product and user deletion.
  *
- * @see docs/modules/cart.md
+ * @see docs/modules/cart.md#the-pipeline
  */
 
 import type { QueryFilter, ClientSession } from 'mongoose';
@@ -160,14 +160,18 @@ const resolveAddMiss = (
                 item.productId.equals(line)
             )?.quantity;
 
-            // No line yet: the filter only guards a line that exists, so a NEW line is checked
-            // against the ceiling here, before anything is written.
+            /**
+             * No line yet: the filter only guards a line that exists, so a NEW line is checked
+             * against the ceiling here, before anything is written.
+             */
             if (currentQuantity === undefined)
                 return quantity > lineMax ? QUANTITY_LIMIT : pushNewLine(owner, line, quantity);
             if (currentQuantity + quantity > lineMax) return QUANTITY_LIMIT;
 
-            // Room exists now, even though the atomic attempt just missed — read afterward, so
-            // still not the answer itself; only the next attempt's own filter can commit to it.
+            /**
+             * Room exists now, even though the atomic attempt just missed — read afterward, so
+             * still not the answer itself; only the next attempt's own filter can commit to it.
+             */
             return RETRY;
         });
 
@@ -202,15 +206,17 @@ const upsertLine = (
     // Read once per call: the filter and the retry decision below must agree on one ceiling.
     const lineMax = cartLineMax();
 
-    // `$elemMatch`, not two top-level `'items.x'` conditions: MongoDB only guarantees the update's
-    // `items.$` binds to the element BOTH conditions matched together when they are joined this
-    // way — two separate conditions can each match a DIFFERENT element, and `$` then updates
-    // whichever the FIRST one found. Silent on a passing case (any two-line cart still updates
-    // SOME line), so it only ever showed up as `q` landing on the wrong product.
-    // https://www.mongodb.com/docs/manual/reference/operator/update/positional/#--em-multiple--em--array-conditions
-    // `'set'` matches only a line whose quantity DIFFERS: an identical set must not bump `__v`,
-    // or repeating it mid-checkout fails that checkout with CART_CHANGED (RFC 9110 §9.2.2 —
-    // the same PUT twice leaves the same state).
+    /**
+     * `$elemMatch`, not two top-level `'items.x'` conditions: MongoDB only guarantees the update's
+     * `items.$` binds to the element BOTH conditions matched together when they are joined this
+     * way — two separate conditions can each match a DIFFERENT element, and `$` then updates
+     * whichever the FIRST one found. Silent on a passing case (any two-line cart still updates
+     * SOME line), so it only ever showed up as `q` landing on the wrong product.
+     * https://www.mongodb.com/docs/manual/reference/operator/update/positional/#--em-multiple--em--array-conditions
+     * `'set'` matches only a line whose quantity DIFFERS: an identical set must not bump `__v`,
+     * or repeating it mid-checkout fails that checkout with CART_CHANGED (RFC 9110 §9.2.2 —
+     * the same PUT twice leaves the same state).
+     */
     const matchExistingLine: QueryFilter<CartDocument> =
         mode === 'add'
             ? {
@@ -230,8 +236,10 @@ const upsertLine = (
 
     return (
         cartModel
-            // `$inc.__v` rides along with the quantity write itself, not a separate update —
-            // same reasoning as `pushNewLine`.
+            /**
+             * `$inc.__v` rides along with the quantity write itself, not a separate update —
+             * same reasoning as `pushNewLine`.
+             */
             .findOneAndUpdate(
                 matchExistingLine,
                 mode === 'add'
@@ -240,9 +248,11 @@ const upsertLine = (
                 { returnDocument: 'after' }
             )
             .exec()
-            // Explicit generic: without it, TS infers this callback's return type from the OUTER
-            // function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
-            // branch below.
+            /**
+             * Explicit generic: without it, TS infers this callback's return type from the OUTER
+             * function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
+             * branch below.
+             */
             .then<LineWrite | typeof QUANTITY_LIMIT | typeof LINE_LIMIT | typeof NO_LINE>(
                 (cart) => {
                     if (cart) return { cart, created: false };
@@ -361,12 +371,14 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
                 { userId: toObjectId(userId), __v: version },
                 {
                     $set: { items: [] },
-                    // The choice was for the basket just bought; a stale one would otherwise
-                    // outlive it and meet the next, different basket.
+                    /**
+                     * The choice was for the basket just bought; a stale one would otherwise
+                     * outlive it and meet the next, different basket.
+                     */
                     $unset: { shippingMethodId: '' },
                     $inc: { __v: 1 }
                 },
-                /*
+                /**
                  * `timestamps: false`, unlike `clearLines` above: this clear is checkout's own
                  * side effect, not something the shopper did to their cart, so it should not make
                  * an untouched cart read as "recently edited".

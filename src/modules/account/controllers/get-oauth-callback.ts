@@ -109,23 +109,29 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     // Express types `query` as parsed-qs values; every field is re-validated below before use.
     const query = request.query as Record<string, unknown>;
 
-    /** The language the visitor started the login in — re-validated for the same reason as
-     * `continue` below, and read lazily because every caller runs after `state` is trusted. */
+    /**
+     * The language the visitor started the login in — re-validated for the same reason as
+     * `continue` below, and read lazily because every caller runs after `state` is trusted.
+     */
     const savedLocale = (): string | undefined => {
         const saved = cookieOf(request, OAUTH_LOCALE_COOKIE);
         return isLocaleTag(saved) ? saved : undefined;
     };
 
-    /** Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
-     * every failure path shares, whichever response follows. */
+    /**
+     * Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
+     * every failure path shares, whichever response follows.
+     */
     const recordFailureAndClear = (reason: string) => {
         accountService.recordOAuthFailure(context, providerName, reason);
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
         clearOAuthCookies(response);
     };
 
-    /** `recordFailureAndClear`, then fail towards the FRONTEND with `?error=<reason>` rather
-     * than a JSON body — the browser is mid-navigation by the time any of this runs. */
+    /**
+     * `recordFailureAndClear`, then fail towards the FRONTEND with `?error=<reason>` rather
+     * than a JSON body — the browser is mid-navigation by the time any of this runs.
+     */
     const failToFrontend = (reason: OAuthCallbackError) => {
         // A 302 reads as success to the credential budgets; the flag makes them count it.
         request.credentialAttemptFailed = true;
@@ -139,15 +145,19 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         return;
     }
 
-    // Read only once `state` is trusted — a forged callback must not choose where a stranger's
-    // browser lands. Re-validated here too, not just at the start controller: a cookie is
-    // client-writable, so its value is never trusted on the strength of its name alone.
+    /**
+     * Read only once `state` is trusted — a forged callback must not choose where a stranger's
+     * browser lands. Re-validated here too, not just at the start controller: a cookie is
+     * client-writable, so its value is never trusted on the strength of its name alone.
+     */
     const savedContinue = cookieOf(request, OAUTH_CONTINUE_COOKIE);
     const continueTo = isSameOriginPath(savedContinue) ? savedContinue : undefined;
 
-    // A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
-    // that received no challenge at the start happily accepts an exchange with no verifier, so
-    // "no cookie" and "no PKCE" must never share a branch.
+    /**
+     * A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
+     * that received no challenge at the start happily accepts an exchange with no verifier, so
+     * "no cookie" and "no PKCE" must never share a branch.
+     */
     const verifier = cookieOf(request, OAUTH_VERIFIER_COOKIE);
     if (typeof verifier !== 'string' || verifier.length === 0) {
         recordFailureAndClear('invalid_verifier');
@@ -168,9 +178,11 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     // Read before the code exchange: a password changed while it runs must refuse this login.
     const provedAt = Date.now();
 
-    // A connect attempt carries its own cookie, set by the signed-in start. It never signs anyone in:
-    // the account that began it is already signed in, so the callback links the identity to THAT
-    // account and sends the browser back to where it was.
+    /**
+     * A connect attempt carries its own cookie, set by the signed-in start. It never signs anyone in:
+     * the account that began it is already signed in, so the callback links the identity to THAT
+     * account and sends the browser back to where it was.
+     */
     const linkToken = cookieOf(request, OAUTH_LINK_COOKIE);
     if (typeof linkToken === 'string' && linkToken.length > 0) {
         return provider
@@ -229,15 +241,17 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         })
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
         .then(({ user, outcome }) => {
-            /*
+            /**
              * A factor armed on the password path applies here too — 2FA is a control on the
              * ACCOUNT, not on one login method. Minting a session directly would let a provider
              * alone stand in for a second factor the owner deliberately turned on — see 1b in
              * docs/understand/defences/authentication.md#federated-login.
              */
             if (!user.twoFactorEnabledAt) {
-                // Deletion grace: no session and no login yet. The claim check rides a cookie, the
-                // dates ride the redirect; the frontend offers the restore.
+                /**
+                 * Deletion grace: no session and no login yet. The claim check rides a cookie, the
+                 * dates ride the redirect; the frontend offers the restore.
+                 */
                 if (isRestorable(user)) {
                     return buildDeletionPending(user, [provider.name]).then((pending) => {
                         createDeletionChallengeCookie(
@@ -261,10 +275,12 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                     amr: [provider.name],
                     provedAt
                 }).then(() => {
-                    // The same completed-login mark the password path sets (Q15): the cookie
-                    // grants nothing but a skipped per-account failure budget.
+                    /**
+                     * The same completed-login mark the password path sets (Q15): the cookie
+                     * grants nothing but a skipped per-account failure budget.
+                     */
                     rememberDevice(request, response, user.email);
-                    /*
+                    /**
                      * Only a genuine LOGIN owes the audit row: `link`/`signup` already audited
                      * themselves in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN
                      * here too would double-count the event under a second action name.
@@ -299,27 +315,35 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 failToFrontend('email_unverified');
                 return;
             }
-            // A matching account exists, but a sign-in does not link: the owner signs in the way
-            // the account allows and connects the provider from their profile.
+            /**
+             * A matching account exists, but a sign-in does not link: the owner signs in the way
+             * the account allows and connects the provider from their profile.
+             */
             if (error instanceof OAuthAccountExistsError) {
                 failToFrontend('account_exists');
                 return;
             }
-            // A DIFFERENT code from the one above, because the remedy is different: there the
-            // caller verifies with the provider, here they reset the password on the account
-            // already holding this address.
+            /**
+             * A DIFFERENT code from the one above, because the remedy is different: there the
+             * caller verifies with the provider, here they reset the password on the account
+             * already holding this address.
+             */
             if (error instanceof OAuthAccountUnverifiedError) {
                 failToFrontend('account_unverified');
                 return;
             }
-            // A banned or soft-deleted account answers like any other provider failure: the
-            // caller must not learn what state the account is in. Expected, so not logged as one.
+            /**
+             * A banned or soft-deleted account answers like any other provider failure: the
+             * caller must not learn what state the account is in. Expected, so not logged as one.
+             */
             if (error instanceof OAuthAccountUnavailableError) {
                 failToFrontend('provider_error');
                 return;
             }
-            // The provider/exchange detail is developer-facing only — same rule
-            // `rejectDatabaseError` follows for a driver failure.
+            /**
+             * The provider/exchange detail is developer-facing only — same rule
+             * `rejectDatabaseError` follows for a driver failure.
+             */
             // Stryker disable all
             logger.error({
                 message: 'OAuth callback failed',

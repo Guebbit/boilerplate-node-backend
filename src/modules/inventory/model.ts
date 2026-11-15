@@ -6,7 +6,7 @@
  * on its own document purely so a catalogue read needs no join, but never writes it and this
  * module never reads that copy back. See `docs/modules/inventory.md#why-products-still-carries-a-copy`.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -51,7 +51,7 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
             enum: MOVEMENT_REASONS,
             required: true
         },
-        /*
+        /**
          * Every delta on every row, any possibly zero. Storing one column per counter rather than
          * one signed number is what makes the ledger replayable — summing each column over a
          * product's rows reproduces the counter it describes. `default: 0` because most
@@ -84,7 +84,7 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
     }
 );
 
-/*
+/**
  * The names are given rather than derived: Mongo identifies an index by its name as much as by
  * its key, so asking for a key it already holds under a different name fails at startup instead
  * of doing nothing.
@@ -162,10 +162,12 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
             required: true,
             unique: true
         },
-        // No `min: 0` here — every write to these three moves through `repository.ts#applyDelta`'s
-        // `$inc`, which Mongoose never validates against `min`/`max` (it cannot see the pre-update
-        // value). The real floor is `conditionFor`'s `$gte` guard in the same file, checked in the
-        // update's FILTER rather than after the fact.
+        /**
+         * No `min: 0` here — every write to these three moves through `repository.ts#applyDelta`'s
+         * `$inc`, which Mongoose never validates against `min`/`max` (it cannot see the pre-update
+         * value). The real floor is `conditionFor`'s `$gte` guard in the same file, checked in the
+         * update's FILTER rather than after the fact.
+         */
         onHand: {
             type: Number,
             default: 0
@@ -178,8 +180,10 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
             type: Number,
             default: 0
         },
-        // Same as the counters above: `backordered` only moves through `$inc` in `applyDelta`, whose
-        // guard (`backordered + n <= backorderLimit`) is the real ceiling.
+        /**
+         * Same as the counters above: `backordered` only moves through `$inc` in `applyDelta`, whose
+         * guard (`backordered + n <= backorderLimit`) is the real ceiling.
+         */
         backorderLimit: {
             type: Number,
             default: 0,
@@ -289,7 +293,7 @@ const reservationItemSchema = new Schema<ReservationItem>(
 /** Mongoose Schema for a hold. One document per order — see `orderId`'s unique index below. */
 export const reservationSchema = new Schema<ReservationDocument>(
     {
-        /*
+        /**
          * Unique, and load-bearing rather than hygienic: it is what makes reserving exactly once.
          * A retried checkout needs no read-then-write to detect — the second insert simply fails
          * and no counter moves.
@@ -299,7 +303,7 @@ export const reservationSchema = new Schema<ReservationDocument>(
             required: true,
             unique: true
         },
-        /*
+        /**
          * The hold's own copy of what it claimed, rather than a lookup through the order. If
          * releasing had to read the order's items this module would depend on `orders`, which
          * already depends on it — a cycle. It is also more correct: what must be given back is
@@ -309,7 +313,7 @@ export const reservationSchema = new Schema<ReservationDocument>(
             type: [reservationItemSchema],
             required: true
         },
-        /*
+        /**
          * The exactly-once gate. Every lifecycle operation is a conditional move off `held`, so a
          * second cancel, a duplicate webhook or a sweep racing a payment loses the match and does
          * nothing — the same primitive `orderRepository.updateStatusIfIn` is built on.
@@ -320,7 +324,7 @@ export const reservationSchema = new Schema<ReservationDocument>(
             default: 'held',
             required: true
         },
-        /*
+        /**
          * No Mongo TTL index: that would delete the document outright, but the units still need
          * giving back and the story needs to survive. Expiry is a sweep — see `runReservationSweep`.
          */

@@ -13,7 +13,7 @@
  * the token digests are stripped from `toJSON` regardless.
  *
  * @see docs/modules/account.md#data-export
- * @see docs/modules/account-sessions.md
+ * @see docs/modules/account-sessions.md#where-sessions-live
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -134,9 +134,11 @@ export const sessionSchema = new Schema<SessionDocument, SessionModel>(
 
 applySerialization(sessionSchema, { omit: ['tokenHash'] });
 
-// Deletes the row at its own `purgeAt` (`expireAfterSeconds: 0`: "at that time"). A per-row date,
-// not an env-driven TTL, so changing a lifetime never rebuilds the index.
-// https://www.mongodb.com/docs/manual/tutorial/expire-data/
+/**
+ * Deletes the row at its own `purgeAt` (`expireAfterSeconds: 0`: "at that time"). A per-row date,
+ * not an env-driven TTL, so changing a lifetime never rebuilds the index.
+ * https://www.mongodb.com/docs/manual/tutorial/expire-data/
+ */
 sessionSchema.index({ purgeAt: 1 }, { expireAfterSeconds: 0 });
 
 // "this account's sessions", and "this one session" — the list, a revoke, logout everywhere.
@@ -187,8 +189,10 @@ applySerialization(verificationTokenSchema, { omit: ['tokenHash'] });
 // The database deletes the row at its own `expiresAt`; reads still check it (the monitor lags).
 verificationTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// One live link per account per kind, for the kinds that allow only one: a PARTIAL index, so the
-// kinds that allow several (a delete confirmation, an MFA challenge) are not constrained by it.
+/**
+ * One live link per account per kind, for the kinds that allow only one: a PARTIAL index, so the
+ * kinds that allow several (a delete confirmation, an MFA challenge) are not constrained by it.
+ */
 verificationTokenSchema.index(
     { userId: 1, type: 1 },
     { unique: true, partialFilterExpression: { type: { $in: [...ONE_LIVE_TOKEN_TYPES] } } }
@@ -254,8 +258,10 @@ erasureLedgerSchema.index({ userId: 1, kind: 1 }, { unique: true });
 // `ops:reapply-erasures`' read: every row since a snapshot.
 erasureLedgerSchema.index({ at: 1 });
 
-// The database deletes the row at its own `expiresAt`: a per-row date, so changing the retention
-// knob never needs an index rebuild.
+/**
+ * The database deletes the row at its own `expiresAt`: a per-row date, so changing the retention
+ * knob never needs an index rebuild.
+ */
 erasureLedgerSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 /** The compiled Mongoose model for `erasureledgers`. */

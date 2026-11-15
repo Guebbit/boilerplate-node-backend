@@ -46,7 +46,6 @@ const sameDate = (a: Date | undefined, b: Date | undefined): boolean =>
 /**
  * The date a product holds for the kind of wait asked about: a release date for a preorder, a
  * restock date for a backorder.
- * @param product - the product
  * @param cause - which wait
  */
 const dateFor = (

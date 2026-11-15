@@ -74,8 +74,10 @@ const appendEntryPipeline = (item: object, claimsDefault: boolean) => {
                         [{ $mergeObjects: [{ $literal: item }, { default: becomesDefault }] }]
                     ]
                 },
-                // A pipeline upsert has no `$setOnInsert`; `updatedAt` is stamped by Mongoose's own
-                // timestamps stage, `createdAt` is kept once set.
+                /**
+                 * A pipeline upsert has no `$setOnInsert`; `updatedAt` is stamped by Mongoose's own
+                 * timestamps stage, `createdAt` is kept once set.
+                 */
                 createdAt: { $ifNull: ['$createdAt', '$$NOW'] }
             }
         }
@@ -187,8 +189,10 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
             .findOneAndUpdate(
                 { userId: owner, [`items.${String(addressBookMax() - 1)}`]: { $exists: false } },
                 appendEntryPipeline(item, entry.default ?? false),
-                // `updatePipeline`: Mongoose refuses an array update without it.
-                // https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                /**
+                 * `updatePipeline`: Mongoose refuses an array update without it.
+                 * https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                 */
                 { upsert: true, returnDocument: 'after', updatePipeline: true }
             )
             .exec()
@@ -220,9 +224,11 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         if (!found) return null;
         const { book, entry } = found;
 
-        // `label`/`phone` are the nullable fields — `null` clears them
-        // ($unset on save, via `clearedOrValue`); the other five are required on the resource
-        // itself, so the contract refuses `null` for them before this ever runs.
+        /**
+         * `label`/`phone` are the nullable fields — `null` clears them
+         * ($unset on save, via `clearedOrValue`); the other five are required on the resource
+         * itself, so the contract refuses `null` for them before this ever runs.
+         */
         if (changes.label !== undefined) entry.label = clearedOrValue(changes.label);
         for (const field of REQUIRED_PII_FIELDS) {
             const value = changes[field];

@@ -138,8 +138,10 @@ const splitAct = async (
             ...(held.agreedAt ? { agreedAt: held.agreedAt } : {}),
             ...(held.promisedAt ? { promisedAt: held.promisedAt } : {}),
             ...(held.expectedAt ? { expectedAt: held.expectedAt } : {}),
-            // Units owed for a lost parcel stay linked to it after the split, so it turning up
-            // finds every part that is still owed.
+            /**
+             * Units owed for a lost parcel stay linked to it after the split, so it turning up
+             * finds every part that is still owed.
+             */
             ...(held.sourceShipmentId ? { sourceShipmentId: held.sourceShipmentId } : {})
         },
         session

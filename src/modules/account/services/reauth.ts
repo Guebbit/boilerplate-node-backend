@@ -72,8 +72,10 @@ export interface ReauthProven {
  */
 const methodsOf = (user: UserDocument): ReauthMethod[] => {
     if (user.password) return ['password'];
-    // The same two facts the email second factor asks: a verified address, and a deployment that
-    // can deliver to it (an unset SMTP host makes `twoFactorMethod` answer undefined).
+    /**
+     * The same two facts the email second factor asks: a verified address, and a deployment that
+     * can deliver to it (an unset SMTP host makes `twoFactorMethod` answer undefined).
+     */
     return user.verifiedAt && twoFactorMethod('email') ? ['email'] : [];
 };
 
@@ -101,8 +103,10 @@ const deliverCode = (
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorDelivery>> => {
     user.reauthCode = {};
-    // Read back: Mongoose hydrates the assigned object into a subdocument, and that is the one
-    // the helpers must mutate.
+    /**
+     * Read back: Mongoose hydrates the assigned object into a subdocument, and that is the one
+     * the helpers must mutate.
+     */
     const slot: DeliveredCodeState = user.reauthCode;
 
     return deliverEmailCode(user, slot, context, reauthCodeEmail)

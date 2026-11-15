@@ -157,7 +157,7 @@ export type CheckoutVerdict =
 export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutVerdict => {
     if (lines.length === 0) return { ok: false, reason: 'empty' };
 
-    /*
+    /**
      * One availability per line, from the rule the cart view and the merge share. `removed` is
      * "gone entirely or hidden" (`product` null — a hard delete the catalogue join can no longer
      * find — or `active: false`, or soft-deleted). Every refused line, not just the first: a

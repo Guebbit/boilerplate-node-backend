@@ -6,7 +6,7 @@
  * module exists to take away. A sibling asks for a transition by name and gets a boolean — what
  * it costs in counters is not their business.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#its-neighbourhood
  */
 
 export * from './services';

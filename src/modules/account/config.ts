@@ -47,14 +47,18 @@ export const accountConfig = defineConfig({
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
         NODE_EMAIL_VERIFY_TTL_MS: int({ default: DAY_MS, min: 1 }),
         NODE_ACCOUNT_EXPORT_TTL_DAYS: int({ default: 7, min: 1 }),
-        // Ceiling in code, not in the contract: nothing on the wire is bounded by it. 31 is the
-        // longest month; `purgeAt` is also capped at one calendar month (GDPR Art. 12(3)).
+        /**
+         * Ceiling in code, not in the contract: nothing on the wire is bounded by it. 31 is the
+         * longest month; `purgeAt` is also capped at one calendar month (GDPR Art. 12(3)).
+         */
         NODE_ACCOUNT_DELETION_GRACE_DAYS: int({ default: 30, min: 1, max: 31 }),
         // 220 days: the default backup keep (6 monthly snapshots, up to ~7 months back) plus a margin.
         NODE_ERASURE_LEDGER_RETENTION_DAYS: int({ default: 220, min: 1 }),
         NODE_TERMS_VERSION: text({ default: '1' }),
-        // The operator's legal identity: name and postal address are required (e-Commerce
-        // Directive Art. 5(1)(a)-(c), GDPR Art. 13(1)(a)); the rest is published when set.
+        /**
+         * The operator's legal identity: name and postal address are required (e-Commerce
+         * Directive Art. 5(1)(a)-(c), GDPR Art. 13(1)(a)); the rest is published when set.
+         */
         NODE_LEGAL_NAME: text({ required: { minLength: 1 } }),
         NODE_LEGAL_VAT_NUMBER: text(),
         NODE_LEGAL_TRADE_REGISTER: text(),

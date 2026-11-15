@@ -30,8 +30,10 @@ export const postPasswordChange = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    // The contract's own body: an absent or out-of-bounds field is a malformed request, not a
-    // wrong password. The service adds only what the contract cannot say (the repeat matches).
+    /**
+     * The contract's own body: an absent or out-of-bounds field is a malformed request, not a
+     * wrong password. The service adds only what the contract cannot say (the repeat matches).
+     */
     const parsed = parseBody(ChangePasswordBody, request.body, response);
     if (!parsed) {
         authPasswordChangeTotal.inc({ status: 'failure' });
@@ -40,8 +42,10 @@ export const postPasswordChange = (
 
     const { currentPassword, password, passwordConfirm } = parsed;
 
-    // Taken first: the change purges every session, this request's included, and the re-mint below
-    // has to continue the one it replaces.
+    /**
+     * Taken first: the change purges every session, this request's included, and the re-mint below
+     * has to continue the one it replaces.
+     */
     return sessionSnapshotOf(request, id)
         .then((snapshot) =>
             accountService
@@ -60,7 +64,7 @@ export const postPasswordChange = (
                 return;
             }
 
-            /*
+            /**
              * The password write and the revoke have both already succeeded by this point —
              * only the re-mint is left. If IT fails, the response must still say success: the
              * caller's password DID change, and every prior session is already gone either way.
@@ -73,8 +77,10 @@ export const postPasswordChange = (
                     successResponse<AuthTokens>(response, issued, 200);
                 })
                 .catch((error: unknown) => {
-                    // Still a real fact worth finding — a swallowed re-mint failure had no
-                    // trail at all before this, even though the degrade to 200 above is correct.
+                    /**
+                     * Still a real fact worth finding — a swallowed re-mint failure had no
+                     * trail at all before this, even though the degrade to 200 above is correct.
+                     */
                     logger.warn({
                         message: 'Password changed, but the session re-mint failed.',
                         userId: id,

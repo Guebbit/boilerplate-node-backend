@@ -31,10 +31,12 @@ export const postResetRequest = (
     const body = parseBody(RequestPasswordResetBody, request.body, response);
     if (!body) return;
 
-    // Detached: the answer must not wait on a lookup, a token write and a mail enqueue that only
-    // exist for a registered address, or the response time itself says which addresses those are
-    // (OWASP Forgot Password Cheat Sheet, "consistent response time"). The service logs its own
-    // failures and keeps the metric and the audit row.
+    /**
+     * Detached: the answer must not wait on a lookup, a token write and a mail enqueue that only
+     * exist for a registered address, or the response time itself says which addresses those are
+     * (OWASP Forgot Password Cheat Sheet, "consistent response time"). The service logs its own
+     * failures and keeps the metric and the audit row.
+     */
     // eslint-disable-next-line @typescript-eslint/no-floating-promises -- requestPasswordReset never rejects (a failed lookup is logged and answers false)
     void accountService.requestPasswordReset(body.email, callerContextOf(request));
     noContentResponse(response);

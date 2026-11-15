@@ -11,7 +11,7 @@
  *   session's public id, sign-in time and absolute expiry.
  * - `lastUsedAt` is written at most once a minute, so a busy tab does not write per request.
  *
- * @see docs/understand/sessions.md
+ * @see docs/understand/sessions.md#cookie-mode-one-random-id
  */
 
 import { RememberTier } from '@types';
@@ -251,8 +251,10 @@ const resolveSession = (
                         .removeFamily(String(row.userId), String(row.familyId))
                         .then((): Resolution<AuthContext | undefined> => ({ miss: 'expired' }));
 
-                // Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
-                // throttle is checked on the row already in hand, so a busy tab costs no extra query.
+                /**
+                 * Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
+                 * throttle is checked on the row already in hand, so a busy tab costs no extra query.
+                 */
                 if (ok && !options.passive && stampDue(row))
                     void sessionRepository
                         .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)

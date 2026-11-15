@@ -6,7 +6,7 @@
  * `metrics-registry.ts`'s two process gauges do it: registering themselves is the constructor's
  * whole job, and nothing reads the handles.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-pipeline
  */
 
 import { Gauge } from 'prom-client';

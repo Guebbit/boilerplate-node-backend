@@ -138,9 +138,11 @@ const planSlot = (
                 `${locale}.${unknownField}`
             );
 
-        // The entity's own rules for a value, parsed (so trimmed too): this door cannot land what
-        // the entity's own write door would refuse. The unknown-field check above runs first, so
-        // strict mode's root-level `unrecognized_keys` issue (empty path) never reaches here.
+        /**
+         * The entity's own rules for a value, parsed (so trimmed too): this door cannot land what
+         * the entity's own write door would refuse. The unknown-field check above runs first, so
+         * strict mode's root-level `unrecognized_keys` issue (empty path) never reaches here.
+         */
         const parsed = target.fieldRules.safeParse(value.fields);
         if (!parsed.success) {
             const [issue] = parsed.error.issues;
@@ -149,23 +151,29 @@ const planSlot = (
             ]);
         }
 
-        // `.optional()` rules type an omitted field as `undefined`; zod omits the key in practice,
-        // and `stripUndefined` makes it certain, which narrows the type the compiler cannot.
+        /**
+         * `.optional()` rules type an omitted field as `undefined`; zod omits the key in practice,
+         * and `stripUndefined` makes it certain, which narrows the type the compiler cannot.
+         */
         const fields = stripUndefined(parsed.data) as Record<string, string | null>;
         return { locale, kind: 'upsert', fields, origin: value.origin ?? 'human' };
     };
 
-    // The fallback locale can't be deleted or deactivated, so writing it never needs the
-    // `locales` collection lookup — this is what still stores fallback-language content once
-    // `locales` is uninstalled entirely (`kernel/translation.ts`'s own fallback path).
+    /**
+     * The fallback locale can't be deleted or deactivated, so writing it never needs the
+     * `locales` collection lookup — this is what still stores fallback-language content once
+     * `locales` is uninstalled entirely (`kernel/translation.ts`'s own fallback path).
+     */
     if (locale === fallbackLocale) return Promise.resolve(planFields());
 
     return localeRepository.findByTag(locale).then((language) => {
         if (!language)
             return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
 
-        // An inactive language is writable on purpose: that is where a translation is drafted.
-        // The read paths drop its rows until the language goes live (`inactiveTags`).
+        /**
+         * An inactive language is writable on purpose: that is where a translation is drafted.
+         * The read paths drop its rows until the language goes live (`inactiveTags`).
+         */
         return planFields();
     });
 };
@@ -356,21 +364,29 @@ const applyTranslationBatch = async (
     if (isRejection(plan)) return plan;
     const { target, fallbackLocale, planned } = plan;
 
-    // Checked before any write: a missing (or malformed) entity id must never leave orphan
-    // translation rows behind for a document that was never there to translate.
+    /**
+     * Checked before any write: a missing (or malformed) entity id must never leave orphan
+     * translation rows behind for a document that was never there to translate.
+     */
     if ((await target.revisionOf(entityId)) === undefined)
         return entityNotFound(entityType, entityId);
 
     const translatedBy = context?.caller.id ?? undefined;
-    // One transaction: the document's tag, the rows and the derived index column (see
-    // `writePlannedTranslations`'s docblock). Rows outside the document changed, so its tag must
-    // move with them, and no `PUT` carrying the still-valid tag may land between the writes.
+    /**
+     * One transaction: the document's tag, the rows and the derived index column (see
+     * `writePlannedTranslations`'s docblock). Rows outside the document changed, so its tag must
+     * move with them, and no `PUT` carrying the still-valid tag may land between the writes.
+     */
     await withTransaction(async (session) => {
-        // The driver re-runs this callback on a transient conflict; each run must compare the
-        // caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+        /**
+         * The driver re-runs this callback on a transient conflict; each run must compare the
+         * caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+         */
         rearmPrecondition();
-        // First, so a stale `If-Match` is refused (412) before any row is written. The fence is
-        // the OWNER's counter: a translation save and a product edit refuse each other on purpose.
+        /**
+         * First, so a stale `If-Match` is refused (412) before any row is written. The fence is
+         * the OWNER's counter: a translation save and a product edit refuse each other on purpose.
+         */
         await target.markEdited(entityId, session);
         await writePlannedTranslations(
             entityType,

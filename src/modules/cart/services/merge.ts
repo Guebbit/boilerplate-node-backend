@@ -92,8 +92,10 @@ const mergeLine = (
             ? writeAdd(userId, productId, plan.add, context)
             : Promise.resolve<{ cart: CartDocument | null; raced?: Raced }>({ cart });
     return written.then(({ cart: after, raced }) => {
-        // A lost race at a cap is `capped` or `cart_full` whatever the rule predicted: the line
-        // was not grown, so `summed` would claim a sum the cart does not hold.
+        /**
+         * A lost race at a cap is `capped` or `cart_full` whatever the rule predicted: the line
+         * was not grown, so `summed` would claim a sum the cart does not hold.
+         */
         const reason = raced ?? plan.reason;
         const resulting = heldIn(after, productId);
         return {

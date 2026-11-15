@@ -35,13 +35,15 @@ const rememberSchema = z.object({
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
 export const postLogin = (
-    // `LoginRequest | undefined`, because express 5 leaves `request.body` UNDEFINED when no parser
-    // matched the content-type — not `{}`, the way express 4 did. Declaring the truth is what
-    // makes the guards below necessary rather than noise a lint rule would strip.
+    /**
+     * `LoginRequest | undefined`, because express 5 leaves `request.body` UNDEFINED when no parser
+     * matched the content-type — not `{}`, the way express 4 did. Declaring the truth is what
+     * makes the guards below necessary rather than noise a lint rule would strip.
+     */
     request: Request<Record<string, string>, unknown, LoginRequest | undefined>,
     response: Response
 ) => {
-    /*
+    /**
      * Passed whole, not parsed against `LoginBody` here. Three reasons, and only the first is
      * about answering uniformly — `accountService.login` parses anyway (an unknown field is its
      * 422 too), so this is not where a 422 is avoided.
@@ -62,7 +64,7 @@ export const postLogin = (
      */
     const body: unknown = request.body ?? {};
 
-    /*
+    /**
      * `remember` IS parsed, and first: it is not a secret, so a 422 here tells a caller nothing
      * about the credentials — while an unknown tier must not slip through to become a cookie with
      * no lifetime at all.
@@ -87,7 +89,7 @@ export const postLogin = (
 
             const { data } = result;
             const userId = data._id.toString();
-            /*
+            /**
              * 2FA branch: the password checked out, but the login is not complete — no
              * cookies, no access token, just a short-lived challenge naming this attempt and the
              * factors the caller may answer it with. Nothing is recorded as a login yet;
@@ -99,7 +101,7 @@ export const postLogin = (
                 });
             }
 
-            /*
+            /**
              * Deletion-grace branch: the owner asked to delete this account and its grace has not
              * run out. No session and no login yet: a claim check goes back instead, and the
              * client decides to restore (`POST /account/login/restore`) or to walk away.
@@ -120,16 +122,20 @@ export const postLogin = (
                 recordLoginSuccess(request, userId)
                     .then(() => withAccountView(issued, userId, { amr, provedAt }))
                     .then((body) => {
-                        // A completed login marks this browser familiar for the account, so a
-                        // lockout an attacker caused cannot keep the owner out.
+                        /**
+                         * A completed login marks this browser familiar for the account, so a
+                         * lockout an attacker caused cannot keep the owner out.
+                         */
                         rememberDevice(request, response, data.email);
                         successResponse<LoginOutcome>(response, body, 200);
                     })
             );
         })
         .catch((error: unknown) => {
-            // Covers the credential check and the token/cookie steps after it. A failure in any of them is not a rejected login — the caller may well
-            // have had the right password — so it must not be recorded as one.
+            /**
+             * Covers the credential check and the token/cookie steps after it. A failure in any of them is not a rejected login — the caller may well
+             * have had the right password — so it must not be recorded as one.
+             */
             rejectDatabaseError(response, 'postLogin', error);
         });
 };

@@ -90,10 +90,12 @@ const notifyMinted = (minterId: string, apiKey: ApiKeyDocument): void => {
         .then((minter) => {
             if (!minter) return;
             const locale = minter.locale ?? getDefaultLocale();
-            // Intl: a long, locale-aware date, so the mail reads the way the recipient's own does.
-            // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
-            // Naming the zone: a foundation module knows no shop zone, and a date
-            // with no zone reads as the server's. Naming UTC is what makes the day unambiguous.
+            /**
+             * Intl: a long, locale-aware date, so the mail reads the way the recipient's own does.
+             * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+             * Naming the zone: a foundation module knows no shop zone, and a date
+             * with no zone reads as the server's. Naming UTC is what makes the day unambiguous.
+             */
             const expires = new Intl.DateTimeFormat(locale, {
                 // Field by field: `dateStyle` refuses a `timeZoneName`.
                 year: 'numeric',
@@ -250,8 +252,10 @@ export const mint = (
             publicPrefix,
             hash,
             permissions: body.permissions,
-            // `router.use(getAuth, isAuth)` demands a live session before any route here is
-            // reached, so `id` is never the stranger case `Caller` otherwise allows for.
+            /**
+             * `router.use(getAuth, isAuth)` demands a live session before any route here is
+             * reached, so `id` is never the stranger case `Caller` otherwise allows for.
+             */
             createdByUserId: context.caller.id!,
             expiresAt: new Date(body.expiresAt)
         })

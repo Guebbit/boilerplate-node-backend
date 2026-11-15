@@ -62,8 +62,10 @@ const identityOf = (claims: client.IDToken | undefined): OAuthIdentity => {
 export const googleOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 
-    // https://developers.google.com/identity/protocols/oauth2/web-server#httprest
-    // Scope `openid email profile` is what makes Google return an ID token with these claims.
+    /**
+     * https://developers.google.com/identity/protocols/oauth2/web-server#httprest
+     * Scope `openid email profile` is what makes Google return an ID token with these claims.
+     */
     authorizeUrl: (state, redirectUri, codeChallenge) =>
         authorizationUrlFor(configurationFor(PROVIDER_NAME, SERVER), {
             redirectUri,

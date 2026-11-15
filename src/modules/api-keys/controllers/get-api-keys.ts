@@ -16,8 +16,10 @@ import { apiKeysService } from '../services';
  */
 export const listApiKeys = createListController({
     entity: 'apiKeys',
-    // `page`/`pageSize` swapped for the infra pair so an absent one stays absent; `sort` is split
-    // on commas by `csvLists`.
+    /**
+     * `page`/`pageSize` swapped for the infra pair so an absent one stays absent; `sort` is split
+     * on commas by `csvLists`.
+     */
     schema: ListApiKeysQueryParams.extend({ page: pageSchema, pageSize: pageSizeSchema }).partial(),
     input: { csvLists: ['sort'] },
     runList: (parsed, request): Promise<ApiKeysResponse> =>

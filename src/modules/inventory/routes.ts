@@ -5,7 +5,7 @@
  * they are looking at — but not every route needs the same key: `manager` reads levels without
  * moving stock, `warehouse` moves stock through `create:StockMovement`.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-pipeline
  */
 
 import { Router } from 'express';
@@ -23,7 +23,7 @@ import { postReservationsSweep } from './controllers/post-reservations-sweep';
 /** Express router for inventory operations. */
 export const router = Router();
 
-/*
+/**
  * Exposing the counters or ledger publicly would tell competitors what sells and tell customers
  * how close they are to missing out — a dark pattern when true, a lie when not.
  *
@@ -42,18 +42,22 @@ router.get('/levels/:productId', requirePermission('read', 'StockLevel'), getInv
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
 router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
 
-// PATCH /inventory/levels/:productId — edit the level: today only how many units may be backordered
-// at once. `update:StockLevel`, not the movement key: it edits the record without moving stock, a
-// promise about units that do not exist yet. Absolute, so a retry is harmless without an
-// idempotency key.
+/**
+ * PATCH /inventory/levels/:productId — edit the level: today only how many units may be backordered
+ * at once. `update:StockLevel`, not the movement key: it edits the record without moving stock, a
+ * promise about units that do not exist yet. Absolute, so a retry is harmless without an
+ * idempotency key.
+ */
 router.patch('/levels/:productId', requirePermission('update', 'StockLevel'), patchInventoryLevel);
 
 // GET /inventory/movements — the ledger, newest first
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
-// POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
-// moves without — see `shared/authorization-keys.generated.yaml`. The key is REQUIRED: a retried
-// receipt must replay, not count the delivery twice.
+/**
+ * POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
+ * moves without — see `shared/authorization-keys.generated.yaml`. The key is REQUIRED: a retried
+ * receipt must replay, not count the delivery twice.
+ */
 router.post(
     '/levels/:productId/receive',
     requirePermission('create', 'StockMovement'),
@@ -61,8 +65,10 @@ router.post(
     postReceipt
 );
 
-// POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same required key as receipts:
-// a retried delta applied twice is a wrong stock count.
+/**
+ * POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same required key as receipts:
+ * a retried delta applied twice is a wrong stock count.
+ */
 router.post(
     '/levels/:productId/adjust',
     requirePermission('create', 'StockMovement'),
@@ -70,10 +76,12 @@ router.post(
     postAdjustment
 );
 
-// POST /inventory/reservations/sweep — the expiry tick's on-demand door. `npm run
-// sweep:reservations` (`docker/crontab`) is the actual schedule, calling `runReservationSweep`
-// in-process and never reaching this route at all; this is for an operator, or a platform
-// scheduler that prefers HTTP over a cron container. `sweep`, not `manage`: no preset role is
-// meant to reach it directly, and CRUD has no verb for "clear expired holds on demand" — see
-// `shared/authorization-keys.generated.yaml`.
+/**
+ * POST /inventory/reservations/sweep — the expiry tick's on-demand door. `npm run
+ * sweep:reservations` (`docker/crontab`) is the actual schedule, calling `runReservationSweep`
+ * in-process and never reaching this route at all; this is for an operator, or a platform
+ * scheduler that prefers HTTP over a cron container. `sweep`, not `manage`: no preset role is
+ * meant to reach it directly, and CRUD has no verb for "clear expired holds on demand" — see
+ * `shared/authorization-keys.generated.yaml`.
+ */
 router.post('/reservations/sweep', requirePermission('sweep', 'StockLevel'), postReservationsSweep);

@@ -47,12 +47,14 @@ const addressItemSchema = new Schema(
         ...postalAddressPaths,
         default: { type: Boolean, default: false }
     },
-    /* `_id: true` is mongoose's default; spelled out because the WISH to have one is the whole
-     * difference from the cart/wishlist line schemas next door. */
+    /**
+     * `_id: true` is mongoose's default; spelled out because the WISH to have one is the whole
+     * difference from the cart/wishlist line schemas next door.
+     */
     { _id: true }
 );
 
-/*
+/**
  * An entry serializes as the contract's `Address` — `_id` renamed to `id`, like the product
  * snapshot embedded in an order line. `./services/addresses` maps entries by hand instead, so no
  * request path uses this; only `tests/integration/scenarios/shop.test.ts`'s conformance check

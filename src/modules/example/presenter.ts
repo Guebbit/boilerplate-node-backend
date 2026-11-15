@@ -5,7 +5,7 @@
  * Here: the one field a document cannot supply is `ownerName`, which belongs to `users`; `actions`
  * is decided by the caller's service and handed in, never asked for here.
  *
- * @see docs/understand/layers.md
+ * @see docs/understand/layers.md#example-from-this-repo
  */
 
 import type { Example, ExampleActions, ExportExample } from '@types';
@@ -29,8 +29,10 @@ export const presentExample = (
     actions: ExampleActions
 ): Example =>
     carryVersion(document, {
-        // The schema's `toJSON` transform produces the row shape `ExampleRow` names; Mongoose types
-        // it as a generic object.
+        /**
+         * The schema's `toJSON` transform produces the row shape `ExampleRow` names; Mongoose types
+         * it as a generic object.
+         */
         ...(document.toJSON() as ExampleRow),
         ownerName,
         actions

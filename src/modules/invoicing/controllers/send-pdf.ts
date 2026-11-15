@@ -18,8 +18,10 @@ export const sendPdf = (response: Response, filename: string, pdf: Buffer | Uint
         .status(200)
         .setHeader('Content-Type', 'application/pdf')
         .setHeader('Content-Disposition', `inline; filename="${filename}"`)
-        // Personal and financial data — never a shared/CDN cache, and never the browser's own
-        // disk cache either.
+        /**
+         * Personal and financial data — never a shared/CDN cache, and never the browser's own
+         * disk cache either.
+         */
         .setHeader('Cache-Control', 'private, no-store')
         .send(pdf);
 };

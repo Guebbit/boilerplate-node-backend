@@ -213,8 +213,10 @@ const fail = (
     logger.error({ message: 'account export failed', exportId: String(row._id), error });
 
     return settleAnnouncing(row, 'failed').then((settled) => {
-        // Otherwise a sibling settled the row (its file is good) or the row is gone (its file
-        // is nobody's).
+        /**
+         * Otherwise a sibling settled the row (its file is good) or the row is gone (its file
+         * is nobody's).
+         */
         if (!settled) return removeFileIfRowGone(row);
 
         // This run's own failure: its half-built file goes, and only this run tells the person.
@@ -238,12 +240,16 @@ export const runExportJob = (job: AccountExportJobPayload): Promise<boolean> =>
         if (row?.status !== 'building') return true;
 
         return accountUserService.getById(job.userId).then((user) => {
-            // Erased since the request: there is no account to export, and the job's own address
-            // is not trusted to stand in for one.
+            /**
+             * Erased since the request: there is no account to export, and the job's own address
+             * is not trusted to stand in for one.
+             */
             if (!user) return fail(job, row, new Error('The account is gone.')).then(() => true);
 
-            // Two-argument `then`, not `then().catch()`: a failure AFTER the row is ready (the mail)
-            // must not reach `fail`, which would delete a good file.
+            /**
+             * Two-argument `then`, not `then().catch()`: a failure AFTER the row is ready (the mail)
+             * must not reach `fail`, which would delete a good file.
+             */
             return buildAndSettle(personalDataSubjectOf(user), row)
                 .then(
                     (settled) => afterBuild(job, row, settled),

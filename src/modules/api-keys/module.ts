@@ -9,7 +9,7 @@
  *              `onRegistered` hook, the same "module fills a kernel port" shape
  *              `account/module.ts`'s `registerAuthResolver` already establishes.
  *
- * @see docs/modules/api-keys.md
+ * @see docs/modules/api-keys.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -36,9 +36,11 @@ export default {
     mounts: [{ basePath: '/api-keys', routes: router }],
     onRegistered,
     subscribe: () => {
-        // A key outlives every session, so the events that end sessions wholesale (logout
-        // everywhere, a password reset) revoke what the person minted. Owned here: `account` knows
-        // nothing about keys, it only announces.
+        /**
+         * A key outlives every session, so the events that end sessions wholesale (logout
+         * everywhere, a password reset) revoke what the person minted. Owned here: `account` knows
+         * nothing about keys, it only announces.
+         */
         onDomainEvent(ACCOUNT_SESSIONS_REVOKED, ({ userId, reason }) =>
             revokeAllMintedBy(userId, reason)
         );
@@ -53,11 +55,13 @@ export default {
         {
             section: 'apiKeys',
             collect: (subject) => findOwnApiKeys(subject.userId),
-            // A destroyed account takes its minted credentials with it, inside the same
-            // transaction — the same hook `addresses`, `cart`, `wishlist` and `payments` each
-            // declare on their own collection. Without this, an erased user's keys stayed live:
-            // the credential resolver refuses them once the user is gone, but the rows themselves
-            // outlived the account.
+            /**
+             * A destroyed account takes its minted credentials with it, inside the same
+             * transaction — the same hook `addresses`, `cart`, `wishlist` and `payments` each
+             * declare on their own collection. Without this, an erased user's keys stayed live:
+             * the credential resolver refuses them once the user is gone, but the rows themselves
+             * outlived the account.
+             */
             erase: ({ userId }, session) => apiKeysDeleteByUserId(userId, session)
         }
     ]

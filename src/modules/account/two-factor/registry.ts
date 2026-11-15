@@ -74,8 +74,10 @@ export interface TwoFactorMethodHandler {
  */
 const HANDLERS: readonly TwoFactorMethodHandler[] = [totpMethod, emailMethod];
 
-// Zero from startup (every method, plus the `all` of the full disable), so the failure alert sees
-// the first failure after a restart. https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+/**
+ * Zero from startup (every method, plus the `all` of the full disable), so the failure alert sees
+ * the first failure after a restart. https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+ */
 for (const method of ['all', ...HANDLERS.map((handler) => handler.name)])
     for (const status of ['success', 'failure'])
         authTwoFactorDisableTotal.inc({ method, status }, 0);

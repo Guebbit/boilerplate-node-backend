@@ -58,7 +58,6 @@ interface Shipped {
  * Whether the order is in a state a shipment may leave from: `processing`, or `paid` for a caller
  * who may start it. A `canceled` or `pending` order is not shippable at all — a different refusal,
  * because the remedy differs (nothing to do, versus start fulfillment).
- * @param status - the order's status
  * @param mayStart - whether the caller holds `start:Shipment`
  * @throws {ActRefusal} 409 for a closed or unpaid order, 403 for a `paid` one the caller may not start
  */

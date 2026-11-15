@@ -4,7 +4,7 @@
  * credential. The secret itself is never stored — only `hash`, a sha256 digest (see
  * `./credentials`) — so a database leak alone can never forge a credential.
  *
- * @see docs/reference/data.md
+ * @see docs/reference/data.md#the-two-halves
  */
 
 import { model, Schema } from 'mongoose';
@@ -44,8 +44,10 @@ export const apiKeySchema = new Schema<ApiKeyDocument, ApiKeyModel>(
             required: true,
             trim: true
         },
-        // `unique: true` is a database fact, not just an index: two credentials sharing a prefix
-        // would make `findActiveByPrefix` ambiguous about which hash to verify against.
+        /**
+         * `unique: true` is a database fact, not just an index: two credentials sharing a prefix
+         * would make `findActiveByPrefix` ambiguous about which hash to verify against.
+         */
         publicPrefix: {
             type: String,
             required: true,

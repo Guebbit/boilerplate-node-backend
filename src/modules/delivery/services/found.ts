@@ -25,7 +25,6 @@ import { announceCanceled } from './announce';
 
 /**
  * A lost shipment and the fulfillment orders of its order, as the plan reads them.
- * @param shipment - the shipment
  * @param orders - every fulfillment order of its order
  */
 const planFor = (
@@ -57,7 +56,6 @@ const planFor = (
 /**
  * Whether a shipment is `lost` AND can still be recorded as arrived, for the flags on its read.
  * @param shipments - the shipments of one order
- * @param orderId - the order
  * @returns the ids of the lost shipments whose units are all still open
  */
 export const restorableIds = (
@@ -81,7 +79,6 @@ export const restorableIds = (
 /**
  * A shipment as the wire carries it, for an act or a read that holds one shipment: a `lost` one
  * asks the fulfillment orders whether it can still arrive.
- * @param shipment - the shipment
  * @param order - its order
  * @param authContext - the caller
  */

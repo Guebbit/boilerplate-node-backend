@@ -18,9 +18,11 @@ import { postProcessOrder } from './controllers/post-process-order';
 /** Express router for the delivery operations that live under an order. */
 export const orderRouter = Router();
 
-// POST /orders/:id/process — begins fulfillment; moves the order paid -> processing. Optional:
-// shipping from `paid` makes the same move itself.
-// No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
+/**
+ * POST /orders/:id/process — begins fulfillment; moves the order paid -> processing. Optional:
+ * shipping from `paid` makes the same move itself.
+ * No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
+ */
 orderRouter.post(
     '/:id/process',
     getAuth,
@@ -29,8 +31,10 @@ orderRouter.post(
     postProcessOrder
 );
 
-// GET /orders/:id/fulfillment-orders and /shipments — the lists behind one of the caller's orders.
-// `read:Order`, the key of the order they are about; the service scopes to the caller's own.
+/**
+ * GET /orders/:id/fulfillment-orders and /shipments — the lists behind one of the caller's orders.
+ * `read:Order`, the key of the order they are about; the service scopes to the caller's own.
+ */
 orderRouter.get(
     '/:id/fulfillment-orders',
     getAuth,

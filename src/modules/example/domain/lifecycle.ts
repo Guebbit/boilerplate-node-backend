@@ -7,7 +7,7 @@
  * contract carries the status enum and the `actions` flags, never the graph; each verb endpoint
  * names its "from" statuses in one line.
  *
- * @see docs/understand/domain-layer.md
+ * @see docs/understand/domain-layer.md#the-shape-verdict-not-rejection
  */
 
 import { ExampleStatus } from '@types';

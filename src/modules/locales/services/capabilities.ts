@@ -87,8 +87,10 @@ export const staticCapability = (tag: string, active = true): Language => ({
     nativeName: describeLanguage(tag, tag),
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
     active,
-    // The backend app and only that: the API has its own wording in it, and there is no dictionary
-    // to download.
+    /**
+     * The backend app and only that: the API has its own wording in it, and there is no dictionary
+     * to download.
+     */
     apps: [backendApp()],
     source: LocaleSource.static,
     entryCount: 0,
@@ -175,8 +177,10 @@ export const readDynamicTier = (
     inactiveTags: ReadonlySet<string>;
 }> =>
     Promise.all([
-        // `active` gates what a VISITOR may select and nothing else — the admin, who is the
-        // one toggling the flag, reads every row. Same rule as products and users.
+        /**
+         * `active` gates what a VISITOR may select and nothing else — the admin, who is the
+         * one toggling the flag, reads every row. Same rule as products and users.
+         */
         localeRepository.list(scope),
         localeEntryRepository.countEntriesByLocale(),
         localeRepository.listInactiveTags()
@@ -228,11 +232,13 @@ export const listCapabilities = (
     standing: LanguageStanding = NO_STANDING
 ): Promise<LocaleCapabilities> =>
     readDynamicTier(scope).then(({ languages, entryCounts, inactiveTags }) => ({
-        // A language with a deployed dictionary file is always in `listSupportedLocales()`; a
-        // visitor's scoped read drops its switched-off row, so the flags come from the unscoped
-        // set. It stays in the list as `active: false` rather than vanishing: the frontend bundles
-        // its own copy of the language, and only this row tells it to stop offering it. A failed
-        // read of the flags is an empty set, and the files are served as before.
+        /**
+         * A language with a deployed dictionary file is always in `listSupportedLocales()`; a
+         * visitor's scoped read drops its switched-off row, so the flags come from the unscoped
+         * set. It stays in the list as `active: false` rather than vanishing: the frontend bundles
+         * its own copy of the language, and only this row tells it to stop offering it. A failed
+         * read of the flags is an empty set, and the files are served as before.
+         */
         locales: mergeCapabilities(
             listSupportedLocales(),
             languages,
@@ -250,7 +256,6 @@ export const listCapabilities = (
  * Reads through {@link listCapabilities} on purpose: `GET /locales/{locale}`, the writes' answers
  * and the list are then the same representation under the same scoping, by construction.
  *
- * @param tag - the language
  * @param scope - which rows this caller may read ({@link callerScope}); omit to read every row,
  *   as a write's answer does
  * @param standing - what the caller may do to a registered language ({@link readStanding})

@@ -60,8 +60,10 @@ const deliverAct = async (
     if (!canRecordArrival(order.status))
         refuse(409, ERROR_CODES.DELIVERY_NOT_DELIVERABLE, 'delivery.not-deliverable');
 
-    // One instant for the shipment and, when it completes the order, the withdrawal deadline: the
-    // two must never disagree about when the goods arrived.
+    /**
+     * One instant for the shipment and, when it completes the order, the withdrawal deadline: the
+     * two must never disagree about when the goods arrived.
+     */
     const at = new Date();
     const wasLost = found.status === ShipmentStatus.lost;
     const shipment = wasLost

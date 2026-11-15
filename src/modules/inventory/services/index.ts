@@ -9,7 +9,7 @@
  *               release with its announcement (`sweep.ts`). The rest are conditional
  *               single-document writes; gaps are noted at the call sites that own them.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#its-neighbourhood
  */
 
 import { reserveForOrder } from './reserve';

@@ -23,8 +23,10 @@ import type { Order } from '@types';
  */
 export const postCheckout = (request: Request, response: Response) => {
     const userId = request.authContext!.id;
-    // The body is required (it names `expectedTotal`); a missing one reaches the schema as `undefined`
-    // and answers 422 like any other malformed body.
+    /**
+     * The body is required (it names `expectedTotal`); a missing one reaches the schema as `undefined`
+     * and answers 422 like any other malformed body.
+     */
     const body = parseBody(CheckoutBody, request.body as unknown, response);
     if (!body) return;
 
@@ -34,13 +36,17 @@ export const postCheckout = (request: Request, response: Response) => {
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;
 
-            // `withActions` is the one place an `OrderDocument` becomes the wire shape — it also
-            // resolves each line's live `current` picture, which a bare `.toJSON()` here would
-            // leave off the response entirely.
+            /**
+             * `withActions` is the one place an `OrderDocument` becomes the wire shape — it also
+             * resolves each line's live `current` picture, which a bare `.toJSON()` here would
+             * leave off the response entirely.
+             */
             return orderService.withActions(result.data, request.authContext).then((order) => {
-                // The order itself, as `POST /orders` answers it: a 201 describes the resource it
-                // created, and the confirmation copy is the envelope's own `message`.
-                // The order's real tag, from the document: `order` is the wire shape.
+                /**
+                 * The order itself, as `POST /orders` answers it: a 201 describes the resource it
+                 * created, and the confirmation copy is the envelope's own `message`.
+                 * The order's real tag, from the document: `order` is the wire shape.
+                 */
                 answerAsResource(response, result.data, `/orders/${order.id}`);
                 createdResponse<Order>(response, order, `/orders/${order.id}`);
             });

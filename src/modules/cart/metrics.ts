@@ -16,8 +16,10 @@ export const cartCheckoutTotal = new Counter({
     // Prometheus naming: `<domain>_<subject>_total` for a counter.
     name: 'cart_checkout_total',
     help: 'Total checkout attempts, labelled by outcome.',
-    // `as const` narrows the label names to literals, so `inc({ status })` is type-checked
-    // against them instead of accepting any string key.
+    /**
+     * `as const` narrows the label names to literals, so `inc({ status })` is type-checked
+     * against them instead of accepting any string key.
+     */
     labelNames: ['status'] as const,
     registers: [metricsRegistry]
 });

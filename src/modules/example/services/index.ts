@@ -5,7 +5,7 @@
  * barrel publishes: every operation once, on the object, and nowhere by name.
  * Here: CRUD, the cover, and the status doors (publish, archive, unarchive).
  *
- * @see docs/understand/layers.md
+ * @see docs/understand/layers.md#example-from-this-repo
  */
 
 import { create, getById, removeById, search, updateById } from './crud';

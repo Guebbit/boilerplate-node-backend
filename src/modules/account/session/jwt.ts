@@ -269,9 +269,11 @@ export const verifyRefreshWithRow = (
 ): Promise<{ data: TokenData; row: SessionRow }> =>
     verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
         sessionRepository.findByHash(hashToken(token)).then((row) => {
-            // A rotated-away token still has its row (reuse detection and the two-tab grace need
-            // that); as a credential for anything but the rotation itself it is dead. Reuse is
-            // only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
+            /**
+             * A rotated-away token still has its row (reuse detection and the two-tab grace need
+             * that); as a credential for anything but the rotation itself it is dead. Reuse is
+             * only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
+             */
             if (row?.mode !== 'jwt' || row.supersededAt || row.expiresAt <= new Date())
                 throw new TokenRejection('revoked', 'Forbidden');
             // Scoped: a deactivated or deleted account's refresh cookie stops on its very next use.
@@ -364,7 +366,7 @@ const mintRefreshToken = (
     accountUserService.findAuthenticatableById(id).then((user) => {
         if (!user) throw new Error('User not found');
         guard(user);
-        /*
+        /**
          * Signed through `signRefreshToken`, whose `jti` is what makes two refresh tokens
          * minted in the same second different. The payload is `{ sub }` plus JWT's own
          * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
@@ -391,8 +393,10 @@ const mintRefreshToken = (
             return sessionRepository
                 .insert({
                     userId: new Types.ObjectId(id),
-                    // A first row starts a session family; a rotation's or a re-proof's
-                    // successor copies it.
+                    /**
+                     * A first row starts a session family; a rotation's or a re-proof's
+                     * successor copies it.
+                     */
                     familyId: continued?.familyId ?? new Types.ObjectId(),
                     mode: 'jwt',
                     tokenHash: hashToken(token),
@@ -452,8 +456,10 @@ export const continueSession = (
     remember?: RememberTier,
     continued?: SessionSnapshot
 ): Promise<string> =>
-    // Stamped at the mint: a re-mint can follow its own epoch move (a password change), which a
-    // proof time read before that move would predate.
+    /**
+     * Stamped at the mint: a re-mint can follow its own epoch move (a password change), which a
+     * proof time read before that move would predate.
+     */
     mintRefreshToken(id, { amr, provedAt: Date.now() }, remember, () => undefined, continued);
 
 /**
@@ -512,8 +518,10 @@ const storeSuccessor = (
             mode: 'jwt',
             tokenHash: hashToken(newRefreshToken),
             authTime: claims.auth_time,
-            // A refresh is the client renewing a token, not the person acting: the clock the idle
-            // timeout reads is carried over, never reset by the rotation.
+            /**
+             * A refresh is the client renewing a token, not the person acting: the clock the idle
+             * timeout reads is carried over, never reset by the rotation.
+             */
             ...(previous.lastUsedAt && { lastUsedAt: previous.lastUsedAt }),
             expiresAt: new Date(now.getTime() + remainingMs)
         })
@@ -546,16 +554,20 @@ const reissueRotated = (
 ): Promise<RotatedSession> =>
     accountUserService.findAuthenticatableById(claims.sub).then((user) => {
         if (!user) throw new TokenRejection('revoked', 'User not found');
-        // The epoch may have moved since the presented token was minted: a rotation must not
-        // carry a revoked session forward.
+        /**
+         * The epoch may have moved since the presented token was minted: a rotation must not
+         * carry a revoked session forward.
+         */
         if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
             throw new TokenRejection('revoked', 'Forbidden');
 
         return sessionRepository.findByHash(hashToken(oldToken)).then(async (previous) => {
             if (!previous) throw new TokenRejection('revoked', 'Forbidden');
 
-            // A refresh is not the person acting (`passive`): judged against the idle limit, never
-            // counted as activity. An idled-out staff family is removed by the check itself.
+            /**
+             * A refresh is not the person acting (`passive`): judged against the idle limit, never
+             * counted as activity. An idled-out staff family is removed by the check itself.
+             */
             const liveness = await resolveInLiveFamily(
                 claims.sub,
                 String(previous.familyId),
@@ -589,30 +601,38 @@ const resolveLostRotation = (
     remainingMs: number
 ): Promise<RotatedSession> =>
     sessionRepository.findByHash(hashToken(oldToken)).then((row) => {
-        // Genuinely absent — revoked by logout/password-change/deactivation while this
-        // JWT's signature still verified, or already deleted by its TTL. An ordinary dead
-        // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
-        // already gone. `verifyRefreshToken` answers this identically for the non-rotating
-        // callers that still use it.
+        /**
+         * Genuinely absent — revoked by logout/password-change/deactivation while this
+         * JWT's signature still verified, or already deleted by its TTL. An ordinary dead
+         * credential, same as it always was: NOT reuse, and nothing to revoke that isn't
+         * already gone. `verifyRefreshToken` answers this identically for the non-rotating
+         * callers that still use it.
+         */
         if (!row) throw new TokenRejection('revoked', 'Forbidden');
 
-        // Still live (no `supersededAt`) despite losing the claim: only reachable through
-        // a race tighter than `supersede` itself allows for. Treat it as live — the
-        // credential is exactly as valid as the caller believes it is.
+        /**
+         * Still live (no `supersededAt`) despite losing the claim: only reachable through
+         * a race tighter than `supersede` itself allows for. Treat it as live — the
+         * credential is exactly as valid as the caller believes it is.
+         */
         if (!row.supersededAt) return reissueRotated(claims, oldToken, remainingMs);
 
         const supersededMsAgo = Date.now() - row.supersededAt.getTime();
         if (supersededMsAgo <= getRotationGraceMilliseconds())
-            // The benign race: someone else's rotation of this SAME token already won,
-            // moments ago. Reissue rather than reject — see the module doc above.
+            /**
+             * The benign race: someone else's rotation of this SAME token already won,
+             * moments ago. Reissue rather than reject — see the module doc above.
+             */
             return reissueRotated(claims, oldToken, remainingMs);
 
-        // Superseded well outside the grace window: THIS is the signal that distinguishes
-        // reuse from an ordinary dead credential — a token this account rotated away, on
-        // purpose, being replayed long after. Revoke first, so the throw below is never a
-        // lie about what state the account is left in: every session this account holds is gone,
-        // and every access token with them — the epoch moves FIRST, so if the removal then fails
-        // the tokens are already dead.
+        /**
+         * Superseded well outside the grace window: THIS is the signal that distinguishes
+         * reuse from an ordinary dead credential — a token this account rotated away, on
+         * purpose, being replayed long after. Revoke first, so the throw below is never a
+         * lie about what state the account is left in: every session this account holds is gone,
+         * and every access token with them — the epoch moves FIRST, so if the removal then fails
+         * the tokens are already dead.
+         */
         return revokeFor('refresh-reuse', claims.sub).then(() => {
             throw new TokenReuseError(claims.sub);
         });
@@ -635,8 +655,10 @@ export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
     // Signature/expiry/ring lookup only, no DB round trip yet — same as `verifyAccessToken`.
     verifyAgainstRing(oldToken, getRefreshTokenRing(), 'refresh').then(({ exp, ...oldClaims }) => {
         const claims = carriedClaims(oldClaims);
-        // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
-        // verified with almost no time left still gets a successor that lives a moment.
+        /**
+         * `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
+         * verified with almost no time left still gets a successor that lives a moment.
+         */
         const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
 
         return sessionRepository

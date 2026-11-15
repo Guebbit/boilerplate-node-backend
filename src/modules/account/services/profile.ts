@@ -68,8 +68,10 @@ const writeProfile = (
     user: UserDocument,
     fields: ProfileFields
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // Judged before the write assigns onto the document. Only a stored `true` has anything captured
-    // under it: `undefined` never opted in, and `false → false` withdrew already.
+    /**
+     * Judged before the write assigns onto the document. Only a stored `true` has anything captured
+     * under it: `undefined` never opted in, and `false → false` withdrew already.
+     */
     const withdrawing = user.analyticsConsent === true && fields.analyticsConsent === false;
 
     // The outbox row commits with the save, so it exists exactly when the withdrawal does.
@@ -101,8 +103,10 @@ export const updateProfile = (
     changes: ProfileFields,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    // Credentials included by default: the update saves this same document. The shape was checked
-    // once, at the edge (`update-account.ts`'s factory), so nothing here parses it again.
+    /**
+     * Credentials included by default: the update saves this same document. The shape was checked
+     * once, at the edge (`update-account.ts`'s factory), so nothing here parses it again.
+     */
     withOwnAccount(userId, (user) => {
         // Read before the write assigns onto the document.
         const metadata = accountUserService.userAuditChanges(user, changes);

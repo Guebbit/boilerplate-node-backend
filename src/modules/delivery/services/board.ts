@@ -60,7 +60,6 @@ const readableOrders = (
 /**
  * Whether every shipment cut from a closed fulfillment order has arrived.
  *
- * @param fulfillmentOrder - the fulfillment order
  * @param shipped - its shipments
  */
 const isDelivered = (

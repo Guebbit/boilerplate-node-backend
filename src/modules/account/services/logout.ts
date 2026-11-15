@@ -92,7 +92,7 @@ export const logoutCurrentSession = (
             action: accountAuditActions.AUTH_LOGGED_OUT,
             outcome: 'success'
         });
-        /*
+        /**
          * This route authenticates by cookie alone, so there is no bearer to resolve and
          * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
          * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
@@ -122,8 +122,10 @@ export const logoutEverywhere = (
                 | ResponseSuccess<UserDocument>
                 | ResponseReject
                 | Promise<ResponseSuccess<UserDocument>> => {
-                // Gone-but-verified is 401 here too — `openapi.yaml` declares no 404 for
-                // `logoutAll`, and the caller's session is exactly what no longer exists.
+                /**
+                 * Gone-but-verified is 401 here too — `openapi.yaml` declares no 404 for
+                 * `logoutAll`, and the caller's session is exactly what no longer exists.
+                 */
                 if (!user) return generateReject(401, []);
                 return revokeFor('logout-all', user.id).then(() =>
                     generateSuccess<UserDocument>(user)
@@ -136,8 +138,10 @@ export const logoutEverywhere = (
                 action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
                 outcome: result.success ? 'success' : 'failure'
             });
-            // Same name as the single-session logout, told apart by `scope`: one funnel counts
-            // logouts, and splitting it across two names would make every rate built on it wrong.
+            /**
+             * Same name as the single-session logout, told apart by `scope`: one funnel counts
+             * logouts, and splitting it across two names would make every rate built on it wrong.
+             */
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
                 event: accountAnalyticsEvents.USER_LOGGED_OUT,

@@ -28,8 +28,10 @@ export const postResetConfirm = (
 
     const { token, password, passwordConfirm, termsAccepted } = body;
 
-    // The whole order — checks, then the atomic spend of the link — lives in the service, so a
-    // refused password can never burn the link. See `completePasswordReset`.
+    /**
+     * The whole order — checks, then the atomic spend of the link — lives in the service, so a
+     * refused password can never burn the link. See `completePasswordReset`.
+     */
     return accountService
         .completePasswordReset(
             token,

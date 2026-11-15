@@ -9,7 +9,7 @@
  * Shares: nothing over HTTP. `account`, `api-keys`, `example`, `orders`, `payments`, `returns`
  *         and `users` consume it, all through this barrel.
  *
- * @see docs/understand/authorization.md
+ * @see docs/understand/authorization.md#where-it-lives
  */
 
 import type { AppModule } from '@kernel/registry';
@@ -21,9 +21,11 @@ export default {
     personalData: [
         {
             section: 'roles',
-            // Scope only — never the tenant id. This deployment ships one shop, so the id adds
-            // nothing a subject would recognise, and `role`/`scope` alone already answer "what can
-            // this account do", which is what Art. 15 asks for here.
+            /**
+             * Scope only — never the tenant id. This deployment ships one shop, so the id adds
+             * nothing a subject would recognise, and `role`/`scope` alone already answer "what can
+             * this account do", which is what Art. 15 asks for here.
+             */
             collect: (subject) =>
                 accessService.membershipsOf(subject.userId).then((memberships) =>
                     memberships.map((membership) => ({

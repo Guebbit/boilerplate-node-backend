@@ -12,8 +12,10 @@ export const accountAnalyticsEvents = {
     // Auth / onboarding
     USER_SIGNED_UP: 'user_signed_up',
     USER_LOGGED_IN: 'user_logged_in',
-    // Emitted server-side, not by the client: both logout routes are real requests this API
-    // answers, so it can report the one that succeeded rather than the one that was attempted.
+    /**
+     * Emitted server-side, not by the client: both logout routes are real requests this API
+     * answers, so it can report the one that succeeded rather than the one that was attempted.
+     */
     USER_LOGGED_OUT: 'user_logged_out',
     USER_PROFILE_VIEWED: 'user_profile_viewed',
     // The purge fires nothing: no request, no consent behind it.

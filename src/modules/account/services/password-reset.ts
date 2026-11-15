@@ -57,15 +57,19 @@ const afterReset = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (!result.success) return Promise.resolve(result);
 
-    // Same fire-and-forget shape as the mail below: the password change already succeeded, so a
-    // lookup hiccup here must not turn a successful reset into an error — worst case, this one
-    // audit row is missing.
+    /**
+     * Same fire-and-forget shape as the mail below: the password change already succeeded, so a
+     * lookup hiccup here must not turn a successful reset into an error — worst case, this one
+     * audit row is missing.
+     */
     void recordAccountAudit(context, String(user._id), {
         action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
         outcome: 'success'
     }).catch((error: unknown) => {
-        // Still just a missing audit row, not a reset failure — see the comment
-        // above — but a swallowed lookup failure still leaves a trail here.
+        /**
+         * Still just a missing audit row, not a reset failure — see the comment
+         * above — but a swallowed lookup failure still leaves a trail here.
+         */
         logger.warn({
             message: 'Could not audit a completed password reset.',
             userId: String(user._id),
@@ -73,7 +77,7 @@ const afterReset = (
         });
     });
 
-    /*
+    /**
      * The recipient's OWN language first. These links are clicked from an email client,
      * possibly on a shared or borrowed device, so the request's `Accept-Language` says
      * very little about who the message is for — it is the fallback, not the answer. The
@@ -85,8 +89,10 @@ const afterReset = (
     const mail = resetConfirmEmail(
         recipientLocale(user.locale, context),
         greetableName(user, user.email),
-        // `oauthAccounts` is `select: false`: present on a holder loaded for the reset, absent on
-        // one that was not, which is then simply "no providers to name".
+        /**
+         * `oauthAccounts` is `select: false`: present on a holder loaded for the reset, absent on
+         * one that was not, which is then simply "no providers to name".
+         */
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `oauthAccounts` is always loaded; `select: false` makes that a lie
         (user.oauthAccounts ?? []).map(({ provider }) => provider)
     );
@@ -124,8 +130,10 @@ const resetWith = (
     context: CallerContext,
     termsAccepted: boolean | undefined
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // After the link was found, so only the holder of a live token ever sees this refusal; before
-    // the spend, so the link survives and the page can ask again.
+    /**
+     * After the link was found, so only the holder of a live token ever sees this refusal; before
+     * the spend, so the link survives and the page can ask again.
+     */
     if (!user.termsAcceptedAt && termsAccepted !== true)
         return Promise.resolve(
             generateReject(422, [
@@ -136,8 +144,10 @@ const resetWith = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        // One transaction: the spend and the new password commit together, so a failing write
-        // leaves the link live for a retry.
+        /**
+         * One transaction: the spend and the new password commit together, so a failing write
+         * leaves the link live for a retry.
+         */
         return spendThen(
             PASSWORD_RESET_TOKEN_TYPE,
             token,

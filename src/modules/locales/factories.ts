@@ -39,8 +39,10 @@ export const makeLocale = ({
     ...identityOf({ id, createdAt, updatedAt }),
     name: fields.tag,
     nativeName: fields.tag,
-    // Derived, exactly as `createLanguage` derives it: a fixture that stated its own could
-    // publish a dataset the API can never produce.
+    /**
+     * Derived, exactly as `createLanguage` derives it: a fixture that stated its own could
+     * publish a dataset the API can never produce.
+     */
     baseLanguage: deriveBaseLanguage(fields.tag),
     ...stripUndefined({ ...fields })
 });

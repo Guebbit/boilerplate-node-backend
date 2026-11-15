@@ -92,10 +92,12 @@ export const applyTransition = async (
     session?: ClientSession
 ): Promise<boolean> => {
     const { kind = 'stock', ...recorded } = context;
-    // Only read the product back when this product has no level row yet — the common case (every
-    // transition after the first) skips it entirely.
+    /**
+     * Only read the product back when this product has no level row yet — the common case (every
+     * transition after the first) skips it entirely.
+     */
     if (!(await stockLevelRepository.findByProductId(productId, session))) {
-        /*
+        /**
          * A `reserve` against no row has nothing to set aside: a level that never existed reads as
          * nothing available (see `reserve.ts`), so the hold is refused, never reported as taken.
          * A `preorder` against no row has no allowance to claim, for the same reason.
@@ -107,7 +109,7 @@ export const applyTransition = async (
         )
             return false;
 
-        /*
+        /**
          * `release`/`expire`/`commit` read "no row" as "nothing to move", not a failure: a
          * product's level row is deleted alongside it (see `module.ts`'s `PRODUCT_DELETED`
          * listener), so a hold still open against a since-deleted line has nowhere left to land.
@@ -169,8 +171,10 @@ export const applyToEveryLine = async (
 ): Promise<void> => {
     for (const { productId, quantity, kind } of lines) {
         const id = String(productId);
-        // Units that do not exist yet cannot leave the shelf: refusing here rolls the caller's
-        // transaction back instead of taking real units for an allowance.
+        /**
+         * Units that do not exist yet cannot leave the shelf: refusing here rolls the caller's
+         * transaction back instead of taking real units for an allowance.
+         */
         if (reason === StockMovementReason.ship && kind === 'backorder')
             throw new Error(
                 `Inventory: cannot ship ${quantity} of product ${id} for order ${context.reference} — they are still a preorder claim`

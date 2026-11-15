@@ -11,7 +11,7 @@
  *         return (`kernel/middlewares/authorizations.ts`) for why mounting two routers there
  *         costs one auth resolution, not two.
  *
- * @see docs/modules/addresses.md
+ * @see docs/modules/addresses.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -30,8 +30,10 @@ export default {
             section: 'addresses',
             collect: (subject) =>
                 addressService.list(subject.userId).then((view) => view.addresses),
-            // A destroyed account takes its address book with it, inside the same
-            // transaction — see `addressesDeleteByUserId`.
+            /**
+             * A destroyed account takes its address book with it, inside the same
+             * transaction — see `addressesDeleteByUserId`.
+             */
             erase: ({ userId }, session) => addressService.removeByUserId(userId, session),
             // The book is re-enterable convenience data, the first thing an idle account drops.
             minimise: addressService.minimise

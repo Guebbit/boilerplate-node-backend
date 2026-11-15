@@ -7,7 +7,7 @@
  * cancels what has not through `shippedQuantities` and `cancelRemainder`. The two repositories and the
  * models' runtime stay inside — no other export here is a write handle on a collection.
  *
- * @see docs/modules/delivery.md
+ * @see docs/modules/delivery.md#its-neighbourhood
  */
 
 export * from './services';

@@ -99,7 +99,7 @@ export const router = Router();
 // All routes apply getAuth so request.authContext is populated when a token is present
 router.use(getAuth);
 
-/*
+/**
  * Credentials and auth-state changes: never cacheable. Mounted here rather than per controller so
  * a route added later cannot silently omit it — see `noStore`. Covers `GET /account` too,
  * deliberately: `setCache`'s `Cache-Control` REPLACES the header this sets, so a route mounting
@@ -112,18 +112,22 @@ router.use(noStore);
 // GET /account — current user profile (requires auth)
 router.get('/', isAuth, getAccount);
 
-// PUT /account (replace) and PATCH /account (merge) — own profile, requires auth. The upload
-// mirrors signup's. No fresh-auth gate: the fields here (username, locale, image, consent) are not
-// a sign-in or recovery channel. The email is, and has its own door below.
+/**
+ * PUT /account (replace) and PATCH /account (merge) — own profile, requires auth. The upload
+ * mirrors signup's. No fresh-auth gate: the fields here (username, locale, image, consent) are not
+ * a sign-in or recovery channel. The email is, and has its own door below.
+ */
 router.put('/', uploadLimiter, isAuth, upload.image(), replaceAccount);
 
 // PATCH /account — merge the fields sent; same upload as the PUT above.
 router.patch('/', uploadLimiter, isAuth, upload.image(), updateAccount);
 
-// POST /account/email-change — start an email change (requires auth). The address is a sign-in and
-// recovery channel, so the step-up is unconditional: sensitive tier, plus an `otp` proof when a
-// second factor is armed. `signedInCredentialLimiters` after `isAuth`, as on /password: its budget
-// is per account, and bounds a signed-in caller probing which addresses are taken.
+/**
+ * POST /account/email-change — start an email change (requires auth). The address is a sign-in and
+ * recovery channel, so the step-up is unconditional: sensitive tier, plus an `otp` proof when a
+ * second factor is armed. `signedInCredentialLimiters` after `isAuth`, as on /password: its budget
+ * is per account, and bounds a signed-in caller probing which addresses are taken.
+ */
 router.post(
     '/email-change',
     isAuth,
@@ -133,18 +137,24 @@ router.post(
     postEmailChange
 );
 
-// DELETE /account/email-change — cancel a pending email change (requires auth). No fresh-auth
-// gate: it only discards a change, the same trust level as reading the profile that shows it.
+/**
+ * DELETE /account/email-change — cancel a pending email change (requires auth). No fresh-auth
+ * gate: it only discards a change, the same trust level as reading the profile that shows it.
+ */
 router.delete('/email-change', isAuth, cancelPendingEmail);
 
-// POST /account/email-change/resend — mail the pending address a fresh link (requires auth). No
-// fresh-auth gate: the address was already asked for under one, and nothing about the account
-// changes. Bounded by the service's cooldown and the mailbox budget, not the credential budgets:
-// it takes no secret.
+/**
+ * POST /account/email-change/resend — mail the pending address a fresh link (requires auth). No
+ * fresh-auth gate: the address was already asked for under one, and nothing about the account
+ * changes. Bounded by the service's cooldown and the mailbox budget, not the credential budgets:
+ * it takes no secret.
+ */
 router.post('/email-change/resend', isAuth, postPendingEmailResend);
 
-// DELETE /account — lock the account and schedule its erasure (requires auth). Critical:
-// destruction. An account with a second factor must also have proved a code in that fresh session.
+/**
+ * DELETE /account — lock the account and schedule its erasure (requires auth). Critical:
+ * destruction. An account with a second factor must also have proved a code in that fresh session.
+ */
 router.delete(
     '/',
     isAuth,
@@ -153,20 +163,26 @@ router.delete(
     deleteAccount
 );
 
-// POST /account/restore — cancel the scheduled deletion with the mailed token. Public, the token is
-// the credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
+/**
+ * POST /account/restore — cancel the scheduled deletion with the mailed token. Public, the token is
+ * the credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
+ */
 router.post('/restore', credentialLimiters, postAccountRestore);
 
-// POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
-// default) only engages once `credentialLimiters`' identity or block budget is mostly spent —
-// never on an honest first attempt, see rate-limits.ts.
+/**
+ * POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
+ * default) only engages once `credentialLimiters`' identity or block budget is mostly spent —
+ * never on an honest first attempt, see rate-limits.ts.
+ */
 router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 
-// POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
-// abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
-// would spend nothing on — see rate-limits.ts. `humanChallengeGate` is rung 3, off by default.
-// JSON only: no upload middleware is mounted, because a stranger writes nothing to the image store
-// before registering — the avatar is a follow-up `PATCH /account` from the signed-in session.
+/**
+ * POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
+ * abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
+ * would spend nothing on — see rate-limits.ts. `humanChallengeGate` is rung 3, off by default.
+ * JSON only: no upload middleware is mounted, because a stranger writes nothing to the image store
+ * before registering — the avatar is a follow-up `PATCH /account` from the signed-in session.
+ */
 router.post(
     '/signup',
     signupLimiters,
@@ -176,8 +192,10 @@ router.post(
     postSignup
 );
 
-// POST /account/password/reset — request password reset email. `resetRequestLimiters`, same reasoning as
-// signup: this route always answers 200, so only a budget spent by success bounds anything.
+/**
+ * POST /account/password/reset — request password reset email. `resetRequestLimiters`, same reasoning as
+ * signup: this route always answers 200, so only a budget spent by success bounds anything.
+ */
 router.post(
     '/password/reset',
     resetRequestLimiters,
@@ -189,11 +207,13 @@ router.post(
 // POST /account/password/reset/confirm — complete password reset with token
 router.post('/password/reset/confirm', credentialLimiters, postResetConfirm);
 
-// POST /account/password — change password by proving the current one (requires auth). An account
-// with a second factor must also have a fresh session that proved a code; one without is asked
-// nothing new.
-// `isAuth` runs BEFORE `signedInCredentialLimiters` here and on /reauth: the body names no account,
-// so the signed-in budget can only be per account if it reads the signed-in account's.
+/**
+ * POST /account/password — change password by proving the current one (requires auth). An account
+ * with a second factor must also have a fresh session that proved a code; one without is asked
+ * nothing new.
+ * `isAuth` runs BEFORE `signedInCredentialLimiters` here and on /reauth: the body names no account,
+ * so the signed-in budget can only be per account if it reads the signed-in account's.
+ */
 router.post(
     '/password',
     isAuth,
@@ -202,36 +222,50 @@ router.post(
     postPasswordChange
 );
 
-// POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
-// an account exists). `passwordCheckLimiters`, not `credentialLimiters`: this body carries no
-// email/username, so `credentialLimiters`' identity key would fall back to the caller's address
-// block. Address- and block-keyed directly instead.
+/**
+ * POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
+ * an account exists). `passwordCheckLimiters`, not `credentialLimiters`: this body carries no
+ * email/username, so `credentialLimiters`' identity key would fall back to the caller's address
+ * block. Address- and block-keyed directly instead.
+ */
 router.post('/password/check', passwordCheckLimiters, postPasswordCheck);
 
-// GET /account/reauth — which methods this account can step up with. Plain `isAuth`: a stale
-// session has to be able to ask, or it could never learn how to get fresh.
+/**
+ * GET /account/reauth — which methods this account can step up with. Plain `isAuth`: a stale
+ * session has to be able to ask, or it could never learn how to get fresh.
+ */
 router.get('/reauth', isAuth, getReauthMethods);
 
-// POST /account/reauth — step-up: re-prove a password or a mailed code, refresh auth_time
-// (requires auth)
+/**
+ * POST /account/reauth — step-up: re-prove a password or a mailed code, refresh auth_time
+ * (requires auth)
+ */
 router.post('/reauth', isAuth, signedInCredentialLimiters, postReauth);
 
-// POST /account/reauth/methods/:method/send — mail the step-up code to an account with no
-// password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
-// since both spend the same mailbox.
+/**
+ * POST /account/reauth/methods/:method/send — mail the step-up code to an account with no
+ * password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
+ * since both spend the same mailbox.
+ */
 router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
 
-// POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
-// rotates the token (a state change a GET must not make), and origin-checked: the cookie alone
-// authenticates it, so a request from someone else's page must not act.
+/**
+ * POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
+ * rotates the token (a state change a GET must not make), and origin-checked: the cookie alone
+ * authenticates it, so a request from someone else's page must not act.
+ */
 router.post('/refresh', requireAllowedOrigin, getRefreshToken);
 
-// POST /account/logout — revoke THIS session's refresh token (cookie is the credential), behind the
-// same origin check as refresh.
+/**
+ * POST /account/logout — revoke THIS session's refresh token (cookie is the credential), behind the
+ * same origin check as refresh.
+ */
 router.post('/logout', requireAllowedOrigin, postLogout);
 
-// DELETE /account/sessions — revoke all refresh tokens (requires auth). Sensitive: evicting the
-// owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
+/**
+ * DELETE /account/sessions — revoke all refresh tokens (requires auth). Sensitive: evicting the
+ * owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
+ */
 router.delete('/sessions', isAuth, requireFreshAuth('sensitive'), postLogoutEverywhere);
 
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
@@ -243,70 +277,98 @@ router.post('/sessions/current/touch', isAuth, postSessionTouch);
 // GET /account/sessions/:sessionId — one of the caller's own live sessions (requires auth)
 router.get('/sessions/:sessionId', isAuth, getSession);
 
-// DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
-// reasoning as logout-all.
+/**
+ * DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
+ * reasoning as logout-all.
+ */
 router.delete('/sessions/:sessionId', isAuth, requireFreshAuth('sensitive'), deleteSession);
 
-// POST /account/email-verification/resend — re-send the verification email (requires auth). Bounded
-// by the service's cooldown and the mailbox budget, not the credential budgets: it takes no secret.
+/**
+ * POST /account/email-verification/resend — re-send the verification email (requires auth). Bounded
+ * by the service's cooldown and the mailbox budget, not the credential budgets: it takes no secret.
+ */
 router.post('/email-verification/resend', isAuth, postVerifyRequest);
 
 // POST /account/email-verification/confirm — spend the emailed token; public, the token is the credential
 router.post('/email-verification/confirm', credentialLimiters, postVerifyConfirm);
 
-// POST /account/email-change/confirm — spend the emailed `email-change` token; public, same
-// reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
+/**
+ * POST /account/email-change/confirm — spend the emailed `email-change` token; public, same
+ * reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
+ */
 router.post('/email-change/confirm', credentialLimiters, postEmailChangeConfirm);
 
-// POST /account/email-change/undo — spend the `email-change-undo` token mailed to the OLD address;
-// public, the token is the credential. Survives a password change on purpose: see `revocation.ts`.
+/**
+ * POST /account/email-change/undo — spend the `email-change-undo` token mailed to the OLD address;
+ * public, the token is the credential. Survives a password change on purpose: see `revocation.ts`.
+ */
 router.post('/email-change/undo', credentialLimiters, postEmailChangeUndo);
 
-// POST /account/export — ask for the caller's full data export; 202, built in the background.
-// Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the
-// body.
+/**
+ * POST /account/export — ask for the caller's full data export; 202, built in the background.
+ * Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the
+ * body.
+ */
 router.post('/export', isAuth, requireFreshAuth('sensitive'), postAccountExport);
 
-// GET /account/export — where the caller's export stands. `isAuth` only: dates and a state, no
-// personal data, so the profile card can read it without a step-up prompt.
+/**
+ * GET /account/export — where the caller's export stands. `isAuth` only: dates and a state, no
+ * personal data, so the profile card can read it without a step-up prompt.
+ */
 router.get('/export', isAuth, getAccountExportStatus);
 
-// GET /account/export/file — download the caller's finished export (one per account, so no id).
-// Same tier as the request: the mailed link only opens a page, and the data leaves only for a
-// session that is fresh.
+/**
+ * GET /account/export/file — download the caller's finished export (one per account, so no id).
+ * Same tier as the request: the mailed link only opens a page, and the data leaves only for a
+ * session that is fresh.
+ */
 router.get('/export/file', isAuth, requireFreshAuth('sensitive'), getAccountExport);
 
-// POST /account/login/2fa/send — mail a login code. Registered ABOVE `/login/2fa` so the more
-// specific path is matched first. Public like /login, and limited twice over: this is the only
-// 2FA route an unauthenticated caller can make this deployment send mail with.
+/**
+ * POST /account/login/2fa/send — mail a login code. Registered ABOVE `/login/2fa` so the more
+ * specific path is matched first. Public like /login, and limited twice over: this is the only
+ * 2FA route an unauthenticated caller can make this deployment send mail with.
+ */
 router.post('/login/2fa/send', credentialLimiters, mfaSendLimiter, postLoginTwoFactorSend);
 
-// POST /account/login/2fa — the second step of a 2FA login. Public, like /login
-// itself: the challenge token is the credential. `mfaChallengeLimiter` bounds guesses against
-// ONE challenge; `credentialLimiters` is defense in depth on top of it.
+/**
+ * POST /account/login/2fa — the second step of a 2FA login. Public, like /login
+ * itself: the challenge token is the credential. `mfaChallengeLimiter` bounds guesses against
+ * ONE challenge; `credentialLimiters` is defense in depth on top of it.
+ */
 router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoFactor);
 
-// POST /account/login/restore — redeem the deletion-grace claim check: cancels the deletion and
-// starts the session. Public, the claim check is the credential: `credentialLimiters` bound the
-// guesses like the other challenge answers.
+/**
+ * POST /account/login/restore — redeem the deletion-grace claim check: cancels the deletion and
+ * starts the session. Public, the claim check is the credential: `credentialLimiters` bound the
+ * guesses like the other challenge answers.
+ */
 router.post('/login/restore', credentialLimiters, postLoginRestore);
 
-// GET /account/2fa — the caller's own factors. Plain `isAuth`: reading your own 2FA status
-// reveals nothing a step-up would protect, and the profile page needs it on every visit.
+/**
+ * GET /account/2fa — the caller's own factors. Plain `isAuth`: reading your own 2FA status
+ * reveals nothing a step-up would protect, and the profile page needs it on every visit.
+ */
 router.get('/2fa', isAuth, get2fa);
 
-// POST /account/2fa/disable — drop every factor. Critical fresh auth AND a valid code in the body:
-// disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
-// The wrong-code cap lives in the service (`reserveMfaAttempt`), on the account, not in a limiter.
+/**
+ * POST /account/2fa/disable — drop every factor. Critical fresh auth AND a valid code in the body:
+ * disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
+ * The wrong-code cap lives in the service (`reserveMfaAttempt`), on the account, not in a limiter.
+ */
 router.post('/2fa/disable', isAuth, requireFreshAuth('critical'), post2faDisable);
 
-// POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
-// tier: a restart disarms a factor that was already working.
+/**
+ * POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
+ * tier: a restart disarms a factor that was already working.
+ */
 router.post('/2fa/methods/:method/setup', isAuth, requireFreshAuth('critical'), post2faSetup);
 
-// POST /account/2fa/methods/:method/send — mail a signed-in caller a code for an ARMED delivered
-// method, so an email-only account can prove itself before changing its factors. Critical tier,
-// like the calls it serves, and its own per-account delivery budget (mail is what it spends).
+/**
+ * POST /account/2fa/methods/:method/send — mail a signed-in caller a code for an ARMED delivered
+ * method, so an email-only account can prove itself before changing its factors. Critical tier,
+ * like the calls it serves, and its own per-account delivery budget (mail is what it spends).
+ */
 router.post(
     '/2fa/methods/:method/send',
     isAuth,
@@ -326,28 +388,40 @@ router.post(
     post2faMethodRemove
 );
 
-// POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
-// tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut
-// around whichever factor is actually armed.
+/**
+ * POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
+ * tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut
+ * around whichever factor is actually armed.
+ */
 router.post('/2fa/backup-codes', isAuth, requireFreshAuth('critical'), post2faBackupCodes);
 
-// GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
-// route, so it is not swallowed by it.
+/**
+ * GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
+ * route, so it is not swallowed by it.
+ */
 router.get('/oauth/links', isAuth, getOAuthLinks);
 
-// POST /account/oauth/links/:provider — connect a provider to the SIGNED-IN account. Sensitive
-// tier like the removal: it adds a way into the account, and a sign-in never links by email match
-// (NIST SP 800-63C-4 §3.8.1), so this is the only door. Answers the consent URL as JSON.
+/**
+ * POST /account/oauth/links/:provider — connect a provider to the SIGNED-IN account. Sensitive
+ * tier like the removal: it adds a way into the account, and a sign-in never links by email match
+ * (NIST SP 800-63C-4 §3.8.1), so this is the only door. Answers the consent URL as JSON.
+ */
 router.post('/oauth/links/:provider', isAuth, requireFreshAuth('sensitive'), postOAuthLinkStart);
 
-// DELETE /account/oauth/links/:provider — disconnect one provider. Sensitive tier: it removes a way
-// into the account, an identity change like the email.
+/**
+ * DELETE /account/oauth/links/:provider — disconnect one provider. Sensitive tier: it removes a way
+ * into the account, an identity change like the email.
+ */
 router.delete('/oauth/links/:provider', isAuth, requireFreshAuth('sensitive'), deleteOAuthLink);
 
-// GET /account/oauth/:provider — 302 to the provider's consent screen. Public: this is how an
-// OAuth session begins, same footing as /login and /signup.
+/**
+ * GET /account/oauth/:provider — 302 to the provider's consent screen. Public: this is how an
+ * OAuth session begins, same footing as /login and /signup.
+ */
 router.get('/oauth/:provider', credentialLimiters, getOAuthStart);
 
-// GET /account/oauth/:provider/callback — 302 back to the frontend, cookies set on success.
-// Public: the provider's own code+state round trip is the credential.
+/**
+ * GET /account/oauth/:provider/callback — 302 back to the frontend, cookies set on success.
+ * Public: the provider's own code+state round trip is the credential.
+ */
 router.get('/oauth/:provider/callback', credentialLimiters, getOAuthCallback);

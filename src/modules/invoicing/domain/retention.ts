@@ -28,7 +28,6 @@ export const buyerRetentionEnd = (issuedAt: Date, timezone: string, years: numbe
  * Whether a document's buyer block is past its retention.
  *
  * @param document - the two frozen fields the rule reads
- * @param years - the retention in years
  * @param now - the moment to judge against
  */
 export const isBuyerRetentionOver = (
@@ -42,7 +41,6 @@ export const isBuyerRetentionOver = (
  * rule runs. A document is due only once the shop-zone year reaches issue year + N + 1; the zone
  * year is at most the UTC year of tomorrow, and a local 1 January is before 2 January UTC.
  *
- * @param years - the retention in years
  * @param now - the moment to judge against
  */
 export const buyerRetentionScanBound = (years: number, now: Date): Date => {

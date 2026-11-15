@@ -4,7 +4,7 @@
  * `listObservabilityAuditEntries` serves, reached with a tenant key instead of a platform one — see
  * `../service.ts` for why one collection answers both.
  *
- * @see docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md#the-pipeline
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
@@ -15,9 +15,11 @@ import { createListController } from '@infrastructure/surfaces/create-list-contr
 /** Handles `GET /audit`: a page of this shop's own action history, filtered and paged. */
 export const getAudit = createListController({
     entity: 'auditEntries',
-    // The generated `outcome` enum rejects anything outside `success`/`failure` with a 422
-    // instead of the filter silently matching every row — `page`/`pageSize` swapped for the
-    // infra pair so an absent one stays absent for `normalizePagination` to default.
+    /**
+     * The generated `outcome` enum rejects anything outside `success`/`failure` with a 422
+     * instead of the filter silently matching every row — `page`/`pageSize` swapped for the
+     * infra pair so an absent one stays absent for `normalizePagination` to default.
+     */
     schema: ListAuditEntriesQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema

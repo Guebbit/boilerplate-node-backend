@@ -35,12 +35,16 @@ import { analyticsAnswer, termsAcceptance } from '../consent-record';
  * terms are accepted. No image: signup takes none, so the new account has none.
  */
 const signupSchema = SignupBody.extend({
-    // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
-    // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
-    // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+    /**
+     * Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
+     * (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
+     * non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+     */
     analyticsConsent: optionalBooleanSchema,
-    // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
-    // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+    /**
+     * Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
+     * (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+     */
     termsAccepted: z.preprocess(
         parseFormBoolean,
         z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
@@ -118,9 +122,11 @@ const createAccountIfEmailFree = (
                     password: input.password,
                     ...analyticsAnswer(input.analyticsConsent),
                     ...termsAcceptance(),
-                    // The language they signed up in, kept for work that happens later without a
-                    // request to read `Accept-Language` from — a queued email, a nightly job.
-                    // Editable afterwards from the user endpoints.
+                    /**
+                     * The language they signed up in, kept for work that happens later without a
+                     * request to read `Accept-Language` from — a queued email, a nightly job.
+                     * Editable afterwards from the user endpoints.
+                     */
                     locale: getCurrentLocale()
                 })
                 .then((createdUser) =>
@@ -144,8 +150,10 @@ export const signup = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = signupSchema.safeParse(body);
 
-    // One gate per line: a breached password, then the antibot decoy, then the email-taken
-    // lookup that creates the account — the first one to answer is what signup returns.
+    /**
+     * One gate per line: a breached password, then the antibot decoy, then the email-taken
+     * lookup that creates the account — the first one to answer is what signup returns.
+     */
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
         ? guardBreachedPassword(parseResult.data.password)
               .then<ResponseReject | ResponseSuccess<UserDocument> | undefined>(
@@ -157,11 +165,13 @@ export const signup = (
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
-        // The audit trail must not name an account rung 2 refused, or record it as anything other
-        // than the refusal it was.
-        // `Document#isNew` stays true until `.save()`, and the rung-2 refusal path is the only
-        // one that returns a document never saved — so it reads backwards here: true means NO
-        // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+        /**
+         * The audit trail must not name an account rung 2 refused, or record it as anything other
+         * than the refusal it was.
+         * `Document#isNew` stays true until `.save()`, and the rung-2 refusal path is the only
+         * one that returns a document never saved — so it reads backwards here: true means NO
+         * account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+         */
         if (!result.success || result.data.isNew) {
             recordAudit(callerContext, {
                 action: accountAuditActions.AUTH_SIGNED_UP,

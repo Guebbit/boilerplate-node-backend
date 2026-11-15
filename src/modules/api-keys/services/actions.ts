@@ -24,7 +24,9 @@ export const actionsForRows = (
 ): ((row: Pick<StoredApiKey, 'revokedAt'>) => ApiKeyActions) => {
     const permits = permitsOnRows(context.caller, 'ApiKey', ['delete']);
 
-    // A revoked credential is revoked for good; the call would be an accepted no-op, so the
-    // control is off rather than offered.
+    /**
+     * A revoked credential is revoked for good; the call would be an accepted no-op, so the
+     * control is off rather than offered.
+     */
     return (row) => ({ revoke: permits({}).delete && !row.revokedAt });
 };

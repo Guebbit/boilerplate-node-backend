@@ -44,7 +44,7 @@ export default {
             // No `erase` — see `services/personal-data.ts`'s own docblock.
         }
     ],
-    /*
+    /**
      * Neither listener requests a fact — both react to one `orders`/`payments` already recorded
      * and announced. A failure here is logged by `emitDomainEvent` and never rolls back the write
      * that triggered it: an order that reached `paid` stays `paid` whether or not its invoice
@@ -53,15 +53,19 @@ export default {
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {
             if (to !== OrderStatus.paid) return undefined;
-            // A fresh read, not the event's own payload: `ORDER_STATUS_CHANGED` carries only
-            // `{ orderId, from, to }`, and this needs the order's full frozen lines, address and
-            // currency to freeze onto the invoice.
+            /**
+             * A fresh read, not the event's own payload: `ORDER_STATUS_CHANGED` carries only
+             * `{ orderId, from, to }`, and this needs the order's full frozen lines, address and
+             * currency to freeze onto the invoice.
+             */
             return (
                 orderService
                     .getById(orderId)
                     .then((order) => (order ? invoicingService.issueInvoice(order) : undefined))
-                    // A refund that settled while the invoice event was dead found no invoice to
-                    // credit and skipped its note; reviving the invoice brings the notes back.
+                    /**
+                     * A refund that settled while the invoice event was dead found no invoice to
+                     * credit and skipped its note; reviving the invoice brings the notes back.
+                     */
                     .then((invoice) => (invoice ? creditSettledRefunds(orderId) : undefined))
             );
         });

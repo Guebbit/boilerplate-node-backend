@@ -70,8 +70,6 @@ const mayReadCreditNotes = (
 
 /**
  * The order's invoice, for a caller who may read the order.
- * @param orderId - the order
- * @param authContext - the caller
  * @returns the invoice and its order, or a 404: unknown or unreadable order, or no invoice yet
  */
 export const invoiceForCaller = (
@@ -96,8 +94,6 @@ export const invoiceForCaller = (
 /**
  * The order's credit notes, for a caller who may read the order. Staff who may read the order but
  * not the money see none, and are not told there are any.
- * @param orderId - the order
- * @param authContext - the caller
  * @param context - the caller, for the audit entry of a refusal
  * @returns the credit notes (empty when the caller may not see them), or a 404 for the order
  */
@@ -117,9 +113,7 @@ export const creditNotesForCaller = (
  * One credit note of the order, for a caller who may read both. An unknown or malformed credit
  * note answers "not issued" only to a caller who may see the order at all, and so does a caller
  * who may read the order but not the money.
- * @param orderId - the order
  * @param creditNoteId - the credit note; unchecked, since a malformed one must answer "not issued"
- * @param authContext - the caller
  * @param context - the caller, for the audit entry of a refusal
  * @returns the credit note and its order, or a 404
  */

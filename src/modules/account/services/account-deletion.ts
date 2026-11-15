@@ -93,8 +93,10 @@ export const scheduleAccountDeletion = (
                 });
                 authAccountDeleteTotal.inc({ status: 'scheduled' });
 
-                // The recipient's OWN language, the request's only as fallback; high priority, since a
-                // person is waiting on the link.
+                /**
+                 * The recipient's OWN language, the request's only as fallback; high priority, since a
+                 * person is waiting on the link.
+                 */
                 const mail = deletionScheduledEmail(
                     recipientLocale(user.locale, context),
                     greetableName(user, user.email),

@@ -231,8 +231,10 @@ export const reserveForOrder = async (
 ): Promise<ReserveOutcome> => {
     const expiresAt = new Date(Date.now() + holdMinutes * MINUTE_MS);
     const hold = await reservationRepository.insertHold(orderId, [], expiresAt);
-    // Already held — a retry, or a double-clicked button. The first call did the work; report
-    // ITS expiry, not the fresh guess this attempt computed but never actually wrote.
+    /**
+     * Already held — a retry, or a double-clicked button. The first call did the work; report
+     * ITS expiry, not the fresh guess this attempt computed but never actually wrote.
+     */
     if (!hold) {
         const existing = await reservationRepository.findByOrderId(orderId);
         return { held: true, expiresAt: existing?.expiresAt ?? expiresAt, owed: [] };
@@ -244,7 +246,7 @@ export const reserveForOrder = async (
         for (const line of inLockOrder(lines)) {
             const parts = await takeLine(orderId, line);
             if (!parts) {
-                /*
+                /**
                  * Read the blocker back before unwinding, so the reported number is the one that
                  * actually refused this line, not what a pre-flight saw earlier. Read from this
                  * module's own level, the source of truth — never the product's synced copy, which

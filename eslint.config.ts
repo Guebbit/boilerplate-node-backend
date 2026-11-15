@@ -735,9 +735,14 @@ export default defineConfig(
             'src/infrastructure/**/*.ts',
             'src/domain-primitives/**/*.ts',
             'src/types/**/*.ts',
-            'src/*.ts'
+            'src/*.ts',
+            'src/modules/{access,account,addresses,analytics,antibot,api-keys,audit-logs,cart,delivery,example,inventory,invoicing,locales}/**/*.ts'
         ],
-        ignores: ['src/types/asyncapi.generated.ts'],
+        ignores: [
+            'src/types/asyncapi.generated.ts',
+            'src/modules/*/tests/**',
+            'src/modules/*/**/tests/**'
+        ],
 
         plugins: {
             jsdoc: pluginJsdoc

@@ -27,7 +27,6 @@ import {
 
 /**
  * The payload both `shipment.*` events carry.
- * @param shipment - the shipment
  */
 const shipmentPayload = (shipment: ShipmentDocument) => ({
     orderId: String(shipment.orderId),

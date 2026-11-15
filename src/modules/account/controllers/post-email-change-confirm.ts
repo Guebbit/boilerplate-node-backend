@@ -7,8 +7,10 @@
 import type { Request, Response } from 'express';
 import { ConfirmEmailChangeBody } from '@api/schemas.zod';
 import { noContentResponse } from '@infrastructure/http/response';
-// The request body schema is shared with `verify-confirm` — both endpoints accept `{ token }` —
-// so orval names the TYPE after that shared schema rather than minting a second one.
+/**
+ * The request body schema is shared with `verify-confirm` — both endpoints accept `{ token }` —
+ * so orval names the TYPE after that shared schema rather than minting a second one.
+ */
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailChangeConfirmTotal } from '../metrics';
 import { accountService } from '../services';
@@ -43,10 +45,12 @@ export const postEmailChangeConfirm = (
         })
         .catch((error: unknown) => {
             authEmailChangeConfirmTotal.inc({ status: 'failure' });
-            // The status is DERIVED, not assumed 500: the new address being claimed by another
-            // account between the request and this confirm is a real 409 (a unique-index refusal
-            // on the save), not a server failure — `catchAs` is what tells the two apart, and logs
-            // whichever one actually happened instead of swallowing it.
+            /**
+             * The status is DERIVED, not assumed 500: the new address being claimed by another
+             * account between the request and this confirm is a real 409 (a unique-index refusal
+             * on the save), not a server failure — `catchAs` is what tells the two apart, and logs
+             * whichever one actually happened instead of swallowing it.
+             */
             catchAs(response, 'postEmailChangeConfirm')(error);
         });
 };

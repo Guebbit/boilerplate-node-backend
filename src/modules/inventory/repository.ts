@@ -4,7 +4,7 @@
  * written out because Mongoose's generics are too large for TypeScript to serialize an inferred
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-pipeline
  */
 
 import { Types } from 'mongoose';
@@ -69,10 +69,12 @@ const conditionFor = (
                 ? { backordered: { $gte: quantity } }
                 : { reserved: { $gte: quantity } };
         }
-        // The cap is the real ceiling, checked in the write's own filter like every other guard.
-        // An explicit `null` limit is no cap. A MISSING field is not: `$type: 'null'` matches only
-        // the stored null, where `{ backorderLimit: null }` would also match an absent one, and
-        // `$ifNull` below reads that absent field as zero, closed.
+        /**
+         * The cap is the real ceiling, checked in the write's own filter like every other guard.
+         * An explicit `null` limit is no cap. A MISSING field is not: `$type: 'null'` matches only
+         * the stored null, where `{ backorderLimit: null }` would also match an absent one, and
+         * `$ifNull` below reads that absent field as zero, closed.
+         */
         case StockMovementReason.backorder: {
             return {
                 $or: [
@@ -263,7 +265,6 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * level is never overwritten. A product without a row yet genuinely has none, never a cached
      * count worth adopting — see `docs/modules/inventory.md#why-products-still-carries-a-copy`.
      *
-     * @param productId - the product
      * @param session - the caller's transaction, so the insert and the stock booked after it commit together
      * @returns `true` when the row was inserted now, `false` when it was already there
      */
@@ -296,7 +297,6 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         stockLevelModel.find({ productId: { $in: productIds.map((id) => toObjectId(id)) } }).exec(),
 
     /**
-     * @param productId - the product
      * @param session - the caller's transaction, so the read sees its own uncommitted writes
      * @returns its level, or `null` if it has none yet (never received, or the product is gone)
      */
@@ -406,7 +406,6 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * with no ledger row; the admin door audits it. Creates the level when the product has none
      * yet, so a limit can be set before the first receipt.
      *
-     * @param productId - the product
      * @param backorderLimit - the new allowance; `null` removes the cap
      * @returns whether a level was written
      */
@@ -511,8 +510,10 @@ export const stockMovementRepository: AppendOnlyLedger<StockMovementDocument, St
         transform: applyStockMovementTransform,
         searchable: {
             objectIds: { productId: 'productId' },
-            // A closed vocabulary, matched verbatim: partial matching would let `re` pull back
-            // `reserve`, `release` and `receive` at once and call the result a filtered view.
+            /**
+             * A closed vocabulary, matched verbatim: partial matching would let `re` pull back
+             * `reserve`, `release` and `receive` at once and call the result a filtered view.
+             */
             exact: { reason: 'reason' }
         }
     });
@@ -592,7 +593,6 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
     /**
      * Read an order's hold, whatever state it is in.
      *
-     * @param orderId - the order
      * @returns the hold, or `null` if the order never had one
      */
     findByOrderId: (orderId: string) =>
@@ -624,7 +624,6 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      * The hold, but only while it still sets units aside (`held` or `committed`) — the read a
      * partial shipment or a remainder cancel starts from, inside its own transaction.
      *
-     * @param orderId - the order
      * @param session - the caller's transaction
      * @returns the hold, or `null` when none is open
      */
@@ -639,7 +638,6 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      * write. Conditional on the hold still being open, so a racing cancel that already released it
      * matches nothing.
      *
-     * @param orderId - the order
      * @param items - what the hold still sets aside
      * @param endsAs - the terminal status to write when nothing is left, else `undefined`
      * @param session - the caller's transaction
@@ -666,7 +664,6 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      * (`committedAt`) keeps the original payment when there is one. With no hold at all, a
      * `committed` one is made. Conditional on the status read, so a racing cancel loses cleanly.
      *
-     * @param orderId - the order
      * @param added - the units set aside on top
      * @param session - the caller's transaction
      * @returns whether the hold now names the added units

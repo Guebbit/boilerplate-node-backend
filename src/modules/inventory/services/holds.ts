@@ -227,15 +227,19 @@ const commitWithin = async (
         return { committed: true, allocated: allocations.length };
     }
 
-    // The claim missed. Read what the reservation actually is, to tell a benign replay from the
-    // states meaning the order is paid with nothing held.
+    /**
+     * The claim missed. Read what the reservation actually is, to tell a benign replay from the
+     * states meaning the order is paid with nothing held.
+     */
     const existing = await reservationRepository.findByOrderId(orderId);
     if (existing?.status === 'committed' || existing?.status === 'shipped')
         return { committed: false, allocated: 0 };
 
-    // Money landed on a hold that was given up: take the units again and commit them. `orders`
-    // does this before it writes `paid`; this is the net for any other caller. Short means the
-    // order is paid with nothing set aside, the one case left to alarm besides a missing hold.
+    /**
+     * Money landed on a hold that was given up: take the units again and commit them. `orders`
+     * does this before it writes `paid`; this is the net for any other caller. Short means the
+     * order is paid with nothing set aside, the one case left to alarm besides a missing hold.
+     */
     if (
         existing?.status === 'released' &&
         (await retakeReleasedForOrder(orderId, session)) === 'retaken'
@@ -243,8 +247,10 @@ const commitWithin = async (
         return commitWithin(orderId, session).then((done) => ({ ...done, retook: true }));
 
     raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'commit');
-    // Only the payment's step is a situation to work: a missing hold at shipping means the goods
-    // already left, so the alarm and the audit row are the whole record.
+    /**
+     * Only the payment's step is a situation to work: a missing hold at shipping means the goods
+     * already left, so the alarm and the audit row are the whole record.
+     */
     await enqueueOutboxEvent(HOLD_ORPHANED, { orderId }, orderId, session);
     return { committed: false, allocated: 0, orphaned: true };
 };
@@ -303,8 +309,10 @@ export const shipForOrder = async (orderId: string, session?: ClientSession): Pr
         (await claimAndApply(orderId, 'held', 'shipped', StockMovementReason.ship, session));
     if (claimed) return true;
 
-    // Only a hold that never existed is corruption. A `released` one is benign: a remainder
-    // cancel emptied it after a partial shipment, so there is nothing left to take.
+    /**
+     * Only a hold that never existed is corruption. A `released` one is benign: a remainder
+     * cancel emptied it after a partial shipment, so there is nothing left to take.
+     */
     const existing = await reservationRepository.findByOrderId(orderId);
     if (!existing) raiseOrphanAlarm(orderId, 'none', 'ship');
     return false;
@@ -315,7 +323,6 @@ export const shipForOrder = async (orderId: string, session?: ClientSession): Pr
  * shared body of a partial shipment and a remainder cancel. The hold ends — `endsAs` — once its
  * last unit is out.
  *
- * @param orderId - the order
  * @param lines - what leaves the hold
  * @param reason - which ledger movement each line records (`ship` or `release`)
  * @param endsAs - the terminal status the hold takes when it empties
@@ -425,8 +432,10 @@ export const releaseTopUpForOrder = (
  */
 export const releaseForOrder = async (
     orderId: string,
-    // The two literals rather than the whole enum: only these end a hold without a sale, and
-    // naming the pair stops a caller passing `commit` to a function that would record a sale.
+    /**
+     * The two literals rather than the whole enum: only these end a hold without a sale, and
+     * naming the pair stops a caller passing `commit` to a function that would record a sale.
+     */
     reason: 'release' | 'expire' = StockMovementReason.release,
     session?: ClientSession
 ): Promise<boolean> => claimAndApply(orderId, 'held', 'released', reason, session);

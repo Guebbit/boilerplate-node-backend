@@ -47,8 +47,10 @@ export const createLocale = (
                 .describeStoredLanguage(result.data, localeService.standingOn(request.caller))
                 .then((language) => {
                     const location = `/locales/${language.tag}`;
-                    // The new language's real tag, so the first edit needs no re-read, and the
-                    // resource it belongs to (RFC 9110 §8.8.3).
+                    /**
+                     * The new language's real tag, so the first edit needs no re-read, and the
+                     * resource it belongs to (RFC 9110 §8.8.3).
+                     */
                     answerAsResource(response, language, location);
                     return createdResponse<Language>(response, language, location);
                 });

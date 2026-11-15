@@ -4,7 +4,7 @@
  * test can vary them per case. A process's environment is fixed at start: a deployment changes
  * them with a restart. The restock mark itself lives in `stockConfig`, shared with `products`.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-story
  */
 
 import { defineConfig } from '@infrastructure/config/define';

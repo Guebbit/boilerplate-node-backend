@@ -3,7 +3,7 @@
  * The `/audit` router: one read, gated on `read:AuditLog` — a shop's own action history, for the
  * roles that hold the key rather than for the platform operator.
  *
- * @see docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md#the-pipeline
  */
 
 import { Router } from 'express';
@@ -13,9 +13,11 @@ import { getAudit } from './controllers/get-audit';
 /** Express router for the tenant-facing audit trail. */
 export const router = Router();
 
-// The router's only route, guarded the same way `users/routes.ts` guards its whole surface.
-// `isAuthOrCredential`: a compliance or SIEM integration pulling the trail is a machine, and
-// `read:AuditLog` is a tenant key like any other. The controller reads no `authContext`.
+/**
+ * The router's only route, guarded the same way `users/routes.ts` guards its whole surface.
+ * `isAuthOrCredential`: a compliance or SIEM integration pulling the trail is a machine, and
+ * `read:AuditLog` is a tenant key like any other. The controller reads no `authContext`.
+ */
 router.use(getAuth, isAuthOrCredential, requirePermission('read', 'AuditLog'));
 
 // GET /audit

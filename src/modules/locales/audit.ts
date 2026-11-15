@@ -16,13 +16,13 @@ export const localeAuditActions = {
     ADMIN_LOCALE_ENTRY_CREATED: 'admin.locale_entry.created',
     ADMIN_LOCALE_ENTRY_UPDATED: 'admin.locale_entry.updated',
     ADMIN_LOCALE_ENTRY_DELETED: 'admin.locale_entry.deleted',
-    /*
+    /**
      * One action for both bulk routes, with the mode in the metadata. They differ in what they do
      * to keys the body did not name, which is a detail of the same event — and a compliance query
      * asking "who changed the Spanish copy" wants one prefix to filter on, not two.
      */
     ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported',
-    /*
+    /**
      * One action for the whole batch a PATCH carries, upserts and deletes together — a compliance
      * query asking "who changed this product's translations" wants one row per request, not one
      * per locale the request happened to touch.

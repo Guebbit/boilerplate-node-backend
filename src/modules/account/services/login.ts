@@ -46,17 +46,21 @@ export const login = (body: unknown): Promise<ResponseSuccess<UserDocument> | Re
             // `password` is select:false — this is one of the few flows that legitimately needs it.
             .findForLogin(parseResult.data.email)
             .then((user) => {
-                // Compare against DUMMY_PASSWORD_HASH on a miss, so an
-                // unknown email costs the same as a wrong password — an unconditional `return`
-                // here would answer 401 before the hash's own cost, the timing gap that lets an
-                // attacker tell "no such account" from "wrong password" by response time alone.
+                /**
+                 * Compare against DUMMY_PASSWORD_HASH on a miss, so an
+                 * unknown email costs the same as a wrong password — an unconditional `return`
+                 * here would answer 401 before the hash's own cost, the timing gap that lets an
+                 * attacker tell "no such account" from "wrong password" by response time alone.
+                 */
                 return verifyPassword(
                     parseResult.data.password,
                     user?.password ?? DUMMY_PASSWORD_HASH
                 ).then((doMatch) => {
-                    // The lookup also returns an account in its deletion grace; one whose
-                    // grace ran out since the query is neither, and is refused like a wrong
-                    // password.
+                    /**
+                     * The lookup also returns an account in its deletion grace; one whose
+                     * grace ran out since the query is neither, and is refused like a wrong
+                     * password.
+                     */
                     if (!user || !doMatch || !(isAuthenticatable(user) || isRestorable(user)))
                         return generateReject(401, [t('account.login.wrong-data')]);
                     return generateSuccess<UserDocument>(user);

@@ -74,9 +74,11 @@ export const recordLoginSuccess = (
         emitAnalyticsEvent({
             ...buildAnalyticsBase(context),
             distinctId: userId,
-            // A login route carries no token, so the context holds the banner header only. The
-            // account's stored answer, yes or no, wins over it (GDPR Art. 7(3)); the header
-            // counts only for an account that never answered.
+            /**
+             * A login route carries no token, so the context holds the banner header only. The
+             * account's stored answer, yes or no, wins over it (GDPR Art. 7(3)); the header
+             * counts only for an account that never answered.
+             */
             analyticsConsent: user?.analyticsConsent ?? context.analyticsConsent,
             event: accountAnalyticsEvents.USER_LOGGED_IN,
             properties: { role }

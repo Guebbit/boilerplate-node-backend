@@ -28,9 +28,11 @@ export const describeDevice = (userAgent: string | undefined): string | undefine
     const text = userAgent?.slice(0, MAX_USER_AGENT_LENGTH).trim();
     if (!text) return undefined;
 
-    // Bowser: a regex-table parser for the two names. `getParser` is lazy and throws on an empty
-    // string, hence the guard above; an agent it cannot place answers `''` for each name.
-    // https://github.com/bowser-js/bowser#readme
+    /**
+     * Bowser: a regex-table parser for the two names. `getParser` is lazy and throws on an empty
+     * string, hence the guard above; an agent it cannot place answers `''` for each name.
+     * https://github.com/bowser-js/bowser#readme
+     */
     const parser = Bowser.getParser(text);
     const browser = parser.getBrowserName();
     const system = parser.getOSName();

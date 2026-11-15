@@ -55,8 +55,10 @@ const importEntries =
             .then((result) => {
                 if (refused(response, result)) return;
 
-                // The language's new revision, so the next import needs no re-export. The tag's
-                // version is the dictionary counter; a PUT answer drops it (RFC 9110 §9.3.4).
+                /**
+                 * The language's new revision, so the next import needs no re-export. The tag's
+                 * version is the dictionary counter; a PUT answer drops it (RFC 9110 §9.3.4).
+                 */
                 setEtag(response, { [EDIT_REVISION]: result.data.revision });
                 return successResponse<LocaleImportResult>(response, result.data);
             })

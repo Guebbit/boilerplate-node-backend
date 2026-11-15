@@ -6,7 +6,7 @@
  * update or delete: an audit trail that can be edited from the application is not an audit trail,
  * and expiry is Mongo's job via the TTL index on the model.
  *
- * @see docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md#the-pipeline
  */
 
 import { auditLogModel, applyAuditLogTransform } from './model';
@@ -39,9 +39,11 @@ export interface AuditLogSearchFilters {
 const base = createRepository<AuditLogDocument, AuditEntryItem>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
-        // All five are closed vocabularies or opaque ids — matched verbatim, never as a regex.
-        // `outcome` in particular must not be a partial match: 'fail' silently matching 'failure'
-        // would make a filtered view quietly disagree with the numbers next to it.
+        /**
+         * All five are closed vocabularies or opaque ids — matched verbatim, never as a regex.
+         * `outcome` in particular must not be a partial match: 'fail' silently matching 'failure'
+         * would make a filtered view quietly disagree with the numbers next to it.
+         */
         exact: {
             actor: 'actorUserId',
             action: 'action',
@@ -144,8 +146,10 @@ const ownEntriesPage = (
         .lean<{ _id: Types.ObjectId; timestamp: Date }[]>()
         .exec()
         .then((rows) => {
-            // The cursor first: `normalize` rewrites each row in place (`timestamp` becomes a
-            // string, `_id` goes), and the cursor needs both as they were stored.
+            /**
+             * The cursor first: `normalize` rewrites each row in place (`timestamp` becomes a
+             * string, `_id` goes), and the cursor needs both as they were stored.
+             */
             const next = rows.length < limit ? undefined : cursorAfter(rows, after);
             return { items: base.normalize(rows), next };
         });
@@ -179,7 +183,7 @@ const consultationsOf = (
         .lean<ConsultationRow[]>()
         .exec();
 
-/*
+/**
  * Five members, not the base repository's full surface. An audit trail is append-and-read: no
  * `save`, no `deleteOne`, so the type is what refuses an edit rather than a reviewer.
  */

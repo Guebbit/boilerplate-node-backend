@@ -7,7 +7,7 @@
  * One rule: the client's copy of the abilities has NO authority. It decides what to RENDER, never
  *           what is allowed; every request is re-evaluated server-side.
  *
- * @see docs/modules/account.md
+ * @see docs/modules/account.md#the-pipeline
  */
 
 import { packRules } from '@casl/ability/extra';
@@ -54,12 +54,14 @@ const modelVersion = permissionModelVersion(PERMISSION_RULES.map((entry) => entr
  * @param caller - the caller as resolved in ONE scope; never both at once
  */
 const rulesFor = (caller: Parameters<typeof buildAbility>[0]): PackedRules =>
-    // The contract cannot spell a CASL tuple (OpenAPI has no tuple), so it declares each position as
-    // `string | 0 | 1 | object`. CASL's own tuple type admits `undefined` in the conditions slot
-    // only
-    // because `RawRule.conditions` is optional; `packRules` writes `0` there (`conditions || 0`)
-    // and
-    // pops trailing falsy members, so no `undefined` is ever produced and the cast only narrows.
+    /**
+     * The contract cannot spell a CASL tuple (OpenAPI has no tuple), so it declares each position as
+     * `string | 0 | 1 | object`. CASL's own tuple type admits `undefined` in the conditions slot
+     * only
+     * because `RawRule.conditions` is optional; `packRules` writes `0` there (`conditions || 0`)
+     * and
+     * pops trailing falsy members, so no `undefined` is ever produced and the cast only narrows.
+     */
     packRules(buildAbility(caller).rules) as PackedRules;
 
 /**

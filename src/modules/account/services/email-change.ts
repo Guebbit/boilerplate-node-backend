@@ -139,8 +139,10 @@ export const cancelPendingEmailChange = (
         .findByIdWithPendingEmail(userId)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
-            // Only `pendingEmail` is loaded here: enough to tell whether `cancel` applies, which
-            // is all the table is asked for.
+            /**
+             * Only `pendingEmail` is loaded here: enough to tell whether `cancel` applies, which
+             * is all the table is asked for.
+             */
             const hadPending = emailChangeNext(emailChangeStateOf(user), 'cancel') !== undefined;
             return accountUserService
                 .cancelPendingEmail(user)

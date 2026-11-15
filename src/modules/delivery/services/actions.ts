@@ -52,7 +52,6 @@ export const standingOn = (authContext: AuthContext | undefined): Standing =>
 
 /**
  * What the caller may do to one fulfillment order.
- * @param fulfillmentOrder - the fulfillment order
  * @param order - the order it belongs to
  * @param standing - how the caller stands to it
  */
@@ -73,7 +72,6 @@ export const fulfillmentOrderActions = (
 
 /**
  * What the caller may do to one shipment.
- * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param standing - how the caller stands to it
  * @param restorable - for a `lost` shipment: whether every unit on it is still open (see `./found`)
@@ -103,7 +101,6 @@ const shipmentActions = (
 
 /**
  * A fulfillment order as the wire carries it, for this caller.
- * @param fulfillmentOrder - the fulfillment order
  * @param order - the order it belongs to
  * @param authContext - the caller
  */
@@ -123,7 +120,6 @@ export const viewFulfillmentOrder = (
 
 /**
  * A shipment as the wire carries it, for this caller.
- * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param authContext - the caller
  * @param restorable - for a `lost` shipment: whether it can still be recorded as arrived
@@ -138,7 +134,6 @@ export const viewShipment = (
 /**
  * A shipment as the wire carries it, for a caller whose standing is already known — the list read
  * works that out once for every row.
- * @param shipment - the shipment
  * @param order - the order it belongs to
  * @param standing - how the caller stands to it
  * @param restorable - for a `lost` shipment: whether it can still be recorded as arrived

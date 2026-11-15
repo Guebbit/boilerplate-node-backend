@@ -23,9 +23,11 @@ export const router = Router();
 // Everything below needs a signed-in user: `getAuth` resolves the session, `isAuth` refuses none.
 router.use(getAuth, isAuth);
 
-// GET /orders/:id/invoice — not in the JSON cache: caching PDF bytes there would only ever
-// hold the first byte range express actually flushed. The PDF store (`services/render.ts`)
-// keeps the bytes instead. `invoicingLimiter` guards the Chromium launch a render spawns.
+/**
+ * GET /orders/:id/invoice — not in the JSON cache: caching PDF bytes there would only ever
+ * hold the first byte range express actually flushed. The PDF store (`services/render.ts`)
+ * keeps the bytes instead. `invoicingLimiter` guards the Chromium launch a render spawns.
+ */
 router.get('/:id/invoice', invoicingLimiter, getOrderInvoice);
 
 // GET /orders/:id/credit-notes — the list; a plain read, so no PDF limiter.

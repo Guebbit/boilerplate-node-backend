@@ -18,7 +18,7 @@
  *             the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely
  *             is per-database data — WHO holds a role, never WHAT a role holds.
  *
- * @see docs/understand/authorization.md
+ * @see docs/understand/authorization.md#the-model
  */
 
 import { model, Schema } from 'mongoose';
@@ -75,7 +75,7 @@ const membershipSchema = new Schema<MembershipDocument>(
     { timestamps: true }
 );
 
-/*
+/**
  * One membership per person per place. A second row for the same pair is not a wider grant, it is
  * two answers to "what may they do here" — and the resolver would have to pick one.
  */

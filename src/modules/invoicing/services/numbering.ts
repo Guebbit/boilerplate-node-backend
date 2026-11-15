@@ -68,8 +68,10 @@ export const readWinner =
     (error: unknown): Promise<TDocument> => {
         if (!isDuplicateKey(error)) throw error;
         return find().then((existing) => {
-            // Unreachable outside a corrupted unique index: the duplicate key error IS the
-            // existing row's own guarantee that a read right behind it finds something.
+            /**
+             * Unreachable outside a corrupted unique index: the duplicate key error IS the
+             * existing row's own guarantee that a read right behind it finds something.
+             */
             if (!existing) throw error;
             return existing;
         });

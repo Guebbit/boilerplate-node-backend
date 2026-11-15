@@ -4,7 +4,7 @@
  * through. The return types are written out because Mongoose's generics are too large for
  * TypeScript to serialize an inferred one at an export boundary (TS7056), the same reason
  * `Repository` exists.
- * @see docs/modules/delivery.md
+ * @see docs/modules/delivery.md#routes-and-events
  */
 
 import {
@@ -221,7 +221,6 @@ export const fulfillmentOrderRepository: Repository<
     /**
      * Every fulfillment order of one order, in number order — the caller's read, and the input of
      * the summary an act recomputes.
-     * @param orderId - the order
      * @param session - the act's transaction, when the read belongs to one
      */
     findByOrderId: (orderId, session) =>
@@ -256,7 +255,6 @@ export const fulfillmentOrderRepository: Repository<
      * retried listener leaves what is there alone.
      *
      * Mongoose `updateOne` with `upsert`: https://mongoosejs.com/docs/api/model.html#Model.updateOne()
-     * @param orderId - the order
      * @param draft - the fulfillment order the grouping rule made
      * @param session - the act's transaction
      * @returns whether this call made it, so a caller can narrate a birth exactly once
@@ -546,7 +544,6 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
 
     /**
      * Every shipment of one order, in the order they were cut.
-     * @param orderId - the order
      * @param session - the act's transaction, when the read belongs to one
      */
     findByOrderId: (orderId, session) =>
@@ -591,7 +588,6 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
      * The number the next shipment of this order takes. Read in the act's transaction: two acts
      * taking the same number conflict on the unique `{ orderId, number }` index, and the driver
      * re-runs the loser against the winner's result.
-     * @param orderId - the order
      * @param session - the act's transaction
      */
     nextNumber: (orderId, session) =>

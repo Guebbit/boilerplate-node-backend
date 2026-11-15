@@ -16,7 +16,7 @@ import { revokeApiKey } from './controllers/delete-api-key';
 /** Express router for the api-keys admin surface. */
 export const router = Router();
 
-/*
+/**
  * `isAuth`, NOT `isAuthOrCredential` — and this is the one module where that is a decision rather
  * than a consequence. Nothing here reads `authContext`, so it would qualify on the mechanical
  * test; it is excluded because a credential that can mint credentials is a credential that never

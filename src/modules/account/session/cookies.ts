@@ -48,12 +48,16 @@ export const hostCookieOptions = () => ({ ...secureCookieOptions(), secure: true
 export const createSessionCookie = (response: Response, credential: string, maxAgeMs?: number) => {
     response.cookie(SESSION_COOKIE, credential, {
         ...hostCookieOptions(),
-        // Express: `maxAge` undefined emits no `Max-Age`/`Expires`, i.e. a session cookie.
-        // https://expressjs.com/en/api.html#res.cookie
+        /**
+         * Express: `maxAge` undefined emits no `Max-Age`/`Expires`, i.e. a session cookie.
+         * https://expressjs.com/en/api.html#res.cookie
+         */
         maxAge: maxAgeMs
     });
-    // Always set beside the credential, with the same lifetime: a hint without it, or the other
-    // way round, is a client that cannot tell whether to try restoring a session.
+    /**
+     * Always set beside the credential, with the same lifetime: a hint without it, or the other
+     * way round, is a client that cannot tell whether to try restoring a session.
+     */
     createLoggedCookie(response, maxAgeMs);
 };
 

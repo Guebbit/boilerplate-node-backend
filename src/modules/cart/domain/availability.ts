@@ -47,7 +47,6 @@ export interface AvailabilityFacts {
  * empty).
  *
  * @param facts - the joined product, the ledger's units and, for a cart line, its quantity
- * @returns the line's availability
  */
 export const lineAvailability = ({
     product,

@@ -15,7 +15,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
- * DELETE /account
+ * DELETE /account: schedules the caller's deletion and ends the session; the purge date is in the 202.
  * @param request - authenticated request (isAuth, a critically fresh session and, with 2FA, an otp proof required)
  * @param response - Express response
  */

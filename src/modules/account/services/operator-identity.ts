@@ -4,7 +4,7 @@
  * (e-Commerce Directive Art. 5(1), GDPR Art. 13(1)(a)). `GET /config` publishes it; `invoicing` and
  * `orders` print it. Owned here, not by `shop`: a site without the shop still has an operator.
  *
- * @see docs/modules/account.md
+ * @see docs/modules/account.md#operator-identity
  */
 
 import { ConfigError } from '@infrastructure/config/define';
@@ -15,9 +15,7 @@ import { accountConfig } from '../config';
 /**
  * A required variable's value. `NODE_ENV=test` skips the boot check, so a suite that forgot to
  * set one gets this refusal instead of a silent `undefined` on a legal notice.
- * @param name - the variable, for the message
  * @param value - what the slice parsed
- * @returns the value
  * @throws {ConfigError} when it is unset
  */
 const requiredValue = (name: string, value: string | undefined): string => {

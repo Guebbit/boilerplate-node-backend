@@ -12,7 +12,7 @@
  * order that waited for the stock, and `products`' `release_date_changed` tells the buyers who
  * already paid that their date moved.
  *
- * @see docs/modules/delivery.md
+ * @see docs/modules/delivery.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -33,8 +33,10 @@ import { orderRouter } from './order-routes';
 import { deliveryConfig } from './config';
 import { deliveryService } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
-// Also installs this module's event declarations. Reached directly, never through this module's
-// own barrel — see CLAUDE.md's module-barrel rule.
+/**
+ * Also installs this module's event declarations. Reached directly, never through this module's
+ * own barrel — see CLAUDE.md's module-barrel rule.
+ */
 import {
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HOLD_NOTICED,
@@ -100,10 +102,12 @@ export default {
     personalData: [
         {
             section: 'shipments',
-            // `delivery -> orders` already exists (see the module docblock); the read itself needs
-            // the caller's own order ids first — `orders` publishes `ownOrderIds` for exactly this,
-            // so this module never has to page through full order documents (or navigate
-            // `.search()`'s own `_id`/`id` normalization trap) just to get them.
+            /**
+             * `delivery -> orders` already exists (see the module docblock); the read itself needs
+             * the caller's own order ids first — `orders` publishes `ownOrderIds` for exactly this,
+             * so this module never has to page through full order documents (or navigate
+             * `.search()`'s own `_id`/`id` normalization trap) just to get them.
+             */
             collect: (subject) =>
                 orderService
                     .ownOrderIds(subject.userId)
@@ -121,7 +125,7 @@ export default {
                     .then((all) => all.map((one) => presentExportFulfillmentOrder(one)))
         }
     ],
-    /*
+    /**
      * None of the first three requests a fact — each reacts to one `orders` already recorded and
      * announced. A failure is logged by `emitDomainEvent`, and the outbox retries it; the missing
      * fulfillment orders a lost `paid` would leave are made again by `start`, a preorder allocation,

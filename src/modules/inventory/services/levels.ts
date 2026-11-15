@@ -159,7 +159,6 @@ export const listLevels = async (
  * One product's stock level — the item read of a board row, the record `receive`, `adjust` and
  * `PATCH` act on. A product that is gone and one with no level row are the same 404.
  *
- * @param productId - the product
  * @returns its level, or the 404
  */
 export const getLevel = (
@@ -199,6 +198,8 @@ export const lowStockCount = (): Promise<number> =>
 export const listMovements = (
     filters: MovementFilters = {}
 ): Promise<{ items: StockMovement[]; meta: PaginatedMeta }> =>
-    // No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
-    // the only one that makes a paged ledger stable.
+    /**
+     * No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
+     * the only one that makes a paged ledger stable.
+     */
     stockMovementRepository.search(filters);

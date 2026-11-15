@@ -6,7 +6,7 @@
  * Which events exist, and how each becomes a provider event, is declared by the modules that own
  * them (`AppModule.browserEvents`); this file knows none of them by name.
  *
- * @see docs/modules/analytics.md
+ * @see docs/modules/analytics.md#the-story
  */
 
 import type { BrowserEventTarget } from '@kernel/registry';
@@ -41,8 +41,10 @@ export const relayEvent = (event: AnalyticsEventRequest, context: CallerContext)
     if (!target) return;
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
-        // The target was registered for exactly this event name, so the body it receives is the
-        // shape its own fragment declares.
+        /**
+         * The target was registered for exactly this event name, so the body it receives is the
+         * shape its own fragment declares.
+         */
         ...target.toReport(event)
     });
 };

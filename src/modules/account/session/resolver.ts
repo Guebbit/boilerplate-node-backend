@@ -5,7 +5,7 @@
  * {@link accountAuthResolver} via `registerAuthResolver` in its `onRegistered` hook; what a
  * credential means lives in the strategies, and what a proof means (`./auth-context`) is shared.
  *
- * @see docs/modules/account-sessions.md
+ * @see docs/modules/account-sessions.md#choosing-the-session-mode
  */
 
 import type { AuthResolver } from '@kernel/authentication';

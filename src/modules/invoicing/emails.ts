@@ -76,8 +76,10 @@ export interface DocumentVatBlock {
         unitPrice: string;
         net: string;
         rate: string;
-        /** Header for {@link DocumentVatRow.categoryCode} — the per-LINE table only; the
-         *  rate-grouped summary tables stay grouped by rate alone. */
+        /**
+         * Header for {@link DocumentVatRow.categoryCode} — the per-LINE table only; the
+         *  rate-grouped summary tables stay grouped by rate alone.
+         */
         category: string;
         tax: string;
         gross: string;
@@ -132,9 +134,11 @@ const buildVatBlock = (
     t: TFunction,
     document: EInvoicingDocument
 ): DocumentVatBlock => {
-    // One instance, reused for every amount — a real allocation, not worth paying once per cell.
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
-    // Places come from the pinned ISO 4217 table, as in `formatMoney`, never the runtime's CLDR data.
+    /**
+     * One instance, reused for every amount — a real allocation, not worth paying once per cell.
+     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+     * Places come from the pinned ISO 4217 table, as in `formatMoney`, never the runtime's CLDR data.
+     */
     const digits = minorUnitExponent(document.currency);
     const money = new Intl.NumberFormat(locale, {
         style: 'currency',
@@ -145,9 +149,11 @@ const buildVatBlock = (
     // A decimal rate (`0.055`) as the document prints it (`"5.5%"`).
     const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 });
 
-    // Art. 226(8): the unit price printed is EXCLUSIVE of VAT. The frozen `unitPrice` is gross, so
-    // it is divided back out, and shown with two places beyond the currency's own — a net unit
-    // price is rarely a whole minor unit (19.90 at 22% is 16.3115), and BT-146 allows any precision.
+    /**
+     * Art. 226(8): the unit price printed is EXCLUSIVE of VAT. The frozen `unitPrice` is gross, so
+     * it is divided back out, and shown with two places beyond the currency's own — a net unit
+     * price is rarely a whole minor unit (19.90 at 22% is 16.3115), and BT-146 allows any precision.
+     */
     const unitNetMoney = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: document.currency,
@@ -155,9 +161,11 @@ const buildVatBlock = (
         maximumFractionDigits: digits + 2
     });
 
-    // BR-CO-17: each rate's VAT was rounded ONCE, on the rate's whole taxable total, and frozen in
-    // `taxSummary`. A line's own share is that rate's GOODS VAT (summary minus its shipping slice)
-    // spread over the rate's lines, so the printed lines add up to the frozen totals exactly.
+    /**
+     * BR-CO-17: each rate's VAT was rounded ONCE, on the rate's whole taxable total, and frozen in
+     * `taxSummary`. A line's own share is that rate's GOODS VAT (summary minus its shipping slice)
+     * spread over the rate's lines, so the printed lines add up to the frozen totals exactly.
+     */
     const { currency } = document;
     const shippingTaxAt = new Map(document.shippingByRate.map((row) => [row.rate, row.taxAmount]));
     const goodsTaxByRate = new Map(

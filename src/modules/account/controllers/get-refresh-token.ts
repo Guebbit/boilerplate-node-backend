@@ -42,9 +42,11 @@ export const getRefreshToken = (request: Request, response: Response) => {
                 abilitiesOfUser(userId).then((abilities) => {
                     // The account stopped authenticating between the rotation and this read.
                     if (!abilities) throw new TokenRejection('revoked', 'User not found');
-                    // The rotated value replaces the client's cookie in the SAME response —
-                    // without this the client keeps presenting the now-superseded token, which
-                    // its next refresh has to survive via the grace window rather than needing to.
+                    /**
+                     * The rotated value replaces the client's cookie in the SAME response —
+                     * without this the client keeps presenting the now-superseded token, which
+                     * its next refresh has to survive via the grace window rather than needing to.
+                     */
                     createSessionCookie(response, rotated, refreshMaxAgeMs);
                     authRefreshTotal.inc({ status: 'success' });
                     successResponse<RefreshTokenResponse>(response, {
@@ -53,9 +55,11 @@ export const getRefreshToken = (request: Request, response: Response) => {
                     });
                 })
             )
-            // Every refusal of the token is the same 401: an unknown, expired, revoked or replayed
-            // token must not be told apart by a client. An outage is not a refusal: the client
-            // treats 401 as a definitive sign-out, so it gets a retryable 503 instead.
+            /**
+             * Every refusal of the token is the same 401: an unknown, expired, revoked or replayed
+             * token must not be told apart by a client. An outage is not a refusal: the client
+             * treats 401 as a definitive sign-out, so it gets a retryable 503 instead.
+             */
             .catch((error: unknown) => {
                 if (isInfrastructureError(error)) {
                     // The 503 (`QUERY_TIMEOUT` for a killed query) plus the log line and span mark.
@@ -63,8 +67,10 @@ export const getRefreshToken = (request: Request, response: Response) => {
                     return;
                 }
                 authRefreshTotal.inc({ status: 'failure' });
-                // An idled-out staff session says so, as every other door does: the client then
-                // shows "signed out for inactivity" rather than a generic expiry.
+                /**
+                 * An idled-out staff session says so, as every other door does: the client then
+                 * shows "signed out for inactivity" rather than a generic expiry.
+                 */
                 if (error instanceof TokenRejection && error.reason === 'idle') {
                     rejectResponse(response, 401, [
                         { code: ERROR_CODES.SESSION_IDLE, message: t('account.session-idle') }

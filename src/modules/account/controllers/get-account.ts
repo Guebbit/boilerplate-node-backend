@@ -27,16 +27,20 @@ export const getAccount = (request: Request, response: Response): void => {
     accountService
         .getOwnProfile(authContext.id, callerContextOf(request))
         .then((user) => {
-            // A valid token whose row is gone is a dead session, not a server fault. The role
-            // comes straight off the already-resolved auth context — it was read from the
-            // membership store once already, at token verification, so no second lookup here.
+            /**
+             * A valid token whose row is gone is a dead session, not a server fault. The role
+             * comes straight off the already-resolved auth context — it was read from the
+             * membership store once already, at token verification, so no second lookup here.
+             */
             if (!user) {
                 rejectResponse(response, 401);
                 return;
             }
-            // The edit part is the stored document's revision (a role change moves it,
-            // `users/services/update.ts`); the body part moves on every read (`lastActiveAt`),
-            // which `no-store` makes harmless.
+            /**
+             * The edit part is the stored document's revision (a role change moves it,
+             * `users/services/update.ts`); the body part moves on every read (`lastActiveAt`),
+             * which `no-store` makes harmless.
+             */
             setEtag(response, user);
             successResponse<AccountView>(response, accountViewOf(user, authContext));
         })

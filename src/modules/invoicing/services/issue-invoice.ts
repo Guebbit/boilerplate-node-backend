@@ -7,7 +7,7 @@
  * transaction, so the loser's duplicate-key error aborts it — the number goes back — and the
  * loser reads the winner's row instead of doubling the document.
  *
- * @see docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md#issuing-a-document
  */
 
 import { Types } from 'mongoose';
@@ -109,9 +109,11 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                         shippingTaxAmount: breakdown.shippingTaxAmount,
                         taxSummary: breakdown.taxSummary,
                         shippingByRate: breakdown.shippingByRate,
-                        // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
-                        // both quote — never a hand-composed sum, so this can never drift from what the order
-                        // itself says it charged.
+                        /**
+                         * The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
+                         * both quote — never a hand-composed sum, so this can never drift from what the order
+                         * itself says it charged.
+                         */
                         grandTotal: orderTotal(order)
                     },
                     session
