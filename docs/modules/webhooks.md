@@ -5,6 +5,8 @@ audience: [developer]
 
 # webhooks
 
+Outbound event delivery to a subscriber's own URL.
+
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
 **Depends on** — nothing. The modules that publish events (`delivery`, `orders`, `payments`, `returns`, `example`) declare them; this module never imports them, and no reach back the other way.
@@ -78,6 +80,26 @@ flowchart LR
 ```
 
 <!-- module-graph:webhooks:end -->
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule                         | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                                                                                          |
+| ---------------------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:WebhookSubscription`   | `WebhookDisplay`    | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Read this shop's webhook subscriptions, delivery log and event catalogue.                                                                                                                                                                                                     |
+| `create:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Add a subscription, minting its first secret.                                                                                                                                                                                                                                 |
+| `update:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Change a subscription, switch it on or off, rotate or drop a secret from its ring, and replay a delivery. The blast radius of all of them is the same — a party this shop did not intend gets signed deliveries, or the right one stops getting them — so they share one key. |
+| `delete:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Remove a subscription. Separate from update because the blast radius is.                                                                                                                                                                                                      |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
 
 ## The story
 
@@ -439,25 +461,9 @@ npm run sync:frontend     # hands the same three to the paired frontend
 **A twin trusts the same CA** the way its runtime does: PHP's cURL reads `CURLOPT_CAINFO` or
 `SSL_CERT_FILE`, pointing at `webhook-sink-ca.pem`.
 
-See: [Events & Logging](../understand/events-and-logging.md), [RabbitMQ](../understand/rabbitmq.md), and
-[the AsyncAPI workflow](../build/asyncapi-workflow.md).
+## Read next
 
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-<!-- permissions:start -->
-
-| Rule                         | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                                                                                          |
-| ---------------------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read:WebhookSubscription`   | `WebhookDisplay`    | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Read this shop's webhook subscriptions, delivery log and event catalogue.                                                                                                                                                                                                     |
-| `create:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Add a subscription, minting its first secret.                                                                                                                                                                                                                                 |
-| `update:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Change a subscription, switch it on or off, rotate or drop a secret from its ring, and replay a delivery. The blast radius of all of them is the same — a party this shop did not intend gets signed deliveries, or the right one stops getting them — so they share one key. |
-| `delete:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Remove a subscription. Separate from update because the blast radius is.                                                                                                                                                                                                      |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
+- [Events & Logging](../understand/events-and-logging.md) — the event bus webhooks subscribe to
+- [RabbitMQ](../understand/rabbitmq.md) — the broker behind delivery
+- [The AsyncAPI workflow](../build/asyncapi-workflow.md) — how an event is declared
+- [Modules overview](./start.md) — the whole context map

@@ -5,6 +5,8 @@ audience: [developer]
 
 # audit-logs
 
+Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.
+
 ::: tip At a glance
 **Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (180 by default), which its TTL index enforces.
 **Depends on** — [`access`](./access.md), only for the refusal reasons its read side lists. Nothing, for the write side: nothing imports this module, it installs a sink instead.
@@ -37,6 +39,23 @@ flowchart LR
 ```
 
 <!-- module-graph:audit-logs:end -->
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule            | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                      |
+| --------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------- |
+| `read:AuditLog` | `AuditDisplay` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Read the audit trail. There is no write key — nothing edits an audit row. |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../understand/authorization.md) explains the model.
+
+<!-- permissions:end -->
 
 ## The story
 
@@ -191,24 +210,7 @@ free text and stays out.
 `GET /audit` also filters on `ownOrder` (`true` keeps the entries flagged `metadata.ownOrder`,
 `false` the rest) so staff can separate actions on their own orders from actions on customers'.
 
-## Who can do what
-
-Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
-
-<!-- permissions:start -->
-
-| Rule            | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                      |
-| --------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------- |
-| `read:AuditLog` | `AuditDisplay` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Read the audit trail. There is no write key — nothing edits an audit row. |
-
-✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
-Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
-`src/modules/*/authorization.yaml` and the roles in `shared/rules/authorization-roles.yaml`, asked of the
-evaluator — [Authorization](../understand/authorization.md) explains the model.
-
-<!-- permissions:end -->
-
-## Related pages
+## Read next
 
 - [`observability`](./observability.md) — the module's OTHER reader, `GET /observability/audit`
 - [Authorization](../understand/authorization.md) — `read:AuditLog`, and why a bare key can never answer a platform question

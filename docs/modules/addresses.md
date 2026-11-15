@@ -5,6 +5,8 @@ audience: [developer]
 
 # addresses
 
+The address book, its own module so the cart's checkout can reach it without importing account.
+
 ::: tip At a glance
 **Owns** — the address book: one document per user, entries keeping their own id (two addresses
 can be identical in every field and still be different entries).
@@ -119,7 +121,7 @@ place that encrypts (every write) and decrypts (every read) — `service.ts` and
 snapshot both see plaintext, never the stored ciphertext. See
 [Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest).
 
-## Related pages
+## Read next
 
 - [`account`](./account.md) — shares the `/account` URL prefix and the frontend screen
 - [`cart`](./cart.md) — the checkout that resolves a shipping address through this module

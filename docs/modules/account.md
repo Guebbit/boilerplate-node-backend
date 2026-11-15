@@ -5,6 +5,8 @@ audience: [developer]
 
 # account
 
+Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle.
+
 ::: tip At a glance
 **Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Four collections of its own: `sessions`, `verificationtokens`, `accountexports` and `erasureledgers` (the [erasure ledger](../understand/data-retention.md#backups-and-erasure): who was erased and when, so a backup restore can erase them again); the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
@@ -434,7 +436,7 @@ Identity is one generic subdomain. Keycloak, Auth0 and better-auth all keep it a
 - No capability modules (a "login" module, a "tokens" module): they would share one collection.
 - No external identity provider: the contract is the core of a two-backend boilerplate.
 
-## Related pages
+## Read next
 
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
 - [Two-factor authentication](./account-two-factor.md) — the registry, and the enrollment state machine
