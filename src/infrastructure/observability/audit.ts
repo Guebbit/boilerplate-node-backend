@@ -5,7 +5,7 @@
  * go to a dedicated always-on logger (`auditLogger`) with a stable, machine-readable field set
  * that must not be reshaped for convenience.
  *
- * @see docs/operate/winston.md
+ * @see docs/operate/winston.md#audit-events
  */
 
 import { auditLogger, redactCredentials } from '@infrastructure/adapters/logger';
@@ -161,12 +161,16 @@ export const registerAuditSink = (sink: AuditSink): void => {
  * @param event - fully populated audit event (normally built by `buildAuditEvent`)
  */
 export const emitAuditEvent = (event: AuditEvent): void => {
-    // Level mirrors the outcome, so an ops alert on `level: warn` in the audit stream picks up
-    // failed logins and permission denials without needing to know the action vocabulary.
+    /**
+     * Level mirrors the outcome, so an ops alert on `level: warn` in the audit stream picks up
+     * failed logins and permission denials without needing to know the action vocabulary.
+     */
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
-    // Credentials are scrubbed once here so the log line and the stored row get the same
-    // metadata; personal fields stay raw in the row (docs/understand/data-protection.md) and are
-    // handled by the logger's own pipeline for the line.
+    /**
+     * Credentials are scrubbed once here so the log line and the stored row get the same
+     * metadata; personal fields stay raw in the row (docs/understand/data-protection.md) and are
+     * handled by the logger's own pipeline for the line.
+     */
     const scrubbed: AuditEvent = {
         ...event,
         // A single narrowing cast: the walk returns `unknown`, but it copies a record to a record.
@@ -174,15 +178,19 @@ export const emitAuditEvent = (event: AuditEvent): void => {
             metadata: redactCredentials(event.metadata) as Record<string, unknown>
         })
     };
-    // `logger.log(level, message, meta)` — the action doubles as the log message, and the whole
-    // event object is attached as structured metadata.
+    /**
+     * `logger.log(level, message, meta)` — the action doubles as the log message, and the whole
+     * event object is attached as structured metadata.
+     */
     auditLogger.log(level, event.action, scrubbed);
 
     if (!auditSink) return;
 
     const entry: AuditEntry = { ...scrubbed, timestamp: new Date(), level };
-    // Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
-    // that breaks the contract anyway unable to take down the request that triggered it.
+    /**
+     * Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
+     * that breaks the contract anyway unable to take down the request that triggered it.
+     */
     // eslint-disable-next-line no-restricted-syntax -- the sink contract forbids throwing; this contains a sink that breaks it anyway
     try {
         auditSink(entry);
@@ -202,14 +210,18 @@ export const emitAuditEvent = (event: AuditEvent): void => {
 export const extractRequestContext = (
     context: CallerContext
 ): Pick<AuditEvent, 'ip' | 'userAgent' | 'requestId' | 'traceId'> => ({
-    // Note: `ip` reflects the proxy's address unless Express `trust proxy` is configured —
-    // behind a load balancer that setting is what makes this field meaningful.
+    /**
+     * Note: `ip` reflects the proxy's address unless Express `trust proxy` is configured —
+     * behind a load balancer that setting is what makes this field meaningful.
+     */
     ip: context.ip,
     userAgent: context.userAgent,
     // Assigned by the request-id middleware.
     requestId: context.requestId,
-    // Pulled from ambient OTel context, so audit entries join up with traces. Safe unlike a
-    // "current request" accessor would be — see `CallerContext`'s docblock.
+    /**
+     * Pulled from ambient OTel context, so audit entries join up with traces. Safe unlike a
+     * "current request" accessor would be — see `CallerContext`'s docblock.
+     */
     traceId: getActiveSpanContext().traceId
 });
 
@@ -224,15 +236,17 @@ export const extractRequestContext = (
  * this four-way split still passes `actorRoleName` alongside, and one auditing an action for a
  * caller it already knows is unrestricted may still pass `actorRole` explicitly to skip this
  * default.
- * @param context - the caller context built once in the controller
- * @returns the actor's role
  */
 const resolveActorRole = (context: CallerContext): AuditEvent['actorRole'] => {
-    // No caller id at all: an unauthenticated request. Still audited — failed logins and
-    // blocked access attempts are exactly the events worth keeping.
+    /**
+     * No caller id at all: an unauthenticated request. Still audited — failed logins and
+     * blocked access attempts are exactly the events worth keeping.
+     */
     if (!context.caller.id) return 'anonymous';
-    // Checked before `unrestricted`: `SYSTEM_ACTOR` is unrestricted too, and without this
-    // check first every background job would read as an admin's own action.
+    /**
+     * Checked before `unrestricted`: `SYSTEM_ACTOR` is unrestricted too, and without this
+     * check first every background job would read as an admin's own action.
+     */
     if (context.caller.system) return 'system';
     return context.caller.unrestricted ? 'admin' : 'user';
 };
@@ -246,9 +260,11 @@ const resolveActorRole = (context: CallerContext): AuditEvent['actorRole'] => {
  */
 export const buildAuditEvent = (
     context: CallerContext,
-    // The type says: `action` and `outcome` are mandatory, everything else optional. That is the
-    // whole ergonomic point — a call site cannot forget what happened or whether it succeeded,
-    // but never has to restate context the request already carries.
+    /**
+     * The type says: `action` and `outcome` are mandatory, everything else optional. That is the
+     * whole ergonomic point — a call site cannot forget what happened or whether it succeeded,
+     * but never has to restate context the request already carries.
+     */
     fields: Pick<AuditEvent, 'action' | 'outcome'> &
         Partial<
             Pick<
@@ -265,26 +281,34 @@ export const buildAuditEvent = (
             >
         >
 ): AuditEvent => ({
-    // Explicit override wins, then the authenticated caller, then 'unknown'. The override matters
-    // where there is no caller id at all — a failed login records `'anonymous'` rather than
-    // `'unknown'`, so the two cases stay distinguishable.
+    /**
+     * Explicit override wins, then the authenticated caller, then 'unknown'. The override matters
+     * where there is no caller id at all — a failed login records `'anonymous'` rather than
+     * `'unknown'`, so the two cases stay distinguishable.
+     */
     actorUserId: fields.actorUserId ?? context.caller.id ?? 'unknown',
     actorRole: fields.actorRole ?? resolveActorRole(context),
     actorRoleName: fields.actorRoleName ?? context.actorRoleName,
     actorCredentialId: fields.actorCredentialId ?? context.actorCredentialId,
-    // `context.caller.scope` is always `'tenant'` (see `AuditEvent.actorScope`'s own docblock),
-    // so this default is correct for every ordinary tenant action and wrong for a platform one —
-    // which is exactly why a platform-key check overrides it explicitly instead of relying here.
+    /**
+     * `context.caller.scope` is always `'tenant'` (see `AuditEvent.actorScope`'s own docblock),
+     * so this default is correct for every ordinary tenant action and wrong for a platform one —
+     * which is exactly why a platform-key check overrides it explicitly instead of relying here.
+     */
     actorScope: fields.actorScope ?? context.caller.scope,
     // Spread after the defaults so caller values replace them.
     ...fields,
-    // The caller's own request id rides in `metadata`, not a column of its own: it is a hint for
-    // correlation, and the audit schema stays as it is.
+    /**
+     * The caller's own request id rides in `metadata`, not a column of its own: it is a hint for
+     * correlation, and the audit schema stays as it is.
+     */
     ...(context.clientRequestId && {
         metadata: { ...fields.metadata, clientRequestId: context.clientRequestId }
     }),
-    // Spread last, deliberately: context-derived fields (ip, traceId, ...) are not
-    // caller-overridable, so an audit entry cannot misreport where it came from.
+    /**
+     * Spread last, deliberately: context-derived fields (ip, traceId, ...) are not
+     * caller-overridable, so an audit entry cannot misreport where it came from.
+     */
     ...extractRequestContext(context)
 });
 

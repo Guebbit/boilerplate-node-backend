@@ -5,7 +5,7 @@
  * on top of what this produces, one direction, never back. A project that changes where
  * dictionaries live edits this file and nothing else.
  *
- * @see docs/understand/i18n.md
+ * @see docs/understand/i18n.md#two-tiers-and-they-never-merge
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -193,8 +193,10 @@ export const readLocaleDictionary = (tag: string): Record<string, unknown> => {
     // Files are named by the canonical tag, so `pt-br` reads `pt-BR.json`.
     const locale = canonicalLocale(tag);
     const cached = dictionaryCache.get(locale);
-    // structuredClone: a copy per caller, so one caller's edits cannot reach the shared tree.
-    // https://developer.mozilla.org/docs/Web/API/Window/structuredClone
+    /**
+     * structuredClone: a copy per caller, so one caller's edits cannot reach the shared tree.
+     * https://developer.mozilla.org/docs/Web/API/Window/structuredClone
+     */
     if (cached) return structuredClone(cached);
 
     // Shared file first, module contributions layered on top — hence a module CAN shadow a key.

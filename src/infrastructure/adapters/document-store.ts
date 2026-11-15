@@ -13,7 +13,7 @@
  * on purpose and in writing: at-rest protection is the host's, like the Mongo data files
  * (`docs/understand/data-protection.md`).
  *
- * @see docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md#downloading-a-document
  */
 
 import path from 'node:path';
@@ -42,7 +42,6 @@ const resolveName = (name: string): string | undefined =>
 /**
  * Read a stored document.
  *
- * @param name - the document's name
  * @returns its bytes, or `undefined` when none is stored (or the name is not one this store writes)
  */
 export const readDocument = (name: string): Promise<Buffer | undefined> => {
@@ -64,7 +63,6 @@ export const readDocument = (name: string): Promise<Buffer | undefined> => {
  * over the final name. A reader (or a second download rendering the same bytes at the same moment)
  * sees either no file or a whole one, never half of one.
  *
- * @param name - the document's name
  * @param bytes - the finished PDF
  * @throws {Error} for a name this store would not write, or a failed write
  */
@@ -92,7 +90,6 @@ export const reapDocuments = (retentionMs: number): Promise<ReapResult> =>
  * Delete one stored document now, ahead of its retention window. An absent file is success: the
  * document may never have been rendered, or the nightly reaper got there first.
  *
- * @param name - the document's name
  * @returns whether a file was deleted
  */
 export const removeDocument = (name: string): Promise<boolean> => {

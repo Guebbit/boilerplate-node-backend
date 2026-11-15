@@ -288,8 +288,10 @@ export interface DeclaredRule extends PermissionRule {
 /** Every declared rule, in the order the shared file lists them. */
 export const PERMISSION_RULES: readonly DeclaredRule[] = keysDocument.rules.map((rule) => ({
     ...rule,
-    // A string until the pair is looked up: the generated id list is the YAML's own, so no schema
-    // could say more than this cast does. `tests/cross-cutting/permission-vocabulary.test.ts` pins it.
+    /**
+     * A string until the pair is looked up: the generated id list is the YAML's own, so no schema
+     * could say more than this cast does. `tests/cross-cutting/permission-vocabulary.test.ts` pins it.
+     */
     id: ruleId(rule.action, rule.subject) as PermissionRuleId
 }));
 
@@ -577,9 +579,11 @@ export const assembleCaller = (
         unrestricted: holdsEveryDeclaredRule(scope, permissions),
         system: id === SYSTEM_ACTOR_ID
     };
-    // `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
-    // paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
-    // code guarantees but the type checker cannot see across four independent parameters.
+    /**
+     * `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
+     * paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
+     * code guarantees but the type checker cannot see across four independent parameters.
+     */
     return assembled as Caller;
 };
 
@@ -598,12 +602,16 @@ export function callerInScope(context: AuthContext, scope: 'tenant'): TenantCall
 export function callerInScope(context: AuthContext, scope: 'platform'): PlatformCaller;
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller;
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller {
-    // Platform scope is tenant-less by definition; carrying a tenantId here would let a platform
-    // rule be narrowed by a shop it does not belong to.
+    /**
+     * Platform scope is tenant-less by definition; carrying a tenantId here would let a platform
+     * rule be narrowed by a shop it does not belong to.
+     */
     const tenantId = scope === 'platform' ? null : context.tenantId;
     const held = scope === 'platform' ? context.roles.platform : context.roles.tenant;
-    // A staff role grants nothing until an authenticator app is armed: the account keeps what its
-    // audience holds (a customer's own cart, orders) and can enrol, nothing more.
+    /**
+     * A staff role grants nothing until an authenticator app is armed: the account keeps what its
+     * audience holds (a customer's own cart, orders) and can enrol, nothing more.
+     */
     const permissions = keysInScope(
         staffRoleWithheld(context) ? null : held,
         scope,
@@ -674,8 +682,10 @@ const holdsEveryDeclaredRule = (
 ): boolean => {
     const held = new Set(permissions);
     const declared = declaredRulesOfScope.get(scope) ?? [];
-    // A scope with nothing declared makes nobody unrestricted — `every` over an empty list is
-    // vacuously true, which would mark every caller in it as an admin.
+    /**
+     * A scope with nothing declared makes nobody unrestricted — `every` over an empty list is
+     * vacuously true, which would mark every caller in it as an admin.
+     */
     return declared.length > 0 && declared.every((key) => held.has(key));
 };
 

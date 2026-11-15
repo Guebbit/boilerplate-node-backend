@@ -717,6 +717,71 @@ export default defineConfig(
     },
 
     /**
+     * Every top-level declaration carries a docblock, and no tag only repeats the name it tags.
+     *
+     * Presence:   a function, class, variable, type, interface, enum or class member at the top of
+     *             a file has a docblock. `enableFixer` is off on purpose: `lint:fix` must never
+     *             insert an empty stub that passes this rule and says nothing.
+     * Accuracy:   `informative-docs` refuses a description that only restates its name.
+     * Scope:      grows one folder per commit, until it is every linted file.
+     *
+     * Later than the block above, so for a listed file this one wins.
+     * @see docs/build/code-comments.md#the-form-at-a-glance
+     */
+    {
+        files: [
+            'src/app/**/*.ts',
+            'src/kernel/**/*.ts',
+            'src/infrastructure/**/*.ts',
+            'src/domain-primitives/**/*.ts',
+            'src/types/**/*.ts',
+            'src/*.ts'
+        ],
+        ignores: ['src/types/asyncapi.generated.ts'],
+
+        plugins: {
+            jsdoc: pluginJsdoc
+        },
+
+        settings: {
+            jsdoc: { mode: 'typescript' }
+        },
+
+        rules: {
+            'jsdoc/require-jsdoc': [
+                'error',
+                {
+                    publicOnly: false,
+                    enableFixer: false,
+                    require: {
+                        FunctionDeclaration: false,
+                        ArrowFunctionExpression: false,
+                        FunctionExpression: false,
+                        ClassDeclaration: false
+                    },
+                    // Top-level selectors, not `require`: that would also flag every nested arrow.
+                    contexts: [
+                        'Program > FunctionDeclaration',
+                        'Program > ClassDeclaration',
+                        'Program > VariableDeclaration',
+                        'Program > TSInterfaceDeclaration',
+                        'Program > TSTypeAliasDeclaration',
+                        'Program > TSEnumDeclaration',
+                        // The docblock sits above `export`, so the plugin reads it from this node.
+                        'Program > ExportNamedDeclaration[declaration]',
+                        'Program > ExportDefaultDeclaration',
+                        'Program > ClassDeclaration > ClassBody > MethodDefinition',
+                        'Program > ClassDeclaration > ClassBody > PropertyDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > MethodDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > PropertyDefinition'
+                    ]
+                }
+            ],
+            'jsdoc/informative-docs': 'error'
+        }
+    },
+
+    /**
      * Controllers, and the one rule that is only theirs.
      *
      * A fire-and-forget promise chain is legitimate in an adapter — `enqueueEmail` deliberately

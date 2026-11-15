@@ -8,12 +8,16 @@
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-// multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
-// `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
-// `FileFilterCallback` is the signature of the accept/reject callback used below.
+/**
+ * multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
+ * `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
+ * `FileFilterCallback` is the signature of the accept/reject callback used below.
+ */
 import multer, { MulterError, type FileFilterCallback, type Multer } from 'multer';
-// `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
-// filenames would let someone guess the URL of another user's upload.
+/**
+ * `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
+ * filenames would let someone guess the URL of another user's upload.
+ */
 import { randomBytes } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -44,7 +48,7 @@ import { uploadConfig } from '@infrastructure/http/config';
  * two separate moments, which is what lets the second one be a remote bucket. Override with
  * `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the cap, or unwritable by the app user.
  *
- * @see docs/understand/security.md
+ * @see docs/understand/security.md#why-search-text-is-escaped-before-it-reaches-regex
  */
 export const uploadStagingPath = () => uploadConfig().NODE_UPLOAD_STAGING_PATH;
 
@@ -70,15 +74,19 @@ export const resolveUploadDestination = (
     file: Express.Multer.File,
     callback: (error: Error | null, destination: string) => void
 ): void => {
-    // Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
-    // more likely an attack or a client bug than a legitimate upload.
+    /**
+     * Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
+     * more likely an attack or a client bug than a legitimate upload.
+     */
     if (file.fieldname !== IMAGE_UPLOAD_FIELD) {
         callback(new MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname), '');
         return;
     }
 
-    // Created on demand because multer will not create it, and the default lives in the system
-    // temp directory, which a reboot empties.
+    /**
+     * Created on demand because multer will not create it, and the default lives in the system
+     * temp directory, which a reboot empties.
+     */
     const staging = uploadStagingPath();
     void mkdir(staging, { recursive: true })
         .then(() => callback(null, staging))
@@ -104,8 +112,10 @@ export const resolveUploadFilename = (
     file: Express.Multer.File,
     callback: (error: Error | null, filename: string) => void
 ): void => {
-    // 16 random bytes as hex = 32 chars / 128 bits — collision probability is negligible, and
-    // the name is unguessable, which is what keeps one user's uploads from being enumerable.
+    /**
+     * 16 random bytes as hex = 32 chars / 128 bits — collision probability is negligible, and
+     * the name is unguessable, which is what keeps one user's uploads from being enumerable.
+     */
     const extension = extensionForImage(normaliseDeclaredImageMime(file.mimetype)) ?? 'bin';
     callback(null, randomBytes(16).toString('hex') + '.' + extension);
 };
@@ -181,12 +191,16 @@ const rawUpload = (): Multer =>
         fileFilter,
         limits: {
             fileSize: maxUploadBytes(),
-            // These endpoints accept one image. Without a cap, a request carrying ten thousand file
-            // parts is accepted and each one is written.
+            /**
+             * These endpoints accept one image. Without a cap, a request carrying ten thousand file
+             * parts is accepted and each one is written.
+             */
             files: 1,
-            // Non-file parts are bounded too: multer's 1 MB per field is generous, and the number of
-            // fields is unlimited by default, so a body of a million empty fields is otherwise a
-            // free way to burn parser time.
+            /**
+             * Non-file parts are bounded too: multer's 1 MB per field is generous, and the number of
+             * fields is unlimited by default, so a body of a million empty fields is otherwise a
+             * free way to burn parser time.
+             */
             fields: 32,
             fieldSize: 100 * 1024,
             parts: 64
@@ -239,8 +253,10 @@ const isMalformedMultipart = (error: unknown): error is Error =>
  */
 const answerUploadError = (error: unknown, response: Response, next: NextFunction): void => {
     if (!(error instanceof UnsupportedUploadTypeError)) {
-        // `cause` keeps busboy's own error for the log; `expose` is the thrower's statement that
-        // this describes the request, not the server.
+        /**
+         * `cause` keeps busboy's own error for the log; `expose` is the thrower's statement that
+         * this describes the request, not the server.
+         */
         next(
             isMalformedMultipart(error)
                 ? Object.assign(new Error('Malformed multipart body', { cause: error }), {
@@ -281,11 +297,13 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
         return;
     }
 
-    // The declared type decided the stored EXTENSION, and the extension decides the
-    // `Content-Type` a static file server sends — so the bytes have to match the declaration,
-    // not merely be some image. Valid JPEG bytes stored as `.png` would otherwise be served as
-    // `image/png`; harmless today, but it is the same class of mismatch this whole check exists
-    // to remove, and cheap to close while the file is in hand.
+    /**
+     * The declared type decided the stored EXTENSION, and the extension decides the
+     * `Content-Type` a static file server sends — so the bytes have to match the declaration,
+     * not merely be some image. Valid JPEG bytes stored as `.png` would otherwise be served as
+     * `image/png`; harmless today, but it is the same class of mismatch this whole check exists
+     * to remove, and cheap to close while the file is in hand.
+     */
     const declared = normaliseDeclaredImageMime(request.file?.mimetype);
 
     void Promise.all(paths.map((path) => identifyImageFile(path)))
@@ -300,8 +318,10 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
                 return;
             }
 
-            // Logged, because a mismatch between the declared type and the bytes is not a typo —
-            // it is either a broken client or someone probing what this endpoint will store.
+            /**
+             * Logged, because a mismatch between the declared type and the bytes is not a typo —
+             * it is either a broken client or someone probing what this endpoint will store.
+             */
             // Stryker disable all
             logger.warn({
                 message: 'Upload rejected: content does not match the declared image format.',
@@ -353,8 +373,10 @@ const cleanupAfterPartialQuarantine = (
 const releaseUnclaimedUpload = (request: Request, response: Response): void => {
     response.once('close', () => {
         if (response.statusCode < 400 || request.uploadClaimed) return;
-        // `deleteUpload` resolves even when the storage hiccups (image-store.ts), so a failure
-        // here is only logged by the store itself.
+        /**
+         * `deleteUpload` resolves even when the storage hiccups (image-store.ts), so a failure
+         * here is only logged by the store itself.
+         */
         // eslint-disable-next-line @typescript-eslint/no-floating-promises -- deleteUpload never rejects (cleanup failures are swallowed by the image store)
         void readUploadedImage(request).deleteUpload();
     });
@@ -377,11 +399,13 @@ const digestQuarantinedKeysInline = (
     keys: string[],
     next: NextFunction
 ): Promise<void> =>
-    // The owner salt is the key's STEM, not the key itself: `resolveUploadFilename` names the
-    // quarantined file `<hex>.<ext>`, and `image-store.ts#promote` appends the digested mime's own
-    // extension to `contentStem`'s result — passing the raw key here doubled it, landing files as
-    // `<hex>.png-<hash>.png`. `key` (with its extension) still goes to `digestQuarantinedImage`
-    // itself, which needs it to find the quarantined file on disk.
+    /**
+     * The owner salt is the key's STEM, not the key itself: `resolveUploadFilename` names the
+     * quarantined file `<hex>.<ext>`, and `image-store.ts#promote` appends the digested mime's own
+     * extension to `contentStem`'s result — passing the raw key here doubled it, landing files as
+     * `<hex>.png-<hash>.png`. `key` (with its extension) still goes to `digestQuarantinedImage`
+     * itself, which needs it to find the quarantined file on disk.
+     */
     Promise.all(
         keys.map((key) => digestQuarantinedImage(key, path.basename(key, path.extname(key))))
     )
@@ -389,8 +413,10 @@ const digestQuarantinedKeysInline = (
             request.storedImageUrls = digested.map((result) => result.imageUrl);
             request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
             releaseUnclaimedUpload(request, response);
-            // No writeback on this path — the urls ride the request into the write itself — so
-            // the quarantine files are done with as soon as the digest is.
+            /**
+             * No writeback on this path — the urls ride the request into the write itself — so
+             * the quarantine files are done with as soon as the digest is.
+             */
             return Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
                 next()
             );
@@ -420,9 +446,11 @@ export const quarantineUploadedImages: RequestHandler = (request, response, next
         return;
     }
 
-    // `allSettled`, not `all`: with several files the interesting failure is the partial one, and
-    // `all` rejects while the successful quarantines are still in flight — leaving files quarantined
-    // that nothing will ever reference or reap early. The results are needed to clean those up.
+    /**
+     * `allSettled`, not `all`: with several files the interesting failure is the partial one, and
+     * `all` rejects while the successful quarantines are still in flight — leaving files quarantined
+     * that nothing will ever reference or reap early. The results are needed to clean those up.
+     */
     void Promise.allSettled(staged.map((stagedPath) => imageStore.quarantine(stagedPath)))
         .then(
             (results) => {
@@ -433,8 +461,10 @@ export const quarantineUploadedImages: RequestHandler = (request, response, next
                     );
 
                 const keys = results.map(
-                    // Every rejected result was refused earlier in this chain, so only fulfilled
-                    // ones remain here.
+                    /**
+                     * Every rejected result was refused earlier in this chain, so only fulfilled
+                     * ones remain here.
+                     */
                     (result) => (result as PromiseFulfilledResult<string>).value
                 );
 
@@ -445,38 +475,42 @@ export const quarantineUploadedImages: RequestHandler = (request, response, next
                     return;
                 }
 
-                // No broker, or one configured but not currently reachable: the contract promises a
-                // real `thumbnailUrl` regardless, so the digest runs now, inline, before the request
-                // is allowed to proceed — same shape as `enqueueEmail` sending inline rather than
-                // dropping the message.
-                //
-                // Why `queueState()`, not `isQueueEnabled()`:
-                //   a broker configured but down must behave exactly like "no broker" here, not
-                //   fall through to `enqueueImageDigest`'s own fallback deeper in the write path —
-                //   that one exists for a publish that fails despite the queue looking ready
-                //   moments earlier, not as the steady-state path for an outage this middleware
-                //   could see coming.
-                //
-                // Why it's safe to call here:
-                //   `queueState()` never dials the broker — cheap on purpose. Nothing here needs
-                //   to nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps
-                //   retrying the connection on its own, in the background, for as long as the
-                //   process runs. The next upload after it succeeds simply finds `queueState()`
-                //   reading `ready` again.
-                //
-                // Why the `owner` salt below is the quarantine key's stem:
-                //   no document exists yet at this point in the request, so
-                //   `digestQuarantinedImage`'s `owner` salt is the quarantine key instead — minus
-                //   its extension, which `digestQuarantinedKeysInline` strips before passing it on
-                //   (see that function's own comment for why). That stem is unique per upload and
-                //   never retried, so this loses nothing (there is no duplicate run to converge)
-                //   while still keeping this promoted file from ever sharing a name with an
-                //   unrelated upload.
+                /**
+                 * No broker, or one configured but not currently reachable: the contract promises a
+                 * real `thumbnailUrl` regardless, so the digest runs now, inline, before the request
+                 * is allowed to proceed — same shape as `enqueueEmail` sending inline rather than
+                 * dropping the message.
+                 *
+                 * Why `queueState()`, not `isQueueEnabled()`:
+                 *   a broker configured but down must behave exactly like "no broker" here, not
+                 *   fall through to `enqueueImageDigest`'s own fallback deeper in the write path —
+                 *   that one exists for a publish that fails despite the queue looking ready
+                 *   moments earlier, not as the steady-state path for an outage this middleware
+                 *   could see coming.
+                 *
+                 * Why it's safe to call here:
+                 *   `queueState()` never dials the broker — cheap on purpose. Nothing here needs
+                 *   to nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps
+                 *   retrying the connection on its own, in the background, for as long as the
+                 *   process runs. The next upload after it succeeds simply finds `queueState()`
+                 *   reading `ready` again.
+                 *
+                 * Why the `owner` salt below is the quarantine key's stem:
+                 *   no document exists yet at this point in the request, so
+                 *   `digestQuarantinedImage`'s `owner` salt is the quarantine key instead — minus
+                 *   its extension, which `digestQuarantinedKeysInline` strips before passing it on
+                 *   (see that function's own comment for why). That stem is unique per upload and
+                 *   never retried, so this loses nothing (there is no duplicate run to converge)
+                 *   while still keeping this promoted file from ever sharing a name with an
+                 *   unrelated upload.
+                 */
                 return digestQuarantinedKeysInline(request, response, keys, next);
             }
-            // A rejection from inside the callback above — its own cleanup Promise.all included —
-            // must still reach next(): without this, the request hangs rather than answering the 500
-            // an ordinary thrown error would.
+            /**
+             * A rejection from inside the callback above — its own cleanup Promise.all included —
+             * must still reach next(): without this, the request hangs rather than answering the 500
+             * an ordinary thrown error would.
+             */
         )
         .catch((error: unknown) => next(error));
 };

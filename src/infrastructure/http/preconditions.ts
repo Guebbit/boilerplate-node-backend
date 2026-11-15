@@ -68,8 +68,10 @@ const DIGEST_LENGTH = 16;
  * Express's `json spaces`/`replacer`/`escape`, so `JSON.stringify` matches the wire bytes.
  */
 const digestOf = (body: unknown): string =>
-    // node:crypto sha256, base64url so the digest never needs quoting inside the tag.
-    // https://nodejs.org/api/crypto.html#hashdigestencoding
+    /**
+     * node:crypto sha256, base64url so the digest never needs quoting inside the tag.
+     * https://nodejs.org/api/crypto.html#hashdigestencoding
+     */
     createHash('sha256').update(JSON.stringify(body)).digest('base64url').slice(0, DIGEST_LENGTH);
 
 /**
@@ -154,14 +156,18 @@ export const answerAsResource = (response: Response, row: unknown, uri: string):
 export const dropUnownedValidators: RequestHandler = (request, response, next) => {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
         const writeHead = response.writeHead.bind(response);
-        // Node's `ServerResponse#writeHead` has several overloads; the wrapper forwards whichever
-        // one was called. https://nodejs.org/api/http.html#responsewriteheadstatuscode-statusmessage-headers
+        /**
+         * Node's `ServerResponse#writeHead` has several overloads; the wrapper forwards whichever
+         * one was called. https://nodejs.org/api/http.html#responsewriteheadstatuscode-statusmessage-headers
+         */
         response.writeHead = ((...arguments_: Parameters<Response['writeHead']>) => {
             if (request.method === 'PUT' || !ownTags.has(response)) response.removeHeader('ETag');
             if (request.method === 'PUT') response.removeHeader('Last-Modified');
             return writeHead(...arguments_);
-            // `writeHead` is overloaded, so the wrapper's rest-args signature cannot be matched to any
-            // one overload; it forwards its arguments untouched.
+            /**
+             * `writeHead` is overloaded, so the wrapper's rest-args signature cannot be matched to any
+             * one overload; it forwards its arguments untouched.
+             */
         }) as Response['writeHead'];
     }
     next();

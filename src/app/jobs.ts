@@ -26,8 +26,10 @@ export const appJobs: readonly JobDeclaration[] = [
         ...appJobData.reapQuarantine,
         run: () => {
             const root = quarantineRoot();
-            // A quarantine file is left alone this long before it counts as abandoned: 24 hours by
-            // default, so a broker outage across a normal maintenance window loses nothing.
+            /**
+             * A quarantine file is left alone this long before it counts as abandoned: 24 hours by
+             * default, so a broker outage across a normal maintenance window loses nothing.
+             */
             const retentionMs = imageConfig().NODE_QUARANTINE_RETENTION_HOURS * HOUR_MS;
             return reapDirectory(root, Date.now() - retentionMs, 'Quarantine').then(
                 ({ checked, reaped }) => {
@@ -44,8 +46,10 @@ export const appJobs: readonly JobDeclaration[] = [
     },
     {
         ...appJobData.reapMailSpool,
-        // A spooled file is left alone this long before it counts as abandoned: one hour by default.
-        // A mail job settles in seconds; anything still here past that died mid-flight.
+        /**
+         * A spooled file is left alone this long before it counts as abandoned: one hour by default.
+         * A mail job settles in seconds; anything still here past that died mid-flight.
+         */
         run: () =>
             reapSpooled(mailFilesConfig().NODE_MAIL_SPOOL_RETENTION_HOURS * HOUR_MS).then(
                 (reaped) => {

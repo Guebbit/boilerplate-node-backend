@@ -47,21 +47,25 @@ export const mergedSearchInput = (
     request: Request,
     extendInput?: SearchControllerSpec<ZodType, unknown>['extendInput']
 ): Record<string, unknown> => {
-    // readInput: merges params/query/body into one object, per the `search` surface's
-    // rules — see docs/understand/request-input.md. A body exists only on `POST …/search`: a GET's
-    // is never parsed (`app/security.ts`), so `request.body` is `undefined` there. `id` is a batch filter (an array), so it
-    // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
-    // entry, which is correct for `update`/`delete` (one row) but would silently turn
-    // `?id=a&id=b` into `?id=a` here.
-    // `sort` is a CSV in a query and an array in a body: `csvLists` splits only the query's, so a
-    // body CSV is refused by the schema's enum instead of silently accepted.
+    /**
+     * readInput: merges params/query/body into one object, per the `search` surface's
+     * rules — see docs/understand/request-input.md. A body exists only on `POST …/search`: a GET's
+     * is never parsed (`app/security.ts`), so `request.body` is `undefined` there. `id` is a batch filter (an array), so it
+     * goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
+     * entry, which is correct for `update`/`delete` (one row) but would silently turn
+     * `?id=a&id=b` into `?id=a` here.
+     * `sort` is a CSV in a query and an array in a body: `csvLists` splits only the query's, so a
+     * body CSV is refused by the schema's enum instead of silently accepted.
+     */
     const input = readInput(request, {
         surface: 'search',
         stringArrays: ['id'],
         csvLists: ['sort']
     });
-    // extendInput: the module's own overlay — coercions or request-derived values a plain
-    // field list can't express.
+    /**
+     * extendInput: the module's own overlay — coercions or request-derived values a plain
+     * field list can't express.
+     */
     return extendInput ? { ...input, ...extendInput(input, request) } : input;
 };
 
@@ -83,8 +87,10 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
     return namedHandler(operation, (request: Request, response: Response) => {
         const merged = mergedSearchInput(request, extendInput);
 
-        // parseBody: validates the merged input against the module's schema; 422s and returns
-        // undefined on failure.
+        /**
+         * parseBody: validates the merged input against the module's schema; 422s and returns
+         * undefined on failure.
+         */
         const parsed = parseBody(schema, merged, response);
         if (!parsed) return;
 

@@ -7,7 +7,7 @@
  *
  * Same shape as `reencryptOf(model)` in `../security/reencrypt.ts`: a function of the model.
  *
- * @see docs/modules/locales.md
+ * @see docs/modules/locales.md#the-translations-collection
  */
 
 import type { ClientSession, Document, Model, UpdateQuery } from 'mongoose';
@@ -67,8 +67,10 @@ export const translatableColumnsOf = <TDocument extends Document>(
         model
             .updateOne(
                 { _id: toObjectId(entityId) },
-                // `as`: the column names arrive as data (the port's `fields`), which a generic
-                // `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
+                /**
+                 * `as`: the column names arrive as data (the port's `fields`), which a generic
+                 * `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
+                 */
                 setAndUnset(
                     Object.fromEntries(
                         Object.entries(fields).map(([name, value]) => [name, clearedOrValue(value)])

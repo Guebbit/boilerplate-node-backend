@@ -469,7 +469,7 @@ export interface AppModule {
      * refused at boot, never on the first request that reads it. Most modules that read a
      * variable declare one; deleting the module deletes its gate.
      *
-     * @see docs/operate/configuration.md
+     * @see docs/operate/configuration.md#who-owns-what
      */
     config?: readonly ConfigSlice[];
 
@@ -534,8 +534,10 @@ export interface AppModule {
  * @throws {Error} when two entries share a key
  */
 const uniqueEntries = <T>(entries: [string, T][], label: string): Record<string, T> => {
-    // No prototype: a lookup by an attacker-chosen key (`constructor`, `__proto__`) finds nothing
-    // instead of an inherited function.
+    /**
+     * No prototype: a lookup by an attacker-chosen key (`constructor`, `__proto__`) finds nothing
+     * instead of an inherited function.
+     */
     const merged: Record<string, T> = Object.create(null) as Record<string, T>;
     for (const [key, value] of entries) {
         if (Object.hasOwn(merged, key))
@@ -559,8 +561,10 @@ const uniqueEntries = <T>(entries: [string, T][], label: string): Record<string,
  */
 export const resolveImageTargets = (
     appModules: AppModule[]
-    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
-    // this a lookup by an unregistered `collection` string would type-check as always present.
+    /**
+     * `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+     * this a lookup by an unregistered `collection` string would type-check as always present.
+     */
 ): Readonly<Record<string, ImageTarget | undefined>> =>
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {})),
@@ -594,8 +598,10 @@ export const resolveConsumers = (appModules: AppModule[]): readonly ModuleConsum
  */
 export const resolveTranslatables = (
     appModules: readonly AppModule[]
-    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
-    // this a lookup by an unregistered `entityType` string would type-check as always present.
+    /**
+     * `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+     * this a lookup by an unregistered `entityType` string would type-check as always present.
+     */
 ): Readonly<Record<string, TranslatableTarget | undefined>> =>
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {})),
@@ -617,8 +623,10 @@ export const resolveTranslatables = (
  */
 export const resolvePublicEvents = (
     appModules: readonly AppModule[]
-    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
-    // this a lookup by an unregistered domain event name would type-check as always present.
+    /**
+     * `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+     * this a lookup by an unregistered domain event name would type-check as always present.
+     */
 ): Readonly<Record<string, PublicEventTarget | undefined>> =>
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.publicEvents ?? {})),

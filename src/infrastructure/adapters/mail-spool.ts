@@ -11,7 +11,7 @@
  * reasoning as `image-store.ts`'s quarantine directory: an attachment may carry personal or
  * financial data.
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#email-pipeline
  */
 
 import path from 'node:path';
@@ -39,7 +39,6 @@ const SPOOL_KEY_PATTERN = /^[\w-]{1,64}\.[\da-z]{1,8}$/;
 /**
  * Writes an attachment's bytes to the spool and returns the key that names it.
  *
- * @param bytes - the attachment's bytes
  * @param extension - the file extension, without the leading dot (e.g. `pdf`)
  * @returns the opaque key {@link resolveSpooled} and {@link discardSpooled} address it by
  */

@@ -7,7 +7,7 @@
  * with the only consumer of all four rather than in `adapters/cache.ts` — a project caching
  * something that is not a response inherits none of them.
  *
- * @see docs/understand/redis-cache.md
+ * @see docs/understand/redis-cache.md#cache-flow
  */
 
 import { createHash } from 'node:crypto';
@@ -85,10 +85,12 @@ const STALE_IF_ERROR_SECONDS = 300;
 export const resolveCacheTtl = (seconds: number): number => {
     if (!isRelaxedEnvironment()) return seconds;
 
-    // Longest TTL allowed outside production, in seconds: the bound on how long a write that
-    // bypassed the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can
-    // keep serving a stale answer. Production is never clamped, because there the API is the only
-    // writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
+    /**
+     * Longest TTL allowed outside production, in seconds: the bound on how long a write that
+     * bypassed the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can
+     * keep serving a stale answer. Production is never clamped, because there the API is the only
+     * writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts out.
+     */
     /** @see docs/understand/redis-cache.md#writes-that-bypass-the-api */
     const max = responseCacheConfig().NODE_REDIS_CACHE_DEV_TTL_MAX;
     if (max <= 0) return seconds;
@@ -117,8 +119,10 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
     const maxCachedBytes = responseCacheConfig().NODE_REDIS_CACHE_MAX_BYTES;
     if (Buffer.byteLength(payload) <= maxCachedBytes) return payload;
 
-    // Logged rather than silent: an endpoint that never caches is worth noticing, and the
-    // usual cause is a response that grew past what its page size was supposed to bound.
+    /**
+     * Logged rather than silent: an endpoint that never caches is worth noticing, and the
+     * usual cause is a response that grew past what its page size was supposed to bound.
+     */
     // Stryker disable all
     logger.warn({
         message: 'Redis cache write skipped: response larger than the per-entry limit.',
@@ -140,8 +144,10 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
 const isCachedResponse = (value: unknown): value is CachedResponse =>
     typeof value === 'object' &&
     value !== null &&
-    // The `typeof 'object'` and non-null checks above prove `value` is an object; the cast only
-    // allows reading its keys.
+    /**
+     * The `typeof 'object'` and non-null checks above prove `value` is an object; the cast only
+     * allows reading its keys.
+     */
     typeof (value as Record<string, unknown>).status === 'number' &&
     typeof (value as Record<string, unknown>).staleAt === 'number' &&
     'body' in value &&
@@ -321,15 +327,21 @@ const getCacheKey = (
     const segments = keySegments(request, sortedKeyParameters, options);
     if (!segments) return undefined;
 
-    // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
-    // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
+    /**
+     * Path only. `originalUrl` is the sole place the mounted prefix and the route path are
+     * already joined, so it is split rather than reassembled from `baseUrl` + `path`.
+     */
     const [path] = request.originalUrl.split('?', 1);
-    // A declared identity replaces BOTH halves of the default prefix, because the two spellings
-    // it unifies differ in both — `GET /products` and `POST /products/search`.
+    /**
+     * A declared identity replaces BOTH halves of the default prefix, because the two spellings
+     * it unifies differ in both — `GET /products` and `POST /products/search`.
+     */
     const identity = options.keyAs ?? `${request.method}:${path}`;
-    // node:crypto SHA-256, hex: collision-safe for a cache identity, and the same digest whatever
-    // the length of what went in. https://nodejs.org/api/crypto.html#cryptocreatehashalgorithm-options
-    // No parameters, no digest: the key stays readable for the many routes that declare none.
+    /**
+     * node:crypto SHA-256, hex: collision-safe for a cache identity, and the same digest whatever
+     * the length of what went in. https://nodejs.org/api/crypto.html#cryptocreatehashalgorithm-options
+     * No parameters, no digest: the key stays readable for the many routes that declare none.
+     */
     const digest =
         segments.length > 0 ? createHash('sha256').update(segments.join('&')).digest('hex') : '';
 
@@ -358,10 +370,12 @@ const armCacheWrite = (
 ): void => {
     const responseJson = response.json.bind(response);
     response.json = ((body: unknown) => {
-        // Save only successful, FINISHED responses — errors must not become sticky in cache, and
-        // 202 is a status about the request, not the resource: caching it would keep answering
-        // "still working" long after the work finished, to every caller polling for the result.
-        // A draft preview is never stored, even if a later change moved the bypass decision.
+        /**
+         * Save only successful, FINISHED responses — errors must not become sticky in cache, and
+         * 202 is a status about the request, not the resource: caching it would keep answering
+         * "still working" long after the work finished, to every caller polling for the result.
+         * A draft preview is never stored, even if a later change moved the bypass decision.
+         */
         if (
             response.statusCode >= 200 &&
             response.statusCode < 300 &&
@@ -381,8 +395,10 @@ const armCacheWrite = (
         }
 
         return responseJson(body);
-        // The wrapper takes the same single `body` and returns what the original `json` does, so it
-        // fits the method's type.
+        /**
+         * The wrapper takes the same single `body` and returns what the original `json` does, so it
+         * fits the method's type.
+         */
     }) as Response['json'];
 };
 
@@ -490,10 +506,12 @@ const serveOrArm = (
         return undefined;
     }
 
-    // The grace window clamped to the resolved TTL: outside production `ttl` may already be
-    // clamped to seconds (see resolveCacheTtl), and a fixed 60s grace would hand back most of
-    // what that clamp just took — an out-of-band write could still serve a stale answer for
-    // nearly a minute after it landed.
+    /**
+     * The grace window clamped to the resolved TTL: outside production `ttl` may already be
+     * clamped to seconds (see resolveCacheTtl), and a fixed 60s grace would hand back most of
+     * what that clamp just took — an out-of-band write could still serve a stale answer for
+     * nearly a minute after it landed.
+     */
     const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
 
     const cacheKey = getCacheKey(request, sortedKeyParameters, options);
@@ -528,11 +546,13 @@ const serveOrArm = (
                     return;
                 }
 
-                // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
-                // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
-                // receives the rebuilder's response object, so this cannot leak across callers —
-                // every caller sharing this key already shares the same answer by construction,
-                // per `options.scopeKey`'s own docblock.
+                /**
+                 * Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
+                 * everyone else reads back their OWN key's stale body rather than wait. Nobody ever
+                 * receives the rebuilder's response object, so this cannot leak across callers —
+                 * every caller sharing this key already shares the same answer by construction,
+                 * per `options.scopeKey`'s own docblock.
+                 */
                 return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
                     if (!wonClaim) {
                         response.set(
@@ -550,10 +570,12 @@ const serveOrArm = (
                     next();
                 });
             })
-            // A Redis failure here — `getCacheValue` or `claimCacheRefresh` rejecting — must not
-            // hang the request: `next(error)` reaches the global handler exactly as an ordinary
-            // thrown error would, rather than leaving neither a response nor a next() call ever
-            // made.
+            /**
+             * A Redis failure here — `getCacheValue` or `claimCacheRefresh` rejecting — must not
+             * hang the request: `next(error)` reaches the global handler exactly as an ordinary
+             * thrown error would, rather than leaving neither a response nor a next() call ever
+             * made.
+             */
             .catch(next)
     );
 };
@@ -569,26 +591,34 @@ const serveOrArm = (
  * @returns an Express middleware that serves a cached response or falls through to the controller
  */
 export const setCache = (seconds = 0, options: CacheOptions) => {
-    // Sorted once, at route-registration time rather than per request: the declaration is static,
-    // and sorting it is what makes `?a=1&b=2` and `?b=2&a=1` one entry instead of two.
+    /**
+     * Sorted once, at route-registration time rather than per request: the declaration is static,
+     * and sorting it is what makes `?a=1&b=2` and `?b=2&a=1` one entry instead of two.
+     */
     const sortedKeyParameters = options.keyParameters.toSorted();
 
-    // Named, so the `cache-policy-declared` test can tell a `setCache` route from any other when it walks the
-    // routers (`tests/support/cached-routes.ts`); an anonymous closure has no name.
+    /**
+     * Named, so the `cache-policy-declared` test can tell a `setCache` route from any other when it walks the
+     * routers (`tests/support/cached-routes.ts`); an anonymous closure has no name.
+     */
     const setCacheMiddleware = (request: Request, response: Response, next: NextFunction) => {
-        // Outside production the TTL is clamped (see resolveCacheTtl) so writes that bypass the
-        // API cannot leave stale answers around for an hour — resolved before the headers so
-        // browsers are told the lifetime the server will actually honour.
+        /**
+         * Outside production the TTL is clamped (see resolveCacheTtl) so writes that bypass the
+         * API cannot leave stale answers around for an hour — resolved before the headers so
+         * browsers are told the lifetime the server will actually honour.
+         */
         const ttl = resolveCacheTtl(seconds);
-        // Resolved once, up front: both the headers and the Redis decision below must agree on
-        // whether THIS caller may share the cached answer — see CacheOptions.scopeKey.
-        // A draft preview wins over `scopeKey`: a caller can hold the staff read of a draft
-        // language and still read the guest scope of the catalogue, so the scope alone would
-        // share the visitors' entry with a draft answer.
-        // A response that already carries a `Set-Cookie` (a dead-session clear from `getAuth`) must
-        // not reach a shared cache either: RFC 9111 §7.3 lets one store and replay it to everyone.
-        // Only a cookie set BEFORE this middleware is seen, so a cookie writer mounts ahead of it.
-        // https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3
+        /**
+         * Resolved once, up front: both the headers and the Redis decision below must agree on
+         * whether THIS caller may share the cached answer — see CacheOptions.scopeKey.
+         * A draft preview wins over `scopeKey`: a caller can hold the staff read of a draft
+         * language and still read the guest scope of the catalogue, so the scope alone would
+         * share the visitors' entry with a draft answer.
+         * A response that already carries a `Set-Cookie` (a dead-session clear from `getAuth`) must
+         * not reach a shared cache either: RFC 9111 §7.3 lets one store and replay it to everyone.
+         * Only a cookie set BEFORE this middleware is seen, so a cookie writer mounts ahead of it.
+         * https://www.rfc-editor.org/rfc/rfc9111.html#section-7.3
+         */
         const cacheable =
             !isDraftPreview(response) &&
             response.getHeader('Set-Cookie') === undefined &&

@@ -35,8 +35,10 @@ import { isTestEnvironment } from '@infrastructure/runtime/config';
  * @returns the status it declares, or `undefined` when it declares none
  */
 const clientErrorStatus = (error: Error): number | undefined => {
-    // `in` narrows an unlisted property to `unknown` rather than widening the object — no cast,
-    // and every read below is checked before it is used.
+    /**
+     * `in` narrows an unlisted property to `unknown` rather than widening the object — no cast,
+     * and every read below is checked before it is used.
+     */
     if (!('expose' in error) || error.expose !== true) return undefined;
 
     const declared =
@@ -103,35 +105,45 @@ export const handleUncaughtError = (
     response: Response,
     next: NextFunction
 ) => {
-    // Anything can be thrown (`throw 'boom'`, a rejected string); a bare non-object has no
-    // `name`, `message` or `status` to read, so wrap it once and treat it like any other error.
+    /**
+     * Anything can be thrown (`throw 'boom'`, a rejected string); a bare non-object has no
+     * `name`, `message` or `status` to read, so wrap it once and treat it like any other error.
+     */
     const error = thrown instanceof Error ? thrown : new Error(String(thrown));
 
-    // Too late to answer: the status line is already out. Express's own handler closes the
-    // connection, where a bare return would leave a half-sent stream open.
+    /**
+     * Too late to answer: the status line is already out. Express's own handler closes the
+     * connection, where a bare return would leave a half-sent stream open.
+     */
     if (response.headersSent) {
         next(error);
         return;
     }
 
     const status = resolveStatus(error);
-    // OpenTelemetry HTTP semconv: a 4xx on a server span leaves the status unset, the client's
-    // mistake is not the server's failure. https://opentelemetry.io/docs/specs/semconv/http/http-spans/
+    /**
+     * OpenTelemetry HTTP semconv: a 4xx on a server span leaves the status unset, the client's
+     * mistake is not the server's failure. https://opentelemetry.io/docs/specs/semconv/http/http-spans/
+     */
     if (status >= 500) recordErrorOnActiveSpan(error);
     const logged = loggableError(error, clientErrorStatus(error) !== undefined);
-    // Same rule for the headline: a stripped error's message is exactly what must not be logged,
-    // and the logger will strip a database or SMTP error's own.
+    /**
+     * Same rule for the headline: a stripped error's message is exactly what must not be logged,
+     * and the logger will strip a database or SMTP error's own.
+     */
     const headline =
         logged === error && scrubError(error) === undefined
             ? `${error.name}: ${error.message}`
             : error.name;
 
-    // The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
-    // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
-    // into `{name, message, stack}` before JSON output, so passing it whole is what keeps the
-    // stack in the log line outside production.
-    // A client mistake (409 duplicate, 422 malformed) is the caller's problem, not an incident:
-    // logged at `error` it would page someone for every bad request.
+    /**
+     * The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
+     * process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
+     * into `{name, message, stack}` before JSON output, so passing it whole is what keeps the
+     * stack in the log line outside production.
+     * A client mistake (409 duplicate, 422 malformed) is the caller's problem, not an incident:
+     * logged at `error` it would page someone for every bad request.
+     */
     // Stryker disable all
     logger[status >= 500 ? 'error' : 'warn'](headline, {
         requestId: request.requestId,
@@ -140,11 +152,13 @@ export const handleUncaughtError = (
     });
     // Stryker restore all
 
-    // The one throw shape this handler translates by hand: multer's `code` names which limit was
-    // hit and stays in the item, but its English `message` is replaced by one translated text.
-    // `status` is the 413-or-400 `resolveStatus` already chose.
-    // `field` is set only when multer knows which form field broke the rule; then the item names it
-    // (`details.field`), as every one-field refusal does. `fieldError` supplies that shape.
+    /**
+     * The one throw shape this handler translates by hand: multer's `code` names which limit was
+     * hit and stays in the item, but its English `message` is replaced by one translated text.
+     * `status` is the 413-or-400 `resolveStatus` already chose.
+     * `field` is set only when multer knows which form field broke the rule; then the item names it
+     * (`details.field`), as every one-field refusal does. `fieldError` supplies that shape.
+     */
     if (error instanceof MulterError) {
         const message = t('generic.error-upload-refused');
         return rejectResponse(response, status, [
@@ -160,7 +174,7 @@ export const handleUncaughtError = (
         return rejectServiceUnavailable(response, error);
     }
 
-    /*
+    /**
      * The client is told that something failed, and nothing else: a CONSTANT, never
      * `error.message`, which would leak field paths, hosts, filesystem layout or a URL with a key
      * in it. The detail is logged above with the request and trace ids.
@@ -169,7 +183,7 @@ export const handleUncaughtError = (
      */
     if (status >= 500) return rejectResponse(response, 500);
 
-    /*
+    /**
      * A client error, from either source: a library that declared its own status (an oversized or
      * malformed body), or a driver failure that is really about the request — a malformed
      * ObjectId, a duplicate key — which `databaseErrorInterpreter` is the single place to judge.
@@ -192,9 +206,11 @@ export const handleUncaughtError = (
  */
 export const handleUnhandledRejection = (reason: unknown): void => {
     processUnhandledRejectionsTotal.inc();
-    // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
-    // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
-    // output, so passing it whole is what keeps the stack in the log line outside production.
+    /**
+     * The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
+     * (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
+     * output, so passing it whole is what keeps the stack in the log line outside production.
+     */
     auditLogger.error('process.unhandledRejection', {
         action: 'process.unhandledRejection',
         error: reason
@@ -212,26 +228,32 @@ export const handleUnhandledRejection = (reason: unknown): void => {
 export const installErrorHandling = (app: Express): void => {
     app.use(handleUncaughtError);
 
-    // No handler under a test runner, for either process-level event: registering one for
-    // `unhandledRejection` swallows it into an audit line instead of letting Jest's own handler
-    // pin the rejection on the test that caused it, same reasoning as `uncaughtException` below.
+    /**
+     * No handler under a test runner, for either process-level event: registering one for
+     * `unhandledRejection` swallows it into an audit line instead of letting Jest's own handler
+     * pin the rejection on the test that caused it, same reasoning as `uncaughtException` below.
+     */
     if (isTestEnvironment()) return;
 
-    /*
+    /**
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
     process.on('unhandledRejection', handleUnhandledRejection);
 
     process.on('uncaughtException', (error, origin) => {
-        // The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection
-        // handler above for why.
+        /**
+         * The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection
+         * handler above for why.
+         */
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',
             error,
             origin
         });
-        // Logged first, then stopped, in every environment: the state after an uncaught exception
-        // is unknown, so the only safe move is to stop. Throwing would re-enter this handler.
+        /**
+         * Logged first, then stopped, in every environment: the state after an uncaught exception
+         * is unknown, so the only safe move is to stop. Throwing would re-enter this handler.
+         */
         process.exit(1);
     });
 };

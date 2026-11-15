@@ -9,9 +9,11 @@ import { persistenceConfig } from '@infrastructure/persistence/config';
 
 /** Raw page/size as they arrive off a request, before {@link normalizePagination} coerces them. */
 export interface PaginationInput {
-    // `unknown` rather than `number | string | null`: these values come straight off a request,
-    // where a repeated query key arrives as an array and a JSON body can hold anything. The
-    // coercion below already copes; a narrower type would only force callers to cast.
+    /**
+     * `unknown` rather than `number | string | null`: these values come straight off a request,
+     * where a repeated query key arrives as an array and a JSON body can hold anything. The
+     * coercion below already copes; a narrower type would only force callers to cast.
+     */
     page?: unknown;
     pageSize?: unknown;
 }
@@ -53,8 +55,10 @@ export const MAX_CONFIGURED_PAGE_SIZE = 100;
  */
 export const normalizePagination = (input: PaginationInput = {}): PaginationResult => {
     const page = Math.max(1, Number(input.page ?? 1) || 1);
-    // `|| 0` collapses '', null, NaN and 0 alike into "the caller did not ask", which is what
-    // lets the fallback below take over.
+    /**
+     * `|| 0` collapses '', null, NaN and 0 alike into "the caller did not ask", which is what
+     * lets the fallback below take over.
+     */
     const requestedPageSize = Number(input.pageSize) || 0;
     const configuredPageSize = Math.min(
         MAX_CONFIGURED_PAGE_SIZE,
@@ -92,8 +96,10 @@ export const readAll = <TItem>(
     fetchPage: (page: number) => Promise<TItem[]>,
     pageSize: number
 ): Promise<TItem[]> => {
-    // One array pushed to, not rebuilt per page: spreading `[...collected, ...items]` copies every
-    // item already collected on every page, which is quadratic in the number of pages.
+    /**
+     * One array pushed to, not rebuilt per page: spreading `[...collected, ...items]` copies every
+     * item already collected on every page, which is quadratic in the number of pages.
+     */
     const collected: TItem[] = [];
     const collectFrom = (page: number): Promise<TItem[]> =>
         fetchPage(page).then((items) => {

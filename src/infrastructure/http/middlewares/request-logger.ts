@@ -25,8 +25,10 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         // A 4xx is the caller's fault and a 5xx is ours, so they must not share a severity.
         const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
-        // `route` is the matched template, never the concrete path — read here rather than
-        // before `next()` because that is when Express has populated it.
+        /**
+         * `route` is the matched template, never the concrete path — read here rather than
+         * before `next()` because that is when Express has populated it.
+         */
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
             requestId,
             clientRequestId,

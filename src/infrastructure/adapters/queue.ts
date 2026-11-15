@@ -14,16 +14,18 @@
  *             demand-driven (the next cache read retries) rather than a background loop; only its
  *             shared warn-once latch is reused here.
  *
- * @see docs/understand/rabbitmq.md
+ * @see docs/understand/rabbitmq.md#architecture
  */
 
-// `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
-// each (re)connect; `RecoveringChannelModel` is the wrapper `connect(url, { recovery })` resolves
-// to, an EventEmitter for `connect`/`disconnect` that outlives every individual reconnect;
-// `ConfirmChannel` is the session every command runs on (see `setupChannel`'s own docblock for why
-// a confirm channel, not a plain one); `ConsumeMessage` is a delivered message — `.content`
-// (Buffer) plus the delivery tag `ack`/`nack` reference; `MessagePropertyHeaders` is that
-// message's headers, where the retry attempt count rides.
+/**
+ * `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
+ * each (re)connect; `RecoveringChannelModel` is the wrapper `connect(url, { recovery })` resolves
+ * to, an EventEmitter for `connect`/`disconnect` that outlives every individual reconnect;
+ * `ConfirmChannel` is the session every command runs on (see `setupChannel`'s own docblock for why
+ * a confirm channel, not a plain one); `ConsumeMessage` is a delivered message — `.content`
+ * (Buffer) plus the delivery tag `ack`/`nack` reference; `MessagePropertyHeaders` is that
+ * message's headers, where the retry attempt count rides.
+ */
 import amqplib, {
     type ChannelModel,
     type RecoveringChannelModel,
@@ -60,8 +62,10 @@ const getAmqpUrl = (): string | undefined => {
     // The port is the required fragment: without it there is nothing to assemble, so queue is off.
     if (!config.NODE_RABBITMQ_PORT) return;
 
-    // Encoded: a generated password routinely holds `@`, `/` or `#`, each of which would
-    // otherwise end the userinfo part of the URL early.
+    /**
+     * Encoded: a generated password routinely holds `@`, `/` or `#`, each of which would
+     * otherwise end the userinfo part of the URL early.
+     */
     const user = encodeURIComponent(config.NODE_RABBITMQ_USER);
     const pass = encodeURIComponent(config.NODE_RABBITMQ_PASSWORD);
     return `amqp://${user}:${pass}@${config.NODE_RABBITMQ_HOST}:${String(config.NODE_RABBITMQ_PORT)}`;
@@ -144,17 +148,21 @@ const inFlightHandlers = new Set<Promise<unknown>>();
  * @param model - the fresh connection this (re)connect opened
  */
 const setupChannel = async (model: ChannelModel): Promise<void> => {
-    // https://amqp-node.github.io/amqplib/channel_api.html#confirms — a confirm channel's
-    // `sendToQueue` gains a callback the broker invokes once it has actually accepted (or
-    // refused) the message, which is what lets `publishToQueue` tell a real failure from
-    // `sendToQueue`'s own local buffer-full signal.
+    /**
+     * https://amqp-node.github.io/amqplib/channel_api.html#confirms — a confirm channel's
+     * `sendToQueue` gains a callback the broker invokes once it has actually accepted (or
+     * refused) the message, which is what lets `publishToQueue` tell a real failure from
+     * `sendToQueue`'s own local buffer-full signal.
+     */
     const ch = await model.createConfirmChannel();
-    // A channel dies on its own for ordinary reasons (most of them named by `assertJobQueue`
-    // below) WITHOUT the connection closing — recovery only reacts to a connection drop, so this
-    // has to be handled separately: re-open a fresh channel on the SAME connection after a short
-    // backoff. If the connection is ALSO down, `createConfirmChannel` below rejects harmlessly —
-    // amqplib's own recovery reaches `setupChannel` again once it reconnects, same as any other
-    // (re)connect; this is only for the channel-only close that recovery never sees at all.
+    /**
+     * A channel dies on its own for ordinary reasons (most of them named by `assertJobQueue`
+     * below) WITHOUT the connection closing — recovery only reacts to a connection drop, so this
+     * has to be handled separately: re-open a fresh channel on the SAME connection after a short
+     * backoff. If the connection is ALSO down, `createConfirmChannel` below rejects harmlessly —
+     * amqplib's own recovery reaches `setupChannel` again once it reconnects, same as any other
+     * (re)connect; this is only for the channel-only close that recovery never sees at all.
+     */
     let lastError: unknown;
     ch.on('error', (error: unknown) => {
         lastError = error;
@@ -164,11 +172,15 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
         if (currentChannel !== ch) return;
         currentChannel = undefined;
         consumerTags.clear();
-        // A channel error is `unknown`; `code` is read optionally and compared by value, so any
-        // other shape falls through.
+        /**
+         * A channel error is `unknown`; `code` is read optionally and compared by value, so any
+         * other shape falls through.
+         */
         if ((lastError as { code?: unknown } | undefined)?.code === PRECONDITION_FAILED) {
-            // Not retried, and logged every time rather than through the once-only latch: this
-            // is a configuration mismatch only a deploy fixes, and it must not read as a blip.
+            /**
+             * Not retried, and logged every time rather than through the once-only latch: this
+             * is a configuration mismatch only a deploy fixes, and it must not read as a blip.
+             */
             // Stryker disable next-line all
             logger.error({
                 message:
@@ -177,8 +189,10 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
             });
             return;
         }
-        // `.unref()` — same reasoning as `RECOVERY_OPTIONS`'s own docblock: a timer nothing else
-        // is waiting on must not be the reason a test process (or a graceful shutdown) hangs.
+        /**
+         * `.unref()` — same reasoning as `RECOVERY_OPTIONS`'s own docblock: a timer nothing else
+         * is waiting on must not be the reason a test process (or a graceful shutdown) hangs.
+         */
         const retry = setTimeout(() => {
             void setupChannel(model).catch(unavailabilityLog.report);
         }, CHANNEL_REOPEN_DELAY_MS);
@@ -245,18 +259,24 @@ const ensureConnecting = (): void => {
     connectionStarted = true;
     const generation = connectionGeneration;
 
-    // https://github.com/amqp-node/amqplib#opt-in-recovery — `setup` is awaited before THIS
-    // promise resolves, so by the time it does, `currentChannel` is already set.
+    /**
+     * https://github.com/amqp-node/amqplib#opt-in-recovery — `setup` is awaited before THIS
+     * promise resolves, so by the time it does, `currentChannel` is already set.
+     */
     void amqplib
         .connect(url, { recovery: recoveryOptions() })
         .then((model) => {
-            // Landed after `stopQueue()`, which found nothing to close: close it here, or its open
-            // socket keeps a job process alive for good.
+            /**
+             * Landed after `stopQueue()`, which found nothing to close: close it here, or its open
+             * socket keeps a job process alive for good.
+             */
             if (generation !== connectionGeneration) return model.close().catch(() => undefined);
             recoveringConnection = model;
 
-            // Fires on every RECONNECT — never on this first connect, which is what THIS promise
-            // IS resolving for; a listener attached here cannot also catch the event that led to it.
+            /**
+             * Fires on every RECONNECT — never on this first connect, which is what THIS promise
+             * IS resolving for; a listener attached here cannot also catch the event that led to it.
+             */
             model.on('connect', () => {
                 if (!unavailabilityLog.clear()) return;
                 // Stryker disable next-line all
@@ -268,8 +288,10 @@ const ensureConnecting = (): void => {
             });
             return undefined;
         })
-        // Only reachable when `maxRetries` is finite (`NODE_ENV=test` above) — production's
-        // `Infinity` default never rejects this promise, so there is nothing to catch there.
+        /**
+         * Only reachable when `maxRetries` is finite (`NODE_ENV=test` above) — production's
+         * `Infinity` default never rejects this promise, so there is nothing to catch there.
+         */
         .catch(unavailabilityLog.report);
 };
 
@@ -302,9 +324,11 @@ export const queueState = (): DependencyStatus => {
  * @returns e.g. `amqp://rabbitmq:5672/shop`, or a placeholder when the URL does not parse
  */
 export const redactedBrokerTarget = (url: string): string => {
-    // WHATWG URL: `.host` is `hostname:port` (port omitted when it is the scheme default), and
-    // userinfo lives in `.username`/`.password`, which are simply not read here.
-    // https://nodejs.org/api/url.html#class-url
+    /**
+     * WHATWG URL: `.host` is `hostname:port` (port omitted when it is the scheme default), and
+     * userinfo lives in `.username`/`.password`, which are simply not read here.
+     * https://nodejs.org/api/url.html#class-url
+     */
     if (!URL.canParse(url)) return '(unparseable URL)';
     const { protocol, host, pathname } = new URL(url);
     return `${protocol}//${host}${pathname === '/' ? '' : pathname}`;
@@ -354,9 +378,11 @@ export const stopQueue = (): Promise<void> => {
         currentChannel = undefined;
         return Promise.resolve();
     }
-    // Stop taking deliveries, let the ones already running settle (and ack), then close. Closing
-    // first would strand every running job's ack, and the broker would redeliver work that
-    // already finished — an email sent twice on every deploy.
+    /**
+     * Stop taking deliveries, let the ones already running settle (and ack), then close. Closing
+     * first would strand every running job's ack, and the broker would redeliver work that
+     * already finished — an email sent twice on every deploy.
+     */
     return (
         cancelConsumers(channel)
             // A handler that outlives the wait is simply redelivered once the connection closes.
@@ -578,12 +604,14 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
  */
 const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
     const retryQueue = retryQueueOf(queue);
-    // `NODE_QUEUE_RETRY_DELAY_SECONDS`: how long a failed job waits in {@link retryQueueOf} before
-    // RabbitMQ dead-letters it back onto the work queue. There is no per-consumer override, which
-    // keeps producer and consumer trivially agreeing (see the docblock above). One fixed delay per
-    // queue (not per message) is what keeps this ONE retry queue per work queue and sidesteps
-    // RabbitMQ's head-of-line expiry rule: a 5s message queued behind a 10-hour one would otherwise
-    // wait 10 hours, since a queue only expires from the head.
+    /**
+     * `NODE_QUEUE_RETRY_DELAY_SECONDS`: how long a failed job waits in {@link retryQueueOf} before
+     * RabbitMQ dead-letters it back onto the work queue. There is no per-consumer override, which
+     * keeps producer and consumer trivially agreeing (see the docblock above). One fixed delay per
+     * queue (not per message) is what keeps this ONE retry queue per work queue and sidesteps
+     * RabbitMQ's head-of-line expiry rule: a 5s message queued behind a 10-hour one would otherwise
+     * wait 10 hours, since a queue only expires from the head.
+     */
     const retryDelaySeconds = queueConfig().NODE_QUEUE_RETRY_DELAY_SECONDS;
 
     return ch
@@ -604,8 +632,10 @@ const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
         .then(() => ch.bindQueue(retryQueue, DEAD_LETTER_EXCHANGE, retryQueue))
         .then(() =>
             ch.assertQueue(queue, {
-                // `durable` = the queue definition survives a broker restart. Every work queue
-                // gets it — no caller has ever asked for a transient one.
+                /**
+                 * `durable` = the queue definition survives a broker restart. Every work queue
+                 * gets it — no caller has ever asked for a transient one.
+                 */
                 durable: true,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
                 deadLetterRoutingKey: deadLetterQueueOf(queue),
@@ -683,19 +713,23 @@ export const publishToQueue = <TPayload = unknown>(
                         resolve(false);
                     }, PUBLISH_CONFIRM_TIMEOUT_MS);
 
-                    // `sendToQueue(queue, content, options, callback)` — content must be a
-                    // Buffer, so the payload is JSON-serialized here and parsed back in
-                    // `consumeFromQueue`. The RETURN VALUE is deliberately ignored: it is
-                    // amqplib's local buffer-full signal, not the broker's answer, which only
-                    // the callback below carries.
+                    /**
+                     * `sendToQueue(queue, content, options, callback)` — content must be a
+                     * Buffer, so the payload is JSON-serialized here and parsed back in
+                     * `consumeFromQueue`. The RETURN VALUE is deliberately ignored: it is
+                     * amqplib's local buffer-full signal, not the broker's answer, which only
+                     * the callback below carries.
+                     */
                     ch.sendToQueue(
                         queue,
                         Buffer.from(JSON.stringify(payload)),
                         {
-                            // `persistent` = the *message* is written to disk. Both this and a
-                            // durable queue are required to survive a restart: a durable queue
-                            // with transient messages comes back empty. Every job publishes
-                            // persistent — no caller has ever asked for a transient one.
+                            /**
+                             * `persistent` = the *message* is written to disk. Both this and a
+                             * durable queue are required to survive a restart: a durable queue
+                             * with transient messages comes back empty. Every job publishes
+                             * persistent — no caller has ever asked for a transient one.
+                             */
                             persistent: true,
                             priority: JOB_PRIORITY_VALUES[priority]
                         },
@@ -833,8 +867,10 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
  * @param incoming - the raw delivered message
  */
 const retryLater = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage): void => {
-    // Same guard as {@link safeAck}: `sendToQueue` on a closed channel throws synchronously, and
-    // the unacked delivery is redelivered anyway once the broker sees the channel gone.
+    /**
+     * Same guard as {@link safeAck}: `sendToQueue` on a closed channel throws synchronously, and
+     * the unacked delivery is redelivered anyway once the broker sees the channel gone.
+     */
     if (currentChannel !== ch) return;
     // eslint-disable-next-line no-restricted-syntax -- amqplib throws synchronously for a channel that closed between the guard and the call; this is the guard, not a swallowed rejection
     try {
@@ -901,7 +937,7 @@ const handleDelivery = <TPayload>(
         return;
     }
 
-    /*
+    /**
      * Dead-lettered, not requeued, for the same reason a parse failure is: a message that does not
      * match the contract will not start matching it on a retry. Logged at `warn` with the reason,
      * because the interesting case is not this one message — it is a producer that has drifted.
@@ -919,13 +955,15 @@ const handleDelivery = <TPayload>(
         return;
     }
 
-    /*
+    /**
      * The handler gets `verdict.data`, the schema's output: no cast of the raw JSON to `TPayload`,
      * because the schema is what makes the type true.
      */
-    // The handler's boolean *is* the ack decision — see the policy above. Started inside a
-    // `.then` so a handler that throws synchronously lands in the `.catch` below instead of
-    // escaping into amqplib's frame handling.
+    /**
+     * The handler's boolean *is* the ack decision — see the policy above. Started inside a
+     * `.then` so a handler that throws synchronously lands in the `.catch` below instead of
+     * escaping into amqplib's frame handling.
+     */
     const settled = Promise.resolve()
         .then(() => handler(verdict.data, incoming))
         .then((ack) => {
@@ -935,8 +973,10 @@ const handleDelivery = <TPayload>(
             else parkInDead(ch, queue, incoming);
         })
         .catch((error: unknown) => {
-            // Thrown = presumed transient (DB down, SMTP timeout): republish to the retry queue,
-            // which redelivers it once its TTL expires. The attempt count rides in our own header.
+            /**
+             * Thrown = presumed transient (DB down, SMTP timeout): republish to the retry queue,
+             * which redelivers it once its TTL expires. The attempt count rides in our own header.
+             */
             const attemptsSoFar = attemptsOf(incoming.properties.headers) + 1;
             if (attemptsSoFar < maxAttempts) {
                 retryLater(ch, queue, incoming);
@@ -954,8 +994,10 @@ const handleDelivery = <TPayload>(
             parkInDead(ch, queue, incoming);
         });
     inFlightHandlers.add(settled);
-    // `then(release, release)` cannot reject; `finally` would if the `.catch` above ever threw.
-    // `settled` itself is what `settleWithin` drains, so its outcome is still seen there.
+    /**
+     * `then(release, release)` cannot reject; `finally` would if the `.catch` above ever threw.
+     * `settled` itself is what `settleWithin` drains, so its outcome is still seen there.
+     */
     const release = () => inFlightHandlers.delete(settled);
     settled.then(release, release);
 };
@@ -983,23 +1025,31 @@ const bindConsumer = <TPayload>(
     options: ConsumeOptions<TPayload>
 ): Promise<void> => {
     const { queue, handler, schema, prefetch = 1 } = options;
-    // Deliveries a job gets before it is parked in {@link deadLetterQueueOf}: one deployment-wide
-    // number, not a per-consumer option and not a second environment variable.
+    /**
+     * Deliveries a job gets before it is parked in {@link deadLetterQueueOf}: one deployment-wide
+     * number, not a per-consumer option and not a second environment variable.
+     */
     const maxAttempts = queueConfig().NODE_QUEUE_MAX_ATTEMPTS;
 
     return (
         // Same idempotent declaration as on the publish side — the consumer may boot first.
         assertJobQueue(ch, queue)
-            // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
-            // hands over the next message only after the current one is acked, which gives fair
-            // round-robin across replicas instead of one worker hoarding a batch.
+            /**
+             * `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
+             * hands over the next message only after the current one is acked, which gives fair
+             * round-robin across replicas instead of one worker hoarding a batch.
+             */
             .then(() => ch.prefetch(prefetch))
             .then(() =>
-                // `consume` registers the callback and returns a consumerTag (unused here, since
-                // the consumer lives for the channel's lifetime — see `replayConsumers`).
+                /**
+                 * `consume` registers the callback and returns a consumerTag (unused here, since
+                 * the consumer lives for the channel's lifetime — see `replayConsumers`).
+                 */
                 ch.consume(queue, (incoming) => {
-                    // `null` is delivered when the consumer is canceled broker-side (queue
-                    // deleted, channel closing) — nothing to ack.
+                    /**
+                     * `null` is delivered when the consumer is canceled broker-side (queue
+                     * deleted, channel closing) — nothing to ack.
+                     */
                     if (!incoming) return;
 
                     handleDelivery(ch, queue, handler, incoming, maxAttempts, schema);

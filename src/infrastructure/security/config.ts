@@ -6,7 +6,7 @@
  * Relative imports only: `pseudonymise.ts` is on the logger's import chain, which jest's
  * `globalSetup` loads outside path-alias resolution.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '../config/define';

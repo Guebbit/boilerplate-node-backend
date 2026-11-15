@@ -12,8 +12,8 @@
  * the CONNECTION forever and re-runs `setup` after every reconnect, which this module has no
  * equivalent for. It does share {@link unavailabilityLatch}, the one piece that generalises.
  *
- * @see docs/understand/redis-cache.md
- * @see docs/understand/rabbitmq.md
+ * @see docs/understand/redis-cache.md#two-redis-instances
+ * @see docs/understand/rabbitmq.md#graceful-shutdown
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -203,8 +203,10 @@ export const manageConnection = <THandle>({
                 if (opened === undefined) throw new NotConfigured();
 
                 handle = opened;
-                // `clear()`'s return is "was a warning ever logged for this outage" — recovery is
-                // only worth announcing when one was.
+                /**
+                 * `clear()`'s return is "was a warning ever logged for this outage" — recovery is
+                 * only worth announcing when one was.
+                 */
                 if (latch.clear()) onRecovered?.();
                 return opened;
             })
@@ -247,8 +249,10 @@ export const manageConnection = <THandle>({
         state: () => {
             if (!isEnabled()) return 'disabled';
             if (handle && isReady(handle)) return 'ready';
-            // One rule for every managed dependency, rather than each client's own socket flags:
-            // the handshake window is exactly the time an attempt is in flight.
+            /**
+             * One rule for every managed dependency, rather than each client's own socket flags:
+             * the handshake window is exactly the time an attempt is in flight.
+             */
             if (connectPromise) return 'connecting';
             return 'unavailable';
         },
@@ -260,17 +264,21 @@ export const manageConnection = <THandle>({
         reportUnavailable: latch.report,
 
         stop: () => {
-            // An attempt still running owns the handle this is about to close, so it is settled
-            // first. If it rejects, there was never a handle to close — `close(undefined)` would
-            // have been a no-op anyway, so the catch below skips straight past it.
+            /**
+             * An attempt still running owns the handle this is about to close, so it is settled
+             * first. If it rejects, there was never a handle to close — `close(undefined)` would
+             * have been a no-op anyway, so the catch below skips straight past it.
+             */
             const settled = connectPromise ?? Promise.resolve(handle);
 
             return (
                 settled
                     .then(close)
-                    // Shutdown is the one path that must not raise. An already-dead socket rejecting
-                    // its own close is the ordinary case here and there is nothing to salvage: the
-                    // process is on its way out and the next boot starts from a fresh handle.
+                    /**
+                     * Shutdown is the one path that must not raise. An already-dead socket rejecting
+                     * its own close is the ordinary case here and there is nothing to salvage: the
+                     * process is on its way out and the next boot starts from a fresh handle.
+                     */
                     .catch(() => undefined)
                     .finally(() => {
                         handle = undefined;

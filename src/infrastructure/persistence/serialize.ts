@@ -77,8 +77,10 @@ export const applySerialization = (
         delete serialized.__v;
         // A stored amount is a Decimal128; every reader above this layer wants its decimal text.
         stringifyDecimals(serialized);
-        // The edit counter is the row's version, not part of its wire shape: it rides beside the
-        // object (`carryVersion`) so the item and update controllers can still derive the `ETag`.
+        /**
+         * The edit counter is the row's version, not part of its wire shape: it rides beside the
+         * object (`carryVersion`) so the item and update controllers can still derive the `ETag`.
+         */
         carryVersion(serialized, serialized);
         Reflect.deleteProperty(serialized, EDIT_REVISION);
 
@@ -98,7 +100,7 @@ export const applySerialization = (
     schema.set('toJSON', {
         virtuals,
         versionKey: false,
-        /*
+        /**
          * One `as`, not `as unknown as`: Mongoose hands the transform `{ _id, __v? }`, a
          * *narrower* type than the serializer's string-keyed bag — widening it is a single step.
          */

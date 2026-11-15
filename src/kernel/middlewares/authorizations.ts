@@ -13,8 +13,8 @@
  * is code, declared beside the routes that check it, and `assertDeclared` refuses one no module
  * owns — so a typo in a mount is a boot failure rather than a route nobody can reach.
  *
- * @see docs/understand/security.md
- * @see docs/understand/authorization.md
+ * @see docs/understand/security.md#where-token-verification-happens
+ * @see docs/understand/authorization.md#the-model
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -244,8 +244,10 @@ const takesNoSignIn = (request: Request): boolean => {
 const refuseDeadBearer = (request: Request, response: Response): boolean => {
     if (takesNoSignIn(request)) return false;
     response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
-    // Not `refuseUnauthenticated`: `noteMiss` already counted and, for a forged token, audited
-    // this one, and a token that merely expired every few minutes must not flood the trail.
+    /**
+     * Not `refuseUnauthenticated`: `noteMiss` already counted and, for a forged token, audited
+     * this one, and a token that merely expired every few minutes must not flood the trail.
+     */
     rejectResponse(
         response,
         401,
@@ -277,8 +279,10 @@ const continueWithCookie = (request: Request, response: Response, next: NextFunc
     }
 
     const resolveFromCookie = (): void => {
-        // A cookie the resolver refuses can never work again (another mode's, revoked from
-        // another device, expired): clearing it saves the lookup on every request after this one.
+        /**
+         * A cookie the resolver refuses can never work again (another mode's, revoked from
+         * another device, expired): clearing it saves the lookup on every request after this one.
+         */
         continueWithSession(
             request,
             next,
@@ -337,16 +341,20 @@ const refuseInvalidApiKey = (response: Response): void => {
  *   resolving the credential or session, otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
-    // In cookie mode the session cookie picks the caller, so a cache must key on it too; in jwt
-    // mode the cookie is not read here. `Authorization` is named by `setCache`/`privateNoCache`.
-    // https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.5
+    /**
+     * In cookie mode the session cookie picks the caller, so a cache must key on it too; in jwt
+     * mode the cookie is not read here. `Authorization` is named by `setCache`/`privateNoCache`.
+     * https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.5
+     */
     if (cookieAuthenticatesRequests()) response.vary('Cookie');
 
-    // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
-    // each mounting this guard on its own router. An unmatched request in the first router falls
-    // through Express to the second, which would otherwise redo the verify / user read /
-    // membership read — and spend a second unit of an `sk_` caller's request budget — for work
-    // already done. A caller already resolved (session or API key) is left exactly as-is.
+    /**
+     * Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
+     * each mounting this guard on its own router. An unmatched request in the first router falls
+     * through Express to the second, which would otherwise redo the verify / user read /
+     * membership read — and spend a second unit of an `sk_` caller's request budget — for work
+     * already done. A caller already resolved (session or API key) is left exactly as-is.
+     */
     if (request.authContext ?? request.caller) {
         next();
         return;
@@ -359,9 +367,11 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
         return;
     }
 
-    // Checked before any session resolution is attempted: a JWT is always base64url of `{"alg"`
-    // (`eyJ...`), so the prefixes can never collide, and this skips a wasted parse attempt on an
-    // opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
+    /**
+     * Checked before any session resolution is attempted: a JWT is always base64url of `{"alg"`
+     * (`eyJ...`), so the prefixes can never collide, and this skips a wasted parse attempt on an
+     * opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
+     */
     if (token.startsWith(API_KEY_TOKEN_PREFIX)) {
         resolveCredential(token)
             .then((resolution) => {
@@ -526,8 +536,10 @@ const challengeForFreshAuth = (
         {
             code: ERROR_CODES.REAUTH_REQUIRED,
             message: t('generic.error-reauth-required'),
-            // `methods` names what the re-authentication must PROVE beyond recency (RFC 9470 asks
-            // the same of `acr_values`); absent when the route asks for nothing but a fresh login.
+            /**
+             * `methods` names what the re-authentication must PROVE beyond recency (RFC 9470 asks
+             * the same of `acr_values`); absent when the route asks for nothing but a fresh login.
+             */
             details: { maxAge: maxAgeSeconds, ...(methods.length > 0 && { methods }) }
         }
     ]);
@@ -570,23 +582,29 @@ export const requirePermission = <TSubject extends PermissionSubject>(
 ) => {
     const declared = assertDeclared(action, subject);
     const permission = ruleId(action, subject);
-    // The one place this guard's own scope is known — everything it audits below states it
-    // explicitly, because `buildAuditEvent`'s default (`context.caller.scope`) is always
-    // `'tenant'` and would misreport every platform-rule refusal as a tenant one.
+    /**
+     * The one place this guard's own scope is known — everything it audits below states it
+     * explicitly, because `buildAuditEvent`'s default (`context.caller.scope`) is always
+     * `'tenant'` and would misreport every platform-rule refusal as a tenant one.
+     */
     const { scope } = declared;
-    // `FORBIDDEN` unless the rule names its own — see `PermissionRule.deniedCode`'s docblock.
-    // `deniedCode` is a plain `string` on `PermissionRule` (not `ErrorCode`) so that
-    // `kernel/permissions.ts` never needs the generated catalogue at boot; the cast is safe
-    // because `tests/cross-cutting/authorization-keys.test.ts` proves every declared `deniedCode`
-    // is a real one.
+    /**
+     * `FORBIDDEN` unless the rule names its own — see `PermissionRule.deniedCode`'s docblock.
+     * `deniedCode` is a plain `string` on `PermissionRule` (not `ErrorCode`) so that
+     * `kernel/permissions.ts` never needs the generated catalogue at boot; the cast is safe
+     * because `tests/cross-cutting/authorization-keys.test.ts` proves every declared `deniedCode`
+     * is a real one.
+     */
     const deniedCode = (declared.deniedCode as ErrorCode | undefined) ?? ERROR_CODES.FORBIDDEN;
     const deniedMessageKey = errorLocaleKeyFor(deniedCode);
 
-    // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
-    // module's route sweep identify a guard by its function name, and a factory that returns an
-    // arrow makes every mount read as unguarded.
+    /**
+     * Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
+     * module's route sweep identify a guard by its function name, and a factory that returns an
+     * arrow makes every mount read as unguarded.
+     */
     function requirePermissionGuard(request: Request, response: Response, next: NextFunction) {
-        /*
+        /**
          * No credentials at all — 401, not 403. Unreachable through the current routes, which all
          * mount `isAuth` first; it guards a future mount that forgets. Two paths resolve a
          * caller: `authContext` (a human session) or `caller` alone (an api-key — see `getAuth`'s
@@ -606,7 +624,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
             return;
         }
 
-        /*
+        /**
          * An api-key is tenant-scoped by construction (docs/understand/security.md#machine-to-machine-credentials)
          * and can never satisfy a platform rule. Refused here, distinctly from a missing
          * permission, rather than left to fall through to `holds` for the same 403 — the audit
@@ -622,7 +640,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
             return;
         }
 
-        /*
+        /**
          * The guard asks the rules, so a route and a query agree by construction: both read the
          * same ones. It asks about the ACTION and SUBJECT rather than about the row, because a
          * route guard runs before anything is fetched — which is the whole point of keeping the
@@ -643,7 +661,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
             : request.caller!;
         const allowed = holds(caller, action, subject);
 
-        /*
+        /**
          * Step-up is asked AFTER the rule check, and the order is the argument: telling somebody
          * to re-authenticate for an action they could never take either way hands them a fact
          * about the permission model they had not earned. Refused first, challenged second.
@@ -659,8 +677,10 @@ export const requirePermission = <TSubject extends PermissionSubject>(
             return;
         }
 
-        // A staff role switched off for want of an authenticator app: say so, so the client can
-        // send the person to enrol instead of showing a bare refusal.
+        /**
+         * A staff role switched off for want of an authenticator app: say so, so the client can
+         * send the person to enrol instead of showing a bare refusal.
+         */
         if (
             !allowed &&
             request.authContext &&
@@ -693,9 +713,11 @@ export const requirePermission = <TSubject extends PermissionSubject>(
         next();
     }
 
-    // The rule this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
-    // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
-    // rather than only whether a guard is present at all.
+    /**
+     * The rule this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
+     * reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
+     * rather than only whether a guard is present at all.
+     */
     return Object.assign(requirePermissionGuard, { permission: { action, subject } });
 };
 
@@ -771,8 +793,10 @@ const cookieGuard = (
         resolution: Resolution<AuthContext | undefined>
     ) => AuthContext | undefined
 ) =>
-    // Sets the function's `name` (a plain property is read-only):
-    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty
+    /**
+     * Sets the function's `name` (a plain property is read-only):
+     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty
+     */
     Object.defineProperty(
         function cookieSessionGuard(request: Request, response: Response, next: NextFunction) {
             const sessionToken = readSessionCookie(request);
@@ -783,9 +807,11 @@ const cookieGuard = (
                 return;
             }
 
-            // `.then(onWatch, next)`: a resolver that REJECTS is an outage (the database), which the
-            // central handler answers 503; a bad cookie never rejects, it resolves to a miss.
-            // The trailing `.catch` is the judge's deliberate throw: no user, so 401.
+            /**
+             * `.then(onWatch, next)`: a resolver that REJECTS is an outage (the database), which the
+             * central handler answers 503; a bad cookie never rejects, it resolves to a miss.
+             * The trailing `.catch` is the judge's deliberate throw: no user, so 401.
+             */
             watchCookie(sessionToken)
                 .then((watch) => {
                     const user = judge(request, 'miss' in watch ? watch : { ok: watch.ok.context });
@@ -921,10 +947,12 @@ export const requireFreshAuth =
     (request: Request, response: Response, next: NextFunction) => {
         const maxAgeSeconds = reauthWindowSeconds(tier);
 
-        // No session to age. An API key can never step up (nobody types a password into a key), so
-        // it is refused as forbidden, not challenged: a 401 here would tell it to authenticate
-        // again, which it cannot do. With no caller at all a route mounted this guard without
-        // `isAuth` first, so it answers like any other unauthenticated request.
+        /**
+         * No session to age. An API key can never step up (nobody types a password into a key), so
+         * it is refused as forbidden, not challenged: a 401 here would tell it to authenticate
+         * again, which it cannot do. With no caller at all a route mounted this guard without
+         * `isAuth` first, so it answers like any other unauthenticated request.
+         */
         if (!request.authContext) {
             if (isCredentialCaller(request)) {
                 auditRefusal(request, {
@@ -952,11 +980,13 @@ export const requireFreshAuth =
             return;
         }
 
-        // The module docblock's own promise — "every rejection from the identity guards is
-        // audited" — which this direct mount had not kept: `requirePermission`'s OWN step-up path
-        // (`declared.stepUp`, above) already audits `SECURITY_REAUTH_REQUIRED`, but a route mounting
-        // `requireFreshAuth`/`requireFreshAuthWhen` directly — `cart`, `payments`, `account` itself,
-        // per this file's own module doc — challenged with no trail at all.
+        /**
+         * The module docblock's own promise — "every rejection from the identity guards is
+         * audited" — which this direct mount had not kept: `requirePermission`'s OWN step-up path
+         * (`declared.stepUp`, above) already audits `SECURITY_REAUTH_REQUIRED`, but a route mounting
+         * `requireFreshAuth`/`requireFreshAuthWhen` directly — `cart`, `payments`, `account` itself,
+         * per this file's own module doc — challenged with no trail at all.
+         */
         auditRefusal(request, {
             action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
             metadata: { reason: 'fresh_auth_required', tier, maxAgeSeconds }

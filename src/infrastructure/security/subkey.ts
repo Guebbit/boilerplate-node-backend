@@ -31,7 +31,7 @@ export const deriveSubkey = (root: string, info: string): KeyObject => {
     const known = forRoot.get(info);
     if (known) return known;
 
-    /*
+    /**
      * Node: HKDF-SHA256. Args: digest, input key material, salt, info, output length in bytes.
      * https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
      * `createSecretKey` wraps the bytes in a `KeyObject`, which cannot be mutated afterwards

@@ -119,8 +119,10 @@ export const identifyImageFile = async (filePath: string): Promise<string | unde
         const { bytesRead } = await handle.read(header, 0, HEADER_LENGTH, 0);
         return identifyImage(header.subarray(0, bytesRead));
     } catch {
-        // Unreadable is not identifiable. The caller rejects either way, so there is nothing to
-        // gain by distinguishing "no such file" from "not an image".
+        /**
+         * Unreadable is not identifiable. The caller rejects either way, so there is nothing to
+         * gain by distinguishing "no such file" from "not an image".
+         */
         return undefined;
     } finally {
         await handle?.close();

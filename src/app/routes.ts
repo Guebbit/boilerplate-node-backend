@@ -25,7 +25,7 @@ import { router as configRoutes } from './config-routes';
  * @param app - the express application to configure
  */
 export const installRoutes = (app: Express): void => {
-    /*
+    /**
      * `no-store` unless a route says otherwise: a response is uncacheable by default, so one that
      * carries a secret (a minted API key, a webhook secret, an audit page) can never be kept by a
      * shared cache or a browser's disk because someone forgot an opt-in.

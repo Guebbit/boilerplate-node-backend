@@ -9,8 +9,10 @@
 import { randomBytes } from 'node:crypto';
 import { copyFile, readdir, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
-// Shared toolkit helper: unlinks a file and routes any error to the callback instead of
-// throwing, so callers do not need their own try/catch.
+/**
+ * Shared toolkit helper: unlinks a file and routes any error to the callback instead of
+ * throwing, so callers do not need their own try/catch.
+ */
 import { deleteFile as toolkitDeleteFile } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -50,11 +52,13 @@ export const moveFile = async (source: string, destination: string) => {
 export const deleteFile = (filePath: string) =>
     // Second argument is the error callback the toolkit invokes instead of rejecting.
     toolkitDeleteFile(filePath, (error) =>
-        // `error` level, not `warn`: an undeletable file usually points at a permissions or
-        // mount misconfiguration a human should look at.
-        // The Error stays nested under `error`, never spread into its own fields: `redactFormat`
-        // routes it to `serializeError`, the one place deciding stacks stay out of production
-        // logs — spreading it would bypass that and leak container paths.
+        /**
+         * `error` level, not `warn`: an undeletable file usually points at a permissions or
+         * mount misconfiguration a human should look at.
+         * The Error stays nested under `error`, never spread into its own fields: `redactFormat`
+         * routes it to `serializeError`, the one place deciding stacks stay out of production
+         * logs — spreading it would bypass that and leak container paths.
+         */
         // Stryker disable next-line all
         logger.error({ message: 'Could not delete file.', error })
     );
@@ -81,8 +85,10 @@ export const unlinkIfPresent = (
     unlink(filePath).then(
         () => true,
         (error: unknown) => {
-            // `unlink` rejects with an `ErrnoException`; `code` reads `undefined` on anything else,
-            // which is also not `ENOENT`.
+            /**
+             * `unlink` rejects with an `ErrnoException`; `code` reads `undefined` on anything else,
+             * which is also not `ENOENT`.
+             */
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
                 // Stryker disable next-line all
                 logger.warn({ message, ...fields, error });
@@ -171,8 +177,10 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
                                 : false
                         )
                         .catch((error: unknown) => {
-                            // Gone between the listing and here — another sweep, or the store's
-                            // own cleanup, got to it first. Not this sweep's failure.
+                            /**
+                             * Gone between the listing and here — another sweep, or the store's
+                             * own cleanup, got to it first. Not this sweep's failure.
+                             */
                             if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
                             throw error;
                         });
@@ -214,8 +222,10 @@ export const pruneUnreferenced = (
                     const filePath = path.join(root, entry.name);
                     return stat(filePath).then(
                         (info) =>
-                            // `minAgeMs > 0`: with no grace period a file stamped in the same
-                            // millisecond (mtime is fractional, `Date.now()` is not) is not "young".
+                            /**
+                             * `minAgeMs > 0`: with no grace period a file stamped in the same
+                             * millisecond (mtime is fractional, `Date.now()` is not) is not "young".
+                             */
                             minAgeMs > 0 && Date.now() - info.mtimeMs < minAgeMs
                                 ? false
                                 : unlinkIfPresent(filePath, 'Could not delete an orphaned file.', {

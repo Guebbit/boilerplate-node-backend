@@ -11,7 +11,7 @@
  * Both fail OPEN — any failure accepts the password. Rung 3 (a strength meter) lives in the
  * paired frontend only, as advice rather than a gate; nothing here enforces it.
  *
- * @see docs/understand/defences/authentication.md
+ * @see docs/understand/defences/authentication.md#guessing-the-credential
  */
 
 import { createHash } from 'node:crypto';
@@ -65,8 +65,10 @@ export const checkHibpRange = (
 
     return fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
         headers: { 'Add-Padding': 'true' },
-        // Bounds the call so a slow HIBP never becomes a slow signup.
-        // https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
+        /**
+         * Bounds the call so a slow HIBP never becomes a slow signup.
+         * https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
+         */
         signal: AbortSignal.timeout(timeoutMs),
         // fetch: a redirect is an error, not something to follow to a host nobody chose.
         redirect: 'error'
@@ -80,8 +82,10 @@ export const checkHibpRange = (
             const match = body
                 .split(/\r?\n/)
                 .map((line) => parseRangeLine(line))
-                // Padding entries (`Add-Padding`) carry count 0 and are fake: discard them.
-                // https://haveibeenpwned.com/API/v3#PwnedPasswordsPadding
+                /**
+                 * Padding entries (`Add-Padding`) carry count 0 and are fake: discard them.
+                 * https://haveibeenpwned.com/API/v3#PwnedPasswordsPadding
+                 */
                 .find((entry) => entry?.suffix === suffix && entry.count > 0);
             return match ? { breached: true, count: match.count } : { breached: false };
         })

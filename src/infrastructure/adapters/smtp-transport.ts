@@ -8,8 +8,10 @@
  * @see docs/understand/email-and-rendering.md#smtp-configuration
  */
 
-// nodemailer: `createTransport` builds a reusable SMTP sender; `SentMessageInfo` is the server's
-// reply (messageId, accepted/rejected recipients) — https://nodemailer.com/smtp/
+/**
+ * nodemailer: `createTransport` builds a reusable SMTP sender; `SentMessageInfo` is the server's
+ * reply (messageId, accepted/rejected recipients) — https://nodemailer.com/smtp/
+ */
 import { createTransport, type SentMessageInfo, type Transporter } from 'nodemailer';
 import { mailConfig } from './config';
 import type { OutgoingMail } from './mail-transports';
@@ -39,33 +41,45 @@ const getTransporter = (): Transporter => {
     const port = smtp.NODE_SMTP_PORT;
 
     transport = createTransport({
-        // Hostname this client announces in the SMTP EHLO greeting. Some strict servers
-        // check it.
+        /**
+         * Hostname this client announces in the SMTP EHLO greeting. Some strict servers
+         * check it.
+         */
         name: smtp.NODE_SMTP_NAME ?? '',
         // SMTP server to connect to.
         host: smtp.NODE_SMTP_HOST ?? '',
-        // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
-        // 25 = relay.
+        /**
+         * 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
+         * 25 = relay.
+         */
         port,
-        // `secure: true` means TLS from the first byte, which is only correct on 465.
-        // On 587 it must be false — the connection starts plaintext and is upgraded via
-        // STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
-        // 465" and open a plaintext connection to a port expecting TLS immediately.
+        /**
+         * `secure: true` means TLS from the first byte, which is only correct on 465.
+         * On 587 it must be false — the connection starts plaintext and is upgraded via
+         * STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
+         * 465" and open a plaintext connection to a port expecting TLS immediately.
+         */
         secure: port === 465,
-        // On 587, refuse to go on without STARTTLS. nodemailer otherwise upgrades only
-        // when the server advertises it, so an attacker who strips the advertisement
-        // gets the AUTH credentials in cleartext.
-        // https://nodemailer.com/smtp/#tls-options
+        /**
+         * On 587, refuse to go on without STARTTLS. nodemailer otherwise upgrades only
+         * when the server advertises it, so an attacker who strips the advertisement
+         * gets the AUTH credentials in cleartext.
+         * https://nodemailer.com/smtp/#tls-options
+         */
         requireTLS: port === 587,
-        // Transport-level switches: message data can never turn them off. A `path` or `href` in
-        // any attachment or part is refused, so a forged job cannot read a local file or fetch a URL.
-        // https://nodemailer.com/message/attachments/ (security note on `path`)
+        /**
+         * Transport-level switches: message data can never turn them off. A `path` or `href` in
+         * any attachment or part is refused, so a forged job cannot read a local file or fetch a URL.
+         * https://nodemailer.com/message/attachments/ (security note on `path`)
+         */
         disableFileAccess: true,
         disableUrlAccess: true,
-        // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
-        // attempts an unauthenticated send and the server rejects it — the failure
-        // surfaces at send time, not at boot, because email is not a hard startup
-        // dependency.
+        /**
+         * SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
+         * attempts an unauthenticated send and the server rejects it — the failure
+         * surfaces at send time, not at boot, because email is not a hard startup
+         * dependency.
+         */
         auth: {
             user: smtp.NODE_SMTP_USER ?? '',
             pass: smtp.NODE_SMTP_PASS ?? ''

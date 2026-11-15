@@ -52,18 +52,24 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
     const operation = operationName('delete', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // The id comes from the path alone: a DELETE names its target in the URL, never in a body
-        // (RFC 9110 §9.3.5). A malformed one is the same 404 an unknown id gets.
+        /**
+         * The id comes from the path alone: a DELETE names its target in the URL, never in a body
+         * (RFC 9110 §9.3.5). A malformed one is the same 404 an unknown id gets.
+         */
         const id = requireId(request, response, { notFound: notFoundKey, surface: 'path' });
         if (!id) return Promise.resolve();
 
-        // `hardDelete` arrives two ways (path segment via `routeFlag`, or the query) and is OR'd
-        // across sources rather than following surface precedence: any true wins, all false/absent defaults to false, any undecodable value 422s. OR avoids
-        // `false` (the default, what nobody types) ever outvoting a `true` someone deliberately
-        // sent on a different transport.
+        /**
+         * `hardDelete` arrives two ways (path segment via `routeFlag`, or the query) and is OR'd
+         * across sources rather than following surface precedence: any true wins, all false/absent defaults to false, any undecodable value 422s. OR avoids
+         * `false` (the default, what nobody types) ever outvoting a `true` someone deliberately
+         * sent on a different transport.
+         */
         const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
-        // Validates the merged `hardDelete` value against its schema; 422s and returns
-        // undefined on failure (a valid `false` is not `undefined`).
+        /**
+         * Validates the merged `hardDelete` value against its schema; 422s and returns
+         * undefined on failure (a valid `false` is not `undefined`).
+         */
         const hardDelete = parseBody(hardDeleteSchema, input.hardDelete, response);
         if (hardDelete === undefined) return Promise.resolve();
 

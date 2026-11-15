@@ -19,9 +19,11 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
-// js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
-// rejection that is not an `Error` still yields its message. `String(error)` is the fallback
-// rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
+/**
+ * js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
+ * rejection that is not an `Error` still yields its message. `String(error)` is the fallback
+ * rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
+ */
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 
 /**
@@ -67,8 +69,10 @@ const leaseSchema: Schema<LeaseDocument, LeaseModel> = new Schema<LeaseDocument,
         }
     },
     {
-        // `updatedAt` is when the job last ran (`lastRunAt` in the summaries). No TTL index reads
-        // it: a row lives until a technician deletes it, so a retired job stays visible as stale.
+        /**
+         * `updatedAt` is when the job last ran (`lastRunAt` in the summaries). No TTL index reads
+         * it: a row lives until a technician deletes it, so a retired job stays visible as stale.
+         */
         timestamps: true
     }
 );
@@ -178,10 +182,12 @@ const releaseLease = (
         )
         .exec()
         .catch((releaseError: unknown) => {
-            // A failed release is not a failed job: the lease simply rides out its `ttlMs` instead
-            // of freeing early, exactly as if the process had crashed here. Logged, not thrown —
-            // throwing would replace the job's own outcome (success or its real error) with this
-            // one.
+            /**
+             * A failed release is not a failed job: the lease simply rides out its `ttlMs` instead
+             * of freeing early, exactly as if the process had crashed here. Logged, not thrown —
+             * throwing would replace the job's own outcome (success or its real error) with this
+             * one.
+             */
             // Stryker disable all
             logger.warn('releaseLease - could not release, lease will expire naturally', {
                 name,
@@ -223,8 +229,10 @@ export const recordJobOutcome = (
         )
         .exec()
         .catch((error: unknown) => {
-            // Same reasoning as `releaseLease`'s own catch: a failed record is not a failed job,
-            // and must not turn a successful run red.
+            /**
+             * Same reasoning as `releaseLease`'s own catch: a failed record is not a failed job,
+             * and must not turn a successful run red.
+             */
             // Stryker disable all
             logger.warn('recordJobOutcome - could not record, job health will show stale', {
                 name,

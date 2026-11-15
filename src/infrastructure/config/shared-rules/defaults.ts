@@ -42,7 +42,7 @@ export const defaultsSchema = z.strictObject({
             /** Hours a quarantined upload is left alone before it counts as abandoned. */
             quarantineRetentionHours: positive
         }),
-        /** Uploads. */
+        /** Limits on the upload body, before any image decoding starts. */
         uploads: z.strictObject({
             /** Largest accepted upload body, in bytes. */
             maxBytes: positive

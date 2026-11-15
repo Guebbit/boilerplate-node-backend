@@ -8,7 +8,7 @@
  * - a replayed `POST /products` (the ledger answers the first product; the retry's upload stays)
  * - a throwaway Mongo (`npm run demo`, e2e) that was reseeded under files on a persistent disk
  *
- * @see docs/reference/ops.md
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 import path from 'node:path';

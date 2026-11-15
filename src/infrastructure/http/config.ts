@@ -3,7 +3,7 @@
  * The HTTP layer's configuration: this deployment's own addresses, the rate limiter's store, upload
  * limits, the response cache's bounds and the idempotency ledger's retention.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { tmpdir } from 'node:os';
@@ -24,10 +24,12 @@ export const siteConfig = defineConfig({
         }),
         NODE_FRONTEND_URL: text({
             default: 'http://localhost:8080',
-            // Required in a deployment, though the default stays for a developer: unset, every
-            // reset, verify, delete and email-change link, and the OAuth landing page, would point
-            // at `localhost` and the app's own flows would break. The check reads the raw
-            // variable, so the default does not satisfy it.
+            /**
+             * Required in a deployment, though the default stays for a developer: unset, every
+             * reset, verify, delete and email-change link, and the OAuth landing page, would point
+             * at `localhost` and the app's own flows would break. The check reads the raw
+             * variable, so the default does not satisfy it.
+             */
             required: { minLength: 1, productionOnly: true }
         }),
         NODE_CORS_ORIGIN: csv({
@@ -89,7 +91,7 @@ export const idempotencyConfig = defineConfig({
  * Caps on live SSE streams, counted per process. Opens past either cap are refused, since a held
  * stream is never counted by the request limiter.
  *
- * @see docs/understand/defences/denial-of-service.md
+ * @see docs/understand/defences/denial-of-service.md#holding-a-resource
  */
 export const sseConfig = defineConfig({
     name: 'sse',

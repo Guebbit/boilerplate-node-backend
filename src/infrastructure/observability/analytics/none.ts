@@ -5,7 +5,7 @@
  * providers warn when selected but unconfigured, because that state is almost always an
  * accident; this one is silent because it is not.
  *
- * @see docs/understand/analytics.md
+ * @see docs/understand/analytics.md#choosing-a-provider
  */
 
 import type { AnalyticsProvider } from './index';

@@ -6,7 +6,7 @@
  * Relative imports only: `adapters/logger.ts` sits on jest's `globalSetup` import chain, where the
  * `@infrastructure` alias does not resolve, and it reads this file.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig, isRelaxedIn } from '../config/define';

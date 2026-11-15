@@ -48,8 +48,10 @@ export const limitsRedisUrl = (): string | undefined => rateLimitConfig().NODE_R
 export const buildLimitsClient = (url: string): RedisClient => {
     const redisClient: RedisClient = createRedisClient(url);
 
-    // node-redis is an EventEmitter and an unhandled 'error' event would crash the process, so this
-    // listener is mandatory rather than merely useful.
+    /**
+     * node-redis is an EventEmitter and an unhandled 'error' event would crash the process, so this
+     * listener is mandatory rather than merely useful.
+     */
     redisClient.on('error', () => undefined);
 
     return redisClient;
@@ -66,18 +68,22 @@ let limitsConnection: ManagedConnection<RedisClient> | undefined;
 const connectionFor = (url: string): ManagedConnection<RedisClient> => {
     if (limitsConnection) return limitsConnection;
 
-    // Kept apart from `manageConnection`'s own memoised handle: a client whose handshake hasn't
-    // finished is still the SAME socket worth reconnecting, not one to throw away. node-redis
-    // rejects a second `connect()` racing the first with `Socket already opened`, so a fresh
-    // client per attempt (like the cache adapter) is not an option here.
+    /**
+     * Kept apart from `manageConnection`'s own memoised handle: a client whose handshake hasn't
+     * finished is still the SAME socket worth reconnecting, not one to throw away. node-redis
+     * rejects a second `connect()` racing the first with `Socket already opened`, so a fresh
+     * client per attempt (like the cache adapter) is not an option here.
+     */
     let redisClient: RedisClient | undefined;
 
     const connection = manageConnection<RedisClient>({
         unavailableMessage:
             'Limits Redis unreachable — until it returns, budgets count in this process alone (the browsing brake passes unbudgeted) and single-use claims are per process.',
         unavailableLevel: 'error',
-        // Enablement is already decided by whoever builds a Redis-backed store: this connection
-        // only exists when a URL is configured.
+        /**
+         * Enablement is already decided by whoever builds a Redis-backed store: this connection
+         * only exists when a URL is configured.
+         */
         isEnabled: () => true,
         connect: () => {
             redisClient ??= buildLimitsClient(url);

@@ -6,7 +6,7 @@
  * without duplicating the handler. This module owns the binding *rules*, behind one entry point,
  * `readInput`, so controllers don't re-assemble them.
  *
- * @see docs/understand/request-input.md
+ * @see docs/understand/request-input.md#the-shape-in-one-picture
  */
 
 import type { Request } from 'express';
@@ -26,8 +26,10 @@ import { isPlainObject, stripUndefined } from '@infrastructure/object-guards';
  */
 export const parseFormBoolean = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
-    // `??`, not the ternary `parseFormJson` needs: `parseBooleanWord` only ever returns
-    // `boolean | undefined`, never `null`/`0`/`''`, so there is no falsy-but-valid case to protect.
+    /**
+     * `??`, not the ternary `parseFormJson` needs: `parseBooleanWord` only ever returns
+     * `boolean | undefined`, never `null`/`0`/`''`, so there is no falsy-but-valid case to protect.
+     */
     return parseBooleanWord(value) ?? value;
 };
 
@@ -89,7 +91,7 @@ export type RequestInputSource = 'params' | 'body' | 'query';
  * than an ordering chosen by whoever wrote the newest controller. A sixth combination has to be
  * added deliberately, where it can be reviewed against the spec.
  *
- * @see docs/understand/request-input.md
+ * @see docs/understand/request-input.md#the-rules-behind-the-table
  */
 export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' | 'path';
 
@@ -105,7 +107,7 @@ export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' |
  * params, then query, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is
  * params-only, for a value that cannot arrive any other way.
  *
- * @see docs/understand/request-input.md
+ * @see docs/understand/request-input.md#the-table
  */
 const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],
@@ -173,8 +175,10 @@ export interface RequestInputDeclaration<TId extends string> {
  * @param request - the incoming request, or anything carrying its `body`
  */
 export const bodyRecordOf = (request: Pick<Request, 'body'>): Record<string, unknown> => {
-    // `request.body` is typed `any` by Express; routed through `unknown` before the narrowing
-    // below so the `any` stops here rather than infecting every caller.
+    /**
+     * `request.body` is typed `any` by Express; routed through `unknown` before the narrowing
+     * below so the `any` stops here rather than infecting every caller.
+     */
     const body: unknown = request.body;
     return isPlainObject(body) ? body : {};
 };
@@ -200,8 +204,10 @@ export const readInput = <TId extends string = never>(
     declaration: RequestInputDeclaration<TId>
 ): Record<string, unknown> & Partial<Record<TId, string>> => {
     const anyTrue = declaration.anyTrue ?? [];
-    // `anyTrue` fields are booleans too. Folded in here rather than asked of the caller twice,
-    // because an `anyTrue` field left undecoded would never see the `true` a query string spells.
+    /**
+     * `anyTrue` fields are booleans too. Folded in here rather than asked of the caller twice,
+     * because an `anyTrue` field left undecoded would never see the `true` a query string spells.
+     */
     const booleans = [...(declaration.booleans ?? []), ...anyTrue];
     const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
@@ -233,14 +239,18 @@ export const readInput = <TId extends string = never>(
         return decoded;
     };
 
-    // The content type is inspected only when the declaration has something to decode, so a route
-    // that declares neither never asks.
+    /**
+     * The content type is inspected only when the declaration has something to decode, so a route
+     * that declares neither never asks.
+     */
     const stringTransport: Record<RequestInputSource, boolean> = {
         params: true,
         query: true,
-        // Multipart is the only body not already typed: a JSON body needs no coercion, and
-        // coercing it anyway would swallow a contract violation (`!!'not-a-boolean'` is `true`).
-        // Express' `req.is` answers `null`, not `false`, for no body at all — hence `!!`.
+        /**
+         * Multipart is the only body not already typed: a JSON body needs no coercion, and
+         * coercing it anyway would swallow a contract violation (`!!'not-a-boolean'` is `true`).
+         * Express' `req.is` answers `null`, not `false`, for no body at all — hence `!!`.
+         */
         body: decodes && !!request.is('multipart/form-data')
     };
     const values: Record<RequestInputSource, Record<string, unknown>> = {
@@ -252,18 +262,24 @@ export const readInput = <TId extends string = never>(
         decodes && stringTransport[source] ? decode(values[source]) : values[source]
     );
 
-    // Assigned lowest-precedence first, so higher ones overwrite. `Object.assign` copies keys
-    // the same way a spread would — including `undefined` ones, removed by `stripUndefined`.
+    /**
+     * Assigned lowest-precedence first, so higher ones overwrite. `Object.assign` copies keys
+     * the same way a spread would — including `undefined` ones, removed by `stripUndefined`.
+     */
     const merged = Object.assign({}, ...sources.toReversed()) as Record<string, unknown>;
     const result: Record<string, unknown> = stripUndefined(merged);
 
-    // A `||` chain across the sources: the first non-empty value wins, and a source carrying an
-    // empty string is only used if nothing better follows.
+    /**
+     * A `||` chain across the sources: the first non-empty value wins, and a source carrying an
+     * empty string is only used if nothing better follows.
+     */
     for (const key of declaration.ids ?? []) {
         let resolved: unknown;
         for (const source of sources) {
-            // A repeated key arrives as an array and stays one, so it fails as a malformed id (422)
-            // instead of silently picking an entry.
+            /**
+             * A repeated key arrives as an array and stays one, so it fails as a malformed id (422)
+             * instead of silently picking an entry.
+             */
             const value: unknown = source[key];
             if (value) {
                 resolved = value;
@@ -278,14 +294,18 @@ export const readInput = <TId extends string = never>(
 
     // OR across the sources rather than a ranking of them.
     for (const key of anyTrue) {
-        // Blank and null are "not stated", exactly as `hardDeleteSchema`'s own preprocess reads
-        // them — otherwise `?hardDelete=` would outvote a body that said true.
+        /**
+         * Blank and null are "not stated", exactly as `hardDeleteSchema`'s own preprocess reads
+         * them — otherwise `?hardDelete=` would outvote a body that said true.
+         */
         const stated = sources
             .map((source) => source[key])
             .filter((value) => value !== undefined && value !== null && value !== '');
         if (stated.length === 0) continue;
-        // A value this layer could not decode is never outvoted: it reaches the schema and answers
-        // 422, instead of a `true` somewhere else deciding on its behalf.
+        /**
+         * A value this layer could not decode is never outvoted: it reaches the schema and answers
+         * 422, instead of a `true` somewhere else deciding on its behalf.
+         */
         const undecoded = stated.find((value) => typeof value !== 'boolean');
         result[key] = undecoded ?? stated.includes(true);
     }
@@ -340,26 +360,34 @@ export const callerContextOf = (request: {
     const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
         caller: request.caller ?? STRANGER,
-        // `null` (no membership) reads the same as "never resolved one" here — `actorRoleName`
-        // has no separate spelling for "authenticated, but holds no role".
+        /**
+         * `null` (no membership) reads the same as "never resolved one" here — `actorRoleName`
+         * has no separate spelling for "authenticated, but holds no role".
+         */
         actorRoleName: request.authContext?.roles?.tenant ?? undefined,
         actorCredentialId: request.credentialId,
         ip: request.ip,
-        // Node exposes a repeated header as an array; take the first rather than logging
-        // '[object Object]'-style noise.
+        /**
+         * Node exposes a repeated header as an array; take the first rather than logging
+         * '[object Object]'-style noise.
+         */
         userAgent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
         host: request.headers?.host,
         requestId: request.requestId,
         clientRequestId: request.clientRequestId,
-        // Absent until the locale middleware has run. Left absent rather than defaulted here: the
-        // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
-        // precedence chain whose first term is the recipient's own stored preference.
+        /**
+         * Absent until the locale middleware has run. Left absent rather than defaulted here: the
+         * default belongs at the point of use, where `getDefaultLocale()` is the last term of a
+         * precedence chain whose first term is the recipient's own stored preference.
+         */
         locale: request.locale,
-        // A stored answer, yes or no, always wins: withdrawing consent (GDPR Art. 7(3)) must not
-        // be undone by a header. Only a caller with no stored answer (a guest, or an account never
-        // asked) takes the banner choice the frontend forwards, so it counts until `PUT /account`
-        // records it. The header is read with `parseFormBoolean` — never `Boolean(value)`, which
-        // would make the string `'false'` truthy. Unrecognised (absent included) is `false`.
+        /**
+         * A stored answer, yes or no, always wins: withdrawing consent (GDPR Art. 7(3)) must not
+         * be undone by a header. Only a caller with no stored answer (a guest, or an account never
+         * asked) takes the banner choice the frontend forwards, so it counts until `PUT /account`
+         * records it. The header is read with `parseFormBoolean` — never `Boolean(value)`, which
+         * would make the string `'false'` truthy. Unrecognised (absent included) is `false`.
+         */
         analyticsConsent:
             request.authContext?.analyticsConsent ??
             (consentHeader !== undefined && parseFormBoolean(consentHeader) === true)

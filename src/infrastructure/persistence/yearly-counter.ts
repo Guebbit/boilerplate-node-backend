@@ -29,9 +29,11 @@ export const incrementYearlyCounter = (
     session?: ClientSession
 ): Promise<number> =>
     counterModel
-        // Mongoose: `upsert` creates the year's row; `returnDocument: 'after'` returns the
-        // incremented value rather than the pre-update one.
-        // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+        /**
+         * Mongoose: `upsert` creates the year's row; `returnDocument: 'after'` returns the
+         * incremented value rather than the pre-update one.
+         * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+         */
         .findOneAndUpdate(
             { _id: year },
             { $inc: { seq: 1 } },

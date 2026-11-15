@@ -111,12 +111,14 @@ export const checkEmailPolicy = (email: string): Promise<RungVerdict> =>
 
         // The domain half of the address, lower-cased for case-insensitive list membership.
         const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
-        // Domains this deployment exempts even when they would otherwise be refused — a
-        // forwarding or aliasing service the upstream list is too broad about, or a customer's
-        // own domain flagged by mistake.
+        /**
+         * Domains this deployment exempts even when they would otherwise be refused — a
+         * forwarding or aliasing service the upstream list is too broad about, or a customer's
+         * own domain flagged by mistake.
+         */
         if (antibotConfig().NODE_ANTIBOT_EMAIL_ALLOWLIST.includes(domain)) return 'ok';
 
-        /*
+        /**
          * disposable-email-domains-js: wraps the community-maintained `disposable-email-domains`
          * list (~3,500 domains; every addition requires a merged PR proving it generates throwaway
          * inboxes). Freshness is upstream's job, not this deployment's. `NODE_..._DENYLIST_EXTRA`

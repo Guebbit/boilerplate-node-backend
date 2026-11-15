@@ -53,8 +53,10 @@ const siteverify = (token: string, remoteAddress?: string): Promise<RungVerdict>
             response.ok ? readCappedJson(response, DEFAULT_BODY_CAP_BYTES) : undefined
         )
         .then((body) =>
-            // `readCappedJson` answers `unknown`; only Cloudflare's `success` flag is read, and
-            // anything else is `refused`.
+            /**
+             * `readCappedJson` answers `unknown`; only Cloudflare's `success` flag is read, and
+             * anything else is `refused`.
+             */
             (body as { success?: boolean } | undefined)?.success === true ? 'ok' : 'refused'
         );
 

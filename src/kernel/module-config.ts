@@ -10,7 +10,7 @@
  * budgets are slices too, generated from the data it already declares, so deleting the module
  * deletes its gate.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#two-kinds-of-rule
  */
 
 import type { AppModule } from '@kernel/registry';
@@ -20,7 +20,6 @@ import { rateLimitBudgetConfig } from '@infrastructure/http/config';
 /**
  * Every slice one module contributes: its own declared ones, plus its rate-limit budgets.
  *
- * @param appModule - the module
  * @returns the slices, in declaration order
  */
 export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => [
@@ -33,7 +32,6 @@ export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => 
 /**
  * Every slice a list of modules contributes, flattened in module order.
  *
- * @param appModules - the modules
  * @returns each module's {@link configSlicesOf}, back to back
  */
 export const moduleConfigSlices = (appModules: readonly AppModule[]): readonly ConfigSlice[] =>

@@ -83,11 +83,15 @@ const redisClientOptions = (url: string) => ({
     maintNotifications: 'disabled' as const,
     socket: {
         connectTimeout: 1000,
-        // A literal `false`, not `boolean`: node-redis' socket options require the literal to
-        // disable the reconnect loop rather than accepting a plain boolean.
+        /**
+         * A literal `false`, not `boolean`: node-redis' socket options require the literal to
+         * disable the reconnect loop rather than accepting a plain boolean.
+         */
         reconnectStrategy: false as const,
-        // The half-open-connection guard `commandOptions.timeout` above cannot be — see this
-        // function's own docblock.
+        /**
+         * The half-open-connection guard `commandOptions.timeout` above cannot be — see this
+         * function's own docblock.
+         */
         socketTimeout: COMMAND_TIMEOUT_MS
     },
     pingInterval: KEEPALIVE_PING_MS,

@@ -47,8 +47,10 @@ export const namedHandler = <THandler extends (request: Request, response: Respo
     operation: string,
     handler: THandler
 ): THandler =>
-    // `as THandler`: the forwarder has the handler's own parameters and return, but the compiler
-    // only sees the constraint, not the caller's narrower type.
+    /**
+     * `as THandler`: the forwarder has the handler's own parameters and return, but the compiler
+     * only sees the constraint, not the caller's narrower type.
+     */
     ({ [operation]: (request: Request, response: Response) => handler(request, response) })[
         operation
     ] as THandler;

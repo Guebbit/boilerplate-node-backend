@@ -83,8 +83,10 @@ function incrementOnUpdate(this: Query<unknown, unknown>): void {
     if (!stampsUpdatedAt(update)) return;
 
     if (Array.isArray(update)) {
-        // A pipeline update has no `$inc`; the same step is a `$set` stage. `$ifNull` covers a row
-        // that has no counter yet.
+        /**
+         * A pipeline update has no `$inc`; the same step is a `$set` stage. `$ifNull` covers a row
+         * that has no counter yet.
+         */
         this.setUpdate([
             ...(update as unknown[]),
             { $set: { [EDIT_REVISION]: { $add: [{ $ifNull: [`$${EDIT_REVISION}`, 0] }, 1] } } }
@@ -105,13 +107,17 @@ function incrementOnUpdate(this: Query<unknown, unknown>): void {
  * @param schema - the schema to version
  */
 export const revisionPlugin = (schema: Schema): void => {
-    // The version key is Mongoose's own counter slot: it is created at 0, sent as `$inc`, and
-    // incremented in memory after the write. Replaces `__v` on this schema.
+    /**
+     * The version key is Mongoose's own counter slot: it is created at 0, sent as `$inc`, and
+     * incremented in memory after the write. Replaces `__v` on this schema.
+     */
     schema.set('versionKey', EDIT_REVISION);
 
     schema.pre('save', function flagEdit(this: Document) {
-        // `updatedAt` is stamped by Mongoose's timestamps hook (registered when the schema was
-        // built, so it runs first) exactly when this save is an edit of an existing row.
+        /**
+         * `updatedAt` is stamped by Mongoose's timestamps hook (registered when the schema was
+         * built, so it runs first) exactly when this save is an edit of an existing row.
+         */
         if (!this.isNew && this.isModified('updatedAt')) flagIncrement(this);
     });
 

@@ -7,8 +7,8 @@
  * extension carries the machine codes. Internally both outcomes stay one `ServiceResult` union
  * discriminated on `success`; only the serialisers below put anything on the wire.
  *
- * @see docs/reference/responses.md
- * @see docs/reference/errors.md
+ * @see docs/reference/responses.md#a-resource
+ * @see docs/reference/errors.md#problem-details
  */
 
 import { STATUS_CODES } from 'node:http';
@@ -62,9 +62,11 @@ export interface ResponseReject extends ResponseNeutral {
     message: string;
     /** The literal (not `boolean`) is what lets TypeScript narrow `ServiceResult<T>` on this field alone. */
     success: false;
-    // explicit undefined keeps `result.data` union-safe
-    // (the key is present, so `result.data` type-checks on both branches of the union
-    // instead of erroring as a missing property).
+    /**
+     * explicit undefined keeps `result.data` union-safe
+     * (the key is present, so `result.data` type-checks on both branches of the union
+     * instead of erroring as a missing property).
+     */
     data: undefined;
     // structured errors for machines and UIs
     errors: ResponseErrorItem[];
@@ -90,8 +92,10 @@ export const generateSuccess = <T>(data: T, status = 200): ResponseSuccess<T> =>
  * @param status - HTTP status (200 by default; pass 201 for creations)
  */
 export const successResponse = <T>(response: Response, data: T, status = 200) =>
-    // `.json()` sets Content-Type and ends the response; the cast just types the return value
-    // so controllers can `return successResponse(...)` and keep their signature accurate.
+    /**
+     * `.json()` sets Content-Type and ends the response; the cast just types the return value
+     * so controllers can `return successResponse(...)` and keep their signature accurate.
+     */
     response.status(status).json(data) as Response<T>;
 
 /**
@@ -105,8 +109,10 @@ export const successResponse = <T>(response: Response, data: T, status = 200) =>
  * @param location - the new resource's path on this API, e.g. `/products/abc`
  */
 export const createdResponse = <T>(response: Response, data: T, location: string) => {
-    // Express: sets the `Location` header, URL-encoding it; it never follows it.
-    // https://expressjs.com/en/api.html#res.location
+    /**
+     * Express: sets the `Location` header, URL-encoding it; it never follows it.
+     * https://expressjs.com/en/api.html#res.location
+     */
     response.location(location);
     return successResponse(response, data, 201);
 };
@@ -232,8 +238,10 @@ const normalizeErrors = (
     errors: (string | ResponseErrorItem)[]
 ): ResponseErrorItem[] => {
     const fallbackMessage = resolveErrorText(status);
-    // Guarantee at least one item: a failure response with `errors: []` would force every
-    // client to special-case it.
+    /**
+     * Guarantee at least one item: a failure response with `errors: []` would force every
+     * client to special-case it.
+     */
     const inputErrors = errors.length > 0 ? errors : [fallbackMessage];
 
     return inputErrors.map((error) => {
@@ -250,8 +258,10 @@ const normalizeErrors = (
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `ErrorCode` has no empty-string member, but `error` crossed a call boundary the type system cannot enforce (a caller building one dynamically); this is the fallback for that case, not dead code.
             code: error.code || resolveErrorCode(status),
             message: error.message || fallbackMessage,
-            // Conditional spread so `details` is omitted entirely rather than serialized as
-            // `"details": undefined`-shaped noise.
+            /**
+             * Conditional spread so `details` is omitted entirely rather than serialized as
+             * `"details": undefined`-shaped noise.
+             */
             ...(error.details ? { details: error.details } : {})
         };
     });
@@ -427,8 +437,10 @@ export const rejectResponse = (
     // `Retry-After` is the header form of what `details.retryAfter` already says (RFC 9110 §10.2.3).
     if (status === 429 && retryAfter !== undefined)
         response.setHeader('Retry-After', String(retryAfter));
-    // A refusing budget is always listed with `r=0`, even one no limiter announced (a mailbox
-    // charged by hand). Only here, on the refusal: a success never names a budget (draft §8.2).
+    /**
+     * A refusing budget is always listed with `r=0`, even one no limiter announced (a mailbox
+     * charged by hand). Only here, on the refusal: a success never names a budget (draft §8.2).
+     */
     const policy = rejection.errors[0].details?.policy;
     if (
         status === 429 &&
@@ -437,27 +449,37 @@ export const rejectResponse = (
         !listsBudget(response, policy)
     )
         response.append('RateLimit', rateLimitItem(policy, 0, retryAfter));
-    // A 503 carries a wait hint too (RFC 9110 §15.6.4); a guard that knows better sets it first.
-    // Not on a do-not-retry operation (`requireIdempotencyKey`): its 503 can fire after the write
-    // committed, so a hint to retry would be wrong.
+    /**
+     * A 503 carries a wait hint too (RFC 9110 §15.6.4); a guard that knows better sets it first.
+     * Not on a do-not-retry operation (`requireIdempotencyKey`): its 503 can fire after the write
+     * committed, so a hint to retry would be wrong.
+     */
     if (status === 503 && !response.hasHeader('Retry-After') && !doNotRetryResponses.has(response))
         response.setHeader('Retry-After', String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
-    // A 401 MUST carry a challenge (RFC 9110 §15.5.2, §11.6.1): the default says which scheme the
-    // API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.
+    /**
+     * A 401 MUST carry a challenge (RFC 9110 §15.5.2, §11.6.1): the default says which scheme the
+     * API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.
+     */
     if (status === 401 && !response.hasHeader('WWW-Authenticate'))
         response.setHeader('WWW-Authenticate', 'Bearer realm="api"');
-    // An error is a fact about one request, never about the resource: no browser or CDN may keep
-    // it. Overwrites what `setCache` set before the controller failed (a public max-age on a 5xx).
+    /**
+     * An error is a fact about one request, never about the resource: no browser or CDN may keep
+     * it. Overwrites what `setCache` set before the controller failed (a public max-age on a 5xx).
+     */
     response.setHeader('Cache-Control', 'no-store');
-    // Set before `.json()`, which only defaults the type when none is set: an export route's
-    // earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.
+    /**
+     * Set before `.json()`, which only defaults the type when none is set: an export route's
+     * earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.
+     */
     response.setHeader('Content-Type', PROBLEM_MEDIA_TYPE);
     response.removeHeader('Content-Disposition');
     return (
         response
             .status(status)
-            // `.json()` answers the `Response` it was called on; the cast only names the body type it
-            // was given.
+            /**
+             * `.json()` answers the `Response` it was called on; the cast only names the body type it
+             * was given.
+             */
             .json(problemOf(rejection, instanceOf(response))) as Response<ProblemDetails>
     );
 };

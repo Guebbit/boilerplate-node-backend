@@ -149,14 +149,18 @@ const pipelineOf =
     (request: Request, response: Response): Promise<void> => {
         const { versioned, input, update, present } = spec;
 
-        // A malformed path id answers as an unknown one, before the body is even read.
-        // `=== undefined`, not falsy: an `idFrom` tag can normalize to `''`, which is an id that
-        // matches no row (the update's own 404), not a refusal already sent.
+        /**
+         * A malformed path id answers as an unknown one, before the body is even read.
+         * `=== undefined`, not falsy: an `idFrom` tag can normalize to `''`, which is an id that
+         * matches no row (the update's own 404), not a refusal already sent.
+         */
         const id = idOf(spec, request, response);
         if (id === undefined) return Promise.resolve();
 
-        // `create` is `readInput`'s body-only surface: the id was resolved above, and a path
-        // param merged into this object would fail the body's strict schema.
+        /**
+         * `create` is `readInput`'s body-only surface: the id was resolved above, and a path
+         * param merged into this object would fail the body's strict schema.
+         */
         const body = parseBody(
             schema,
             readInput(request, { ...input, surface: 'create' }),
@@ -164,14 +168,18 @@ const pipelineOf =
         );
         if (body === undefined) return Promise.resolve();
 
-        // The PATCH schema's output type is the contract of `update()`; a filled PUT body is
-        // the same shape, since every field it adds is one the PUT schema itself accepts null for.
+        /**
+         * The PATCH schema's output type is the contract of `update()`; a filled PUT body is
+         * the same shape, since every field it adds is one the PUT schema itself accepts null for.
+         */
         const changes = fillOmittedWithNull(body, fills) as TPatch['_output'];
 
         return (
             (complete ? complete(id, changes) : Promise.resolve(changes))
-                // On a versioned resource an `If-Match` fences the row's write; without one, or on
-                // an unversioned resource, this is just `update()`.
+                /**
+                 * On a versioned resource an `If-Match` fences the row's write; without one, or on
+                 * an unversioned resource, this is just `update()`.
+                 */
                 .then((completed) =>
                     versioned
                         ? withIfMatch(request, id, () => update(id, completed, request))
@@ -180,9 +188,11 @@ const pipelineOf =
                 .then((result) => {
                     // Sends the error envelope (404, 409, 422) and stops here if refused.
                     if (refused(response, result)) return;
-                    // The saved row's new tag, so the caller's next edit needs no re-read. A PUT
-                    // answers none (RFC 9110 §9.3.4; `dropUnownedValidators` enforces it), so only a
-                    // PATCH stamps one.
+                    /**
+                     * The saved row's new tag, so the caller's next edit needs no re-read. A PUT
+                     * answers none (RFC 9110 §9.3.4; `dropUnownedValidators` enforces it), so only a
+                     * PATCH stamps one.
+                     */
                     if (request.method === 'PATCH') setEtag(response, result.data);
                     return Promise.resolve(present(result.data, request)).then((shaped) => {
                         successResponse(response, shaped, 200);

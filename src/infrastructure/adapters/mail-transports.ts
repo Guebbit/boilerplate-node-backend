@@ -88,7 +88,6 @@ const mailTransportRegistry = createSharedProviderRegistry<MailTransportAdapter>
  * Add (or, in a test, override) one transport without editing this file.
  *
  * @param name - the value `NODE_MAIL_TRANSPORT` selects it by
- * @param transport - the transport
  */
 export const registerMailTransport = (name: string, transport: MailTransportAdapter): void =>
     mailTransportRegistry.register(name, transport);

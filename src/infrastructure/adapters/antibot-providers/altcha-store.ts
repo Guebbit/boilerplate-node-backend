@@ -94,7 +94,9 @@ export const isSpent = (id: string): Promise<boolean> => {
 export const claim = (id: string): Promise<boolean> => {
     if (id.length > MAX_KEY_LENGTH) return Promise.resolve(false);
     if (!claimLocally(keyOf(id))) return Promise.resolve(false);
-    // `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
-    // process, the same floor as before Redis is reachable.
+    /**
+     * `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
+     * process, the same floor as before Redis is reachable.
+     */
     return claimLimitsKey(keyOf(id), RECORD_TTL_SECONDS).then((result) => result !== 'taken');
 };

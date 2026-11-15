@@ -5,11 +5,13 @@
  * is a hosted dependency, which is why it is not the default. Select with
  * `NODE_ANALYTICS_PROVIDER=posthog`, and set both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST`.
  *
- * @see docs/understand/analytics.md
+ * @see docs/understand/analytics.md#choosing-a-provider
  */
 
-// `PostHog` is the Node server-side client. It buffers events in memory and flushes them in
-// batches over HTTP, so `capture()` does not block the request it was called from.
+/**
+ * `PostHog` is the Node server-side client. It buffers events in memory and flushes them in
+ * batches over HTTP, so `capture()` does not block the request it was called from.
+ */
 import { PostHog } from 'posthog-node';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
@@ -37,8 +39,10 @@ let _client: PostHog | undefined;
  * the non-null assertion on the API key below safe.
  */
 const getClient = (): PostHog => {
-    // PostHog client: key is a write-only server key (safe here); host is the target region/
-    // self-host URL; flushAt/flushInterval batch events and cap staleness — flushed manually on shutdown.
+    /**
+     * PostHog client: key is a write-only server key (safe here); host is the target region/
+     * self-host URL; flushAt/flushInterval batch events and cap staleness — flushed manually on shutdown.
+     */
     _client ??= new PostHog(analyticsConfig().NODE_POSTHOG_API_KEY!, {
         host: analyticsConfig().NODE_POSTHOG_HOST,
         flushAt: 20,
@@ -97,9 +101,11 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
             return;
         }
 
-        // capture() enqueues locally and returns immediately; PostHog flushes per the batching
-        // config above. distinctId stitches the user's timeline; properties spreads caller data
-        // first so trace_id below can't be overwritten, and is added only when the event is traced.
+        /**
+         * capture() enqueues locally and returns immediately; PostHog flushes per the batching
+         * config above. distinctId stitches the user's timeline; properties spreads caller data
+         * first so trace_id below can't be overwritten, and is added only when the event is traced.
+         */
         getClient().capture({
             distinctId: event.distinctId,
             event: event.event,
@@ -123,9 +129,11 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
         const config = readErasureConfig();
         if (!config) return Promise.resolve();
 
-        // Bearer: a PERSONAL api key (not the `phc_` project key), scope `person:write`.
-        // `distinct_ids` matches on the id we sent; `delete_events` also queues the person's
-        // events for PostHog's batch deletion.
+        /**
+         * Bearer: a PERSONAL api key (not the `phc_` project key), scope `person:write`.
+         * `distinct_ids` matches on the id we sent; `delete_events` also queues the person's
+         * events for PostHog's batch deletion.
+         */
         return fetch(
             `${config.apiHost}/api/projects/${encodeURIComponent(config.projectId)}/persons/bulk_delete/`,
             {
@@ -140,8 +148,10 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
         ).then((response) => {
             if (!response.ok)
                 throw new Error(`PostHog person deletion refused with status ${response.status}`);
-            // `response.json()` answers `Promise<any>`; only PostHog's documented `deletion_errors`
-            // field is read, optionally.
+            /**
+             * `response.json()` answers `Promise<any>`; only PostHog's documented `deletion_errors`
+             * field is read, optionally.
+             */
             return (response.json() as Promise<BulkDeleteResponse>).then((body) => {
                 if (body.deletion_errors?.length)
                     throw new Error('PostHog reported errors deleting the person');
@@ -156,12 +166,16 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
     shutdown(): Promise<void> {
         if (!_client) return Promise.resolve();
         const closing = _client;
-        // Cleared before the flush resolves, so a `capture()` racing the shutdown builds a fresh
-        // client rather than enqueueing onto one that is closing.
+        /**
+         * Cleared before the flush resolves, so a `capture()` racing the shutdown builds a fresh
+         * client rather than enqueueing onto one that is closing.
+         */
         _client = undefined;
-        // Bounded well inside the process's own shutdown deadline: the library default (30s)
-        // outlasts it, and a forced exit then skips the trace flush that runs after this.
-        // https://posthog.com/docs/libraries/node#shutdown
+        /**
+         * Bounded well inside the process's own shutdown deadline: the library default (30s)
+         * outlasts it, and a forced exit then skips the trace flush that runs after this.
+         * https://posthog.com/docs/libraries/node#shutdown
+         */
         return closing.shutdown(SHUTDOWN_TIMEOUT_MS);
     }
 };

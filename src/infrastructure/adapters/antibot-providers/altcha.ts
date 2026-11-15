@@ -47,8 +47,10 @@ const signatureSecret = (): string => {
 const issue = (): Promise<IssuedChallenge> =>
     createChallenge({
         algorithm: ALGORITHM,
-        // Iteration count the solver works through, and the dial a deployment turns. Higher taxes a
-        // bot's CPU and an honest visitor's alike — raise it only as far as abuse justifies.
+        /**
+         * Iteration count the solver works through, and the dial a deployment turns. Higher taxes a
+         * bot's CPU and an honest visitor's alike — raise it only as far as abuse justifies.
+         */
         cost: antibotConfig().NODE_ANTIBOT_ALTCHA_COST,
         deriveKey,
         expiresAt: new Date(Date.now() + TTL_SECONDS * 1000),
@@ -109,9 +111,11 @@ const check = (payload: string): Promise<RungVerdict> => {
 
     return (
         isSpent(id)
-            // `signatureSecret`'s throw has to happen INSIDE the chain: raised while evaluating an
-            // argument it would escape synchronously, past the `.catch` that makes a broken
-            // deployment refuse callers rather than 500 at them.
+            /**
+             * `signatureSecret`'s throw has to happen INSIDE the chain: raised while evaluating an
+             * argument it would escape synchronously, past the `.catch` that makes a broken
+             * deployment refuse callers rather than 500 at them.
+             */
             .then((spent) =>
                 spent
                     ? false
@@ -127,8 +131,10 @@ const check = (payload: string): Promise<RungVerdict> => {
 /** ALTCHA behind the port: this server issues the challenge and verifies the solution. */
 export const altchaProvider: HumanChallengeProvider = {
     name: 'altcha',
-    // The widget needs no key — it is told where to fetch a challenge, named by the caller
-    // (`modules/antibot`'s own controller), never hard-coded in this adapter.
+    /**
+     * The widget needs no key — it is told where to fetch a challenge, named by the caller
+     * (`modules/antibot`'s own controller), never hard-coded in this adapter.
+     */
     publicParameters: (challengeUrl) => ({ challengeUrl }),
     issueChallenge: issue,
     verify: (token) => check(token).catch(() => 'refused')

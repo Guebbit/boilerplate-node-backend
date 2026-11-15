@@ -4,7 +4,7 @@
  * pipeline (`image.worker.ts`) sits below the modules and cannot import a model, so each module
  * hands it this function built over its own: `writebackImage: imageWritebackFor(userModel)`.
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#why-the-writeback-is-conditional
  */
 
 import type { Document, Model } from 'mongoose';

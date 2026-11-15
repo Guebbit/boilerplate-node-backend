@@ -2,17 +2,21 @@
  * @module
  * Structured logging.
  *
- * @see docs/operate/winston.md
+ * @see docs/operate/winston.md#two-log-streams
  */
 
-// Winston is the logging library: a `Logger` combines *formats* (a transform pipeline applied
-// to every log record) with *transports* (where the record is written). Everything below is
-// built out of those two concepts.
+/**
+ * Winston is the logging library: a `Logger` combines *formats* (a transform pipeline applied
+ * to every log record) with *transports* (where the record is written). Everything below is
+ * built out of those two concepts.
+ */
 import winston from 'winston';
-// Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
-// chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
-// module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
-// fails at jest's globalSetup runtime.
+/**
+ * Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
+ * chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
+ * module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
+ * fails at jest's globalSetup runtime.
+ */
 import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
 import { correlationDigest } from '../security/pseudonymise';
 import { toSemanticNames } from './semantic-names';
@@ -199,25 +203,33 @@ const redactWalk = (
     ancestors: WeakSet<object>,
     scrubPersonal: boolean
 ): unknown => {
-    // An Error's fields are non-enumerable, so the walk below would turn one into `{}`: nested
-    // anywhere (`{ cause: error }`, `{ errors: [...] }`), it is serialised first.
+    /**
+     * An Error's fields are non-enumerable, so the walk below would turn one into `{}`: nested
+     * anywhere (`{ cause: error }`, `{ errors: [...] }`), it is serialised first.
+     */
     if (input instanceof Error) return redactWalk(serializeError(input), ancestors, scrubPersonal);
 
     if (input === null || typeof input !== 'object') return input;
 
-    // A caller may hand in a graph with a cycle (a request, a Mongoose document); without this,
-    // the walk overflows the stack inside the log call and takes the caller down with it.
+    /**
+     * A caller may hand in a graph with a cycle (a request, a Mongoose document); without this,
+     * the walk overflows the stack inside the log call and takes the caller down with it.
+     */
     if (ancestors.has(input)) return CIRCULAR;
     ancestors.add(input);
 
-    // Arrays first: `typeof [] === 'object'`, so without this branch an array would be
-    // rebuilt as an object with numeric string keys.
+    /**
+     * Arrays first: `typeof [] === 'object'`, so without this branch an array would be
+     * rebuilt as an object with numeric string keys.
+     */
     const result = Array.isArray(input)
         ? input.map((item) => redactWalk(item, ancestors, scrubPersonal))
         : redactEntries(input as Record<string, unknown>, ancestors, scrubPersonal);
 
-    // Only the current path counts: the same object reached twice by different routes is
-    // shared, not circular.
+    /**
+     * Only the current path counts: the same object reached twice by different routes is
+     * shared, not circular.
+     */
     ancestors.delete(input);
     return result;
 };
@@ -237,16 +249,19 @@ const redactEntries = (
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(input)) {
         const normalized = normalizeKey(key);
-        // Credential first — SENSITIVE_FIELDS always wins if a name were ever on both lists.
-        // Personal-data fields only get the mode treatment when the value is itself a string;
-        // a nested object under a personal-sounding key (unlikely, but not impossible) still
-        // gets walked normally rather than silently skipped.
+        /**
+         * Credential first — SENSITIVE_FIELDS always wins if a name were ever on both lists.
+         * Personal-data fields only get the mode treatment when the value is itself a string;
+         * a nested object under a personal-sounding key (unlikely, but not impossible) still
+         * gets walked normally rather than silently skipped.
+         */
         if (isSensitiveKey(normalized)) result[key] = REDACTED;
         else if (scrubPersonal && PERSONAL_FIELDS.has(normalized) && typeof value === 'string')
             result[key] = applyPersonalFieldMode(value);
-        // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
-        // nested personal data are caught too.
-        else result[key] = redactWalk(value, ancestors, scrubPersonal);
+        /**
+         * Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
+         * nested personal data are caught too.
+         */ else result[key] = redactWalk(value, ancestors, scrubPersonal);
     }
     return result;
 };
@@ -301,8 +316,10 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
         return {
             ...fields,
             ...(typeof fields.message === 'string' && { message: maskText(fields.message) }),
-            // Stack traces expose absolute paths and dependency internals — useful locally,
-            // an information leak in aggregated server logs. Kept only on a developer's machine or CI.
+            /**
+             * Stack traces expose absolute paths and dependency internals — useful locally,
+             * an information leak in aggregated server logs. Kept only on a developer's machine or CI.
+             */
             ...(isRelaxedEnvironment() && { stack }),
             // The wrapped error is usually the one that explains the failure.
             ...(error.cause !== undefined && { cause: error.cause })
@@ -367,30 +384,40 @@ const restoreSplatError = (info: Record<string | symbol, unknown>): void => {
 export const redactFormat = winston.format((info) => {
     restoreSplatError(info);
 
-    // `level` and `message` are winston's own reserved fields; separating them means the
-    // redaction walk only sees caller-supplied metadata.
+    /**
+     * `level` and `message` are winston's own reserved fields; separating them means the
+     * redaction walk only sees caller-supplied metadata.
+     */
     const { level, message, ...rest } = info;
 
-    // winston copies an Error passed as metadata (`logger.error('text', error)`) onto the record
-    // as a top-level `stack`, past `serializeError`'s own guard. Same rule: only a developer's
-    // machine or CI keeps it.
+    /**
+     * winston copies an Error passed as metadata (`logger.error('text', error)`) onto the record
+     * as a top-level `stack`, past `serializeError`'s own guard. Same rule: only a developer's
+     * machine or CI keeps it.
+     */
     if (!isRelaxedEnvironment()) {
         delete rest.stack;
         delete info.stack;
     }
 
-    // Turn a raw thrown Error into a serializable object *before* redaction, otherwise
-    // the walk above would return an empty `{}` for it.
+    /**
+     * Turn a raw thrown Error into a serializable object *before* redaction, otherwise
+     * the walk above would return an empty `{}` for it.
+     */
     if (rest.error && rest.error instanceof Error) {
         rest.error = serializeError(rest.error);
     }
 
     const redacted = redactSensitiveFields(rest);
-    // The headline is not metadata, so the walk never sees it. winston appends a logged error's
-    // message to it (`logger.error('text', error)`), which is where an address would ride in.
+    /**
+     * The headline is not metadata, so the walk never sees it. winston appends a logged error's
+     * message to it (`logger.error('text', error)`), which is where an address would ride in.
+     */
     const headline = typeof message === 'string' ? maskText(message) : message;
-    // Mutate `info` in place (winston requires the same object identity back) while
-    // overwriting metadata with the redacted copy and restoring the reserved fields.
+    /**
+     * Mutate `info` in place (winston requires the same object identity back) while
+     * overwriting metadata with the redacted copy and restoring the reserved fields.
+     */
     return Object.assign(info, { level, message: headline }, redacted);
 });
 
@@ -451,8 +478,10 @@ const prettyFormat = winston.format.combine(
     winston.format.colorize({ all: true }),
     // `printf` is the terminal format: whatever string it returns is what gets written.
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
-        // Append leftover metadata as compact JSON, and only when there is any —
-        // otherwise every line would end in a useless `{}`.
+        /**
+         * Append leftover metadata as compact JSON, and only when there is any —
+         * otherwise every line would end in a useless `{}`.
+         */
         const metaString = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
         // `String(...)` casts because winston types these fields as `unknown`.
         return `${String(timestamp)} [${level}] ${String(message)}${metaString}`;
@@ -465,7 +494,7 @@ const prettyFormat = winston.format.combine(
  * container log file — exactly when something downstream has to parse the line. Production stays
  * JSON regardless. Exported so the environment matrix can be asserted rather than assumed.
  *
- * @see docs/operate/loki.md
+ * @see docs/operate/loki.md#trace-log-correlation
  */
 export const resolveConsoleFormat = (): winston.Logform.Format =>
     isRelaxedEnvironment() && process.stdout.isTTY ? prettyFormat : baseFormat;
@@ -479,19 +508,25 @@ export const resolveConsoleFormat = (): winston.Logform.Format =>
 export const logger: Logger = winston.createLogger({
     // Minimum severity that gets emitted at all (see `resolveLogLevel`).
     level: resolveLogLevel(),
-    // Logger-wide pipeline. The Console transport below overrides it per-environment,
-    // but it stays the default for any transport added without its own `format`.
+    /**
+     * Logger-wide pipeline. The Console transport below overrides it per-environment,
+     * but it stays the default for any transport added without its own `format`.
+     */
     format: baseFormat,
-    // Merged into every record — lets a log aggregator filter by service when several
-    // apps ship to the same backend.
+    /**
+     * Merged into every record — lets a log aggregator filter by service when several
+     * apps ship to the same backend.
+     */
     defaultMeta: {
         service: loggingConfig().NODE_SERVICE_NAME,
         // Which process wrote the line: in cluster mode, which worker.
         pid: process.pid
     },
     transports: [
-        // stdout only, deliberately: in containers the platform owns log collection and
-        // rotation, so writing files inside the container would just fill the layer up.
+        /**
+         * stdout only, deliberately: in containers the platform owns log collection and
+         * rotation, so writing files inside the container would just fill the layer up.
+         */
         new winston.transports.Console({
             format: resolveConsoleFormat()
         })

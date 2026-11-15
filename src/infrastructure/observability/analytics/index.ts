@@ -5,7 +5,7 @@
  * answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`); default `umami`, `posthog` for
  * identity-shaped funnels, `none` to collect nothing.
  *
- * @see docs/understand/analytics.md
+ * @see docs/understand/analytics.md#choosing-a-provider
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/span-context';
@@ -172,19 +172,25 @@ export const buildAnalyticsBase = (
     AnalyticsEventInput,
     'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname' | 'analyticsConsent'
 > => ({
-    // CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
-    // pre-login events cannot be told apart per visitor *by this field*. Under Umami the
-    // IP + user-agent hash below still separates them; under PostHog they do not separate.
+    /**
+     * CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
+     * pre-login events cannot be told apart per visitor *by this field*. Under Umami the
+     * IP + user-agent hash below still separates them; under PostHog they do not separate.
+     */
     distinctId: context.caller.id ?? 'anonymous',
-    // Read from the ambient OTel context — no plumbing needed at the call site. Safe unlike a
-    // "current request" accessor would be: OTel's context manager is built to survive exactly
-    // the async hops a service-tier call adds, which is not true of an ad hoc ALS lookup.
+    /**
+     * Read from the ambient OTel context — no plumbing needed at the call site. Safe unlike a
+     * "current request" accessor would be: OTel's context manager is built to survive exactly
+     * the async hops a service-tier call adds, which is not true of an ad hoc ALS lookup.
+     */
     traceId: getActiveSpanContext().traceId,
     clientIp: context.ip,
     userAgent: context.userAgent,
     hostname: context.host,
-    // Carried through so `emitAnalyticsEvent` can gate on it without every call site of this
-    // function changing.
+    /**
+     * Carried through so `emitAnalyticsEvent` can gate on it without every call site of this
+     * function changing.
+     */
     analyticsConsent: context.analyticsConsent
 });
 
@@ -205,9 +211,11 @@ export const buildAnalyticsBase = (
 export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
     const { analyticsConsent, ...capturable } = event;
 
-    // Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate
-    // that shipped the permissive default would ship it into every project built on it. A
-    // deployment with its own legal advice about server-side, non-cookie analytics can opt out.
+    /**
+     * Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate
+     * that shipped the permissive default would ship it into every project built on it. A
+     * deployment with its own legal advice about server-side, non-cookie analytics can opt out.
+     */
     if (analyticsConfig().NODE_ANALYTICS_REQUIRE_CONSENT && !analyticsConsent) return;
 
     resolveAnalyticsProvider().capture(capturable);
@@ -222,8 +230,10 @@ export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
 export const shutdownAnalytics = (): Promise<void> => {
     if (!provider) return Promise.resolve();
     return provider.shutdown().then(() => {
-        // Clear the handle so a restarted app (or a test) builds a fresh client rather than
-        // reusing a shut-down one, whose `capture()` calls would silently do nothing.
+        /**
+         * Clear the handle so a restarted app (or a test) builds a fresh client rather than
+         * reusing a shut-down one, whose `capture()` calls would silently do nothing.
+         */
         provider = undefined;
     });
 };

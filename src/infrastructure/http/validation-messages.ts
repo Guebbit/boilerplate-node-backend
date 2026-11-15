@@ -92,8 +92,10 @@ const messageFor = (issue: $ZodRawIssue): string => {
 
     switch (issue.code) {
         case 'invalid_type': {
-            // Absent and wrong-typed are different mistakes to whoever has to fix them: one is a
-            // field left out, the other a field filled in wrongly.
+            /**
+             * Absent and wrong-typed are different mistakes to whoever has to fix them: one is a
+             * field left out, the other a field filled in wrongly.
+             */
             return issue.input === undefined
                 ? t('validation.required', { attribute })
                 : t(`validation.type-${TYPE_WORDS[issue.expected] ?? 'other'}`, { attribute });

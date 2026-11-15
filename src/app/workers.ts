@@ -8,7 +8,7 @@
  * `resolveConsumers` — see `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call
  * `consumeFromQueue` itself.
  *
- * @see docs/understand/rabbitmq.md
+ * @see docs/understand/rabbitmq.md#where-the-code-lives
  */
 
 import { consumeFromQueue, isQueueEnabled } from '@infrastructure/adapters/queue';
@@ -27,7 +27,7 @@ import { enabledModules } from '../modules';
  * Register all queue consumers. Called once during app startup — no-op when RabbitMQ is disabled.
  */
 export const registerWorkers = (): Promise<void> => {
-    /*
+    /**
      * Wired unconditionally, not gated behind `isQueueEnabled()` below: this is the one place
      * allowed to see every module's `imageTargets` (see `ImageWriteback` in
      * `infrastructure/adapters/image.worker.ts` for why the worker cannot resolve this itself),
@@ -41,24 +41,30 @@ export const registerWorkers = (): Promise<void> => {
     // Stryker disable next-line all
     logger.info('Registering queue workers...');
     return Promise.all([
-        // `prefetch: 5` — sending an email is I/O-bound, not CPU-bound, so several in flight per
-        // worker is cheap.
+        /**
+         * `prefetch: 5` — sending an email is I/O-bound, not CPU-bound, so several in flight per
+         * worker is cheap.
+         */
         consumeFromQueue({
             queue: EMAIL_QUEUE,
             handler: handleEmailJob,
             schema: EmailJobPayloadSchema,
             prefetch: 5
         }),
-        // `prefetch: 1` — decoding, re-encoding and thumbnailing is the most CPU-bound job this
-        // process runs; one at a time per worker keeps a burst of uploads from starving requests.
+        /**
+         * `prefetch: 1` — decoding, re-encoding and thumbnailing is the most CPU-bound job this
+         * process runs; one at a time per worker keeps a burst of uploads from starving requests.
+         */
         consumeFromQueue({
             queue: IMAGE_QUEUE,
             handler: handleImageDigestJob,
             schema: ImageDigestJobPayloadSchema,
             prefetch: 1
         }),
-        // Every module-declared consumer — webhooks' `worker.webhook.deliver` today, whatever a
-        // future module adds tomorrow, with no edit needed here either time.
+        /**
+         * Every module-declared consumer — webhooks' `worker.webhook.deliver` today, whatever a
+         * future module adds tomorrow, with no edit needed here either time.
+         */
         ...resolveConsumers(enabledModules).map((consumer) => consumeFromQueue(consumer))
     ]).then(() => {
         // Stryker disable next-line all

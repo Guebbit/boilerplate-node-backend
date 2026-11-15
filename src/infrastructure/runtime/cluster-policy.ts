@@ -5,7 +5,7 @@
  * the primary itself, which is a script with process side effects, so each rule can be tested on
  * its own.
  *
- * @see docs/understand/clustering.md
+ * @see docs/understand/clustering.md#two-ways-to-run-it
  */
 
 import { ConfigError } from '@infrastructure/config/define';
@@ -29,7 +29,7 @@ export const workerTarget = (requested: number, availableCpus: number): number =
  * worker count. Called by the primary only, before it forks. `--scale app=N` replicas and PM2
  * cannot be seen from here, so they stay the operator's to set up.
  *
- * @see docs/understand/clustering.md
+ * @see docs/understand/clustering.md#cluster-mode-limits
  * @param environment - the primary's resolved settings
  * @param environment.clustered - `NODE_ENABLE_CLUSTERING`
  * @param environment.configuredWorkers - `NODE_CLUSTER_WORKERS`

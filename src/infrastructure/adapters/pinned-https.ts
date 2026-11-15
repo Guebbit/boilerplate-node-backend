@@ -6,7 +6,7 @@
  * Why its own file: `ssrf-guard.ts` is mocked whole by `remote-image.test.ts`, and keeping the
  * request here keeps that seam.
  *
- * @see docs/understand/defences/ssrf.md
+ * @see docs/understand/defences/ssrf.md#making-the-server-fetch
  */
 
 import type { IncomingMessage, OutgoingHttpHeaders } from 'node:http';
@@ -46,7 +46,7 @@ export const pinnedHttpsRequest = (
         (target) =>
             new Promise<IncomingMessage>((resolve, reject) => {
                 const url = new URL(rawUrl);
-                /*
+                /**
                  * node:https request(options, callback)
                  * https://nodejs.org/api/https.html#httpsrequestoptions-callback
                  *  - `hostname`: the ORIGINAL host, not the pinned IP, so TLS SNI and certificate

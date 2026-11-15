@@ -137,9 +137,11 @@ export const moneyPath = ({
  * @param schema - a schema with at least one {@link moneyPath}
  */
 export const moneyPlugin = (schema: Schema): void => {
-    // Mongoose query middleware: `post('find', fn)` runs after the query resolves, with its result.
-    // `mongooseOptions().lean` is the flag `.lean()` set on this query.
-    // https://mongoosejs.com/docs/middleware.html#types-of-middleware
+    /**
+     * Mongoose query middleware: `post('find', fn)` runs after the query resolves, with its result.
+     * `mongooseOptions().lean` is the flag `.lean()` set on this query.
+     * https://mongoosejs.com/docs/middleware.html#types-of-middleware
+     */
     schema.post(
         ['find', 'findOne', 'findOneAndUpdate', 'findOneAndDelete', 'findOneAndReplace'],
         function reviveLean(this: Query<unknown, unknown>, result: unknown) {

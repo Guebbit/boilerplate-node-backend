@@ -82,9 +82,11 @@ export const resetLocaleOverrides = (): void => {
 const applyLocaleOverrides = (overridesByLocale: Record<string, Record<string, unknown>>): void => {
     const supported = new Set(listSupportedLocales());
 
-    // EVERY supported language is restored, not only the ones with overrides here — deleting a
-    // language's last override must restore it, not leave it unchanged. Synchronous so nothing
-    // observes the language briefly back on its file baseline.
+    /**
+     * EVERY supported language is restored, not only the ones with overrides here — deleting a
+     * language's last override must restore it, not leave it unchanged. Synchronous so nothing
+     * observes the language briefly back on its file baseline.
+     */
     restoreFileBaseline();
 
     const skipped: string[] = [];
@@ -95,9 +97,11 @@ const applyLocaleOverrides = (overridesByLocale: Record<string, Record<string, u
             continue;
         }
 
-        // i18next `addResourceBundle(lng, ns, resources, deep, overwrite)`: merge into the existing
-        // `translation` namespace (deep = true), the database copy winning (overwrite = true).
-        // https://www.i18next.com/overview/api#addresourcebundle
+        /**
+         * i18next `addResourceBundle(lng, ns, resources, deep, overwrite)`: merge into the existing
+         * `translation` namespace (deep = true), the database copy winning (overwrite = true).
+         * https://www.i18next.com/overview/api#addresourcebundle
+         */
         i18next.addResourceBundle(locale, 'translation', overrides, true, true);
     }
 

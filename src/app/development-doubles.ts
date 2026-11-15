@@ -7,7 +7,7 @@
  * Why a runtime `import()`: the production image has no `scenarios/`, and a static import would
  * break both the build and `src-cannot-reach-scenarios`. Only this branch can reach the file.
  *
- * @see docs/build/test-doubles.md
+ * @see docs/build/test-doubles.md#the-door-node-env-development
  */
 import { access } from 'node:fs/promises';
 import path from 'node:path';
