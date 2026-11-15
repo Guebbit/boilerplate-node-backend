@@ -5,8 +5,7 @@ audience: [anyone]
 
 # Tests
 
-Every file here is a distinct guarantee, which is why this page names them one at a time: knowing
-_which_ test covers a rule is most of the value of having it.
+One row per folder. A test file's own name and `describe` say which rule it covers.
 
 Tests live in two places, split by whose rule they check rather than by what they touch:
 
@@ -265,17 +264,6 @@ flowchart LR
     J -->|received| R
 ```
 
-| File                                                                   | What it guarantees                                                                                     |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `tests/integration/journeys/bought-returned-refunded.test.ts`          | Signup to the last returned unit: money to the cent, stock, document numbers, stats, audit, mail.      |
-| `tests/integration/journeys/the-provider-disagrees.test.ts`            | A wrong amount, a refused refund and a payment settled behind the server's back all end with no drift. |
-| `tests/integration/journeys/the-hold-that-was-never-paid.test.ts`      | An abandoned 3-D Secure challenge and an unpaid transfer are expired by the sweep.                     |
-| `tests/integration/journeys/an-accounts-whole-security-life.test.ts`   | Signup, TOTP, a key, a reset, step-up, and the undo and export links lapsing.                          |
-| `tests/integration/journeys/social-login-with-a-second-factor.test.ts` | A provider sign-in stops at the challenge once a second factor is armed.                               |
-| `tests/integration/journeys/an-integrator-start-to-finish.test.ts`     | A key subscribes an endpoint; each event arrives once, signed, in order; a key follows its minter.     |
-| `tests/integration/journeys/a-receiver-that-stays-down.test.ts`        | Five dead chains and three failing days switch a subscription off, mail its owner and audit it.        |
-| `tests/integration/journeys/quiet-for-three-years.test.ts`             | Minimise, warn, deactivate, delete, across addresses, orders, wishlist, users and signup.              |
-
 ## `tests/cluster/` — more than one worker
 
 One process is not the deployment. These boot real workers, because the bugs they look for cannot
@@ -394,8 +382,6 @@ scripts: JavaScript for the k6 Go runtime, not this project's TypeScript. Jest's
 `*.test.ts` and never sees them, and `eslint.config.ts` ignores the directory outright, because
 they import from `k6/http` — a specifier that resolves only inside k6.
 
-| File                     | What it is                                                                                                                                     | Read next                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `tests/load/hit.js`      | One URL at constant virtual users, k6's summary and no thresholds: `npm run bench`.                                                            |
-| `tests/load/browse.js`   | The read path under load: the storefront as an anonymous visitor sees it. Where `hit.js` hammers one URL at a flat rate, this walks a journey. | [Load Testing](../build/load-testing.md) |
-| `tests/load/checkout.js` | The write path: log in, fill a cart, check out. The scenario worth having: a write path no single-URL hammer can exercise.                     | [Load Testing](../build/load-testing.md) |
+| Folder        | What lives here                                                                                                                                              | Read next                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `tests/load/` | k6 scripts: one URL at constant load, the anonymous storefront read path, and the log-in, fill-a-cart, check-out write path (`npm run bench` runs the first) | [Load testing](../build/load-testing.md) |
