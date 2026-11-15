@@ -266,7 +266,7 @@ still passes every other check, and simply stops reacting to the rest of the sys
 product would stop emptying it out of carts and wishlists, a reservation timing out would stop
 cancelling its order.
 
-## Related pages
+## Read next
 
 - [Adding & removing a module](../build/module-lifecycle.md) — the procedure, with the commands
 - [Layers](./layers.md) — the layer stack inside one module

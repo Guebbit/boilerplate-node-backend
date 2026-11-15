@@ -232,7 +232,7 @@ email's attachment, an invoice download is a synchronous HTTP response, never a 
 - [Nodemailer SMTP options](https://nodemailer.com/smtp/) — transport config reference (TLS, auth, pool settings)
 - [Puppeteer API](https://pptr.dev/api) — needed when extending the PDF generation beyond the invoice example
 
-## Related pages
+## Read next
 
 - [Runtime](./runtime.md)
 - [Security](./security.md) — password reset flow ties in here

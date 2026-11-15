@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Security
 
+The security tools in use and the decisions behind them; the narrower topics live in the sub-pages.
+
 ## Main security tools
 
 | Tool                                                                                                 | Why it is here                               |
@@ -486,7 +488,7 @@ That is why auth, headers, origin checks, and rate limiting stay near routes and
 - [OWASP REST Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)
 - [OWASP JWT Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
 
-## Related pages
+## Read next
 
 - [Request Flow](request-flow.md)
 - [api-keys](../modules/api-keys.md) — machine-to-machine credentials, in full

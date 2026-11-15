@@ -126,7 +126,7 @@ keeps the catalogue product's id and resolves the picture LIVE, `null` once that
 so a hard delete can free a product's image without leaving a broken link in someone's order
 history. See `orders/services/current.ts`.
 
-## Related
+## Read next
 
 - [Injection](injection.md) — the path-building half of this family
 - [Client-side](client-side.md) — what a served file can do in a browser

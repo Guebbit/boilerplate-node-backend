@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Redis Cache
 
+Redis as an optional cache for repeated GET responses: the key, the entry, and how the API behaves without it.
+
 ## Why Redis is here
 
 [Redis](https://redis.io/docs/latest/) is used as an **optional server-side cache** for repeated GET responses.
@@ -270,7 +272,7 @@ difference shows up as a `warn` on boot in the second case and silence in the fi
 
 - [Redis pub/sub](https://redis.io/docs/latest/develop/interact/pubsub/) — the mechanism this page deliberately does _not_ use, and the one to reach for if an L1 tier is ever added
 
-## Related pages
+## Read next
 
 - [Clustering & Graceful Shutdown](clustering.md) — where the workers sharing this cache come from
 - [Request Flow](request-flow.md)

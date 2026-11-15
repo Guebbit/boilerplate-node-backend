@@ -218,3 +218,9 @@ rejected too: it needs a separate key store and still leaves plaintext email, lo
 **What would change this:** the EDPB's promised backup guidance, if it requires purging inside
 backups; the shop starting to hold Art. 9 data (SDM then asks for correction runs on the backups);
 a deployment with a single backup copy (the newest snapshot is the ledger's off-host copy).
+
+## Read next
+
+- [Data Protection](./data-protection.md): what is processed, and on what basis.
+- [Data retention: orders and invoices](./data-retention-orders.md)
+- [Data retention: accounts](./data-retention-accounts.md)

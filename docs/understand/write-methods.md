@@ -352,3 +352,9 @@ A new date filter picks one of the three; a fourth spelling needs a card.
 | `tests/unit/scripts/contracts/openapi-bundle.test.ts`                                | an `x-versioned` marker (read, write or `post`) that did not reach the bundled operation                                                                                |
 | `tests/contract/request-contract.test.ts`                                            | a body the contract refuses being accepted                                                                                                                              |
 | `tests/fuzz/endpoints.fuzz.test.ts`                                                  | a hostile body answered with a 5xx                                                                                                                                      |
+
+## Read next
+
+- [Write Methods: POST](./write-methods-post.md)
+- [Write Methods: conditional writes](./write-methods-conditional.md)
+- [Request Input](./request-input.md)

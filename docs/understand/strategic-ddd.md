@@ -215,3 +215,9 @@ neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
 
 See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and what going
 further would cost.
+
+## Read next
+
+- [Tactical DDD](./tactical-ddd.md)
+- [Domain layer & DDD](./domain-layer.md)
+- [Modules](./modules.md)

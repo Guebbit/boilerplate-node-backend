@@ -97,7 +97,7 @@ Both for transport reasons rather than contract ones:
   `src/modules/observability/tests/unit/metrics-scraper.test.ts` covers it there instead, including
   the deny-by-default 503 that fires when the token is unset.
 
-## Related pages
+## Read next
 
 - [Observability Stack Reference](../operate/observability-reference.md) — the external stack and its config
 - [Observability Endpoints](../reference/observability.md) — what each route returns

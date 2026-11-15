@@ -255,3 +255,9 @@ When you change behavior, ask:
 - Is this a **dependency or infrastructure** concern? Go to [Tools](tool-map.md).
 - Is this a **layer ownership** issue? Go back to [Layers](./layers.md).
 - Is this about **process lifecycle**, scaling, or shutdown? Go to [Clustering & Shutdown](./clustering.md).
+
+## Read next
+
+- [Request flow: errors](./request-flow-errors.md)
+- [Request Input](./request-input.md)
+- [Layers](./layers.md)

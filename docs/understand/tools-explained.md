@@ -292,3 +292,8 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 **In this repo.** Five suites — unit, cross-cutting, integration, contract and fuzz (`npm test` runs them all). Config lives in `jest.config.js` and `tsconfig.jest.json`; see [Testing & Docs](../build/testing-and-docs.md).
 
 → [Testing & Docs](../build/testing-and-docs.md)
+
+## Read next
+
+- [Tools](./tool-map.md)
+- [Runtime](./runtime.md)

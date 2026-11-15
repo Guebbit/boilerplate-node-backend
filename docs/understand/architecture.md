@@ -84,7 +84,7 @@ The [Layers](./layers.md) page maps each block to an exact folder.
   that a seam does not have to be substrate-tier: `payments/providers/` is a port owned by the
   domain whose business it is.
 
-## Related pages
+## Read next
 
 - See [Layers](./layers.md) for the exact folder stack.
 - See [Request Flow](./request-flow.md) for the live path of one endpoint.

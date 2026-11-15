@@ -248,7 +248,7 @@ verdict: a service holding a repository is the design, a controller holding one 
 violation. The config states each layer's answer beside its reason, and the defaults are the
 strict reading.
 
-## Related pages
+## Read next
 
 - [Architecture](./architecture.md)
 - [Domain Layer](./domain-layer.md) — where a business rule goes, and the `domain/` folder

@@ -5,6 +5,8 @@ audience: [developer, architect]
 
 # Transactional Outbox
 
+An event is written in the same transaction as the change it announces, and a relay delivers it afterwards.
+
 ## The problem it solves
 
 A payment settles: the money moved, the order is `paid`, the stock is committed. Then the process
@@ -239,3 +241,9 @@ mark rows published with nobody listening.
 - **Three shop events skip the outbox.** `cart.lines_removed`, `wishlist.items_removed` and
   `cart.merge_refused` stay on the in-process bus. They only write inbox notes, and losing one on
   a crash is acceptable, so no outbox row is written for them.
+
+## Read next
+
+- [Events & Logging](./events-and-logging.md)
+- [Idempotency](./idempotency.md)
+- [RabbitMQ](./rabbitmq.md)

@@ -208,3 +208,9 @@ scope, on rows matching these conditions".
 
 The suite is what keeps them honest, and it holds the **deny** cases rather than the happy path: a
 widened scope does not fail a test that only checks the right thing is allowed.
+
+## Read next
+
+- [Authorization: the model](./authorization-model.md): the permission model in full.
+- [Two ways to stay signed in](./sessions.md)
+- [Security](./security.md)

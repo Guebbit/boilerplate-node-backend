@@ -223,7 +223,7 @@ connection. A handler that outlives the wait is redelivered.
 - [amqplib channel API](https://amqp-node.github.io/amqplib/channel_api.html) — the client library used in `src/infrastructure/adapters/queue.ts`
 - [RabbitMQ tutorials (Node.js)](https://www.rabbitmq.com/tutorials) — queue patterns with code examples
 
-## Related pages
+## Read next
 
 - [Email & PDF Rendering](./email-and-rendering.md) — primary queue use case
 - [Runtime](./runtime.md) — startup/shutdown lifecycle

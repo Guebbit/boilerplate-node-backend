@@ -69,7 +69,7 @@ A control nobody can observe is a control nobody can trust.
 | Tamperable audit logs               | a writable log store with no integrity     | Logs are append-only to stdout from this process's side. The audit lines (`log_type=audit`) can be forwarded off the host to a target the operator chooses — object lock, a separate log host — by the Alloy pipeline of the `monitoring` profile; no target, no off-host copy. An insert-only audit database fails (its role needs `createIndex`, so a compromised app could plant a TTL index that wipes it), and a hash chain kept in the attacker's own database proves little — [Monitoring and alerts](../../operate/first-deploy.md#monitoring-and-alerts). |
 | Outdated / vulnerable components    | no patch process, pinned old versions      | See [Supply chain](supply-chain.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
-## Related
+## Read next
 
 - [Data layer](data-layer.md) — the services this compose file is hiding
 - [Supply chain](supply-chain.md) — the image's contents

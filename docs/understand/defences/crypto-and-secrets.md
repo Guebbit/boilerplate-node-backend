@@ -87,7 +87,7 @@ high-entropy and one-time. There is no low-entropy secret to stretch, and argon2
 to every token check for no gain against an offline attacker who cannot guess those bits anyway. The
 reasoning is written at `src/infrastructure/security/hash-token.ts` rather than left to be re-derived.
 
-## Related
+## Read next
 
 - [Authentication](authentication.md) — what these primitives are holding up
 - [Data layer](data-layer.md#secrets-stored-with-the-data) — the same secrets, from the storage side

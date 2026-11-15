@@ -70,7 +70,7 @@ bug in a native library lands as an unprivileged process rather than as root —
 [Infrastructure](infrastructure.md#the-container-and-the-image). That is the mitigation that
 actually applies to the rows above, since none of them can be prevented from inside `src/`.
 
-## Related
+## Read next
 
 - [Injection](injection.md) — where most "see the injection section" rows above go
 - [Denial of service](denial-of-service.md) — the availability half

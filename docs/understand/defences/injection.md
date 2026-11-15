@@ -106,7 +106,7 @@ in `parseBody`. That is not a sanitiser — it is a **type gate**: a value that 
 shape never becomes a value of the wrong shape, it becomes a 422. Most rows above are closed by
 that gate rather than by anything written for the attack by name.
 
-## Related
+## Read next
 
 - [Files and uploads](files-and-uploads.md) — the path half of this family
 - [Email](email.md) — the SMTP half

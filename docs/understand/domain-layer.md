@@ -200,7 +200,7 @@ The expensive option is an aggregate root, a repository returning domain objects
 validator — worth the redesign only once a real core domain argues, by hand, about rules the
 `domain/` folder's plain functions can no longer keep straight.
 
-## Related pages
+## Read next
 
 - [Layers](./layers.md) — the folder map
 - [Modules](./modules.md) — the tier rules and their naming

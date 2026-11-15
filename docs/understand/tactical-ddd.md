@@ -277,7 +277,7 @@ sake: count `__v`, not `status`.
 The line this repo draws: a value type or a rules table where the rule is real and already
 duplicated, and no aggregate until something needs state a pure function cannot see.
 
-## Related pages
+## Read next
 
 - [Domain layer](./domain-layer.md) — what earns a place in `domain/`, and the lint rule; §5 covers
   what an aggregate slice would cost, and the conditions that would make it the right call

@@ -212,3 +212,8 @@ windows are not repeated here — they live in the [processing register](#proces
   obligations is a question for that controller's own counsel.
 - Not complete forever. A new collection that stores personal data, or a new sub-processor, earns
   a row here in the same commit that adds it — the same habit [the file glossary](../reference/start.md#keeping-this-page-true) asks for.
+
+## Read next
+
+- [Data Retention](./data-retention.md): how long each kind of data is kept.
+- [Tenancy](./tenancy.md)

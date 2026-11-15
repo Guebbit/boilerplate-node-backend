@@ -200,7 +200,7 @@ Neither mode saves the account lookup: both read the account and its roles on ev
 "stateless" token saves nothing here. `cookie` adds one indexed read of the session row, where
 `jwt` verifies a signature instead.
 
-## Related pages
+## Read next
 
 - [Sessions](../modules/account-sessions.md) — the files, the storage and the switch, step by step
 - [Authentication defences](./defences/authentication.md) — what each mode defends against, in the

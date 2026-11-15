@@ -97,7 +97,7 @@ where the object currently is.
 | State-machine violations             | cancel after shipped, refund twice                        | `ORDER_EVENTS` names every legal move with its `from` set AND the actors it belongs to, so "cancel after shipped" and "a customer marking their own order paid" are both absent events — `orders/domain/lifecycle.ts` |
 | Context-dependent authorization gaps | "owner can edit", but the owner check reads a stale value | The owner clause is compiled from the verified token at request time, not carried in the document being edited.                                                                                                       |
 
-## Related
+## Read next
 
 - [Authentication](authentication.md) — establishing the identity these checks read
 - [Business logic](business-logic.md) — where the state machine above actually lives

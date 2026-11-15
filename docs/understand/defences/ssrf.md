@@ -105,7 +105,7 @@ Reuse the guard rather than writing a fresh check: the IPv6 embedding forms alon
 Teredo — are a class of bug a hand-rolled range test gets wrong. See
 [The delivery path](../../modules/webhooks.md#the-delivery-path).
 
-## Related
+## Read next
 
 - [webhooks](../../modules/webhooks.md) — one of the two outbound paths that take an externally supplied URL (the other is the avatar download)
 - [The API surface](api-surface.md) — consuming upstream APIs safely

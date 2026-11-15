@@ -65,7 +65,7 @@ first password reset — the check on `mailConfig` in `adapters/config.ts`, fold
 `app/config.ts`. Mail that quietly does not send is worse than mail that fails loudly: the
 reset flow appears to work and the user simply never receives it.
 
-## Related
+## Read next
 
 - [Authentication](authentication.md#recovery-and-changing-the-credential) — the flows that depend on the mailbox
 - [Injection](injection.md#into-a-protocol-or-a-document) — the CRLF family this page's header row belongs to

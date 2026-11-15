@@ -134,7 +134,7 @@ Full detail: [Every attack, A to Z](./a-to-z.md).
   [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
   page. The rows that need both halves are marked **shared** in [Client-side](client-side.md).
 
-## Related
+## Read next
 
 - [Security](../security.md) — the tools, keys and budgets, from the operator's side
 - [Authorization](../authorization.md) — how permission rules, sets and roles are designed
