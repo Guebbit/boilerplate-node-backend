@@ -23,6 +23,8 @@
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
 import '@infrastructure/config/dotenv';
+// Second, before anything that builds a rate limiter: lifts every budget for this process.
+import { deploymentRateLimitRedisUrl } from './support/scripted-environment';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
 // Registers the doubles a seed drives (the fake payment provider, the mail log) — see its header.
@@ -33,33 +35,12 @@ import { currentEnvironment, installEnvironment } from '@infrastructure/config/s
 import { emptyDatabase, isDatabaseEmpty } from './support/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { limitsRedisUrl } from '@infrastructure/adapters/limits-redis';
 import { clearRateLimitCounters } from '@infrastructure/http/middlewares/rate-limit-store';
 import { isRelaxedEnvironment, nodeEnvironment } from '@infrastructure/runtime/config';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { seedCredentials } from '@scenarios/accounts';
-import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
-
-/**
- * The `limits` Redis as the DEPLOYMENT configured it, read before {@link SCRIPTED_RATE_LIMITS}
- * below switches the limiter to in-memory counting for this process. `--reset` clears the counters
- * there, since a reseed leaves the same keys behind (same ids, same email hash, same address).
- */
-const deploymentRateLimitRedisUrl = limitsRedisUrl();
-
-/*
- * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and
- * this makes several hundred requests from one address in seconds. Left alone, the auth rung
- * refuses the shop owner's very first login and the build dies on a 429 that names none of this.
- *
- * Safe because of the production gate below — and because `buildRateLimiter` reads the
- * environment once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
- * per request. Setting these here, before that import ever runs, binds only the app this process
- * is about to boot, for as long as the seed takes. `dotenv/config` above has already run and
- * never overwrites a key that is present.
- */
-installEnvironment(SCRIPTED_RATE_LIMITS);
+import { DEMO_BANK_TRANSFER } from '@scenarios/rate-limits';
 
 /*
  * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
@@ -67,7 +48,7 @@ installEnvironment(SCRIPTED_RATE_LIMITS);
  * attempts to fictional recipients, which is both noise and a reputation risk that belongs to
  * nobody. `log` renders each one (so a broken template still fails here) and opens no socket.
  *
- * Overridden rather than defaulted, same as the budgets above: `.env` naming a real mail server
+ * Overridden rather than defaulted, same as the budgets in `./support/scripted-environment`: `.env` naming a real mail server
  * is exactly the case this protects against.
  */
 installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
@@ -81,7 +62,7 @@ installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
 installEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
 
 /*
- * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
+ * Applied only where nothing is set, unlike the budgets in `./support/scripted-environment`: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
  */
