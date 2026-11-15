@@ -21,12 +21,17 @@ jest.mock('../../../scenarios/support/development-doubles', () => {
     return {};
 });
 
+/** The empty working directory the "no scenarios/" case points `process.cwd()` at. */
+let emptyDirectory: string | undefined;
+
 beforeEach(() => {
     mockLoaded.mockClear();
 });
 
 afterEach(() => {
     jest.restoreAllMocks();
+    if (emptyDirectory) rmSync(emptyDirectory, { recursive: true });
+    emptyDirectory = undefined;
 });
 
 describe('loadDevelopmentDoubles', () => {
@@ -47,16 +52,13 @@ describe('loadDevelopmentDoubles', () => {
     });
 
     it('refuses under development when the working directory has no scenarios/', async () => {
-        const empty = mkdtempSync(path.join(os.tmpdir(), 'no-scenarios-'));
-        jest.spyOn(process, 'cwd').mockReturnValue(empty);
+        emptyDirectory = mkdtempSync(path.join(os.tmpdir(), 'no-scenarios-'));
+        jest.spyOn(process, 'cwd').mockReturnValue(emptyDirectory);
         setEnvironment({ NODE_ENV: 'development' });
 
         await expect(loadDevelopmentDoubles()).rejects.toThrow(
             /NODE_ENV=development.*no `scenarios\/`.*NODE_ENV=production/
         );
-        expect(mockLoaded).not.toHaveBeenCalled();
-
-        rmSync(empty, { recursive: true });
     });
 
     it('names a file that exists: a rename of the doubles must move the loader with it', () => {

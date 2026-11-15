@@ -81,6 +81,12 @@ The full list, and the env var for every port, is in
 [Pairing & Ports](./pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend
 owns `8080–8099`, which is what lets both stacks be up at once.
 
+### The `app` stopped with `Exited (1)`
+
+`app` and `cron` restart on failure at most five times, so a boot refusal (a bad variable, a
+development setting in the wrong place) ends as `Exited (1)` in `podman ps -a` instead of looping.
+`npm run compose -- logs app`: the first lines name the refusal.
+
 ### Rehearse the dead man's switch
 
 The alert pipeline watches itself: Alertmanager pings an outside watcher (Gatus) every minute, and

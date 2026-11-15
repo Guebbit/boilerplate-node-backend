@@ -24,11 +24,10 @@ services:
         build:
             target: dev
 
-        # no (default): Don't restart the container automatically
-        # always: Always restart the container if it stops for any reason (even manual stop)
-        # unless-stopped: same as "always", unless the container is manually stopped
-        # on-failure: Restart the container if it exits with a non-zero exit code (on-failure:N to limit to N retries)
-        restart: unless-stopped
+        # `on-failure:5`, not `unless-stopped`: a boot refusal (a bad variable, a development setting
+        # in the wrong place) ends as `Exited (1)` in `podman ps -a`, where a silent loop once
+        # surfaced in the frontend only as "CORS". Production keeps its own policy.
+        restart: 'on-failure:5'
 
         # Port mapping HOST_IP:HOST_PORT:CONTAINER_PORT. Loopback by default: `db:bootstrap` seeds
         # well-known credentials (`root@root.it` / `Demo-Admin1!` unless every `NODE_SEED_*_PASSWORD`
@@ -193,7 +192,8 @@ services:
             context: .
             dockerfile: docker/Dockerfile
             target: dev
-        restart: unless-stopped
+        # Same as `app`: a refusal ends as `Exited (1)` instead of looping.
+        restart: 'on-failure:5'
         deploy:
             replicas: 1
         environment:
