@@ -226,7 +226,7 @@ customer's mail is sent from a listener on these events ([Customer mail](../unde
 `return.requested` acknowledges, `return.decided` (internal) answers staff's decision, `return.closed`
 says the money went back.
 
-## The withdrawal button
+## The withdrawal button {#the-withdrawal-button}
 
 The button is **server-driven**: `OrderActions.withdraw` says whether it is offered,
 `OrderActions.withdrawBlocked` says why not (`all_excluded`, `window_closed` or `nothing_left`, the
@@ -237,53 +237,7 @@ client must not re-implement the lifecycle, because "a second copy in a separate
 how the two come to disagree". The frontend never counts the days. The clock itself is
 [`orders`'](./orders.md#the-withdrawal-window).
 
-The call always answers one thing: **201 and a `Return`** (the Stripe and GitHub rule: one resource
-per endpoint). Where the goods are decides what that record is:
-
-```mermaid
-flowchart TD
-    A["POST /returns — reason: withdrawal"] --> B{"order status"}
-    B -- "pending · paid · processing" --> C["orders' cancel<br/><i>refund in full · stock released</i>"]
-    C --> D["a Return, born closed<br/><i>no lines · refundAmount = the order, or 0 if unpaid</i>"]
-    D --> G["acknowledgement mailed<br/><i>201 + Location</i>"]
-    B -- "something has shipped" --> E["a Return, born approved<br/><i>lines coming back: at most what shipped,<br/>less what earlier returns took</i>"]
-    E --> F["acknowledgement mailed<br/><i>201 + Location, with date and time</i>"]
-    B -- "kind: cancellation" --> X["the remainder of one fulfillment order<br/>canceled — see below"]
-```
-
-**Before dispatch** reads `fulfillment.shipped`, not the order's status: an order that shipped in part
-is still `processing`, and refunding it whole would refund goods the buyer already holds. A withdrawal
-that loses a race against a shipment is opened again as what the order now is — a return, not a cancel:
-the refund waits for the goods.
-
-- **Before dispatch the Return is a record, not a flow.** The order is still in the shop's hands, so
-  `orders`' cancel already does everything — refund in full, release the stock hold. The Return
-  written beside it is **closed at birth** (`reason: withdrawal`, `decidedAt` and `closedAt` now, no
-  `lines` because no goods are expected, `refundAmount` the whole order — zero when nothing was
-  paid). It exists so every withdrawal has its own dated record (Art. 11a(3) asks the trader to
-  acknowledge the date, time and content), and so `GET /returns?orderId=` answers "what happened to
-  my withdrawal" the same way whatever the order's state. The client reloads the order from
-  `Return.orderId`.
-- **One transaction.** The cancel (status, stock, `order.canceled` row) and the record (the Return,
-  `return.requested`, `return.closed`) commit together under the order's lock row, as a remainder
-  cancel does: a crash leaves both or neither, never a canceled order with no dated proof. A cancel
-  refused by a shipment that landed first writes nothing.
-- **The money does not move through the Return.** The cancel's own refund runs as for any cancel
-  (the `refund` on `order.canceled`, finished by the refund sweep if the provider refuses), so its `payment.refunded`
-  carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
-  The credit note follows that event as usual.
-- **Events:** the order's own `order.canceled` first, then `return.requested` and `return.closed`
-  back to back (both written in the transaction that writes the return). A subscriber to `return.closed` therefore also hears about withdrawals that never
-  had goods.
-- **One mail from this module:** the acknowledgement, with no postage line and no address (nothing
-  is posted). `return-closed` is for a return whose goods came back, so it is never sent here. Any
-  notice about the money is the refund's, which belongs to `payments`, not to this module.
-- An order's `returnStatus` stays `none`: a Return with no lines holds no goods, and
-  `projectReturnStatus` ignores it.
-- **The buyer does it, or staff record it for them** with the day and channel the buyer stated it: see [Staff open a return for the buyer](#staff-open-a-return-for-the-buyer).
-- **The acknowledgement** carries the order, the exact date and time (UTC, spelled out), and who
-  pays the postage — Art. 14(1) permits the consumer to bear it only if told beforehand, so the
-  same `NODE_RETURN_POSTAGE_PAYER` value drives the copy and is frozen on the return.
+Full detail: [The withdrawal button and its deadlines](./returns-withdrawal.md#the-withdrawal-button).
 
 ## Staff open a return for the buyer {#staff-open-a-return-for-the-buyer}
 
@@ -292,36 +246,7 @@ use the same door, `POST /returns` (Solidus has one endpoint for both; Shopify's
 takes `requestedAt` for the same reason). The order is the buyer's or, for such a caller, anyone's;
 anyone else still gets a 404.
 
-| Staff open                       | Born                                   | Deadline                                       | Art. 16 goods            | Recorded                                      |
-| -------------------------------- | -------------------------------------- | ---------------------------------------------- | ------------------------ | --------------------------------------------- |
-| `defective` `wrong_item` `other` | `approved`, `decidedAt` now            | waived; judged on `requestedAt` for the record | taken (`other` only)     | `openedBy: staff`, `policyExceptions`         |
-| `withdrawal`                     | `approved` (or closed before dispatch) | the legal window, judged on `requestedAt`      | refused as for the buyer | `openedBy: staff`, `statedVia`, `requestedAt` |
-
-- **Opening it is the decision.** One transaction writes `return.requested` and `return.decided`
-  (approved), so the buyer gets one mail, with the return address and the day they asked.
-  A wrong decline is fixed the same way: open a new return for the same lines. `declined` and
-  `canceled` are final, so a decision stays a record and is never rewritten.
-- **`requestedAt`** is when the buyer asked, never in the future and never before the order. Staff may
-  backdate it; the audit names the staff member. Every return carries it (the server stamps now for
-  the buyer), and the deadline is judged on it, so a request made inside the window and entered late
-  records no exception.
-- **`policyExceptions`** is frozen at creation, like Solidus' `acceptance_status_errors`:
-  `window_closed` when the reason's deadline had passed on `requestedAt`, `excluded_goods` when a
-  goodwill return takes made-to-order goods. A defect or a wrong item never records the second: the
-  guarantee reaches those goods. The `Return` shows it, so the next staff member sees it was an exception.
-- **A withdrawal is not theirs to waive.** It keeps its legal window and its Art. 16 exclusion, judged
-  on `requestedAt` (CRD Art. 11(2): timing counts from when it was SENT). `requestedAt` and
-  `statedVia` (`phone`, `email`, `letter`, `other`) are required; the buyer's own withdrawal is
-  stamped now and `online`, and the buyer sending either is a 422 `RETURN_STATEMENT_INVALID`.
-- **Keys.** Shipped goods: `update:Return`. Before dispatch the order is cancelled and refunded, which
-  needs `create:Refund` (the money) and `update:Order` (the cancel, run on the operator's scope with
-  the staff member on the timeline). A remainder cancel needs `create:Refund`.
-- **Fresh session.** Any request carrying `statedVia` asks for one, whoever sends it: the record is a
-  legal act and, before dispatch, a refund. Written as "the body carries it", not "the caller is
-  staff", so it fails closed.
-- **The mail** tells the buyer the day they stated it, the channel and the day the shop wrote it
-  down: their dated proof (Art. 11(4)). `return.requested` carries `requestedAt` and `statedVia`.
-- **Not built:** a dedicated key for the waiver. `update:Return` already decides every request.
+Full detail: [The withdrawal button and its deadlines](./returns-withdrawal.md#staff-open-a-return-for-the-buyer).
 
 ## Lines
 
@@ -342,22 +267,12 @@ status follow the commit, so a lost race announces nothing.
 The lock is a row of its own because `returns` must not write `orders`' document, and a counter of
 returned quantities would be a second copy of the truth.
 
-## The two deadlines
+## The two deadlines {#the-two-deadlines}
 
 An order freezes two deadlines the moment it is delivered, and a request is judged by the one that
 belongs to its reason:
 
-| Reason                    | Deadline                                                                                              | Art. 16 exclusion |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- |
-| `withdrawal`, `other`     | `withdrawUntil` plus one silent day: the shop's period (`NODE_WITHDRAWAL_PERIOD_DAYS`, 30 by default) | applies           |
-| `defective`, `wrong_item` | `conformityUntil`: two years from delivery, plus seven days of margin                                 | does not apply    |
-
-The second row is the legal guarantee of conformity (Directive 2019/771 Art. 10(1), Art. 21: not
-waivable). Art. 16 CRD only takes the right of **withdrawal** away, so a made-to-order item that
-arrives broken is still the shop's to put right. A reason past its deadline is a 409
-`RETURN_WINDOW_CLOSED`, worded for the guarantee when the reason was a defect or a wrong item.
-`reasonsOpenAt` (`domain/reasons.ts`) is the one rule; the door and [the options
-read](#the-options-read) both ask it.
+Full detail: [The withdrawal button and its deadlines](./returns-withdrawal.md#the-two-deadlines).
 
 ## The refund deadline {#the-refund-deadline}
 
@@ -366,48 +281,13 @@ one from `order.canceled`), is stamped with its legal deadline when the record o
 `dueRule` for why. The stamp is stored, not recomputed, so a later change of time zone or setting
 never moves a date a buyer was already owed.
 
-| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by                               |
-| --------------------------------------------- | ------------------------------------------------------- | ------------ | ---------------------------------------- |
-| withdrawal return, goods or proof in time     | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on the proof, else on receipt |
-| withdrawal return, goods or proof after that  | the moment they arrived: pay now                        | `withdrawal` | `returns`, same                          |
-| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`                                |
-| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`                               |
-| defective or wrong item                       | the moment the goods or the proof came, the earlier     | `faulty`     | `returns`, on receipt                    |
-| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                                     |
-
-The table is `refundDueByOf` (`domain/refund-due.ts`); `services/refund-due.ts` adds the one thing a
-domain file cannot reach, the shop's calendar. The shop may wait for the goods, whichever comes
-first, but waiting never moves the last date (Directive 2011/83/EU Art. 13(3); guidance 2021/C
-525/01 §5.5.3). Nothing refunds by itself: the system computes, shows and reminds.
+Full detail: [The withdrawal button and its deadlines](./returns-withdrawal.md#the-refund-deadline).
 
 ### Proof of sending {#proof-of-sending}
 
-`POST /returns/{id}/proof-of-sending` (`services/proof.ts`) is staff recording the carrier's document
-for the parcel the buyer sent back: the date on it (`proofOfSendingAt`), the carrier and the
-reference. It needs `receive:Return`, the key that receives the goods, and an `approved` return; it
-is recorded **once** (a second call is a 409 `RETURN_PROOF_ALREADY_RECORDED`) and leaves the return
-`approved`. The return's `actions.recordProof` says whether it is offered.
+See [The withdrawal button and its deadlines](./returns-withdrawal.md#proof-of-sending).
 
-| Reason                  | What the proof does                                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| withdrawal              | opens the refund now, quoted with no handling deduction, so money can go back before the parcel arrives (Art. 13(3): goods or proof, the earlier) |
-| defective or wrong item | records the proof only: the remedy (refund, repair, replace) is decided at receipt; a refund picked then is due the earlier of goods and proof    |
-
-A `sentAt` in the future is a 422 `RETURN_PROOF_DATE_INVALID`. Staff **cannot cancel** a return whose
-proof opened its refund: that is a 409 `RETURN_REFUND_OPEN`, because the refund is owed and a canceled
-return would no longer add up (the check rides in the cancel's own conditional write). The return's
-`actions.cancel` is false from then on, so no client offers the button. A proof on a
-faulty item opens nothing, so that return can still be canceled.
-
-After a proof on a withdrawal, **receiving the goods** restocks as usual and opens no second refund.
-It also refuses a handling deduction above 0 with a 409 `RETURN_REFUND_OPENED_ON_PROOF`: the shop can
-no longer withhold the refund, so what the buyer damaged is claimed from them separately. If that
-refund already settled, the receipt closes the return in the same step; if it is still owed, the
-return stays `received` and the `PAYMENT_REFUNDED` listener closes it when it settles. A parcel lost
-after a proof is received with 0 on every line and follows the same path. The order's timeline gets a
-`proof_of_sending_recorded` row (the return's id only: the carrier and reference stay on the return).
-
-## Goods with no right of withdrawal
+## Goods with no right of withdrawal {#goods-with-no-right-of-withdrawal}
 
 Art. 16(c)–(d) of the Consumer Rights Directive takes the right away from some goods — those made
 to the customer's specifications or clearly personalised, and those liable to deteriorate or expire
@@ -415,35 +295,7 @@ rapidly. A product carries `noWithdrawal: true` (an admin sets it in the
 product form); the flag is **frozen onto each order line at checkout**, like every other line field,
 so changing the product later cannot rewrite what a customer was sold.
 
-- A withdrawal that names no lines leaves excluded lines out of what comes back.
-- A `withdrawal` or `other` return that names an excluded line is refused (422,
-  `RETURN_LINES_INVALID`); a `defective` or `wrong_item` one is not ([the two deadlines](#the-two-deadlines)).
-- A withdrawal **before dispatch** takes the eligible goods; only an order made wholly of excluded
-  goods is refused (422, `all_excluded` on the button). The ordinary cancel is the shop's own policy
-  and is unaffected.
-    - While the order is `pending` or `paid` the shop has not started, so the whole order is cancelled,
-      the excluded line included (the buyer re-orders what they still want).
-    - Once it is `processing` the excluded line is the shop's work: only the other shipment groups are
-      cancelled (a `kind: cancellation` return each) and the made-to-order group stays, with the order.
-    - An edge the flag cannot see: when the eligible groups are already cancelled, the button still
-      shows (the order's lines are frozen) and a second withdrawal answers `RETURN_NOTHING_TO_CANCEL`.
-- `OrderActions.withdraw` is `false` on an order made only of excluded goods (`withdrawBlocked:
-all_excluded`).
-- Excluded units never come back, so they never keep the order from reading `returned` — and a
-  return that leaves them behind is never a "full" return, so delivery is not refunded with it.
-
-**Sealed hygiene goods** (Art. 16(e)) keep the right until the customer opens them after delivery.
-The flag cannot see that, so it is not the switch for them: staff handle an opened return outside
-the flow.
-
-**Digital content** (Art. 16(m): the right is lost once delivery starts, with the consumer's express
-consent) is not modelled: there is no consent step at checkout, and `noWithdrawal` is **not** the
-switch for it. Until one is built, the full withdrawal period is the lawful default (Art. 14(4)(b)).
-
-- Accepting the terms, or a pre-ticked box, is not express consent (Commission guidance on Directive
-  2011/83/EU), so a clause in the shop's own terms-and-conditions text does not replace the step.
-- The step belongs with digital downloads: a marker on the product, the consent, a stamp for when
-  supply began, and the Art. 8(7)(b) confirmation.
+Full detail: [The withdrawal button and its deadlines](./returns-withdrawal.md#goods-with-no-right-of-withdrawal).
 
 ## The statuses beside the order's own
 
@@ -467,72 +319,11 @@ goods coming back.
 move; the next move stamps again. `paymentStatus` is not: `payments` stamps it inside the refund's
 settlement transaction, because no later refund exists to repair it after the last one.
 
-## What the customer gets back
+## What the customer gets back {#what-the-customer-gets-back}
 
 Receiving is where the two clocks meet, and they are kept apart on purpose:
 
-```mermaid
-sequenceDiagram
-    participant W as warehouse
-    participant R as returns
-    participant I as inventory
-    participant P as payments
-    W->>R: POST /returns/{id}/receive
-    R->>R: one transaction
-    R->>I: approved → received, and one restock per line
-    R->>P: open the refund record, carrying the returnId
-    Note over R,P: commit — the goods are back on sale, the debt is on file
-    R->>P: ask the provider
-    alt the money went back
-        P-->>R: settled — return closed
-    else the provider refused
-        P-->>R: failed, still open
-        Note over P,R: the payment sweep retries the same refund; payment.refunded closes the return
-    end
-```
-
-- **A refused refund does not change the answer.** `POST /returns/{id}/receive` answers 200 either
-  way: `received` means the money is still owed (its refund record is already on the payment, where
-  the sweep and the attention list follow it), `closed` means it went back.
-- **Received is a fact about a parcel; closed is a fact about money.** The status move and the
-  restock and the refund RECORD are ONE transaction, so units are never on the shelf behind a return
-  that reads `approved`, and a received return always has its debt on file. Money cannot roll back,
-  so only the provider call is outside it: the record carries this return's id, so a refund the
-  provider refused (or one never sent) is retried by the payment sweep and closes the return when
-  it lands. A return is never stuck
-  `received` for a reason nobody is retrying.
-- **Restock happens on `received`, not on refund** — two facts, two moments. No reservation is
-  claimed: the order's hold was `committed` at payment and stays that way.
-- **Staff choose how many units go back on sale.** `POST /returns/{id}/receive` takes
-  `lines: [{ productId, restock }]`, `0 <= restock <= the line's quantity`. A product not listed goes
-  back in full and absent `lines` restocks everything (the Solidus and Shopify default). Only the
-  restocked units reach `restockReturnedLines` and, in the same transaction, the backorder
-  allocation, so a broken unit is never handed to a paying backorder buyer. A line at 0 writes no
-  ledger row. The count is recorded on each line as `restocked`, and the audit row of
-  `admin.return.received` names every line's count. An unknown or repeated product, or a count over
-  the line, is a 422 `RETURN_RESTOCK_INVALID` on `lines.<i>.restock`, checked before anything is
-  written. The refund never reads it. For a hard-deleted product nothing moves, count or no count.
-  A parcel lost on its way back is received with 0 on every line: this shop's policy is to bear
-  that risk and refund on proof of sending (the EU leaves the final risk to national law), so the
-  money is owed and nothing goes on the shelf. `restocked` is staff's bookkeeping; the buyer's page
-  does not show it.
-- **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
-  an optional handling deduction (Art. 14(2)) staff enter at receipt. It is fixed then and shown as
-  `refundAmount`. `src/modules/returns/domain/refund-amount.ts` is pure integer arithmetic.
-- **Delivery is refunded by whichever cancel or return takes the _last unit_ of the order** — every
-  unit then cancelled or back, counted against ORDERED quantity — and never twice (see
-  [below](#the-delivery-across-several-cancels-and-returns)). For a return that closes the order it is capped at the cheapest standard delivery the shop offers, so a paid
-  express upgrade stays with the shop (Art. 13(2)); on a €150 express order, where standard would
-  have been free, the refundable delivery is zero. `pickup` is collection, not delivery, and does
-  not count. Goods that were faulty or not what was ordered are the seller's own doing: the whole
-  delivery goes back. What an earlier cancel or return already refunded of the delivery is taken off
-  first, so the cap is on what is still owed.
-- **The refund is clamped to what the payment has left**, so a goodwill refund made earlier can
-  never make a return over-refund. The credit note follows the refund
-  ([`invoicing`](./invoicing.md)).
-- **Return postage** follows `NODE_RETURN_POSTAGE_PAYER`. It changes what the customer is told, not the
-  refund: with `consumer` the customer posts at their own cost (Art. 14(1), told beforehand), with
-  `shop` the shop covers it.
+Full detail: [Remedies for a return](./returns-remedies.md#what-the-customer-gets-back).
 
 ## The remedy ladder {#the-remedy-ladder}
 
@@ -542,34 +333,7 @@ choice; then a price reduction or the money back. The buyer states a wish when t
 return (`preferredRemedy`, 422 `RETURN_REMEDY_INVALID` for any other reason); staff choose the
 `remedy` at receipt (`refund` by default). A withdrawal and a goodwill return always refund.
 
-```mermaid
-flowchart TD
-    R["receive: remedy"] --> RF["refund<br/><i>today's flow: restock, refund, close</i>"]
-    R --> RP["replace<br/><i>units reopen on the SAME order<br/>and ship again; close at 0</i>"]
-    R --> RE["repair<br/><i>guarantee +12 months, once;<br/>close at 0</i>"]
-    RP --> D["delivery: reopen, top up the hold,<br/>owe what the shelf cannot cover"]
-    RE --> O["orders: conformityUntil +12 months,<br/>conformityExtendedAt marks it"]
-    RF --> M["payments: the refund record"]
-```
-
-- **Money and units.** `replace` and `repair` move no money and write no credit note. They close the
-  return in the receipt's transaction and **stop holding its quantities**: the buyer has a unit
-  again, so it stays returnable under the guarantee, and it never takes the delivery refund
-  (`holdsReturnedGoods`, `accountsOf`).
-- **`replace`** is the same product, same order ([delivery](./delivery.md#replacement-after-a-return)).
-  Restock is still per line (a defect is usually 0, a wrong item usually all).
-- **`repair`** extends `conformityUntil` by 12 months (Directive 2024/1799), once per order; the
-  unit is posted back by staff.
-- **No deduction.** A guarantee remedy is free of charge (2019/771 Art. 14(1)), so a
-  `handlingDeduction` on a `defective` or `wrong_item` return is a 422 `RETURN_DEDUCTION_INVALID`.
-- **Staff may differ from the wish** (Art. 13(3): impossible or disproportionate). Nothing is
-  refused; the audit row of `admin.return.received` carries both `remedy` and `preferredRemedy`.
-- **Records.** `Return.remedy`, the order timeline's `return_closed` row, and the `return.closed`
-  webhook carry the remedy. Two mails: `return-replaced` and `return-repaired`; the request and
-  approval mails for a defect or a wrong item tell the buyer they choose, and that a repair extends
-  the guarantee by 12 months.
-- **Price reduction** (Art. 15) needs no door: the Refund button, with the guide entry
-  [A faulty item](../use-the-shop/when-something-goes-wrong.md#faulty-item).
+Full detail: [Remedies for a return](./returns-remedies.md#the-remedy-ladder).
 
 ## Reads for the stats
 
@@ -578,7 +342,7 @@ were received (`received`, `closed`), dated by `receivedAt` in the shop's zone (
 `{status, receivedAt}`). A return asked for but not received counts nothing. [`stats`](./stats.md)
 composes them into "units reversed" and the return rate.
 
-## Cancelling what has not shipped
+## Cancelling what has not shipped {#cancelling-what-has-not-shipped}
 
 Once any shipment left, an order can no longer be cancelled whole. What remains is cancelled **one
 fulfillment order at a time**, as a Return of `kind: cancellation`, **closed when made**: its `lines`
@@ -587,92 +351,11 @@ are the remainder, and the refund of them follows the commit. The legal basis is
 Shopify rule for the staff side: a partly shipped order cannot be cancelled, you refund the unshipped
 items, under the Refund permission.
 
-| Case                     | The door                                                           | Result                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| nothing shipped anywhere | the order's own cancel (as always)                                 | order `canceled`, full refund including delivery; every fulfillment order cancelled                      |
-| something shipped        | `POST /returns` `{kind: cancellation, fulfillmentOrderId, reason}` | the remainder's lines cancelled; refund of those lines (+ delivery on the last unit); units back on sale |
-| everything shipped       | a return, as always                                                | —                                                                                                        |
+Full detail: [Remedies for a return](./returns-remedies.md#cancelling-what-has-not-shipped).
 
-Why here and not in `delivery`: a remainder cancel moves **money, stock and the shipping rule**, and
-only this module already reaches all four. In **one transaction**, under the order's lock row, it
-asks `delivery` to mark the lines (`cancelRemainder`, which also recomputes the order's summary and
-moves its status when that completes it), gives the units back (`orders.releaseStock`, which drives the hold) and
-writes the Return and opens its refund record (`openReturnRefund`, `reason: cancellation`, the
-Return's id). After the commit, when the settlement cancelled the order (every parcel lost), `returns` runs the
-cancel report `orders` handed back: the audit row and the analytics event. Then the provider call
-(`sendOpenedRefund`); a refund the provider refuses stays open for the payment
-sweep, and the Return stays closed.
+### The delivery across several cancels and returns {#the-delivery-across-several-cancels-and-returns}
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as buyer or staff
-    participant R as returns
-    participant D as delivery
-    participant O as orders
-    participant P as payments
-    C->>R: POST /returns {kind: cancellation, fulfillmentOrderId}
-    Note over R: owner or key checks · then one transaction under the order's lock
-    R->>D: cancelRemainder(fulfillmentOrderId)
-    D-->>R: the lines canceled, the summary updated
-    R->>O: releaseStock(lines)
-    R->>R: write the Return (closed) · return.requested · return.closed
-    R->>P: openReturnRefund(reason: cancellation, returnId)
-    Note over R: commit
-    R->>O: report the lost-parcel cancel (audit + analytics), when the settlement canceled the order
-    R->>P: sendOpenedRefund
-    P-->>C: the refund's own mail
-```
-
-**Who may.** The buyer, as part of their withdrawal (`reason: withdrawal`; never on goods Art. 16
-excludes, and inside the window). **Staff** (out of stock for good) need
-the **refund key**, `create:Refund` — `stepUp: critical`, so the route asks for a fresh session —
-held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
-whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
-audit rows are flagged `ownOrder` ([your own money](../understand/authorization.md#your-own-money)).
-The refund's **request** is audited the moment its record opens (`admin.payment.refund_requested`),
-before the provider is asked, so a provider refusal that the sweep later finishes still leaves the
-decision on file; an approval or a receipt of one's own return carries the flag too. No new key and
-no new verb: it is one more thing the refund permission already means.
-
-`reason: withdrawal` by staff is **recording** the buyer's withdrawal, so it carries the day and the
-channel the buyer stated it (`requestedAt`, `statedVia`) and is judged on that day, with the buyer's
-own window and Art. 16 limits. A staff member who IS the buyer is answered as the buyer, and is
-never prompted for a fresh session.
-
-| Caller                                   | `withdrawal`                                                        | Any other reason                    |
-| ---------------------------------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| the order's buyer (staff or not)         | allowed, no step-up                                                 | `RETURN_CANCELLATION_INVALID` (422) |
-| staff with the refund key, not the buyer | with `requestedAt` and `statedVia`, after a fresh session; else 422 | allowed, after a fresh session      |
-| anyone else                              | 403 (the key is asked first)                                        | 403                                 |
-
-The route asks for the fresh session BEFORE the idempotency ledger: the ledger stores any JSON
-answer, so a 401 challenge placed behind it would be replayed to the same key after the staff member
-re-authenticated. The order is read as the caller may read it: a stranger's order is a 404.
-
-Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, a return that
-names one, or a reason that does not fit the caller (above); `RETURN_STATEMENT_INVALID` (422) — the
-stated date or channel is missing, misplaced, in the future or before the order; `RETURN_NOTHING_TO_CANCEL` (409) —
-nothing is left on that fulfillment order, or nothing has shipped and no other fulfillment order has
-units (that one is the whole order: cancel the order instead).
-
-**Before anything ships**, a fulfillment order may be cancelled alone as long as another stays live.
-Made-to-order goods have a group of their own (`delivery`'s [grouping rule](./delivery.md#the-grouping-rule)),
-which the buyer may cancel while the order is `paid` and not once it is `processing`.
-
-### The delivery across several cancels and returns
-
-CRD Art. 13(1) refunds "all payments … including … the costs of delivery"; Art. 13(2) lets the premium
-over the cheapest standard delivery be kept; the CJEU (C-511/08 _Heinrich Heine_) forbids charging the
-outbound delivery to a consumer who withdraws. The Notice is silent on partial withdrawal, so the rule
-is the one that never refunds twice and never splits it:
-
-| Detail       | Rule                                                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| "last unit"  | every ordered unit is cancelled, back (a return `received` or `closed`), or in the act being settled                                 |
-| Which amount | closed by a **cancel** → all the delivery still owed; closed by a **return** → that return's reason rule (cheapest standard vs full) |
-| Two at once  | decided under the per-order lock (`ReturnOrderLock`): exactly one is last. A receipt takes the lock too                              |
-| Never twice  | each cancel and return stores the delivery inside its refund; the next is quoted on what is still owed                               |
+See [Remedies for a return](./returns-remedies.md#the-delivery-across-several-cancels-and-returns).
 
 ## The order timeline
 

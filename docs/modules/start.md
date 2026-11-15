@@ -261,13 +261,13 @@ Ships with every deployment, whatever the project becomes.
 The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
 
 - [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival, report it lost and hold or release a fulfillment order, and what a late preorder owes its buyer.
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival, report it lost and hold or release a fulfillment order, and what a late preorder owes its buyer. Deeper: [Lost shipments and replacements](./delivery-lost-and-replaced.md), [Fulfillment orders and shipments](./delivery-records.md).
 - [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
-- [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link.
-- [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
+- [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link. Deeper: [Order status and timeline](./orders-status-and-timeline.md), [Withdrawal window, purchase hold and shop identity](./orders-withdrawal-and-hold.md).
+- [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [Disputes and writing an adapter](./payments-disputes-and-adapters.md), [Offline and bank-transfer payments](./payments-offline.md), [The provider port](./payments-provider-port.md), [Refunds and refund failures](./payments-refunds.md), [How a payment settles](./payments-settlement.md).
 - [`products`](./products.md) — The catalogue, its search surface and its cache.
-- [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
+- [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button. Deeper: [Remedies for a return](./returns-remedies.md), [The withdrawal button and its deadlines](./returns-withdrawal.md).
 - [`shop`](./shop.md) — The shop itself: its time zone, where goods come back to, what it ships to, and the one currency it trades in.
 - [`shop-tasks`](./shop-tasks.md) — The shop's side of the helpdesk: opens a to-do for each payment, stock or delivery situation that needs a person, writes the buyer's messages and the staff's work notices, and sends the staff digest.
 - [`sitemap`](./sitemap.md) — sitemap.xml for search engines: the shop pages and every public product, once per language.

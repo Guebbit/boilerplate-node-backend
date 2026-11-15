@@ -138,579 +138,83 @@ produced, never a card number. That is what keeps the deployment in the light PC
 rather than the heavy one, and it is why the request schema refuses a value shaped like a PAN.
 :::
 
-## The answer is not always immediate
+## The answer is not always immediate {#the-answer-is-not-always-immediate}
 
 Two statuses sit between submitted and settled, and a lifecycle without them loses every European
 card payment the bank decides to challenge:
 
-| Status            | What it means                                                                                                                                                   |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requires_action` | The buyer has something to do: the bank wants a 3-D Secure challenge answered in the browser, or a bank transfer is waiting to be sent (`nextAction` says how). |
-| `processing`      | The provider has the payment but has not settled it. Some methods take days.                                                                                    |
+Full detail: [How a payment settles](./payments-settlement.md#the-answer-is-not-always-immediate).
 
-Both answer **200**, not an error: the browser has a next step, and a 4xx would tell it to stop.
-`POST /payments/{id}/sync` re-reads the provider and settles, which is what makes the happy path
-feel synchronous.
-
-**`processing` also extends the order's stock hold**, to `NODE_BANK_TRANSFER_HOLD_HOURS` from that
-moment — a SEPA debit or a bank redirect can take days, and the ordinary 15-minute window
-would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel an order whose
-money is still on its way. `requires_action` gets no such grace: it means the browser has a
-challenge to answer, not the provider a payment to finish.
-
-**`POST /payments/webhook/{provider}` is what makes the server look**, and the browser never is. It arrives whether or not
-the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
-its caller is a machine with no account, authenticating by signing the raw body — a stronger proof
-of origin than any cookie this API could ask it for. The delivery is a thin event: the server
-re-reads the payment's state from the provider and settles that, never the body's own claim.
-A provider retries for days, so a redelivery re-reads the provider and settles again; every write in
-the settlement is conditional (the payment's own `succeeded` write is the gate), so a repeat settles
-once and nothing keeps a ledger of event ids.
-
-A payment's payer is the order's own `userId`, copied as it stands. `payments` does not import
-[`users`](./users.md): an account's erasure reaches it through the `personalData.erase` hook it
-registers, not through an import, so no account lookup stands between an intent and the order it pays.
-
-`unique: true` on `orderId` is the guard against a double charge: one payment per order is a
-database fact, not a check somebody has to remember.
-
-Delete this module and cancelling an order still releases its stock but returns no money — the
-cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has no idea this module exists.
-
-## The pre-check, and the final write
+## The pre-check, and the final write {#the-pre-check-and-the-final-write}
 
 Two different questions, asked at two different moments, both owned by `orders`:
 
-- **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
-  payment: `POST /payments`, `POST /orders/{id}/payments`, and `getForOrder`'s
-  `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
-  still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
-  not a fresh offer to pay. This module never compares a status literal to decide whether to open a
-  door; it always asks `orders`, so it cannot drift off the rule the lifecycle owns. The card
-  confirm asks one more thing of `orders`, `isPayableNow` (awaiting payment AND its hold not
-  released), because it is the only door where the buyer can still be refused before money moves;
-  [why the others do not](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again).
-- **The final write** — `markPaid` (`orders/friends/payments.ts`) — is what actually moves the order once money has
-  settled (`settlePayment` calls it; see "Status transitions" below and
-  `docs/understand/tactical-ddd.md` §1 "Who writes the status"). It is `orders`' own conditional write,
-  independent of the pre-check: a race that slips past the pre-check still cannot double-move the
-  order, because `markPaid` only writes from `pending`.
+Full detail: [How a payment settles](./payments-settlement.md#the-pre-check-and-the-final-write).
 
-**The final write and the payment's own `succeeded` write are one transaction.** A customer may
-cancel at any moment, and a cancel racing the settlement serialises on the order document: either
-the cancel lands first and `markPaid` finds the order gone (the money is put straight back, see
-[One settlement transaction](#one-settlement-transaction)), or the settlement lands first and the
-cancel's refund sees a `succeeded` payment. What makes sure only one of them refunds is
-`addRefund`'s condition on `amountRefunded` (a second refund of the same money finds nothing left
-to ask back), not a status write.
-
-**Before the final write, the money is compared with what was asked.** A provider's `succeeded`
-carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
-the payment frozen at the intent, compared in minor units (the provider's `amountReceived` is decimal text, so `"50"` and `"50.00"` agree). One that differs, or is missing, is not accepted
-(PayPal IPN, WooCommerce "on hold" and Magento "Suspected Fraud" all make the same comparison). The
-payment is written `succeeded` with what ARRIVED, and then:
-
-```mermaid
-flowchart TD
-    S["provider reports succeeded"] --> C{"amount, currency and<br/>paymentId match?"}
-    C -->|yes| P["markPaid, commit the hold,<br/>payment.succeeded"]
-    C -->|no| W["record what arrived"]
-    W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
-    A --> X["cancel the order (system actor)"]
-    X --> R["the refund record is already open<br/>(written with the payment):<br/>the refund path returns the money"]
-    R --> A409["confirm and sync answer 409<br/>PAYMENT_ORDER_NOT_PAYABLE;<br/>the webhook acknowledges"]
-```
-
-No stock is committed, no `payment.succeeded` is announced, no invoice is issued. The 409 is not a
-decline, so it spends no decline budget. A crash after the payment write leaves the order
-`pending`; the reservation expiry then cancels it and the same refund path returns the money. A
-hand-recorded payment (`manual`) is exempt: its amount is the order's own, with no provider
-reporting a different one. The audit action stays out of `security.*`, whose whole prefix the
-incident view takes: this is a reconciliation, not an attack signal.
-
-## One settlement transaction
+## One settlement transaction {#one-settlement-transaction}
 
 A success settles in ONE Mongo transaction with an explicit session. `markPaid` takes the session and
 commits the order's hold itself (paid means stock committed, as cancelled means stock released).
 
-```mermaid
-flowchart TD
-    S["settlePayment: provider says succeeded"] --> T["withTransaction (database only)"]
-    T --> G["payment -> succeeded<br/>(the gate: one caller wins)"]
-    G -->|lost the race| R["replay: nothing to do"]
-    G --> M["orderService.markPaid(session)<br/>+ hold commit + timeline"]
-    M -->|order paid| O["enqueue payment.succeeded"]
-    M -->|order gone| F["open refund record (same transaction)"]
-    O --> C["after commit: nudge relay, mail"]
-    F --> P["after commit: provider refund"]
-    P -->|fails| Q["record stays open;<br/>retryOpenRefunds finishes it"]
-```
+Full detail: [How a payment settles](./payments-settlement.md#one-settlement-transaction).
 
-- **Database only.** The driver re-runs the callback on a transient error, so no provider call, mail
-  or cache write happens inside it.
-- **No marker.** A crash before the commit leaves nothing; after it, the outbox row is durable and the
-  relay publishes it. Nothing redelivers a settlement that already answered its caller, and nothing
-  has to.
-- **A lost order owes a refund record, not a marker.** The record is opened in the same transaction
-  as the `succeeded` write, so money is never durable without its way back. The provider is asked
-  after the commit; `npm run job sweep:payment-effects` (`retryOpenRefunds`) finishes a refund that
-  failed.
-- **A hold expiring on a paid order is no longer possible.** The commit lands with the `paid` move,
-  so the reservation sweep (which only releases `held` holds) never sees a paid order's hold.
-
-## Lost webhooks
+## Lost webhooks {#lost-webhooks}
 
 A provider's webhook is the authority on a payment, and a webhook can be lost: a deploy at the wrong
 moment, a retry window that ran out, a browser closed before the sync. Two nets sit under it, and
 both end in the one settlement the webhook, the confirm and the sync already share
 (`settlement.ts#settleFromProvider`), so none can drift from the others.
 
-```mermaid
-flowchart LR
-    sweep["sweep:payment-effects<br/>reconcileStalePayments"] --> ask["provider.retrieve"]
-    cancel["order.canceled<br/>cancelOpenIntentForOrder"] -- "provider refuses to close<br/>(already succeeded)" --> ask
-    hook["webhook"] --> ask
-    ask --> settle["settlePayment"]
-    settle -- "order still payable" --> paid["order paid, stock committed"]
-    settle -- "order gone" --> refund["money returned"]
-```
+Full detail: [How a payment settles](./payments-settlement.md#lost-webhooks).
 
-- **The sweep.** Every unsettled payment holding a provider intent, untouched for
-  `NODE_PAYMENT_RECONCILE_MINUTES` (default 15), is asked about. An intent nobody attempted comes
-  back `open` and changes nothing: no hold is stretched, no decline is invented. A payment the webhook already
-  settled is not asked at all, and every write inside the settlement is conditional, so the sweep
-  racing a late webhook settles once.
-- **The cancel path.** Cancelling an order closes its open intent at the provider. A provider that
-  answers "already succeeded" has taken money in the last minutes before the cancel, which no sweep
-  window can be short enough to catch. The cancel path reconciles that payment on the spot: the order
-  is gone, so the money goes straight back. A provider still mid-flight is left to the sweep.
-
-Neither net adds a marker or a field: the payment's own status and `updatedAt` are the whole state.
-
-## Status transitions
+## Status transitions {#status-transitions}
 
 `requires_confirmation` is entered once, by `POST /payments`, and never again — nothing a
 provider reports is ever that value. From there, every non-terminal status can settle to any other
 non-terminal status. Three sets in `domain/lifecycle.ts` say which write may run from where:
 
-| Set                                   | Statuses                                                             | Gates                                                                        |
-| ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `CONFIRMABLE_PAYMENT_STATUSES`        | `requires_confirmation`, `declined`                                  | `POST /payments/{id}/confirm` (a decline is retryable with another method)   |
-| `SETTLEABLE_PAYMENT_STATUSES`         | `requires_confirmation`, `requires_action`, `processing`, `declined` | every write except the success write: in-flight, decline, the order's cancel |
-| `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` | the settleable ones plus `canceled`                                  | the success write, the amount-mismatch write and the provider re-read's gate |
+Full detail: [How a payment settles](./payments-settlement.md#status-transitions).
 
-`succeeded` is terminal, and stays `succeeded` however much is refunded: refund state is read from
-the refund records and `amountRefunded` ([Refund records](#refund-records)), the way Stripe's
-PaymentIntent and Shopify's transactions do, and the order already carries `paymentStatus`.
-
-`canceled` is written by the `order.canceled` listener (`cancelOpenIntentForOrder`), only after
-the provider confirmed the intent closed, and only from a still-open status: a success racing it
-wins. A report that arrives later (`processing`, `declined`) moves nothing and announces nothing.
-Money that arrives on it is real: the success write runs from `canceled`, finds the order gone and
-opens the refund for the whole amount in the same transaction.
-
-```mermaid
-stateDiagram-v2
-    [*] --> requires_confirmation: POST /payments
-    requires_confirmation --> requires_action: confirm
-    requires_confirmation --> processing: confirm
-    requires_confirmation --> succeeded: confirm
-    requires_confirmation --> declined: confirm
-    requires_action --> requires_action: sync — still waiting
-    requires_action --> processing: sync
-    requires_action --> succeeded: sync
-    requires_action --> declined: sync
-    processing --> processing: sync — still waiting
-    processing --> succeeded: sync
-    processing --> declined: sync
-    declined --> requires_action: confirm, retried
-    declined --> processing: confirm, retried
-    declined --> succeeded: confirm, retried
-    declined --> declined: confirm, refused again
-    requires_confirmation --> succeeded: recorded by hand
-    declined --> succeeded: recorded by hand
-    requires_confirmation --> canceled: order canceled
-    requires_action --> canceled: order canceled
-    processing --> canceled: order canceled
-    declined --> canceled: order canceled
-    canceled --> succeeded: late success, refunded in the same transaction
-    succeeded --> succeeded: a refund, partial or whole
-```
-
-**Each fact is reported once, by the call whose write made it true.** `settlePayment` says whether
-its own write moved the payment (`transitioned`); only then do the `payment.confirmed` / `payment.failed`
-audit row and the `payment_succeeded` / `payment_declined` analytics event fire. So a poll of a
-payment that already succeeded, or a webhook for a decline the confirm already recorded (Stripe sends
-two events for one decline), reports nothing. Only a confirm may decline an already-`declined`
-payment, because a confirm is itself a new attempt: card A refused, then card B refused, are two
-`payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
-winner left it, not the copy it read first.
-
-`POST /orders/{id}/payments` (below) is a fourth way to reach `succeeded`, alongside
-confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
-diagram's terminal states or their guards changes for it.
-
-## Offline payments
+## Offline payments {#offline-payments}
 
 Not every payment goes through the provider: an admin can record money that arrived some other
 way — cash at the counter, a phone order paid by bank transfer — on a still-`pending` order.
 
-```mermaid
-sequenceDiagram
-    actor Admin
-    participant API as POST /orders/:id/payments
-    participant Pay as payments
-    participant Set as settlePayment
-    Admin->>API: method, reference?, receivedAt?
-    API->>Pay: order pending? no card charge in flight?
-    Pay->>Pay: upsert payment — provider "manual"
-    Pay->>Set: state { status: succeeded }
-    Set->>Set: order pending → paid (system)
-    Set-->>Admin: 201 payment
-```
+Full detail: [Offline and bank-transfer payments](./payments-offline.md#offline-payments).
 
-**The admin records a payment; `settlePayment` moves the order.** Same code path as a card, so the
-stock commits, `ORDER_STATUS_CHANGED` and `PAYMENT_SUCCEEDED` fire, and webhooks and emails follow
-exactly as they would for a card. `manual` is not a provider port implementation — the port is
-card-shaped, and a `manual` adapter would be three methods that throw — the offline path instead
-writes the row directly and calls `settlePayment`.
+## Refunds {#refunds}
 
-The amount is always the order's own total; a partial or over-payment is out of scope, handled by
-hand and off-system. Recording is refused with `PAYMENT_ORDER_NOT_PAYABLE` once the order is no
-longer `pending` (including a second attempt at the same order), except a late transfer on a
-canceled order, which is recorded and owed back, and with `PAYMENT_IN_FLIGHT` while
-a card charge on the same order is still `requires_action` or `processing` — the provider could
-still land that charge on its own, and recording money too would risk charging twice. A card
-attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
-becomes the offline one.
+Money going back to the buyer: the record, the send, and every way it can fail or be made outside the app.
 
-**Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
-money that left the system by hand can only be confirmed returned by a person. Every way a refund
-opens on a hand-paid payment (a cancel, a late transfer on a cancelled order, an operator's
-`refundPayment`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
-and writes a `payment.refund_owed_by_hand` audit row naming the order, the record, the amount and
-the reason; the actor is the caller, or the system when none is behind it. Nobody settles it on the
-spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
+Full detail: [Refunds and refund failures](./payments-refunds.md#refunds).
 
-`settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
-fresh-session tier as recording a payment) is the only door that sets `settledByHand: true` (on the refund, never on the payment: one hand-settled refund says nothing about the next). It
-names one record, so a payment carrying several open refunds (a cancelled remainder and two
-returns) settles each separately, and a return stays `received` until its own money is confirmed
-back. It answers the refund it settled (`GET /payments/{id}` has the totals and the actions). It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
-for a provider refund. `PaymentActions.settleRefundByHand` lists the ids a caller may settle. A refund two
-operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`. A cancelled hand-paid order therefore shows
-`succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
+### Refund records {#refund-records}
 
-**The `actions` on every payment.** Each response that carries a payment, the answer to every
-write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
-card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
-than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
-`succeeded` payment, and something left: a refund still open counts against what is left but does
-not hide the control while money remains) and `settleRefundByHand`. `confirm`, `sync` and `intent` read the
-order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
-whatever the order says, so they read nothing.
-
-<a id="refund-records"></a>
-
-### Refund records
-
-A refund is a row on the payment (`refunds[]`), one per attempt — Stripe's `Refund` shape — and
-`amountRefunded` is the running total, counting a refund from the moment it is opened.
-
-```mermaid
-sequenceDiagram
-    participant C as caller (operator / cancel listener)
-    participant P as payments
-    participant D as database
-    participant V as provider
-    C->>P: refund(orderId, amount?)
-    P->>D: card: settle any refund still open (same idempotency key)
-    P->>D: open a record + raise amountRefunded (conditional on the value read)
-    P->>V: refund(part, idempotencyKey)
-    alt provider answers
-        P->>D: record succeeded (conditional on it still being open)
-        P->>D: order.paymentStatus stamped (same transaction)
-        P-->>C: payment.refunded (once per refund)
-    else provider refuses
-        P->>D: record failed + failureReason, still counted
-        P-->>C: 201 with the failed record — the sweep retries it, or staff settle it
-    end
-```
-
-- **A refusal is an answer, not an error.** The record exists and counts against what is left, so
-  `POST /payments/{id}/refunds` answers **201** with the `failed` record (never a 5xx: a 500 would
-  invite a second click that opens a second partial refund). The three entry points differ:
-
-    | Entry point                   | Answers                                       | Where staff follow the refund                                        |
-    | ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-    | `POST /payments/{id}/refunds` | 201 and the record (`failed` if refused)      | the record itself, `actions.settleRefundByHand`, the attention list  |
-    | `POST /orders/{id}/cancel`    | 200; the refund runs after the answer         | the payment's `displayStatus` (`refund_pending`), the attention list |
-    | `POST /returns/{id}/receive`  | 200; `received` = still owed, `closed` = back | the order's payment, the attention list                              |
-
-- **Opened before asked.** The write that appends the record also raises `amountRefunded`, and it is
-  conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
-  cannot return more than was paid. A miss re-reads and re-checks.
-- **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalString` from
-  `@domain-primitives/money`), never by adding decimals. They rest as `Decimal128`
-  ([Money at rest](../understand/tactical-ddd.md#at-rest-decimal128)); a refund with more places than
-  the currency's minor unit is refused (`fitsCurrency`).
-- **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
-  provider, and two different partial refunds are never mistaken for one.
-- **The order's status commits with the settlement.** `order.paymentStatus` (`partially_refunded`
-  or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
-  missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
-- **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
-  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. What happens next
-  is [the claim](#sending-a-refund-the-claim-the-fence-the-delay) below. A later cancel, return or
-  operator call sends only records it opened itself (or found never attempted), so one stuck refund
-  never blocks the next: the request opens its own record and the sweep keeps retrying the old one.
-- **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
-  all that is still refundable; with an `amount` it returns that part. An `amount` over what is
-  left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
-  nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
-- **A refund can pay for a return.** `openReturnRefund` (called by [`returns`](./returns.md) inside its own
-  transaction when goods are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
-  payment has left. The record commits with the return; `sendOpenedRefund` asks the provider after. `payment.refunded` carries the `returnId`, so `returns` closes the return when
-  the refund lands — including later, when the sweep completes one the provider first refused.
-- **No sale, no document.** A late payment or an amount mismatch has no invoice, so its refund gets no
-  credit note ([`invoicing`](./invoicing.md#issuing-a-document)).
-- **A late payment is named.** Money that lands after the order could no longer be paid (its hold
-  expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
-  can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
-- **A refund can pay for a cancelled remainder.** The same door takes `reason: cancellation` for the
-  unshipped part of an order that shipped in part ([`returns`](./returns.md#cancelling-what-has-not-shipped)).
-  The `returnId` names the cancellation, which is closed at birth, so nothing waits on it; and because
-  no return-closing notice follows, the buyer is told by the refund's own mail, like any cancel's.
-- **A credit note per refund.** `payment.refunded` carries `refundId`, this refund's `amount` and
-  `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)). A return's refund also
-  records the goods it pays back (`lines`: product and quantity, plus the `shipping` inside the
-  amount, Shopify's `refund_line_items`) and announces them as `goods`, so the credit note
-  credits each line at its own VAT rate. Neither field is published on the wire.
+See [Refunds and refund failures](./payments-refunds.md#refund-records).
 
 ### Sending a refund: the claim, the fence, the delay {#sending-a-refund-the-claim-the-fence-the-delay}
 
-Two callers can reach the same open record (the request that opened it, the sweep every few
-minutes). Three rules keep them from sending it twice or overwriting each other:
-
-| Rule      | What it does                                                                                                                                                                                                                                                                                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The claim | One conditional write moves a sendable record to `pending` and stamps `attemptedAt`. Sendable is: `failed` and not final and past its delay, or `pending` with an attempt old enough to be taken for dead. A record opened in a caller's transaction carries no stamp and is claimed at once. |
-| The fence | The provider's answer settles, and its refusal fails, only a `pending` record that still carries the SAME `attemptedAt`. A slow old attempt that comes back after a newer claim finds nothing to write.                                                                                       |
-| The delay | After a refusal the record waits `NODE_PAYMENT_REFUND_RETRY_MINUTES`, doubling with each refusal and capped at a day (`nextAttemptAt`). A definite refusal has no next attempt at all.                                                                                                        |
-
-```mermaid
-stateDiagram-v2
-    [*] --> pending: opened (attemptedAt stamped when the request sends it)
-    pending --> succeeded: the provider answers, same attemptedAt
-    pending --> failed: the provider refuses, same attemptedAt
-    failed --> pending: claimed (retryable, delay passed)
-    pending --> pending: claimed again (attempt looks dead)
-    failed --> [*]: final refusal, never claimed
-    succeeded --> [*]
-```
-
-A refusal is **final** when the provider (or the lack of one) gave a definite answer about this
-refund: `declined`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed`. Asking
-again will not change it, so the sweep never does; the shop pays back another way. `insufficient_funds`
-(the shop's own provider balance is short), `provider_unavailable` and `unknown` are retried.
-The domain sets are `FINAL_REFUND_FAILURES` and `MONEY_DID_NOT_MOVE_FAILURES`
-(`payments/domain/lifecycle.ts`).
-
-**A provider the deployment no longer carries.** A payment keeps the name of the provider that took
-it. If that adapter is gone from this process, nothing can be asked: the refund fails once as
-`provider_removed` (final), and the reconcile sweep skips such payments instead of stopping on
-them. See [Retiring a provider](./payments-provider-port.md#retiring-a-provider).
-
-**The provider's key expires.** A provider remembers an idempotency key for a day from its first
-use (Stripe). Past that a reused key makes a NEW refund, so the adapter must adopt the refund the
-record already made ([the port](./payments-provider-port.md#a-key-the-provider-forgot)). The age
-is measured from the record's `createdAt`, never from the last attempt.
+See [Refunds and refund failures](./payments-refunds.md#sending-a-refund-the-claim-the-fence-the-delay).
 
 ### When a card refund cannot go back {#when-a-card-refund-cannot-go-back}
 
-A refused card refund is the shop's to settle: the money has to reach the buyer another way, and an
-operator then presses **Mark returned** (`POST /payments/{id}/refunds/{refundId}/settle`). That is
-only offered when the refusal PROVES the money did not move.
-
-| The refusal                                                   | Money moved? | Retried?           | Hand settle                                                       | Attention kind                      |
-| ------------------------------------------------------------- | ------------ | ------------------ | ----------------------------------------------------------------- | ----------------------------------- |
-| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                                               | `refused_refund`, at once           |
-| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                                               | `refused_refund`, at once           |
-| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | only after a lost chargeback covers it, see [Disputes](#disputes) | `refused_refund`, at once           |
-| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                                               | `stale_refund`, after the threshold |
-| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                | `stale_refund`, after the threshold |
-| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                | `stale_refund`                      |
-
-```mermaid
-flowchart TD
-    A[provider refuses] --> B{the answer was about THIS refund?}
-    B -->|yes, definite| C[final: declined, expired, lost, removed]
-    B -->|yes, shop balance| D[insufficient_funds: retried, settleable]
-    B -->|no answer or unclear| E[provider_unavailable or unknown: retried]
-    C --> F[on the attention list at once]
-    D --> G[settleRefundByHand lists it]
-    C --> G
-    E --> H[sweep resends under the same key; a timeout then gets the real answer]
-    G --> I[operator returns the money, presses Mark returned]
-    I --> J[credit note, return closes, buyer mail, webhook]
-```
-
-An unclear failure that never resolves (the provider gone dark) stays open with the growing delay
-and shows on the attention list after `NODE_PAYMENT_ATTENTION_MINUTES`. There is no override: a
-provider gone for good is a technician's edit of the record. Staff check the provider's dashboard or
-support first. Rule of thumb for adapter authors: [reading a refusal](./payments-provider-port.md#reading-a-refusal).
+See [Refunds and refund failures](./payments-refunds.md#when-a-card-refund-cannot-go-back).
 
 ### When the provider reports a refund's own status {#when-the-bank-sends-a-refund-back}
 
-A refund is an object of its own at the provider, with a status that can change after the first
-answer. The port reports it: `refund` answers `{refundRef, status}`, and `retrieveRefund` reads it back.
-
-```mermaid
-stateDiagram-v2
-    [*] --> pending: opened here
-    pending --> pending: provider says pending (refund id kept)
-    pending --> succeeded: provider says succeeded
-    pending --> failed: provider says failed (reversedAt set)
-    succeeded --> failed: a bank sends it back (reversedAt set)
-    failed --> succeeded: staff pay another way, Mark returned
-```
-
-| What happens                                        | Record                                             | Announced                                  |
-| --------------------------------------------------- | -------------------------------------------------- | ------------------------------------------ |
-| the provider answers `pending`                      | stays `pending`, holds the provider's refund id    | nothing yet: no credit note, no buyer mail |
-| the sweep (or a webhook) re-reads it: `succeeded`   | settles                                            | `payment.refunded`                         |
-| a re-read says `failed` on an open record           | `failed` + reason + `reversedAt`, never resent     | `payment.refund_failed` with `final: true` |
-| a webhook says `failed` on a settled record         | `failed` + reason + `reversedAt`, `settledAt` gone | `payment.refund_reversed`                  |
-| the same report again, or a success after a failure | unchanged: `reversedAt` is set once                | nothing                                    |
-
-- **Never resent.** A record holding a provider refund id is re-read by the sweep, never sent again:
-  a resend inside the key window replays the old success. A record with `reversedAt` is skipped.
-- **Owed, not undone.** The order is re-stamped (`partially_refunded` while another refund stands,
-  otherwise cleared so it reads `paid`), the timeline gains `refund_reversed`, and the payment reads
-  `refund_pending`. The credit note and a closed return stay: the sale was reduced, and a bounced
-  payout is a payable, not a tax event (an accountant should confirm before a real shop relies on it).
-- **Settled by hand.** Staff agree a method with the buyer, pay, and press Mark returned. That
-  fires `payment.refunded` again for the same `refundId`: the credit note (unique per refund) and the
-  return ignore it, the outbound webhook goes out again.
-- **A report that beats the answer.** A webhook can arrive before `refund()` returns. The provider
-  echoes our record id, so the delivery finds the open record, fails it for good, and the late
-  success answer then settles nothing (the settle refuses a record with `reversedAt`).
-- **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
-  it bounced. It is only for a refund that HAD settled (`reversedAfterSettling` on the record); the
-  provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
-  A reversed refund cannot be cancelled (it settled once): only paid by hand.
-  `payment.refund_reversed` also opens a `refund_reversed` to-do for `PaymentRefunding`, closed when
-  the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos)).
+See [Refunds and refund failures](./payments-refunds.md#when-the-bank-sends-a-refund-back).
 
 ### Telling the buyer their refund cannot reach the card {#telling-the-buyer}
 
-EU law (Consumer Rights Directive Art. 13(1), Codice del Consumo Art. 56) returns the money by the
-means the buyer paid with, unless they expressly agree otherwise, and at no cost to them. So when a
-refund cannot reach the card the shop asks; it never picks a method for them.
-
-```mermaid
-flowchart LR
-    F[payment.refund_failed, final] --> L{record owed another way?}
-    R[payment.refund_reversed] --> L
-    L -->|yes| M[mail payments.refund-undeliverable: we owe you, tell us how]
-    L -->|no: unclear, shop balance, dispute, settled by hand| N[no mail]
-    M --> B[buyer replies to the shop]
-    B --> H[staff pay, press Mark returned: success mail, credit note, webhook]
-```
-
-- **One template, two triggers.** `payments.refund-undeliverable` is sent on a refusal that ended the
-  retrying and on a reversal. The listener reads the record, so a refund already paid by hand mails
-  nobody, and a transient refusal that later turns final mails once (the event fires only on a NEW
-  refusal).
-- **Never mailed:** `provider_unavailable` and `unknown` (the refund may have gone through),
-  `insufficient_funds` (the shop's own balance), `disputed` (the bank already returned it).
-- **No reason in the mail, nor on the buyer's page.** `Refund.owedAnotherWay` is the buyer-visible
-  half: true on an open refund that is owed another way. The order page says so instead of "retried
-  automatically". `failureReason` stays staff-only.
-- **No bank details are stored.** The buyer replies by email and the IBAN stays in the shop's mailbox
-  and bank, under the shop's own retention (GDPR Art. 5(1)(c): the app keeps nothing for a rare
-  event). The mail shows `NODE_SUPPORT_EMAIL` as text.
+See [Refunds and refund failures](./payments-refunds.md#telling-the-buyer).
 
 ### Refunds made outside the app {#refunds-made-outside-the-app}
 
-Staff can refund from the provider's own dashboard. The application finds those refunds and records
-them, so the credit note (a VAT duty), the buyer's mail and the order's state follow, and
-`remainingOf` stops offering money that already left.
-
-```mermaid
-flowchart TD
-    E[refund event: refund.created, refund.updated, refund.failed, charge.refunded] --> L[listRefunds for the intent]
-    L --> W{each provider refund}
-    W -->|ours: our record id echoed, or its stored id| A[apply its status to the record]
-    W -->|unknown, succeeded, same currency| I[import: settled record, reason external]
-    W -->|unknown, pending or failed| S[skip until a later event says succeeded]
-    W -->|unknown, other currency| X[log an error, skip]
-    I --> F[timeline rows, order stamp, payment.refunded: credit note, buyer mail, webhook]
-```
-
-- **Matched by our id, not a flag.** The adapter echoes `metadata.refund_record` as `refundId`, so a
-  refund of ours whose answer was lost (a timeout that ran) is settled from the provider, never
-  imported a second time.
-- **One write, once.** The import appends the record, raises the running total and carries the
-  provider's refund id in one conditional write: a redelivery imports nothing. It sets
-  `createdAt` and `settledAt` to the provider's own date.
-- **Always recorded.** The money moved, so the import never refuses, even when the total then passes
-  what was paid. An open refund of ours that no longer fits (`exceedsRemaining`: what the provider
-  holds, plus this one, is more than was paid) is held **unsent**: the provider would refuse it. It
-  shows as `refund_exceeds_remaining` with `exceedsBy`, and staff cancel it or mark it returned.
-  Nothing closes by itself.
-- **The order is not cancelled.** An outside refund moves `paymentStatus`; the order keeps its status.
+See [Refunds and refund failures](./payments-refunds.md#refunds-made-outside-the-app).
 
 ### Cancelling a refund {#cancelling-a-refund}
 
-Staff void a refund the shop must never pay (a duplicate opened by mistake, or one the provider's
-dashboard already covered) with `POST /payments/{id}/refunds/{refundId}/cancel`, body `{ note }`.
-The note is required: the audit row says why, as for the status override. `create:Refund` at the
-route, so the same fresh-session tier as creating one. It answers 200 with the `Refund`
-(`status: failed`, `failureReason: canceled`).
-
-It is a local void. Nothing reaches the provider, and none of `payment.refunded`, a credit note or a
-buyer mail happens: no money moved. What it does write, in one transaction:
-
-| Write                | Detail                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| the record           | `failed` with `failureReason: canceled`; one conditional write that also takes its share off `amountRefunded` |
-| the order's timeline | `refund_canceled`, staff only: ids and amount, never the note                                                 |
-| the audit row        | `admin.payment.refund_canceled`, with the note                                                                |
-| the domain event     | `payment.refund_canceled`, through the outbox; internal, no webhook carries it                                |
-
-Which refunds may be voided is the hand-settle rule (`mayBeCanceled`), because both rest on the fact
-that the money provably did not move. `PaymentActions.cancelRefund` lists exactly those ids.
-
-| The refund                                                                                                                       | Cancel                             |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| a hand-paid payment's `pending` one                                                                                              | yes                                |
-| a card refund refused as `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed` | yes                                |
-| `succeeded` (the money moved), or already canceled                                                                               | no: 409 `PAYMENT_REFUND_NOT_OPEN`  |
-| a card refund `pending` (an attempt runs) or failed as `provider_unavailable` / `unknown`                                        | no: 409 `PAYMENT_REFUND_IN_FLIGHT` |
-
-A canceled record is closed for good: the refund sweep never claims it (`canceled` is not
-retryable), `isOpenRefund` is false for it, so it is on no attention list and does not make the
-payment read `refund_pending`, and it can be neither settled by hand nor canceled again. A claim by
-the sweep between the read and the write makes the conditional write miss: the check runs again
-against the record as it now stands. The order's `paymentStatus` stamp is recomputed by a cancel
-when the payment holds a settled refund, because an open record blocks `refunded`: cancelling the
-last one, after the rest came back from the dashboard, moves the order to `refunded`. A cancel with
-no settled refund leaves the stamp as it is.
-
-Every other refund dispatches to the provider named on the payment's own `provider` field — never
-the deployment's currently configured one — so a refund of an older payment still reaches the
-provider that actually took the money even after a deployment switches to another. The provider is
-asked AFTER the record opens: a rejection leaves the payment `succeeded` and the record `failed`, so the
-refund sweep (above) can actually retry it, instead of a failed attempt being recorded as a
-successful one.
-
-Requires `create:Payment`, the same fresh-session tier as a refund (`create:Refund`) — an
-admin's own word that money arrived is exactly as consequential as one that it left.
-
-The webhook is not on this diagram because it does not add an edge the diagram doesn't already
-have — it reaches the exact same `settlePayment` a sync does, with `succeeded` or `declined` as the
-only two states it ever reports.
+See [Refunds and refund failures](./payments-refunds.md#cancelling-a-refund).
 
 ## Disputes {#disputes}
 
@@ -718,168 +222,24 @@ A buyer can ask their bank to take a card payment back. The bank does it at once
 about 7 to 21 days opens for the shop to send evidence. The application shows the dispute, alerts
 staff, and refuses to refund twice; the answer itself is given in the provider's own dashboard.
 
-```mermaid
-flowchart TD
-    D["provider webhook: dispute report<br/>(Stripe charge.dispute.*, Adyen CHARGEBACK ...)"] --> N{newer observedAt<br/>than the stored one?}
-    N -->|no: old or repeated| X[dropped, nothing announced]
-    N -->|yes, first report| O["store on Payment.disputes<br/>timeline dispute_opened<br/>payment.dispute_opened"]
-    N -->|yes, known dispute| U["replace the stored one<br/>payment.dispute_updated<br/>timeline dispute_closed if it just closed"]
-    O --> R{open chargeback?}
-    U --> R
-    R -->|yes| B["refund door: 409 PAYMENT_DISPUTED<br/>actions.refund false<br/>sent refunds fail final as disputed"]
-    R -->|lost or accepted| L["remaining = amount - refunded - lost"]
-    R -->|inquiry, won, closed| A[refunds allowed]
-```
+Full detail: [Disputes and writing an adapter](./payments-disputes-and-adapters.md#disputes).
 
-- **A chargeback is not a refund.** It raises no `payment.refunded`, so no credit note; it changes no
-  order status and no `amountRefunded` (Saleor lowers `charged`, not `refunded`). In the EU a lost
-  chargeback with no return is a non-payment, not a credit note (VAT Directive Art. 90); in Italy that
-  holds outside insolvency (DPR 633/72 art. 26). Have an accountant confirm it for your deployment.
-- **The report is the state.** Unlike a payment or a refund, a dispute is not re-read from the
-  provider: Adyen has no endpoint to read one, so the signed notification is the only source. The port
-  therefore carries `ProviderWebhookEvent.dispute` (`ProviderDisputeState`), and the application
-  trusts it only after the signature has been verified.
-- **Order is the provider's `observedAt`.** One write per report, conditional on it being newer than
-  the stored one for the same `disputeRef`; a repeated or out-of-order delivery changes and announces
-  nothing. There is no terminal state: a lost dispute can flip to `won` (a late win) and a closed one
-  can reopen (a second chargeback).
-- **Stored on the payment.** `Payment.disputes[]`, one per `disputeRef`, staff only on the wire. The
-  payment's `displayStatus` does not change (Shopify keeps `displayFinancialStatus` separate); the
-  staff list filters with `disputed=true`.
-
-| Rule                        | What happens                                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                           |
-| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                |
-| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                       |
-| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled by hand while the chargeback is open                       |
-| Lost chargeback covers it   | a refund open at that time may be marked returned (the bank paid the buyer); that is the normal path, so a return still gets its credit note |
-| Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
-| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
-
-**To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
-
-**Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
-with `since`, `dueBy` (the provider's evidence deadline) and `disputeId` (it has no `refundId`). When
-the payment already had refunds succeed, the row carries `alreadyRefunded`: send that refund as
-evidence (a refund-then-chargeback; Adyen defends it by itself). The order timeline gets two staff-only
-rows, `dispute_opened` and `dispute_closed`.
-
-**Events.** `payment.dispute_opened` on the first report and `payment.dispute_updated` on each newer
-one (Shopify's two topics), both through the outbox and both public webhook events. The payload is
-ids, closed codes and money: `{paymentId, orderId, disputeId, kind, status, reason, amount, currency,
-fundsWithdrawn, evidenceDueBy?}`.
-
-| Provider      | Its event                                                                                | Maps to                                              |
-| ------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Stripe        | `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` | re-read `disputes.retrieve`, fill the report from it |
-| Stripe status | `warning_needs_response`, `warning_under_review`, `warning_closed`                       | inquiry: `needs_response`, `under_review`, `closed`  |
-| Stripe status | `needs_response`, `under_review`, `won`, `lost`                                          | chargeback with the same status                      |
-| Stripe error  | `charge_disputed`, `refund_disputed_payment` on a refund                                 | `PaymentProviderError('disputed')`                   |
-| Adyen         | `REQUEST_FOR_INFORMATION`, `NOTIFICATION_OF_CHARGEBACK`                                  | inquiry, `needs_response`                            |
-| Adyen         | `CHARGEBACK`, `SECOND_CHARGEBACK`                                                        | chargeback, `needs_response` (reopens a closed one)  |
-| Adyen         | `CHARGEBACK_REVERSED`                                                                    | chargeback, `won`                                    |
-
-The fake provider's lever is `setFakeDispute(providerRef, state)` (`scenarios/support/doubles/payments/fake.ts`):
-it returns the delivery; `signFakeDelivery` signs it, and `paymentService.receiveWebhook` (or the
-real route) takes it from there. The demo profile's `POST /__test/payments/dispute` does it for an order.
-
-## Bank transfer
+## Bank transfer {#bank-transfer}
 
 At checkout the customer may choose `bank_transfer` instead of `card` — `GET /payments/methods`
 says whether this deployment offers it at all, which is only once `NODE_BANK_TRANSFER_BENEFICIARY`
 and `_IBAN` are both set. This module owns the method outright: its settings, its reference, its
 instructions and the two mails around them.
 
-A transfer order is owed money from the moment it is placed, so it gets its **payment** then. The
-payment carries everything the buyer and the operator need, and the order carries none of it.
+Full detail: [Offline and bank-transfer payments](./payments-offline.md#bank-transfer).
 
-```mermaid
-stateDiagram-v2
-    [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
-    requires_action --> succeeded: admin records the transfer<br/>POST /orders/:id/payments
-    requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
-    requires_action --> canceled: order canceled, or payBy passed with no money
-    canceled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
-    succeeded --> [*]
-    canceled --> [*]: deleted a year after the last touch
-```
-
-- **`order.created` opens it.** A listener (`services/transfer.ts`) inserts the row if absent: a
-  `requires_action` payment, `provider: manual` (no provider is behind it), for the order's total,
-  with the RF reference and `payBy` copied from the order. A redelivered event finds the row and
-  does nothing, and the instructions mail goes out only from the call that inserted it. A payment
-  that already exists (a card paid first, an operator recorded the money) is left exactly as it is.
-- **The instructions ride on the payment as `nextAction`**, a union keyed by `type` so a later
-  redirect is one more member: `{ type: 'bank_transfer', beneficiary, iban, bic?, reference, payBy }`,
-  present while the payment is `requires_action`. Beneficiary, IBAN and BIC are read live from
-  the deployment's config, never frozen — a corrected typo shows on every transfer still open. The
-  reference and `payBy` are the payment's own. A deployment that has stopped offering transfers
-  shows no instructions.
-- **The order carries the chosen method as a preference, not a lock.** The card form stays offered
-  regardless: `createIntent` takes the same row over (`requires_confirmation`, method `card`,
-  reference kept, instructions gone), and a card payment settles through the ordinary pipeline above.
-  When a card pays a transfer order the order's `paymentMethod` becomes `card`, so the order page
-  agrees with its payment; money recorded by hand leaves it alone.
-- **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
-  `placeOrder` an explicit window, which `orders` passes to `inventory`'s `reserveForOrder` —
-  `NODE_BANK_TRANSFER_HOLD_HOURS` (default 168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
-  releases a 15-minute card hold releases this one too, since it only ever reads each hold's own
-  stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
-- **A week-long hold is free to take, so an account is capped, for every method.**
-  `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
-  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT_REACHED`,
-  naming the open orders, before anything is written.
-- **Nothing asks a provider about it.** The reconcile sweep skips hand-recorded rows, and the
-  browser's `POST /payments/{id}/sync` answers the payment as it stands: only an operator recording
-  the money moves it.
-- **Three mails, one of them not this module's.** The order-placed confirmation is `orders`', with
-  the withdrawal notice, for every method. This module sends the **instructions** when it opens the
-  payment, and **"no transfer received"** when the order was cancelled because the hold ran out — by
-  the call whose write moved the payment to `canceled`, so one cancel mails once. The buyer's own
-  cancel is answered by `orders`' cancel mail alone. Any other hold's expiry stays `orders`'.
-- **A cancelled transfer payment is kept a year**, not the thirty days of every other abandoned
-  attempt (`TRANSFER_PAYMENT_RETENTION_DAYS`), so the reference still finds the order when a late
-  transfer shows up. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
-
-## Matching a transfer back to its order
+## Matching a transfer back to its order {#matching-a-transfer-back-to-its-order}
 
 The bank never tells this app anything — there is no statement feed, no webhook, no polling.
 Instead the transfer payment gives the customer a clean code to write into the transfer, and an
 admin reads it back off the bank's own website:
 
-```mermaid
-flowchart LR
-    C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
-    B --> A["Admin reads the code,<br/>pastes it into the app"]
-    A --> L["GET /payments?transferReference=<br/>finds the payment, whose orderId is the order"]
-    L --> P["POST .../payments<br/>marks it paid — settlePayment, as usual"]
-```
-
-- **The reference is an ISO 11649 "RF" creditor reference** — the standard SEPA reference field,
-  e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`. Its mod-97 check digits (ISO 7064 MOD 97-10, the same scheme
-  IBAN itself uses) mean a mistyped code is REJECTED rather than silently matching the wrong order.
-  `domain/transfer-reference.ts`'s `buildReference` mints it from the order's own id encoded as
-  base-36 — lossless over every bit of the id, so two different orders can never mint the same code
-  the way a hash could, which is what makes the `transferReference` unique index a true invariant
-  rather than a rarely-firing safety net. `parseReference` reads one back.
-- **Minted once, when the payment opens, never recomputed.** It is deterministic in the order id,
-  so a redelivered `order.created` could not mint a different one anyway. A `card` order never has
-  one and is not reachable through this filter; an admin finds it by id through the normal order
-  search instead. No raw-id fallback: a raw order id is not a reference and finds nothing.
-- **No new settlement code.** The admin screen filters the payments list by the code, then the existing `POST
-/orders/{id}/payments` — the same `pending → paid` move, stock commit, and events any
-  other offline record already goes through.
-- **A transfer that arrives after its order was cancelled is recorded, not refused.** The filter
-  still finds the payment (its cancelled payment is kept), and `POST .../payments` takes the money onto
-  that payment. The order cannot be paid any more, so the settlement owes the money straight back:
-  the payment reads `succeeded`, its refund record stays open (a hand-paid refund is returned by
-  the operator, off-system, and marked done), and the order stays cancelled with no stock touched.
-- **A malformed and an unmatched reference answer the same empty list.** The filter reads the code
-  in its canonical form first (spacing and case tolerated), and a code that is not a valid RF
-  reference never reaches the database. Distinguishing the two would tell a guesser which half of
-  a code they got right. The guard is the list's own `display:Payment`, and a staff read of the
-  list is not an audited order read: the answer is a payment row, not the order.
+Full detail: [Offline and bank-transfer payments](./payments-offline.md#matching-a-transfer-back-to-its-order).
 
 ## Libraries
 
@@ -1091,7 +451,7 @@ This is a genuinely different shape from `orders`' retention: `orders` keeps eve
 scrubs PII in place; `payments` keeps a settled row forever and deletes an unsettled one outright.
 Neither scrubs a settled payment, because there is nothing on it left to scrub.
 
-## Writing a payment adapter
+## Writing a payment adapter {#writing-a-payment-adapter}
 
 The boilerplate ships no PSP adapter. Production offers bank transfer and offline payments; card
 payments exist the day a deployment adds one file and one `registerPaymentProvider` call. This
@@ -1099,134 +459,7 @@ section is what that file has to get right. Everything said about Stripe is a cl
 party and can go stale: check [Stripe's docs](https://docs.stripe.com/payments/paymentintents/lifecycle)
 before relying on it, and test against the provider's sandbox on the deployment that picks it.
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant A as This API
-    participant P as Your adapter
-    participant S as Provider
-    B->>A: POST /payments
-    A->>P: prepare(charge, metadata)
-    P->>S: create intent, idempotent on paymentId
-    S-->>P: providerRef + client secret
-    B->>A: POST /payments/{id}/confirm (method reference)
-    A->>P: confirm(providerRef, ref)
-    P->>S: confirm intent
-    S-->>P: status
-    P-->>A: one of five words
-    B->>S: finish the challenge (requires_action only)
-    B->>A: POST /payments/{id}/sync
-    S->>A: webhook, signed over the raw body
-    A->>P: parseWebhook(rawBody, signature)
-    A->>P: retrieve(providerRef)
-    A->>A: settlePayment, once
-```
-
-### Status mapping
-
-The port speaks five words (`ProviderPaymentStatus`). An adapter maps its provider's own states
-onto them and nothing else is visible to the rest of the module.
-
-| Port word         | Stripe `PaymentIntent` status                                                      | Note                                                                                |
-| ----------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `open`            | `requires_confirmation`, or `requires_payment_method` with no `last_payment_error` | Nobody has attempted it yet. Settlement writes nothing, and the sweep re-asks later |
-| `requires_action` | `requires_action`                                                                  | The browser has a challenge (3-D Secure) to answer                                  |
-| `processing`      | `processing`                                                                       | Slow methods; extends the stock hold                                                |
-| `succeeded`       | `succeeded`                                                                        | Report `amountReceived`, `currency`, `paymentId` and `cardLast4` too                |
-| `declined`        | `requires_payment_method` with a `last_payment_error`                              | Stripe sends a refused attempt back to this state, so it is a decline               |
-| none              | `canceled`                                                                         | No word exists for it today. Open: the vocabulary has not been extended             |
-
-A decline is an answer, not an error: `confirm` returns `declined` and throws only on transport
-failure. `succeeded` without `amountReceived` is treated as a mismatch, so convert minor units to
-the decimal the payment stores. Amounts, refunds, disputes and the `amountMin`/`amountMax` filters travel as decimal strings; the webhook `amount` fields likewise.
-
-### Declines are reported once
-
-Stripe sends two events for one decline, and a payment can be declined more than once by
-different attempts. The module reports each fact once, from the call whose write made it true
-(`settlePayment` returns `transitioned`, and only then are the audit row and the analytics event written). Only a `confirm`
-may decline an already-`declined` payment, because a confirm is a new attempt: card A refused,
-then card B refused, are two failures. A webhook or a sync repeating the same decline reports
-nothing. The port carries no attempt id, so do not try to dedupe inside the adapter: return the
-status and let the settlement decide.
-
-### Idempotency keys expire
-
-A provider forgets a key after a window (Stripe: 24 hours), so a refund retried after it must find the
-existing one instead of creating another: [a key the provider forgot](./payments-provider-port.md#a-key-the-provider-forgot).
-
-### The webhook
-
-`parseWebhook` receives the raw body, byte for byte. Verify the signature over those bytes first,
-then translate the body, then return only the event id and the intent it names.
-The delivery's own claim about the outcome is never used: the settlement calls `retrieve`, so a
-late or reordered event is harmless. Throw `WebhookRejected` for anything that does not
-authenticate or parse; the route answers 400.
-
-The port checks your work: `receiveWebhook` (through `applyWebhookDelivery`) parses the event you return against the
-contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operator object such as
-`{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
-adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
-yourself, and keep the reason in the `WebhookRejected` message.
-
-### Refund status, and the refund webhooks
-
-`refund` answers `{refundRef, status}`: `pending` for a refund the provider accepted but has not
-settled (Stripe `pending`, `requires_action`), `succeeded` otherwise. An immediate refusal still
-throws. `retrieveRefund(refundRef)` returns the refund's own status: Stripe `canceled` maps to
-`failed`, `requires_action` to `pending`, and `metadata.refund_record` comes back as `refundId`.
-
-| Stripe event                                                           | Delivery                                       |
-| ---------------------------------------------------------------------- | ---------------------------------------------- |
-| `refund.created`, `refund.updated`, `refund.failed`, `charge.refunded` | `{id, providerRef: payment_intent, refundRef}` |
-
-`parseWebhook(rawBody, headers)` receives every header: Stripe signs in `Stripe-Signature`, PayPal
-in several. A charge under dispute (`charge_disputed`, `refund_disputed_payment`) is `disputed`.
-
-| Stripe event                                                                             | Delivery                                                                |
-| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn`, `.funds_reinstated` | `{id, providerRef: payment_intent, dispute}`, see [Disputes](#disputes) |
-
-### Refund errors
-
-An adapter maps the provider's refusal onto the closed `RefundFailureReason`:
-[reading a refusal](./payments-provider-port.md#reading-a-refusal).
-
-### The reconcile sweep calls the provider
-
-[Lost webhooks](#lost-webhooks) are caught by `sweep:payment-effects`, which calls `retrieve` for
-each unsettled payment untouched for `NODE_PAYMENT_RECONCILE_MINUTES`, one at a time, up to 200 per
-run. That is one provider read per stale payment per run: mind the provider's rate limit, and do not
-answer a guess when it refuses.
-
-### A Stripe server-confirm walkthrough
-
-This repo confirms on the server, not through Checkout Sessions.
-
-1. `prepare` creates a `PaymentIntent` with `metadata.paymentId`, using the payment id as the
-   idempotency key, and returns its id and `client_secret`. Resuming a payment that already has
-   an intent returns that same intent.
-2. The browser mounts Stripe's Payment Element, calls `stripe.createConfirmationToken`, and posts
-   the token id (`ctoken_…`) as the method reference to `POST /payments/{id}/confirm`. This needs
-   Stripe.js in the storefront and its origins in the CSP; the storefront ships only a fake card
-   picker today.
-3. `confirm` calls `paymentIntents.confirm` with that token and maps the answer.
-4. On `requires_action` the browser calls `stripe.handleNextAction` with the client secret, then
-   `POST /payments/{id}/sync`, which `retrieve`s and settles.
-5. Whatever the browser did, the signed webhook arrives and settles the same payment once.
-
-### Port fit
-
-| The port needs...             | Embedded form (Stripe Payment Element, Adyen, Braintree) | Redirect (Mollie, PayPal, Stripe Checkout)                                        |
-| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `prepare`: an id and a secret | Fits: intent id plus `clientSecret`                      | Partial: there is an id, but the customer needs a URL and the port has none       |
-| `confirm`: a method reference | Fits: a token or nonce from the browser                  | Does not apply: the customer pays at the provider, so there is nothing to confirm |
-| `retrieve` and the webhook    | Fits                                                     | Fits: thin event, then read the payment back                                      |
-| `refund`, `cancel`            | Fits                                                     | Fits                                                                              |
-
-The redirect gap is open. `PreparedPayment` carries only `clientSecret`, so a redirect provider
-cannot tell the storefront where to send the customer, and closing it changes the contract. Until
-it is decided, a redirect adapter has no honest place to put its URL.
+Full detail: [Disputes and writing an adapter](./payments-disputes-and-adapters.md#writing-a-payment-adapter).
 
 ## Read next
 
