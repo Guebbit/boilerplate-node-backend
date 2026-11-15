@@ -55,155 +55,23 @@ The **set** of statuses is not its business. `OrderStatus` is generated from `op
 `@api/models`, so the six values are contract-first and single-sourced. What the enum cannot carry
 is the **edges** between them, and the **actor** each edge belongs to.
 
-The table is keyed by **event**, not by status: `pay`, `process`, `ship`, `reopen` (a lost
-shipment steps the order back), `reship` (a replacement does the same from `delivered`), `deliver`,
-`fulfillmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
-completes the order), `expire`, `cancel` and `cancelInFulfillment`. Each entry carries its `from`
-set, its `to` and its actors, so a service names the event and the conditional write is handed the
-event's own `from` — nothing is derived from a neighbouring column.
-
-What a status **is**, apart from its edges, is a second table: `ORDER_STATUS_TRAITS` in
-`domain/status-traits.ts` (stock committed, before dispatch, withdrawable, fulfilment value). It is
-total over `OrderStatus`, so a new contract status is a compile error there, not a silent default.
-See [the status traits](../modules/orders.md#status-traits).
-
-```mermaid
-%%{init: {'stateDiagram': {'nodeSpacing': 40}}}%%
-stateDiagram-v2
-    direction LR
-    [*] --> pending
-    pending --> paid: system
-    pending --> canceled: customer, admin
-    pending --> canceled: system (reservation expiry)
-    pending --> canceled: withdrawal
-    paid --> processing: system
-    paid --> canceled: customer, admin, withdrawal
-    processing --> shipped: system
-    processing --> canceled: admin, withdrawal
-    shipped --> delivered: system
-    processing --> delivered: system (digital fulfillment)
-    canceled --> [*]
-```
-
-Three absences are load-bearing:
-
-- **Nothing reaches `paid` but `system`.** An operator cannot mark an order paid by hand — money
-  landing is a fact from outside the application. the table is where it holds.
-- **A customer's cancel stops at `paid`.** The refund listener is what makes `paid` cancellable;
-  past that the order is in the fulfilment queue and cancelling becomes an operator's decision (the
-  EU withdrawal right is its own actor, `withdrawal`, which can also cancel from `processing`).
-- **`shipped` has no cancel edge at all.** Goods in transit come back as a return, which is a flow
-  of its own. The only way back is a lost parcel or a replacement, which step the order back to
-  `processing`.
-
-An admin override (below) can still force any of these moves forward with a reason — the diagram
-above is the forward path, the one no override is involved in. Two system-only backward moves
-(`reopen` for a lost parcel, `reship` for a replacement) and the lost-parcel cancel are in
-[orders](../modules/orders.md#who-writes-the-status).
-
 ### Who writes the status
 
 Two rules, and they are different rules. **Only `orders` writes a `status` field** — every other
 module that causes a move (`payments` on settlement, `delivery` on a parcel event) asks `orders` to
 make it, through `markPaid` (payments) or `settleFulfillment`/`reopenForFulfillment` (delivery), and never touches the document itself.
-That is a placement rule: it says WHERE the write happens. **The table above is a permission rule:**
-it says WHO may ask for which move, `admin`/`customer`/`system` on each edge.
-
-`system` is not "no human involved" — every `system` move follows from a recorded fact a human (or
-an external service) already caused: money landing at the payment processor, a warehouse operator
-recording a parcel's handover. `system` means "this application did not decide it, it is reporting
-it" — the recording is what makes the move happen, not a person editing a field.
-
-The full move/actor/door table lives on
-[Who writes the status](../modules/orders.md#who-writes-the-status) — one home for it, since a
-second copy here is exactly the kind of duplicate that drifted before. What that table does not
-say: WHAT records the fact before `orders` ever hears about it — the payment processor confirming
-a charge, a warehouse operator scanning a parcel, an operator's own typed reason for an override.
-`orders` only ever reports a fact something else already caused.
-
-One reported move, end to end — the warehouse records a handover, `delivery` owns the shipment, and
-`orders` is the only thing that ever writes the status. Everything below commits in ONE transaction
-(the shipment, the units leaving the shelf, the order's summary, the status move, the outbox events):
-
-```mermaid
-sequenceDiagram
-    participant W as warehouse operator
-    participant D as delivery
-    participant O as orders
-    participant L as listeners
-
-    W->>D: POST /delivery/fulfillment-orders/{id}/shipments<br/>{ trackingCode }
-    D->>D: claim the fulfillment order, write the shipment
-    D->>O: recordFulfillmentProgress(summary)
-    D->>O: settleFulfillment(orderId, at, session) — orders picks the edge from the summary
-    O->>O: canTransition(processing, shipped, 'system')
-    O->>O: conditional write — updateStatusIfIn
-    O->>L: emit order.status_changed { from, to } — after the commit
-    L-->>D: shipped email queued
-```
-
-`delivery` never assigns `order.status` itself, and never picks the edge either: it states the fact (the
-summary is written) and `settleFulfillment` (`services/status.ts`) decides from the order's own status and
-that summary whether it ships, delivers, completes in one act or cancels as lost. `reopenForFulfillment`
-puts a `shipped` or `delivered` order back to `processing`. Both take the act's own session, so the move
-commits with the shipment; the six `mark*` steps beneath them are not on the barrel. A second door, `overrideStatus`, moves the status alone and
-announces it, so `delivery` keeps its records in step — see
-[Who writes the status](../modules/orders.md#who-writes-the-status) for both.
 
 ### The actor is part of the table, not beside it
 
 "Which status may follow `paid`" has no single answer — it depends on who is asking. Splitting the
 actor into a second table would let the two disagree, so it rides on the edge itself.
 
-`system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
-make by hand, because something outside the application has to have happened first. Money landing
-is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
-start action (`POST /orders/{id}/process`), or by the first shipment or fulfil — see "Action endpoints execute" below.
-
 ### What the table prevents
 
 Lifecycle knowledge in several places that can disagree is how an unguarded status write becomes a
-refund on delivered goods:
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
-flowchart TD
-    A["a status written by assignment<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancelable set"]
-    B --> C["customer clicks cancel"]
-    C --> D["afterCancel runs"]
-    D --> E2["order.canceled<br/>{ refund: true } delivered"]
-    E2 --> E["payments refunds a<br/>succeeded payment"]
-    D --> F["inventory release<br/>claims 'held' — no match"]
-    E --> G["💸 real money returned on<br/>goods already delivered"]
-    F --> H["✅ stock unaffected"]
-
-    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
-    classDef ok fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class G bad;
-    class H ok;
-```
-
-Every individual write site is defensively coded, which is why only one half of that sequence would
-cause damage: `inventory` claims the reservation conditionally, so a stale release finds nothing,
-while `payments` guards the refund on the payment's own status — and that payment really was
-`succeeded`, so the guard passes. The table closes it at the source: no write site asserts a
-lifecycle edge of its own, they all ask.
+refund on delivered goods.
 
 ### How it is enforced
-
-| Call site                                                                     | Question asked                                                                                                                                  |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — the cancel doors                                | `statusesLeadingTo(canceled, cause.by)`                                                                                                         |
-| `orders/services/status.ts` — `markPaid`/`markProcessing`/`settleFulfillment` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
-| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`          | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
-| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`          | `canProcessOrder`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                           |
-| `orders/services/override.ts`                                                 | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
-
-Every cancel door asks as its cause's actor, because the table answers differently for each: a customer
-may cancel from `pending` and `paid`, an operator also from `processing`.
-
-A stored status with named action endpoints uses the table where it fits: each move is one event,
-and the write, the `actions` flag and the test all read it.
 
 ### Action endpoints execute; `update` does not decide
 
@@ -211,100 +79,14 @@ Whether a flip is an action or a field is one test, written once in
 [`write-methods.md`](write-methods.md#action-or-field): does the move have an effect, guard
 or permission of its own? The order's status does; a product's `active` does not.
 
-`orders/services/crud.ts`'s `update` carries no status logic at all: `UpdateOrderByIdRequest`
-declares `email` only, so there is no move left for it to refuse or apply, and no partial-write
-window between an email save and a status move to guard against — impossible by construction
-rather than guarded.
-
-`POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
-alike: the hold is released and `ORDER_CANCELED` is announced, in the cancel's own transaction,
-carrying `refund` — and when one is due `payments` opens the refund from that same event. A plain field write could
-never do that — a paid order set to `canceled` by assignment would end with the customer's money
-kept and the stock held until the sweep.
-
-`shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
-`delivery` records, through `settleFulfillment` (see "Who writes the status" above).
-`paid → processing` follows a fulfillment-start fact the same way, through `markProcessing`.
-The admin override (`POST /orders/{id}/override-status`) is the door for a mis-scanned parcel or a
-manual correction. `items`/`userId` are not in
-`UpdateOrderByIdRequest` at all either — they stay `POST /orders` (create)-only. Rewriting a
-document that already carries a sequential invoice number has no safe meaning: EU VAT practice
-corrects an issued invoice with a credit note, not a rewrite, and a real order-edit flow (stock
-delta, refund/charge, tax) is a feature of its own.
-
 ### Deciding and enforcing stay separate
 
-The table decides. `updateStatusIfIn` (`src/infrastructure/persistence/conditional-status.ts`) enforces:
-it is the conditional write that makes exactly one racing writer win. A plain "move only from {A,B}"
-write uses it, so none can forget `status` in its filter. A write that needs more (`$unset`,
-`$min`/`$max`, a lease, an upsert, a revision, lean rows) writes its own guarded filter, and its
-docblock says why. The table only decides which `from` set that write is handed.
-
-The table itself is TypeScript, an event table (`{ initial, events: { name: { from[], to, actors? } } }`)
-built with `defineLifecycle` (`src/domain-primitives/lifecycle.ts`), which refuses at load a status that
-does not exist and an event that lands inside its own `from` — the self-move is illegal by
-construction.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
-    S["service"] -->|"which moves are legal?"| T["domain/lifecycle.ts<br/><i>decides</i>"]
-    T -->|"a from set"| R["repository<br/>updateStatusIfIn<br/><i>enforces atomically</i>"]
-    R --> DB[("MongoDB<br/>findOneAndUpdate")]
-
-    classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class T pure;
-```
-
-A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELABLE` from
-a cancel door with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
-`details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
-`Order.actions` on the order instead: the flags (`cancel`, `overrideStatus`, …) name the doors open to the caller. Every guard runs before any field
-is assigned, so a refused request is never a partial write.
+The table decides. `updateStatusIfIn` (`src/infrastructure/persistence/conditional-status.ts`) enforces.
 
 ### Compensation is policy, and it travels with the fact
 
 A cancellation has consequences — the stock comes back, and usually the money does too. Who decides
 which, and where that decision lives, is a separate question from which moves are legal.
-
-`order.canceled` carries a `refund` flag rather than the listener inferring one, and that flag is
-the whole promise: it is written to the outbox in the cancel's own transaction, `payments` opens a
-refund record from it, and the relay delivers the event again until that has happened. Once the
-record exists it is the durable intent (the refund sweep finishes it, forever, with the same
-idempotency key), so a provider refusal after that point is logged and the event is answered. A
-second event for the refund was tried and dropped: it needed its own marker on the order and its
-own sweep, a second mechanism for what the outbox already does. A redelivery cannot duplicate
-anything: the refund finds nothing left to return, and `webhooks` dedupes on the event id.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 40}}}%%
-flowchart TD
-    C["POST /orders/{id}/cancel"] --> S{"who is cancelling?"}
-    S -->|customer| F["refund = true<br/><i>forced</i>"]
-    S -->|operator| O["refund = body.refund<br/><i>default true</i>"]
-    F --> W["conditional status write"]
-    O --> W
-    W --> R["inventory release<br/><i>always</i>"]
-    R --> E["emit order.canceled<br/>{ orderId, refund }<br/><i>the fact, once</i>"]
-    E --> P{"refund?"}
-    P -->|true| M["payments opens the refund<br/>record and asks the provider"]
-    P -->|false| N["money left alone"]
-
-    classDef forced fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class F forced;
-```
-
-Three things this shape buys. A customer cannot waive their own refund, because `paid` is
-cancellable precisely on the promise that the money comes back — the flag is overwritten, not
-trusted. An operator can cancel without refunding, which is the replacement-going-out case. And
-`order.canceled` fires either way, so the record of what happened does not depend on what was
-compensated; suppressing it for the no-refund case would make `order.canceled` mean "cancelled and
-refunded", which is not what it says.
-
-Returning money on its own is a separate route, `POST /payments/{id}/refunds`, because it
-is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
-than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
-reaching back for a refund would close a cycle `npm run check` refuses.
 
 ### What is still NOT modelled
 
@@ -313,12 +95,7 @@ refund policy, and no caller can reach the state while skipping the consequences
 plain move to `canceled` for exactly that reason. What the conditional write buys is that **at most
 one caller runs the sequence**; a double-click and the reservation sweep cannot both proceed.
 
-The status move, the stock coming back and the `order.canceled` outbox row are one transaction
-(`moveToCanceled`), so a crash cannot leave a cancelled order holding stock or a cancel nobody
-heard of. What runs after the commit is the catalogue's stock cache, which is a mirror and cannot
-roll back; the next stock write refreshes it.
-
----
+Full detail: [1. The order lifecycle](./tactical-ddd-order-lifecycle.md).
 
 ## 2. Capabilities: the server answers what a client may do
 
@@ -428,53 +205,11 @@ needs no flag: the control stays enabled, the door refuses, and the client rende
 `openapi.yaml` types every monetary field `number`/`double`, and nothing about that moved. What
 changed is the arithmetic _between_ the boundaries.
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
-    IN["product.price<br/>shippingCost<br/><i>decimal, unknown</i>"] -->|toMinorUnits| M["Money<br/><i>integer cents</i>"]
-    M -->|addMoney / scaleMoney| M
-    M -->|toDecimalString| OUT["totalPrice<br/><i>decimal, contract</i>"]
-
-    classDef exact fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px;
-    class M exact;
-```
-
-One function in (`toMinorUnits`) and one out (`toDecimalString`), both taking the currency they
-convert for. Every intermediate is an integer, so the sum is exact and
-order-independent — no accumulator can round differently depending on the sequence it saw the lines
-in. The rounding rule exists once, in this file.
-
-`money.ts` owns ROUNDING; `totals.ts` owns COMPOSITION. `orderTotal({ items, shippingCost })` is
-what the customer owes, and every place that needs that figure reads it rather than adding the two
-numbers itself, so the payment intent cannot charge the lines and forget the shipping.
-
 ### At rest: Decimal128
 
 A stored amount is a BSON `Decimal128`, MongoDB's own recommendation for money (a `double` is
 "unsuitable for monetary arithmetic"). It is exact on disk and in the database, so a `$sum` over it
 needs no conversion. Nothing above the persistence layer sees one.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
-    W["decimal string<br/><i>"19.99"</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
-    D -->|"path getter · lean hook · serializer"| R["string at the currency's scale<br/><i>"19.99", the wire</i>"]
-    D -->|"$sum"| S["Decimal128<br/><i>exact sum</i>"]
-    S -->|"toMinorUnits, read as text"| M["Money<br/><i>integer cents</i>"]
-
-    classDef exact fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px;
-    class D,S,M exact;
-```
-
-- **One definition.** `moneyPath()` in `src/infrastructure/persistence/money-field.ts` is how a
-  model declares a money field, and `moneyPlugin` is what a lean read needs. Decimal128 has no `min`,
-  so `nonNegative` is a validator.
-- **Reading a sum.** `toMinorUnits` takes the `Decimal128` of a `$sum` as text and moves the digits;
-  it never multiplies a float. A `number` is still multiplied and rounded, for the callers that hold one.
-- **On the wire.** Every amount is a decimal string padded to its currency's ISO 4217 places (`"19.90"` EUR, `"1000"` JPY, `"1.500"` KWD), so two equal amounts are equal strings. `Decimal128` drops trailing zeros and `$inc`/`$sum` lose the scale, so `applySerialization` pads every money path last, from the schema's `moneyPath` list, with the document's own currency (products use the live shop currency). `toDecimalString` moves digits, never divides. A JSON number is refused with 422; more places than the currency has is refused with 422; rates (`taxRate`) stay numbers.
-- **Not every aggregation is revived.** A lean read and `toJSON` hand back decimal text. An aggregation's
-  output is whatever its pipeline shaped, so a pipeline that returns stored money row by row
-  (`payments/repository.ts#aggregateRefundRows`) revives it with `stringifyDecimals`; the serializer pads it on the way out.
 
 ### Which decimals a currency has
 
@@ -482,18 +217,11 @@ flowchart LR
 digits say 0 for HUF, IDR, COP, PKR, LBP and IQD, where ISO says 2, 2, 2, 2, 2 and 3: a HUF shop
 would lose the fillér. A code the table does not list gets 2. The six are pinned by a unit test.
 
-`fitsCurrency(amount, currency)` is the write-side rule: a price, a delivery rate or a refund with
-more places than the minor unit is refused, so the stored value is always the charged value
-(19.999 EUR is a 422, not a stored 19.999 charged as 20.00). It cannot be a contract `multipleOf`,
-because that cannot vary by currency, so it is a refinement beside each schema.
-
 ### Why a brand rather than a class
 
 A class would give the domain layer an object identity to maintain, a `toJSON` every serialization
 path must know about, and a shape Mongoose would try to store. A branded number is **the same
-integer at runtime** and a distinct type at compile time — which is the whole benefit:
-`toDecimalString` is the only way back to a plain `number`, so an amount cannot be summed with a raw
-price by accident or written to a document without passing the boundary that rounds it.
+integer at runtime** and a distinct type at compile time — which is the whole benefit.
 
 ### Totality is checked at every step, not at the end
 
@@ -501,11 +229,6 @@ price by accident or written to a document without passing the boundary that rou
 `Infinity`, a later negative term makes the running total `NaN` — which reaches the customer as a
 blank price. So every construction point funnels through one private `asMoney`, which answers
 "nothing owed" for anything non-finite, and normalises `-0` away as a second spelling of an amount
-with one meaning.
-
-That is a property over every possible input, which is why
-`tests/unit/domain-primitives/money.property.test.ts` is property-based rather than a table of
-examples. It found the `-0` case.
 
 ### Why it lives in `src/domain-primitives/`
 
@@ -513,73 +236,10 @@ Money arithmetic is not one module's business: `orders`, `payments`, `returns`, 
 `cart` and `stats`, among others, all add, scale or convert amounts. A type that many modules need
 has no single owner, so it sits in its own tier, `src/domain-primitives/`.
 
-There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,
-`@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type
-therefore has to sit somewhere a `domain/` folder CAN reach, without loosening that rule. The
-`domain-primitives` tier does it: it is the Shared Kernel (generic, npm only), and every tier may
-import it. See [the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart TD
-    K["@kernel/*"] -.->|"❌ lint"| D["domain/ folders"]
-    I["@infrastructure/*"] -.->|"❌ lint"| D
-    S["@modules/*"] -.->|"❌ lint"| D
-    SK["src/domain-primitives/money.ts<br/><i>npm and @types only</i>"] -->|"✅"| D
-    SK -->|"✅"| C["services, repositories, stats<br/><i>every other tier</i>"]
-
-    classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef banned fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class D,SK pure;
-    class K,I,S banned;
-```
-
 ### Per-rate VAT, and where shipping's own split goes
 
 `orders/domain/tax.ts`'s `orderTaxBreakdown` answers three questions from the same pass over an
-order's frozen lines, not three separate ones:
-
-- **Per line** (`lines[]`) — goods only, what `netTotal` sums. `taxTotal` does not stay goods-only:
-  it folds in shipping's own apportioned tax on top of the lines' — see `shippingNetAmount`/
-  `shippingTaxAmount` below for the goods/shipping split `netTotal` keeps but `taxTotal` doesn't.
-- **Shipping's own split** (`shippingNetAmount`/`shippingTaxAmount`) — delivery carries no VAT
-  rate of its own; it is taxed as ancillary to what it delivers, apportioned pro-rata across the
-  lines by their own gross value (`apportion`, the same "remainder to the largest weight" rule
-  `domain-primitives/money.ts` has), then taxed at _each line's own rate_. Two lines at different rates
-  split shipping's cost between them and pay two different amounts of tax on their own halves.
-- **Per rate** (`taxSummary[]`) — one row per DISTINCT rate charged on the order, goods and
-  shipping folded into the same row, since shipping was never a rate of its own to begin with.
-  This is what an invoice actually has to print: a customer does not care which line shipping's
-  22%-taxed share came from, only that the 22% column reconciles.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart LR
-    L1["line @ 22%"] --> R22["taxSummary<br/><i>rate 0.22</i>"]
-    L2["line @ 10%"] --> R10["taxSummary<br/><i>rate 0.10</i>"]
-    S["shippingCost"] -->|apportion, by gross value| SA["share @ 22%"] --> R22
-    S -->|apportion, by gross value| SB["share @ 10%"] --> R10
-
-    classDef row fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class R22,R10 row;
-```
-
-VAT is rounded ONCE per rate, on that rate's whole gross total (EN 16931 BR-CO-17), and only then
-split down to shipping and lines by the same `apportion` rule. Summing per-line rounded amounts
-would drift: three 0.10 lines at 22% carry 0.05 of VAT, not 0.06. The order response and the
-invoice call the same function, so they cannot disagree.
-
-Reconciliation is exact, in integer minor units, never approximated: summed `taxSummary.netAmount`
-is `netTotal + shippingNetAmount`, summed `taxAmount` is `taxTotal`, and summed `grossAmount` is
-the order's own `totalPrice` — `orders/tests/unit/tax.test.ts` asserts both reconciliations with a
-fixed multi-rate, multi-line example each, not a single hand-picked total.
-
-The invoice needs a fourth shape `orderTaxBreakdown` also returns but the wire contract never
-sees: `shippingByRate`, shipping's slice of `taxSummary` broken back OUT per rate — "shipping,
-taxed at 22%: €4.10 net, €0.90 tax" as its own printed row. `model.ts` does not copy it onto a
-serialized order. `invoicing`'s `issue-invoice.ts` and `services/credit-breakdown.ts` call
-`orderTaxBreakdown` and freeze `shippingByRate` onto the invoicing document; `emails.ts`, `render.ts`
-and `domain/credit-shares.ts` read it from there.
+order's frozen lines, not three separate ones.
 
 ### Currency is an argument, not part of the type
 
@@ -587,12 +247,8 @@ A currency's minor unit is not always a hundredth (JPY has none, KWD has three),
 `toMinorUnits(value, currency)` and `toDecimalString(amount, currency)` take the code they convert
 for, and `orderTotal` takes the order's own `currency`. The `Money` brand itself carries no
 currency, so `addMoney` cannot refuse a mismatch: the shop is single-currency per deployment
-(`NODE_DEFAULT_CURRENCY`), and a tag on the type would have one possible value.
 
-The day two currencies mix in one sum, the currency belongs **on this type** rather than beside
-the amount — an `addMoney` that refuses a mismatch is precisely the reason to put it there.
-
----
+Full detail: [3. Money](./tactical-ddd-money.md).
 
 ## 4. What is still absent
 

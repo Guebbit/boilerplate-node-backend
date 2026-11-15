@@ -152,184 +152,28 @@ bounded-context pattern**.
 A `language: {}` map on `module.ts` would be read by nothing and checked by nothing, and would sit
 furthest from the symbol each entry constrains. The prose lives in the glossary page; the
 constraints belong on the symbols.
-:::
+::.
 
 ## 4. Subdomain distillation — where to spend effort
 
 DDD's own advice is the part most often skipped: spend the modelling effort where the business
 differs, and use the simplest thing that works everywhere else.
 
-- The **expensive** tactical patterns — entities, aggregates, domain repositories, invariants at
-  construction — are what `core` would earn. Outside `core` they are a signal to re-check the label or
-  the build-vs-buy call, not a ban: how much logic a module has picks the pattern, the label only
-  predicts it (Khononov, _Learning Domain-Driven Design_, ch. 10).
-- The **cheap** two this repo already uses, `Money` and a transition table, go wherever the rule lives:
-  `tasks` and `example` (`generic`) and `payments`, `delivery` and `returns` (`supporting`) all carry tables.
-  No `core` module has an aggregate today.
-
-| Subdomain    | Meaning                                                         | Here, for example                           |
-| ------------ | --------------------------------------------------------------- | ------------------------------------------- |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`         |
-| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `users` |
-
-[The map](../modules/start.md#the-map) colours every module by its subdomain.
-
-The rule that follows: **the label sets how much modelling a module earns; the complexity of its logic
-picks the pattern; any rule that clears
-[the floor](./domain-layer.md#the-floor-testable-without-a-database-is-necessary-not-sufficient)
-goes in `domain/`, whatever the label.**
-
-- Where the pure rules live is a separate question from which pattern the module uses. A `domain/` of
-  pure functions is not a tactical pattern: it is a functional core inside an imperative shell, and any
-  pattern, even a Transaction Script, can have one. `account` (`generic`) keeps its session-revocation
-  and email-change rules there.
-- Evans says the same from the other side: a generic subdomain still gets its own model, and the label
-  sets priority and buy-versus-build ([DDD Reference](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)).
-- Keep the useful half of the old rule as a smell, not a ban: expect a generic module's `domain/` to be
-  small. A large one says the label, or the build-vs-buy call, is wrong.
-
-::: warning These values are an example, not a finding
-A boilerplate has no core domain. It cannot know what the next project's will be, and what it ships
-— products, orders, cart — is the textbook case of a _generic_ subdomain dressed as a core one. The
-mechanism is the deliverable; the first thing a real project should do is re-decide every row of
-that table.
-:::
-
-This table keeps the definitions; the values themselves live on each module's own
-`module.yaml#subdomain` and are read from there into the generated map at `docs/modules/start.md`
-(`npm run regenerate`) — so the table above is illustrative, not the source of truth for any one
-module's label. The strict schema (`npm run check`, module-graph step) only holds `subdomain` to being one
-of the three names; it does not check that a classification stays HONEST (nothing stops every module
-drifting to `core`). Placing the value with
-the module it describes is still worth doing, since a doc table can go stale the moment a new module
-lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
+Full detail: [4. Subdomain distillation — where to spend effort](./strategic-ddd-subdomains.md).
 
 ## 4a. Foundation and shop — an enforced fact, not a naming convention {#4a-foundation-and-shop}
 
 The API docs' "Core" family is the platform (every `group: foundation` module), NOT the DDD core
 subdomain: products, orders and cart are the core subdomain here and sit under "Catalogue" and "Buying".
 
-Subdomain distillation (§4) asks "how much modelling effort does this deserve". A second, separate
-question asks "does this module ship with every deployment, or is it the demo shop's own worked
-example" — `module.yaml#group`, `foundation | shop | example`.
-
-The two axes are independent: `access` is `generic` (§4) AND `foundation` (this section);
-`payments` is `supporting` AND `shop`. Neither implies the other.
-
-| Group        | Meaning                                                                                                   |
-| ------------ | --------------------------------------------------------------------------------------------------------- |
-| `foundation` | ships with every deployment, whatever the next project turns this boilerplate into                        |
-| `shop`       | the demo e-commerce domain's own worked example — deletable on its own                                    |
-| `example`    | the one module that exists only to be copied; see [the module template](./modules.md#the-module-template) |
-
-Unlike `subdomain`, this line is **enforced, not aspirational**:
-`.dependency-cruiser.cjs`'s `foundation-cannot-reach-shop` rule fails closed on a `foundation`
-module importing a `shop` one, the same way `module-coupling-<name>` fails closed on an
-undeclared sibling import. `webhooks` is labelled `foundation`: delivery, retries and signing are
-generic, and each module declares its own public events on its manifest (`publicEvents`,
-`kernel/registry.ts`'s `resolvePublicEvents`), so `webhooks` subscribes to whatever is registered
-instead of importing `orders`/`payments` event constants directly. The `example` group has two
-rules of its own: `nothing-reaches-example` (no other module may reach it, so deleting it breaks
-nothing) and `example-cannot-reach-shop` (it uses the foundation and nothing of the demo shop, so
-either can be deleted without the other). `demo:remove` deletes both groups: `example` is mounted
-in production, so a deployment copies it first and then removes it.
+Full detail: [4a. Foundation and shop — an enforced fact, not a naming convention](./strategic-ddd-subdomains.md).
 
 ## 5. Published language — the barrel
 
 `index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it — every
 module has one, structurally, so there is no "no barrel, therefore unreachable" escape hatch left.
 
-The convention is a **convenience barrel with a short, structural deny-list**, not the narrower
-"publish only what a sibling imports today". That narrower form has exactly one failure in practice: the list is short, a sibling's need is real, and copying the logic,
-redeclaring the type, or casting around the gap is cheaper than adding the export. A convenience
-barrel removes the incentive to route around it, at the cost of three things
-this repo already pays for elsewhere: a write handle leaking through a published repository (closed
-by the deny-list below), an import cycle inside a module (closed by ESLint refusing a module's own
-barrel-of-itself), and the loading cost of pulling in a whole module (already paid — `modules.ts`
-loads every module regardless).
-
-What a barrel publishes: `export *` from its services, domain rules, events and emails files, and
-`export type *` from its model and its presenter(s) — a shape describing itself grants no power the
-way a handle does. What it never publishes, no matter how convenient:
-
-- **A repository.** `productRepository` leaving the barrel is a handle on a collection: whoever
-  holds it can create, update and delete rows of a module it does not own, with that module's
-  service — and every rule, event, counter and audit line the service carries — bypassed. A sibling
-  read moves to a service function instead. `modules/inventory/index.ts` states the case by
-  refusing outright:
-
-    > The repositories, both models and every counter primitive are deliberately absent:
-    > publishing one would hand back the ability this module exists to take away. A sibling asks
-    > for a transition by name and gets a boolean — what it costs in counters is not their
-    > business.
-
-- **A step beneath a guarded door.** The work a service does once another function has checked
-  scope, ownership or state (`payments`' `settlePayment`, `inventory`'s `applyTransition`).
-  Publishing it is a repository export one level up: the write goes through, the checks don't. A
-  judgement call, not a file name, so a person marks the step `@internal` (TSDoc's own tag, with
-  the one-line reason). `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` then refuses
-  any tagged step a barrel reaches (also when a service object bundles it as `{ x: ns.fn }`, as a
-  forwarding wrapper `{ x: (a) => step(a) }`, or with `...ns`), and the
-  `scripts/audit/reachability/SKILL.md` audit (see [AI Auditing](../build/ai-auditing.md))
-  hunts the ones nobody has tagged.
-
-    The same rule holds for the raw write a `…ById` door delegates to (`update(doc)`, `remove(doc)`):
-    the barrel publishes the door, not the write. When a sibling has a legitimate reason to hold the
-    loaded document, the module names a narrower door for it: `users` serves `account` through
-    `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `softDeleteInactive` and `eraseInactive`, see
-    [users](../modules/users.md#the-doors-a-sibling-module-may-use).
-
-    **A step exactly one other module must call** is not published in the barrel either. The owner
-    gives that module a **friend file**, `src/modules/<owner>/friends/<friend>.ts`, and the
-    boundaries policy lets only the module named in the file's name import it (the template
-    `friends/<the importer's module>.ts` in `eslint.config.ts`). Three exist:
-    `users/friends/account.ts` (`accountUserService`, everything `account` calls),
-    `users/friends/orders.ts` (`takeAutomaticPurchaseHold`) and `orders/friends/payments.ts`
-    (`markPaid`). A friend file opens with why that module is the friend, and the step it carries is
-    tagged `@internal` so the barrel can never re-export it. A friend uses only its friend object:
-    a second policy refuses `account` the public `userService`, so a new `account`-only function can
-    only be added to `accountUserService`, and making something public is a deliberate step for
-    another module. Tests may reach any friend file. Not caught, on purpose: `import * as users`,
-    `export *` and a dynamic `import()`.
-
-- **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
-  `export type * from './model'` still publishes every type the model declares; only the values
-  that touch storage stay inside.
-- **The presenter FUNCTION.** `presenter.ts` (or `presenters.ts`, for a module presenting more than
-  one resource shape) is the one place a Mongoose document becomes a wire shape — see
-  [Modules](./modules.md#the-module-template). Its RETURN TYPE leaves the barrel the same way
-  the model's does, `export type * from './presenter'`; the function itself never does, in any
-  form. A sibling that needs the transform asks the service for it, the same door it already goes
-  through for a repository read — `orderService.withActions` is `orders/presenter.ts`'s
-  `presentOrder` plus the caller's `actions` (`orders/services/actions.ts`), reached this way by `cart`, `delivery` and `payments` alike.
-- **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
-  `audit.ts`. The app registers these; a sibling never calls them.
-- **`factories.ts`.** A builder writes past the domain rules a service enforces — the same
-  shortcut a repository export would be, offered from the test side instead. It stays reachable at
-  `@modules/<name>/factories`, directly, for tests, `scenarios/`, and a module's own
-  `tests/factories.ts`; the barrel is a production door, and a production import has no legitimate
-  reason to reach for a test builder.
-
-Unused exports in a published file are allowed on purpose and unenforced — the point of this
-section is that copying is the expensive failure mode, not an idle export. Published means
-reachable from the module barrel; a sub-barrel or an infrastructure facade is a convenience, and
-its unused re-exports go. What IS enforced: a
-barrel may only `export *` from the files above, and a module may not import its own barrel — the
-same cycle risk `export *` always carries, now closed at the one place it would bite.
-
-A repository export deserves more thought than a type export even so, and the asymmetry above is
-worth restating in code, not just here: `OrderDocument` leaving the barrel promises a shape will not
-move; a repository leaving it is a bypass of everything the owning service enforces.
-
-The narrowest surface in the repo is `observability`'s — it owns no collection and no data a
-sibling could want, so its barrel publishes services nothing has needed to import yet (see that
-module's own page). The widest is `users`, and it is wide
-because it is the `users` end of the one shared-kernel relationship in the repo — `account`
-authenticates the record `users` administers. The credentials stay on that record deliberately;
-the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-the-user-document-carries).
-
----
+Full detail: [5. Published language — the barrel](./strategic-ddd-barrel.md).
 
 ## How the tier walls are enforced
 

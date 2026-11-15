@@ -19,81 +19,9 @@ Two things, in order:
 
 ### Where does this go?
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
-flowchart TD
-    Q{"Could you test it<br/>without a database?"}
-    Q -->|no| OUT["not a domain rule"]
-    Q -->|yes| Q2{"Does it produce a<br/>status code or<br/>translated text?"}
-    Q2 -->|yes| SVC["service.ts<br/><i>it maps verdicts</i>"]
-    Q2 -->|no| DOM["domain/ ✅"]
-
-    OUT --> R1["query, index, pipeline → repository.ts"]
-    OUT --> R2["atomic write, concurrency → repository.ts"]
-    OUT --> R3["transaction, side-effect order → service.ts"]
-    OUT --> R4["request parsing → controllers/"]
-
-    classDef ask fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef yes fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef no fill:#fef3c7,stroke:#d97706,color:#111827;
-    class Q,Q2 ask;
-    class DOM yes;
-    class OUT,R1,R2,R3,R4,SVC no;
-```
-
 ### The rule, enforced by lint
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 45}}}%%
-flowchart LR
-    C["controllers/"] --> S["service.ts"]
-    S --> R["repository.ts"]
-    S --> D["domain/"]
-    R --> M["model.ts"]
-    D -.->|"❌ never"| R
-    D -.->|"❌ never"| M
-
-    classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef normal fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class D pure;
-    class C,S,R,M normal;
-```
-
-**The arrow points inward only.** The one thing outside itself `domain/` may import is
-`@domain-primitives/*` (`Money`): that tier is the Shared Kernel: generic, npm only. `domain/` may not import:
-
-| Forbidden                                  | Why                                               |
-| ------------------------------------------ | ------------------------------------------------- |
-| `mongoose`                                 | a rule may not know how anything is stored        |
-| `express`                                  | a rule may not know it was reached over HTTP      |
-| `@infrastructure/*`, `@kernel/*`, `@app/*` | those are tiers; domain sits below all of them    |
-| `@modules/*`                               | a sibling's rules are its own                     |
-| `../*` — its own module's outer files      | domain may not read `../model` or `../repository` |
-
-A rule that needs a document has not been extracted — it has been moved.
-
 ### The shape: verdict, not rejection
-
-```ts
-// domain/rules.ts — knows nothing of 422, 404 or i18n
-export const checkOrderLines = (lines) =>
-    lines.length === 0
-        ? { ok: false, reason: 'no-lines' }
-        : lines.some(hasNoProduct)
-          ? { ok: false, reason: 'product-missing' }
-          : { ok: true };
-```
-
-```ts
-// service.ts — owns the translation into an answer
-if (!verdict.ok)
-    return verdict.reason === 'no-lines'
-        ? generateReject(422, [t('generic.error-missing-data')])
-        : generateReject(404, [t('products.not-found')]);
-```
-
-The rule says _what is wrong_. The service says _what that means to an HTTP client_. Status codes
-and copy are delivery concerns; the same verdict serves a queue consumer or a CLI importer.
 
 ### Why bother
 
@@ -101,66 +29,11 @@ and copy are delivery concerns; the same verdict serves a queue consumer or a CL
 `setupTestDb`, no `beforeAll` and no mocks** — there is nothing to set up, because the file under
 test cannot reach anything. It proves things like _"a total is never `NaN`, for every possible
 input"_, which is a claim about all inputs that no table of examples can make. A `NaN` total
-reaches a customer as a blank price, so this is worth proving rather than spot-checking.
-
-**Lint is how the boundary is enforced, not why it exists.** The block in `eslint.config.ts` points
-at `src/modules/*/domain/**` because ESLint matches on paths — a folder is simply the only thing a
-linter can aim at. If the folder existed _only_ to satisfy the linter, it would be ceremony. It
-exists so that money arithmetic can be proven; the linter is what stops that from decaying the
-first day someone needs "just one query" inside a rule, at which point the fast proof quietly
-becomes a slow integration test nobody runs.
 
 ### Is this standard?
 
 Yes. A framework-free innermost layer is one of the most agreed-on ideas in software architecture —
-four traditions describe the same ring under four names:
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 35}}}%%
-flowchart TD
-    O["<b>outside</b><br/>HTTP · database · queues · email"]
-    A["<b>application</b><br/>service.ts · controllers/ · repository.ts"]
-    D["<b>the rules</b><br/>domain/"]
-
-    O -->|"may import"| A
-    A -->|"may import"| D
-    D -.->|"❌ never"| A
-    D -.->|"❌ never"| O
-
-    classDef out fill:#fee2e2,stroke:#dc2626,color:#111827;
-    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class O out;
-    class A app;
-    class D pure;
-```
-
-| Tradition                        | Year | Author            | What it calls the innermost ring |
-| -------------------------------- | ---- | ----------------- | -------------------------------- |
-| **DDD**, layered architecture    | 2003 | Eric Evans        | the **domain layer**             |
-| **Hexagonal** (Ports & Adapters) | 2005 | Alistair Cockburn | the inside, behind ports         |
-| **Onion Architecture**           | 2008 | Jeffrey Palermo   | Domain Model + Domain Services   |
-| **Clean Architecture**           | 2012 | Robert C. Martin  | Entities, then Use Cases         |
-
-All four state the same rule this page opened with: the rules do not import the delivery mechanism
-or the database, and the dependency arrow points inward only. `domain/` is the DDD spelling, which
-is why the folder carries that name.
-
-**Will a reader recognise it?** Depends on the reader, and it is worth being honest about that:
-
-| Arriving from                      | Reaction                                               |
-| ---------------------------------- | ------------------------------------------------------ |
-| Java/Spring, .NET, Go, or any DDD  | instant — `orders/domain/` is the expected layout      |
-| Nx / modular monorepos             | familiar — the "domain library" split is the same idea |
-| typical Express or Vue application | often not — this is the page that has to explain it    |
-
-The third row is why this page exists. The idea is standard; its presence in a Node boilerplate is
-not, so it gets documented rather than assumed.
-
-**When you would not have one at all:** a module whose rules are all "store this, return it" has no
-domain layer, and inventing one produces empty folders. About half the modules here have none — see
-[the floor](#the-floor-testable-without-a-database-is-necessary-not-sufficient) for the test a rule
-must pass before it earns a place.
+four traditions describe the same ring under four names.
 
 ### The floor: "testable without a database" is necessary, not sufficient
 
@@ -168,85 +41,12 @@ The question above decides _where_ a rule goes. It does not decide _whether_ the
 one-line expression passes "testable without a database" trivially, so the test alone would pull
 every ternary in the codebase into `domain/`.
 
-> **A rule earns `domain/` when it has more than one caller, _or_ a non-obvious failure mode a
-> reader would otherwise reintroduce. A one-line expression with one caller and no trap is
-> inlined, and its comment goes with it.**
-
-The comment is the part worth keeping. `if (order.deletedAt) return …; order.deletedAt = new Date()`
-with a line pointing at `hardDeleteSchema`, where the soft-delete semantics are written once for
-every collection, says everything a `nextDeletionState(deletedAt, now)` said — minus an import, a
-barrel line and a hop.
-
-Both halves are live:
-
-| Kept              | Why it clears the floor                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `sumLineItems`    | Three modules — `cart`, `orders` and `returns` total through it, so a summary cannot disagree with the order it previews |
-| `orderTotal`      | Every place that owes the customer one number reads it, so the order and the payment intent cannot disagree              |
-| `steppedQuantity` | Frontend (the paired repo's cart quantity helpers): one caller, but a real trap — the clamp catches a double click       |
-| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                                   |
-
-| Removed             | Why it did not                                                                |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `nextDeletionState` | `deletedAt ? undefined : now`, one caller — the call site was shorter inlined |
-| `readScope`         | A tagged union its only caller destructured two lines later                   |
-| `canDecrement`      | Frontend: `q > MIN_LINE_QUANTITY`, one template binding                       |
-
 ### A 3+-state stored status almost always earns the folder
 
 A 3+-state **stored** status almost always clears the floor, because its allowed moves are a rule: a
 transition table catches real bugs a status literal scattered across services cannot.
-`orders/domain/lifecycle.ts` below is the worked example. "Stored" keeps a derived status, such as
-observability's `DependencyStatus`, out of it.
 
-It is a consequence of the floor, not a rule of its own. `webhooks` has a 4-state delivery status and no
-transition table: its moves are atomic claims in `repository.ts`, a database concern. Its `domain/`
-exists for the retry ladder and auto-disable limits (`backoff.ts`, `rules.generated.ts`) and the
-event filter.
-
-No rule that clears the floor means no folder, and never an empty one: creating a folder to match a
-shape is how ceremony starts.
-
-**`delivery/domain/rates.ts` is a worked example, and a good argument for the folder.** It is
-a few pure functions (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
-`cheapestStandardShipping`), re-exported through the module barrel: a sibling prices a shipping
-method without learning that shipments, couriers or a `shipmentRepository` exist. That is what stops `cart`'s checkout and `GET /delivery/methods` from
-ever quoting different numbers — there is one function and both call it — and it is a published
-language rather than a handle on this module's storage, which is the distinction
-[Strategic DDD](./strategic-ddd.md) draws between kinds of dependency edge.
-
-**`orders/domain/lifecycle.ts` is the case where the folder holds a rule that has no other home.** It is
-one table saying which status may follow which, and who may make each move. The _set_ of statuses is
-not its business — `OrderStatus` is generated from `openapi.yaml`, so the values stay contract-first
-— but the edges between them live here once. The cancel (`orders/services/cancel.ts`), the system
-moves (`orders/services/status.ts`, `delivery`) and the admin override all read the table, which is
-the whole point of a domain folder: the rule exists once and the callers ask it.
-
-That table is built with `domain-primitives/lifecycle.ts`'s `defineLifecycle`, the same helper
-`example/domain/lifecycle.ts` uses: the module writes the events as an `as const` object and gets
-`allows`, `fromOf`, `toOf`, `eventsFrom`, `reachableFrom` and `canTransition` back, with the
-construction-time checks (known statuses, no self-move) done once. The module keeps its own guards
-in code (`orders`' `canOverrideTo`, the digital-only rule).
-
-**`domain-primitives/money.ts` is the case for a value type in a codebase that is not otherwise doing
-tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
-whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` types every amount
-as a decimal string (`DecimalAmount`, padded to the currency's places) and keeps `number` only for rates; no site outside this
-file holds a rounding rule of its own. It lives in `src/domain-primitives/` because many modules do money
-arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
-the tier imports npm only. Why one small kernel and no second:
-[the rulebook](./layers.md#the-rulebook-one-small-shared-kernel).
-
-**`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
-itself.** It is one table (`counterDeltaFor`) mapping each stock movement reason to the
-three counter deltas (`onHand`, `reserved`, `backordered`) it implies, plus the subtraction that defines availability. Nothing about it
-needs a database, and everything that does — the conditional writes, the ledger row, the
-reservation lifecycle — reads the table rather than restating it;
-`src/modules/inventory/tests/unit/transitions.test.ts` pins the actual signed delta each reason
-produces against `openapi.yaml`'s own documented table, so a reason added to the contract and not
-to this one is a compile error the moment something calls it.
-
----
+Full detail: [1. The folder](./domain-layer-folder.md).
 
 ## 2. What DDD is
 

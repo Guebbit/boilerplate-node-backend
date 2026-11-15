@@ -150,7 +150,6 @@ fires at all. Anything decided by the write itself belongs with the write.
 ### Security first
 
 Things like [Helmet](security.md), CORS, cookies, auth, and rate limits happen near the edge.
-That keeps the inside layers focused.
 
 ### Validation at the edge, rules inside
 
@@ -158,29 +157,6 @@ Shape validation happens in the **controller**, against the [Zod](runtime.md) sc
 generated from `openapi.yaml` — so a service is only ever called with data the contract already
 accepted, and never has to ask whether a field is a string. Which sources a controller reads
 (params, query, body, and in what precedence) is a property of the surface rather than of the
-handler; [Request Input](./request-input.md) is the page for that.
-
-The four steps every controller repeats — parse the body, answer 422, send a service refusal,
-catch — live in `@infrastructure/http/controller` as `parseBody`, `refused`
-and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned the chain would
-move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
-hide the literal `.catch(` that `scripts/eslint/controller-chain-must-catch.ts` looks for.
-
-**A refusal about one field names it**, whatever its code: `details.field` carries the dotted path
-(`shippingAddress.zip`), so a client shows the message under that input instead of in a banner.
-A schema failure is `VALIDATION_ERROR`; a business rule about one field keeps its domain code
-(`RETURN_DEDUCTION_INVALID` on `handlingDeduction`). Both build their item with `fieldError` from
-`@infrastructure/http/response`. This is Stripe's `param`, and RFC 9457's `errors[].pointer`.
-
-**Two endpoints deliberately do not parse a generated schema, and say so in place.**
-`post-signup` is validated by its service against `SignupBody` plus the two rules the contract
-cannot say (the repeat matches, terms accepted), so a direct caller of the service gets the same 422. `post-login` answers one
-way for every wrong credential: parsing first makes a too-short password a 422 while a wrong
-password of the right length is a 401, and it answers before `recordLoginFailure`, so the attempt
-most worth recording never reaches the audit trail.
-
-Business rules live in the
-service, and the ones worth proving without a database live in `domain/`.
 
 ### Optional acceleration
 
@@ -197,94 +173,18 @@ catch its rejection. `void p` does not change that: it only discards the value. 
 `@typescript-eslint/no-floating-promises` runs with `ignoreVoid: false`, so `void p` is checked
 like `p`.
 
-What a lost rejection costs depends on where it happens:
-
-| Where                   | What an unhandled rejection does                                                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Production request path | `handleUnhandledRejection` (`src/app/error-handling.ts`) counts it, audit-logs it and keeps running. The line carries no request id and no user. |
-| Tests                   | No handler is registered, so Jest pins the rejection on the test and fails it.                                                                   |
-| Scripts and early boot  | Node's default: the process crashes.                                                                                                             |
-
-```mermaid
-flowchart TD
-    A[A promise you will not await] --> B{Own .catch, or .then with an onRejected arm?}
-    B -- yes --> OK1[Handled: the rule is satisfied]
-    B -- no --> C{Callee documents "Never rejects."?}
-    C -- yes --> OK2["void + eslint-disable-next-line ... -- why"]
-    C -- no --> D[".catch(log with the user or request context)"]
-```
-
-- Handle it at the site: `.catch((error: unknown) => logger.error({ message, userId, error }))`.
-- Opt out only when the callee cannot reject, and say so on the line:
-  `// eslint-disable-next-line @typescript-eslint/no-floating-promises -- enqueueEmail never rejects`.
-  The callee's JSDoc says "Never rejects." so the reason can be checked.
-- A script's top-level promise ends in `.catch(failScript)` (`scripts/fail-script.ts`).
-
 ### Signals everywhere
 
 [Winston](../operate/winston.md), [Prometheus](../operate/prometheus.md), [OpenTelemetry](../operate/opentelemetry.md), and [Grafana](../operate/grafana.md) make it easier to debug the same request from multiple angles. Each log line carries a `trace_id` that links back to the full trace in Grafana → Tempo.
+
+Full detail: [Cross-cutting strategies](./request-flow-strategies.md).
 
 ## PUT replaces, PATCH merges
 
 The rules themselves — what each verb means, the status it answers, `null` versus `''`, the
 415 guard — are on [Write Methods](write-methods.md). This section is the mechanism.
 
-Most resources with an update answer both verbs through one shared controller —
-`createUpdateController` in `@infrastructure/surfaces/create-update-controller`. The verb only
-changes the front of the pipeline; the module's own `update(id, changes)` never learns which one
-produced the change-set.
-
-**Not factory-backed:**
-
-- **Entity translations** (`PUT`/`PATCH /locales/translations/{entityType}/{id}`) and the locale
-  entries bulk import (`PUT`/`PATCH /locales/{locale}/apps/{app}/entries`) are hand-written.
-  Their bodies differ by verb where it matters: a PATCH locale entry merges field by field (a
-  `null` clears one), a PUT states each locale whole.
-- **PUT-only resources** — `PUT /locales/{locale}/apps/{app}/entries/{entryId}`,
-  `PUT /cart/shipping-method`, `PUT /account/addresses/{id}/default` —
-  have no PATCH.
-
-```mermaid
-flowchart LR
-    P["PUT body"] --> VR["validate<br/>Replace*Request"] --> F["fill every omitted<br/>nullable field with null<br/>(minus keptWhenOmitted)"] --> C["completeReplace<br/>(a keyed map's stored keys → null)"] --> U
-    M["PATCH body"] --> VP["validate<br/>Update*Request"] --> U["module's update(id, changes)"]
-    U --> S["value → $set<br/>null → $unset"]
-```
-
-- **The factory reads the clearable fields off the schema itself** (`clearableFields`: every field
-  that accepts `null`), so nobody keeps the list by hand. A field that cannot be `null` is
-  required by the PUT schema instead.
-- **`keptWhenOmitted`** names fields outside the PUT representation that are nullable yet must
-  survive an omission — `imageUrl`, whose only writer is an upload. An explicit `null` still
-  clears it: the field is unset and the old file and thumbnail are deleted after the save.
-- **`completeReplace`** is the PUT-only hook for a keyed map the schema alone cannot name: a
-  product's `translations` sets every stored locale the body left out to `null`, the signal a
-  PATCH uses to delete one.
-- **A cleared field is unset on disk, never a stored `null`.** `clearedOrValue`
-  (`@infrastructure/persistence/changes`) turns the change-set's `null` into `undefined`, which
-  `.save()` writes as `$unset`.
-- **The module's `update()` audits itself.** The factory never records an audit entry, so no
-  update is logged twice.
-
-`tests/cross-cutting/replace-patch-parity.test.ts` checks that each resource's PUT and PATCH
-schemas declare the same fields.
-
-**Conditional writes ride the same pipeline.** The update and delete factories run the module's
-write inside `withIfMatch(request, id, …)`, which opens a precondition for that row. The
-repository's `save`/`deleteOne` are where it is met, so no module writes precondition code — see
-[Write Methods](write-methods.md#conditional-writes-etag-and-if-match).
-
-The update factory takes a required `versioned: boolean`. `true` is a resource whose contract
-declares `If-Match` and `412`; `false` ignores the header entirely, so a route never answers a
-`412` its contract does not declare. The list is in
-[Which resources are versioned](write-methods.md#which-resources-are-versioned).
-
-```mermaid
-flowchart LR
-    H["If-Match header"] --> W["withIfMatch(request, id)"] --> U["module's update(id, changes)"] --> R["repository.save"]
-    R -->|"tag matches the loaded row<br/>+ fenced on editRevision"| OK["200 (a PATCH also answers the new ETag)"]
-    R -->|"stale, or lost the race"| E["PreconditionFailedError → 412"]
-```
+Full detail: [PUT replaces, PATCH merges](./request-flow-strategies.md).
 
 ## A malformed id has one answer per position
 
@@ -292,45 +192,7 @@ Where an id sits decides the answer. "Malformed" means not this backend's own id
 characters. The contract's shared `Id` is deliberately looser (see below), so a value can satisfy
 the contract and still be refused here.
 
-| The id is in…      | Malformed (`abc`)                                                     | Well-formed but unknown |
-| ------------------ | --------------------------------------------------------------------- | ----------------------- |
-| the **URL path**   | **404**, the same code and copy the module answers an unknown id with | 404                     |
-| a **body field**   | **422** `VALIDATION_ERROR`, `details.field` names the field           | 404 from the service    |
-| a **query filter** | **422** `VALIDATION_ERROR`, `details.field` names the field           | an empty list           |
-
-`tests/integration/malformed-ids.test.ts` owns the test of this table: it sends every position its
-malformed spellings, so a module test repeats one only when it checks more than the status.
-
-```mermaid
-flowchart TD
-    A["id arrives"] --> B{"where?"}
-    B -->|"URL path"| C["requireId"]
-    B -->|"body or query"| D["parseBody"]
-    C -->|"24 hex"| S["service: found, or the module's 404"]
-    C -->|"anything else"| N["404, as an unknown id"]
-    D -->|"24 hex"| S
-    D -->|"anything else"| V["422 VALIDATION_ERROR + details.field"]
-```
-
-- **Path → 404.** The URL _is_ the resource asked for, so a broken one points at nothing, and the
-  answer cannot tell a caller which ids this API issues. `requireId`
-  (`src/infrastructure/http/ids.ts`) is the one check, called by every shared controller factory and
-  by every hand-written controller with an id in its path, before the database is asked. It takes
-  the module's own not-found copy, which is what makes the two answers byte-identical.
-- **Field → 422 naming the field.** A body or query value is an argument, and a bad argument is a
-  validation error that says which one. `parseBody` walks the request schema for the contract's `Id`
-  fields (found by the shared pattern) and refuses each that is not an ObjectId, in the same list
-  as every other bad field — so a body with a bad `quantity` and a bad `items.1.productId` reports
-  both.
-- **The contract's `Id`** is `minLength: 1`, `maxLength: 64`, `pattern: '^[0-9A-Za-z_-]+$'`: a
-  storage-neutral bound (OWASP API4:2023, bound every string input) that fits an ObjectId, a ULID
-  and a UUID, so the paired twin and the frontend's response validation keep working. The ObjectId
-  rule is this backend's alone and never reaches the contract.
-- **Why not 404 everywhere.** A 404 on `POST /cart/items` reads like a mistyped path, it cannot name the
-  field (one body can carry several ids), and `quantity: -1` is already a 422 naming its field.
-
-`tests/integration/malformed-ids.test.ts` walks every id site `openapi.yaml` declares and holds it
-to the table, so a route added later is covered on its first run.
+Full detail: [A malformed id has one answer per position](./request-flow-errors.md).
 
 ## The database error interpreter
 
@@ -339,52 +201,23 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                                                                                           | Status | Why it is the caller's problem                                                                                                                                                          |
-| --------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CastError` (Mongoose)                                                                              | 422    | A value failed a schema path's cast (recognised by its `kind`). A safety net: a malformed id is answered before the database, see [below](#a-malformed-id-has-one-answer-per-position). |
-| `BSONError` (driver)                                                                                | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters. The same safety net.                                                                  |
-| `E11000` duplicate key                                                                              | 409    | A unique index refused the write: something with that value already exists.                                                                                                             |
-| `ValidationError` (Mongoose)                                                                        | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                                                               |
-| any module's `ConflictError`                                                                        | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                                                            |
-| `PreconditionFailedError`                                                                           | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](write-methods.md#conditional-writes-etag-and-if-match).                                                  |
-| a dependency outage (Mongo or Redis unreachable, a full queue, or a query killed at its time limit) | 503    | The server is temporarily broken, not the request: `isInfrastructureError`, answered with `SERVICE_UNAVAILABLE` (`QUERY_TIMEOUT` for a killed query) and a `Retry-After` hint.          |
-| anything else                                                                                       | 500    | Genuinely unrecognised.                                                                                                                                                                 |
-
-Every branch above exists so that something describing the CALLER is not reported as a server
-fault. `POST /products/search` is public and takes an `id` filter, so `{"id": ""}` must not become
-an **unauthenticated** request producing a server error — an availability signal as much as a
-correctness one.
-
 ### Three rules the branches share
 
 - **The driver/Mongoose branches are detected by shape, not `instanceof`:** `BSONError` and `ValidationError` by `name`, `CastError` by its own `kind` property, E11000 by `isDuplicateKey`. Both `bson` and
   `mongoose` reach this process as transitive dependencies of more than one package, and an
-  `instanceof` against the wrong copy silently returns false. `ConflictError` is the one exception:
-  it is our own class, defined once, here — a module subclasses it and `instanceof` is exactly the
-  right tool, since there is no second copy of it anywhere to disagree with.
-- **The message is never the driver's.** E11000's text carries the index name and the duplicated
-  value — user-supplied data, which has no business being echoed back. Mongoose's enumerates the
-  failing paths, which describes the schema. Both are literals here instead.
-- **Neither half of the tuple comes from the error.** `message` is prose, so parsing a status out
-  of it yields `NaN`, and `res.status(NaN)` throws inside Express — a client error arriving as a 500.
+  `instanceof` against the wrong copy silently returns false. `ConflictError` is the one exception.
 
 ### Why `ValidationError` is not already impossible
 
 Request bodies are validated by Zod schemas generated from `openapi.yaml`, inside the controller (`parseBody`), before any service runs,
 so a Mongoose validator firing means the model is enforcing something the contract does not.
-For example, a display name of one space satisfies `minLength: 1`, then the schema's `trim`
-reduces it to `''` and `required` refuses it — a 500 for a stray space, which
-`tests/fuzz/endpoints.fuzz.test.ts` finds.
-
-Closing it **at the contract** is still the better fix where the constraint can be expressed there.
-This branch is the floor under that, across every model at once.
 
 ### Where a fifth branch goes
 
 In this function, carrying a comment naming which driver raises it and why its status is what it
 is — not in a controller, and not as a `try`/`catch` at the call site.
-`tests/fuzz/endpoints.fuzz.test.ts` is what surfaces these: a 500 out of it is this class of error
-until something proves otherwise.
+
+Full detail: [The database error interpreter](./request-flow-errors.md).
 
 ## What an unhandled error tells the client
 
@@ -392,28 +225,11 @@ The global handler answers in four branches, and the order is the point: a `Mult
 413 for a size limit (`LIMIT_FILE_SIZE`, `LIMIT_FIELD_VALUE`) and 400 for any other limit; a library that follows the `http-errors` contract (`expose: true`, a 4xx `.status`/
 `.statusCode`) — body-parser's oversized-body and malformed-body rejections among them — answers
 that declared status (400/413/415), never the library's own message; a driver failure that
-`databaseErrorInterpreter` recognises as a _client_ mistake becomes that 4xx; and everything else
-is 500. A middleware that already has the `Response` in hand — file upload validation, for one —
-answers `rejectResponse` directly instead of throwing something for this handler to translate.
-
-A malformed multipart body (no boundary, cut short) is the same contract: the upload middleware
-wraps busboy's plain `Error` as a 400 client error (`status` + `expose`), so it never reaches the
-500 branch. An OS failure (a full disk) is left alone and stays 500.
-
-The JSON parser is non-strict: any JSON value parses (RFC 8259 §2), and a body that is not a JSON
-object (`5`, `"x"`, `true`, `null`, `[]`) answers 422 `VALIDATION_ERROR` from `requireJsonObjectBody`
-before any route (RFC 5789 §2.2). Unparseable JSON stays the parser's 400.
 
 ### A status-only failure is still translated
 
 A refusal that carries no text of its own (a bare 404 from the catch-all, a 409, a 412) answers
 `errors[0].message` from one `generic.*` locale key per status, in the caller's `Accept-Language`.
-The problem's `title` stays the English status phrase on purpose: it is the developer-facing
-label, `detail` and `errors[]` are what a person reads ([the shape](../reference/errors.md#problem-details)). The locale is
-negotiated before request parsing, so the global limiter's 429 and a parser's 400 / 413 / 415
-speak the caller's language and carry `Content-Language` too. A `MulterError` keeps its `code`,
-and its English text is replaced by `generic.error-upload-refused`. When multer names the
-form field that broke the rule, the item also carries `details.field`.
 
 ### The database branch is a safety net, not a substitute
 
@@ -421,7 +237,6 @@ Every controller ends its chain with a `.catch()` that calls `rejectDatabaseErro
 routinely relies on this branch. But a controller added later may forget one, and forgetting is
 silent. `tests/fuzz/endpoints.fuzz.test.ts` walks every spec operation and is what catches the next
 one. A malformed id is not that case: it is answered before the database by `requireId` and
-`parseBody`, and a `CastError` reaching this branch means a route skipped them.
 
 ### The 500 branch says nothing
 
@@ -429,10 +244,8 @@ one. A malformed id is not that case: it is answered before the database by `req
 where nobody chose the wording: a Mongoose validation error naming internal field paths, a driver
 error naming hosts and ports, an `ENOENT` naming a filesystem layout, a third-party client quoting
 a URL with a key in it. Any of those is free reconnaissance for an unauthenticated caller, and none
-of it means anything to the person reading it.
 
-The detail is not lost — it is logged with the request id and trace id, where an operator can act on
-it and a stranger cannot.
+Full detail: [What an unhandled error tells the client](./request-flow-errors.md).
 
 ## Why the flow matters
 
