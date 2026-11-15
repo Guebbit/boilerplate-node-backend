@@ -57,13 +57,13 @@ number can always be rebuilt from its history.
 
 Every product carries three figures, and confusing them is the classic warehouse mistake:
 
-| Figure        | Means                                                      |
-| ------------- | ---------------------------------------------------------- |
-| **On hand**   | Physically on the shelf right now                          |
-| **Set aside** | Of those, how many are promised to orders not yet shipped  |
-| **Available** | On hand minus set aside — what a customer can actually buy |
+| Figure        | Means                                                     |
+| ------------- | --------------------------------------------------------- |
+| **On hand**   | Physically on the shelf right now                         |
+| **Reserved**  | Of those, how many are promised to orders not yet shipped |
+| **Available** | On hand minus reserved — what a customer can actually buy |
 
-A product with 10 on hand and 4 set aside sells to 6 more people, not 10.
+A product with 10 on hand and 4 reserved sells to 6 more people, not 10.
 
 ## The two things you do by hand
 
@@ -93,7 +93,7 @@ parcel already left, record a **correction** so the count is true again. Then as
 
 ## Clearing expired holds
 
-When a customer checks out but never pays, their goods sit "set aside" for 15 minutes (by default) and then need
+When a customer checks out but never pays, their goods sit "reserved" for 15 minutes for a card, a week for a bank transfer (by default) and then need
 releasing.
 
 ::: warning This does not happen by itself
@@ -225,8 +225,8 @@ arrives. Receive the return with a restock count of 0 on every line (see
 | Word           | In plain terms                                                                                 |
 | -------------- | ---------------------------------------------------------------------------------------------- |
 | **On hand**    | Physically present on the shelf.                                                               |
-| **Set aside**  | On the shelf, but promised to an order not yet shipped. → [Inventory](../modules/inventory.md) |
-| **Available**  | On hand minus set aside. What can still be sold.                                               |
+| **Reserved**   | On the shelf, but promised to an order not yet shipped. → [Inventory](../modules/inventory.md) |
+| **Available**  | On hand minus reserved. What can still be sold.                                                |
 | **The sweep**  | The job that releases holds nobody paid for. Must be triggered.                                |
 | **Adjustment** | A recorded correction after counting the shelf.                                                |
 | **Receipt**    | A recorded delivery from a supplier.                                                           |

@@ -51,7 +51,7 @@ a new, narrower key to add, not something this role already enforces.
 
 ## The two doors onto a product's words
 
-A product's copy can be reached two ways, and they are genuinely different endpoints:
+A product's copy can be reached two ways, and they are genuinely different doors:
 
 | Where you edit          | Reaches                                                                     | Needs                                                     |
 | ----------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------- |

@@ -5,6 +5,8 @@ audience: [staff, owner]
 
 # The moderator
 
+<!-- IMG: a customer's account page with the purchase hold and the ban action · the account page showing the hold notice and the Deactivate user button -->
+
 Accounts that need action taken against them, orders that need sorting out, and money that needs
 to go back.
 
@@ -28,8 +30,8 @@ Every role's full rights are in [the role table](./start.md#what-that-actually-g
 
 ## Banning is its own key {#banning-is-its-own-key}
 
-Banning an account **is** deactivating it (the **Deactivate** action), and bringing it back is
-activating it. Both need the ban permission, which [support](./support.md) does not hold. A role that fixes a
+Banning an account **is** deactivating it (the **Deactivate user** button), and bringing it back is
+**Activate user**. Both need the ban permission, which [support](./support.md) does not hold. A role that fixes a
 customer's phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
@@ -91,7 +93,7 @@ order moves to paid, stock commits, the confirmation fires.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /orders/{id}/payments</i>"]
+    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>Record a payment by hand</i>"]
     B --> C["the order is paid<br/><i>stock commits, the confirmation fires</i>"]
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;

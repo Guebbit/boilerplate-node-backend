@@ -120,7 +120,7 @@ arrive.
 4. The units are open again on the **same order**. Either **ship them again** with the **Ship items** button
    (the order goes back to _being prepared_ and forward again), or **cancel the rest** and refund the
    buyer if they would rather have the money. If nothing of the order ever arrived, a full refund makes
-   the order show **Cancelled (lost in transit)**, not _Delivered_.
+   the order show **Cancelled**, and its history reads **Lost in transit, refunded**, not _Delivered_.
 5. Claim the loss with the carrier in the carrier's own portal. The shipment, its tracking code and your
    note are the paper trail.
 

@@ -89,7 +89,7 @@ its own.
 
 ## The 15-minute hold
 
-Setting goods aside is a promise with a deadline.
+Setting goods aside is a promise with a deadline. A card payment gets 15 minutes; a bank transfer gets a week, because the money takes days to arrive.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -122,9 +122,9 @@ the test card `pm_card_declined`, which is always refused — so a refusal can b
 than waited for.
 
 A refused card is not a failure of the order. The order stays unpaid, the goods stay set aside for
-the rest of the 15 minutes, and the customer can try again.
+the rest of the hold (15 minutes for a card, a week for a bank transfer), and the customer can try again.
 
-**A payment that arrives after the 15 minutes** (a bank transfer recorded late, or a card payment
+**A payment that arrives after the hold ran out** (a card payment
 that was still being confirmed) either completes normally, if the goods are still on the shelf, or
 is **refunded automatically** if they were sold to someone else in the meantime. The customer is
 never charged for goods that are gone.
