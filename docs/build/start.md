@@ -49,6 +49,7 @@ Run it locally, start a project, change a contract, test it, and the conventions
 ## Conventions
 
 - [Writing These Docs](./documentation-style.md)
+- [Code comments](./code-comments.md)
 - [Dependency Vetting](./dependency-vetting.md)
 - [Dependency graph](./dependency-graph.md)
 - [Pending Major Upgrades](./pending-major-upgrades.md)

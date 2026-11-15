@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [developer]
 ---
 
@@ -20,6 +20,138 @@ flowchart LR
 ```
 
 That loop, repeated per section, is most of this page.
+
+## The rules every page follows
+
+| Rule                             | What it means                                                                                                           |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| One hub per topic                | The hub owns the overview. Its satellites link up to it and never re-explain it.                                        |
+| Links go down or sideways        | Down to the detail, sideways as "Read next". A page never restates another page.                                        |
+| At most 3 levels                 | Branch, topic, page.                                                                                                    |
+| About 300 lines a page           | Past that, a hub plus sub-pages.                                                                                        |
+| Front-matter on every page       | `type` and `audience`, below. The home page is the one exemption.                                                       |
+| One type per H2                  | A section is a concept, a task, a reference or a troubleshooting. `npm run check` does not judge this; the review does. |
+| Visual first                     | A table beats a list, a list beats prose. Mermaid for every flow, process or structure.                                 |
+| Images where they explain better | A real screen or a drawn concept. See the placeholder below.                                                            |
+
+## Front-matter
+
+Every page except `docs/index.md` opens with a block that `npm run check` reads:
+
+```yaml
+---
+type: concept # concept | task | reference | troubleshooting
+audience: [developer] # a non-empty list from: staff, owner, developer, architect, operator, anyone
+---
+```
+
+| `type`            | The reader wants to | Shape                        |
+| ----------------- | ------------------- | ---------------------------- |
+| `concept`         | understand why      | idea, diagram, trade-offs    |
+| `task`            | get something done  | ordered steps, each runnable |
+| `reference`       | look something up   | a table, nothing else        |
+| `troubleshooting` | fix a symptom       | symptom, cause, fix          |
+
+## Images and placeholders
+
+Where a real screen or a drawn concept explains better than words, leave a placeholder; the image
+pass fills it later:
+
+```md
+<!-- IMG: what the picture shows · alt text for the reader -->
+```
+
+## One template per type
+
+Copy the block for the page's type, then delete what the page does not need.
+
+### Concept
+
+````md
+---
+type: concept
+audience: [developer]
+---
+
+# <The idea, as a noun>
+
+<One line: what this is and why a reader would care.>
+
+```mermaid
+<the shape of it>
+```
+
+## Why it is built this way
+
+| Choice | Why | What it costs |
+| ------ | --- | ------------- |
+
+## Read next
+
+- [<the page that goes deeper>](./x.md)
+````
+
+### Task
+
+```md
+---
+type: task
+audience: [developer]
+---
+
+# <Verb the thing>
+
+<One line: what you will have at the end.>
+
+## Before you start
+
+- <what must already be true>
+
+## Steps
+
+1. <one action, with the command to run>
+2. <the check that shows it worked>
+
+## Read next
+
+- [<the page for the next job>](./x.md)
+```
+
+### Reference
+
+```md
+---
+type: reference
+audience: [anyone]
+---
+
+# <The thing being listed>
+
+<One line: what the table covers and what generates it, if anything.>
+
+| Name | What it is | Where it is defined |
+| ---- | ---------- | ------------------- |
+```
+
+### Troubleshooting
+
+```md
+---
+type: troubleshooting
+audience: [staff]
+---
+
+# <When X happens>
+
+<One line: who this is for.>
+
+| You see | Because | Do this |
+| ------- | ------- | ------- |
+
+## Still stuck
+
+- [<the page that owns the area>](./x.md)
+```
 
 ## The six rules
 
@@ -135,4 +267,5 @@ passing a check. Judgement stays with whoever writes the page.
 | You want to                            | Read                                   |
 | -------------------------------------- | -------------------------------------- |
 | See the file glossary these docs index | [File Glossary](../reference/start.md) |
+| Write a code comment                   | [Code comments](./code-comments.md)    |
 | Check the file paths the docs name     | `npm run check`                        |

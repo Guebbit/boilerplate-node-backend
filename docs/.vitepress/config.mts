@@ -264,6 +264,7 @@ export default withMermaid(
                         text: 'Conventions',
                         items: [
                             { text: 'Writing These Docs', link: '/build/documentation-style' },
+                            { text: 'Code comments', link: '/build/code-comments' },
                             { text: 'Dependency Vetting', link: '/build/dependency-vetting' },
                             { text: 'Dependency graph', link: '/build/dependency-graph' },
                             {
