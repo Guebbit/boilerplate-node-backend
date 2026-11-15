@@ -23,6 +23,21 @@ language is kept per context rather than shared.
 
 ---
 
+## Terms that cross modules
+
+Words used by several modules that mean the same thing in each. One line here; the page that owns the
+idea has the rest.
+
+| Term                | What it means here                                                                                                            | Owner                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Tenant**          | Two senses: an organisation (`tenantId`, `tenant` columns), and the industry sense of a SaaS customer. Not the same as a shop | [Tenancy § 7](../understand/tenancy.md#_7-·-the-glossary-of-the-two-tenants)             |
+| **Outbox**          | Rows written in the same transaction as the change, drained after commit, so a crash never loses an event                     | [Transactional Outbox](../understand/outbox.md)                                          |
+| **Idempotency key** | The `Idempotency-Key` header: a retried write replays the stored answer instead of running twice                              | [Idempotency](../understand/idempotency.md)                                              |
+| **Step-up**         | A rule's `stepUp` tier: the action demands a freshly proved session, else `401 REAUTH_REQUIRED`                               | [Asking for the password again](../understand/sessions.md#asking-for-the-password-again) |
+| **Permission key**  | `<action>:<Subject>` (`read:Order`), the unit a rule or permission set grants                                                 | [Permission vocabulary](./permission-vocabulary.md)                                      |
+
+---
+
 ## `account`
 
 | Term                 | What it means here                                                                                                                                                                    |
