@@ -195,31 +195,14 @@ commercial versus non-commercial.
 
 ## Running the gate in a container
 
-`docker/Dockerfile` carries everything `npm run complete` needs, baked mongod included. Two ways
-to run it, and only one is a CI job:
+`docker/Dockerfile` carries everything `npm run complete` needs, baked mongod included. The
+`container-gate` CI job builds it and runs the gate hermetically:
 
-| Mode         | How                                                                                              | Services                  | Proves                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------ | ------------------------- | -------------------------------------------------------------------------------- |
-| **Hermetic** | `docker build -f docker/Dockerfile . && docker run --rm --network=none <image> npm run complete` | none — the baked `mongod` | the image is self-contained; this is the `container-gate` CI job                 |
-| **Wired**    | `npm run compose -- -f docker-compose.test.yml run --rm -T gate`                                 | compose Mongo + Redis     | `NODE_TEST_MONGO_URI`/`NODE_TEST_REDIS_URL` work against a real external service |
+```sh
+docker build -f docker/Dockerfile . && docker run --rm --network=none <image> npm run complete
+```
 
-Hermetic is the stronger claim — no compose, no network, no `depends_on` — so it is what CI gates
-on. Wired is the everyday-dev shape: run it by hand before merging a change that touches the image
-or the env-var resolvers (`scenarios/support/ephemeral-mongo.ts`,
-`tests/cluster/support/redis.ts`).
-
-`docker-compose.test.yml` gives itself its own compose project `name:` on purpose — without one,
-compose derives the project name from the directory, the same one `docker-compose.yml` uses with
-no override, and the two would fight over container names (`redis`, `database`) instead of running
-side by side.
-
-The `gate` service builds the image and runs it as built, with **no source bind mount** — that
-image IS the thing under test, not a live-reload target. A mount would also fight
-`--userns=keep-id`: rootless podman needs that flag to keep a bind-mounted write from landing as
-your subuid rather than you, but the image's own `/app` is root-owned from the build, and
-`keep-id` remaps the in-container process away from root — so anything the run needs to write
-outside a mount (`tsc`'s own `dist/`, for one) loses access instead. Read a wired run's result with
-`podman compose -f docker-compose.test.yml logs gate`.
+No compose, no network, no `depends_on`: the image is self-contained or the job fails.
 
 `docker/Dockerfile.dockerignore` overrides the root `.dockerignore` for this one image, keeping
 `.git` in the build context — `npm run complete` runs `lint`, and the `local/comment-links` ESLint

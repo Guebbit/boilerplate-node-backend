@@ -202,7 +202,6 @@ read `CONTAINER_LOGS_PATH` from `.env`, which is what gives Alloy a host log pat
 ```bash
 npm run compose -- logs -f app                   # any compose subcommand
 CONTAINER_ENGINE=docker npm run compose:restart  # podman is the default
-npm run compose -- -f docker-compose.test.yml run --rm -T gate  # the wired gate — see Docker & Podman
 ```
 
 All of them expand to `${CONTAINER_ENGINE:-podman} compose`. Export `CONTAINER_ENGINE` in your shell

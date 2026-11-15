@@ -58,8 +58,8 @@ const usePreinstalledBinary = (): void => {
 /**
  * Resolves a Mongo to test or demo against.
  *
- * `NODE_TEST_MONGO_URI` wins when set — a database already listening, such as CI's own service
- * container or a developer's compose stack. Otherwise starts an in-process `mongod` through
+ * `NODE_TEST_MONGO_URI` wins when set — a database already listening, such as a developer's
+ * compose stack. Otherwise starts an in-process `mongod` through
  * `startInProcess`, taking a pre-installed binary over `mongodb-memory-server`'s own download when
  * one is on disk.
  *

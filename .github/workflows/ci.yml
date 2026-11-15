@@ -738,9 +738,7 @@ jobs:
         # Proves the CONTAINER LANE, not just the code: builds `docker/Dockerfile` and runs
         # `npm run complete` inside it — no compose, no service containers, no network — so a
         # passing run means the image genuinely carries everything it needs, baked `mongod`
-        # included. This is the "hermetic" mode; the "wired" mode (`docker-compose.test.yml`'s
-        # `gate` service, against compose-supplied Mongo/Redis) is the everyday-dev shape and is
-        # not run a second time here — one hermetic proof is the stronger claim.
+        # included. This is the "hermetic" mode.
         #
         # Docker, not podman: runners ship Docker, and `CONTAINER_ENGINE` exists precisely so
         # switching is a one-variable difference — the claim under test is about the image, not

@@ -61,7 +61,7 @@ precisely what [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-co
 purpose. The container lane **must** supply `NODE_TEST_REDIS_URL` — there is no code change to
 make this work, since the resolver already honours it, only a variable to set. `test:cluster` is
 not part of `npm run complete` (it is `complete:manual`), so this does not block the `container-gate`
-CI job or `docker-compose.test.yml`'s `gate` service; it blocks anyone running the full manual pass
+CI job; it blocks anyone running the full manual pass
 inside a container.
 
 [testcontainers](https://testcontainers.com/) is the obvious dependency for this and was not taken:
