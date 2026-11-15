@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Start a New Project
 
 What to do the day this boilerplate stops being a demo shop and starts being YOUR project.

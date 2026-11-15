@@ -13,10 +13,12 @@ import type { ScaffoldOptions } from './options';
  * @param options - the scaffold options
  * @returns the Markdown text
  */
-export const documentationPage = (
-    names: ModuleNames,
-    options: ScaffoldOptions
-): string => `# ${names.kebab}
+export const documentationPage = (names: ModuleNames, options: ScaffoldOptions): string => `---
+type: concept
+audience: [developer]
+---
+
+# ${names.kebab}
 
 ::: tip At a glance
 **Owns** — ${options.summary}

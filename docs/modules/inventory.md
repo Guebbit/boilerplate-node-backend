@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # inventory
 
 ::: tip At a glance

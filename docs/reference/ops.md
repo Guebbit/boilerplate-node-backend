@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Ops & Assets
 
 Everything that is not application code: the images the app runs in, the observability stack that

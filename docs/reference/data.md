@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Data
 
 `scripts/db/` holds everything that shapes or fills a database, and the split is the point:

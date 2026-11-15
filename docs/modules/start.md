@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Modules
 
 One page per domain, top to bottom. This is the **vertical** cut through the codebase; the rest of

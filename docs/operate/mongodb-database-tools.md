@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # MongoDB Database Tools
 
 ## What it is

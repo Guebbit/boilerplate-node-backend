@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Data Retention
 
 The [processing register](./data-protection.md#processing-register-art-30) lists every retention

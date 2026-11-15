@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Human and social
 
 Attacks on people, not code. The family every other page's controls route around: no amount of

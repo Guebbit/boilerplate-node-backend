@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Redis Cache
 
 ## Why Redis is here

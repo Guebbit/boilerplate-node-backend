@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # API
 
 This section explains the API contracts and the tools around them.

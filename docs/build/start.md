@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Build
 
 Run it locally, start a project, change a contract, test it, and the conventions every change follows.

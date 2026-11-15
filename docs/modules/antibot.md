@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # antibot
 
 ::: tip At a glance

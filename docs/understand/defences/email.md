@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Email and notifications
 
 Mail is a security surface twice over: it is the channel account recovery runs through, so whoever

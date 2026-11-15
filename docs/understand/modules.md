@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Modules
 
 A domain lives in exactly one folder. Adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept lists

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Strategic DDD
 
 **The part of Domain-Driven Design that pays for itself in a starter kit** — bounded contexts,

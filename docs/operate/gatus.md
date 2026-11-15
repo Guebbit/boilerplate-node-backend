@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Gatus
 
 ## What it is

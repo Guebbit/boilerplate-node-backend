@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Package Dependencies
 
 This page is the short map of `package.json` dependencies.

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Glossary
 
 The terms each module uses, **defined as that module means them**.

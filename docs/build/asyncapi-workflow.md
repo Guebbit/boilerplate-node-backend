@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # AsyncAPI Workflow
 
 ## AsyncAPI is the async contract source of truth

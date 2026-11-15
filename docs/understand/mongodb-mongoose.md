@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # MongoDB & Mongoose
 
 ## Why this stack exists in this repo

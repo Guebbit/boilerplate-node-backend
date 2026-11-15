@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # `GET /config` — the boot answer
 
 One public call carries what a client needs before anyone has signed in: the session settings, the

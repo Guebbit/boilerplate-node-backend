@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # notifications
 
 ::: tip At a glance

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Tests
 
 Every file here is a distinct guarantee, which is why this page names them one at a time: knowing

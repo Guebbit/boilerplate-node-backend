@@ -178,6 +178,12 @@ describe('the generated declarations', () => {
         expect(components.schemas.FieldNoteActions.required).toEqual(['update', 'delete']);
     });
 
+    it('opens the docs page with the front-matter the docs check requires', () => {
+        const page = contentOf(OPTIONS, 'docs/modules/field-notes.md');
+
+        expect(page.startsWith('---\ntype: concept\naudience: [developer]\n---\n')).toBe(true);
+    });
+
     it('keeps the docs page graph markers `regenerate` fills', () => {
         const page = contentOf(OPTIONS, 'docs/modules/field-notes.md');
 

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Events & Logging
 
 Seven things in this codebase can be described as "recording that something happened", and they

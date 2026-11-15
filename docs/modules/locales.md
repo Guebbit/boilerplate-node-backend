@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # locales
 
 ::: tip At a glance

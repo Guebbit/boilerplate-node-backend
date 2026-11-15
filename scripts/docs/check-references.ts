@@ -26,7 +26,7 @@ import {
 } from './repo-references';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { deadCodeCitations, headingSlugs } from './code-citations';
-import { missingScripts } from './document-facts';
+import { missingFrontMatter, missingScripts } from './document-facts';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
 const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
@@ -297,6 +297,13 @@ const run = (): number => {
         findings.push({ page: 'outside docs/', token: citation });
 
     findings.push(...deadScriptFindings(pages, peerRoot));
+
+    const sources = pages.map((page) => ({
+        path: page,
+        text: readFileSync(path.join(ROOT, page), 'utf8')
+    }));
+    for (const { page, problem } of missingFrontMatter(sources))
+        findings.push({ page, token: problem });
 
     if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {
         console.error(

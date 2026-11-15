@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Deploy and rollback
 
 One command ships a release, checks it came up healthy, and puts the previous release back when it

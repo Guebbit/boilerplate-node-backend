@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Denial of service
 
 Availability. The only family where the attacker does not need a flaw at all — just an asymmetry

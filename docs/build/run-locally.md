@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Getting Started
 
 From a fresh clone to a browsable API with demo data. Five minutes, three commands, no manual

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Infrastructure
 
 `src/infrastructure/` is the substrate: everything the application runs _on_, and nothing about

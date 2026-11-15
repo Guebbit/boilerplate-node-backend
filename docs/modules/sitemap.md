@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # sitemap
 
 ::: tip At a glance

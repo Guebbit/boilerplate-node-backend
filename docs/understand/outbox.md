@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Transactional Outbox
 
 ## The problem it solves

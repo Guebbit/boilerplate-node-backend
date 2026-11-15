@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Prometheus
 
 ## What it is

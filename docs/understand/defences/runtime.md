@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Runtime and language level
 
 Bugs that live below the application logic and surface through it. Node's own sharp edges, the

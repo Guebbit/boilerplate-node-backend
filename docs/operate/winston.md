@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Winston & Audit Logs
 
 ## Two log streams

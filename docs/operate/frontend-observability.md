@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Frontend Observability
 
 This page covers how the **paired frontend** should be observed, and **why this repo

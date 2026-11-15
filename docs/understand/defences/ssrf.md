@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Server-side request forgery
 
 The server is made to fetch a URL the attacker chose. It matters because the server sits somewhere

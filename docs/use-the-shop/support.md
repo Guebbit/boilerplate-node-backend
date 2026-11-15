@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The support desk
 
 Messages from people, accounts that need help, and knowing whether the shop is actually broken.

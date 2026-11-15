@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Tools
 
 This section explains **why dependencies exist** and where they fit in the app.

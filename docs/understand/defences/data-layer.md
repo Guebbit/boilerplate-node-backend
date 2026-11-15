@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # The data layer
 
 Databases, caches and queues. The application's guards are irrelevant if the store answers someone

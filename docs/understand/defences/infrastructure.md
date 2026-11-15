@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Infrastructure, configuration and deployment
 
 Nothing here is a coding mistake. Every row is something that was **left as it shipped**, or

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Supply chain
 
 Code you did not write, running with your privileges. The uncomfortable part of this family is

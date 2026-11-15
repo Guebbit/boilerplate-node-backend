@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # rclone
 
 ## What it is

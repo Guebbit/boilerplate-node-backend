@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Authorization
 
 **Who may act, how strongly they proved it, and which rows they see.** Three separate questions,

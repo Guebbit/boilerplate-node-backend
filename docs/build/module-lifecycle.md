@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Adding & removing a module
 
 The procedure, in order, with the commands. [Modules](../understand/modules.md) is the reasoning behind the

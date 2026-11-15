@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [staff, owner]
+---
+
 # What this demo models
 
 **One place to check "does it do X", instead of guessing from a scattered comment or a missing

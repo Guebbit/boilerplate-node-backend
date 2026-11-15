@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Repository Root
 
 Files with no directory above them. This is where the "what on earth is `orval.config.ts`"

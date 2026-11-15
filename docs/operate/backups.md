@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Backups
 
 The production compose file ships a `backup` service: a small container that dumps the database

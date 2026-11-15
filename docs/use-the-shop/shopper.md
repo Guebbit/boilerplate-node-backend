@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The customer
 
 What someone buying pet supplies actually experiences, start to finish.

@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # App, Kernel & Types
 
 The five files at the top of `src/`, the assembly layer under `src/app/`, the module system under

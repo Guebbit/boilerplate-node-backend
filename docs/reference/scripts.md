@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Scripts & Hooks
 
 `scripts/` is the repo's own tooling: every file here is the implementation behind an `npm run`

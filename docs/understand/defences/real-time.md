@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Real-time and messaging
 
 WebSockets, SSE and brokers. The family exists because a long-lived connection breaks an

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Theory
 
 This section explains **how the boilerplate thinks**.

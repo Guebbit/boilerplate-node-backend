@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Client-side
 
 Attacks that run in the victim's browser. The site's own **origin** is the prize: anything that

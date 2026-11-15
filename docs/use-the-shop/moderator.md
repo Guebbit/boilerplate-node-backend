@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The moderator
 
 Accounts that need action taken against them, orders that need sorting out, and money that needs

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # api-keys
 
 ::: tip At a glance

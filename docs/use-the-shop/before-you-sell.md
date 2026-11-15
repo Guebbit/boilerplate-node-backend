@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # Before you sell for real
 
 ::: danger Every legal text in this demo is an example only

@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The shop manager
 
 Running the shop: what is for sale, at what price, and what happens to orders after they arrive.

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # webhooks
 
 ::: tip At a glance

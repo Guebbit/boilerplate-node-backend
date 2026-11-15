@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Test doubles
 
 **No fake, no stub, no demo code in production.** Not refused: absent.

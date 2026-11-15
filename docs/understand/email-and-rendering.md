@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Email & PDF Rendering
 
 The boilerplate ships two "outbound rendering" examples that are easy to forget about because they sit outside the request/response loop:

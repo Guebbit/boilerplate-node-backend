@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # shop-tasks
 
 ::: tip At a glance

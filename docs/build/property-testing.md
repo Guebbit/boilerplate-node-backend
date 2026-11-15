@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Property-Based Testing
 
 An ordinary test says _"for this input, expect that output."_ A property says _"for **every** input, this must hold."_ The library generates the inputs, and when it finds one that breaks the rule it shrinks it to the smallest example that still fails.

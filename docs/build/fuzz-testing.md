@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Spec-Driven Fuzzing
 
 Every other suite tests endpoints somebody thought about. This one tests the endpoints **nobody thought about** — including the ones added after it was written.

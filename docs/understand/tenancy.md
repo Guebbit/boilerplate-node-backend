@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Tenancy
 
 The code underneath this page is **tenant-aware**: roles, memberships and a `tenants` collection

@@ -1,3 +1,8 @@
+---
+type: troubleshooting
+audience: [staff, owner]
+---
+
 # When something goes wrong
 
 **The shop handles the ordinary cases by itself. These are the odd ones, and they are yours.**

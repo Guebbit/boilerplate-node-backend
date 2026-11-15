@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Clustering & Graceful Shutdown
 
 This page explains how the app boots, how to scale it, and how it shuts down cleanly.

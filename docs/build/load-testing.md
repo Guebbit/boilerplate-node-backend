@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Load testing
 
 Load is generated from **outside** the process, with [k6](https://k6.io/), against a running server.

@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Hosting
 
 This boilerplate is **provider-neutral, deliberately.** It names what a host must offer and which

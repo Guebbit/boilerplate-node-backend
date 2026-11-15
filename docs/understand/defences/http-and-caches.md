@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # HTTP, proxies and caches
 
 Attacks that exploit **disagreement between two parsers**, or that abuse a shared cache. Nothing

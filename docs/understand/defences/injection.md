@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Injection
 
 Untrusted data reaches an interpreter — a query planner, a shell, a template engine, a regex

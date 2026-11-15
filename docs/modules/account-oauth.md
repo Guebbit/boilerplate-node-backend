@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # OAuth
 
 Signing in with somebody else's identity provider — the port, the CSRF handshake across the

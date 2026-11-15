@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The editor
 
 Everything the shop **says and shows**: what a product is called, what it says, what it costs and

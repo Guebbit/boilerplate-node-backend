@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Two Client Stacks
 
 The silo decision — one client, one stack, one database — is a claim until it is demonstrated. This

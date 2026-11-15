@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Files, uploads and paths
 
 Reading or writing where you should not. Two directions, and they fail differently: **reading**

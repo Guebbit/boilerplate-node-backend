@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Dependency graph
 
 `npm run check` — [dependency-cruiser](https://github.com/sverweij/dependency-cruiser)

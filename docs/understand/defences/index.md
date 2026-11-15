@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Web attacks and defences
 
 Every kind of flaw a website can have, and what this codebase does about each one.

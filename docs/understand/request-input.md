@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Request Input
 
 A value an endpoint needs may arrive as a route param, a query-string entry or a body field, and

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # observability
 
 ::: tip At a glance

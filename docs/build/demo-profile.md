@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # The demo profile
 
 The real API, booted self-contained and disposable:

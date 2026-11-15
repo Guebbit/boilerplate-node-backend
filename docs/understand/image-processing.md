@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Image processing
 
 Every uploaded image goes through a **digest pipeline** before it is ever served: metadata (EXIF

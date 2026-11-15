@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Architecture
 
 Use this page for the **big blocks and their boundaries**.

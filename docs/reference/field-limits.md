@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Field limits
 
 Every string a request can carry declares its own `maxLength`. A field with no bound is limited

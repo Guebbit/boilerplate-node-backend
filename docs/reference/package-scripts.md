@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Package Scripts
 
 This page groups the `package.json` scripts by job instead of by raw list order.

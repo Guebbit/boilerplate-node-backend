@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Success Responses
 
 A success answers with the thing itself. There is no wrapper around it: the status line says it

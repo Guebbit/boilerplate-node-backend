@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Weak Machines
 
 Every other page here assumes the suite fits. This one is about the machine where it doesn't — a

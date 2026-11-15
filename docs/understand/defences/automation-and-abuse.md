@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Automation and abuse
 
 Legitimate features at machine scale. Nothing is broken: signup works, the contact form works, the

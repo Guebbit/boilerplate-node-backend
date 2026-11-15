@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # wishlist
 
 ::: tip At a glance

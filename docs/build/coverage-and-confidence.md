@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Coverage & Confidence
 
 **Which number tells you the test suite is good, and why line coverage is not one of them.**

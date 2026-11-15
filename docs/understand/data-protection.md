@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Data Protection
 
 GDPR binds a **controller** — whoever deploys this, decides why data is processed, and answers to

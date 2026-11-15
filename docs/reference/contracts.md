@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Contracts
 
 The contract is the source of truth: `openapi.yaml` for REST, `asyncapi.yaml` for events. Neither

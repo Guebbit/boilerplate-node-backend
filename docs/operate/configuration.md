@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Configuration
 
 Every environment variable is read in **one layer**, checked **once at boot**, and handed to the

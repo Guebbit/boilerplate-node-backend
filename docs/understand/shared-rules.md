@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Shared rules
 
 A rule that is really **data** (a list, a table, a few numbers) is written once, in a file both

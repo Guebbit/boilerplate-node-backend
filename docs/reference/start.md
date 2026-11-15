@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # File Glossary
 
 **You found a filename and you do not know what it is.** This section answers that in one hop:

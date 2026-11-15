@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Versioning and Retiring an Endpoint
 
 How the API changes once somebody outside this repo depends on it, and when that starts.

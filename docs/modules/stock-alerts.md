@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # stock-alerts
 
 ::: tip At a glance

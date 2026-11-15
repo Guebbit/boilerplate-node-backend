@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Endpoints
 
 Why the application's HTTP surface is shaped the way it is, domain by domain — the reasoning that

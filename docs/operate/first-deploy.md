@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Getting Started — Production
 
 The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the

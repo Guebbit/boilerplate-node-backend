@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # The API surface
 
 REST, GraphQL and webhooks. Most of the OWASP API Top 10 lives on other pages — object-level

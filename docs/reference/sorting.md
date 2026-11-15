@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Sorting a List
 
 Every paged list can be ordered by the server, so "sort by price" orders the **whole** catalogue

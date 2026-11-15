@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Tactical DDD
 
 **The half of Domain-Driven Design this repo takes selectively** — value objects, invariants,

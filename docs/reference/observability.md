@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Observability Endpoints
 
 The `/observability/*` routes expose operational data for dashboards and monitoring tooling.

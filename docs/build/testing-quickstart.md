@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Testing — Quick Start
 
 Everything you can run, what each answers, and what it costs. Start here; the pages linked from

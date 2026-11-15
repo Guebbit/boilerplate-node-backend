@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # restic
 
 ## What it is

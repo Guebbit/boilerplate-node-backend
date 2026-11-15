@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Write Methods: POST, PUT, PATCH
 
 Every write route follows the web's own rules for its verb. This page is those rules, in the

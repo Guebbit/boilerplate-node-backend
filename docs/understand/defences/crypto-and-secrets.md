@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Cryptography, secrets and transport
 
 Secrets, keys and TLS. The defining property of this family: **failures are silent.** Bad

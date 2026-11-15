@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Backup server
 
 The second machine: where every client's [backups](./backups.md) land, and the **only** place old

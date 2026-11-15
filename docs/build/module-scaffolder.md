@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Module scaffolder
 
 `npm run scaffold:module -- <name>` writes a working module from the core of the `example` module

@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Operate
 
 Deploy it, configure it, back it up, and watch it run.

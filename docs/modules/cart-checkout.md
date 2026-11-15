@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Checkout
 
 `POST /cart/checkout` — the one cart operation that writes to another module's collection, and the

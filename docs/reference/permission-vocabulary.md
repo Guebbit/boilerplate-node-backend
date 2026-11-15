@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Permission Vocabulary
 
 The permission vocabulary is written **once**, in `shared/authorization-keys.generated.yaml`, and generated into

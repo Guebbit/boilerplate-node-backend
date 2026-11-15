@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Regenerating After a Change
 
 The cheat sheet for "I edited a fragment — now what?".

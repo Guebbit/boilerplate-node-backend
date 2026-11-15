@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Cluster testing
 
 `npm run test:cluster` — the only suite that boots `src/cluster.ts` and forks real worker

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Request Flow
 
 The controller, service, repository and model below are **one module's** files, sitting side by side

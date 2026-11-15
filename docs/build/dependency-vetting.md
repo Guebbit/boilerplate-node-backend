@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Dependency Vetting
 
 Rules for what earns a place in `package.json`, written down after `@asyncapi/cli` broke all of

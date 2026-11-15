@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Sessions
 
 How this application decides who is making a request — and why none of it is published.

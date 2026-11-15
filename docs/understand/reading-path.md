@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Reading Path
 
 **The first hour in the codebase.** Every other page here explains a concept; this one names the

@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Integration Testing
 
 The layer that answers: **are the units actually wired together?** A service, its repository and its Mongoose model can each be individually correct (see [Unit Testing](./unit-testing.md)) while the router that's supposed to connect them to the outside world mounts the wrong middleware, or mounts nothing at all. This layer drives the real Express app, and the real database, to check the wiring and the behaviour that only shows up when the pieces meet.

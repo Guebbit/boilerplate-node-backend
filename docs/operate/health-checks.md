@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Health checks
 
 A container health check is a command Docker runs on a timer. Docker records `healthy` or

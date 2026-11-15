@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # The warehouse
 
 Stock, and getting parcels out of the door.

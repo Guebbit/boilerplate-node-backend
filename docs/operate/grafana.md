@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Grafana
 
 ## What it is

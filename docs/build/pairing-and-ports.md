@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Pairing & Ports
 
 How this API and the paired frontend run side by side, and which host port everything claims.

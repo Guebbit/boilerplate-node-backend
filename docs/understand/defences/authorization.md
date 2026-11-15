@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Authorization
 
 Proving what you may do. The most common class in modern APIs, and the one scanners are worst at:

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # API Standards
 
 This API follows the mature HTTP standards, and writes down where it does not. This page names

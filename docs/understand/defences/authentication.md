@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Authentication
 
 Proving who you are. Mostly flaws — missing controls — and the attacks are the ways credentials

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Reservations
 
 A reservation is a **promise that units exist**, made before money changes hands and kept for a

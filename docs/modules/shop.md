@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # shop
 
 ::: tip At a glance

@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Testing & Docs
 
 This page is the map. Each layer has its own detail page — code, tools, patterns, file map and a diagram — linked from the table below and from "Related pages" at the bottom of every one of them, so you can start anywhere and always find your way back here.

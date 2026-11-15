@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Contract-Derived Request Data
 
 [Contract Testing](./contract-testing.md) answers "does the _response_ match `openapi.yaml`?" This page is the mirror image, and structurally different rather than just "the same idea applied to requests": for every write endpoint, does the API accept every payload its own contract declares legal, and reject exactly what it declares illegal? Neither question can be answered by hand-written factories (`tests/support/factories/*`) — they encode one known-good scenario each. This layer generates data **from the contract itself**, so it can ask "for _any_ legal input", not "for this one".

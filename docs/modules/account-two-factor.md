@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # Two-factor authentication
 
 The second factor's **structure** — the registry, the state machine, and what a user document

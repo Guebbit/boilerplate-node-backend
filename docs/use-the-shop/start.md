@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [staff, owner]
+---
+
 # The demo shop
 
 **A small online shop that really works.** You can browse it, put things in a basket, pay, and

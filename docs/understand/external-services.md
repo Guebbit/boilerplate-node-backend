@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # External Services
 
 Which third-party services this app can use, where each one plugs in, and **what you lose by

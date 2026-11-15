@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Domain layer & DDD
 
 Two things, in order:

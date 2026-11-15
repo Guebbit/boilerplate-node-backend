@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Contract Ownership & Fragmentation
 
 [OpenAPI Workflow](./openapi-workflow.md) covers **how to change** the contract. This page covers

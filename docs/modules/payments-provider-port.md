@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # The provider port
 
 The seam a real payment service provider plugs into — and the reason nothing above it knows which

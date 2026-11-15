@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [operator]
+---
+
 # Observability Stack Reference
 
 This page is the quick map of the boilerplate observability stack and the most common config settings.

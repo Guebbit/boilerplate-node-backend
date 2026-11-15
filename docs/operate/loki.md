@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Loki
 
 ## What it is

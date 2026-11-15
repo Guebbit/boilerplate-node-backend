@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # The Observability Layer
 
 [Observability Stack Reference](../operate/observability-reference.md) maps the **external stack** —

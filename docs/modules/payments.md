@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # payments
 
 ::: tip At a glance

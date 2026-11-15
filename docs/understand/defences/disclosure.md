@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Information disclosure
 
 The site tells you too much. Individually these are the "low severity" findings nobody prioritises;

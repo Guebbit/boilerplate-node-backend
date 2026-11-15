@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # AI Auditing
 
 Every other instrument in this repo compares the system **to itself**: code to schema, mutant to

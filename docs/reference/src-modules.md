@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Modules
 
 `src/modules/` is most of the repository, and almost none of it is unique. Every domain is built

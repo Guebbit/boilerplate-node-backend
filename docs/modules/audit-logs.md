@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # audit-logs
 
 ::: tip At a glance

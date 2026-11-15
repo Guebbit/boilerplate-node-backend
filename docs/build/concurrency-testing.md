@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Concurrency Testing
 
 Every other suite asks _"does this operation do the right thing?"_ This one asks _"does it still, when N of them happen at once?"_

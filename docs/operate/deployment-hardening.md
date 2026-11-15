@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # Deployment hardening
 
 Recipes for the controls this codebase **cannot** implement, because they live in DNS, in CI, in

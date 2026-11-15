@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Writing These Docs
 
 The site calls itself "ADHD-friendly docs" in `docs/.vitepress/config.mts`'s own description. That

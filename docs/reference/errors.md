@@ -1,3 +1,8 @@
+---
+type: reference
+audience: [anyone]
+---
+
 # Error Responses
 
 Every 4xx and 5xx the application sends is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)

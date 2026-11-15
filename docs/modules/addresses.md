@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # addresses
 
 ::: tip At a glance

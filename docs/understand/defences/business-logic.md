@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Business logic, money and payments
 
 No parser and no bug involved. The application does exactly what it was told, and what it was told

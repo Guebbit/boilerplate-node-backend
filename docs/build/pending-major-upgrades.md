@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Pending Major Upgrades
 
 Two majors and one replacement are deliberately not taken yet: `dotenv` 18, `typescript` 7 and

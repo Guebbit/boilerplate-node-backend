@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # OpenAPI Workflow
 
 ## OpenAPI is the source of truth

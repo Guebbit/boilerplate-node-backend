@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # delivery
 
 ::: tip At a glance

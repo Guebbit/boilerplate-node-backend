@@ -1,3 +1,8 @@
+---
+type: task
+audience: [staff, owner]
+---
+
 # Test it yourself
 
 **Every kind of person the shop knows about has an account you can log into.** Pick one, sign in,

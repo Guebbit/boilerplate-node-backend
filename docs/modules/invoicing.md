@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer]
+---
+
 # invoicing
 
 ::: tip At a glance

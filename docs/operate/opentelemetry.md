@@ -1,3 +1,8 @@
+---
+type: task
+audience: [operator]
+---
+
 # OpenTelemetry
 
 ## Why it is here

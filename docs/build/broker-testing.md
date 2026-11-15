@@ -1,3 +1,8 @@
+---
+type: task
+audience: [developer]
+---
+
 # Broker testing
 
 `npm run test:broker` runs the queue adapter (`src/infrastructure/adapters/queue.ts`) against a

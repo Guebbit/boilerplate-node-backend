@@ -1,3 +1,8 @@
+---
+type: concept
+audience: [developer, architect]
+---
+
 # Two ways to stay signed in
 
 A deployment keeps people signed in in one of two ways. A setting picks which, and everything above
