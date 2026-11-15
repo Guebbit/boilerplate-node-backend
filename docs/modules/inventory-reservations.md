@@ -92,118 +92,23 @@ Two more `reason` values exist and belong to no reservation at all: `receive`
 (`POST /inventory/levels/{productId}/receive`) and `adjust` (`POST /inventory/levels/{productId}/adjust`), which move `onHand`
 directly.
 
-## Preorders
+## Preorders {#preorders}
 
 Owed units live in one counter, whatever phase of the product claimed them: a preorder, or a released product out of stock ([below](#backorders)). The names say so: `backorderLimit`, `backordered`, kind and reason `backorder`. The product state keeps "preorder".
 
-A preorder is sold before its units exist, so it claims an **allowance** instead of a shelf unit. The
-stock level gains two counters, a third ledger column and two `reason` values; the hold's lines gain
-a `kind` (`stock` or `backorder`).
+Full detail: [Preorders and backorders](./inventory-reservations-preorders-and-backorders.md#preorders).
 
-| Counter / column   | Meaning                                                                                                                                                               |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backorderLimit`   | how many units may be owed at once; set by staff holding `update:StockLevel` (admin, warehouse), `0` closes it, stored `null` is no cap (the wire leaves the key out) |
-| `backordered`      | units claimed against it and not yet allocated stock, paid or not                                                                                                     |
-| `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta`                                                                         |
-
-A claim is a `backorder` movement (`backordered` +n, nothing else), guarded in the write's own filter by
-`backordered + n <= backorderLimit`. The shelf is never read: 50 units on hand do not widen the
-allowance, and an allowance of 5 does not need one unit to exist. The cap counts from the moment the
-order is placed (decided 2026-10-11): a buyer who then pays a week later by bank transfer is never
-refused for a cap that filled in between.
-
-```mermaid
-flowchart LR
-    N["no hold"] -->|"reserveForOrder<br/><i>preorder line</i>"| H["held<br/><i>backordered +n</i>"]
-    H -->|"commitForOrder<br/><i>stamps committedAt</i>"| C["committed<br/><i>no counter moves</i>"]
-    H -->|"sweep / cancel"| R["released<br/><i>backordered −n</i>"]
-    C -->|"cancel before stock"| R
-    C -->|"receive: allocate<br/><i>oldest committedAt first</i>"| A["committed, kind stock<br/><i>backordered −n · reserved +n</i>"]
-    A -->|"shipLinesForOrder"| S["shipped<br/><i>onHand −n · reserved −n</i>"]
-```
-
-| Moment                  | What happens to a preorder line                                                                                             |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| before payment          | today's windows: 15 minutes by card, a week by bank transfer, then the sweep gives the allowance back                       |
-| payment                 | `held → committed`, no expiry; `committedAt` is stamped by the same claim, so it is the payment's instant                   |
-| stock arrives           | `POST /inventory/levels/{productId}/receive` receives and **allocates in the same transaction**, oldest `committedAt` first |
-| a short delivery        | the order gets what exists; the rest stays a claim and keeps waiting                                                        |
-| cancelled while waiting | the allowance comes back (`backordered` −n); `restock` is never used, it would add stock that never existed                 |
-
-Allocation turns the claim into an ordinary hold on a real unit: `backordered` falls and `reserved`
-rises by the same number, so `available` drops by what was allocated and the units never look
-sellable to a stranger in between. From then on those units ship, release and restock like any
-others; the hold keeps the same product under both kinds while part of it still waits, and every
-caller that takes lines out of a hold (`shipLinesForOrder`, `releaseLinesForOrder`) names the kind.
-A claim cannot ship: `ship` of a `backorder` line throws and rolls its transaction back.
-
-Oldest payment first, not oldest order: the key is the moment the buyer's money was in, so a bank
-transfer is still served, after the cards that paid earlier. It is the hold's own `committedAt`
-because this module does not depend on `orders` and cannot read `paidAt`. Unpaid holds are never
-allocated. Stock that arrived while an order was still unpaid is served by the payment itself:
-`commitForOrder` runs the same allocation once it has claimed the hold.
-
-Each allocation writes `inventory.backorder_allocated { orderId, productId, waiting }` to the outbox in
-that transaction. `waiting` is what the order still claims of that product, a state and not a delta, so
-a redelivery is harmless: [`delivery`](./delivery.md) releases whatever it holds beyond `waiting`, and
-the second time there is nothing beyond it.
-
-A product that is a preorder never reads as "running low": its `lowStock` flag is false and the
-`products_low_stock_total` gauge leaves it out (`countPublic` with `excludePreorders`). The stock
-board's `lowOnly` view is unchanged, since a restocker wants to see it.
-
-`GET /inventory/preorders` is the preorder board's read: per product the cap, `backordered`, its split
-between `held` (unpaid, frees itself) and `paid`, `left`, and `ordered`, the lifetime count read off the
-ledger's `backorder` rows. `PATCH /inventory/levels/{productId}` sets the allowance under
-`update:StockLevel`; it is not a stock movement and leaves no ledger row, only an audit entry.
-
-## Backorders
+## Backorders {#backorders}
 
 A released product the shop keeps selling while the shelf is empty owes units the same way a preorder
 does, from the same counter. `allowBackorder` on the product ([`products`](./products.md#backorder))
 switches it on and the catalogue tells this module which lines may spill; the cap stays here.
 
-**A line the shelf covers half.** `reserveForOrder` takes a line with `spill` whole from the shelf when
-it fits. Otherwise, in one transaction, it takes the shelf units there are, claims the rest against the
-cap and adds each part to the hold. A crash anywhere inside leaves nothing taken; a claim
-the cap refuses gives the shelf part back; two checkouts racing the last unit resolve inside the
-database. The outcome returns the owed count per line for [`orders`](./orders.md) to freeze.
-
-**No cap.** `backorderLimit: null` is no cap; `0` is closed and is the default. A level row without the
-field reads as closed, never as unlimited. The room left is `Infinity`, never `null`: callers do
-arithmetic on it, and a `null` would read as sold out. The shopper-facing `available` of an uncapped product reads `999999` instead: the contract wants an integer, and no buyer is ever told the count.
-
-**Every arrival serves the queue.** The claims of buyers who paid are served oldest `committedAt`
-first by every write that raises `available`, in that write's own transaction, not only by a receipt:
-
-| Raises `available`                    | Allocates                               |
-| ------------------------------------- | --------------------------------------- |
-| receipt, positive stocktake `adjust`  | yes                                     |
-| return restock                        | yes                                     |
-| unpaid hold expiring (the sweep)      | yes                                     |
-| order cancel, paid or not             | yes                                     |
-| remainder cancel                      | yes                                     |
-| a claim given back (`backorder` kind) | no: it frees allowance, not shelf units |
-
-Without this, a hold that expires would hand its units to the next stranger while a buyer who paid
-last week keeps waiting. An allocation is not undone: a typo (+50 for +5) allocates, and the correcting
-−45 is refused as `INVENTORY_BELOW_RESERVED`.
+Full detail: [Preorders and backorders](./inventory-reservations-preorders-and-backorders.md#backorders).
 
 ### Owed after a loss {#owed-after-a-loss}
 
-A parcel [reported lost](./delivery.md#lost-in-transit) leaves the order owed its units, and they left
-the shelf when the parcel shipped. `reserveMoreForOrder` tops the order's hold up, per line:
-
-| Part                        | What it does                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the shelf part              | reserves the free units, `available` drops. Never units held for another order: `available` already excludes them                                   |
-| the owed part               | an `owed` movement **outside the cap** (a ledger note says so): the cap limits new sales, not a promise already made                                |
-| a product with no stock row | claims nothing and does not fail: the loss is recorded elsewhere                                                                                    |
-| the hold                    | an open hold grows; a hold that ended (`shipped`, `released`) is reopened `committed` with only the added units, keeping the original `committedAt` |
-
-The owed claim is in the paid queue at the place of the original payment, so a stranger's checkout
-cannot take the next arriving unit. When the lost parcel turns up, `releaseTopUpForOrder` gives both
-parts back and the hold ends `shipped`, not `released`: the goods it named left for good.
+See [Preorders and backorders](./inventory-reservations-preorders-and-backorders.md#owed-after-a-loss).
 
 ## Exactly-once, without a lock
 
@@ -235,122 +140,18 @@ A paid order always commits its hold, and a shipped one always ships it. When `c
 `shipForOrder`'s claim misses, that is one of three very different facts, and it tells them apart
 before deciding what to do:
 
-- the hold is already `committed` or `shipped` — a redelivered settlement, or a repeated dispatch
-  report; the sale already stands. Silent, correctly: replaying it is not new information.
-- the hold is `released` at **ship**. Silent too: a remainder cancel emptied it after a partial
-  shipment, so nothing is left to take. (At **commit** a `released` hold is not an incident either:
-  the units are taken again, see the next section.)
-- the hold **never existed**. No checkout door can produce that: it means seeded or hand-edited
-  data. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order and the
-  `stage` (`commit` or `ship`). The only other alarm is a `released` hold at commit whose units were
-  sold in the meantime and cannot be taken back, a safety net for any caller that did not use
-  `markPaid`.
+Full detail: [Orphaned holds and the ledger](./inventory-reservations-orphaned-holds.md#orphaned-hold).
 
-The alarm **records** the fact and **pages**: the counter `inventory_commit_orphaned_total{stage}` rises
-with it, which fires the `PaidOrderWithoutHold` alert (severity `critical`, see
-[Prometheus](../operate/prometheus.md)). A human checks the stock and decides ship or refund. The payment's
-own step also announces `inventory.hold_orphaned` in its transaction, which opens a `paid_without_hold`
-task for the warehouse ([tasks](./tasks.md#system-tasks)); it closes when the order is cancelled or
-ships. The shipping step alarms but opens no task: the goods already left.
+### Money can land on a released hold: take the units again {#money-can-land-on-a-released-hold-take-the-units-again}
 
-::: info Where the page goes
-`critical` means email **and** the webhook. Until `ALERT_WEBHOOK_URL` is set, only the email reaches
-anyone, so read the alert mailbox. Setting up a phone push is a deployment choice, not part of this
-module.
-:::
+See [Orphaned holds and the ledger](./inventory-reservations-orphaned-holds.md#money-can-land-on-a-released-hold-take-the-units-again).
 
-### When the alert fires
-
-1. Read the `admin.commit.orphaned` audit row: it names the order, the `stage` and the
-   `reservationStatus`. `none` means no hold ever existed; `released` at `commit` means the units
-   were sold in the meantime and could not be taken again.
-2. `none` means the database was edited or restored, not that a payment arrived late: no checkout
-   door produces an order without a hold.
-3. **Stage `commit`:** if the units are on the shelf, restore the reservation by hand; if they are
-   not, cancel the order, which refunds it.
-4. **Stage `ship`:** the units left the shelf without a hold behind them. Lower `onHand` with an
-   `adjust` so the count is true again.
-5. Find out who changed the database or what restore put the order out of step with the stock.
-
-### Money can land on a released hold: take the units again
-
-An expiry is two transactions, not one: the sweep releases the hold and writes
-`inventory.reservation_expired` (`expireOne`), and `orders` cancels the order later, when the
-outbox delivers that event (`expireReservationById`). They cannot be one transaction because
-`inventory` may not import `orders`. In between, the order still says `pending` and is payable
-while its hold is `released`, and the units it gave up may already belong to someone else.
-
-| Situation                                 | How long the order is payable with no hold                  |
-| ----------------------------------------- | ----------------------------------------------------------- |
-| normal (`nudgeOutbox()` after the commit) | milliseconds                                                |
-| the nudge fails                           | up to a minute (the `sweep:outbox` cron is the backstop)    |
-| the cancel throws                         | backoff retries, up to `NODE_OUTBOX_MAX_ATTEMPTS`           |
-| retries exhausted, the row goes `dead`    | unbounded: the order stays `pending`, payable, with no hold |
-
-**The rule: money that lands on a released hold takes the units again, inside the payment's own
-transaction, before the order is written `paid`.** `markPaid` (`orders`) first reads the order in
-that transaction: one that can no longer be paid (the sweep already cancelled it) takes nothing back,
-so the ledger gets no reserve-then-release pair for it. A payable order asks
-`inventoryService.retakeReleasedForOrder`:
-
-- the hold is not released: nothing to do, the normal commit follows.
-- the shelf still covers it: the hold goes `released → held` and every line's counters move again
-  (one conditional write each, so two late payments racing for the last unit meet in the database
-  and exactly one wins). The order is written `paid` and the hold commits as usual; the late
-  `reservation_expired` cancel then finds a paid order and does nothing.
-- the shelf is short (a line sold meanwhile): the lines already taken are given back, the hold goes
-  back to `released`, and `markPaid` answers `null` without writing `paid`. The payment then takes
-  the existing `lost` path: it is recorded as received and refunded (a card or provider refund is
-  sent; a hand-recorded payment leaves the refund open for the operator to return by hand), and the
-  late cancel ends the order. Nothing is oversold.
-
-It never throws: a throw would abort the very transaction that records the refund.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant S as sweep (inventory)
-    participant X as outbox
-    participant O as orders
-    participant P as payments
-    S->>S: release the hold (held → released)
-    S->>X: write reservation_expired, in the same transaction
-    Note over O: order still pending and payable
-    P->>O: money lands (a transfer is recorded, a late webhook arrives)
-    O->>S: retakeReleasedForOrder: take the units again, inside the payment's transaction
-    alt the shelf still covers it
-        O->>O: markPaid: the order is paid, the hold commits
-        X->>O: reservation_expired, delivered late
-        O->>O: the system cancel finds a paid order: nothing to do
-    else the shelf is short
-        O-->>P: not paid (the lost path)
-        P->>P: record the money and refund it
-        X->>O: reservation_expired, delivered late
-        O->>O: the system cancel ends the pending order
-    end
-```
-
-**Which doors ask first.** Only the card confirm checks the hold before money moves
-(`orderService.isPayableNow`: awaiting payment AND hold not released). It is interactive, so the
-buyer can still be refused before the card is charged. Every other door records money that already
-moved: an operator recording cash or a transfer, a provider reference or webhook, the
-`PaymentActions.pay` view, `orders`' `canRecordPayment` and `markPaid` itself check the status only.
-Refusing there would not un-pay anything, so they take the units again or refund, as above.
-
-When the retries are exhausted the row is `dead`, which the `OutboxEventsDead` alert already
-raises (see [Alert rules](../operate/prometheus.md#alert-rules) and [the outbox](../understand/outbox.md)).
-
-## The ledger is half of the transition, not a reaction to it
+## The ledger is half of the transition, not a reaction to it {#the-ledger-is-half-of-the-transition-not-a-reaction-to-it}
 
 `stockmovements` rows are written **by the same call that moves the counter**. There is deliberately
 no `product.stock_moved` event:
 
-> As an event, the ledger row would be a _reaction_ to a counter change rather than half of one, so
-> every mover would have to remember to announce on every path, rollback paths included.
-> **A counter change nobody recorded is a corrupt audit trail, not a smaller feature.**
-
-The row records the deltas rather than the resulting totals, so replaying the ledger reconstructs
-either counter at any point in time.
+Full detail: [Orphaned holds and the ledger](./inventory-reservations-orphaned-holds.md#the-ledger-is-half-of-the-transition-not-a-reaction-to-it).
 
 ## The sweep
 
@@ -411,7 +212,7 @@ population is the intended arrangement.
 Both settings are read through their slice on every call rather than captured at import, and the
 slice parses the environment once per process: a changed variable takes effect on restart.
 
-## Related pages
+## Read next
 
 - [`inventory`](./inventory.md) — the module this belongs to
 - [Checkout](./cart-checkout.md) — where a hold is taken

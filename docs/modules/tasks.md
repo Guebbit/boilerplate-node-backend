@@ -92,117 +92,45 @@ A visitor may add a **category** (`order`, `cancellation`, `return`, `payment`, 
 `privacy`, `other`) and the order number they typed (`orderNumber`, free text, never checked
 against an order). Both are the filer's own words, so the export includes them.
 
-### The list row {#the-list-row}
+## The list row {#the-list-row}
 
 `GET /tasks` and `POST /tasks/search` answer a `TaskListItem`: the sender's name and email, subject,
 a `messagePreview` of the first 160 characters, category, order number, assignee, due date, status
 and `actions`. The whole message, the staff notes and the sender's account are `GET /tasks/{id}`, the
 audited read. See [a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
-### System tasks
+## System tasks {#system-tasks}
 
 A producer module announces a situation through the outbox; `tasks` subscribes (`module.ts`,
 `services/system.ts`) and opens **one task per situation**. The event that ends the situation
 closes it as `resolved` with `resolution: cleared`, so "the system closed it" shows, and its notes
 are kept. The producers never import `tasks`.
 
-| Kind             | Opens on                                                  | Cleared by                                          | Due (`dueAt`) |
-| ---------------- | --------------------------------------------------------- | --------------------------------------------------- | ------------- |
-| `account_review` | `user.review_flagged` (paid cancellations over the limit) | `user.review_cleared` (a hold placed or lifted)     | +72 h         |
-| `export_failed`  | `account.export_failed`                                   | a later `account.export_ready` for the same account | +72 h         |
+Full detail: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md#system-tasks).
 
-**One situation is a task or a notice, never both.** `account_review` is opened only by the
-review flag that pauses nothing; the automatic hold already tells the staff who can ban it
-(`shop-tasks.staff.purchase-hold-placed`). A `task.opened` is what `notifications` turns into
-a work notice.
-
-**Dedup and replays.** The dedup key is `<kind>:<link.type>:<link.id>`, unique while open. A repeat
-of an open situation only stamps `lastSeenAt` / `seenCount` and keeps the earlier `dueAt`; two racing
-events open one task (the loser of the unique key touches). Each task remembers its last 20
-event ids, and an id already seen is a no-op, so a redelivery after the task closed cannot open
-it again. The same situation returning after a close opens a **new** task. A clearing event on a
-task staff closed first does nothing.
-
-**The shop's kinds.** The kinds a payment, stock or delivery situation opens (a refund owed by
-hand, a refused refund, a mismatch, a dispute, a payment with no hold, the delay reminder) belong
-to [`shop-tasks`](./shop-tasks.md#the-shop-s-to-dos), which opens them through this engine. The
-dedup and replay rules above apply to them unchanged.
-
-### Jurisdiction
+## Jurisdiction {#jurisdiction}
 
 Each kind of task is routed to one **permission set**, frozen on the task when it opens
 (`domain/routing.ts`). A role is a bundle of sets, so routing to a set routes to every role that
 holds it, and the administrator holds every set, with no special case.
 
-| Kind             | Route set     |
-| ---------------- | ------------- |
-| `contact`        | `TaskDisplay` |
-| `account_review` | `UserBanning` |
-| `export_failed`  | `UserErasure` |
+Full detail: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md#jurisdiction).
 
-The shop's kinds route to the sets listed in [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
-
-A visitor task is the inbox's: anyone who may read tasks reads it. A system task is visible
-and workable only to a caller who holds its route set; to anyone else it is a **404**, not a 403 (it
-does not admit to existing). Every route also asks the plain `Task` rule, so today the people who
-reach this page are the holders of `TaskDisplay` / `TaskManagement`; a role that holds only a
-routed set (a warehouse worker and a shop to-do) needs the route guard widened first.
-Assignment is stricter on purpose: an assignee needs the route set and `update:Task`, so with the
-preset roles only `admin` can be handed a system task, and `support` can also be handed a contact
-message (a contact message is a visitor task).
-
-### Lifecycle
+## Lifecycle {#lifecycle}
 
 `status` is **read-only**. It moves through three bodyless doors, and through assignment.
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
-flowchart LR
-    V["visitor form"] --> H{"honeypot?"}
-    H -->|yes| SP["spam<br/><i>closed at birth</i>"]
-    H -->|no| N["new"]
-    N -->|"assign / take"| P["in_progress"]
-    P -->|"give back"| N
-    N -->|"POST resolve"| R["resolved<br/><i>resolution: staff</i>"]
-    P -->|"POST resolve"| R
-    N -.->|"POST mark-spam"| SP
-    P -.->|"POST mark-spam"| SP
-    R -->|"POST mark-spam"| SP
-    SP -->|"POST resolve"| R
-    R -->|"POST reopen"| N
-    SP -->|"POST reopen"| N
-    R & SP -.->|"closedAt + retention"| X(("gone"))
+Full detail: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md#lifecycle).
 
-    classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
-    class N,P,H open;
-    class R done;
-    class SP,X bad;
-```
-
-| Door               | From                       | To                                     | Stamps                                                                                                                                                  |
-| ------------------ | -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST …/resolve`   | new, in progress, spam     | resolved                               | `resolution: staff`, `closedAt` (kept if already closed), `respondedAt` once; releases the dedup key                                                    |
-| `POST …/mark-spam` | new, in progress, resolved | spam                                   | `resolution: spam`, `closedAt` (kept); releases the dedup key                                                                                           |
-| `POST …/reopen`    | resolved, spam             | in progress with an assignee, else new | clears `closedAt` and `resolution`; restores the dedup key; **keeps `dueAt`**                                                                           |
-| `POST …/assign`    | new, in progress           | in progress                            | the assignee must hold the task's route set and `update:Task` (else 422); the person who holds it already: 409 `TASK_ALREADY_ASSIGNED`, nothing written |
-| `POST …/unassign`  | any                        | an in-progress task goes back to new   | clears the assignee; nobody held it: 409 `TASK_NOT_ASSIGNED`, nothing written or audited                                                                |
-
-Every move is **one conditional write** filtered on the status that was read, so two clicks give one
-200 and one 409. A repeat answers 409 with `TASK_ALREADY_RESOLVED`, `TASK_ALREADY_SPAM` or
-`TASK_ALREADY_OPEN`; a reopen that finds a newer open task holding the same dedup key answers
-`TASK_SUPERSEDED` with that task's id in `details`. Spam to resolve keeps the time the task
-was first closed. The deadline (`dueAt`) belongs to the situation, not to the reopen, so it is kept.
-Every answer is the task, with the caller's `actions` telling a screen which buttons to show.
-
-### Notes
+## Notes {#notes}
 
 `POST /tasks/{id}/notes` appends to the staff thread: append-only, with author and time, allowed
 on a closed task too. Write each note as if the customer will read it: the data subject's export
 carries the words and the time, never the author.
 
-### Who is told
+Full detail: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md#notes).
+
+## Who is told {#who-is-told}
 
 A task never mails anyone itself. A new one (spam excluded) is announced as `task.opened`
 `{ taskId, kind, routeSet, category?, work? }`, handing one to a colleague as `task.assigned`
@@ -212,115 +140,22 @@ and one that passes it as `task.overdue` (both with the payload of `task.opened`
 [`notifications`](./notifications.md#work-notices-for-staff) hears all four and does the telling,
 so a situation is one task kind or one notice code, never both.
 
-All four go through the [transactional outbox](../understand/outbox.md): the event row is written in
-the same transaction as the change it announces (the insert, the assignment, the due-soon and overdue claims),
-so a crash or a failing listener cannot lose a notice. Delivery is at-least-once, and the receiver
-dedupes (`task-opened:<id>`, `task-due-soon:<id>`, `task-overdue:<id>`, `task-assigned:<id>:<assignedAt>`). The
-`aggregateId` is the task id, so a task's events arrive in order. Contact spam writes no row.
+Full detail: [Task notices and the staff badge](./tasks-notices.md#who-is-told).
 
-| Event           | Told                                                                                          | Mail                                                                                                                                                                                                                                                  |
-| --------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task.opened`   | everyone who works the kind (a contact message: `TaskManagement`, not the read-only managers) | a contact message: none per person, the [main mailbox](#who-is-told) gets it. Other kinds: a fixed phrase, the kind (a contact message also its category) and a link to the task. Never the visitor's name, address, subject, message or order number |
-| `task.due_soon` | the same people as `task.opened`, once; of the contact messages only a privacy request        | the same phrase, kind and link as the opener's, worded as a reminder that the deadline is three days away. A privacy request: none per person, ONE reminder to the main mailbox, in the first mail's thread                                           |
-| `task.overdue`  | the same people as `task.opened`, once                                                        | a contact message: none per person, ONE reminder to the main mailbox ("message #ref from `<address>` is still unanswered"). Other kinds: the opener's phrase, worded as a reminder                                                                    |
-| `task.assigned` | the assignee only                                                                             | none (the bell)                                                                                                                                                                                                                                       |
-
-**The main mailbox.** A contact message is answered from ONE mailbox, `NODE_SUPPORT_EMAIL`
-(required). It is mailed every time, on `task.opened`, on `task.due_soon` (a privacy request only) and again on `task.overdue`, and carries the
-full message, the order number, the category as a word, a link to the item, a plain-text part and
-`Reply-To: <the visitor's bare address>`, so pressing Reply in that mailbox reaches them. The
-subject carries `[#ref]` (the last eight characters of the task id) and, for a privacy request,
-`[privacy]`. No person is mailed for a contact message: it stays in the bell. The other kinds
-(account review, export failed, the shop's) keep their per-person mail. The mailbox sits outside
-the retention TTL and outside `DELETE /tasks/{id}`: the mailbox copy of a message is cleaned by
-hand. An erasure that deleted messages mails the mailbox ONE notice naming them by `[#ref]` alone
-(no address, name or text), and staff follow
-[the guide](../use-the-shop/support.md#mailbox-after-erasure); the retention rule is in
-[data retention](../understand/data-retention.md#the-support-mailbox). The reminders thread under the first mail (`Message-ID` `<task-<id>@<support domain>>`, then `In-Reply-To`
-and `References` pointing at it). Nothing is mailed to the visitor.
-
-```mermaid
-sequenceDiagram
-    actor V as Visitor
-    participant A as POST /tasks
-    participant N as notifications
-    participant B as Main mailbox
-    actor S as Staff
-    V->>A: the form
-    A-->>V: 202, no body
-    A->>N: task.opened (outbox)
-    N->>N: bell for the people who work the kind
-    N->>B: full mail, Reply-To the visitor
-    S->>B: Reply
-    B->>V: the answer
-    Note over N,B: a privacy request 3 days from due: task.due_soon,<br/>bell and ONE reminder to the mailbox
-    Note over N,B: past its due date: task.overdue,<br/>bell again and ONE reminder to the mailbox
-```
-
-### The overdue reminder
+## The overdue reminder {#the-overdue-reminder}
 
 An open task (`new` or `in_progress`) past its `dueAt` is announced once as `task.overdue`, by
 the daily job `sweep:tasks-overdue` (06:40 UTC, ten minutes after the staff digest). The same
 sweep announces once, three days ahead, an open task about to fall due as `task.due_soon`. The
 sweep lives here, not in the shop's openers, because every kind has the same clock.
 
-```mermaid
-flowchart LR
-    O["task.opened"] -->|"dueAt - 3 days"| S["task.due_soon<br/>(once)"]
-    S -->|"dueAt passes"| V["task.overdue<br/>(once)"]
-    O -.->|"opened with 3 days or less to live,<br/>a contact message other than privacy, or opted out"| V
-    S --> N["notifications: the opener's sets,<br/>bell + mail (a contact message: bell +<br/>the main mailbox, not each person)"]
-    V --> N
-```
+Full detail: [Task notices and the staff badge](./tasks-notices.md#the-overdue-reminder).
 
-```mermaid
-flowchart LR
-    J["sweep:tasks-overdue"] --> C{"claim: open, past dueAt,<br/>no overdueNotifiedAt"}
-    C -->|stamp overdueNotifiedAt + outbox row, one transaction| E["task.overdue"]
-    J --> D{"claim: open, due within 3 days,<br/>no dueSoonNotifiedAt"}
-    D -->|stamp dueSoonNotifiedAt + outbox row, one transaction| F["task.due_soon"]
-    C -->|none left| Z["done"]
-    E --> N["notifications: the opener's sets,<br/>bell + mail (a contact message: bell +<br/>the main mailbox, not each person)"]
-    F --> N
-```
-
-- **Who gets a due-soon reminder.** Only a task whose whole life (`dueAt` minus `createdAt`) was
-  longer than `DUE_SOON_MS` (3 days, a constant in `domain/lifecycle.ts`, no env var) and that is
-  still ahead of its deadline: one opened already past due, or with a short life, goes straight to
-  overdue. A contact message gets one only when it is a privacy request, whose deadline is a
-  month (an ordinary contact message has a 48-hour life: its single reminder is the overdue one,
-  to the support address), and neither does a task whose opener set `noDueSoon` (a wait on someone
-  else). The
-  stamp is `dueSoonNotifiedAt`, internal like `overdueNotifiedAt`; a later overdue is still sent.
-
-- **Once, never again.** The claim and the stamp (`overdueNotifiedAt`, internal, not on the wire)
-  are one transaction with the `task.overdue` outbox row, so overlapping sweeps cannot claim a task
-  twice, and a crash rolls back both: the next sweep claims it again. A task is reminded once; a
-  reopened task keeps that state. Delivery is at-least-once, deduped on `task-overdue:<id>`.
-- **Closed first, nothing sent.** A resolved or spam task is never claimed.
-- **Same audience as the opener.** `notifications` tells the sets that work the kind (a contact
-  message: `TaskManagement`, by bell only) and mails the main mailbox the one reminder for a
-  contact message; any other kind with nobody to tell goes nowhere, exactly as at opening.
-- **The clock.** A contact message is due `NODE_TASKS_CONTACT_SLA_HOURS` (default 48) after it was
-  filed; a message in the `privacy` category is due one calendar month after (GDPR Art. 12(3)).
-
-### The staff badge
+## The staff badge {#the-staff-badge}
 
 This is the Tasks badge only; the other staff badges are counted by [`GET /shop-tasks/summary`](./shop-tasks.md#the-nav-badge-summary).
 
-`GET /tasks/summary` answers `{ open, mine, overdue, unassigned }`, scoped to the caller's
-jurisdiction. `overdue` is read-time arithmetic (open and past `dueAt`): no sweep keeps it true.
-
-**The honeypot.** `website` is a field a real browser always submits empty and a bot reliably
-fills — declared in the contract (so an undeclared field wouldn't 422 real browsers too) but never
-persisted or returned. A non-empty value — or an address the email policy `refused`
-(`checkEmailPolicy`, `services/contact.ts`) — writes the row straight to `status: spam`, closed at birth, and
-announces nothing; the caller still gets the same `202` a real submission gets, so a
-bot learns nothing from the response. That trades an email amplifier for a storage amplifier,
-which `contactLimiters` bounds and the TTL index expires.
-
-`POST /tasks` answers `202` with no body, in every case: the sender is a visitor with nothing to do
-with the stored task. Staff read it from the bell, the inbox and the main mailbox.
+Full detail: [Task notices and the staff badge](./tasks-notices.md#the-staff-badge).
 
 ## Personal data
 
