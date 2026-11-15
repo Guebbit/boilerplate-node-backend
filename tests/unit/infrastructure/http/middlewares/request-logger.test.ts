@@ -19,8 +19,10 @@ jest.mock('@infrastructure/observability/metrics-http', () => ({
 
 import { logger } from '@infrastructure/adapters/logger';
 
+/** The logger, mocked so cases can assert the access line. */
 const mockLog = logger.log as jest.MockedFunction<typeof logger.log>;
 
+/** A request stub; a case overrides only the fields it tests. */
 const buildRequest = (overrides: Partial<Request> = {}): Request =>
     asStub<Request>({
         method: 'GET',
@@ -30,6 +32,7 @@ const buildRequest = (overrides: Partial<Request> = {}): Request =>
         ...overrides
     });
 
+/** A response stub that records what the code under test sets and sends. */
 const buildResponse = (statusCode = 200): Response => {
     const listeners = new Map<string, (() => void)[]>();
     const once = (event: string, handler: () => void) => {

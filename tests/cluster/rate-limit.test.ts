@@ -50,7 +50,9 @@ import { startRedis, type TestRedis } from './support/redis';
 
 /** Small enough that a burst passes it quickly, large enough that an off-by-one is not the story. */
 const LIMIT = 5;
+/** Worker processes the cluster under test forks. */
 const WORKERS = 2;
+/** Requests sent in one burst: well past the limit, so the shared counter must refuse some. */
 const BURST = 30;
 
 /** Booting two clusters and pulling a Redis image is not a five-second affair. */
@@ -108,7 +110,7 @@ describe('the rate limiter across a real cluster', () => {
     afterAll(() => redis.stop());
 
     it('spends one budget across every worker', () => {
-        /*
+        /**
          * The assertion the fix needs. `LIMIT` requests are answered and every one after them is
          * refused — no matter which of the two workers each landed on.
          */
@@ -130,7 +132,7 @@ describe('the rate limiter across a real cluster', () => {
                     })
                     .then(() => servedAcrossWorkers(cluster))
                     .then((perWorker) => {
-                        /*
+                        /**
                          * The control. Each limit falls back to in-memory counting when Redis
                          * errors, and one worker alone also spends exactly one budget. Both would
                          * pass the counts above; neither can show more than one worker answering.
@@ -141,7 +143,7 @@ describe('the rate limiter across a real cluster', () => {
     });
 
     it('refuses to boot two workers when the counters would be in memory', () => {
-        /*
+        /**
          * Two workers without the limits Redis would each count alone and grant a doubled budget.
          * The primary refuses before it forks (`assertSharedRateLimitCounters`), so there is no
          * cluster to burst against: the case asserts the refusal and the variable it names.

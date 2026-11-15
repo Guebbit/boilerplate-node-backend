@@ -24,20 +24,33 @@ import { setEnvironment } from '@tests/environment';
 
 // ─── clearCache: "nothing to clear" vs "could not clear" ──────────────────────
 
+/** Stands in for the client's `On`; the cases assert how it was called. */
 const mockOn = jest.fn();
+/** Stands in for the client's `Connect`; the cases assert how it was called. */
 const mockConnect = jest.fn();
+/** Stands in for the client's `ScanIterator`; the cases assert how it was called. */
 const mockScanIterator = jest.fn();
+/** Stands in for the client's `Del`; the cases assert how it was called. */
 const mockDel = jest.fn();
+/** Stands in for the client's `Set`; the cases assert how it was called. */
 const mockSet = jest.fn();
+/** Stands in for the client's `ZAdd`; the cases assert how it was called. */
 const mockZAdd = jest.fn();
+/** Stands in for the client's `ZRemRangeByScore`; the cases assert how it was called. */
 const mockZRemRangeByScore = jest.fn();
+/** Stands in for the client's `Expire`; the cases assert how it was called. */
 const mockExpire = jest.fn();
+/** Stands in for the client's `Get`; the cases assert how it was called. */
 const mockGet = jest.fn();
+/** Stands in for the client's `ZRange`; the cases assert how it was called. */
 const mockZRange = jest.fn();
 
+/** Stands in for the client's `Quit`; the cases assert how it was called. */
 const mockQuit = jest.fn();
+/** Stands in for the client's `Destroy`; the cases assert how it was called. */
 const mockDestroy = jest.fn();
 
+/** The Redis client the adapter is built on, with every command mocked. */
 const mockClient = {
     on: mockOn,
     connect: mockConnect,
@@ -51,12 +64,15 @@ const mockClient = {
     zRange: mockZRange,
     close: mockQuit,
     destroy: mockDestroy,
-    // The lifecycle short-circuits on `isReady`; keeping it false forces the connect path, which
-    // is where the reachable/unreachable distinction is actually decided.
+    /**
+     * The lifecycle short-circuits on `isReady`; keeping it false forces the connect path, which
+     * is where the reachable/unreachable distinction is actually decided.
+     */
     isReady: false,
     isOpen: false
 };
 
+/** The Redis client the adapter is built on, with every command mocked. */
 const mockCreateClient = jest.fn((_options: unknown) => mockClient);
 
 jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
@@ -131,7 +147,7 @@ describe('clearCache', () => {
         expect(mockConnect).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * `getClient()` reports a failed connect by resolving void — the same value it uses for
      * "caching is off" — so collapsing the two would have `db:cache:clear` print "0 keys removed"
      * and exit 0 with a full cache.
@@ -173,8 +189,10 @@ describe('getCacheValue', () => {
     });
 
     it('returns the stored bytes on a hit, exactly as they were written', async () => {
-        // Opaque to the adapter: whatever the caller serialized comes back verbatim, and only the
-        // caller knows how to read it.
+        /**
+         * Opaque to the adapter: whatever the caller serialized comes back verbatim, and only the
+         * caller knows how to read it.
+         */
         mockGet.mockImplementation(() => Promise.resolve('{"status":201,"body":{"id":"7"}}'));
 
         const value = await freshCache().getCacheValue('GET:/products');
@@ -205,8 +223,10 @@ describe('getCacheValue', () => {
     });
 
     it('resolves undefined when caching is switched off, without connecting', async () => {
-        // Both routes to a URL — the explicit one and the host/port fallback — or `getRedisUrl`
-        // still resolves one from a loaded `.env`, as it did under the mutation runner.
+        /**
+         * Both routes to a URL — the explicit one and the host/port fallback — or `getRedisUrl`
+         * still resolves one from a loaded `.env`, as it did under the mutation runner.
+         */
         setEnvironment({ NODE_REDIS_URL: undefined });
         setEnvironment({ NODE_REDIS_PORT: undefined });
 
@@ -244,10 +264,12 @@ describe('setCacheValue tag index', () => {
     });
 
     it('registers the entry under every tag it was given', async () => {
-        // This reverse index is the entire mechanism behind group invalidation: Redis cannot
-        // efficiently delete "every key matching a pattern", so writes have to record their own
-        // membership. A write that skips it produces an entry nothing can ever invalidate — it
-        // just serves stale data until its TTL runs out.
+        /**
+         * This reverse index is the entire mechanism behind group invalidation: Redis cannot
+         * efficiently delete "every key matching a pattern", so writes have to record their own
+         * membership. A write that skips it produces an entry nothing can ever invalidate — it
+         * just serves stale data until its TTL runs out.
+         */
         await freshCache().setCacheValue('GET:/products', '{}', 60, ['products', 'catalog']);
 
         expect(mockZAdd).toHaveBeenCalledTimes(2);
@@ -261,8 +283,10 @@ describe('setCacheValue tag index', () => {
         });
     });
 
-    // A plain set would keep a member after its entry expired, so a flood of distinct keys
-    // would grow it until the next invalidation.
+    /**
+     * A plain set would keep a member after its entry expired, so a flood of distinct keys
+     * would grow it until the next invalidation.
+     */
     it('scores each member with its own expiry and prunes the ones already past it', async () => {
         const before = Date.now();
         await freshCache().setCacheValue('GET:/products', '{}', 60, ['products']);
@@ -281,8 +305,10 @@ describe('setCacheValue tag index', () => {
     });
 
     it('de-duplicates tags and drops empty ones', async () => {
-        // Both halves matter: a repeated tag is a wasted round-trip, and an empty one creates a
-        // junk `tag:` key that every future invalidation then reads and deletes for nothing.
+        /**
+         * Both halves matter: a repeated tag is a wasted round-trip, and an empty one creates a
+         * junk `tag:` key that every future invalidation then reads and deletes for nothing.
+         */
         await freshCache().setCacheValue('GET:/products', '{}', 60, [
             'products',
             'products',
@@ -301,12 +327,16 @@ describe('setCacheValue tag index', () => {
         ).resolves.toBeUndefined();
     });
 
-    // The TTL guard runs first and is the cheapest check there is: nothing is sent, and no client
-    // is even asked for, on behalf of an entry that was never going to be written.
+    /**
+     * The TTL guard runs first and is the cheapest check there is: nothing is sent, and no client
+     * is even asked for, on behalf of an entry that was never going to be written.
+     */
     it.each([0, -1])('refuses a TTL of %s, and indexes nothing', async (ttlSeconds) => {
-        // Redis rejects `EX` values of zero or less, and a non-positive TTL means "do not cache"
-        // anyway — so it is caught here rather than sent and refused. Asserting on `mockConnect`
-        // is what pins the ORDER.
+        /**
+         * Redis rejects `EX` values of zero or less, and a non-positive TTL means "do not cache"
+         * anyway — so it is caught here rather than sent and refused. Asserting on `mockConnect`
+         * is what pins the ORDER.
+         */
         await freshCache().setCacheValue('GET:/products', '{}', ttlSeconds, ['products']);
 
         expect(mockSet).not.toHaveBeenCalled();
@@ -341,8 +371,10 @@ describe('claimCacheRefresh', () => {
     });
 
     it('loses the claim when another caller already holds it', async () => {
-        // NX refuses the write and node-redis answers null, not an error — a contended claim is
-        // the expected case under real traffic, not a failure.
+        /**
+         * NX refuses the write and node-redis answers null, not an error — a contended claim is
+         * the expected case under real traffic, not a failure.
+         */
         mockSet.mockImplementation(() => Promise.resolve(null));
 
         await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(false);
@@ -375,8 +407,10 @@ describe('the Redis client', () => {
         mockQuit.mockImplementation(() => Promise.resolve());
     });
 
-    // Both spellings are supported so deployment config can stay flexible; the fragments are the
-    // half a compose file usually has.
+    /**
+     * Both spellings are supported so deployment config can stay flexible; the fragments are the
+     * half a compose file usually has.
+     */
     it('assembles a URL from host and port when no full URL is given', async () => {
         setEnvironment({ NODE_REDIS_URL: undefined });
         setEnvironment({ NODE_REDIS_HOST: 'redis.internal' });
@@ -412,7 +446,7 @@ describe('the Redis client', () => {
         expect(mockDestroy).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * QUIT waits for queued replies, which an already-dead socket will never send. `destroy()`
      * drops it immediately — otherwise a shutdown against a Redis that went away first hangs on
      * the way out, which reads as a stuck deploy rather than as a dead cache.
@@ -478,8 +512,10 @@ describe('invalidateCacheTags', () => {
     });
 
     it('does not issue a DEL with no arguments for an empty tag', async () => {
-        // `DEL` with zero keys is a protocol error, not a no-op, so an empty set has to be
-        // detected here. The tag key itself is still deleted.
+        /**
+         * `DEL` with zero keys is a protocol error, not a no-op, so an empty set has to be
+         * detected here. The tag key itself is still deleted.
+         */
         mockZRange.mockImplementation(() => Promise.resolve([]));
 
         await freshCache().invalidateCacheTags(['products']);
@@ -502,8 +538,10 @@ describe('invalidateCacheTags', () => {
     });
 
     it('resolves rather than rejecting when Redis fails mid-invalidation', async () => {
-        // The caller is a write that has already succeeded in Mongo. Rejecting here would turn a
-        // completed write into an error response, and the client would retry a write that landed.
+        /**
+         * The caller is a write that has already succeeded in Mongo. Rejecting here would turn a
+         * completed write into an error response, and the client would retry a write that landed.
+         */
         mockZRange.mockImplementation(() => Promise.reject(new Error('connection reset')));
 
         await expect(freshCache().invalidateCacheTags(['products'])).resolves.toEqual({
@@ -524,8 +562,10 @@ describe('invalidateCacheTags', () => {
     it('reports success with the number of cached responses removed', async () => {
         const cache = freshCache();
         mockZRange.mockImplementation(() => Promise.resolve(['a', 'b']));
-        // Variadic DEL answers with how many keys it removed; the tag set's own deletion is not a
-        // cached response and must not be counted with them.
+        /**
+         * Variadic DEL answers with how many keys it removed; the tag set's own deletion is not a
+         * cached response and must not be counted with them.
+         */
         mockDel.mockImplementation((keys: string[] | string) =>
             Promise.resolve(Array.isArray(keys) ? keys.length : 1)
         );

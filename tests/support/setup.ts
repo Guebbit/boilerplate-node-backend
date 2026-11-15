@@ -11,8 +11,10 @@
  * Note what is NOT here: no database. Mongo is per-suite, through `setupTestDb()`, because not
  * every suite needs one and starting a mongod for a pure-function test is pure cost.
  */
-// First, and for its side effect alone: it must write the environment before any import below
-// can read it. See the file's own header.
+/**
+ * First, and for its side effect alone: it must write the environment before any import below
+ * can read it. See the file's own header.
+ */
 import './setup-environment';
 // Before any model loads: a `bulkWrite` filter reads `strictQuery` as it was at schema build.
 import '@infrastructure/runtime/mongoose-boot';
@@ -20,10 +22,12 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-// The leaf module, NOT `@infrastructure/adapters/mailer` — that file also imports `nodemailer`,
-// and this runs in `setupFiles`, before a test file's own `jest.mock('nodemailer', …)` is even
-// hoisted. Importing the mailer here would hand every mocking test file an already-evaluated,
-// un-mockable `nodemailer` — see `template-registry.ts`'s own header.
+/**
+ * The leaf module, NOT `@infrastructure/adapters/mailer` — that file also imports `nodemailer`,
+ * and this runs in `setupFiles`, before a test file's own `jest.mock('nodemailer', …)` is even
+ * hoisted. Importing the mailer here would hand every mocking test file an already-evaluated,
+ * un-mockable `nodemailer` — see `template-registry.ts`'s own header.
+ */
 import { registerTemplateDirectories } from '@infrastructure/adapters/template-registry';
 import { registerDoubles } from '@scenarios/support/doubles/register';
 import { MODULES_ROOT } from '@tests/paths';
@@ -35,7 +39,7 @@ import { MODULES_ROOT } from '@tests/paths';
  * module-scope `t()` runs, so eagerly-resolved Zod messages worked here and only here. Copy that
  * must resolve at PARSE time (the validation messages) is a thunk for that reason.
  */
-/*
+/**
  * The same wiring `app.ts` does at boot: a module carries its own strings, and
  * `loadLocaleResources()` below only sees them once the directories are registered. Without this,
  * every test asserting on a domain message resolves the raw key instead of the copy.
@@ -52,18 +56,20 @@ bootI18n(
         .filter((directory) => existsSync(directory)),
     'en'
 ).catch((error: unknown) => {
-    // `setupFiles` cannot await. Rethrowing from the handler makes the failure an unhandled
-    // rejection, which Jest pins on the first test, instead of a suite quietly running on raw keys.
+    /**
+     * `setupFiles` cannot await. Rethrowing from the handler makes the failure an unhandled
+     * rejection, which Jest pins on the first test, instead of a suite quietly running on raw keys.
+     */
     throw new Error('Test setup: the locale dictionaries could not be loaded.', { cause: error });
 });
 
-/*
+/**
  * The other half of `app.ts`'s boot: without it, Zod answers its own English here and the suite
  * would be asserting behaviour the running service does not have.
  */
 registerValidationMessages();
 
-/*
+/**
  * The third half of `app.ts`'s boot: without it, `templateFile()` throws on every name a
  * suite's own `sendTemplatedEmail`/`enqueueEmail` call tries to resolve, since nothing has
  * collected the per-module directories yet. Globbed off disk for the same reason `bootI18n`'s
@@ -76,7 +82,7 @@ registerTemplateDirectories(
         .filter((directory) => existsSync(directory))
 );
 
-/*
+/**
  * DNS, for the webhook URL check (`webhooks/services/subscriptions.ts`) and every suite that
  * subscribes to a URL like `https://example.test/inbox`: a public address for any name, so no
  * test depends on a real resolver — or on the network being there. A suite that needs a private
@@ -91,7 +97,7 @@ jest.mock('node:dns/promises', () => ({
     )
 }));
 
-/*
+/**
  * The doubles production does not have — the fake payment provider, and the mail log and outbox.
  * Registered here, in `setupFiles`, because a test's own `jest.mock` is hoisted after this file
  * runs: `register.ts` loads nothing but the registries, and each double loads what it needs on

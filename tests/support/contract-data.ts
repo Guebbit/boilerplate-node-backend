@@ -38,10 +38,12 @@ import { asStub } from './stub';
 import { sampleForPattern } from './pattern-samples';
 import type { ZodType } from 'zod';
 
-// ─── seeded PRNG ────────────────────────────────────────────────────────────────
-//
-// Mulberry32: small, fast, good statistical quality for test-data purposes (not
-// cryptographic). Returns a function yielding floats in [0, 1), deterministic for a given seed.
+/**
+ * ─── seeded PRNG ────────────────────────────────────────────────────────────────
+ *
+ * Mulberry32: small, fast, good statistical quality for test-data purposes (not
+ * cryptographic). Returns a function yielding floats in [0, 1), deterministic for a given seed.
+ */
 const createRandom = (seed: number) => {
     let state = seed >>> 0;
     return (): number => {
@@ -94,9 +96,11 @@ const randomAlpha = (length: number): string =>
 const randomHex = (length: number): string =>
     Array.from({ length }, () => HEX_ALPHABET[randomInt(0, HEX_ALPHABET.length - 1)]).join('');
 
-/** A few short words joined together — long enough in practice to clear common hand-tightened
+/**
+ * A few short words joined together — long enough in practice to clear common hand-tightened
  * minimums (e.g. a username or title requiring at least a few characters) without hardcoding
- * any specific business rule the contract itself doesn't declare. */
+ * any specific business rule the contract itself doesn't declare.
+ */
 const randomWords = (): string =>
     Array.from({ length: randomInt(3, 6) }, () => randomAlpha(randomInt(3, 8))).join(' ');
 
@@ -265,11 +269,13 @@ const buildValue = (schema: ZodType): unknown => {
             const max = checks.find((check) => check.check === 'less_than')?.value;
             const low = typeof min === 'number' ? min : 0;
             const high = typeof max === 'number' ? max : low + 1000;
-            // Always a whole number: a valid `number`/`format: double` either way, but also
-            // satisfies fields the OpenAPI spec declares `type: integer` — a constraint that
-            // doesn't always survive into the generated zod schema as an explicit `.int()`
-            // (e.g. CreateOrderBody's `items[].quantity` is `zod.number().min(1)` in
-            // `api/schemas.zod.ts`, but `integer` in `openapi.yaml`).
+            /**
+             * Always a whole number: a valid `number`/`format: double` either way, but also
+             * satisfies fields the OpenAPI spec declares `type: integer` — a constraint that
+             * doesn't always survive into the generated zod schema as an explicit `.int()`
+             * (e.g. CreateOrderBody's `items[].quantity` is `zod.number().min(1)` in
+             * `api/schemas.zod.ts`, but `integer` in `openapi.yaml`).
+             */
             return Math.round(low + random() * (high - low));
         }
         case 'boolean': {

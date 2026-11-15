@@ -21,8 +21,10 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+/** Temp directory the files land in; removed after each case. */
 let root: string;
 
+/** Writes a staged file under the temp root and returns its path. */
 const stage = async (name: string, contents = 'image bytes') => {
     const file = path.join(root, name);
     await writeFile(file, contents);
@@ -66,8 +68,10 @@ describe('moveFile', () => {
         const { moveFile } = await import('@infrastructure/adapters/filesystem');
         const source = await stage('staged.png');
 
-        // Throwing is the contract: a silent failure here means the database is about to record a
-        // url for bytes that are not there.
+        /**
+         * Throwing is the contract: a silent failure here means the database is about to record a
+         * url for bytes that are not there.
+         */
         await expect(
             moveFile(source, path.join(root, 'no-such-directory', 'committed.png'))
         ).rejects.toThrow();
@@ -177,8 +181,10 @@ describe('reapDirectory', () => {
 
     it('skips an entry that is gone by the time it is checked, instead of failing the sweep', async () => {
         const { reapDirectory } = await import('@infrastructure/adapters/filesystem');
-        // A dangling link: listed by `readdir`, ENOENT to `stat` — the same answer a file
-        // deleted mid-sweep gives.
+        /**
+         * A dangling link: listed by `readdir`, ENOENT to `stat` — the same answer a file
+         * deleted mid-sweep gives.
+         */
         await symlink(path.join(root, 'already-gone'), path.join(root, 'dangling'));
 
         await expect(reapDirectory(root, Date.now(), 'Test')).resolves.toEqual({

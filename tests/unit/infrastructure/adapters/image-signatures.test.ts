@@ -45,8 +45,11 @@ jest.mock('node:fs/promises', () => {
  * where the claim and the bytes disagree — a disguised payload, and a real image mislabelled.
  */
 
+/** The first bytes of a PNG, enough for the signature check. */
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+/** The first bytes of a JPEG, enough for the signature check. */
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+/** The first bytes of a WebP, enough for the signature check. */
 const WEBP = Buffer.concat([
     Buffer.from('RIFF'),
     Buffer.from([0x24, 0, 0, 0]),

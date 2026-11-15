@@ -26,6 +26,7 @@ const audited = (spy: jest.SpyInstance): { action: string; metadata?: Record<str
         (call: unknown[]) => call[2] as { action: string; metadata?: Record<string, unknown> }
     );
 
+/** Spy on the audit emitter; each case reads what the flow recorded. */
 let auditSpy: jest.SpyInstance;
 
 beforeEach(() => {

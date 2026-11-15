@@ -14,9 +14,11 @@ jest.mock('@infrastructure/adapters/logger', () => ({ logger: { error: jest.fn()
 /** A well-formed id: the controller refuses anything else before it asks the database. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
+/** A request stub; a case overrides only the fields it tests. */
 const makeRequest = (id: string) =>
     asStub<Request>({ params: { id }, query: {}, body: undefined, is: () => null });
 
+/** A response stub that records what the code under test sets and sends. */
 const makeResponse = () =>
     asStub<Response>({
         status: jest.fn().mockReturnThis(),

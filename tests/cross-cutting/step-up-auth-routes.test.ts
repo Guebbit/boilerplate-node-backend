@@ -59,17 +59,25 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'cart POST /checkout': [`requireFreshAuth(critical)`],
     'payments POST /': [`requireFreshAuth(critical)`],
     'payments POST /:id/confirm': [`requireFreshAuth(critical)`],
-    // The sync settles money just as the confirm does, from the provider's answer rather than
-    // from a method the caller supplied — so it sits at the same tier, not a lower one.
+    /**
+     * The sync settles money just as the confirm does, from the provider's answer rather than
+     * from a method the caller supplied — so it sits at the same tier, not a lower one.
+     */
     'payments POST /:id/sync': [`requireFreshAuth(critical)`],
-    // The conditional guard asks an account with a second factor for an `otp`; the unconditional
-    // one after it is the only gate an account without one meets.
+    /**
+     * The conditional guard asks an account with a second factor for an `otp`; the unconditional
+     * one after it is the only gate an account without one meets.
+     */
     'account DELETE /': [`requireFreshAuthWhen(critical)`, `requireFreshAuth(critical)`],
-    // Only for an account with a second factor armed (the otp demand): the plain password change
-    // of an account without one is gated by the current password alone, as before.
+    /**
+     * Only for an account with a second factor armed (the otp demand): the plain password change
+     * of an account without one is gated by the current password alone, as before.
+     */
     'account POST /password': [`requireFreshAuthWhen(sensitive)`],
-    // The email is a sign-in and recovery channel: always a fresh session, and the code on top for
-    // an armed account. `PUT`/`PATCH /account` no longer carry it, so they ask nothing.
+    /**
+     * The email is a sign-in and recovery channel: always a fresh session, and the code on top for
+     * an armed account. `PUT`/`PATCH /account` no longer carry it, so they ask nothing.
+     */
     'account POST /email-change': [
         `requireFreshAuthWhen(sensitive)`,
         `requireFreshAuth(sensitive)`
@@ -79,30 +87,42 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account POST /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /sessions/:sessionId': [`requireFreshAuth(sensitive)`],
-    // The data export adopts this same guard in place of a bespoke password check — see the
-    // route's own comment in `account/routes.ts`.
+    /**
+     * The data export adopts this same guard in place of a bespoke password check — see the
+     * route's own comment in `account/routes.ts`.
+     */
     'account POST /export': [`requireFreshAuth(sensitive)`],
     'account GET /export/file': [`requireFreshAuth(sensitive)`],
-    // Enrolling, confirming or disabling a second factor is itself a sensitive action —
-    // critical tier, same as `DELETE /` and the checkout/payment routes above.
+    /**
+     * Enrolling, confirming or disabling a second factor is itself a sensitive action —
+     * critical tier, same as `DELETE /` and the checkout/payment routes above.
+     */
     'account POST /2fa/methods/:method/setup': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/send': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/confirm': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/remove': [`requireFreshAuth(critical)`],
     'account POST /2fa/disable': [`requireFreshAuth(critical)`],
-    // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
-    // as disabling a factor.
+    /**
+     * Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
+     * as disabling a factor.
+     */
     'account POST /2fa/backup-codes': [`requireFreshAuth(critical)`],
-    // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
-    // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
+    /**
+     * A remainder cancel by a caller holding the refund key is staff's money-out door, at that
+     * key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
+     */
     'returns POST /': [`requireFreshAuthWhen(critical)`],
-    // An operator's cancel can keep or refund a paid order's money; a customer's own is never
-    // prompted (the predicate asks `update:Order`).
+    /**
+     * An operator's cancel can keep or refund a paid order's money; a customer's own is never
+     * prompted (the predicate asks `update:Order`).
+     */
     'orders POST /:id/cancel': [`requireFreshAuthWhen(critical)`],
-    // Creating an account with a role widens a person's powers: the same critical tier minting an
-    // API key asks, and a create that names none is never prompted. So is activating or
-    // deactivating an account, since the role stays and the power comes or goes. The role door
-    // (`assign-role`, `revoke-role`) is the other half: `assign:Role` carries its own `stepUp`.
+    /**
+     * Creating an account with a role widens a person's powers: the same critical tier minting an
+     * API key asks, and a create that names none is never prompted. So is activating or
+     * deactivating an account, since the role stays and the power comes or goes. The role door
+     * (`assign-role`, `revoke-role`) is the other half: `assign:Role` carries its own `stepUp`.
+     */
     'users POST /': [`requireFreshAuthWhen(critical)`],
     'users POST /:id/activate': [`requireFreshAuthWhen(critical)`],
     'users POST /:id/deactivate': [`requireFreshAuthWhen(critical)`]
@@ -114,8 +134,10 @@ const mountedStepUps = (): Record<string, string[]> => {
 
     for (const [moduleName, router] of Object.entries(ROUTERS))
         for (const signature of routeSignatures(router)) {
-            // Every step-up on the route, not the first: DELETE /account carries a conditional
-            // guard AND an unconditional one, and the second is the only gate without 2FA.
+            /**
+             * Every step-up on the route, not the first: DELETE /account carries a conditional
+             * guard AND an unconditional one, and the second is the only gate without 2FA.
+             */
             const stepUps = guardsOn(router, signature).filter(
                 (entry) =>
                     entry.startsWith('requireFreshAuth(') ||

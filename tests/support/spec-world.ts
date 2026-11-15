@@ -54,7 +54,6 @@ const LITERAL_PARAMETERS: Record<string, string> = {
  * outcome, a 500 is not.
  *
  * @param path - the templated path, which says what kind of row `{id}` is
- * @param name - the parameter
  * @param world - the rows seeded for this operation
  */
 const parameterValue = (path: string, name: string, world: World): string => {

@@ -20,6 +20,7 @@ import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
 import { retryUntil } from '@tests/eventually';
 import { REPO_ROOT } from '@tests/paths';
 
+/** A running cluster: its address and how to stop it. */
 export interface Cluster {
     /** The port the cluster's workers share. */
     port: number;
@@ -178,17 +179,21 @@ const spawnPrimary = ({
     port: number;
     dbUri: string;
 }): ChildProcess => {
-    // `NODE_ENV=development` below is what makes the primary and every worker load the doubles
-    // production does not have (the fake payment provider, the mail log) — the same door
-    // `npm run dev` uses.
+    /**
+     * `NODE_ENV=development` below is what makes the primary and every worker load the doubles
+     * production does not have (the fake payment provider, the mail log) — the same door
+     * `npm run dev` uses.
+     */
     return spawn('npx', ['tsx', 'src/cluster.ts'], {
         cwd: REPO_ROOT,
-        // A new process group, PGID == this PID: `stop()` below signals the whole group, not
-        // just this one process — see its own docblock for why that is the point.
+        /**
+         * A new process group, PGID == this PID: `stop()` below signals the whole group, not
+         * just this one process — see its own docblock for why that is the point.
+         */
         detached: true,
         env: {
             ...process.env,
-            /*
+            /**
              * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
              * presence checks under `NODE_ENV=test`, and this suite wants them run for real
              * against the secrets set below.
@@ -199,7 +204,7 @@ const spawnPrimary = ({
             NODE_DB_URI: dbUri,
             NODE_TOKEN_ACCESS: '84860f6e3faa80b96e22593ea147c55d721af62475d82804a40610b892e84f80',
             NODE_TOKEN_REFRESH: '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
-            /*
+            /**
              * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
              * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
              * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
@@ -213,7 +218,7 @@ const spawnPrimary = ({
                 'd31c29a41dec73b1cb2a6c16030c377e997176fee0fa4a2101a623f6093a44a7',
             NODE_PII_ENCRYPTION_KEY:
                 'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
-            /*
+            /**
              * The shop's identity and VAT rates are required at boot too
              * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
              * values `.env-example` ships, so the child boots the way a fresh checkout does.
@@ -228,10 +233,12 @@ const spawnPrimary = ({
             NODE_LEGAL_PHONE: '+39 02 1234567',
             NODE_VAT_RATE_DEFAULT: '0.22',
             NODE_VAT_RATE_REDUCED: '0.10',
-            // The access line is `info`: a developer's `.env` set higher would hide it, and
-            // `createServedCounter` could count nothing.
+            /**
+             * The access line is `info`: a developer's `.env` set higher would hide it, and
+             * `createServedCounter` could count nothing.
+             */
             NODE_LOG_LEVEL: 'info',
-            /*
+            /**
              * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
              * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
              * process, and every assertion about crossing workers passes for the wrong reason.
@@ -274,7 +281,7 @@ const startCluster = ({
         .then(([mongo, port]) => {
             const child = spawnPrimary({ workers, env, port, dbUri: mongo.uri });
 
-            /*
+            /**
              * Kept so a boot failure can say WHY. Discarding the child's output made every failure
              * here read as a bare 60-second timeout with no cause attached, which is how a red
              * `cluster` job stayed unexplained: the process that knew what went wrong was the one
@@ -282,7 +289,7 @@ const startCluster = ({
              */
             const output: string[] = [];
 
-            /*
+            /**
              * `workersReady` is a running total, not derived from `output`: that array is trimmed,
              * and would silently undercount once boot chatter pushed an early ready line out of its
              * window.
@@ -312,7 +319,7 @@ const startCluster = ({
             child.stdout?.on('data', capture);
             child.stderr?.on('data', capture);
 
-            /*
+            /**
              * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
              * primary two levels down, and never the workers `cluster.fork()` adds below that again.
              * `child.kill()` alone only ever reaches `npx`; whether SIGTERM cascades from there to
@@ -341,7 +348,7 @@ const startCluster = ({
                     }
                     child.once('exit', () => resolve());
                     signalGroup('SIGTERM');
-                    /*
+                    /**
                      * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`)
                      * has up to `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (15s default) to drain its workers
                      * on its own; this waits past that before stepping in, so the normal path is the
@@ -357,8 +364,10 @@ const startCluster = ({
                     }, 20_000).unref();
                 })
                     .then(() => mongo.stop())
-                    // The dbPath directory is this boot's own, unlike the shared jest-instance root
-                    // `global-setup.ts` owns — nothing else sweeps it, so `stop()` must.
+                    /**
+                     * The dbPath directory is this boot's own, unlike the shared jest-instance root
+                     * `global-setup.ts` owns — nothing else sweeps it, so `stop()` must.
+                     */
                     .then(() => rm(dbPath, { recursive: true, force: true }));
 
             return waitForListening(port, bootTimeoutMs)

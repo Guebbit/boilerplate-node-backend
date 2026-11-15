@@ -56,8 +56,10 @@ export interface OwnedCase {
 
 /** Sends one request through the real app. */
 export const send = ({ method, path, bearer, query, body }: Attempt): Promise<Response> => {
-    // `Lowercase<Verb>` is exactly supertest's method names; the cast only restores the literal
-    // type that `toLowerCase()` widens to `string`.
+    /**
+     * `Lowercase<Verb>` is exactly supertest's method names; the cast only restores the literal
+     * type that `toLowerCase()` widens to `string`.
+     */
     const verb = method.toLowerCase() as Lowercase<Verb>;
     const request = api()
         [verb](path)

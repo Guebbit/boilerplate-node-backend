@@ -30,6 +30,7 @@ export const customers = names.map((name, index) =>
 );
 `;
 
+/** A package.json with the seed-image scripts the removal must edit. */
 const PACKAGE_JSON = `{
     "scripts": {
         "scenario:tls": "tsx scenarios/tools/generate-webhook-sink-tls.ts",

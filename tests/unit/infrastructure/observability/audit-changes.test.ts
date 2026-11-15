@@ -3,6 +3,7 @@
  */
 import { auditChanges, fieldChange } from '@infrastructure/observability/audit-changes';
 
+/** The field spec the diff is computed with: which fields carry values and which only a name. */
 const FIELDS = { valued: ['count', 'labels'], named: ['note'] } as const;
 
 describe('auditChanges', () => {

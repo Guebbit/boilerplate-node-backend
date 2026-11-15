@@ -72,9 +72,11 @@ describe('module-declared slices', () => {
     });
 
     it('checks a comma-separated ring member-by-member, not the joined string', () => {
-        // account/session's key ring is exactly this shape: an ordered, comma-separated list of
-        // secrets. A second entry left as the placeholder must refuse to boot even though the
-        // JOINED value is long and does not itself equal the placeholder.
+        /**
+         * account/session's key ring is exactly this shape: an ordered, comma-separated list of
+         * secrets. A second entry left as the placeholder must refuse to boot even though the
+         * JOINED value is long and does not itself equal the placeholder.
+         */
         configure();
         setEnvironment({ SECRET: 'a-real-secret-value,change-me' });
 

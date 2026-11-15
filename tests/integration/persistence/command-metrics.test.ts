@@ -50,8 +50,10 @@ describe('database command metrics', () => {
         };
         const before = await observations(labels);
 
-        // An unknown pipeline stage: the server answers ok:0, which the driver reports as a failed
-        // command. (A duplicate-key insert would not do: that is ok:1 with a write error inside.)
+        /**
+         * An unknown pipeline stage: the server answers ok:0, which the driver reports as a failed
+         * command. (A duplicate-key insert would not do: that is ok:1 with a write error inside.)
+         */
         await expect(
             leaseModel.collection.aggregate([{ $noSuchStage: {} }]).toArray()
         ).rejects.toThrow();

@@ -55,8 +55,10 @@ describe('an empty string is never a stored value', () => {
     it.each(EMPTY_STRING_CASES)('%s %s answers 422', async (method, url, body) => {
         const { bearer } = await authenticateAs(roleReaching({ path: url }));
 
-        // The key rides on every case: the stock and ship doors refuse a request without it (400)
-        // before they look at the body, and any other route ignores it.
+        /**
+         * The key rides on every case: the stock and ship doors refuse a request without it (400)
+         * before they look at the body, and any other route ignores it.
+         */
         const response = await api()
             [method](url)
             .set('Authorization', bearer)
@@ -200,8 +202,10 @@ describe('a 201 names the new resource in Location', () => {
 const STALE_TAG = '"1.stale"';
 
 describe('conditional writes (RFC 9110 §13.1.1)', () => {
-    // The shared response check (`@tests/contract`) fails a 200 that forgets the `ETag` the spec
-    // requires, and a 412 the operation never declared — so these cases pin the spec AND the server.
+    /**
+     * The shared response check (`@tests/contract`) fails a 200 that forgets the `ETag` the spec
+     * requires, and a 412 the operation never declared — so these cases pin the spec AND the server.
+     */
     it('refuses a stale If-Match on a PATCH with a documented 412', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
@@ -245,8 +249,10 @@ describe('conditional writes (RFC 9110 §13.1.1)', () => {
 });
 
 describe('a revalidating read answers 304 (RFC 9110 §13.1.2)', () => {
-    // `GET /users` mounts `privateNoCache`; the bundler adds the shared `304` to it, so the
-    // shared response check refuses this status if the spec stops declaring it.
+    /**
+     * `GET /users` mounts `privateNoCache`; the bundler adds the shared `304` to it, so the
+     * shared response check refuses this status if the spec stops declaring it.
+     */
     it('answers a matching If-None-Match with an empty 304 that keeps the ETag', async () => {
         const { bearer } = await authenticateAs('admin');
 

@@ -21,13 +21,16 @@ import { processUnhandledRejectionsTotal } from '@infrastructure/observability/m
 /** Enough of a `Request` for the one field the handler reads: `requestId`, for the log line. */
 const requestStub = () => asStub<Request>({ requestId: 'req-1', path: '/x', method: 'GET' });
 
+/** The next() the handler is given; cases assert it was not called. */
 const NEXT: NextFunction = jest.fn();
 
 describe('handleUncaughtError', () => {
     it('reads a client status from statusCode when status is absent', () => {
-        // http-errors sets both `.status` and `.statusCode`, but a thrower that follows only the
-        // Node convention (`.statusCode`, no `.status`) still declares itself a client error --
-        // `clientErrorStatus`'s own fallback, uncovered until now.
+        /**
+         * http-errors sets both `.status` and `.statusCode`, but a thrower that follows only the
+         * Node convention (`.statusCode`, no `.status`) still declares itself a client error --
+         * `clientErrorStatus`'s own fallback, uncovered until now.
+         */
         const error = Object.assign(new Error('bad range'), { expose: true, statusCode: 416 });
 
         const response = makeResponseStub();
@@ -81,8 +84,10 @@ describe('handleUncaughtError', () => {
     });
 
     it('falls through to the database interpreter when neither field is a valid 4xx', () => {
-        // statusCode present but out of the 4xx range clientErrorStatus accepts -- resolveStatus
-        // must not treat it as a declared client error.
+        /**
+         * statusCode present but out of the 4xx range clientErrorStatus accepts -- resolveStatus
+         * must not treat it as a declared client error.
+         */
         const error = Object.assign(new Error('boom'), { expose: true, statusCode: 599 });
 
         const response = makeResponseStub();
@@ -111,9 +116,11 @@ describe('handleUncaughtError', () => {
         expect(response.status).not.toHaveBeenCalled();
     });
 
-    // A DB/Redis outage answers 503 (RFC 9110 §15.6.4), not the generic 500 every other
-    // server-side failure gets — the whole point being that a client can tell "retry shortly"
-    // apart from "something is broken".
+    /**
+     * A DB/Redis outage answers 503 (RFC 9110 §15.6.4), not the generic 500 every other
+     * server-side failure gets — the whole point being that a client can tell "retry shortly"
+     * apart from "something is broken".
+     */
     describe('a Mongo/Redis outage (the databaseErrorInterpreter 503 branch)', () => {
         const outage = Object.assign(new Error('server selection timed out'), {
             name: 'MongoServerSelectionError'

@@ -30,19 +30,24 @@ jest.mock('@infrastructure/adapters/image.worker', () => ({
     digestQuarantinedImage: jest.fn()
 }));
 
+/** The mocked image store. */
 const { imageStore } = jest.requireMock<{
     imageStore: { quarantine: jest.Mock; removeQuarantined: jest.Mock; remove: jest.Mock };
 }>('@infrastructure/adapters/image-store');
+/** The mocked file deletion. */
 const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
     '@infrastructure/adapters/filesystem'
 );
+/** The mocked queue state probe. */
 const { queueState } = jest.requireMock<{ queueState: jest.Mock }>(
     '@infrastructure/adapters/queue'
 );
+/** The mocked digest pipeline. */
 const { digestQuarantinedImage } = jest.requireMock<{ digestQuarantinedImage: jest.Mock }>(
     '@infrastructure/adapters/image.worker'
 );
 
+/** An uploaded file stub at the given path. */
 const uploaded = (filePath: string) => asStub<Express.Multer.File>({ path: filePath });
 
 /** A response that can be closed with a status, the way Node's closes after the answer is sent. */
@@ -88,12 +93,14 @@ describe('quarantineUploadedImages — broker ready', () => {
 
         await expect(run({ file: uploaded('/staging/a.png') })).resolves.toBe(failure);
 
-        // Nobody owns it now: the request is over and no key was recorded. Left behind, it is a
-        // slow disk leak in a directory nobody looks at.
+        /**
+         * Nobody owns it now: the request is over and no key was recorded. Left behind, it is a
+         * slow disk leak in a directory nobody looks at.
+         */
         expect(deleteFile).toHaveBeenCalledWith('/staging/a.png');
     });
 
-    /*
+    /**
      * The cleanup step itself is a promise chain with no `.catch()` of its own — without one on
      * the middleware's own outer chain, a rejection here never reaches `next()` and the request
      * just hangs, rather than answering the 500 an ordinary thrown error would.
@@ -126,9 +133,11 @@ describe('quarantineUploadedImages — no broker ready', () => {
 
         await expect(run(request)).resolves.toBeUndefined();
 
-        // Owner is the key's STEM ('a'), not the key itself ('a.png'): `image-store.ts#promote`
-        // appends the digested mime's own extension to it, and passing the key whole would double
-        // it — see `digestQuarantinedKeysInline`'s own comment.
+        /**
+         * Owner is the key's STEM ('a'), not the key itself ('a.png'): `image-store.ts#promote`
+         * appends the digested mime's own extension to it, and passing the key whole would double
+         * it — see `digestQuarantinedKeysInline`'s own comment.
+         */
         expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a');
         expect(request.storedImageUrls).toEqual(['/images/a.png']);
         expect(request.storedThumbnailUrls).toEqual(['/images/thumbs/v1/a.webp']);

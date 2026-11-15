@@ -14,8 +14,10 @@ import net from 'node:net';
 import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
 import { retryUntil } from '@tests/eventually';
 
+/** Container image the throwaway Redis runs; overridable for an air-gapped host. */
 const IMAGE = process.env.NODE_TEST_REDIS_IMAGE ?? 'docker.io/library/redis:7-alpine';
 
+/** A running throwaway Redis: its url and how to stop it. */
 export interface TestRedis {
     url: string;
     stop: () => Promise<void>;

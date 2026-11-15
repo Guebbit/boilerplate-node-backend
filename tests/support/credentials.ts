@@ -27,10 +27,12 @@ export const credentialHolding = async (permissions: string[]): Promise<string> 
     const context: TenantCallerContext = {
         caller: {
             id: String(user._id),
-            // `DEPLOYMENT_TENANT_ID`, not `TEST_TENANT_ID`: `createUser` writes the minter's
-            // membership under the former, and `resolveCredential` re-reads what the minter holds
-            // NOW rather than trusting the snapshot. A mismatch here mints fine and then resolves
-            // to no permissions at all, which reads as a 403 and looks like a guard bug.
+            /**
+             * `DEPLOYMENT_TENANT_ID`, not `TEST_TENANT_ID`: `createUser` writes the minter's
+             * membership under the former, and `resolveCredential` re-reads what the minter holds
+             * NOW rather than trusting the snapshot. A mismatch here mints fine and then resolves
+             * to no permissions at all, which reads as a 403 and looks like a guard bug.
+             */
             tenantId: DEPLOYMENT_TENANT_ID,
             scope: 'tenant',
             permissions,

@@ -16,8 +16,10 @@ describe('zonedStartOfDay', () => {
     });
 
     it('lands on the right side of a spring-forward and a fall-back', () => {
-        // Rome springs forward on 2026-03-29 and falls back on 2026-10-25, both at 01:00 UTC, so
-        // the day of the change is 23 and 25 hours long.
+        /**
+         * Rome springs forward on 2026-03-29 and falls back on 2026-10-25, both at 01:00 UTC, so
+         * the day of the change is 23 and 25 hours long.
+         */
         const edges = [28, 29, 30].map((day) => zonedStartOfDay(2026, 3, day, 'Europe/Rome'));
         const fall = [25, 26].map((day) => zonedStartOfDay(2026, 10, day, 'Europe/Rome'));
 

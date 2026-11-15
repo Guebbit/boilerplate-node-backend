@@ -50,7 +50,7 @@ import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race
 setupTestDb();
 
 describe('R3 — concurrent writes of the SAME product', () => {
-    /*
+    /**
      * `POST /cart/items` ADDS: every participant's increment must land, so the line holds their
      * sum, and every one is answered 200 (a line is written through its parent, never 201). Two
      * participants both concluding "absent" and both appending is the failure the `$ne`-in-filter
@@ -79,8 +79,10 @@ describe('R3 — concurrent writes of the SAME product', () => {
             expect(await cartModel.countDocuments({ userId: user._id })).toBe(1);
 
             const cart = await cartModel.findOne({ userId: user._id });
-            // The line, once. Two participants both concluding "absent" and both appending is the
-            // failure the `$ne`-in-filter guard prevents.
+            /**
+             * The line, once. Two participants both concluding "absent" and both appending is the
+             * failure the `$ne`-in-filter guard prevents.
+             */
             expect(cart?.items).toHaveLength(1);
             expect(cart?.items[0]?.quantity).toBe(RACE_SIZE);
         }));
@@ -88,9 +90,11 @@ describe('R3 — concurrent writes of the SAME product', () => {
 
 describe('R3 — concurrent adds of DIFFERENT products', () => {
     it('keeps every line, on one cart', async () => {
-        // The case that would catch a regression in the `$ne`-in-filter design. With the guard
-        // removed, two adds can both conclude "absent" and both append, and the symptom is a
-        // duplicated line — which only a multi-product race separates from the case above.
+        /**
+         * The case that would catch a regression in the `$ne`-in-filter design. With the guard
+         * removed, two adds can both conclude "absent" and both append, and the symptom is a
+         * duplicated line — which only a multi-product race separates from the case above.
+         */
         const { user, bearer } = await authenticateAs();
         const products = await Promise.all(
             Array.from({ length: RACE_SIZE }, (_, index) =>
@@ -119,9 +123,11 @@ describe('R3 — concurrent adds of DIFFERENT products', () => {
 
 describe('R3 — concurrent quantity writes to the same line', () => {
     it('settles on a value some ordering produces, never on a lost cart', async () => {
-        // `set` mode, so the writes genuinely conflict rather than accumulate. The invariant is
-        // not "which one won" — that is the database's business — but that the result is one of
-        // the values actually sent, rather than a merge artefact or a second cart.
+        /**
+         * `set` mode, so the writes genuinely conflict rather than accumulate. The invariant is
+         * not "which one won" — that is the database's business — but that the result is one of
+         * the values actually sent, rather than a merge artefact or a second cart.
+         */
         const { user, bearer } = await authenticateAs();
         const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
@@ -211,9 +217,11 @@ describe('R2 — concurrent checkouts of one cart', () => {
     });
 
     it('leaves no order behind for a request that lost the race', async () => {
-        // The conditional cart write runs inside the order's transaction, so the loser's order is
-        // never committed. Without that the invariant above would still read "one cart emptied"
-        // while the collection quietly held N orders.
+        /**
+         * The conditional cart write runs inside the order's transaction, so the loser's order is
+         * never committed. Without that the invariant above would still read "one cart emptied"
+         * while the collection quietly held N orders.
+         */
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
         const product = await createProduct({ price: '10.00', onHand: RACE_SIZE * 5 });
@@ -236,10 +244,12 @@ describe('R2 — concurrent checkouts of one cart', () => {
     });
 
     it('gives the loser its hold back rather than leaking it on the product', async () => {
-        // The hold is taken before the order is written, so each loser has already called
-        // `reserveForOrder`. `placeOrder` gives it back when the transaction aborts; without that
-        // the product accumulates a permanent hold per loser that no sweep can ever find, since it
-        // is keyed to an order that no longer exists.
+        /**
+         * The hold is taken before the order is written, so each loser has already called
+         * `reserveForOrder`. `placeOrder` gives it back when the transaction aborts; without that
+         * the product accumulates a permanent hold per loser that no sweep can ever find, since it
+         * is keyed to an order that no longer exists.
+         */
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
         const product = await createProduct({ price: '10.00', onHand: RACE_SIZE * 5 });
@@ -356,8 +366,10 @@ describe('R2 — a checkout that lost the cart race announces nothing', () => {
 
 describe('account deletion racing a cart write', () => {
     it('leaves no orphaned cart and no 5xx', async () => {
-        // A cart is its own document keyed by `userId`, reachable only through the account, so a
-        // cart that outlives its user is a row nothing can ever read or clean up.
+        /**
+         * A cart is its own document keyed by `userId`, reachable only through the account, so a
+         * cart that outlives its user is a row nothing can ever read or clean up.
+         */
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: RACE_SIZE * 5 });

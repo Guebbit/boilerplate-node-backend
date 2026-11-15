@@ -59,9 +59,11 @@ describe('the OAuth provider registry', () => {
     });
 
     it('lists fake once something registers it, with no credentials of its own', () => {
-        // Production seeds no `fake` entry at all — only the development doubles
-        // (`scenarios/support/development-doubles.ts`) calls `registerOAuthProvider('fake', ...)`,
-        // which this reproduces directly.
+        /**
+         * Production seeds no `fake` entry at all — only the development doubles
+         * (`scenarios/support/development-doubles.ts`) calls `registerOAuthProvider('fake', ...)`,
+         * which this reproduces directly.
+         */
         expect(enabledProviders()).not.toContain('fake');
 
         registerOAuthProvider('fake', () => fakeOAuthProvider);

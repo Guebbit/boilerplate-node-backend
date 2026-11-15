@@ -35,9 +35,11 @@ const spellingFindings = async (ruleset: string, document: string): Promise<stri
     const file = path.join(folder, 'document.yaml');
     await writeFile(file, document);
 
-    // Spectral CLI: `--format json` prints the findings as an array. It exits non-zero on an
-    // error-severity finding; the rejection still carries `stdout`, and other findings on this
-    // scratch document are not what is asked about, so the exit code is not read.
+    /**
+     * Spectral CLI: `--format json` prints the findings as an array. It exits non-zero on an
+     * error-severity finding; the rejection still carries `stdout`, and other findings on this
+     * scratch document are not what is asked about, so the exit code is not read.
+     */
     const { stdout } = await run(
         SPECTRAL,
         [
@@ -50,8 +52,10 @@ const spellingFindings = async (ruleset: string, document: string): Promise<stri
         ],
         { encoding: 'utf8' }
     ).catch((error: { stdout: string }) => error);
-    // With nothing to report the CLI prints `[]` and then a plain-text summary line: the JSON is
-    // everything before that line break, or the whole output when findings span several lines.
+    /**
+     * With nothing to report the CLI prints `[]` and then a plain-text summary line: the JSON is
+     * everything before that line break, or the whole output when findings span several lines.
+     */
     const json = stdout.startsWith('[]') ? '[]' : stdout;
     const findings = JSON.parse(json) as { code: string; path: string[] }[];
     return findings

@@ -117,7 +117,6 @@ export const payByCard = async (bearer: string, orderId: string) => {
  * An order as a caller reads it.
  *
  * @param bearer - the caller's `Authorization` header value
- * @param orderId - the order
  */
 export const orderOf = async (bearer: string, orderId: string) =>
     bodyOf(
@@ -129,7 +128,6 @@ export const orderOf = async (bearer: string, orderId: string) =>
  * An order's payment as staff read it.
  *
  * @param bearer - the staff member's `Authorization` header value
- * @param orderId - the order
  */
 export const paymentOf = async (bearer: string, orderId: string) =>
     bodyOf(
@@ -141,7 +139,6 @@ export const paymentOf = async (bearer: string, orderId: string) =>
  * A product's counters as staff read them.
  *
  * @param bearer - the staff member's `Authorization` header value
- * @param productId - the product
  */
 export const stockOf = async (bearer: string, productId: string) => {
     const { onHand, reserved } = bodyOf(
@@ -156,7 +153,6 @@ export const stockOf = async (bearer: string, productId: string) => {
  * The ledger reasons recorded for one product, newest first.
  *
  * @param bearer - the staff member's `Authorization` header value
- * @param productId - the product
  */
 export const ledgerOf = async (bearer: string, productId: string) =>
     bodyOf(

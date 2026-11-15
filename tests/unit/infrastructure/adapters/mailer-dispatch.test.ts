@@ -26,18 +26,21 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileExists } from '@tests/file-sandbox';
 
+/** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
+/** Stands in for the queue publisher; the cases assert how it was called. */
 const publishToQueueMock = jest.fn();
 jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: (job: unknown) => publishToQueueMock(job)
 }));
 
+/** The logger, mocked so cases can assert what was logged. */
 const loggerMock = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
-/*
+/**
  * Getters rather than `logger: loggerMock`, and the difference is not stylistic.
  *
  * `jest.mock` is hoisted above everything, so the factory runs the moment the mocked module is
@@ -64,10 +67,12 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
 import { setEnvironment } from '@tests/environment';
 
+/** A minimal mail request. */
 const REQUEST: EmailJobPayload['request'] = {
     to: 'ada@example.com',
     subject: 'Reset your password'
 };
+/** The template every dispatch case sends. */
 const TEMPLATE = 'account.reset-request';
 /**
  * Every variable the chosen template interpolates — which, since templates stopped translating,
@@ -86,6 +91,7 @@ const DATA: Data = {
     footer: 'Sent by our team.'
 };
 
+/** Temp directory the mail spool writes to; removed after each case. */
 let spoolRoot: string;
 
 beforeEach(async () => {
@@ -111,8 +117,10 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
     });
 
     it('does NOT also send the email inline', async () => {
-        // The duplicate-delivery bug: enqueue and send. The user gets two reset emails and the
-        // second token invalidates the first.
+        /**
+         * The duplicate-delivery bug: enqueue and send. The user gets two reset emails and the
+         * second token invalidates the first.
+         */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
         expect(sendMailMock).not.toHaveBeenCalled();
@@ -126,8 +134,10 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
     });
 
     it('passes an explicit priority through to the queue', async () => {
-        // Auth flows (password reset, account deletion/setup, email verification) pass 'high' —
-        // a person is actively waiting on a short-TTL link, not an FYI.
+        /**
+         * Auth flows (password reset, account deletion/setup, email verification) pass 'high' —
+         * a person is actively waiting on a short-TTL link, not an FYI.
+         */
         await enqueueEmail(REQUEST, TEMPLATE, DATA, 'high');
 
         const { priority } = publishToQueueMock.mock.calls[0][0] as { priority: string };
@@ -135,24 +145,30 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
     });
 
     it('carries the template NAME and data, not rendered HTML', async () => {
-        // Rendering happens on the consumer side, so the payload must stay small and
-        // JSON-serializable. A payload carrying HTML would work and quietly bloat the broker.
+        /**
+         * Rendering happens on the consumer side, so the payload must stay small and
+         * JSON-serializable. A payload carrying HTML would work and quietly bloat the broker.
+         */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
         const { payload } = publishToQueueMock.mock.calls[0][0] as {
             payload: Record<string, unknown>;
         };
         expect(payload.templateName).toBe(TEMPLATE);
-        // The caller's data, plus the chrome `enqueueEmail` resolves on its behalf — still copy
-        // and a template name, still no markup.
-        // Exactly what the caller passed — `enqueueEmail` adds nothing and resolves nothing.
+        /**
+         * The caller's data, plus the chrome `enqueueEmail` resolves on its behalf — still copy
+         * and a template name, still no markup.
+         * Exactly what the caller passed — `enqueueEmail` adds nothing and resolves nothing.
+         */
         expect(payload.data).toEqual(DATA);
         expect(payload).not.toHaveProperty('html');
     });
 
     it('logs the enqueue at debug, not info', async () => {
-        // Enqueueing is routine; the worker logs the actual delivery. At info this is one line
-        // per email in production for an event that has not happened yet.
+        /**
+         * Enqueueing is routine; the worker logs the actual delivery. At info this is one line
+         * per email in production for an event that has not happened yet.
+         */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
         expect(loggerMock.debug).toHaveBeenCalledTimes(1);
@@ -166,9 +182,11 @@ describe('enqueueEmail — path 2: publish resolves false (no broker, or one tha
     });
 
     it('still attempts the publish — publishToQueue itself is the no-op when unconfigured', async () => {
-        // No `isQueueEnabled()` pre-check any more: this call always reaches `publishToQueue`,
-        // which resolves `false` with no I/O of its own when nothing is configured — see
-        // `queue.test.ts` for that half of the contract.
+        /**
+         * No `isQueueEnabled()` pre-check any more: this call always reaches `publishToQueue`,
+         * which resolves `false` with no I/O of its own when nothing is configured — see
+         * `queue.test.ts` for that half of the contract.
+         */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
         expect(publishToQueueMock).toHaveBeenCalledTimes(1);
@@ -187,8 +205,10 @@ describe('enqueueEmail — path 2: publish resolves false (no broker, or one tha
     });
 
     it('resolves undefined, not the SMTP info object', async () => {
-        // Both branches share a `Promise<void>` return type so callers cannot accidentally start
-        // depending on a `SentMessageInfo` that only exists on one path.
+        /**
+         * Both branches share a `Promise<void>` return type so callers cannot accidentally start
+         * depending on a `SentMessageInfo` that only exists on one path.
+         */
         await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).resolves.toBeUndefined();
     });
 });
@@ -215,8 +235,10 @@ describe('enqueueEmail — a publish that rejects instead of answering false', (
 });
 
 describe('enqueueEmail — the paths are mutually exclusive', () => {
-    // Stated as a table over both outcomes: exactly one delivery attempt happens, whichever way
-    // the broker behaves. This is what fails when the `published` branch is inverted.
+    /**
+     * Stated as a table over both outcomes: exactly one delivery attempt happens, whichever way
+     * the broker behaves. This is what fails when the `published` branch is inverted.
+     */
     it.each([
         ['publish succeeds', true],
         ['publish resolves false', false]
@@ -232,7 +254,7 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
     });
 });
 
-/*
+/**
  * `sendInline` — every path above that actually sends now discards through it, since neither has
  * a retry chain behind it: no broker, or a publish that already failed. `sendTemplatedEmail()`
  * itself never discards any more — see `mailer-attachments.test.ts` and `email.worker.test.ts` for

@@ -48,8 +48,10 @@ beforeEach(() => jest.mocked(onDomainEvent).mockClear());
 
 describe('module subscriptions', () => {
     it('finds modules that subscribe at all', () => {
-        // The canary. An empty sweep must mean "no module listens to anything", which would itself
-        // be a finding — not "the sweep broke and every assertion below passed vacuously".
+        /**
+         * The canary. An empty sweep must mean "no module listens to anything", which would itself
+         * be a finding — not "the sweep broke and every assertion below passed vacuously".
+         */
         expect(subscribers().length).toBeGreaterThan(0);
     });
 
@@ -62,9 +64,11 @@ describe('module subscriptions', () => {
     });
 
     it('registers a handler for every event it names', () => {
-        // `onDomainEvent(name, handler)` with a missing second argument registers `undefined`,
-        // which `emitDomainEvent` would then call. It fails at emit time, in production, inside a
-        // try/catch that logs and continues — so the symptom is a silent no-op, not a crash.
+        /**
+         * `onDomainEvent(name, handler)` with a missing second argument registers `undefined`,
+         * which `emitDomainEvent` would then call. It fails at emit time, in production, inside a
+         * try/catch that logs and continues — so the symptom is a silent no-op, not a crash.
+         */
         const malformed: string[] = [];
 
         for (const appModule of subscribers()) {
@@ -81,8 +85,10 @@ describe('module subscriptions', () => {
     });
 
     it('names each event at most once per module', () => {
-        // Two handlers for one event in one module is either a copy-paste or two things that
-        // should be one handler; both run on every emit and neither knows about the other.
+        /**
+         * Two handlers for one event in one module is either a copy-paste or two things that
+         * should be one handler; both run on every emit and neither knows about the other.
+         */
         const duplicated = subscribers().flatMap((appModule) => {
             const names = subscriptionsOf(appModule);
             return names

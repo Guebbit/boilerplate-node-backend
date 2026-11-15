@@ -22,6 +22,7 @@ import { PERMISSION_RULES, PERMISSION_SETS, anonymousCaller } from '@kernel/perm
 import { requirePermission } from '@kernel/middlewares/authorizations';
 import { REPO_ROOT } from '@tests/paths';
 
+/** The shared permission vocabulary file, parsed. */
 const yaml = parse(
     readFileSync(path.join(REPO_ROOT, 'shared', 'authorization-keys.generated.yaml'), 'utf8')
 ) as {

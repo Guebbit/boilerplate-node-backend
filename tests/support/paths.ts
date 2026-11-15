@@ -1,4 +1,4 @@
-/*
+/**
  * Relative/`node:*` imports only: `file-sandbox.ts` pulls `REPO_ROOT` from here, and
  * `globalSetup`/`globalTeardown` load THAT outside `moduleNameMapper` — an aliased import
  * anywhere on this chain would resolve on the developer's machine, not in jest's worker.

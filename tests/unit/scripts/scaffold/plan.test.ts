@@ -22,7 +22,6 @@ const OPTIONS: ScaffoldOptions = {
  * One planned file's content.
  * @param options - the scaffold options
  * @param file - path relative to the module folder, or a repo path
- * @returns the content
  */
 const contentOf = (options: ScaffoldOptions, file: string): string => {
     const found = planModule(options).files.find(

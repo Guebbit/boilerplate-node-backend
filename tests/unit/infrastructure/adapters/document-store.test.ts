@@ -15,6 +15,7 @@ import {
     writeDocument
 } from '@infrastructure/adapters/document-store';
 
+/** Temp directory the files land in; removed after each case. */
 let root: string;
 
 beforeEach(async () => {

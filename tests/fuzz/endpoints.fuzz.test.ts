@@ -31,7 +31,7 @@
  * ── Where it runs ─────────────────────────────────────────────────────────────────────────────
  * In `npm run test` — so in the merge gate — at `TEST_FUZZ_RUNS`' small default, and nightly in
  * `.github/workflows/fuzz.yml` at a much larger one. A failure is usually a real finding.
-
+ *
  * ── What it deliberately does not cover ──────────────────────────────────────────────────────
  * The FILE half of a `multipart/form-data` operation is skipped: its body is a file, `fast-check`
  * has nothing useful to say about a PNG, and the upload path already has
@@ -49,9 +49,11 @@
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-// Not `@tests/contract`: that file's automatic afterEach would judge these same responses a
-// second time. Calling the judge directly, inside the property function, is what lets `fast-check`
-// shrink a mismatch to the smallest failing input instead of reporting from an unrelated afterEach.
+/**
+ * Not `@tests/contract`: that file's automatic afterEach would judge these same responses a
+ * second time. Calling the judge directly, inside the property function, is what lets `fast-check`
+ * shrink a mismatch to the smallest failing input instead of reporting from an unrelated afterEach.
+ */
 import { assertResponseMatchesContract } from '@tests/response-contract';
 import {
     listOperations,
@@ -67,23 +69,29 @@ import { markServerListening } from '@infrastructure/runtime/readiness';
 import { settleInlineExports } from '@modules/account/services/export';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 
-// No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
-// with a REAL order renders, and the stub would answer every request 500. Same stand-in the
-// orders contract suite uses.
+/**
+ * No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
+ * with a REAL order renders, and the stub would answer every request 500. Same stand-in the
+ * orders contract suite uses.
+ */
 jest.mock('@infrastructure/adapters/pdf', () => ({
     renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
 }));
 
 setupTestDb();
 
-// A fuzzed `POST /account/export` as a real caller starts a build that writes its file after the
-// `202`. Wait for it, then empty the sandbox: teardown fails the run on any file a test caused.
+/**
+ * A fuzzed `POST /account/export` as a real caller starts a build that writes its file after the
+ * `202`. Wait for it, then empty the sandbox: teardown fails the run on any file a test caused.
+ */
 afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
-// `GET /readyz` answers 503 until `src/app.ts`'s real boot marks the process listening, which
-// never runs under `NODE_ENV=test` (`tests/support/http.ts`). Marked ready once, here, so the
-// sweep below fuzzes it the way every other operation is fuzzed — as a route actually serving
-// traffic — rather than tripping `neverCrashesOffContract`'s "no 5xx" invariant on every run.
+/**
+ * `GET /readyz` answers 503 until `src/app.ts`'s real boot marks the process listening, which
+ * never runs under `NODE_ENV=test` (`tests/support/http.ts`). Marked ready once, here, so the
+ * sweep below fuzzes it the way every other operation is fuzzed — as a route actually serving
+ * traffic — rather than tripping `neverCrashesOffContract`'s "no 5xx" invariant on every run.
+ */
 markServerListening();
 
 /**
@@ -107,6 +115,7 @@ const SEED = (() => {
     return seed;
 })();
 
+/** Every operation in the contract, each one fuzzed. */
 const OPERATIONS = listOperations();
 
 /** Stands in for "this operation takes no request body". */
@@ -119,18 +128,22 @@ describe('the spec walk itself', () => {
     });
 
     it('uses no JSON Schema keyword the arbitrary builder ignores', () => {
-        // The tripwire described in `spec-walk.ts`: an unknown keyword means the generator stops
-        // constraining a field, the endpoint rightly 422s everything, and the suite goes green
-        // while testing nothing. Failing here is the signal to teach the builder or drop to a
-        // real OpenAPI tool.
+        /**
+         * The tripwire described in `spec-walk.ts`: an unknown keyword means the generator stops
+         * constraining a field, the endpoint rightly 422s everything, and the suite goes green
+         * while testing nothing. Failing here is the signal to teach the builder or drop to a
+         * real OpenAPI tool.
+         */
         expect(unsupportedKeywords()).toEqual([]);
     });
 
     it('declares no pattern the arbitrary builder cannot build a string for', () => {
-        // One level below the keyword tripwire: `pattern` IS understood, but a lookaround one is
-        // more than `fc.stringMatching` can compile, so the field is omitted and its endpoint
-        // 422s every run while this suite stays green. Register a sample in
-        // `tests/support/pattern-samples.ts` — `contract-data.ts` reads the same table.
+        /**
+         * One level below the keyword tripwire: `pattern` IS understood, but a lookaround one is
+         * more than `fc.stringMatching` can compile, so the field is omitted and its endpoint
+         * 422s every run while this suite stays green. Register a sample in
+         * `tests/support/pattern-samples.ts` — `contract-data.ts` reads the same table.
+         */
         expect(ungeneratablePatterns()).toEqual([]);
     });
 
@@ -142,7 +155,7 @@ describe('the spec walk itself', () => {
     });
 });
 
-/*
+/**
  * The fuzz itself, one jest case per operation so a failure names the endpoint rather than
  * reporting "something, somewhere, returned 500".
  */
@@ -258,7 +271,7 @@ describe.each(
     }, 120_000);
 });
 
-/*
+/**
  * The merge-patch variant of every PATCH that declares one (`docs/understand/write-methods.md`). The
  * same field schemas as the JSON body, but a different content type — and a different reading of
  * `null` (clear) — so it is its own route through the body parser and the write.
@@ -291,7 +304,7 @@ describe.each(
     }, 120_000);
 });
 
-/*
+/**
  * The multipart operations' JSON-shaped variant, sent as urlencoded — see the module doc.
  * Every one of these also declares an `application/json` body, so `bodySchema` is always present.
  */
@@ -301,8 +314,10 @@ const MULTIPART_FUZZABLE = OPERATIONS.filter(
 
 describe('the multipart operations, urlencoded', () => {
     it('fuzzes more than zero of them', () => {
-        // Mirrors "skips only the multipart operations" above: a walk that stopped finding any
-        // dual-content-type operation would make this whole block pass by testing nothing.
+        /**
+         * Mirrors "skips only the multipart operations" above: a walk that stopped finding any
+         * dual-content-type operation would make this whole block pass by testing nothing.
+         */
         expect(MULTIPART_FUZZABLE.length).toBeGreaterThan(0);
     });
 });
@@ -321,11 +336,13 @@ describe.each(
 
         await fc.assert(
             fc.asyncProperty(bodyArbitrary, async (body) => {
-                // superagent: `.type('form')` serialises the body as
-                // `application/x-www-form-urlencoded` via `qs.stringify`, the same encoding
-                // `express.urlencoded({ extended: true })` (app/security.ts) decodes with — so a
-                // nested field round-trips through bracket notation rather than flattening.
-                // https://ladjs.github.io/superagent/#request-body
+                /**
+                 * superagent: `.type('form')` serialises the body as
+                 * `application/x-www-form-urlencoded` via `qs.stringify`, the same encoding
+                 * `express.urlencoded({ extended: true })` (app/security.ts) decodes with — so a
+                 * nested field round-trips through bracket notation rather than flattening.
+                 * https://ladjs.github.io/superagent/#request-body
+                 */
                 const response = await api()
                     [operation.method](url)
                     .set('Authorization', bearer)

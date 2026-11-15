@@ -11,8 +11,10 @@ import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
+/** A request stub; a case overrides only the fields it tests. */
 const makeRequest = (params: Record<string, string> = {}) => asStub<Request>({ params });
 
+/** A response stub; the flag middleware never touches it on the pass path. */
 const response = asStub<Response>({});
 
 describe('routeFlag', () => {
@@ -26,8 +28,10 @@ describe('routeFlag', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    // A string, because that is what a route param always is — `readInput` decodes the declared
-    // booleans out of the string transports, so the controller still sees a real `true`.
+    /**
+     * A string, because that is what a route param always is — `readInput` decodes the declared
+     * booleans out of the string transports, so the controller still sees a real `true`.
+     */
     it('writes a string, not a boolean', () => {
         const request = makeRequest();
 

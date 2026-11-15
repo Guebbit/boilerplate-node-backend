@@ -40,6 +40,7 @@ import path from 'node:path';
 import { MODULES_ROOT } from '@tests/paths';
 import { infrastructureMetricData } from '@infrastructure/observability/metrics.generated';
 
+/** The overview controller file, read as text. */
 const OVERVIEW_CONTROLLER = path.join(
     MODULES_ROOT,
     'observability/controllers/get-observability-metrics-overview.ts'
@@ -61,6 +62,7 @@ const metricFiles = (): { module: string; file: string }[] =>
         .map((module) => ({ module, file: path.join(MODULES_ROOT, module, 'metrics.ts') }))
         .filter(({ file }) => existsSync(file));
 
+/** A metric declaration found in the source: its name and where. */
 interface Declaration {
     module: string;
     name: string;
@@ -75,8 +77,10 @@ const declarations = (): Declaration[] => [
             )
         ].map(([, name]) => ({ module, name }))
     ),
-    // Infrastructure metrics are data (`shared/rules/metrics.yaml`), shared by every module's
-    // queries and requests, so no single module claims them; the overview still reads them by name.
+    /**
+     * Infrastructure metrics are data (`shared/rules/metrics.yaml`), shared by every module's
+     * queries and requests, so no single module claims them; the overview still reads them by name.
+     */
     ...Object.values(infrastructureMetricData).map(({ name }) => ({
         module: 'infrastructure',
         name
@@ -107,8 +111,10 @@ const shopMetricNames = (): string[] => {
 
 describe('metric names', () => {
     it('finds the metrics and the readers it means to check', () => {
-        // A canary: a renamed file or a changed call shape would otherwise make every case below a
-        // sweep over an empty list, which passes and proves nothing.
+        /**
+         * A canary: a renamed file or a changed call shape would otherwise make every case below a
+         * sweep over an empty list, which passes and proves nothing.
+         */
         expect(metricFiles().length).toBeGreaterThanOrEqual(3);
         expect(shopMetricNames().length).toBeGreaterThan(0);
         expect(declarations().length).toBeGreaterThanOrEqual(12);
@@ -116,15 +122,17 @@ describe('metric names', () => {
     });
 
     it('resolves every name the overview endpoint reads by string', () => {
-        /*
+        /**
          * The live one. `getSingleMetric` answering `undefined` is indistinguishable from a module
          * that was removed, so the endpoint cannot tell a rename from a deletion — and neither can
          * anyone reading its output.
          */
         const declared = new Set(declarations().map(({ name }) => name));
-        // The controller's own `SHOP_METRIC_NAMES` are optional as a group: with no shop module
-        // deployed none of them is declared, and the `business` block is left out. If ANY is
-        // declared, all must be.
+        /**
+         * The controller's own `SHOP_METRIC_NAMES` are optional as a group: with no shop module
+         * deployed none of them is declared, and the `business` block is left out. If ANY is
+         * declared, all must be.
+         */
         const shopNames = shopMetricNames();
         const shopDeployed = shopNames.some((name) => declared.has(name));
         const unresolved = namesReadByLiteral()
@@ -139,7 +147,7 @@ describe('metric names', () => {
     });
 
     it('registers every metric on the shared registry', () => {
-        /*
+        /**
          * What makes reading text sound. A metric registered on a registry of its own is real, is
          * never exposed by `/metrics`, and is never found by the overview — and every case here
          * would still call it declared.

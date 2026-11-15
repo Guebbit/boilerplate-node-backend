@@ -41,11 +41,13 @@ import { identityGuardIndex } from '@tests/routes';
 
 setupTestDb();
 
+/** A well-formed id no record has, so a route is reached without a real resource. */
 const PLACEHOLDER_ID = '000000000000000000000000';
 
 /** `/inventory/:id` → `/inventory/000000000000000000000000`. */
 const fillParams = (path: string): string => path.replaceAll(/:[^/]+/g, () => PLACEHOLDER_ID);
 
+/** The verbs a route can be mounted with. */
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 /** Dispatches through supertest by method name — avoids an unsafe indexed/`any` call. */
@@ -69,7 +71,9 @@ const request = (method: HttpMethod, path: string) => {
     }
 };
 
+/** Every mounted route, as the real router lists them. */
 const routes = everyMountedRoute();
+/** A route written as `METHOD path`, the key the cases compare on. */
 const signature = ({ method, path }: { method: string; path: string }) => `${method} ${path}`;
 
 describe('every route requiring a caller (contract-derived)', () => {
@@ -109,12 +113,16 @@ describe('every guarded route agrees with the role file, for every tenant person
         '%s answers 403 to exactly the roles that lack its rule',
         async (_signature, route) => {
             for (const role of TENANT_PERSONAS) {
-                // The same question `requirePermissionGuard` asks of the caller it resolves — a
-                // tenant-scope role never holds a `platform.` key, so a platform route's answer is
-                // "false" for every one of these, and the loop asserts 403 across the board.
+                /**
+                 * The same question `requirePermissionGuard` asks of the caller it resolves — a
+                 * tenant-scope role never holds a `platform.` key, so a platform route's answer is
+                 * "false" for every one of these, and the loop asserts 403 across the board.
+                 */
                 const caller = callerAs(role);
-                // A route that stacks guards (a product write asks for the product AND the
-                // translation) is open only to a role that holds every one of them.
+                /**
+                 * A route that stacks guards (a product write asks for the product AND the
+                 * translation) is open only to a role that holds every one of them.
+                 */
                 const allowed = route.permissions.every((ask) =>
                     holds(caller, ask.action, ask.subject)
                 );
@@ -124,9 +132,11 @@ describe('every guarded route agrees with the role file, for every tenant person
                     fillParams(route.path)
                 ).set('Authorization', bearer);
 
-                // Allowed is not necessarily 200 — a route may still 404 or 422 on a placeholder id or
-                // an empty body — but never 403: that would be the route disagreeing with the role
-                // file about a grant the file says this role holds.
+                /**
+                 * Allowed is not necessarily 200 — a route may still 404 or 422 on a placeholder id or
+                 * an empty body — but never 403: that would be the route disagreeing with the role
+                 * file about a grant the file says this role holds.
+                 */
                 expect(response.status === 403).toBe(!allowed);
             }
         }

@@ -182,8 +182,10 @@ describe('the served languages', () => {
             );
         });
 
-        // A user who saved Italian before it was switched off: their next request, mail and order
-        // snapshot are in the default language, not a language the shop no longer serves.
+        /**
+         * A user who saved Italian before it was switched off: their next request, mail and order
+         * snapshot are in the default language, not a language the shop no longer serves.
+         */
         it('falls back for a language switched off since it was saved', () => {
             setServedLanguages([], ['it']);
 
@@ -199,8 +201,10 @@ describe('the served languages', () => {
             expect(createLocaleContext('xx').locale).toBe(getFallbackLocale());
         });
 
-        // The resolver walks the tag, its base language and the fallback, so a regional tag whose
-        // base is served keeps its own tag and speaks its base language's words.
+        /**
+         * The resolver walks the tag, its base language and the fallback, so a regional tag whose
+         * base is served keeps its own tag and speaks its base language's words.
+         */
         it('lets a regional tag follow its served base language', () => {
             const context = createLocaleContext('it-CH');
 

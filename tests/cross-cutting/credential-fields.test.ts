@@ -139,6 +139,7 @@ const keysWithin = (value: unknown, prefix = ''): string[] => {
     });
 };
 
+/** Whether a model field may appear in a published response. */
 const isPublishable = (model: string, key: string): boolean =>
     PUBLISHABLE.some((entry) => entry.model === model && entry.key === key);
 
@@ -146,8 +147,10 @@ describe('credential-shaped fields', () => {
     beforeAll(registerAllModels);
 
     it('finds the models it means to check', () => {
-        // A canary, and the important one here: if no model held a credential-shaped field the
-        // sweep below would pass over nothing at all and report a system with no secrets in it.
+        /**
+         * A canary, and the important one here: if no model held a credential-shaped field the
+         * sweep below would pass over nothing at all and report a system with no secrets in it.
+         */
         expect(Object.keys(mongoose.models).length).toBeGreaterThanOrEqual(8);
 
         const guarded = Object.values(mongoose.models).filter(
@@ -157,7 +160,7 @@ describe('credential-shaped fields', () => {
     });
 
     it('keeps every one of them out of the serialized document', () => {
-        /*
+        /**
          * The whole assertion. `toJSON` is what every controller reaches for — directly, or through
          * the response helpers — so a key surviving here is a key a client can read.
          */

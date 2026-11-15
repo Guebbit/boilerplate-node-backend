@@ -37,7 +37,7 @@ describe('the demo identities', () => {
 });
 
 describe('the seeded passwords', () => {
-    /*
+    /**
      * The constraint that actually bites: the demo profile creates these accounts through the
      * same schema every signup goes through, so a fallback the policy refuses means `npm run demo`
      * boots without the accounts the frontend's e2e suite logs in as.
@@ -73,7 +73,7 @@ describe('the seeded passwords', () => {
 });
 
 describe('seedCredentials', () => {
-    /*
+    /**
      * The paired frontend's e2e logs in with exactly what this publishes (`GET /__test/scenario`),
      * so an entry that disagrees with what the account was seeded with hands it a password the
      * account does not have.

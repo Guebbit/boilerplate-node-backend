@@ -13,26 +13,36 @@ import { recordJobOutcome } from '@infrastructure/persistence/lease';
 import { assertProcessConfig } from '@app/config';
 import { loadDevelopmentDoubles } from '@app/development-doubles';
 
-// Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a
-// factory closing over a `const` would read it before initialisation.
+/**
+ * Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a
+ * factory closing over a `const` would read it before initialisation.
+ */
 jest.mock('@infrastructure/adapters/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 jest.mock('@infrastructure/persistence/lease', () => ({
     recordJobOutcome: jest.fn().mockResolvedValue(undefined)
 }));
-// The real gate loads every module; what is under test here is only what runScript does with its
-// verdict. The gate itself is `tests/unit/app/config.test.ts`'s and `tests/unit/kernel/`'s.
+/**
+ * The real gate loads every module; what is under test here is only what runScript does with its
+ * verdict. The gate itself is `tests/unit/app/config.test.ts`'s and `tests/unit/kernel/`'s.
+ */
 jest.mock('@app/config', () => ({ assertProcessConfig: jest.fn() }));
 // What the loader does is `tests/unit/app/development-doubles.test.ts`'s; here only when it runs.
 jest.mock('@app/development-doubles', () => ({ loadDevelopmentDoubles: jest.fn() }));
 
+/** Stands in for the logger's error. */
 const mockError = jest.mocked(logger.error);
+/** Stands in for the logger's warn. */
 const mockWarn = jest.mocked(logger.warn);
+/** Stands in for recording the job outcome. */
 const mockRecordJobOutcome = jest.mocked(recordJobOutcome);
+/** Stands in for the process config check. */
 const mockAssertProcessConfig = jest.mocked(assertProcessConfig);
+/** Stands in for loading the development doubles. */
 const mockLoadDevelopmentDoubles = jest.mocked(loadDevelopmentDoubles);
 
+/** The exit code as the runner set it, restored after each case. */
 const ORIGINAL_EXIT_CODE = process.exitCode;
 
 beforeEach(() => {

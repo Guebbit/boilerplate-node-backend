@@ -29,9 +29,11 @@ describe('GET /livez', () => {
 });
 
 describe('GET /readyz', () => {
-    // One case walks booting then ready: `src/app.ts`'s auto-start never fires under
-    // `NODE_ENV=test`, so this file's process starts in 'booting', and the phase only moves
-    // forward. Separate cases would pass only in file order.
+    /**
+     * One case walks booting then ready: `src/app.ts`'s auto-start never fires under
+     * `NODE_ENV=test`, so this file's process starts in 'booting', and the phase only moves
+     * forward. Separate cases would pass only in file order.
+     */
     it('matches the contract while booting (503) and once ready (200), empty body both times', async () => {
         const booting = await api().get('/readyz');
 

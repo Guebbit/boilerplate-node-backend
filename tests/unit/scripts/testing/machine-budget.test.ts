@@ -6,7 +6,7 @@
  * expensive in both directions: too high and the OOM killer takes a worker mid-file, too low and a
  * strong machine pays sharding overhead it does not need. Both directions are asserted.
  *
- * @see docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md#start-here-—-the-two-mechanisms
  */
 
 import os from 'node:os';
@@ -57,8 +57,10 @@ describe('environmentKnob', () => {
     });
 
     it.each(['0', '-1', 'plenty', ''])('treats %p as unset rather than as a value', (value) => {
-        // Nonsense must not read as zero: a zero worker count or a zero-file shard is a run that
-        // tests nothing and reports green.
+        /**
+         * Nonsense must not read as zero: a zero worker count or a zero-file shard is a run that
+         * tests nothing and reports green.
+         */
         setProcessEnvironment({ [NAME]: value });
 
         expect(environmentKnob(NAME)).toBeUndefined();
@@ -84,8 +86,10 @@ describe('processBudgetMb', () => {
     });
 
     it('never returns less than one baseline plus one file', () => {
-        // The floor matters because a budget below it would compute zero files per shard, and a
-        // shard that runs no files is a green run that tested nothing.
+        /**
+         * The floor matters because a budget below it would compute zero files per shard, and a
+         * shard that runs no files is a green run that tested nothing.
+         */
         expect(processBudgetMb()).toBeGreaterThanOrEqual(MIN_PROCESS_BUDGET_MB);
     });
 });
@@ -132,8 +136,10 @@ describe('shardCount', () => {
     });
 
     it('treats a layer jest could not count as one shard', () => {
-        // 0 means `--listTests` answered nothing, which is a broken invocation rather than an empty
-        // layer. One shard runs whatever is really there instead of dividing by zero.
+        /**
+         * 0 means `--listTests` answered nothing, which is a broken invocation rather than an empty
+         * layer. One shard runs whatever is really there instead of dividing by zero.
+         */
         expect(shardCount(0, 21)).toBe(1);
     });
 });
@@ -144,8 +150,10 @@ describe('clampShards', () => {
     });
 
     it('caps an override above the file count, so no shard runs empty', () => {
-        // The fuzz layer has 2 files: JEST_SHARDS=4 must not ask for a shard beyond file 2, which
-        // would print "No tests found" and exit non-zero while every real test passes.
+        /**
+         * The fuzz layer has 2 files: JEST_SHARDS=4 must not ask for a shard beyond file 2, which
+         * would print "No tests found" and exit non-zero while every real test passes.
+         */
         expect(clampShards(4, 2)).toBe(2);
         expect(clampShards(30, 26)).toBe(26);
     });
@@ -193,8 +201,10 @@ describe('workerCount', () => {
 
 describe('the two machines this all exists for', () => {
     it('runs a roomy machine in ONE shard, so sharding costs it nothing', () => {
-        // A roomy machine must run the integration layer in ONE shard: a flat per-shard ceiling
-        // would force sharding's wall-clock cost onto a machine that has no need of it.
+        /**
+         * A roomy machine must run the integration layer in ONE shard: a flat per-shard ceiling
+         * would force sharding's wall-clock cost onto a machine that has no need of it.
+         */
         const perShard = filesPerShard(shardTargetMb(processBudgetMb(30_000)));
 
         expect(perShard).toBeGreaterThan(INTEGRATION_FILES);
@@ -202,8 +212,10 @@ describe('the two machines this all exists for', () => {
     });
 
     it('shards a memory-constrained machine instead of letting it OOM', () => {
-        // 2600 MB is the figure measured green here: 19 files peaked at 2407 MB RSS and passed,
-        // where all 75 in one process reached Node's heap ceiling and died.
+        /**
+         * 2600 MB is the figure measured green here: 19 files peaked at 2407 MB RSS and passed,
+         * where all 75 in one process reached Node's heap ceiling and died.
+         */
         const perShard = filesPerShard(shardTargetMb(processBudgetMb(2600)));
 
         expect(perShard).toBeLessThan(INTEGRATION_FILES);

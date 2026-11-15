@@ -71,6 +71,7 @@ const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
  */
 const TAKES_AN_ID = /\{[^}]*[Ii]d\}/;
 
+/** An operation: its route and the errors it declares. */
 interface Operation {
     module: string;
     route: string;
@@ -100,18 +101,21 @@ const operations = (): Operation[] =>
             );
         });
 
+/** Operations whose route takes an id. */
 const takingAnId = () => operations().filter(({ route }) => TAKES_AN_ID.test(route));
 
 describe('declared error responses', () => {
     it('finds the operations it means to check', () => {
-        // A canary: a renamed fragment or a changed path shape would leave every case below
-        // sweeping an empty list, which passes and proves nothing.
+        /**
+         * A canary: a renamed fragment or a changed path shape would leave every case below
+         * sweeping an empty list, which passes and proves nothing.
+         */
         expect(operations().length).toBeGreaterThan(40);
         expect(takingAnId().length).toBeGreaterThanOrEqual(20);
     });
 
     it('declares 404 on every operation that takes an id in its path', () => {
-        /*
+        /**
          * A malformed id answers as an unknown one, so an operation that omits the 404 describes an
          * API that cannot fail the way this one does.
          */

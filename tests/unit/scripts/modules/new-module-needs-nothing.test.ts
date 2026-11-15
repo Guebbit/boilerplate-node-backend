@@ -40,8 +40,10 @@ const write = (relative: string, content: string): void => {
 beforeAll(() => {
     scratch = mkdtempSync(path.join(tmpdir(), 'new-module-'));
 
-    // One existing module, so "appended after" means something, and the throwaway one. Nothing
-    // else is written: no registry, no root edit, no test table.
+    /**
+     * One existing module, so "appended after" means something, and the throwaway one. Nothing
+     * else is written: no registry, no root edit, no test table.
+     */
     write(
         'src/modules/feedback/module.yaml',
         'summary: Contact requests.\nsubdomain: generic\ngroup: foundation\ndependsOn: []\n'

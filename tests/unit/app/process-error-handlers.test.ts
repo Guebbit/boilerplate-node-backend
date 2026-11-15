@@ -46,8 +46,10 @@ const installUnder = (nodeEnv: string) => {
     const addedExceptions = process
         .listeners('uncaughtException')
         .filter((listener) => !beforeExceptions.includes(listener));
-    // Node types every `unhandledRejection` listener as `(reason, promise) => void`; this app's
-    // own handler only reads `reason`, so the cast narrows to the arity the tests below call with.
+    /**
+     * Node types every `unhandledRejection` listener as `(reason, promise) => void`; this app's
+     * own handler only reads `reason`, so the cast narrows to the arity the tests below call with.
+     */
     const addedRejections = process
         .listeners('unhandledRejection')
         .filter((listener) => !beforeRejections.includes(listener)) as ((
@@ -82,9 +84,11 @@ describe('installErrorHandling — uncaughtException', () => {
         expect(addedExceptions).toHaveLength(1);
         addedExceptions[0](new Error('boom'), 'uncaughtException');
 
-        // The order is the finding: the audit write happens BEFORE the exit, not behind it.
-        // The raw Error under `error`, not a hand-picked `message` field — `redactFormat`
-        // (`adapters/logger.ts`) is what serializes it, name/stack included.
+        /**
+         * The order is the finding: the audit write happens BEFORE the exit, not behind it.
+         * The raw Error under `error`, not a hand-picked `message` field — `redactFormat`
+         * (`adapters/logger.ts`) is what serializes it, name/stack included.
+         */
         expect(errorSpy).toHaveBeenCalledWith(
             'process.uncaughtException',
             expect.objectContaining({
@@ -114,8 +118,10 @@ describe('installErrorHandling — unhandledRejection', () => {
         const { addedRejections, remove } = installUnder(nodeEnv);
 
         expect(addedRejections).toHaveLength(1);
-        // A rejection leaves the process in a defined state, so this one audits and continues —
-        // the opposite call from the exception handler above, for the opposite reason.
+        /**
+         * A rejection leaves the process in a defined state, so this one audits and continues —
+         * the opposite call from the exception handler above, for the opposite reason.
+         */
         addedRejections[0](new Error('nobody caught me'));
 
         // The raw rejection reason under `error`, not a hand-flattened `{name, message}`.

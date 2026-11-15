@@ -8,8 +8,10 @@ import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
+/** The query schema the controller validates with. */
 const schema = z.object({ id: z.array(z.string()).optional() });
 
+/** A request stub; a case overrides only the fields it tests. */
 const makeRequest = (query: unknown) =>
     asStub<Request>({
         params: {},
@@ -18,6 +20,7 @@ const makeRequest = (query: unknown) =>
         is: () => false
     });
 
+/** A response stub that records what the code under test sets and sends. */
 const makeResponse = () =>
     asStub<Response>({
         setHeader: jest.fn(),

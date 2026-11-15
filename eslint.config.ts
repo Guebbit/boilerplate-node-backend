@@ -736,7 +736,8 @@ export default defineConfig(
             'src/domain-primitives/**/*.ts',
             'src/types/**/*.ts',
             'src/*.ts',
-            'src/modules/*/**/*.ts'
+            'src/modules/*/**/*.ts',
+            'tests/**/*.ts'
         ],
         ignores: ['src/types/asyncapi.generated.ts'],
 

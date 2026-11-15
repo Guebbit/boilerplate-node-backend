@@ -11,8 +11,10 @@ describe('stripUndefined', () => {
     });
 
     it('keeps null, zero, empty string and false', () => {
-        // Each of these is a VALUE a factory may deliberately state — `shippingCost: '0.00'` and
-        // `active: false` both mean something. Only `undefined` means "not specified".
+        /**
+         * Each of these is a VALUE a factory may deliberately state — `shippingCost: '0.00'` and
+         * `active: false` both mean something. Only `undefined` means "not specified".
+         */
         expect(stripUndefined({ n: null, z: 0, s: '', f: false })).toEqual({
             n: null,
             z: 0,
@@ -44,8 +46,10 @@ describe('fillOmittedWithNull', () => {
     });
 
     it('does not touch a field the schema never declared', () => {
-        // A change-set is built from a VALIDATED body, so an undeclared key should not exist —
-        // this pins that this helper does not itself introduce one.
+        /**
+         * A change-set is built from a VALIDATED body, so an undeclared key should not exist —
+         * this pins that this helper does not itself introduce one.
+         */
         expect(fillOmittedWithNull({ extra: 'x' }, ['a'])).toEqual({ extra: 'x', a: null });
     });
 

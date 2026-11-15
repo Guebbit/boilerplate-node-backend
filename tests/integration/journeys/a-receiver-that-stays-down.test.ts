@@ -28,6 +28,7 @@ import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 
+/** The webhook receiver the journey runs against; closed after each case. */
 let receiver: WebhookReceiver | undefined;
 
 afterEach(async () => {
@@ -38,6 +39,7 @@ afterEach(async () => {
 
 /** An hour and a day, in milliseconds. */
 const HOUR_MS = 3_600_000;
+/** One day in milliseconds. */
 const DAY_MS = 24 * HOUR_MS;
 
 /**
@@ -123,8 +125,10 @@ it('switches itself off after five dead chains and three failing days, then star
         audit.filter(({ action }) => action === 'system.webhook_subscription.auto_disabled')
     ).toHaveLength(1);
 
-    // Switched back on, the streak is gone: the counter is zero and so is its start date, so the
-    // three-day floor begins again.
+    /**
+     * Switched back on, the streak is gone: the counter is zero and so is its start date, so the
+     * three-day floor begins again.
+     */
     await api()
         .post(`/webhooks/subscriptions/${subscriptionId}/enable`)
         .set('Authorization', await loginBearer(admin.email))

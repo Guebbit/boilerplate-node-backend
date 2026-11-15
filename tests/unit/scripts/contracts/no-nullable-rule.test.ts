@@ -46,9 +46,11 @@ const nullableFindings = async (properties: string): Promise<string[]> => {
         `openapi: 3.1.0\ninfo: { title: t, version: '1' }\npaths: {}\ncomponents:\n  schemas:\n    A:\n      type: object\n      properties:\n${properties}\n`
     );
 
-    // Spectral CLI: `--format json` prints the findings as an array. It exits non-zero when it
-    // reports an error-severity finding, which the rejection still carries on `stdout`: the exit
-    // code is not read, because other (unrelated) findings on this scratch document may fail the run.
+    /**
+     * Spectral CLI: `--format json` prints the findings as an array. It exits non-zero when it
+     * reports an error-severity finding, which the rejection still carries on `stdout`: the exit
+     * code is not read, because other (unrelated) findings on this scratch document may fail the run.
+     */
     const { stdout } = await run(
         SPECTRAL,
         ['lint', '--ruleset', RULESET, '--format', 'json', file],

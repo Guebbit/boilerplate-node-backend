@@ -15,8 +15,10 @@ import { asCustomer, asManager, asAdmin, asOperator, callerAs } from '../../supp
 
 describe('accessibleFilter', () => {
     it('narrows nothing for a role that reads everything', () => {
-        // `{}` rather than `undefined`: "no conditions" and "no rules" must not look alike to the
-        // caller spreading this into a query.
+        /**
+         * `{}` rather than `undefined`: "no conditions" and "no rules" must not look alike to the
+         * caller spreading this into a query.
+         */
         expect(accessibleFilter(asAdmin(), 'Product')).toEqual({});
     });
 
@@ -31,9 +33,11 @@ describe('accessibleFilter', () => {
     it('narrows an owner-scope read to the caller’s own rows', () => {
         const filter = accessibleFilter(asCustomer('507f1f77bcf86cd799439011'), 'Order');
 
-        // The owner arrives as an ObjectId, not the string the caller carries: left as a string
-        // the filter silently matches nothing, which is a missing restriction wearing the
-        // opposite disguise.
+        /**
+         * The owner arrives as an ObjectId, not the string the caller carries: left as a string
+         * the filter silently matches nothing, which is a missing restriction wearing the
+         * opposite disguise.
+         */
         expect(filter).toEqual({
             userId: new Types.ObjectId('507f1f77bcf86cd799439011'),
             deletedAt: null
@@ -41,8 +45,10 @@ describe('accessibleFilter', () => {
     });
 
     it('matches nothing for a caller with no rule for the subject', () => {
-        // CASL's own `EMPTY_RESULT_QUERY`. Fails closed by construction — the point of compiling
-        // the rules rather than assembling a fragment, where "no rule" produced no filter at all.
+        /**
+         * CASL's own `EMPTY_RESULT_QUERY`. Fails closed by construction — the point of compiling
+         * the rules rather than assembling a fragment, where "no rule" produced no filter at all.
+         */
         expect(accessibleFilter(asOperator(), 'Shipment')).toEqual({ $expr: { $eq: [0, 1] } });
     });
 
@@ -62,15 +68,19 @@ describe('accessibleFilter', () => {
     });
 
     it('drops the tenant discriminator, which this deployment does not store', () => {
-        // The model is tenant-aware and its conformance cases prove it; these collections are not
-        // partitioned, because the boilerplate ships one shop. Compiling `tenantId` into a query
-        // over a collection with no such field would match nothing and lock everybody out.
+        /**
+         * The model is tenant-aware and its conformance cases prove it; these collections are not
+         * partitioned, because the boilerplate ships one shop. Compiling `tenantId` into a query
+         * over a collection with no such field would match nothing and lock everybody out.
+         */
         expect(JSON.stringify(accessibleFilter(asManager(), 'Product'))).not.toContain('tenantId');
     });
 
     it('answers a write action from the same rules as a read', () => {
-        // One artefact, asked twice. A key that grants more returns more without anybody editing
-        // a filter, which is the whole reason this replaced four hand-written fragments.
+        /**
+         * One artefact, asked twice. A key that grants more returns more without anybody editing
+         * a filter, which is the whole reason this replaced four hand-written fragments.
+         */
         expect(accessibleFilter(asManager(), 'Product', 'update')).toEqual({});
         expect(accessibleFilter(asCustomer(), 'Product', 'update')).toEqual({
             $expr: { $eq: [0, 1] }
@@ -119,8 +129,10 @@ describe('hasAnonymousReadScope', () => {
     });
 
     it('is true for a role that reads exactly the published catalogue, same as a guest', () => {
-        // `asCustomer()` and a guest both resolve to `{ active: true, deletedAt: null }` — proven
-        // by `accessibleFilter`'s own cases above.
+        /**
+         * `asCustomer()` and a guest both resolve to `{ active: true, deletedAt: null }` — proven
+         * by `accessibleFilter`'s own cases above.
+         */
         expect(hasAnonymousReadScope(productScope, asCustomer())).toBe(true);
     });
 
@@ -130,9 +142,11 @@ describe('hasAnonymousReadScope', () => {
     });
 
     it('is false for a role whose filter merely DIFFERS from anonymous, not just widens it', () => {
-        // A customer reads their OWN orders (`{ userId: ..., deletedAt: null }`) where a guest
-        // reads none at all (`{ $expr: { $eq: [0, 1] } }`) — neither is a superset of the other,
-        // and the comparison must still catch that they are not the same filter.
+        /**
+         * A customer reads their OWN orders (`{ userId: ..., deletedAt: null }`) where a guest
+         * reads none at all (`{ $expr: { $eq: [0, 1] } }`) — neither is a superset of the other,
+         * and the comparison must still catch that they are not the same filter.
+         */
         expect(hasAnonymousReadScope(orderScope, asCustomer('507f1f77bcf86cd799439011'))).toBe(
             false
         );

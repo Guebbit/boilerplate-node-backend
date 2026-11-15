@@ -58,8 +58,10 @@ describe('verifyPassword', () => {
     });
 
     it('reads the cost from the stored hash, so a hash made at another cost still verifies', async () => {
-        // m=8 KiB, t=1: a cheaper profile than the current constants, built through the primitive
-        // by hand to stand in for a hash an older version of this file wrote.
+        /**
+         * m=8 KiB, t=1: a cheaper profile than the current constants, built through the primitive
+         * by hand to stand in for a hash an older version of this file wrote.
+         */
         const { argon2Sync, randomBytes } = await import('node:crypto');
         const salt = randomBytes(16);
         const tag = argon2Sync('argon2id', {

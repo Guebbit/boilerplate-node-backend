@@ -16,6 +16,7 @@ interface ProbeDocument {
     stampedAt?: Date;
 }
 
+/** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<ProbeDocument>(
     'ConditionalStatusProbe',
     new Schema<ProbeDocument>({ status: String, scope: String, stampedAt: Date })

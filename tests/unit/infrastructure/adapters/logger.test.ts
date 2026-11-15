@@ -69,8 +69,10 @@ describe('redactSensitiveFields', () => {
     });
 
     it('redacts nested sensitive fields', () => {
-        // `username`, not `email` — `email` is a PERSONAL field and gets hashed, not
-        // left plain; this case is about SENSITIVE_FIELDS nesting specifically.
+        /**
+         * `username`, not `email` — `email` is a PERSONAL field and gets hashed, not
+         * left plain; this case is about SENSITIVE_FIELDS nesting specifically.
+         */
         const input = { user: { username: 'carol', password: 'secret' } };
         expect(redactSensitiveFields(input)).toEqual({
             user: { username: 'carol', password: '[REDACTED]' }
@@ -257,9 +259,11 @@ describe('serializeError — the production stack guard', () => {
     });
 
     it('OMITS the stack in production', () => {
-        // A stack trace names absolute paths and dependency internals. Locally that is debugging;
-        // in an aggregated production log it is a map of the filesystem handed to anyone with
-        // read access to the log tool. Nothing asserted this, so both mutants of the guard lived.
+        /**
+         * A stack trace names absolute paths and dependency internals. Locally that is debugging;
+         * in an aggregated production log it is a map of the filesystem handed to anyone with
+         * read access to the log tool. Nothing asserted this, so both mutants of the guard lived.
+         */
         setEnvironment({ NODE_ENV: 'production' });
 
         expect(serializeError(new Error('boom'))).not.toHaveProperty('stack');
@@ -291,7 +295,7 @@ describe('serializeError — the production stack guard', () => {
     });
 });
 
-/*
+/**
  * Properties. `redactSensitiveFields` walks arbitrary caller-supplied metadata, so "for every
  * input" is the only honest way to state what it guarantees — and two of these are claims the
  * docblock makes in prose and nothing verified.
@@ -319,9 +323,11 @@ const metadata = () =>
 
 describe('redactSensitiveFields — invariants', () => {
     it('NEVER mutates the object it was given', () => {
-        // The docblock is explicit that callers pass live request and domain objects, so mutating
-        // them would corrupt the actual request rather than merely the log line. That is the most
-        // dangerous thing this function could do and nothing was checking it.
+        /**
+         * The docblock is explicit that callers pass live request and domain objects, so mutating
+         * them would corrupt the actual request rather than merely the log line. That is the most
+         * dangerous thing this function could do and nothing was checking it.
+         */
         fc.assert(
             fc.property(metadata(), (input) => {
                 const before = JSON.stringify(input);
@@ -346,12 +352,14 @@ describe('redactSensitiveFields — invariants', () => {
     });
 
     it('leaves no sensitive VALUE anywhere in the output, at any depth', () => {
-        // The claim that matters. Generated nesting reaches shapes no example enumerates.
-        //
-        // Asserted over the output's string VALUES rather than over `JSON.stringify` of the whole
-        // thing, and the difference is not pedantry — the naive version failed on the generated
-        // counterexample `secret = "p"`, because "p" occurs inside the KEY "password". The claim
-        // was never about key names.
+        /**
+         * The claim that matters. Generated nesting reaches shapes no example enumerates.
+         *
+         * Asserted over the output's string VALUES rather than over `JSON.stringify` of the whole
+         * thing, and the difference is not pedantry — the naive version failed on the generated
+         * counterexample `secret = "p"`, because "p" occurs inside the KEY "password". The claim
+         * was never about key names.
+         */
         fc.assert(
             fc.property(fc.string({ minLength: 1 }), fc.nat({ max: 5 }), (secret, depth) => {
                 let payload: Record<string, unknown> = { password: secret };
@@ -364,8 +372,10 @@ describe('redactSensitiveFields — invariants', () => {
     });
 
     it('keeps arrays as arrays rather than rebuilding them as objects', () => {
-        // `typeof [] === 'object'`, so without the Array.isArray branch an array comes back as
-        // `{ '0': ..., '1': ... }` — valid JSON, and a log shape no dashboard can read.
+        /**
+         * `typeof [] === 'object'`, so without the Array.isArray branch an array comes back as
+         * `{ '0': ..., '1': ... }` — valid JSON, and a log shape no dashboard can read.
+         */
         fc.assert(
             fc.property(fc.array(fc.jsonValue(), { maxLength: 6 }), (input) => {
                 expect(Array.isArray(redactSensitiveFields(input))).toBe(true);
@@ -397,7 +407,7 @@ describe('redactSensitiveFields — invariants', () => {
 });
 
 describe('the sensitive-field policy, entry by entry', () => {
-    /*
+    /**
      * Table-driven over the REAL set rather than over a list copied into the test.
      *
      * Two things follow, and the second is the point. A field added to the policy is tested
@@ -415,8 +425,10 @@ describe('the sensitive-field policy, entry by entry', () => {
     });
 
     it.each([...SENSITIVE_FIELDS])('redacts %s regardless of case', (field) => {
-        // Keys are lowercased before the lookup, so `AUTHORIZATION` and `Authorization` are the
-        // same entry. Header casing is not something a caller controls.
+        /**
+         * Keys are lowercased before the lookup, so `AUTHORIZATION` and `Authorization` are the
+         * same entry. Header casing is not something a caller controls.
+         */
         const shouty = field.toUpperCase();
         const redacted = redactSensitiveFields({ [shouty]: 'the-secret' }) as Record<
             string,
@@ -478,8 +490,10 @@ describe('the sensitive-field policy, entry by entry', () => {
     );
 
     it('keeps the fields a debugger reads first: code, statusCode, idempotencyKey', () => {
-        // `code` is deliberately not a fragment, and `key`/`link` are exact names, not fragments:
-        // a broad pattern would eat all of these.
+        /**
+         * `code` is deliberately not a fragment, and `key`/`link` are exact names, not fragments:
+         * a broad pattern would eat all of these.
+         */
         const redacted = redactSensitiveFields({
             code: 'E11000',
             statusCode: 409,
@@ -491,8 +505,10 @@ describe('the sensitive-field policy, entry by entry', () => {
 });
 
 describe('the personal-data policy', () => {
-    // Table-driven over the REAL set, same reasoning as the sensitive-field policy above: a field
-    // added to PERSONAL_FIELDS is covered automatically, and one removed makes its case vanish.
+    /**
+     * Table-driven over the REAL set, same reasoning as the sensitive-field policy above: a field
+     * added to PERSONAL_FIELDS is covered automatically, and one removed makes its case vanish.
+     */
     it.each([...PERSONAL_FIELDS])('hashes %s by default — correlatable, not readable', (field) => {
         setEnvironment({ NODE_LOG_PERSONAL_FIELDS: undefined });
         const redacted = redactSensitiveFields({ [field]: 'the-value' }) as Record<string, unknown>;
@@ -528,8 +544,10 @@ describe('the personal-data policy', () => {
     });
 
     it('hashes the SAME input to a DIFFERENT digest under a different NODE_PSEUDONYM_KEY', () => {
-        // The whole point of a KEYED hash (GDPR pseudonymisation): a digest is only stable
-        // for callers who share the key, not universally guessable like a bare sha256 would be.
+        /**
+         * The whole point of a KEYED hash (GDPR pseudonymisation): a digest is only stable
+         * for callers who share the key, not universally guessable like a bare sha256 would be.
+         */
         setEnvironment({ NODE_PSEUDONYM_KEY: 'the-first-key-of-the-pair' });
         const withFirstKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
             string,
@@ -591,8 +609,10 @@ describe('the personal-data policy', () => {
     });
 
     it('still recurses past a personal-field key whose value is not a string', () => {
-        // A nested object under a personal-sounding key is not hashed itself; it's walked, so a
-        // credential nested one level deeper is still caught.
+        /**
+         * A nested object under a personal-sounding key is not hashed itself; it's walked, so a
+         * credential nested one level deeper is still caught.
+         */
         const redacted = redactSensitiveFields({
             email: { password: 'nested-secret' }
         }) as Record<string, unknown>;
@@ -611,16 +631,20 @@ const transform = (info: Record<string, unknown>) =>
 
 describe('redactFormat — the winston wiring', () => {
     it('redacts caller metadata on the way to the transport', () => {
-        // The end-to-end claim. `redactSensitiveFields` being correct is worth nothing if the
-        // format that applies it is not wired in.
+        /**
+         * The end-to-end claim. `redactSensitiveFields` being correct is worth nothing if the
+         * format that applies it is not wired in.
+         */
         const output = transform({ level: 'info', message: 'login', password: 's3cr3t' });
 
         expect(output.password).toBe('[REDACTED]');
     });
 
     it('returns the SAME object winston handed it', () => {
-        // Winston requires object identity back; returning a copy silently drops the record's
-        // symbol-keyed internals, and returning `false` drops the record entirely.
+        /**
+         * Winston requires object identity back; returning a copy silently drops the record's
+         * symbol-keyed internals, and returning `false` drops the record entirely.
+         */
         const info = { level: 'info', message: 'hello' };
 
         expect(transform(info)).toBe(info);
@@ -634,8 +658,10 @@ describe('redactFormat — the winston wiring', () => {
     });
 
     it('serialises an Error BEFORE redacting, so it does not become an empty object', () => {
-        // `JSON.stringify(new Error('x'))` is `{}` — Error's fields are non-enumerable, so the
-        // redaction walk would return nothing at all and the log line would lose the failure.
+        /**
+         * `JSON.stringify(new Error('x'))` is `{}` — Error's fields are non-enumerable, so the
+         * redaction walk would return nothing at all and the log line would lose the failure.
+         */
         const output = transform({
             level: 'error',
             message: 'failed',
@@ -653,8 +679,10 @@ describe('redactFormat — the winston wiring', () => {
     });
 
     it('drops the top-level stack winston copies off an Error in production', () => {
-        // `logger.error('text', error)` makes winston spread the Error onto the record, `stack`
-        // included, past `serializeError`'s own production guard.
+        /**
+         * `logger.error('text', error)` makes winston spread the Error onto the record, `stack`
+         * included, past `serializeError`'s own production guard.
+         */
         setEnvironment({ NODE_ENV: 'production' });
         const info = { level: 'error', message: 'failed', stack: 'at /srv/app/secret.js:1' };
 
@@ -708,8 +736,10 @@ describe('resolveLogLevel', () => {
     });
 
     it('treats an empty NODE_LOG_LEVEL as unset rather than as a level', () => {
-        // An empty string in the environment is a variable someone meant to fill in; passing it
-        // to winston would silence the logger completely.
+        /**
+         * An empty string in the environment is a variable someone meant to fill in; passing it
+         * to winston would silence the logger completely.
+         */
         setEnvironment({ NODE_LOG_LEVEL: '' });
         setEnvironment({ NODE_ENV: 'development' });
 
@@ -763,8 +793,10 @@ describe('resolveConsoleFormat', () => {
     };
 
     it('emits parseable JSON when stdout is not a terminal, which is every collected runtime', () => {
-        // A container writing to its log file, a pipe, a CI job: nobody is reading this by eye
-        // and something downstream has to parse it.
+        /**
+         * A container writing to its log file, a pipe, a CI job: nobody is reading this by eye
+         * and something downstream has to parse it.
+         */
         setEnvironment({ NODE_ENV: 'development' });
         setTty(false);
 
@@ -790,8 +822,10 @@ describe('resolveConsoleFormat', () => {
     });
 
     it('stays JSON in production even on a terminal', () => {
-        // A production container started interactively still has its logs collected, so the
-        // terminal says nothing about who ends up reading them.
+        /**
+         * A production container started interactively still has its logs collected, so the
+         * terminal says nothing about who ends up reading them.
+         */
         setEnvironment({ NODE_ENV: 'production' });
         setTty(true);
 
@@ -827,16 +861,20 @@ describe('the two loggers are configured independently', () => {
 
         const { logger: appLogger } = await loadLoggers();
 
-        // `level`/`transports` are winston's own configuration surface, erased by the narrow
-        // `Logger` port every OTHER caller depends on. This test is the one place that
-        // legitimately needs the concrete implementation back, to prove winston itself is wired
-        // the way the port's callers assume.
+        /**
+         * `level`/`transports` are winston's own configuration surface, erased by the narrow
+         * `Logger` port every OTHER caller depends on. This test is the one place that
+         * legitimately needs the concrete implementation back, to prove winston itself is wired
+         * the way the port's callers assume.
+         */
         expect((appLogger as winston.Logger).level).toBe('error');
     });
 
     it('does NOT let NODE_LOG_LEVEL quieten the audit logger', async () => {
-        // The compliance property. Set the app to `error` and audit records must still be
-        // written — otherwise one environment variable erases the trail.
+        /**
+         * The compliance property. Set the app to `error` and audit records must still be
+         * written — otherwise one environment variable erases the trail.
+         */
         setEnvironment({ NODE_LOG_LEVEL: 'error' });
 
         const { auditLogger: audit } = await loadLoggers();

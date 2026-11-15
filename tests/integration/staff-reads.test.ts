@@ -29,6 +29,7 @@ interface Entry {
     subjectId?: string;
 }
 
+/** Spy on the audit emitter; each case reads what the flow recorded. */
 let auditSpy: jest.SpyInstance;
 
 beforeEach(() => {

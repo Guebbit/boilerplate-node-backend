@@ -22,15 +22,19 @@ const routed = (baseUrl: string, path?: unknown) =>
  */
 describe('getRouteLabel', () => {
     it('names the template Express matched, mounted', () => {
-        // `/:id`, not `/orders/507f1f77bcf86cd799439011` and not a guess at which segment was an
-        // id: one series per route, whatever the ids look like.
+        /**
+         * `/:id`, not `/orders/507f1f77bcf86cd799439011` and not a guess at which segment was an
+         * id: one series per route, whatever the ids look like.
+         */
         expect(getRouteLabel(routed('/orders', '/:id'))).toBe('/orders/:id');
         expect(getRouteLabel(routed('/orders', '/:id/invoice'))).toBe('/orders/:id/invoice');
     });
 
     it('spells a router root without its trailing slash', () => {
-        // `router.get('/')` mounted at `/orders` is the same route as `/orders`, and two spellings
-        // of one route are two time series.
+        /**
+         * `router.get('/')` mounted at `/orders` is the same route as `/orders`, and two spellings
+         * of one route are two time series.
+         */
         expect(getRouteLabel(routed('/orders', '/'))).toBe('/orders');
         expect(getRouteLabel(routed('', '/'))).toBe('/');
     });

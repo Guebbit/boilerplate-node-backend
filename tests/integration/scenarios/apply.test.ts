@@ -25,6 +25,7 @@ import mongoose from 'mongoose';
 import { seedCredentials } from '@scenarios/accounts';
 import { REPO_ROOT } from '@tests/paths';
 
+/** The tsx binary the apply script is run with. */
 const TSX_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
 
 /** Module load, Mongo connect and a `blank` seed, for real — measured under 3s locally. */
@@ -62,8 +63,10 @@ const runApply = (
                     ...extraEnv
                 }
             },
-            // The callback's own error is ignored: a non-zero exit is a case under test here, and
-            // `close` below carries the status the assertions actually read.
+            /**
+             * The callback's own error is ignored: a non-zero exit is a case under test here, and
+             * `close` below carries the status the assertions actually read.
+             */
             () => undefined
         );
 
@@ -173,8 +176,10 @@ describe('scenarios/apply.ts', () => {
     it(
         'lifts the rate limits before any limiter is built, so a driving scenario outruns a small .env budget',
         async () => {
-            // `shop` is the scenario that DRIVES requests (hundreds, from one address). With the
-            // `.env` budget this small, a limiter built before the overrides applied answers 429.
+            /**
+             * `shop` is the scenario that DRIVES requests (hundreds, from one address). With the
+             * `.env` budget this small, a limiter built before the overrides applied answers 429.
+             */
             const dbUri = freshDbUri();
             const result = await runApply(['shop'], dbUri, 'test', {
                 NODE_RATE_LIMIT_MAX: '5',

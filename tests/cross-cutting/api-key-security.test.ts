@@ -47,6 +47,7 @@ const specSecurity = (): Map<string, Security | undefined> => {
 const listsApiKey = (security: Security | undefined): boolean =>
     security?.some((requirement) => 'apiKeyAuth' in requirement) ?? false;
 
+/** The security scheme each operation declares, from the contract. */
 const security = specSecurity();
 
 /** Every mounted route that has an operation in the spec, keyed the way the spec spells it. */

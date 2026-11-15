@@ -156,19 +156,23 @@ describe('rolesDocumentSchema', () => {
 
 describe('the real shared authorization files', () => {
     it('parsed without throwing at import — every declared rule, set and preset role loaded', () => {
-        // If either file had failed its schema, importing `@kernel/permissions` above would
-        // already have thrown and this whole test file would fail to load — these assertions are
-        // the visible proof that didn't happen.
+        /**
+         * If either file had failed its schema, importing `@kernel/permissions` above would
+         * already have thrown and this whole test file would fail to load — these assertions are
+         * the visible proof that didn't happen.
+         */
         expect(PERMISSION_RULES.length).toBeGreaterThan(0);
         expect(PERMISSION_SETS.length).toBeGreaterThan(0);
         expect(PRESET_ROLES.length).toBeGreaterThan(0);
         expect(AUDIENCE_ROLES.guest.permissions.length).toBeGreaterThan(0);
     });
 
-    // There is no wildcard: `admin` is unrestricted only because it lists every tenant set by
-    // name — bar the rules the `customer` audience already gives every signed-in account. This is
-    // what stops a newly declared set from being silently forgotten off it, the same guarantee a
-    // scope wildcard would give for free.
+    /**
+     * There is no wildcard: `admin` is unrestricted only because it lists every tenant set by
+     * name — bar the rules the `customer` audience already gives every signed-in account. This is
+     * what stops a newly declared set from being silently forgotten off it, the same guarantee a
+     * scope wildcard would give for free.
+     */
     it('grants admin every declared tenant rule by name, bar the customer audience’s', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();
@@ -183,8 +187,10 @@ describe('the real shared authorization files', () => {
         expect(missing).toEqual([]);
     });
 
-    // Every account shops, staff included: a staff role lists none of the audience's sets, since
-    // the audience is unioned in. A set on both would say one thing twice and drift.
+    /**
+     * Every account shops, staff included: a staff role lists none of the audience's sets, since
+     * the audience is unioned in. A set on both would say one thing twice and drift.
+     */
     it('lists no audience rule on a staff role', () => {
         const audienceRules = new Set(
             AUDIENCE_NAMES.flatMap((name) => AUDIENCE_ROLES[name].permissions)
@@ -204,9 +210,11 @@ describe('the real shared authorization files', () => {
         );
     });
 
-    // The mirror case: admin is tenant-scoped only, so it must never pick up a platform rule —
-    // holding one would let a shop's own role reach across the tenant/platform wall the two-scope
-    // split exists to prevent.
+    /**
+     * The mirror case: admin is tenant-scoped only, so it must never pick up a platform rule —
+     * holding one would let a shop's own role reach across the tenant/platform wall the two-scope
+     * split exists to prevent.
+     */
     it('grants admin no platform rule', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();
@@ -220,7 +228,7 @@ describe('the real shared authorization files', () => {
     });
 });
 
-/*
+/**
  * A plain `PERMISSION_RULES.length` cannot tell "the same rules" from "different rules of the
  * same count" — a rename or a rule-for-rule swap left the version untouched, so a client's cached
  * rules would go stale silently. These pin the fingerprint's actual properties instead.
@@ -255,7 +263,7 @@ describe('permissionModelVersion', () => {
     });
 });
 
-/*
+/**
  * What protects people is a rule, not a rank: `assign:Role`, held by the administrator and by
  * nobody else. A staff role is only a list of sets.
  */
@@ -271,7 +279,7 @@ describe('role management', () => {
     });
 });
 
-/*
+/**
  * The audience is computed per request, never stored: the same staff role is a customer's rules plus
  * its own, and `verifiedAt` alone moves an account between `unverified` and `customer`.
  */
@@ -299,8 +307,10 @@ describe('audience roles', () => {
         expect(callerAs('editor').permissions).toContain('create:Example');
     });
 
-    // `*Own`, `*Shopping` and `*Storefront` are the sets that make a signed-in account a shopper;
-    // one left off the customer audience would leave a proven account unable to use the shop.
+    /**
+     * `*Own`, `*Shopping` and `*Storefront` are the sets that make a signed-in account a shopper;
+     * one left off the customer audience would leave a proven account unable to use the shop.
+     */
     it('gives the customer every own, shopping and storefront set', () => {
         const customer = new Set(AUDIENCE_ROLES.customer.permissions);
         const missing = PERMISSION_SETS.filter((set) =>
@@ -332,7 +342,7 @@ describe('audience roles', () => {
     });
 });
 
-/*
+/**
  * A staff role is data the account holds; the authenticator app is what switches it on. The same
  * account keeps what its audience holds either way, so signing in never narrows a shopper.
  */

@@ -27,7 +27,7 @@ import {
     type MutationBaseline
 } from '../../../../scripts/mutation/baseline';
 
-/*
+/**
  * Fixtures are built from TUPLES rather than object literals, because the keys are file paths:
  * `'<path>.ts'` as a literal key trips the naming-convention lint rule in every fixture, and
  * disabling the rule per line would be more noise than the helper.
@@ -43,6 +43,7 @@ const report = (...files: [string, string[]][]) => ({
 /** Per-file scores from `[file, score]` pairs. */
 const scores = (...files: [string, number][]): Record<string, number> => Object.fromEntries(files);
 
+/** Builds a baseline from file and score pairs. */
 const baselineOf = (...files: [string, number][]): MutationBaseline => ({
     generatedAt: '2026-08-09T00:00:00.000Z',
     files: Object.fromEntries(files)
@@ -50,8 +51,11 @@ const baselineOf = (...files: [string, number][]): MutationBaseline => ({
 
 /** The one path used throughout, named so the tuples stay readable. */
 const FILE = 'src/a.ts';
+/** A second file in the baseline. */
 const OTHER = 'src/b.ts';
+/** A file that is in the run but not in the baseline. */
 const NEWCOMER = 'src/new.ts';
+/** A file that is in the baseline but not in the run. */
 const GONE = 'src/gone.ts';
 
 describe('scoresFromReport', () => {
@@ -62,24 +66,30 @@ describe('scoresFromReport', () => {
     });
 
     it('counts a timeout as killed', () => {
-        // Stryker's own convention: a mutant that hangs the suite HAS been detected, expensively.
-        // Scoring it as a survivor would make the number depend on machine load.
+        /**
+         * Stryker's own convention: a mutant that hangs the suite HAS been detected, expensively.
+         * Scoring it as a survivor would make the number depend on machine load.
+         */
         expect(scoresFromReport(report([FILE, ['Timeout', 'Killed']]))).toEqual(
             scores([FILE, 100])
         );
     });
 
     it('excludes non-viable mutants from the denominator entirely', () => {
-        // A mutant that would not compile was never a test the suite could have passed or failed,
-        // so counting it either way would misreport the file.
+        /**
+         * A mutant that would not compile was never a test the suite could have passed or failed,
+         * so counting it either way would misreport the file.
+         */
         expect(
             scoresFromReport(report([FILE, ['Killed', 'CompileError', 'RuntimeError', 'Ignored']]))
         ).toEqual(scores([FILE, 100]));
     });
 
     it('treats a file with no viable mutants as 100, not 0', () => {
-        // Otherwise a file Stryker could not mutate at all would sit permanently at zero and the
-        // ratchet would cry wolf forever.
+        /**
+         * Otherwise a file Stryker could not mutate at all would sit permanently at zero and the
+         * ratchet would cry wolf forever.
+         */
         expect(scoresFromReport(report([FILE, ['CompileError']]))).toEqual(scores([FILE, 100]));
     });
 
@@ -105,8 +115,10 @@ describe('compareToBaseline', () => {
     });
 
     it('does NOT fail a drop within the tolerance', () => {
-        // The tolerance is a measurement error bar for the timeout/survivor race, not slack.
-        // Without it the gate fails on machine load, and a gate that fails randomly gets removed.
+        /**
+         * The tolerance is a measurement error bar for the timeout/survivor race, not slack.
+         * Without it the gate fails on machine load, and a gate that fails randomly gets removed.
+         */
         const comparisons = compareToBaseline(
             scores([FILE, 90 - SCORE_TOLERANCE]),
             baselineOf([FILE, 90])
@@ -136,8 +148,10 @@ describe('compareToBaseline', () => {
     });
 
     it('reports a file that left the mutate scope rather than ignoring it', () => {
-        // Dropping a file out of scope is how a weak file gets "fixed". Legitimate sometimes, but
-        // it belongs in the output where a reviewer can see it.
+        /**
+         * Dropping a file out of scope is how a weak file gets "fixed". Legitimate sometimes, but
+         * it belongs in the output where a reviewer can see it.
+         */
         expect(compareToBaseline(scores(), baselineOf([GONE, 40]))[0]?.verdict).toBe('removed');
     });
 
@@ -156,8 +170,10 @@ describe('nextBaseline — the ratchet', () => {
     });
 
     it('KEEPS the higher value when a file regressed', () => {
-        // The single most important case in this file. If a regression could rewrite the baseline
-        // downward, `--update` would launder every drop and the ratchet would be decorative.
+        /**
+         * The single most important case in this file. If a regression could rewrite the baseline
+         * downward, `--update` would launder every drop and the ratchet would be decorative.
+         */
         expect(nextBaseline(scores([FILE, 40]), baselineOf([FILE, 90])).files).toEqual(
             scores([FILE, 90])
         );
@@ -218,8 +234,10 @@ describe('formatRegressions', () => {
 
 describe('compareMerged — grading a sharded-sweep-partial run', () => {
     it('does not report a file the baseline knows but this round did not measure', () => {
-        // The whole point of `merge` over `--update`: most of the scope is "not yet",
-        // not "gone", and only compareToBaseline (behind a FULL run) may call something removed.
+        /**
+         * The whole point of `merge` over `--update`: most of the scope is "not yet",
+         * not "gone", and only compareToBaseline (behind a FULL run) may call something removed.
+         */
         const comparisons = compareMerged(scores([FILE, 90]), baselineOf([FILE, 90], [OTHER, 40]));
 
         expect(comparisons).toHaveLength(1);
@@ -291,7 +309,7 @@ describe('readReportsUnder — folding a sharded sweep’s shard artifacts', () 
 });
 
 describe('missingFromReport — the partial-run guard', () => {
-    /*
+    /**
      * `stryker run --mutate '<path>.ts'` is the normal way to check one file quickly, and
      * its report contains only that file. Recording it would rebuild the baseline from those keys
      * alone and drop everything else — silently, and worse than silently: the next full run would
@@ -313,8 +331,10 @@ describe('missingFromReport — the partial-run guard', () => {
     });
 
     it('says nothing for a report that covers MORE than the baseline', () => {
-        // A widened `mutate` adds files. That is a re-baselining, not a partial run, and it must
-        // not be blocked — the new file simply arrives as `new`.
+        /**
+         * A widened `mutate` adds files. That is a re-baselining, not a partial run, and it must
+         * not be blocked — the new file simply arrives as `new`.
+         */
         expect(
             missingFromReport(scores([FILE, 90], [NEWCOMER, 0]), baselineOf([FILE, 90]))
         ).toEqual([]);

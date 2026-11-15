@@ -23,6 +23,7 @@ interface Probe {
     lines: { price: string }[];
 }
 
+/** Schema of the throwaway model. */
 const probeSchema = new Schema<Probe>({
     currency: { type: String, default: 'EUR' },
     amount: moneyPath({ required: true, nonNegative: true }),
@@ -33,7 +34,9 @@ const probeSchema = new Schema<Probe>({
     }
 });
 probeSchema.plugin(moneyPlugin);
+/** Schema of the throwaway model. */
 const serialize = applySerialization(probeSchema);
+/** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<Probe>('MoneyProbe', probeSchema);
 
 /** What the collection holds, with no Mongoose read path in between. */

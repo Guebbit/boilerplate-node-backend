@@ -24,8 +24,10 @@ describe('isDuplicateKey', () => {
     });
 
     it('reads the code, not the message', () => {
-        // E11000's text names the index and the duplicated value, so matching on it would break
-        // the first time an index is renamed — and would match a message that merely quotes it.
+        /**
+         * E11000's text names the index and the duplicated value, so matching on it would break
+         * the first time an index is renamed — and would match a message that merely quotes it.
+         */
         expect(isDuplicateKey(new Error('E11000 duplicate key error'))).toBe(false);
     });
 
@@ -71,8 +73,10 @@ describe('isConnectionError', () => {
     });
 
     it('is false for a bare MongooseError that is a programmer error, not an outage', () => {
-        // The base class every other Mongoose throw also uses — the message is the only signal,
-        // and an unrelated one must not be mistaken for the outage case above.
+        /**
+         * The base class every other Mongoose throw also uses — the message is the only signal,
+         * and an unrelated one must not be mistaken for the outage case above.
+         */
         expect(isConnectionError(new mongoose.Error('Aggregate has empty pipeline'))).toBe(false);
     });
 

@@ -46,7 +46,7 @@ export const connect = async () => {
     });
     observeDatabaseCommands(mongoose.connection);
 
-    /*
+    /**
      * Wait for every registered model's indexes to exist before the first case runs.
      *
      * Mongoose builds indexes in the background, so `connect()` resolving does not mean a unique

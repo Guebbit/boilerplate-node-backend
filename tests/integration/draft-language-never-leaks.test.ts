@@ -28,6 +28,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert how it was called. */
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
 
 setupTestDb();

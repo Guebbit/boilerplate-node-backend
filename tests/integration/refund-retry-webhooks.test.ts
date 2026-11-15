@@ -46,8 +46,10 @@ const paidOrder = async () => {
     );
     const order = asSuccess(created).data;
     await payByCard(order, user);
-    // Delivery is after the response: let the relay publish the settlement's rows before the
-    // test cancels, as a real cancel arrives a request later.
+    /**
+     * Delivery is after the response: let the relay publish the settlement's rows before the
+     * test cancels, as a real cancel arrives a request later.
+     */
     await settleOutboxNudges();
     return { user, order };
 };

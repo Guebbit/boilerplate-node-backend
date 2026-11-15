@@ -32,8 +32,10 @@ const REAL_TIMERS = [
  * @param at the instant `Date.now()` returns until the clock is moved again
  */
 export const freezeDate = (at: number | Date = Date.now()): void => {
-    // jest modern fake timers; `doNotFake` keeps the named primitives real.
-    // https://jestjs.io/docs/jest-object#jestusefaketimersfaketimersconfig
+    /**
+     * jest modern fake timers; `doNotFake` keeps the named primitives real.
+     * https://jestjs.io/docs/jest-object#jestusefaketimersfaketimersconfig
+     */
     jest.useFakeTimers({ doNotFake: [...REAL_TIMERS] }).setSystemTime(at);
 };
 
@@ -43,7 +45,9 @@ export const freezeDate = (at: number | Date = Date.now()): void => {
  * @param ms how far to move it
  */
 export const advanceDate = (ms: number): void => {
-    // jest.setSystemTime: sets the fake clock only; nothing scheduled runs.
-    // https://jestjs.io/docs/jest-object#jestsetsystemtimenow-number--date
+    /**
+     * jest.setSystemTime: sets the fake clock only; nothing scheduled runs.
+     * https://jestjs.io/docs/jest-object#jestsetsystemtimenow-number--date
+     */
     jest.setSystemTime(Date.now() + ms);
 };

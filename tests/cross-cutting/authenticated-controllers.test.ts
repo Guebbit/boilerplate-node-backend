@@ -152,8 +152,10 @@ describe('every requirePermission behind isAuthOrCredential asks for a tenant ru
     });
 
     it('actually finds rules to check', () => {
-        // A canary matching the one above `handlersReadingAuthContext` has: an empty result must
-        // mean "every rule qualifies", never "no route mounts isAuthOrCredential at all".
+        /**
+         * A canary matching the one above `handlersReadingAuthContext` has: an empty result must
+         * mean "every rule qualifies", never "no route mounts isAuthOrCredential at all".
+         */
         const total = moduleNames().reduce(
             (count, name) =>
                 count +

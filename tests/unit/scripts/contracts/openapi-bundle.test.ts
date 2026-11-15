@@ -97,8 +97,10 @@ describe('withAppLevelResponses', () => {
     });
 
     it('leaves a non-operation path-item field untouched', () => {
-        // `parameters` and `summary` are not in OPERATION_METHODS -- collecting responses onto
-        // them would corrupt the document rather than merge anything.
+        /**
+         * `parameters` and `summary` are not in OPERATION_METHODS -- collecting responses onto
+         * them would corrupt the document rather than merge anything.
+         */
         const result = parsedResult(
             bundle({
                 '/widgets/{id}': {

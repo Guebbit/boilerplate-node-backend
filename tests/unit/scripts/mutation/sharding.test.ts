@@ -47,14 +47,16 @@ describe('packIntoShards', () => {
     });
 
     it('balances a lopsided input rather than leaving one huge file dominate every other shard', () => {
-        // One huge file plus a pile of tiny ones — the failure this whole design exists to avoid
-        // was one module (`account`) alone setting the wall clock for the entire matrix.
-        // `<huge>.ts` below can never be split, so it alone sets the ceiling on this ratio — the
-        // bound asserted is THAT ceiling (its own lines, over the smallest a single tiny file can
-        // leave a bin at), not an arbitrary number, so it holds regardless of
-        // TARGET_LINES_PER_SHARD: a smaller target means more bins, which spreads the tiny files
-        // thinner (lower minimum), not less balanced — the huge file's dominance is the invariant
-        // being asserted.
+        /**
+         * One huge file plus a pile of tiny ones — the failure this whole design exists to avoid
+         * was one module (`account`) alone setting the wall clock for the entire matrix.
+         * `<huge>.ts` below can never be split, so it alone sets the ceiling on this ratio — the
+         * bound asserted is THAT ceiling (its own lines, over the smallest a single tiny file can
+         * leave a bin at), not an arbitrary number, so it holds regardless of
+         * TARGET_LINES_PER_SHARD: a smaller target means more bins, which spreads the tiny files
+         * thinner (lower minimum), not less balanced — the huge file's dominance is the invariant
+         * being asserted.
+         */
         const input = files(
             ['huge.ts', 6000],
             ...Array.from({ length: 20 }, (_, index): [string, number] => [`tiny-${index}.ts`, 50])

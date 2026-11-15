@@ -53,11 +53,13 @@ setupTestDb();
 
 // `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
-// ─── invalid QUERY parameters ──────────────────────────────────────────────────────────────────
-//
-// Everything above sends a bad BODY. This is the query-side counterpart: every `in: query`
-// parameter the spec constrains with an `enum`, a `pattern` or a numeric bound gets a case here, an
-// obviously-violating value against the real route, expecting 422.
+/**
+ * ─── invalid QUERY parameters ──────────────────────────────────────────────────────────────────
+ *
+ * Everything above sends a bad BODY. This is the query-side counterpart: every `in: query`
+ * parameter the spec constrains with an `enum`, a `pattern` or a numeric bound gets a case here, an
+ * obviously-violating value against the real route, expecting 422.
+ */
 
 /** An admin-authenticated GET against `path`, with `query` appended as-is. */
 const adminQuery =
@@ -89,6 +91,7 @@ interface QueryFixture {
     request: (query: string) => Promise<Response>;
 }
 
+/** A valid query per list route, for routes whose filters need a real value. */
 const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /audit': { request: adminQuery('/audit') },
     'DELETE /notifications': {
@@ -189,8 +192,10 @@ const invalidQueryValues = (schema: SchemaNode): string[] => {
     if (schema.enum) return ['not-a-declared-enum-value'];
     if (schema.pattern) {
         const regex = new RegExp(schema.pattern);
-        // Deliberately not fenced by a range check for exactly-one-char patterns etc.: the goal
-        // is ONE string this pattern refuses, not a generic negation of an arbitrary regex.
+        /**
+         * Deliberately not fenced by a range check for exactly-one-char patterns etc.: the goal
+         * is ONE string this pattern refuses, not a generic negation of an arbitrary regex.
+         */
         const candidate = ['INVALID VALUE !!!', '???', '__nope__', ''].find(
             (value) => !regex.test(value)
         );
@@ -250,13 +255,15 @@ describe('invalid query parameters (contract-derived)', () => {
     );
 });
 
-// ─── every write operation ─────────────────────────────────────────────────────────────────────
-//
-// Everything the spec declares under POST, PUT or PATCH is walked here from `listOperations()`, so
-// a write added tomorrow is covered without anyone remembering to add it. The property that holds
-// without a scenario behind each one: a body the contract declares legal is never refused as a
-// validation failure, and one it declares illegal always is. `STRICT_2XX` names the operations
-// whose legal body, once `FIELD_OVERRIDES` has relinked it, is also answered with a success.
+/**
+ * ─── every write operation ─────────────────────────────────────────────────────────────────────
+ *
+ * Everything the spec declares under POST, PUT or PATCH is walked here from `listOperations()`, so
+ * a write added tomorrow is covered without anyone remembering to add it. The property that holds
+ * without a scenario behind each one: a body the contract declares legal is never refused as a
+ * validation failure, and one it declares illegal always is. `STRICT_2XX` names the operations
+ * whose legal body, once `FIELD_OVERRIDES` has relinked it, is also answered with a success.
+ */
 
 /** The operations whose relinked legal body must be answered with a 2xx, not just not refused. */
 const STRICT_2XX = new Set([
@@ -336,13 +343,17 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     // `role` is a plain string to the schema, because roles are data a deployment may add to.
     createUser: { role: () => 'editor' },
     assignUserRole: { role: () => 'editor' },
-    // `translations` is a `Record<locale, ...>` to the schema: it cannot say the key must be the
-    // deployment's fallback locale, whose row must exist.
+    /**
+     * `translations` is a `Record<locale, ...>` to the schema: it cannot say the key must be the
+     * deployment's fallback locale, whose row must exist.
+     */
     createProduct: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
     createOrder: {
         userId: (world) => world.userId,
-        // A shelf no generated quantity can exhaust, and the admin line limit is a deployment knob
-        // under the contract's wider ceiling: one unit of the seeded product.
+        /**
+         * A shelf no generated quantity can exhaust, and the admin line limit is a deployment knob
+         * under the contract's wider ceiling: one unit of the seeded product.
+         */
         items: (world, payload) =>
             Array.isArray(payload.items)
                 ? (payload.items as Record<string, unknown>[]).map((item) => ({
@@ -372,16 +383,22 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     createReturn: {
         orderId: (world) => world.orderId,
         lines: (world) => [{ productId: world.productId, quantity: 1 }],
-        // A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
-        // the legal body is the goods return the generated `lines` belong to.
+        /**
+         * A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
+         * the legal body is the goods return the generated `lines` belong to.
+         */
         kind: () => 'return',
         fulfillmentOrderId: () => undefined,
-        // A buyer's own return takes neither field: the server sets the date, and a channel belongs
-        // to a withdrawal that staff record. The schema declares both for the staff path.
+        /**
+         * A buyer's own return takes neither field: the server sets the date, and a channel belongs
+         * to a withdrawal that staff record. The schema declares both for the staff path.
+         */
         requestedAt: () => undefined,
         statedVia: () => undefined,
-        // A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
-        // schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
+        /**
+         * A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
+         * schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
+         */
         preferredRemedy: () => undefined
     },
     changePassword: {
@@ -389,8 +406,10 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         passwordConfirm: (_world, payload) => payload.password
     },
     confirmPasswordReset: { passwordConfirm: (_world, payload) => payload.password },
-    // `otp` is optional and only legal for an account with a second factor armed; the generated
-    // account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
+    /**
+     * `otp` is optional and only legal for an account with a second factor armed; the generated
+     * account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
+     */
     reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined },
     createApiKey: { permissions: () => ['read:User'] },
     // An event name is legal only if the catalogue lists it, which the schema cannot say: `*` always is.
@@ -586,12 +605,14 @@ describe('every write operation (contract-derived)', () => {
     );
 });
 
-// ─── a required header ─────────────────────────────────────────────────────────────────────────
-//
-// The walks above SEND every required header. This is the other half: leave it off and the
-// operation must refuse with 400 `IDEMPOTENCY_KEY_REQUIRED`. It is what keeps a new do-not-retry
-// route (one the contract marks with a required `Idempotency-Key`) from being mounted with the
-// optional middleware: the contract says required, the walk finds the route, the route must answer 400.
+/**
+ * ─── a required header ─────────────────────────────────────────────────────────────────────────
+ *
+ * The walks above SEND every required header. This is the other half: leave it off and the
+ * operation must refuse with 400 `IDEMPOTENCY_KEY_REQUIRED`. It is what keeps a new do-not-retry
+ * route (one the contract marks with a required `Idempotency-Key`) from being mounted with the
+ * optional middleware: the contract says required, the walk finds the route, the route must answer 400.
+ */
 
 /** Every operation the contract marks with a required `Idempotency-Key`. */
 const KEY_REQUIRED_OPERATIONS = listOperations().filter((operation) =>

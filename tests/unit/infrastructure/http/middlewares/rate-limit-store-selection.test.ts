@@ -17,18 +17,26 @@
  * The test suite's own `tests/support/setup-environment.ts` blanks `NODE_RATE_LIMIT_REDIS_URL`
  * globally, so every case that means to exercise the Redis path sets one explicitly.
  */
-// Also forces module scope for this file — otherwise its top-level `const`s collide, at the type
-// checker, with the identically-named ones in cache.test.ts's own copy of the same pattern.
+/**
+ * Also forces module scope for this file — otherwise its top-level `const`s collide, at the type
+ * checker, with the identically-named ones in cache.test.ts's own copy of the same pattern.
+ */
 import type { Options, Store } from 'express-rate-limit';
 import { setEnvironment } from '@tests/environment';
 import { asStub } from '@tests/stub';
 
+/** Stands in for the client's `On`; the cases assert how it was called. */
 const mockSelectionOn = jest.fn();
+/** Stands in for the client's `Connect`; the cases assert how it was called. */
 const mockSelectionConnect = jest.fn();
+/** Stands in for the client's `SendCommand`; the cases assert how it was called. */
 const mockSelectionSendCommand = jest.fn();
+/** Stands in for the client's `Destroy`; the cases assert how it was called. */
 const mockSelectionDestroy = jest.fn();
+/** Stands in for the client's `Quit`; the cases assert how it was called. */
 const mockSelectionQuit = jest.fn();
 
+/** Stands in for the client's `Client`; the cases assert how it was called. */
 const mockSelectionClient = {
     on: mockSelectionOn,
     connect: mockSelectionConnect,
@@ -38,22 +46,27 @@ const mockSelectionClient = {
     isReady: false
 };
 
+/** Stands in for the client factory; it returns the mocked client. */
 const mockCreateClient = jest.fn((_options: unknown) => mockSelectionClient);
 jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
 
 /** `RedisStore.init` awaits two Lua-script loads internally — see the fix under test below. */
 const mockInit = jest.fn();
+/** Stands in for the store's increment. */
 const mockIncrement = jest.fn();
+/** Records each time the store is constructed, and with what. */
 const mockConstruct = jest.fn();
 
-/*
+/**
  * `increment` calls `this.sendCommand(...)` — the real `RedisStore` does the same to run its Lua
  * script — so the mock still exercises `send()`/`build()`/`createClient` the way production does,
  * rather than short-circuiting the whole chain this file exists to test.
  */
 class MockRedisStore {
+    /** The command sender the store is handed. */
     sendCommand: (...command: string[]) => Promise<unknown>;
 
+    /** Takes the options the real store takes and records them. */
     constructor(options: {
         prefix: string;
         sendCommand: (...command: string[]) => Promise<unknown>;
@@ -62,7 +75,9 @@ class MockRedisStore {
         this.sendCommand = options.sendCommand;
     }
 
+    /** The store init, mocked. */
     init = mockInit;
+    /** Counts a hit for a key. */
     increment = (key: string) => {
         mockIncrement(key);
         return this.sendCommand('INCR', key);
@@ -98,7 +113,7 @@ const freshLogger = () => {
 };
 /* eslint-enable @typescript-eslint/no-require-imports -- back to normal for the rest of the file */
 
-/*
+/**
  * `express-rate-limit` is not mocked, so `jest.resetModules()` also gives it a fresh module
  * instance — an `instanceof MemoryStore` check against the top-level import would compare across
  * two different copies of the class and always fail. Re-requiring it fresh, the same reason as
@@ -112,14 +127,18 @@ const freshMemoryStore = () => {
 beforeEach(() => {
     mockSelectionConnect.mockImplementation(() => Promise.resolve());
     mockInit.mockImplementation(() => Promise.resolve());
-    // A real Redis answers `INCR` with an integer; the exact value is irrelevant to every case
-    // here, which asserts on whether/how the chain was called, not on a counter value.
+    /**
+     * A real Redis answers `INCR` with an integer; the exact value is irrelevant to every case
+     * here, which asserts on whether/how the chain was called, not on a counter value.
+     */
     mockSelectionSendCommand.mockImplementation(() => Promise.resolve(1));
 });
 
 describe('rateLimitStore — which store gets built', () => {
-    // The cache's Redis evicts under pressure, so a counter there is a budget that resets. The
-    // limiter never reaches for it, however it is configured.
+    /**
+     * The cache's Redis evicts under pressure, so a counter there is a budget that resets. The
+     * limiter never reaches for it, however it is configured.
+     */
     it('returns an in-process MemoryStore when only the CACHE Redis is configured', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
         setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
@@ -174,6 +193,7 @@ describe('rateLimitStore — which store gets built', () => {
     });
 });
 
+/** The url the store connected to, read from the mocked client factory. */
 const urlUsedFor = async (): Promise<string> => {
     const store = freshStore().rateLimitStore('global');
     await store.increment('key');
@@ -207,7 +227,7 @@ describe('rateLimitStore — which URL the limits connection dials', () => {
 });
 
 describe('rateLimitStore — an init failure fails open instead of crashing (regression)', () => {
-    /*
+    /**
      * The bug this guards: firing `inner.init(options)` from `lazyRedisStore` with no `.catch()`
      * would leave a rejection nothing is holding. `RedisStore.init()` awaits two Lua-script loads,
      * so any failure there — Redis unreachable, or a reply `rate-limit-redis` does not recognise —
@@ -219,13 +239,17 @@ describe('rateLimitStore — an init failure fails open instead of crashing (reg
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockInit.mockRejectedValue(new TypeError('unexpected reply from redis client'));
         const store = freshStore().rateLimitStore('global');
-        // `express-rate-limit` calls this on the real Store before any request ever increments it —
-        // it is what makes `options` truthy, and so what makes `store()` call `inner.init(options)`
-        // at all. Skipping it would test a path the middleware never actually leaves untaken.
+        /**
+         * `express-rate-limit` calls this on the real Store before any request ever increments it —
+         * it is what makes `options` truthy, and so what makes `store()` call `inner.init(options)`
+         * at all. Skipping it would test a path the middleware never actually leaves untaken.
+         */
         store.init(asStub<Options>({ windowMs: 60_000 }));
 
-        // The regression itself: this must resolve, not crash the process, even though init()
-        // above is rejecting on this exact tick.
+        /**
+         * The regression itself: this must resolve, not crash the process, even though init()
+         * above is rejecting on this exact tick.
+         */
         await expect(store.increment('key')).resolves.toBeDefined();
 
         // Give the fire-and-forgotten init().catch() a turn to run before asserting on it.
@@ -289,8 +313,10 @@ describe('rateLimitStore — while the limits Redis is down', () => {
         const store = freshStore().rateLimitStore('credentials-identity', 'memory');
         store.init(asStub<Options>({ windowMs: 60_000 }));
 
-        // Read at once: `MemoryStore` hands back the same record object for one key, which the
-        // next increment mutates.
+        /**
+         * Read at once: `MemoryStore` hands back the same record object for one key, which the
+         * next increment mutates.
+         */
         const first = await hitsOf(store, 'attacker');
         const second = await hitsOf(store, 'attacker');
         const other = await hitsOf(store, 'someone-else');
@@ -352,8 +378,10 @@ describe('rateLimitStore — while the limits Redis is down', () => {
             jest.setSystemTime(Date.now() + 31_000);
             const probe = await store.increment('k');
 
-            // The mocked `RedisStore.increment` answers whatever `sendCommand` did: the 7 came
-            // from Redis, not from the in-process counter (which would say 2).
+            /**
+             * The mocked `RedisStore.increment` answers whatever `sendCommand` did: the 7 came
+             * from Redis, not from the in-process counter (which would say 2).
+             */
             expect(probe).toBe(7);
         } finally {
             jest.useRealTimers();

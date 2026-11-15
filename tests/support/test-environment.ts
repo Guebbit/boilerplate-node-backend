@@ -244,7 +244,7 @@ export default class TestEnvironment extends NodeEnvironment {
         super(config, context);
 
         const { global, pending } = this;
-        /*
+        /**
          * One cast per assignment: the wrappers take the widened `StartTimer` shape, while
          * `typeof setTimeout` is an overload set. The runtime contract — same arguments in, same
          * `Timeout` out — is what `tracked` preserves; `withOwnProperties` keeps the rest.

@@ -21,8 +21,10 @@ describe('resolveBearer / resolveCookie / watchCookie with no resolver registere
     });
 
     it('says the cookie authenticates nothing, rather than throwing', () => {
-        // A build with no `account` has no sessions at all; `getAuth` asks this on every cookie-
-        // carrying request, so it must be a plain answer.
+        /**
+         * A build with no `account` has no sessions at all; `getAuth` asks this on every cookie-
+         * carrying request, so it must be a plain answer.
+         */
         expect(cookieAuthenticatesRequests()).toBe(false);
     });
 });

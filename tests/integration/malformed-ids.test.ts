@@ -31,8 +31,10 @@ import {
 } from '@tests/spec-ids';
 import { withoutInstance } from '@tests/problem';
 
-// No real Chromium here: the invoice route with a real order would render, and a missing browser
-// is not what this suite asks about.
+/**
+ * No real Chromium here: the invoice route with a real order would render, and a missing browser
+ * is not what this suite asks about.
+ */
 jest.mock('@infrastructure/adapters/pdf', () => ({
     renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
 }));
@@ -45,6 +47,7 @@ const MALFORMED = ['abc', 'not-an-id', 'z'.repeat(24), 'a'.repeat(25), '0'.repea
 /** The first malformed value, for the body and query sites that need only one. */
 const [BAD_ID] = MALFORMED;
 
+/** Every operation in the contract that takes an id. */
 const OPERATIONS = listOperations();
 
 /** Operations with at least one id in the path. */
@@ -129,7 +132,6 @@ const SENTINEL = '__target__';
 /**
  * `buildUrl`, with one parameter replaced.
  *
- * @param operation - the operation
  * @param world - the seeded rows the other parameters name
  * @param parameter - the parameter to override
  * @param value - what it carries
@@ -173,8 +175,10 @@ const MUST_COMPARE: string[] = PATH_SITES.map(([label]) => label).filter((label)
 
 describe('the id sites the spec declares', () => {
     it('are found, so the sweeps below cannot pass by sweeping nothing', () => {
-        // Counts, not a floor of one: a walk that quietly stopped recognising `Id` would still
-        // find a few, and every sweep below would shrink to a rounding error.
+        /**
+         * Counts, not a floor of one: a walk that quietly stopped recognising `Id` would still
+         * find a few, and every sweep below would shrink to a rounding error.
+         */
         expect(PATH_SITES.length).toBeGreaterThanOrEqual(71);
         expect(BODY_SITES.length).toBeGreaterThanOrEqual(19);
         expect(QUERY_SITES.length).toBeGreaterThanOrEqual(8);
@@ -184,7 +188,6 @@ describe('the id sites the spec declares', () => {
 /**
  * The statuses an operation documents.
  *
- * @param operation - the operation
  */
 const documentedStatuses = (operation: Operation): string[] =>
     Object.keys(
@@ -230,11 +233,13 @@ describe('an id in the URL path', () => {
                 );
 
                 expect(malformed.status).toBe(404);
-                // Same code, same copy: nothing tells it from an unknown id. A body that would
-                // have been refused first (422, 409) makes the unknown answer differ in status,
-                // which is exactly why a malformed id must be answered before the body is read.
-                // A row whose unknown probe was refused has no 404 body to compare: the status
-                // assertion above still ran, and the canary below names the rows that must not skip.
+                /**
+                 * Same code, same copy: nothing tells it from an unknown id. A body that would
+                 * have been refused first (422, 409) makes the unknown answer differ in status,
+                 * which is exactly why a malformed id must be answered before the body is read.
+                 * A row whose unknown probe was refused has no 404 body to compare: the status
+                 * assertion above still ran, and the canary below names the rows that must not skip.
+                 */
                 if (unknown.status !== 404) continue;
 
                 expect(withoutInstance(malformed.body as object)).toEqual(
@@ -246,8 +251,10 @@ describe('an id in the URL path', () => {
     });
 
     it('compares the translations rows, so none of them passes by being skipped', () => {
-        // The canary: a row whose unknown probe stopped answering 404 is skipped above, and a
-        // skipped row proves nothing. These are the rows that carry their own error code.
+        /**
+         * The canary: a row whose unknown probe stopped answering 404 is skipped above, and a
+         * skipped row proves nothing. These are the rows that carry their own error code.
+         */
         expect(MUST_COMPARE).toHaveLength(3);
         expect([...COMPARED].filter((label) => MUST_COMPARE.includes(label))).toHaveLength(
             MUST_COMPARE.length

@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileExists } from '@tests/file-sandbox';
 
+/** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
@@ -36,6 +37,7 @@ const DATA = {
     footer: ''
 };
 
+/** Temp directory the mail spool writes to; removed after each case. */
 let spoolRoot: string;
 
 beforeEach(async () => {
@@ -66,8 +68,10 @@ describe('resolveAttachments — resolving attachments', () => {
     });
 
     it('builds the message from named fields, so a forged job cannot set from, cc or headers', async () => {
-        // A job the schema let through with keys it does not name — held in a variable, so the
-        // extra keys are not an excess-property error.
+        /**
+         * A job the schema let through with keys it does not name — held in a variable, so the
+         * extra keys are not an excess-property error.
+         */
         const forged = {
             to: 'ada@example.com',
             subject: 'Hello',
@@ -144,10 +148,12 @@ describe('resolveAttachments — resolving attachments', () => {
 
 describe('sendTemplatedEmail — never discards its own attachment', () => {
     it('leaves the spooled file on disk once the send has settled, success or failure', async () => {
-        // Guards against a retried job's second attempt resolving a key the first attempt
-        // already deleted, and sending without the attachment. `sendTemplatedEmail()` may be one
-        // attempt of several behind a queue's retry chain, so only a caller who knows the job is
-        // FINISHED may discard — see `mailer-dispatch.test.ts` and `email.worker.test.ts`.
+        /**
+         * Guards against a retried job's second attempt resolving a key the first attempt
+         * already deleted, and sending without the attachment. `sendTemplatedEmail()` may be one
+         * attempt of several behind a queue's retry chain, so only a caller who knows the job is
+         * FINISHED may discard — see `mailer-dispatch.test.ts` and `email.worker.test.ts`.
+         */
         const key = await spoolAttachment(Buffer.from('pdf-bytes'), 'pdf');
 
         await sendTemplatedEmail(

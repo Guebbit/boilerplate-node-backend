@@ -1,4 +1,4 @@
-/*
+/**
  * Relative imports only, like `paths.ts`: reads the contract fragments by hand, never the app.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

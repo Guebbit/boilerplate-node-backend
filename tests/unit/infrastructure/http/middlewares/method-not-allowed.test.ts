@@ -122,8 +122,10 @@ describe('methodNotAllowed', () => {
     });
 
     it('offers the union of every template a path matches', () => {
-        // `/things/search` also reads as `/things/{id}`: the router would give that id to the
-        // parameter route, so a method either template declares is not a 405.
+        /**
+         * `/things/search` also reads as `/things/{id}`: the router would give that id to the
+         * parameter route, so a method either template declares is not a 405.
+         */
         expect(run('PATCH', '/things/search').passed).toBe(true);
         expect(run('GET', '/things/search')).toMatchObject({
             status: 405,

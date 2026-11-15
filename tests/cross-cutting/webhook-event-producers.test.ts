@@ -78,9 +78,11 @@ const createCatchAllSubscription = () => {
 
 describe('every public webhook event has exactly one producer, and no producer names an undeclared one', () => {
     beforeEach(() => {
-        // `orders`/`payments`/`returns`/`example` too, not just `webhooksModule` — their own `publicEvents` manifest
-        // entries are what `webhooks/module.ts`'s `onRegistered` hook resolves and subscribes to;
-        // registering `webhooksModule` alone would resolve an empty lookup and produce nothing.
+        /**
+         * `orders`/`payments`/`returns`/`example` too, not just `webhooksModule` — their own `publicEvents` manifest
+         * entries are what `webhooks/module.ts`'s `onRegistered` hook resolves and subscribes to;
+         * registering `webhooksModule` alone would resolve an empty lookup and produce nothing.
+         */
         registerModules([
             ordersModule,
             paymentsModule,
@@ -97,9 +99,11 @@ describe('every public webhook event has exactly one producer, and no producer n
     it('every declared event is produced, and nothing else is', async () => {
         await createCatchAllSubscription();
 
-        // The domain-event emits the registered modules' `publicEvents` declarations project
-        // from — `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, so one
-        // domain event is emitted twice, with a different `to`.
+        /**
+         * The domain-event emits the registered modules' `publicEvents` declarations project
+         * from — `order.paid`/`order.shipped` both derive from `ORDER_STATUS_CHANGED`, so one
+         * domain event is emitted twice, with a different `to`.
+         */
         await emitDomainEvent(ORDER_CREATED, { orderId: ORDER_ID });
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
             orderId: ORDER_ID,

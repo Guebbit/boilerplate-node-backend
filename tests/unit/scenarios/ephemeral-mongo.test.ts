@@ -12,6 +12,7 @@ import path from 'node:path';
 import { startEphemeralMongo, type EphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 import { setProcessEnvironment } from '@tests/environment';
 
+/** Stands in for starting the in-process Mongo. */
 const startInProcess = jest.fn(
     (_dbPath: string | undefined): Promise<EphemeralMongo> =>
         Promise.resolve({ uri: 'mongodb://127.0.0.1:1/ephemeral', stop: () => Promise.resolve() })
@@ -27,8 +28,10 @@ const startInProcess = jest.fn(
  */
 const CLEARED_ENV_KEYS = ['MONGOMS_SYSTEM_BINARY_VERSION_CHECK', 'MONGOMS_MD5_CHECK'] as const;
 
-// A clean slate regardless of run order: a mutation run's `enableFindRelatedTests` can run any
-// one of these cases alone, with no earlier `afterEach` in this file to have cleared them first.
+/**
+ * A clean slate regardless of run order: a mutation run's `enableFindRelatedTests` can run any
+ * one of these cases alone, with no earlier `afterEach` in this file to have cleared them first.
+ */
 beforeEach(() => {
     setProcessEnvironment(Object.fromEntries(CLEARED_ENV_KEYS.map((key) => [key, undefined])));
 });

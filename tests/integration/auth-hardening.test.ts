@@ -46,8 +46,10 @@ describe('the 500 handler', () => {
         expect(response.status).toBe(500);
         expect(JSON.stringify(response.body)).not.toContain('hunter2');
         expect(JSON.stringify(response.body)).not.toContain('internal-db');
-        // A chosen, translated message still reaches the user, and the stable code still reaches
-        // the client's error handling.
+        /**
+         * A chosen, translated message still reaches the user, and the stable code still reaches
+         * the client's error handling.
+         */
         expect(response.body.errors[0].code).toBe('INTERNAL_SERVER_ERROR');
         expect(response.body.errors[0].message).toBeTruthy();
     });

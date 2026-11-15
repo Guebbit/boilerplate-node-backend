@@ -55,9 +55,11 @@ const sampledSpanStub = (): ReadableSpan =>
 
 describe('otel-sdk — buildProcessors', () => {
     it('drops every span without an endpoint, but still registers a processor', () => {
-        // Never set by any test's own environment — this is the suite's ambient default, not a
-        // fixture this case has to arrange. A processor, not none: with none the SDK registers
-        // no tracer provider, and logs lose their trace ids.
+        /**
+         * Never set by any test's own environment — this is the suite's ambient default, not a
+         * fixture this case has to arrange. A processor, not none: with none the SDK registers
+         * no tracer provider, and logs lose their trace ids.
+         */
         expect(process.env.OTEL_EXPORTER_OTLP_ENDPOINT).toBeUndefined();
         const processors = buildProcessors();
 
@@ -76,8 +78,10 @@ describe('otel-sdk — buildProcessors', () => {
     });
 
     it('forwards a finished span to a real exporter at flush time', async () => {
-        // Spied on the class, not an instance: `buildProcessors()` constructs its own
-        // `OTLPTraceExporter` internally, so there is no instance to spy on beforehand.
+        /**
+         * Spied on the class, not an instance: `buildProcessors()` constructs its own
+         * `OTLPTraceExporter` internally, so there is no instance to spy on beforehand.
+         */
         const exportSpy = jest
             .spyOn(OTLPTraceExporter.prototype, 'export')
             .mockImplementation((_spans, callback) => callback({ code: 0 }));

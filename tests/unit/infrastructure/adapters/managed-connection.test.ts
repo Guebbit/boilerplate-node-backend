@@ -17,6 +17,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
+/** The logger, mocked so cases can assert what was logged. */
 const mockedLogger = jest.mocked(logger);
 
 /** A handle standing in for a Redis client or an AMQP channel: it only has to be identifiable. */
@@ -72,7 +73,7 @@ describe('when the dependency is switched off', () => {
         expect(connect).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * `disabled` is not a failure: a deployment without Redis is supported, and reporting it as
      * broken would train every reader of the health payload to ignore the field.
      */
@@ -87,7 +88,7 @@ describe('when the dependency is switched off', () => {
     });
 });
 
-/*
+/**
  * The reason this file exists. `connecting` means one thing — an attempt is in flight — for every
  * dependency that reports through it, so two entries in one health payload cannot disagree about
  * what the word means. The production HEALTHCHECK allows a start period, during which
@@ -125,8 +126,10 @@ describe('the handle', () => {
         expect(connect).toHaveBeenCalledTimes(1);
     });
 
-    // The reason `isReady` exists: a dependency that died since the last call must be reconnected
-    // rather than handed back dead, or every caller gets a corpse whose methods throw.
+    /**
+     * The reason `isReady` exists: a dependency that died since the last call must be reconnected
+     * rather than handed back dead, or every caller gets a corpse whose methods throw.
+     */
     it('is replaced once it stops being ready', async () => {
         const { connection, connect } = setup();
 
@@ -150,7 +153,7 @@ describe('the handle', () => {
         expect(close).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * A burst at startup — every worker's first request arriving at once — must not open a
      * connection per caller. The second caller joins the attempt already running.
      */
@@ -171,7 +174,7 @@ describe('the handle', () => {
 });
 
 describe('a connect that fails', () => {
-    /*
+    /**
      * The property every fail-open adapter is built on. A rejection here would become a 500 on a
      * request the cache was only ever an optimisation for, and would skip the queue's inline
      * fallback entirely.
@@ -221,7 +224,7 @@ describe('a connect that fails', () => {
         expect(mockedLogger.warn).toHaveBeenCalledTimes(2);
     });
 
-    /*
+    /**
      * `reportUnavailable` shares that latch with failures arriving from outside `connect` — an
      * `error` event on a live handle, a command rejected mid-publish. They are the same outage.
      */
@@ -236,7 +239,7 @@ describe('a connect that fails', () => {
     });
 });
 
-/*
+/**
  * `connect` resolving `undefined` means "cannot be built" — configuration `isEnabled` could not
  * rule out, such as a URL that assembles to nothing. Nothing failed, so nothing is logged.
  */
@@ -262,13 +265,15 @@ describe('stop()', () => {
         expect(close).toHaveBeenCalledWith(handle);
         expect(connection.state()).toBe('unavailable');
 
-        // A restarted app — or a test that boots one in-process — gets a fresh handle rather than
-        // a closed one.
+        /**
+         * A restarted app — or a test that boots one in-process — gets a fresh handle rather than
+         * a closed one.
+         */
         await connection.get();
         expect(connect).toHaveBeenCalledTimes(2);
     });
 
-    /*
+    /**
      * A connect still in flight owns the handle `stop` is about to close. Without waiting, the
      * socket finishes opening after shutdown with nobody left to close it, and holds the process
      * open past the point the server stopped listening.
@@ -290,7 +295,7 @@ describe('stop()', () => {
         expect(close).toHaveBeenCalledWith({ id: 9, live: true });
     });
 
-    /*
+    /**
      * Called with `undefined` rather than skipped: an adapter that opened more than the handle —
      * `queue.ts` holds the TCP connection under its channel — still has to release it.
      */
@@ -302,8 +307,10 @@ describe('stop()', () => {
         expect(close).toHaveBeenCalledWith(undefined);
     });
 
-    // Shutdown is the one path that must not raise: an already-dead socket rejecting its own
-    // close is the ordinary case, and the process is on its way out regardless.
+    /**
+     * Shutdown is the one path that must not raise: an already-dead socket rejecting its own
+     * close is the ordinary case, and the process is on its way out regardless.
+     */
     it('resolves even when close fails', async () => {
         const { connection, close } = setup();
         await connection.get();

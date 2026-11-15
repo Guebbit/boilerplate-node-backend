@@ -20,6 +20,7 @@ import {
 
 /** One locale's rules for the two stub entities: a single optional string each. */
 const titleRules = z.strictObject({ title: z.string().optional() });
+/** A rules schema that accepts an optional body. */
 const bodyRules = z.strictObject({ body: z.string().optional() });
 
 it('calls subscribe on every module that declares one', () => {
@@ -37,8 +38,10 @@ it('calls subscribe on every module that declares one', () => {
 });
 
 it('skips a module with no subscribe, rather than treating it as a mistake', () => {
-    // `audit-logs` and `tasks` both declare none: a module with nothing to react to is
-    // ordinary, and the optional call is what says so.
+    /**
+     * `audit-logs` and `tasks` both declare none: a module with nothing to react to is
+     * ordinary, and the optional call is what says so.
+     */
     const subscribe = jest.fn();
 
     expect(() =>

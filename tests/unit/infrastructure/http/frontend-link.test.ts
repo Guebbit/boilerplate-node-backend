@@ -9,6 +9,7 @@ import { frontendLink } from '@infrastructure/http/frontend-link';
 import { resetSupportedLocales } from '@infrastructure/i18n';
 import { setEnvironment } from '@tests/environment';
 
+/** A fixed token the link is built from. */
 const TOKEN = 'a1b2c3d4e5f6';
 
 /** Overrides the environment for this case and drops the locale-list cache they may affect. */

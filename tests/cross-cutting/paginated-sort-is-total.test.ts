@@ -21,6 +21,7 @@ import { REPO_ROOT } from '@tests/paths';
  * including the ones nobody has written yet.
  */
 
+/** Root of the production source the scan walks. */
 const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
 
 /** Keys that make a sort total. `_id` is the primary key; a model may name its own unique field. */
@@ -29,12 +30,15 @@ const UNIQUE_KEYS = new Set(['_id', 'id']);
 /** The sort constants this repo publishes, all of which already end in a unique key. */
 const TOTAL_SORT_CONSTANTS = new Set(['DEFAULT_SORT']);
 
+/** Every source file under a directory, recursively. */
 const listSourceFiles = (directory: string): string[] =>
     readdirSync(directory).flatMap((entry) => {
         const entryPath = path.join(directory, entry);
         if (statSync(entryPath).isDirectory())
-            // A module's own tests live under `src/`, and a fixture pipeline is not a query the
-            // application runs.
+            /**
+             * A module's own tests live under `src/`, and a fixture pipeline is not a query the
+             * application runs.
+             */
             return entry === 'tests' ? [] : listSourceFiles(entryPath);
         return entryPath.endsWith('.ts') ? [entryPath] : [];
     });
@@ -53,14 +57,17 @@ const sortKeys = (literal: string): string[] =>
 
 /** Does this sort spec end in a key that cannot tie? */
 const isTotal = (spec: string): boolean => {
-    // `chosen ?? DEFAULT_SORT`: the left side is a caller's `resolveSort`, which always closes on
-    // `_id`, so the expression is total exactly when its fallback is.
+    /**
+     * `chosen ?? DEFAULT_SORT`: the left side is a caller's `resolveSort`, which always closes on
+     * `_id`, so the expression is total exactly when its fallback is.
+     */
     if (spec.includes('??')) return isTotal(spec.split('??').at(-1)!.trim());
     if (!spec.startsWith('{')) return TOTAL_SORT_CONSTANTS.has(spec);
     const keys = sortKeys(spec);
     return keys.length > 0 && UNIQUE_KEYS.has(keys.at(-1)!);
 };
 
+/** A sort stage found in a pipeline. */
 interface SortStage {
     file: string;
     spec: string;
@@ -84,12 +91,14 @@ describe('every paged $sort is total', () => {
     });
 
     it('actually finds the pipelines it claims to scan', () => {
-        // A canary, as in the audit sweep: an empty result must mean "all total", never "the
-        // regex stopped matching". `orders` is the one repository that pages through an
-        // aggregation pipeline today — `inventory`'s stock board pages through a plain
-        // `find().sort().skip()` instead, which this regex (deliberately syntactic — see the
-        // module docblock) does not match.
-        // `orders` is the one that does, so without it there may be nothing to find.
+        /**
+         * A canary, as in the audit sweep: an empty result must mean "all total", never "the
+         * regex stopped matching". `orders` is the one repository that pages through an
+         * aggregation pipeline today — `inventory`'s stock board pages through a plain
+         * `find().sort().skip()` instead, which this regex (deliberately syntactic — see the
+         * module docblock) does not match.
+         * `orders` is the one that does, so without it there may be nothing to find.
+         */
         expect(pagedSortStages().length > 0).toBe(isDeployed('orders'));
     });
 });

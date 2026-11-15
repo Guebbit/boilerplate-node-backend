@@ -40,9 +40,11 @@ const modulesHoldingUserRows = readdirSync(MODULES_ROOT, { withFileTypes: true }
 
 describe('personal data erasure', () => {
     it('finds the modules that hold rows about an account (the guard is not vacuous)', () => {
-        // An exact floor, not `>= 1`: a refactor that renames the ref must fail here, not pass empty.
-        // The shop's modules count only while deployed: the floor holds without the shop. `access`,
-        // `api-keys` and `webhooks` name an account by a plain id string, which `ref: 'User'` missed.
+        /**
+         * An exact floor, not `>= 1`: a refactor that renames the ref must fail here, not pass empty.
+         * The shop's modules count only while deployed: the floor holds without the shop. `access`,
+         * `api-keys` and `webhooks` name an account by a plain id string, which `ref: 'User'` missed.
+         */
         expect(modulesHoldingUserRows).toEqual(
             expect.arrayContaining(
                 [

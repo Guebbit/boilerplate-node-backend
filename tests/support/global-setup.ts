@@ -1,8 +1,10 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-// Relative paths, not the `@infrastructure`/`@tests` aliases every other file in this directory
-// uses: `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper`
-// does not apply — an alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
+/**
+ * Relative paths, not the `@infrastructure`/`@tests` aliases every other file in this directory
+ * uses: `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper`
+ * does not apply — an alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
+ */
 import { startEphemeralMongo, type EphemeralMongo } from '../../scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '../../scenarios/support/ephemeral-mongod';
 import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
@@ -125,8 +127,10 @@ const claimInstanceRoot = async (root: string): Promise<string> => {
  * `file-sandbox.ts`.
  */
 const globalSetup = async () => {
-    // `logger.ts` is on this file's import chain and pseudonymises personal fields; `setup-environment`
-    // has not run in this process, and the pseudonymisation root has no built-in fallback.
+    /**
+     * `logger.ts` is on this file's import chain and pseudonymises personal fields; `setup-environment`
+     * has not run in this process, and the pseudonymisation root has no built-in fallback.
+     */
     process.env.NODE_PSEUDONYM_KEY ??= 'test-pseudonym-key-for-the-suite';
 
     process.env[FILE_SANDBOX_ROOT_VARIABLE] = await claimInstanceRoot(instanceFilesRoot());
@@ -134,9 +138,11 @@ const globalSetup = async () => {
     const root = await claimInstanceRoot(instanceDataRoot());
     process.env.NODE_TEST_MONGO_ROOT = root;
 
-    // `dbPath` must already exist — mongodb-memory-server reads the directory before starting.
-    // Ignored when `NODE_TEST_MONGO_URI` is already set: `startEphemeralMongo` then skips starting
-    // one at all.
+    /**
+     * `dbPath` must already exist — mongodb-memory-server reads the directory before starting.
+     * Ignored when `NODE_TEST_MONGO_URI` is already set: `startEphemeralMongo` then skips starting
+     * one at all.
+     */
     const dbPath = path.join(root, 'server');
     await mkdir(dbPath, { recursive: true });
 

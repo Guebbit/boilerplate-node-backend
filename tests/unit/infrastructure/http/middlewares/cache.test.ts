@@ -37,6 +37,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
+/** Stands in for the client's `edCache`; the cases assert how it was called. */
 const mockedCache = jest.mocked(cache);
 
 /**
@@ -46,6 +47,7 @@ const mockedCache = jest.mocked(cache);
  */
 const GUEST_SCOPE = () => true;
 
+/** A response stub that records what the code under test sets and sends. */
 const createResponse = () => {
     const headers: Record<string, string> = {};
     const listeners = new Map<string, () => void>();
@@ -62,9 +64,11 @@ const createResponse = () => {
             response.statusCode = statusCode;
             return response;
         }),
-        // Express appends rather than replaces, and the real stack already carries `Vary: Origin`
-        // from CORS — so the mock has to append too, or a test could pass while the real response
-        // dropped a header it must keep.
+        /**
+         * Express appends rather than replaces, and the real stack already carries `Vary: Origin`
+         * from CORS — so the mock has to append too, or a test could pass while the real response
+         * dropped a header it must keep.
+         */
         vary: jest.fn((field: string) => {
             const existing = headers.vary;
             headers.vary = existing ? `${existing}, ${field}` : field;
@@ -356,7 +360,7 @@ describe('setCache', () => {
         );
     });
 
-    /*
+    /**
      * A half-written or hand-edited entry must degrade to "not cached". If the parse failure
      * escaped, one bad key would turn a working endpoint into a 500 until someone noticed and
      * deleted it by hand — and the adapter cannot catch it, since to the adapter the value is
@@ -383,7 +387,7 @@ describe('setCache', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    /*
+    /**
      * A Redis outage must reach the global error handler, not hang the request — with no
      * `.catch()`, `getCacheValue` rejecting left `next()` never called and no response ever
      * sent: the request just hangs until its client (or a proxy) times it out.
@@ -478,15 +482,17 @@ describe('setCache', () => {
         );
     });
 
-    // A caller `scopeKey` shares the guest entry with answers `public, max-age` — the whole point
-    // being that the body is the SAME one a guest gets, so a shared/edge cache may hold it too.
-    // A caller who sees more (`scopeKey` returns `false`) answers `private, no-cache` instead:
-    // that caller's wider answer must never be stored as if it were the generic one, and Redis is
-    // bypassed for them entirely (`describe('the cache is bypassed...')` below). Both cases name
-    // `Authorization` in `Vary` regardless — an intermediary that ignores `private` must still be
-    // told the answer depends on who asked. `Accept-Language` is there for the same reason with a
-    // different header: bodies carry translated `message`/`errors` copy, so a cache that does not
-    // key on it hands an Italian body to the next English caller of the same URL.
+    /**
+     * A caller `scopeKey` shares the guest entry with answers `public, max-age` — the whole point
+     * being that the body is the SAME one a guest gets, so a shared/edge cache may hold it too.
+     * A caller who sees more (`scopeKey` returns `false`) answers `private, no-cache` instead:
+     * that caller's wider answer must never be stored as if it were the generic one, and Redis is
+     * bypassed for them entirely (`describe('the cache is bypassed...')` below). Both cases name
+     * `Authorization` in `Vary` regardless — an intermediary that ignores `private` must still be
+     * told the answer depends on who asked. `Accept-Language` is there for the same reason with a
+     * different header: bodies carry translated `message`/`errors` copy, so a cache that does not
+     * key on it hands an Italian body to the next English caller of the same URL.
+     */
     it.each([
         [
             'shares the guest scope',
@@ -549,7 +555,7 @@ describe('setCache', () => {
         ]);
     });
 
-    /*
+    /**
      * The cache key is built from the DECLARED parameters, not from `request.originalUrl`.
      *
      * Keying on the raw URL made the key depend on how a request was written rather than on what
@@ -573,8 +579,10 @@ describe('setCache', () => {
             expect(await keyFor({ junk: 'a' }, ['page'])).toBe(await keyFor({}, ['page']));
         });
 
-        // The point of the declaration: a parameter that changes the answer must change the key,
-        // or two different searches share one cached response.
+        /**
+         * The point of the declaration: a parameter that changes the answer must change the key,
+         * or two different searches share one cached response.
+         */
         it('separates requests that differ in a declared parameter', async () => {
             expect(await keyFor({ page: '1' }, ['page'])).not.toBe(
                 await keyFor({ page: '2' }, ['page'])
@@ -588,16 +596,20 @@ describe('setCache', () => {
             );
         });
 
-        // `?id=a&id=b` and `?id=b&id=a` are one question — unsorted, they would mint two cache
-        // entries for it. The controller never sees this: a HIT answers straight from here.
+        /**
+         * `?id=a&id=b` and `?id=b&id=a` are one question — unsorted, they would mint two cache
+         * entries for it. The controller never sees this: a HIT answers straight from here.
+         */
         it('gives two orderings of an array parameter one key', async () => {
             expect(await keyFor({ id: ['a', 'b'] }, ['id'])).toBe(
                 await keyFor({ id: ['b', 'a'] }, ['id'])
             );
         });
 
-        // Absent is not the same request as present-but-blank: the schemas treat them alike, but
-        // the key does not assume that on their behalf.
+        /**
+         * Absent is not the same request as present-but-blank: the schemas treat them alike, but
+         * the key does not assume that on their behalf.
+         */
         it('distinguishes an absent parameter from a blank one', async () => {
             expect(await keyFor({}, ['page'])).not.toBe(await keyFor({ page: '' }, ['page']));
         });
@@ -616,8 +628,10 @@ describe('setCache', () => {
             expect(key).toMatch(/^GET:\/products\?[0-9a-f]{64}:guest:en$/);
         });
 
-        // Walking `[[[…]]]` is what once threw a RangeError out of the key builder; now it is
-        // simply not a cacheable question.
+        /**
+         * Walking `[[[…]]]` is what once threw a RangeError out of the key builder; now it is
+         * simply not a cacheable question.
+         */
         it('skips the cache for a value that is not a scalar or an array of scalars', async () => {
             mockedCache.getCacheValue.mockClear();
             const next = jest.fn() as NextFunction;
@@ -667,14 +681,16 @@ describe('setCache', () => {
             expect(next).toHaveBeenCalledWith();
         });
 
-        // `in` walks the prototype chain, so this would otherwise count as present on every
-        // request and put `toString=undefined` into every key.
+        /**
+         * `in` walks the prototype chain, so this would otherwise count as present on every
+         * request and put `toString=undefined` into every key.
+         */
         it('does not mistake an inherited property for a supplied parameter', async () => {
             expect(await keyFor({}, ['toString'])).toBe(await keyFor({}, []));
         });
     });
 
-    /*
+    /**
      * With `keyValues` the key is built from what the controller will validate, so two spellings of
      * one question share an entry and a request the controller would refuse never gets one.
      */
@@ -709,31 +725,37 @@ describe('setCache', () => {
         });
     });
 
-    /*
+    /**
      * The four searches are one question with two spellings. `keyAs` is what says so, and these
      * are the properties that make saying so safe.
      */
     describe('a search cached under a shared identity', () => {
         const declared = ['page', 'pageSize', 'text'];
 
-        // The whole point: whichever spelling asks first pays for the Mongo query, and the other
-        // is served from that entry.
+        /**
+         * The whole point: whichever spelling asks first pays for the Mongo query, and the other
+         * is served from that entry.
+         */
         it('gives the query and body spellings of one search the same key', async () => {
             expect(await bodyKeyFor({ page: '1', text: 'x' }, declared)).toBe(
                 await sharedQueryKeyFor({ page: '1', text: 'x' }, declared)
             );
         });
 
-        // A query string carries `1` as the string '1'; a JSON body carries the number. Without
-        // normalisation the two spell the same request differently and never share an entry.
+        /**
+         * A query string carries `1` as the string '1'; a JSON body carries the number. Without
+         * normalisation the two spell the same request differently and never share an entry.
+         */
         it('reads a JSON number and a query string as the same value', async () => {
             expect(await bodyKeyFor({ page: 1 }, declared)).toBe(
                 await sharedQueryKeyFor({ page: '1' }, declared)
             );
         });
 
-        // The allowlist is the whole defence: without it any caller mints an unbounded number of
-        // entries by adding a field the endpoint never reads.
+        /**
+         * The allowlist is the whole defence: without it any caller mints an unbounded number of
+         * entries by adding a field the endpoint never reads.
+         */
         it('ignores a body field nobody declared', async () => {
             expect(await bodyKeyFor({ page: '1', junk: 'a' }, declared)).toBe(
                 await bodyKeyFor({ page: '1', junk: 'b' }, declared)
@@ -747,8 +769,10 @@ describe('setCache', () => {
             );
         });
 
-        // `readInput`'s `search` surface reads body before query. The key has to agree, or it
-        // answers a request the controller is not about to serve.
+        /**
+         * `readInput`'s `search` surface reads body before query. The key has to agree, or it
+         * answers a request the controller is not about to serve.
+         */
         it('prefers the body over the query, as the search surface does', async () => {
             mockedCache.getCacheValue.mockResolvedValue(undefined);
             const middleware = setCache(60, {
@@ -773,8 +797,10 @@ describe('setCache', () => {
             expect(key).toBe(await bodyKeyFor({ text: 'from-body' }, declared));
         });
 
-        // Two different searches sharing an entry is the bug this whole declaration exists to
-        // prevent; a shared identity must not reintroduce it across resources.
+        /**
+         * Two different searches sharing an entry is the bug this whole declaration exists to
+         * prevent; a shared identity must not reintroduce it across resources.
+         */
         it('keeps two resources apart even when their parameters match', async () => {
             expect(await bodyKeyFor({ page: '1' }, declared, 'products:search')).not.toBe(
                 await bodyKeyFor({ page: '1' }, declared, 'orders:search')
@@ -808,8 +834,10 @@ describe('setCache', () => {
             expect(mockedCache.getCacheValue).toHaveBeenCalled();
         });
 
-        // Without the identity a POST would key on `POST:/path` and cache whatever mounted this
-        // next — a write included. Requiring it makes caching a POST an explicit claim.
+        /**
+         * Without the identity a POST would key on `POST:/path` and cache whatever mounted this
+         * next — a write included. Requiring it makes caching a POST an explicit claim.
+         */
         it('refuses to cache a POST that declared no shared identity', async () => {
             const middleware = setCache(60, {
                 tags: ['products'],
@@ -892,8 +920,10 @@ describe('setCache', () => {
 
         expect(() => middleware(request, response, jest.fn() as NextFunction)).toThrow(/noStore/);
 
-        // The header noStore set must survive unreplaced — this is the bug the guard exists to
-        // stop: unchecked, setCache would call response.set('Cache-Control', …) right here.
+        /**
+         * The header noStore set must survive unreplaced — this is the bug the guard exists to
+         * stop: unchecked, setCache would call response.set('Cache-Control', …) right here.
+         */
         expect(headers['cache-control']).toBe('no-store');
         expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
     });
@@ -993,7 +1023,7 @@ describe('setCache', () => {
     });
 });
 
-/*
+/**
  * Refresh-ahead: past the soft `staleAt`, exactly one caller rebuilds and everyone else keeps
  * reading their own stale body — the pattern the module doc calls "serve the old value, let
  * exactly one caller rebuild it". `HIT`/`MISS` above already cover "nothing has expired yet" and
@@ -1037,8 +1067,10 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         expect(headers['cache-status']).toContain('fwd=stale');
         expect(next).toHaveBeenCalledTimes(1);
 
-        // The claimer answers with a FRESH body — nobody, including this caller, ever receives
-        // the stale one once a rebuild has been claimed.
+        /**
+         * The claimer answers with a FRESH body — nobody, including this caller, ever receives
+         * the stale one once a rebuild has been claimed.
+         */
         response.statusCode = 200;
         response.json({ fresh: true });
 
@@ -1068,8 +1100,10 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
     });
 
-    // No stale body survives past Redis' own TTL (`ttl + grace`) — nothing left to serve, so a
-    // hard expiry is indistinguishable from a key that was never written.
+    /**
+     * No stale body survives past Redis' own TTL (`ttl + grace`) — nothing left to serve, so a
+     * hard expiry is indistinguishable from a key that was never written.
+     */
     it('falls through to MISS when the entry is hard-expired', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
         const { response, headers } = createResponse();
@@ -1086,9 +1120,11 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    // A fixed 60s grace would hand back most of what the dev TTL ceiling just took — an
-    // out-of-band write's stale answer would then survive almost as long as production's full
-    // hour, rather than the few seconds the ceiling promises.
+    /**
+     * A fixed 60s grace would hand back most of what the dev TTL ceiling just took — an
+     * out-of-band write's stale answer would then survive almost as long as production's full
+     * hour, rather than the few seconds the ceiling promises.
+     */
     it('clamps the grace window to the resolved TTL outside production', async () => {
         setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '10' });
         mockedCache.getCacheValue.mockResolvedValue(undefined);
@@ -1353,7 +1389,7 @@ describe('resolveCacheTtl', () => {
 /** A response body whose serialized form is comfortably above the given byte count. */
 const bodyOfAtLeast = (bytes: number) => ({ items: 'x'.repeat(bytes) });
 
-/*
+/**
  * A cache turns a cheap request into long-lived server state, which is a different risk from
  * simply answering it. `GET /products` is public, its entries live for an hour, and the key
  * carries the full URL — so without a bound on entry size an unauthenticated caller can mint a
@@ -1379,8 +1415,10 @@ describe('the per-entry size limit', () => {
         expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
     });
 
-    // Measured against the bytes that would actually be written: a body of multi-byte characters
-    // is larger than its length in code units suggests.
+    /**
+     * Measured against the bytes that would actually be written: a body of multi-byte characters
+     * is larger than its length in code units suggests.
+     */
     it('measures bytes, not string length', async () => {
         setEnvironment({ NODE_REDIS_CACHE_MAX_BYTES: '100' });
 
@@ -1397,8 +1435,10 @@ describe('the per-entry size limit', () => {
         expect(mockedCache.setCacheValue).toHaveBeenCalledTimes(1);
     });
 
-    // Skipping is a lost optimisation, not a failure: the caller has already been served, and the
-    // response still goes out.
+    /**
+     * Skipping is a lost optimisation, not a failure: the caller has already been served, and the
+     * response still goes out.
+     */
     it('still answers the request it refused to cache', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
         const middleware = setCache(60, {
@@ -1407,8 +1447,10 @@ describe('the per-entry size limit', () => {
             scopeKey: GUEST_SCOPE
         });
         const { response } = createResponse();
-        // Held before the middleware runs: `setCache` replaces `response.json` with the wrapper
-        // that writes to the cache, and the wrapper is what must still reach this one.
+        /**
+         * Held before the middleware runs: `setCache` replaces `response.json` with the wrapper
+         * that writes to the cache, and the wrapper is what must still reach this one.
+         */
         const sendJson = response.json;
 
         await middleware(

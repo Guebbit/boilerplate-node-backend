@@ -47,6 +47,7 @@ interface ConformanceCase {
     expect: 'allow' | 'deny';
 }
 
+/** The shared authorization cases both backends must answer the same. */
 const { cases } = parse(
     readFileSync(
         path.join(__dirname, '..', '..', 'shared', 'cases', 'authorization.cases.yaml'),
@@ -75,8 +76,11 @@ const callerOf = (declared: CaseCaller): Caller =>
  * against a silently empty file stays real in both.
  */
 const shopDeployed = isDeployed('orders');
+/** Floor on how many cases the file holds, so an emptied file cannot pass. */
 const MIN_CASES = shopDeployed ? 30 : 20;
+/** Floor on how many deny cases the file holds. */
 const MIN_DENY = shopDeployed ? 20 : 12;
+/** Floor on how many allow cases the file holds. */
 const MIN_ALLOW = shopDeployed ? 10 : 6;
 
 describe('the shared conformance suite', () => {
@@ -93,7 +97,7 @@ describe('the shared conformance suite', () => {
     it.each(cases.map((one) => [one.expect, one.name, one] as const))(
         '%s: %s',
         (expected, _name, one) => {
-            /*
+            /**
              * `subject()` names the type of a plain object. The resource arrives as attributes
              * from a YAML file with no class behind it, which is the shape a rule is actually
              * about and the shape a query filter takes — these cases describe rows, not

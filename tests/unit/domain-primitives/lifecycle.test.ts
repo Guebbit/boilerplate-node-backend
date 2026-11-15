@@ -2,8 +2,10 @@ import { defineLifecycle } from '@domain-primitives/lifecycle';
 
 /** A small made-up status set, so the primitive is tested apart from any module. */
 const STATUSES = ['draft', 'live', 'gone'] as const;
+/** The statuses of the lifecycle under test. */
 type Status = (typeof STATUSES)[number];
 
+/** The lifecycle table the cases run through. */
 const table = {
     initial: 'draft',
     events: {
@@ -13,6 +15,7 @@ const table = {
     }
 } as const;
 
+/** The lifecycle built from the table. */
 const lifecycle = defineLifecycle<Status, keyof typeof table.events, 'staff' | 'system'>(
     STATUSES,
     table

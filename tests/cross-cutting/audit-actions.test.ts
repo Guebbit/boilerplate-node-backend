@@ -50,13 +50,15 @@ describe('audit actions across modules', () => {
     it('finds an audit vocabulary in every module that emits one', async () => {
         const files = listAuditFiles();
 
-        // A canary, as in the controller sweep: an empty result must mean "nothing declares
-        // actions", not "the sweep stopped finding files".
-        //
-        // Stated against the disk rather than as a count. A literal floor here is a copy of
-        // `src/modules.ts` written as an integer, in a file that names no domain — so it goes
-        // stale the day a domain is added or deleted, which is precisely when nobody is looking
-        // at this line.
+        /**
+         * A canary, as in the controller sweep: an empty result must mean "nothing declares
+         * actions", not "the sweep stopped finding files".
+         *
+         * Stated against the disk rather than as a count. A literal floor here is a copy of
+         * `src/modules.ts` written as an integer, in a file that names no domain — so it goes
+         * stale the day a domain is added or deleted, which is precisely when nobody is looking
+         * at this line.
+         */
         expect(readdirSync(MODULES_ROOT).length).toBeGreaterThan(0);
         expect(files.length).toBeGreaterThanOrEqual(1);
 

@@ -38,9 +38,11 @@
  */
 export interface IntrospectableSchema {
     path(name: string): unknown;
-    // Loose on purpose: Mongoose's own `indexes()` and `options` types are parameterised too, and
-    // pinning them here would reintroduce exactly the assignability problem described above. The
-    // narrowing happens once, inside each reader below, where the shape is actually known.
+    /**
+     * Loose on purpose: Mongoose's own `indexes()` and `options` types are parameterised too, and
+     * pinning them here would reintroduce exactly the assignability problem described above. The
+     * narrowing happens once, inside each reader below, where the shape is actually known.
+     */
     indexes(): unknown[][];
     paths: object;
     options: object;
@@ -193,9 +195,11 @@ export const subSchema = (schema: IntrospectableSchema, path: string): Introspec
 
 /** A schema's own options — `timestamps`, `_id`, `collection`, and the rest. */
 export const optionsOf = (schema: IntrospectableSchema): Record<string, unknown> =>
-    // A necessary widening, not a cosmetic one: the interface declares `object` so a concretely
-    // parameterised `Schema` stays assignable to it (see the header), and `object` carries no
-    // index signature to read `timestamps` or `_id` through.
+    /**
+     * A necessary widening, not a cosmetic one: the interface declares `object` so a concretely
+     * parameterised `Schema` stays assignable to it (see the header), and `object` carries no
+     * index signature to read `timestamps` or `_id` through.
+     */
     schema.options as Record<string, unknown>;
 
 /** Whether a path stores a reference, and to which model. */

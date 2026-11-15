@@ -79,8 +79,10 @@ export const startHttpsTestServer = (
 ): Promise<HttpsTestServer> => {
     const captured: CapturedRequest[] = [];
 
-    // node:https.createServer: https://nodejs.org/api/https.html#httpscreateserveroptions-requestlistener
-    // `key`/`cert` default to this file's throwaway localhost pair — see the module docblock.
+    /**
+     * node:https.createServer: https://nodejs.org/api/https.html#httpscreateserveroptions-requestlistener
+     * `key`/`cert` default to this file's throwaway localhost pair — see the module docblock.
+     */
     const server: Server = createServer(credentials, (request, response) => {
         readBody(request)
             .then((body) => {

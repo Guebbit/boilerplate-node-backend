@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { asStub } from '@tests/stub';
 
+/** The slice of a router route layer these cases read. */
 interface RouteLayer {
     route: {
         path: string;
@@ -23,6 +24,7 @@ interface RouteLayer {
     };
 }
 
+/** The slice of a router middleware layer these cases read. */
 interface UseLayer {
     route?: undefined;
     name?: string;

@@ -25,8 +25,10 @@ import {
     type Money
 } from '@domain-primitives/money';
 
-/** A literal minor-unit count, branded — `Money` is a brand the module itself never exposes a
- * bare constructor for; these are hand-verified integers, not values a real caller could forge. */
+/**
+ * A literal minor-unit count, branded — `Money` is a brand the module itself never exposes a
+ * bare constructor for; these are hand-verified integers, not values a real caller could forge.
+ */
 const asMoney = (minorUnits: number): Money => minorUnits as Money;
 import { PROPERTY_RUNS } from '@tests/knobs';
 
@@ -128,8 +130,10 @@ describe("toMinorUnits/toDecimalString — each currency's own minor-unit expone
     });
 
     it('never confuses two currencies with different exponents for the same minor-unit count', () => {
-        // The exact bug this task exists to fix: the same raw minor-unit integer must decode to a
-        // different decimal amount depending on which currency it was counted in.
+        /**
+         * The exact bug this task exists to fix: the same raw minor-unit integer must decode to a
+         * different decimal amount depending on which currency it was counted in.
+         */
         const raw = asMoney(1990);
 
         expect(toDecimalString(raw, 'EUR')).toBe('19.90');
@@ -138,8 +142,10 @@ describe("toMinorUnits/toDecimalString — each currency's own minor-unit expone
     });
 
     it('caches the resolved exponent — a second call for the same currency agrees with the first', () => {
-        // Not observable from the return value alone; this only pins that repeated use of an
-        // unusual currency (KWD) keeps answering the SAME exponent, run after run.
+        /**
+         * Not observable from the return value alone; this only pins that repeated use of an
+         * unusual currency (KWD) keeps answering the SAME exponent, run after run.
+         */
         fc.assert(
             fc.property(realisticPrice(), (price) => {
                 expect(toMinorUnits(price, 'KWD')).toBe(toMinorUnits(price, 'KWD'));
@@ -361,9 +367,11 @@ describe('scaleMoneyByRate', () => {
     });
 
     it('is exact on a value known to be float-imprecise: 19.90 in cents times 0.22/1.22', () => {
-        // `19.9 * 100 === 1989.9999999999998` — the exact float dust VAT.md flags. `toMinorUnits`
-        // already rounds it away; this confirms a SECOND multiply (the rate) on the result stays
-        // exact too, rather than compounding the imprecision into an off-by-one cent.
+        /**
+         * `19.9 * 100 === 1989.9999999999998` — the exact float dust VAT.md flags. `toMinorUnits`
+         * already rounds it away; this confirms a SECOND multiply (the rate) on the result stays
+         * exact too, rather than compounding the imprecision into an off-by-one cent.
+         */
         const gross = toMinorUnits(19.9, EUR);
         expect(gross).toBe(1990);
         expect(scaleMoneyByRate(gross, 0.22 / 1.22)).toBe(359);
@@ -403,8 +411,10 @@ describe('apportion', () => {
     });
 
     it('gives the whole remainder to the single largest weight on an uneven split', () => {
-        // 100 cents split 2:1 is 66.67/33.33 before rounding — floor gives 66/33, remainder 1
-        // goes to the larger share.
+        /**
+         * 100 cents split 2:1 is 66.67/33.33 before rounding — floor gives 66/33, remainder 1
+         * goes to the larger share.
+         */
         const shares = apportion(toMinorUnits(1, EUR), [
             toMinorUnits(2, EUR),
             toMinorUnits(1, EUR)
@@ -417,8 +427,10 @@ describe('apportion', () => {
     });
 
     it('assigns every leftover cent to the same largest weight when there are more lines than cents', () => {
-        // 1 cent split across 3 equal lines: each floors to 0, and the single leftover cent goes
-        // to the first of the tied-largest weights — never split further, never dropped.
+        /**
+         * 1 cent split across 3 equal lines: each floors to 0, and the single leftover cent goes
+         * to the first of the tied-largest weights — never split further, never dropped.
+         */
         const equalWeights = [toMinorUnits(1, EUR), toMinorUnits(1, EUR), toMinorUnits(1, EUR)];
         expect(apportion(toMinorUnits(0.01, EUR), equalWeights)).toEqual([1, 0, 0]);
     });

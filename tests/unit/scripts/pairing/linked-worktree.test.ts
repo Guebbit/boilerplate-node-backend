@@ -42,7 +42,7 @@ let sandbox: string;
  * @param argv - the git arguments
  */
 const git = (directory: string, ...argv: string[]): void => {
-    /*
+    /**
      * Runs git as a child process; it throws on a non-zero exit, which fails the case.
      * `-c` sets a one-off config value for this command only.
      * `env: gitEnvironment()` matters under the pre-commit hook: git exports
@@ -87,7 +87,7 @@ const runSync = (
     frontend: string,
     ...flags: string[]
 ): { status: number | null; stderr: string } => {
-    /*
+    /**
      * Runs the CLI to completion and captures its output instead of throwing on failure.
      * https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options
      *

@@ -23,6 +23,7 @@ const emailRefusal = (locale: 'en' | 'it'): string => {
 // Only the multipart case signs a user in; every other case rejects before any repository call.
 setupTestDb();
 
+/** A signup body with every field invalid, so every message is translated. */
 const INVALID_SIGNUP = {
     email: 'not-an-email',
     username: 'ab',
@@ -30,11 +31,13 @@ const INVALID_SIGNUP = {
     passwordConfirm: 'x'
 };
 
+/** Signs up with the given Accept-Language and returns the response. */
 const signupWith = (acceptLanguage?: string) => {
     const pending = api().post('/account/signup');
     return acceptLanguage ? pending.set('Accept-Language', acceptLanguage) : pending;
 };
 
+/** The validation messages of an error body. */
 const messagesOf = (body: { errors?: { message?: string }[] }) =>
     (body.errors ?? []).map(({ message }) => message);
 
@@ -92,8 +95,10 @@ describe('Accept-Language negotiation', () => {
      *
      * `src/infrastructure/http/middlewares/upload.ts` re-enters the store after multer; this is the guard.
      */
-    // Signup takes no image any more (and so declares no multipart body); `PATCH /account` is a
-    // multipart door a signed-in caller can reach, and refuses a field it does not take the same way.
+    /**
+     * Signup takes no image any more (and so declares no multipart body); `PATCH /account` is a
+     * multipart door a signed-in caller can reach, and refuses a field it does not take the same way.
+     */
     it('keeps the locale across a multipart upload', async () => {
         const { bearer } = await authenticateAs('user');
 
@@ -141,6 +146,7 @@ describe('Accept-Language negotiation', () => {
  */
 const INVALID_CONTACT = { email: 'not-an-email', subject: '', message: '' };
 
+/** Posts the contact form with the given Accept-Language and returns the response. */
 const contactWith = (acceptLanguage?: string) => {
     const pending = api().post('/tasks');
     return acceptLanguage ? pending.set('Accept-Language', acceptLanguage) : pending;
@@ -174,7 +180,7 @@ describe('generated-schema validation answers in the negotiated language', () =>
         expect(italianMessages).toHaveLength(3);
         expect(englishMessages).toHaveLength(3);
 
-        /*
+        /**
          * Every message differs between the two languages — asserted without naming any copy, so
          * it holds for whatever the dictionary says today. An untranslated Zod default is
          * identical in both responses, which is exactly what this catches: before the shared map

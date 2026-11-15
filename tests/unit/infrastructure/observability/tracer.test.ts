@@ -16,11 +16,14 @@ import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-tr
 import { getTracer, withSpan, recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { getActiveSpanContext } from '@infrastructure/observability/span-context';
 
-// ---------------------------------------------------------------------------
-// Test tracer provider + in-memory exporter (no full SDK needed in tests)
-// ---------------------------------------------------------------------------
+/**
+ * ---------------------------------------------------------------------------
+ * Test tracer provider + in-memory exporter (no full SDK needed in tests)
+ * ---------------------------------------------------------------------------
+ */
 
 // Each describe block sets up and tears down its own provider to stay isolated.
+/** Installs an in-memory tracer provider for the case. */
 const setupTestProvider = () => {
     const exporter = new InMemorySpanExporter();
     const provider = new node.NodeTracerProvider({
@@ -30,14 +33,17 @@ const setupTestProvider = () => {
     return { exporter, provider };
 };
 
+/** Shuts the tracer provider down. */
 const teardownTestProvider = async (provider: node.NodeTracerProvider) => {
     await provider.shutdown();
     trace.disable();
 };
 
-// ---------------------------------------------------------------------------
-// withSpan — success path
-// ---------------------------------------------------------------------------
+/**
+ * ---------------------------------------------------------------------------
+ * withSpan — success path
+ * ---------------------------------------------------------------------------
+ */
 
 describe('withSpan — success', () => {
     let exporter: InMemorySpanExporter;
@@ -63,9 +69,11 @@ describe('withSpan — success', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// withSpan — error path
-// ---------------------------------------------------------------------------
+/**
+ * ---------------------------------------------------------------------------
+ * withSpan — error path
+ * ---------------------------------------------------------------------------
+ */
 
 /** A span callback that throws before it ever returns a promise. */
 const throwing = (): Promise<never> => {
@@ -159,9 +167,11 @@ describe('withSpan — error', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// getActiveSpanContext
-// ---------------------------------------------------------------------------
+/**
+ * ---------------------------------------------------------------------------
+ * getActiveSpanContext
+ * ---------------------------------------------------------------------------
+ */
 
 describe('getActiveSpanContext', () => {
     let provider: node.NodeTracerProvider;
@@ -190,9 +200,11 @@ describe('getActiveSpanContext', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// recordErrorOnActiveSpan
-// ---------------------------------------------------------------------------
+/**
+ * ---------------------------------------------------------------------------
+ * recordErrorOnActiveSpan
+ * ---------------------------------------------------------------------------
+ */
 
 describe('recordErrorOnActiveSpan', () => {
     let exporter: InMemorySpanExporter;

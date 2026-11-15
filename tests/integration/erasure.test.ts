@@ -169,15 +169,19 @@ const KEPT_BY_LAW = {
     auditlogs: 'audit window',
     // Published rows are kept seven days; the events carry ids only.
     outboxevents: 'outbox retention',
-    // The `user.erased` delivery is the notice Art. 19 owes recipients. It carries the id only, no
-    // email, and the delivery log expires on its own clock (30 days).
+    /**
+     * The `user.erased` delivery is the notice Art. 19 owes recipients. It carries the id only, no
+     * email, and the delivery log expires on its own clock (30 days).
+     */
     webhookdeliveries: 'delivery log retention',
     // Art. 17(3)(b): the paid order is the sale; its buyer is scrubbed once the claim window closes.
     orders: 'paid order, tax law',
     // The invoice freezes the billing address (name and address) for the tax duty.
     invoices: 'tax law',
-    // Art. 5(2) and 17: proof the account was erased, so a backup restore re-erases it. Holds the
-    // id only, and expires on NODE_ERASURE_LEDGER_RETENTION_DAYS.
+    /**
+     * Art. 5(2) and 17: proof the account was erased, so a backup restore re-erases it. Holds the
+     * id only, and expires on NODE_ERASURE_LEDGER_RETENTION_DAYS.
+     */
     erasureledgers: 'erasure proof, outlives backups'
 } as const;
 
@@ -253,8 +257,10 @@ describe('a scheduled self-deletion that has run', () => {
             returnPostage: 'consumer'
         });
         await taskModel.create({ email, subject: 'Hello', message: 'A question' });
-        // The seeds landed: every home below names the account before the purge, so an empty
-        // answer afterwards means the cascade worked, not that nothing was ever written.
+        /**
+         * The seeds landed: every home below names the account before the purge, so an empty
+         * answer afterwards means the cascade worked, not that nothing was ever written.
+         */
         expect(await collectionsNaming([user.id.toLowerCase(), email])).toEqual(
             expect.arrayContaining([
                 'addressbooks',

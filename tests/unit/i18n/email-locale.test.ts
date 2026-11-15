@@ -20,12 +20,15 @@ import itAccount from '@modules/account/locales/it.json';
  * wrapper. What is asserted is the rendered HTML and the subject, which is the copy.
  */
 
+/** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'test' });
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
+/** Stands in for the queue publisher; the cases assert how it was called. */
 const publishToQueueMock = jest.fn().mockResolvedValue(true);
+/** Whether the queue counts as enabled; a case flips it. */
 const isQueueEnabledMock = jest.fn().mockReturnValue(true);
 jest.mock('@infrastructure/adapters/queue', () => ({
     isQueueEnabled: () => isQueueEnabledMock(),
@@ -34,6 +37,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
 
 import { resetConfirmEmail } from '@modules/account/emails';
 
+/** A minimal mail request. */
 const REQUEST: EmailJobPayload['request'] = { to: 'ada@example.com', subject: 'ignored' };
 
 /** The English and Italian spellings of the one line asserted throughout. */
@@ -90,8 +94,10 @@ describe('the producer resolves the copy before publishing', () => {
             payload: Record<string, unknown> & { data: Record<string, unknown> };
         };
         expect(payload).not.toHaveProperty('locale');
-        // `data.locale` is the `<html lang>` value the template prints — a finished string like
-        // any other, not something the worker resolves against.
+        /**
+         * `data.locale` is the `<html lang>` value the template prints — a finished string like
+         * any other, not something the worker resolves against.
+         */
         expect(payload.data.locale).toBe('it');
         expect(payload.data.footer).toContain('Inviata dal nostro team.');
     });
@@ -173,8 +179,10 @@ describe('the email worker renders the copy it was given', () => {
         sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
         const { handleEmailJob } = await import('@infrastructure/adapters/email.worker');
 
-        // A refused SMTP connection says nothing about this job. `false` would dead-letter it;
-        // a rejection puts it back on the queue — see the worker's own docblock.
+        /**
+         * A refused SMTP connection says nothing about this job. `false` would dead-letter it;
+         * a rejection puts it back on the queue — see the worker's own docblock.
+         */
         await expect(handleEmailJob(jobFor('it'))).rejects.toThrow('smtp refused');
     });
 });

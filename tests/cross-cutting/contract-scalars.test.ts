@@ -41,8 +41,10 @@ describe('contract scalars', () => {
     });
 
     it('rejects one above every operation’s maximum', () => {
-        // The other half: core must not accept MORE than the contract allows either, or a
-        // lowered `maximum` would pass unnoticed.
+        /**
+         * The other half: core must not accept MORE than the contract allows either, or a
+         * lowered `maximum` would pass unnoticed.
+         */
         const tooPermissive = constantsEndingIn('PageSizeMax')
             .filter(([, value]) => pageSizeSchema.safeParse((value as number) + 1).success)
             .map(([name]) => name);
@@ -50,8 +52,10 @@ describe('contract scalars', () => {
         expect(tooPermissive).toEqual([]);
     });
 
-    // `Page` carries a `maximum` alongside `PageSize`'s — same guarantee,
-    // same shape, so a raised bound in the contract moves here without anyone remembering to.
+    /**
+     * `Page` carries a `maximum` alongside `PageSize`'s — same guarantee,
+     * same shape, so a raised bound in the contract moves here without anyone remembering to.
+     */
     it('agrees with every operation on the maximum page', () => {
         const disagreeing = constantsEndingIn('PageMax')
             .filter(([, value]) => !pageSchema.safeParse(value).success)
@@ -77,16 +81,20 @@ describe('contract scalars', () => {
         expect(disagreeing).toEqual([]);
     });
 
-    // `ids.ts` recognises a request schema's id fields by the shared `Id` pattern, so a changed
-    // pattern in the contract must fail here rather than quietly stop every body and query id
-    // from being checked.
+    /**
+     * `ids.ts` recognises a request schema's id fields by the shared `Id` pattern, so a changed
+     * pattern in the contract must fail here rather than quietly stop every body and query id
+     * from being checked.
+     */
     it('still emits the Id pattern, which is how ids.ts finds a schema’s id fields', () => {
         const ids = constantsEndingIn('RegExp').filter(
             ([, value]) => (value as RegExp).source === CONTRACT_ID_PATTERN
         );
 
-        // Dozens of fields carry the shared `Id` even after `demo:remove` has taken the shop's
-        // schemas away (87 then); a pattern that moved in the contract leaves none carrying this one.
+        /**
+         * Dozens of fields carry the shared `Id` even after `demo:remove` has taken the shop's
+         * schemas away (87 then); a pattern that moved in the contract leaves none carrying this one.
+         */
         expect(ids.length).toBeGreaterThan(50);
     });
 });

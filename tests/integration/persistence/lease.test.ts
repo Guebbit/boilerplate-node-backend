@@ -26,10 +26,12 @@ const MINUTE_MS = 60_000;
 describe('withLease', () => {
     it('runs the body for only one of two callers contending for the same held lease', async () => {
         const started: number[] = [];
-        // Held open until the test releases it explicitly, so the second acquisition attempt below
-        // genuinely lands WHILE the first still holds the lease — an instantly-resolving body would
-        // let the first call finish and release before the second's request even reaches the
-        // server, which would make both "win" in sequence rather than actually contending.
+        /**
+         * Held open until the test releases it explicitly, so the second acquisition attempt below
+         * genuinely lands WHILE the first still holds the lease — an instantly-resolving body would
+         * let the first call finish and release before the second's request even reaches the
+         * server, which would make both "win" in sequence rather than actually contending.
+         */
         let finishFirst: (() => void) | undefined;
         const first = withLease('scheduled-jobs-test.fresh', MINUTE_MS, () => {
             started.push(1);
@@ -50,19 +52,23 @@ describe('withLease', () => {
         finishFirst?.();
         const firstResult = await first;
 
-        // The second caller loses without its body ever running, and resolves `undefined` rather
-        // than rejecting — the duplicate-key race against an already-held, unexpired lease is
-        // "someone else has it", not a failure.
+        /**
+         * The second caller loses without its body ever running, and resolves `undefined` rather
+         * than rejecting — the duplicate-key race against an already-held, unexpired lease is
+         * "someone else has it", not a failure.
+         */
         expect(started).toEqual([1]);
         expect(firstResult).toBe(1);
         expect(secondResult).toBeUndefined();
     });
 
     it('lets only one of two truly concurrent callers win the very first insert for a name', async () => {
-        // No pre-existing document, unlike the case above — both calls fire back to back with no
-        // `await` between them, so both `findOneAndUpdate` upserts are in flight before either can
-        // resolve. This is `acquireLease`'s OTHER duplicate-key race (its own doc comment calls it
-        // out separately from a held-lease race): the very first insert for `name`, contended.
+        /**
+         * No pre-existing document, unlike the case above — both calls fire back to back with no
+         * `await` between them, so both `findOneAndUpdate` upserts are in flight before either can
+         * resolve. This is `acquireLease`'s OTHER duplicate-key race (its own doc comment calls it
+         * out separately from a held-lease race): the very first insert for `name`, contended.
+         */
         const name = 'scheduled-jobs-test.first-insert-race';
         const started: number[] = [];
 
@@ -78,8 +84,10 @@ describe('withLease', () => {
         ]);
 
         expect(started).toHaveLength(1);
-        // Exactly one resolves to its body's own value; the other resolves `undefined` — the same
-        // "someone else has it" outcome a contended, already-held lease produces.
+        /**
+         * Exactly one resolves to its body's own value; the other resolves `undefined` — the same
+         * "someone else has it" outcome a contended, already-held lease produces.
+         */
         expect([firstResult, secondResult].filter((result) => result !== undefined)).toHaveLength(
             1
         );
@@ -89,9 +97,11 @@ describe('withLease', () => {
     });
 
     it('lets a different caller re-acquire a lease that has expired', async () => {
-        // Acquired and released immediately: `withLease` stamps `expiresAt` with the epoch on
-        // release (see lease.ts's `RELEASED`), so the very next acquisition already finds it
-        // expired without a wait.
+        /**
+         * Acquired and released immediately: `withLease` stamps `expiresAt` with the epoch on
+         * release (see lease.ts's `RELEASED`), so the very next acquisition already finds it
+         * expired without a wait.
+         */
         await withLease('scheduled-jobs-test.expired', MINUTE_MS, () => Promise.resolve('first'));
 
         let ran = false;
@@ -111,8 +121,10 @@ describe('withLease', () => {
             withLease('scheduled-jobs-test.throws', MINUTE_MS, () => Promise.reject(failure))
         ).rejects.toBe(failure);
 
-        // A long ttlMs would still block a same-window retry if the failed run had not released —
-        // this proves it did, without waiting for anything to expire.
+        /**
+         * A long ttlMs would still block a same-window retry if the failed run had not released —
+         * this proves it did, without waiting for anything to expire.
+         */
         let ran = false;
         await withLease('scheduled-jobs-test.throws', MINUTE_MS, () => {
             ran = true;
@@ -148,8 +160,10 @@ describe('withLease', () => {
             .lean()
             .exec();
         expect(afterSuccess?.lastSuccessAt).toBeInstanceOf(Date);
-        // A clean run clears a previous failure — a stale `lastError` would misreport a job that
-        // has since recovered as still broken.
+        /**
+         * A clean run clears a previous failure — a stale `lastError` would misreport a job that
+         * has since recovered as still broken.
+         */
         expect(afterSuccess?.lastError).toBeUndefined();
     });
 
@@ -170,8 +184,10 @@ describe('withLease', () => {
         expect(ran).toBe(false);
         expect(result).toBeUndefined();
 
-        // The existing holder's claim is untouched — a losing caller must not perturb the winner's
-        // document on its way to answering "someone else has it".
+        /**
+         * The existing holder's claim is untouched — a losing caller must not perturb the winner's
+         * document on its way to answering "someone else has it".
+         */
         const stored = await leaseModel.findById('scheduled-jobs-test.held').lean().exec();
         expect(stored?.owner).toBe('holder-a');
     });
@@ -188,8 +204,10 @@ describe('recordJobOutcome', () => {
 
         const stored = await leaseModel.findById('scheduled-jobs-test.outcome-only').lean().exec();
         expect(stored?.lastSuccessAt).toBeInstanceOf(Date);
-        // Immediately acquirable: `withLease`'s own query matches `expiresAt < now`, so a fresh
-        // outcome-only row must never block a real lease acquisition for the same name.
+        /**
+         * Immediately acquirable: `withLease`'s own query matches `expiresAt < now`, so a fresh
+         * outcome-only row must never block a real lease acquisition for the same name.
+         */
         expect(stored?.expiresAt.getTime()).toBeLessThan(Date.now());
     });
 

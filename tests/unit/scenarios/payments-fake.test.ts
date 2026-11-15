@@ -25,7 +25,9 @@ import {
     WebhookRejected
 } from '@modules/payments/providers';
 
+/** A charge of 1000.00 in euro. */
 const charge = { amount: '1000.00', currency: 'eur' };
+/** The order and payment ids the fake provider echoes back. */
 const metadata = { orderId: 'order-1', paymentId: 'payment-1' };
 
 describe('fakePaymentProvider.prepare', () => {
@@ -128,8 +130,10 @@ describe('fakePaymentProvider.retrieve', () => {
     });
 
     it('settles nothing for an intent it does not know', async () => {
-        // `open` is the status that moves no money and asks nothing of the hold, which is what an
-        // unknown reference — never confirmed, a restarted process, a second worker — must answer.
+        /**
+         * `open` is the status that moves no money and asks nothing of the hold, which is what an
+         * unknown reference — never confirmed, a restarted process, a second worker — must answer.
+         */
         await expect(fakePaymentProvider.retrieve('fake_pi_unknown')).resolves.toMatchObject({
             status: 'open'
         });

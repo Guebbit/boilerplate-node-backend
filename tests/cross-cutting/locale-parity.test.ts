@@ -38,20 +38,24 @@ const flattenKeys = (dictionary: Record<string, unknown>, prefix = ''): string[]
         )
         .toSorted();
 
+/** The languages the backend lists as supported. */
 const supported = listSupportedLocales();
 
-/*
+/**
  * One language is the reference and the rest are compared to it — any of them would do, since
  * "they all declare the same keys" is symmetric, and comparing every pair would report the same
  * defect once per pair.
  */
 const [reference = 'en', ...others] = supported;
+/** Every key of the reference language; the others must have the same. */
 const referenceKeys = flattenKeys(readLocaleDictionary(reference));
 
 describe('locale files', () => {
     it('has more than one language to compare, so the assertions below are not vacuous', () => {
-        // A canary. With a single supported locale `others` is empty, `it.each` runs zero cases,
-        // and this file would pass while checking nothing.
+        /**
+         * A canary. With a single supported locale `others` is empty, `it.each` runs zero cases,
+         * and this file would pass while checking nothing.
+         */
         expect(supported.length).toBeGreaterThan(1);
     });
 
@@ -60,8 +64,10 @@ describe('locale files', () => {
     });
 
     it('carries more than the shared dictionary, so the module merge actually ran', () => {
-        // A canary: if `registerLocaleDirectories` were never called, every language would still
-        // agree — on the shared half alone — and the parity assertion above would pass vacuously.
+        /**
+         * A canary: if `registerLocaleDirectories` were never called, every language would still
+         * agree — on the shared half alone — and the parity assertion above would pass vacuously.
+         */
         expect(referenceKeys.length).toBeGreaterThan(20);
     });
 });

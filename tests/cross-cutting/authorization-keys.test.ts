@@ -25,12 +25,15 @@ import {
 } from '@kernel/permissions';
 import { ERROR_CODES } from '@api/error-codes';
 
+/** Every permission rule id the code declares. */
 const declared = new Set(PERMISSION_RULES.map((rule) => rule.id));
+/** One role lookup per audience name. */
 const audiences: RoleLookup[] = AUDIENCE_NAMES.map((name) => ({
     name,
     scope: 'tenant',
     permissions: AUDIENCE_ROLES[name].permissions
 }));
+/** Every role whose permission keys must be declared: presets plus audiences. */
 const roles: RoleLookup[] = [...PRESET_ROLES, ...audiences];
 
 describe('the declared rules', () => {
@@ -121,21 +124,25 @@ describe('the preset roles', () => {
             (role) => role.scope === 'tenant' && isUnrestrictedRole(role.name, role.scope)
         );
 
-        // `system` lists `admin`'s own sets via a YAML alias in `authorization-roles.yaml`, so it
-        // is unrestricted for the identical reason and can never drift from it — see
-        // `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
+        /**
+         * `system` lists `admin`'s own sets via a YAML alias in `authorization-roles.yaml`, so it
+         * is unrestricted for the identical reason and can never drift from it — see
+         * `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
+         */
         expect(unrestricted.map((role) => role.name)).toEqual(['admin', 'system']);
     });
 
-    // "Unrestricted" is a derived fact — holds every rule its own scope currently declares — not
-    // a token, so it can be trivially true where a scope declares very few rules. `operator` is
-    // the honest example: platform scope has exactly one declared rule today
-    // (`read:ObservabilitySnapshot`), so holding it alone already satisfies "every platform
-    // rule". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
-    // tenant rule, so it cannot touch a single shop's content, which is the invariant that
-    // actually matters and is asserted elsewhere (`shared/rules/authorization-roles.yaml`'s own
-    // description, and the contract suite). This pins today's fact so a second platform rule being
-    // declared — which would make it false — is a deliberate change to notice, not a surprise.
+    /**
+     * "Unrestricted" is a derived fact — holds every rule its own scope currently declares — not
+     * a token, so it can be trivially true where a scope declares very few rules. `operator` is
+     * the honest example: platform scope has exactly one declared rule today
+     * (`read:ObservabilitySnapshot`), so holding it alone already satisfies "every platform
+     * rule". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
+     * tenant rule, so it cannot touch a single shop's content, which is the invariant that
+     * actually matters and is asserted elsewhere (`shared/rules/authorization-roles.yaml`'s own
+     * description, and the contract suite). This pins today's fact so a second platform rule being
+     * declared — which would make it false — is a deliberate change to notice, not a surprise.
+     */
     it('marks operator unrestricted in platform scope, today — one declared platform rule', () => {
         const platformRules = PERMISSION_RULES.filter((rule) => rule.scope === 'platform');
         expect(platformRules).toHaveLength(1);

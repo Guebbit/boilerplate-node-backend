@@ -24,7 +24,9 @@ import {
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
+/** The content type of a JSON body. */
 const JSON_TYPE = 'application/json';
+/** The content type of a multipart form. */
 const FORM_TYPE = 'multipart/form-data';
 
 /**
@@ -80,8 +82,10 @@ describe('readInput', () => {
         });
 
         it('reads the lower-precedence source when the higher one is absent', () => {
-            // `write` is params-then-body: the ordering only shows when both are populated, so the
-            // fallback needs its own case or a reversed precedence would still pass above.
+            /**
+             * `write` is params-then-body: the ordering only shows when both are populated, so the
+             * fallback needs its own case or a reversed precedence would still pass above.
+             */
             const request = makeRequest({ body: { text: 'body' }, contentType: JSON_TYPE });
 
             expect(readInput(request, { surface: 'write' }).text).toBe('body');
@@ -101,9 +105,11 @@ describe('readInput', () => {
         });
 
         it('ignores sources the surface does not read', () => {
-            // `path` reads params only, so a query the caller sent is not merely lower precedence —
-            // it is invisible. That is what makes `DELETE /cart/items/{productId}` unable to take an id
-            // from anywhere but its path.
+            /**
+             * `path` reads params only, so a query the caller sent is not merely lower precedence —
+             * it is invisible. That is what makes `DELETE /cart/items/{productId}` unable to take an id
+             * from anywhere but its path.
+             */
             const request = makeRequest({
                 params: { productId: 'params' },
                 query: { hardDelete: 'true' },
@@ -114,8 +120,10 @@ describe('readInput', () => {
             expect(readInput(request, { surface: 'path' })).toEqual({ productId: 'params' });
         });
 
-        // A spread keeps keys whose value is undefined, and Mongoose would read such a key as a
-        // `field: undefined` filter clause instead of ignoring it.
+        /**
+         * A spread keeps keys whose value is undefined, and Mongoose would read such a key as a
+         * `field: undefined` filter clause instead of ignoring it.
+         */
         it('drops keys whose value is explicitly undefined', () => {
             const request = makeRequest({
                 body: { text: undefined },
@@ -135,10 +143,12 @@ describe('readInput', () => {
             expect(readInput(request, { surface: 'search' })).toEqual({ page: '1' });
         });
 
-        // Nothing is defaulted or bounded here, so `undefined` still means "did not paginate".
-        // Defaults, the 1-100 bounds and the NODE_SETTINGS_PAGINATION_PAGE_SIZE fallback all live
-        // in `normalizePagination` (@infrastructure/persistence/search), which runs on every search — see
-        // tests/cross-cutting/search-pagination.test.ts.
+        /**
+         * Nothing is defaulted or bounded here, so `undefined` still means "did not paginate".
+         * Defaults, the 1-100 bounds and the NODE_SETTINGS_PAGINATION_PAGE_SIZE fallback all live
+         * in `normalizePagination` (@infrastructure/persistence/search), which runs on every search — see
+         * tests/cross-cutting/search-pagination.test.ts.
+         */
         it('reports absent pagination as absent, not as a default', () => {
             const input = readInput(makeRequest(), { surface: 'search' });
 
@@ -168,8 +178,10 @@ describe('readInput', () => {
             );
         });
 
-        // express 5 gives `undefined` for a body-less request, so reading a body key before
-        // precedence is applied throws rather than falling through to `params`.
+        /**
+         * express 5 gives `undefined` for a body-less request, so reading a body key before
+         * precedence is applied throws rather than falling through to `params`.
+         */
         it('reads the route param when the request has no body at all', () => {
             const request = makeRequest({ params: { productId: OBJECT_ID } });
 
@@ -195,8 +207,10 @@ describe('readInput', () => {
             expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toBe('');
         });
 
-        // A repeated id is a malformed id: it stays an array, so the id check answers 422 instead
-        // of silently picking an entry.
+        /**
+         * A repeated id is a malformed id: it stays an array, so the id check answers 422 instead
+         * of silently picking an entry.
+         */
         it('keeps a repeated key as the array it arrived as', () => {
             const request = makeRequest({
                 body: { id: [OBJECT_ID, 'second'] },
@@ -235,7 +249,7 @@ describe('readInput', () => {
             ).toEqual({ active: false, categories: ['tools'], tags: ['a', 'b'] });
         });
 
-        /*
+        /**
          * Numbers, for the same reason as booleans: a multipart body carries no types, so a
          * numeric field arrives as a string and a schema declaring `z.number()` rejects it. The
          * only such field in this API is `price`, on the image-carrying product routes.
@@ -254,16 +268,20 @@ describe('readInput', () => {
         it('leaves an unparseable number as the string it was', () => {
             const request = makeRequest({ body: { price: 'abc' }, contentType: FORM_TYPE });
 
-            // Not `NaN`: the validator downstream has to reject the caller's actual input with the
-            // contract's own message, rather than this layer inventing a value to be rejected.
+            /**
+             * Not `NaN`: the validator downstream has to reject the caller's actual input with the
+             * contract's own message, rather than this layer inventing a value to be rejected.
+             */
             expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe('abc');
         });
 
         it('leaves a blank number alone rather than reading it as zero', () => {
             const request = makeRequest({ body: { price: '' }, contentType: FORM_TYPE });
 
-            // `Number('')` is 0. An empty form field means "not sent", and a free product is a
-            // legal price — so coercing here would turn a missing value into a valid one.
+            /**
+             * `Number('')` is 0. An empty form field means "not sent", and a free product is a
+             * legal price — so coercing here would turn a missing value into a valid one.
+             */
             expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe('');
         });
 
@@ -273,8 +291,10 @@ describe('readInput', () => {
             expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe(0);
         });
 
-        // The reason the rule is transport-conditional: a JSON body already carries its types,
-        // and decoding it would destroy the type error the validator has to see.
+        /**
+         * The reason the rule is transport-conditional: a JSON body already carries its types,
+         * and decoding it would destroy the type error the validator has to see.
+         */
         it('leaves a JSON number string untouched, so the validator still sees the violation', () => {
             const request = makeRequest({ body: { price: '101' }, contentType: JSON_TYPE });
 
@@ -296,8 +316,10 @@ describe('readInput', () => {
             ).toEqual({ active: 'not-a-boolean', categories: 42 });
         });
 
-        // express answers `null`, not `false`, when the request carries no body — a distinction
-        // that has to be flattened, or a body-less request would be treated as a form.
+        /**
+         * express answers `null`, not `false`, when the request carries no body — a distinction
+         * that has to be flattened, or a body-less request would be treated as a form.
+         */
         it('does not treat a body with no declared content type as a form', () => {
             const request = makeRequest({ body: { active: 'false' } });
 
@@ -325,9 +347,11 @@ describe('readInput', () => {
             );
         });
 
-        // Passing it through untouched is what lets the validator answer 422. Coercing it to
-        // `true` — as `!!value` did — is how a wrong-typed field became a stored `true`. The
-        // empty string is neither true nor false: an empty form field must not become `true`.
+        /**
+         * Passing it through untouched is what lets the validator answer 422. Coercing it to
+         * `true` — as `!!value` did — is how a wrong-typed field became a stored `true`. The
+         * empty string is neither true nor false: an empty form field must not become `true`.
+         */
         it.each(['not-a-boolean', ''])(
             'passes the unrecognisable multipart value %p through for the validator to reject',
             (value) => {
@@ -350,8 +374,10 @@ describe('readInput', () => {
             }
         );
 
-        // Defaulting an absent field would turn a partial update into a full overwrite: the
-        // service layer only assigns what is defined, so `[]` here would wipe the stored tags.
+        /**
+         * Defaulting an absent field would turn a partial update into a full overwrite: the
+         * service layer only assigns what is defined, so `[]` here would wipe the stored tags.
+         */
         it.each([JSON_TYPE, FORM_TYPE])('leaves an absent field absent (%s)', (contentType) => {
             const request = makeRequest({ body: {}, contentType });
 
@@ -431,8 +457,10 @@ describe('readInput', () => {
             expect('hardDelete' in input).toBe(false);
         });
 
-        // The path form wins over a contradictory query: `/products/x/hard?hardDelete=false` is
-        // a caller arguing with themselves, and the URL they aimed at is the more explicit one.
+        /**
+         * The path form wins over a contradictory query: `/products/x/hard?hardDelete=false` is
+         * a caller arguing with themselves, and the URL they aimed at is the more explicit one.
+         */
         it('applies the declared precedence to a decoded value', () => {
             const request = makeRequest({
                 params: { hardDelete: 'true' },
@@ -442,9 +470,11 @@ describe('readInput', () => {
             expect(readInput(request, declaration).hardDelete).toBe(true);
         });
 
-        // `false` from a higher-precedence source has to survive the undefined-dropping pass —
-        // it is a value, not an absence. This is the plain `booleans` rule; `hardDelete` as the
-        // delete controller declares it is `anyTrue` and answers `true` here — see below.
+        /**
+         * `false` from a higher-precedence source has to survive the undefined-dropping pass —
+         * it is a value, not an absence. This is the plain `booleans` rule; `hardDelete` as the
+         * delete controller declares it is `anyTrue` and answers `true` here — see below.
+         */
         it('does not let a decoded false fall through to a lower source', () => {
             const request = makeRequest({
                 query: { hardDelete: 'false' },
@@ -515,8 +545,10 @@ describe('readInput', () => {
             expect('hardDelete' in readInput(makeRequest(), declaration)).toBe(false);
         });
 
-        // `?hardDelete=` is an untouched form field, not a statement of false — the same reading
-        // `hardDeleteSchema` gives it. Were it counted, it would silently veto the body.
+        /**
+         * `?hardDelete=` is an untouched form field, not a statement of false — the same reading
+         * `hardDeleteSchema` gives it. Were it counted, it would silently veto the body.
+         */
         it('does not let a blank query entry outvote a stated true', () => {
             expect(
                 read(
@@ -528,8 +560,10 @@ describe('readInput', () => {
             ).toBe(true);
         });
 
-        // The safety property: OR must not become a way to launder a malformed value into a
-        // destroy. The undecodable value reaches the schema and answers 422.
+        /**
+         * The safety property: OR must not become a way to launder a malformed value into a
+         * destroy. The undecodable value reaches the schema and answers 422.
+         */
         it('passes an undecodable value through even when another source says true', () => {
             expect(
                 read(
@@ -623,10 +657,12 @@ describe('parseFormBoolean', () => {
     });
 
     it('does not resolve to an inherited Object.prototype member', () => {
-        // The defect this closes: a plain-object lookup keyed on user input, `word in
-        // FORM_BOOLEANS`, is true for 'constructor' because every object inherits it from
-        // `Object.prototype` — so `?flag=constructor` decoded to the Object constructor function
-        // rather than reaching the validator as an unrecognised string.
+        /**
+         * The defect this closes: a plain-object lookup keyed on user input, `word in
+         * FORM_BOOLEANS`, is true for 'constructor' because every object inherits it from
+         * `Object.prototype` — so `?flag=constructor` decoded to the Object constructor function
+         * rather than reaching the validator as an unrecognised string.
+         */
         expect(parseFormBoolean('constructor')).toBe('constructor');
         expect(parseFormBoolean('toString')).toBe('toString');
         expect(parseFormBoolean('__proto__')).toBe('__proto__');
@@ -654,8 +690,10 @@ const makeCallerRequest = (
         ip: overrides.ip,
         headers: overrides.headers ?? {},
         authContext: overrides.authContext,
-        // Both, because `getAuth` sets both. A stub carrying only the session would let the
-        // context be built from a caller nothing ever resolved.
+        /**
+         * Both, because `getAuth` sets both. A stub carrying only the session would let the
+         * context be built from a caller nothing ever resolved.
+         */
         caller: overrides.authContext && callerInScope(overrides.authContext, 'tenant'),
         requestId: overrides.requestId
     });
@@ -672,11 +710,15 @@ describe('callerContextOf', () => {
         );
 
         expect(context).toEqual({
-            // The CALLER, not the session: an audit row and an analytics event are about which
-            // keys were held, and identity beyond the id is nobody's business downstream.
+            /**
+             * The CALLER, not the session: an audit row and an analytics event are about which
+             * keys were held, and identity beyond the id is nobody's business downstream.
+             */
             caller: callerInScope(asCustomer('user-1'), 'tenant'),
-            // A customer holds no STAFF role, so there is no name behind that caller — see
-            // `actorRoleName`'s docblock on `CallerContext`.
+            /**
+             * A customer holds no STAFF role, so there is no name behind that caller — see
+             * `actorRoleName`'s docblock on `CallerContext`.
+             */
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',
@@ -696,11 +738,13 @@ describe('callerContextOf', () => {
     it('defaults to a caller who proved nothing when the request carries no auth context', () => {
         const context = callerContextOf(makeCallerRequest({ ip: '9.9.9.9' }));
 
-        // Not the `guest` ROLE: this is what the trail records for a request the resolver never
-        // saw, and an empty key list is the honest answer to "what had this request proved".
-        // `scope: 'platform'` is not a claim about which world the request acts in — the empty
-        // permissions list makes every scope-gated check fail alike — it is the branch of the
-        // `Caller` union that needs no tenant id; see `STRANGER`'s own comment.
+        /**
+         * Not the `guest` ROLE: this is what the trail records for a request the resolver never
+         * saw, and an empty key list is the honest answer to "what had this request proved".
+         * `scope: 'platform'` is not a claim about which world the request acts in — the empty
+         * permissions list makes every scope-gated check fail alike — it is the branch of the
+         * `Caller` union that needs no tenant id; see `STRANGER`'s own comment.
+         */
         expect(context.caller).toEqual({
             id: null,
             tenantId: null,

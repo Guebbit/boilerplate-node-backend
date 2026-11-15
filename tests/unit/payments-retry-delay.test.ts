@@ -5,6 +5,7 @@
 
 import { nextRefundAttemptAt } from '@modules/payments/domain';
 
+/** The instant the retry delay is counted from. */
 const NOW = new Date('2026-01-01T00:00:00Z');
 
 describe('nextRefundAttemptAt', () => {

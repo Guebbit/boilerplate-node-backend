@@ -9,7 +9,7 @@
  * not of this repo's code. This file's job is proving `src/app/security.ts` itself applied
  * `NODE_TRUST_PROXY_HOPS`, which only the real, fully-wired app can show.
  *
- * @see docs/understand/security.md
+ * @see docs/understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
  */
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -22,7 +22,7 @@ const remainingOf = (response: Response): number =>
     Number(/"global";r=(\d+)/.exec(response.headers.ratelimit ?? '')?.[1]);
 
 describe('helmet', () => {
-    /*
+    /**
      * One case on a plain API response, not a full-set assertion — that breaks on every helmet
      * upgrade and teaches nothing. `upload-security.test.ts` already covers the STATIC asset path,
      * which `src/app/static-assets.ts` configures deliberately differently (a relaxed

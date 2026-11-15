@@ -20,8 +20,10 @@ const moduleFolders = (): string[] =>
 
 describe('modules are enabled', () => {
     it('finds folders to check', () => {
-        // The canary. An empty sweep must mean "no modules exist", which would itself be a
-        // finding — not "the sweep broke and every assertion below passed vacuously".
+        /**
+         * The canary. An empty sweep must mean "no modules exist", which would itself be a
+         * finding — not "the sweep broke and every assertion below passed vacuously".
+         */
         expect(moduleFolders().length).toBeGreaterThan(0);
     });
 

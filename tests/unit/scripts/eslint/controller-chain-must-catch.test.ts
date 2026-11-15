@@ -5,6 +5,7 @@
 import { RuleTester } from 'eslint';
 import { controllerChainMustCatch } from '../../../../scripts/eslint/controller-chain-must-catch';
 
+/** Runs the rule against its valid and invalid snippets. */
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }
 });

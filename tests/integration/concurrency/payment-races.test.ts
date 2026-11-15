@@ -36,8 +36,10 @@ import { onDomainEvent } from '@kernel/events';
 import { relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
-// No real Chromium here: the placed-order email renders an invoice, and the stub would log a
-// failed render for every checkout below. Same stand-in the orders contract suite uses.
+/**
+ * No real Chromium here: the placed-order email renders an invoice, and the stub would log a
+ * failed render for every checkout below. Same stand-in the orders contract suite uses.
+ */
 jest.mock('@infrastructure/adapters/pdf', () => ({
     renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
 }));
@@ -103,7 +105,6 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
 /**
  * The provider's reference for a payment, read off the row — it is deliberately not published.
  *
- * @param paymentId - the payment
  */
 const providerRefOf = (paymentId: string) =>
     paymentModel
@@ -209,8 +210,10 @@ describe('P3 — the webhook racing the browser confirm', () => {
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const succeededFor = countSucceededEvents();
 
-        // Half confirms, half distinct webhook events — distinct ids, so the event claim cannot
-        // be what saves it; only the conditional settlement writes can.
+        /**
+         * Half confirms, half distinct webhook events — distinct ids, so the event claim cannot
+         * be what saves it; only the conditional settlement writes can.
+         */
         const results = await raceN(RACE_SIZE, (index) =>
             index % 2 === 0
                 ? api()
@@ -273,7 +276,7 @@ describe('P4 — more buyers than units, all at once', () => {
 const SEQUENTIAL_OUTCOMES = ['canceled/canceled', 'canceled/refunded'];
 
 describe('P5 — a customer cancelling while the payment settles', () => {
-    /*
+    /**
      * Each order races its own cancel against its own confirm, several orders at once so the
      * interleavings vary. Which side wins is the database's business. Every order ends canceled
      * (a customer may cancel a paid order, and a write conflict is retried): either never
@@ -307,8 +310,10 @@ describe('P5 — a customer cancelling while the payment settles', () => {
         for (const { orderId, paymentId } of orders) {
             const order = await orderModel.findById(orderId);
             const payment = await paymentModel.findById(paymentId);
-            // `displayStatusOf` says `refunded` only when no refund is still open and the refunds
-            // add up to the amount; `amountRefunded` alone counts a refund the moment it opens.
+            /**
+             * `displayStatusOf` says `refunded` only when no refund is still open and the refunds
+             * add up to the amount; `amountRefunded` alone counts a refund the moment it opens.
+             */
             outcomes.push(
                 `${orderId} ${String(order?.status)}/${payment ? displayStatusOf(payment) : 'missing'}`
             );

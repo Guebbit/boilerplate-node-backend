@@ -16,6 +16,7 @@ setupTestDb();
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
+/** Stores a translation for the given product and locale. */
 const givenTranslation = (productId: string, locale: string, title: string) =>
     translationRepository.upsertEntityLocale(
         'product',

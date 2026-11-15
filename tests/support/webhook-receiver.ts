@@ -89,8 +89,10 @@ export const startWebhookReceiver = async (): Promise<WebhookReceiver> => {
             }),
         stop: async () => {
             clearSsrfExemptOrigins();
-            // Node >= 24.5: puts the process-wide roots back so the sink's CA never outlives the
-            // case. https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+            /**
+             * Node >= 24.5: puts the process-wide roots back so the sink's CA never outlives the
+             * case. https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+             */
             tls.setDefaultCACertificates(originalRoots);
             await server.close();
         }

@@ -160,9 +160,11 @@ const mockSetCache = (ttl: number, options?: Record<string, unknown>) =>
         `setCache(${ttl}, tags=[${list(options?.tags as unknown[])}], ` +
             `keyParameters=[${list(options?.keyParameters as unknown[])}], ` +
             `keyAs=${text(options?.keyAs)}, ` +
-            // `browserRevalidate` decides whether an editor sees their own save. It is a
-            // separate failure from a wrong tag — Redis is cleared either way, and the stale copy
-            // is the one already in the browser — so it is recorded separately.
+            /**
+             * `browserRevalidate` decides whether an editor sees their own save. It is a
+             * separate failure from a wrong tag — Redis is cleared either way, and the stale copy
+             * is the one already in the browser — so it is recorded separately.
+             */
             `browserRevalidate=${text(options?.browserRevalidate ?? false)})`
     );
 
@@ -190,10 +192,12 @@ const mockSearchCache = (
  * without a real store.
  */
 export const cacheMock = () => ({
-    // Spread the real module first: `noStore` is exported from here too and is mounted directly
-    // rather than through a factory, so it has a name already and must keep working. Replacing
-    // the whole module with a handful of keys would leave `account`'s `router.use(noStore)`
-    // undefined.
+    /**
+     * Spread the real module first: `noStore` is exported from here too and is mounted directly
+     * rather than through a factory, so it has a name already and must keep working. Replacing
+     * the whole module with a handful of keys would leave `account`'s `router.use(noStore)`
+     * undefined.
+     */
     ...jest.requireActual<typeof import('@infrastructure/http/middlewares/cache')>(
         '@infrastructure/http/middlewares/cache'
     ),
@@ -294,9 +298,11 @@ export const storageMock = () => {
  * Passing it there is more informative than falling straight to the literal `'(anonymous)'`.
  */
 const handlerName = (handle: LabelledMiddleware, layerName?: string): string =>
-    // `||`, not `??`: an inline arrow handler has a `name` of `''` rather than `undefined`, and
-    // `??` would keep the empty string — turning every inline handler into a blank entry that
-    // reads, in a failure diff, as if the route had no handler at all.
+    /**
+     * `||`, not `??`: an inline arrow handler has a `name` of `''` rather than `undefined`, and
+     * `??` would keep the empty string — turning every inline handler into a blank entry that
+     * reads, in a failure diff, as if the route had no handler at all.
+     */
     handle[ROUTE_LABEL] ?? (handle.name || layerName || '(anonymous)');
 
 /** One layer of `router.stack`, route or `use`, as far as the walker below needs it. */
@@ -329,9 +335,11 @@ const walk = (
 ): { rows: (RouteRow & { applies: string[] })[]; middleware: string[] } => {
     const layers = asStub<{ stack: Layer[] }>(router).stack;
     const applies: string[] = [];
-    // Parallel to `applies`, kept only long enough to read `.permission` back off a
-    // `router.use(..., requirePermission('read', 'Stats'))` layer — the string form has already thrown that
-    // away by the time a row is built.
+    /**
+     * Parallel to `applies`, kept only long enough to read `.permission` back off a
+     * `router.use(..., requirePermission('read', 'Stats'))` layer — the string form has already thrown that
+     * away by the time a row is built.
+     */
     const appliesHandles: LabelledMiddleware[] = [];
     const rows: (RouteRow & { applies: string[] })[] = [];
 
@@ -358,8 +366,10 @@ const walk = (
             });
     }
 
-    // `applies` by now holds every `use` layer seen, route-adjacent or not — the full sweep
-    // `routerMiddleware` wants, including one mounted below the last route.
+    /**
+     * `applies` by now holds every `use` layer seen, route-adjacent or not — the full sweep
+     * `routerMiddleware` wants, including one mounted below the last route.
+     */
     return { rows, middleware: applies };
 };
 

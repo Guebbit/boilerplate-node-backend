@@ -16,9 +16,10 @@ const mockedResolveMx = jest.fn();
 
 /** The A and AAAA lookups of the RFC 5321 fallback — mocked for the same reason. */
 const mockedResolve4 = jest.fn();
+/** Stands in for the IPv6 lookup; a case picks the answer. */
 const mockedResolve6 = jest.fn();
 
-/*
+/**
  * The adapter builds its resolver at import, before this file's own `const`s exist — so the
  * options it was built with are kept inside the mock, and read back with `jest.requireMock`.
  */
@@ -96,8 +97,10 @@ describe('checkEmailPolicy', () => {
         });
 
         it('does not check MX records', async () => {
-            // A domain with no MX record at all still passes under `disposable` — that check is
-            // `mx`-only.
+            /**
+             * A domain with no MX record at all still passes under `disposable` — that check is
+             * `mx`-only.
+             */
             await expect(
                 checkEmailPolicy('someone@this-domain-does-not-exist.invalid')
             ).resolves.toBe('ok');

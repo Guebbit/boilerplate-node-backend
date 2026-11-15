@@ -22,6 +22,7 @@ import type { AuthContext } from '@types';
 import { requireFreshAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { withEnvironmentOverrides } from '@tests/environment';
 
+/** Stands in for the audit emitter; the cases assert how it was called. */
 const emitAuditEvent = jest.fn();
 
 jest.mock('@infrastructure/observability/audit', () => {
@@ -31,9 +32,11 @@ jest.mock('@infrastructure/observability/audit', () => {
     return {
         ...actual,
         emitAuditEvent: (...args: unknown[]) => emitAuditEvent(...args),
-        // `requirePermission`'s step-up path calls `recordAudit`, which closes over its own
-        // module's real `emitAuditEvent` — immune to the override above. Reroute it through the
-        // wrapped one so this file's assertions still see it.
+        /**
+         * `requirePermission`'s step-up path calls `recordAudit`, which closes over its own
+         * module's real `emitAuditEvent` — immune to the override above. Reroute it through the
+         * wrapped one so this file's assertions still see it.
+         */
         recordAudit: (
             context: Parameters<typeof actual.recordAudit>[0],
             fields: Parameters<typeof actual.recordAudit>[1]
@@ -44,8 +47,10 @@ jest.mock('@infrastructure/observability/audit', () => {
     };
 });
 
+/** The current time in epoch seconds, as a token claim carries it. */
 const NOW = () => Math.floor(Date.now() / 1000);
 
+/** A request stub; a case overrides only the fields it tests. */
 const makeRequest = (context: AuthContext) =>
     asStub<Request>({
         authContext: context,
@@ -55,6 +60,7 @@ const makeRequest = (context: AuthContext) =>
         headers: {}
     });
 
+/** A response stub that records what the code under test sets and sends. */
 const makeResponse = makeResponseStub;
 
 beforeEach(() => emitAuditEvent.mockClear());
@@ -83,8 +89,10 @@ describe('a key that demands step-up', () => {
             asStub<NextFunction>(next)
         );
 
-        // 401 because the status names the client's next move, and "authenticate and try again"
-        // is the literal definition of step-up.
+        /**
+         * 401 because the status names the client's next move, and "authenticate and try again"
+         * is the literal definition of step-up.
+         */
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
     });
@@ -117,8 +125,10 @@ describe('a key that demands step-up', () => {
             asStub<NextFunction>(jest.fn())
         );
 
-        // The header for anything that speaks OAuth; the envelope code for this app's own clients,
-        // which read `errors[].code` and never the header.
+        /**
+         * The header for anything that speaks OAuth; the envelope code for this app's own clients,
+         * which read `errors[].code` and never the header.
+         */
         expect(response.setHeader).toHaveBeenCalledWith(
             'WWW-Authenticate',
             expect.stringContaining('insufficient_user_authentication')
@@ -160,8 +170,10 @@ describe('a key that demands step-up', () => {
             asStub<NextFunction>(jest.fn())
         );
 
-        // 403, not 401. Telling somebody to re-authenticate for an action they could never take
-        // either way hands them a fact about the model they had not earned.
+        /**
+         * 403, not 401. Telling somebody to re-authenticate for an action they could never take
+         * either way hands them a fact about the model they had not earned.
+         */
         expect(response.status).toHaveBeenCalledWith(403);
         expect(emitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({ action: 'security.forbidden' })
@@ -179,8 +191,10 @@ describe('a key that does not demand step-up', () => {
             asStub<NextFunction>(next)
         );
 
-        // A challenge people learn to dismiss protects nothing, which is why almost no key
-        // carries one.
+        /**
+         * A challenge people learn to dismiss protects nothing, which is why almost no key
+         * carries one.
+         */
         expect(next).toHaveBeenCalledTimes(1);
     });
 });

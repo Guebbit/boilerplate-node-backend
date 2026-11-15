@@ -22,6 +22,7 @@ import { logger } from '@infrastructure/adapters/logger';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({ sendTemplatedEmail: jest.fn() }));
 
+/** Stands in for discarding a spooled attachment; the cases assert how it was called. */
 const discardSpooledMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@infrastructure/adapters/mail-spool', () => ({
     discardSpooled: (key: string) => discardSpooledMock(key)
@@ -35,6 +36,7 @@ import {
 } from '@infrastructure/adapters/email.worker';
 import { asStub } from '@tests/stub';
 
+/** The templated mailer, mocked: the worker is tested, not SMTP. */
 const mockedMailer = sendTemplatedEmail as jest.MockedFunction<typeof sendTemplatedEmail>;
 
 beforeEach(() => {
@@ -67,9 +69,11 @@ describe('handleEmailJob', () => {
         mockedMailer.mockResolvedValue(undefined);
 
         await expect(handleEmailJob(job)).resolves.toBe(true);
-        // The producer resolved the copy before publishing, so the worker forwards `data`
-        // untouched — re-resolving it here would render in the worker's language, not the
-        // requester's.
+        /**
+         * The producer resolved the copy before publishing, so the worker forwards `data`
+         * untouched — re-resolving it here would render in the worker's language, not the
+         * requester's.
+         */
         expect(mockedMailer).toHaveBeenCalledWith(job.request, 'welcome', { name: 'Ada' });
     });
 
@@ -81,7 +85,7 @@ describe('handleEmailJob', () => {
         expect(mockedMailer).toHaveBeenCalledWith(job.request, 'welcome', {});
     });
 
-    /*
+    /**
      * Every payload the guard rejects. `Partial` is honest about the broker: an older producer, or
      * a hand-published message, can deliver any of these — and each must be discarded rather than
      * reaching nodemailer with a missing recipient.
@@ -119,16 +123,20 @@ describe('handleEmailJob', () => {
         const failure = new Error('SMTP refused');
         mockedMailer.mockRejectedValue(failure);
 
-        // Not `false`. A refused connection, a timeout, greylisting — none of them are facts about
-        // this job, and `consumeFromQueue` requeues a rejection for exactly that reason. Answering
-        // `false` here dead-letters a password reset because SMTP blinked.
+        /**
+         * Not `false`. A refused connection, a timeout, greylisting — none of them are facts about
+         * this job, and `consumeFromQueue` requeues a rejection for exactly that reason. Answering
+         * `false` here dead-letters a password reset because SMTP blinked.
+         */
         await expect(handleEmailJob(job)).rejects.toThrow('SMTP refused');
-        // Logged on the way out: the requeue is what saves the email, the log is what makes a job
-        // that keeps failing visible instead of a queue that quietly refills.
+        /**
+         * Logged on the way out: the requeue is what saves the email, the log is what makes a job
+         * that keeps failing visible instead of a queue that quietly refills.
+         */
         expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: failure }));
     });
 
-    /*
+    /**
      * `sendTemplatedEmail()` itself never discards any more — a retried attempt needs its
      * attachment intact. These pin the two outcomes this worker treats as final, and the one it
      * does not.

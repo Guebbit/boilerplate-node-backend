@@ -801,7 +801,6 @@ describe('a hard delete is fenced, not only checked', () => {
 
 /**
  * One of {@link RESOURCES} by name.
- * @param name - the resource's `name`
  */
 const resourceNamed = (name: string): Resource => {
     const found = RESOURCES.find((resource) => resource.name === name);

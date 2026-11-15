@@ -43,6 +43,7 @@ const parsed: unknown = parse(readFileSync(path.join(REPO_ROOT, 'compose.proxy.y
 if (!isOverlay(parsed))
     throw new Error('[proxy-overlay] compose.proxy.yaml did not parse to an object.');
 
+/** The proxy and app services of the overlay. */
 const { traefik, app } = parsed.services;
 
 /**
@@ -56,7 +57,7 @@ const flagMs = (flag: string): number => {
 };
 
 describe('the Traefik overlay', () => {
-    /*
+    /**
      * The Docker API behind the socket is root on the host, and `:ro` only protects the socket file.
      * The file provider reads routes from a directory instead.
      */
@@ -67,7 +68,7 @@ describe('the Traefik overlay', () => {
         expect(traefik?.command).toContain('--providers.file.watch=true');
     });
 
-    /*
+    /**
      * `clients/` holds every client's secrets; the routes directory holds nothing but routes.
      */
     it('mounts only the routes directory, read-only, and never the clients', () => {
@@ -85,7 +86,7 @@ describe('the Traefik overlay', () => {
         );
     });
 
-    /*
+    /**
      * With a hop count of 0 every client is the proxy: the per-address login budgets become
      * site-wide. A client env file that sets its own value must still win, hence `:-`.
      */
@@ -93,7 +94,7 @@ describe('the Traefik overlay', () => {
         expect(app?.environment?.NODE_TRUST_PROXY_HOPS).toBe('${NODE_TRUST_PROXY_HOPS:-1}');
     });
 
-    /*
+    /**
      * Client env files are copies of `.env-example`, and Compose's `:-` default applies only to an
      * unset variable: a shipped `NODE_TRUST_PROXY_HOPS=0` would override the overlay's `1`.
      */
@@ -103,7 +104,7 @@ describe('the Traefik overlay', () => {
         expect(envExample).not.toMatch(/^NODE_TRUST_PROXY_HOPS=/m);
     });
 
-    /*
+    /**
      * Traefik's read limit must outlast the app's, or it cuts a slow upload with no problem body;
      * its idle-to-app limit must be shorter, or it reuses a socket Node already closed (502).
      */
@@ -122,7 +123,7 @@ describe('the Traefik overlay', () => {
         );
     });
 
-    /*
+    /**
      * A bare `app` resolves on the shared network to every client's `app`; only the alias is unique.
      */
     it('names the app by a per-client alias and carries no routing labels', () => {

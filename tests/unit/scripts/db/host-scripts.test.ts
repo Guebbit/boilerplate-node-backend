@@ -9,6 +9,7 @@
 import { getDatabaseUri } from '@infrastructure/runtime/database';
 import { setEnvironment } from '@tests/environment';
 
+/** The variables that name the Mongo host, cleared and restored around each case. */
 const MONGO_VARS = [
     'NODE_DB_URI',
     'NODE_MONGODB_HOST',
@@ -48,8 +49,10 @@ describe('database URI resolution', () => {
         setEnvironment({ NODE_MONGODB_HOST: 'localhost' });
         setEnvironment({ NODE_MONGODB_NAME: 'my-actual-data' });
 
-        // A hardcoded URI would produce `…/boilerplate-node-backend` here, seeding a database the
-        // developer never heard of while their real one sat untouched.
+        /**
+         * A hardcoded URI would produce `…/boilerplate-node-backend` here, seeding a database the
+         * developer never heard of while their real one sat untouched.
+         */
         expect(getDatabaseUri()).toContain('/my-actual-data');
         expect(getDatabaseUri()).not.toContain('boilerplate-node-backend');
     });

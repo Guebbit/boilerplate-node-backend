@@ -71,6 +71,7 @@ const parsedCompose: unknown = parse(
 if (!isComposeFile(parsedCompose))
     throw new Error('[production-topology] compose.production.yaml did not parse to an object.');
 
+/** The production compose file, parsed. */
 const compose = parsedCompose;
 
 /** The whole multi-stage Dockerfile; the dev stage runs lifecycle scripts on purpose, so only slices of it are asserted on. */
@@ -133,7 +134,7 @@ const hostInterfaceOf = (port: PortMapping): string | undefined =>
     typeof port === 'string' ? /^(\[[^\]]+\]|[\d.]+):/.exec(port)?.[1] : port.host_ip;
 
 describe('production container logs are bounded', () => {
-    /*
+    /**
      * Without `max-size` the default driver writes forever and a busy API fills the host's disk
      * with its own log. Every service, the one-shot ones and the data stores included: a service
      * left out is the one that fills the disk.
@@ -147,7 +148,7 @@ describe('production container logs are bounded', () => {
 });
 
 describe('production containers are hardened', () => {
-    /*
+    /**
      * `read_only` turns a file-write primitive in the application into an error instead of a
      * foothold; `cap_drop: [ALL]` removes every Linux capability a Node process serving HTTP above
      * port 1024 never needs; `no-new-privileges` stops a setuid binary in the image raising
@@ -168,7 +169,7 @@ describe('production containers are hardened', () => {
 });
 
 describe('production data services are hardened, within what their entrypoints need', () => {
-    /*
+    /**
      * The official images start as root, `chown` their data directory and drop to their own user,
      * so unlike the three that run our code they cannot be `read_only` or capability-free. They
      * drop everything and take back only what that sequence uses; a service that keeps the full
@@ -194,7 +195,7 @@ describe('production data services are hardened, within what their entrypoints n
 });
 
 describe('production publishes no data port', () => {
-    /*
+    /**
      * A published port on Mongo, Redis or RabbitMQ is reachable from the host's network, which on
      * a cloud box usually means the internet. These three speak to `app` over the compose network
      * and need no host mapping at all — the absence of a `ports:` key IS the defence.
@@ -206,7 +207,7 @@ describe('production publishes no data port', () => {
         expect(service.ports ?? []).toEqual([]);
     });
 
-    /*
+    /**
      * `app` does publish, because something has to answer the reverse proxy. It must bind the
      * loopback interface explicitly: `'3000:3000'` listens on every interface, `'127.0.0.1:3000:3000'`
      * listens only where the proxy on the same host can reach it.
@@ -232,7 +233,7 @@ describe('production publishes no data port', () => {
 });
 
 describe('the bundled database can boot with wire TLS', () => {
-    /*
+    /**
      * mongod 8.3 refuses `--tlsMode requireTLS` without a chain of trust (SERVER-72839), which
      * `--tlsCertificateKeyFile` alone is not. `--tlsCAFile` supplies it, and
      * `--tlsAllowConnectionsWithoutCertificates` keeps the TLS one-way, so a client is not
@@ -253,7 +254,7 @@ describe('the bundled database can boot with wire TLS', () => {
 });
 
 describe('cron refuses a bad environment before it schedules anything', () => {
-    /*
+    /**
      * Its healthcheck sees only supercronic, and every job judges the environment on its own: a
      * broken `.env` would read as a healthy container whose every job fails. Checking first makes
      * the container exit instead, where `ps` and the restart count show it.
@@ -268,7 +269,7 @@ describe('cron refuses a bad environment before it schedules anything', () => {
 });
 
 describe('cron mounts every volume app mounts', () => {
-    /*
+    /**
      * Same image, same code, same paths: a mount only `app` has is a path cron's jobs see empty.
      * The orphan sweep and a cron-run erasure's file step then succeed having touched nothing.
      * Derived from `app`'s own list, so a new or renamed mount needs no edit here.
@@ -283,7 +284,7 @@ describe('cron mounts every volume app mounts', () => {
 });
 
 describe('the production image carries no package manager, so nothing starts through one', () => {
-    /*
+    /**
      * npm, corepack and yarn ship in the Node base image with their own CVEs, and a running
      * container never needs them. The runtime stage removes them, so a command that still says
      * `npm` would fail at boot instead of in review.
@@ -311,7 +312,7 @@ describe('the production image carries no package manager, so nothing starts thr
 });
 
 describe('production runs no debugger', () => {
-    /*
+    /**
      * `--inspect` opens a port that grants arbitrary code execution inside the process, with no
      * authentication beyond reaching it. It arrives by being left behind after a debugging
      * session, which is why this reads the files rather than trusting that nobody would.
@@ -329,7 +330,7 @@ describe('production runs no debugger', () => {
 });
 
 describe('the production image installs no lifecycle scripts', () => {
-    /*
+    /**
      * A dependency's `postinstall` runs with the build's privileges and network, during a step
      * that produces the artifact you deploy — the shape of every npm supply-chain compromise.
      * `--ignore-scripts` refuses them all; this repo's own `postinstall` is then run by name on
@@ -337,8 +338,10 @@ describe('the production image installs no lifecycle scripts', () => {
      * https://docs.npmjs.com/cli/v10/using-npm/scripts#ignore-scripts
      */
     it('every npm ci in the production build ignores scripts', () => {
-        // Comment lines out first: this Dockerfile explains its own `npm ci` choice in prose, and
-        // a prose mention is not an install step.
+        /**
+         * Comment lines out first: this Dockerfile explains its own `npm ci` choice in prose, and
+         * a prose mention is not an install step.
+         */
         const instructions = dockerfile
             .split('\n')
             .filter((line) => !line.trimStart().startsWith('#'))
@@ -414,7 +417,7 @@ describe('the monitoring profile', () => {
 });
 
 describe('each service gets only its own secrets', () => {
-    /*
+    /**
      * The Mongo root account is for creating the app's own user and for starting the replica set.
      * Code execution in the app must not be able to read it, so only the two containers that do
      * those jobs mount it. This is the property a shared `env_file:` would break.
@@ -436,7 +439,7 @@ describe('each service gets only its own secrets', () => {
         expect(setup).toContain('mongo_app_password');
     });
 
-    /*
+    /**
      * Every `NODE_X_FILE=/run/secrets/y` must name a secret the same service mounts, or the app
      * dies at boot on a path that is not there; and every declared secret must be used, or a
      * file is demanded of the operator for nothing.
@@ -466,7 +469,7 @@ describe('each service gets only its own secrets', () => {
             );
     });
 
-    /*
+    /**
      * A password on a command line shows in `ps`, in `/proc/<pid>/cmdline` and in `docker inspect`.
      */
     it('puts no password on any command line or in any environment variable', () => {
@@ -491,7 +494,7 @@ const commandLineOf = (name: string): string => {
 };
 
 describe('the cache and the limits are two Redis instances', () => {
-    /*
+    /**
      * Eviction is per Redis INSTANCE. A rate-limit counter or a spent single-use claim on the
      * evicting cache is a budget that resets and a solution that replays, so they live on their own
      * instance that can only refuse a write, never drop a key.
@@ -526,7 +529,7 @@ describe('the cache and the limits are two Redis instances', () => {
 });
 
 describe('compose.yaml shares names, builds and pins, and nothing the production verdicts read', () => {
-    /*
+    /**
      * Production runs as `-f compose.yaml -f compose.production.yaml`, and every assertion above reads
      * `compose.production.yaml` alone. That is only sound while the base file sets none of the keys those
      * assertions reason about: then the merge cannot change a verdict, and this file needs no compose-merge

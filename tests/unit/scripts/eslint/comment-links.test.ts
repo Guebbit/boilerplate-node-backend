@@ -9,6 +9,7 @@
 import { RuleTester } from 'eslint';
 import { commentLinks } from '../../../../scripts/eslint/comment-links';
 
+/** Runs the rule against its valid and invalid snippets. */
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }
 });

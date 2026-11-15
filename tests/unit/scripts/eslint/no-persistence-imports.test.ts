@@ -5,6 +5,7 @@
 import { RuleTester } from 'eslint';
 import { noPersistenceImports } from '../../../../scripts/eslint/no-persistence-imports';
 
+/** Runs the rule against its valid and invalid snippets. */
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }
 });
@@ -16,8 +17,10 @@ tester.run('no-persistence-imports', noPersistenceImports as never, {
     valid: [],
     invalid: [
         {
-            // Through the barrel: the specifier says `@modules/users` and nothing else — only the
-            // binding name gives the violation away.
+            /**
+             * Through the barrel: the specifier says `@modules/users` and nothing else — only the
+             * binding name gives the violation away.
+             */
             code: `import { userRepository } from '@modules/users';`,
             options: STRICT,
             errors: [{ messageId: 'binding' }]

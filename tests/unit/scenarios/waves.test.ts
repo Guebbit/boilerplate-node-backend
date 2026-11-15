@@ -40,9 +40,11 @@ describe('waveOrder', () => {
         expect(waveOrder(entries)).toEqual([['addresses', 'wishlist']]);
     });
 
-    // The property that matters here: deleting `locales`' own entry must
-    // not require editing `products`' — a dependency on a name that is simply not in the table
-    // is satisfied for free, not a broken reference.
+    /**
+     * The property that matters here: deleting `locales`' own entry must
+     * not require editing `products`' — a dependency on a name that is simply not in the table
+     * is satisfied for free, not a broken reference.
+     */
     it('ignores an `after` name absent from the table', () => {
         const entries = { products: recording([], 'products', ['locales']) };
 
