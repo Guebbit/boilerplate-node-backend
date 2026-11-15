@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [staff, owner]
 ---
 
@@ -7,7 +7,9 @@ audience: [staff, owner]
 
 Messages from people, accounts that need help, and knowing whether the shop is actually broken.
 
-Log in as `support@example.com`. The password is on [Test it yourself](./test-me.md).
+Sign in as the support account (see [Test it yourself](./test-me.md)).
+
+<!-- IMG: the support desk's task list · the list of contact-form messages with owners and due dates -->
 
 ::: tip When something goes wrong
 When a buyer asks where their parcel is: [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing).
@@ -62,11 +64,11 @@ name). A task stays in the inbox for 24 months after it was closed, then goes.
 Every message also lands in the support mailbox, and **Reply** there reaches the customer. The
 mailbox is where you answer; the task is how the team knows who is answering.
 
-1. Open the task first. The mail links to it, and the task shows its `#ref`, the same one as in the
+1. Open the task first. The mail links to it, and the task shows its reference number, the same one as in the
    mail subject.
 2. A name on it? It is theirs: ask before stepping in.
 3. Nobody's? Press **Take**.
-4. Reply from the mailbox. Keep the `[#…]` in the subject.
+4. Reply from the mailbox. Keep the reference number in the subject.
 5. Back on the task, add a note: what you answered, in a line or two.
 6. Press **Resolve**. They write back? **Reopen**.
 
@@ -92,7 +94,7 @@ stands.
   **Overdue only** or sort by **Due soonest**.
 - Late: one reminder, by bell and to the support mailbox.
 - A personal-data request warns **3 days before** it is due, by bell and to the mailbox. Its subject
-  carries `[privacy]`. Reminders arrive in the same thread as the first mail.
+  carries the word "privacy" in brackets. Reminders arrive in the same thread as the first mail.
 
 ::: warning The GDPR extension has a deadline too
 A personal-data request may take two more months only if you tell the person **within the first
@@ -109,7 +111,7 @@ If the message clearly says so, record it on the order the same day
 
 When an account is erased (an admin's hard delete, the purge after the owner asked, the inactivity
 erasure, or a restore replaying the erasure ledger), the shop deletes their messages, to-dos and notes. It cannot delete the
-copies in the support mailbox, so it mails the mailbox ONE notice listing the `[#ref]`s of the
+copies in the support mailbox, so it mails the mailbox ONE notice listing the reference numbers of the
 deleted messages (no address, name or text). Do this the same week:
 
 1. Search the mailbox for each ref, and for the address if you know it.
@@ -122,7 +124,7 @@ The provider's backups age out on its contract schedule.
 
 **Every month:** delete every mail older than 24 months in every folder (a mail rule can do it).
 
-→ [`tasks`](../modules/tasks.md) · [data retention](../understand/data-retention.md#the-support-mailbox)
+→ [Tasks](../modules/tasks.md) · [data retention](../understand/data-retention.md#the-support-mailbox)
 
 ## "I can't get in"
 
@@ -146,14 +148,13 @@ flowchart LR
 ::: tip What the desk may and may not do to an account
 Support fixes a customer's details (a phone number, a name) and nothing that is the customer's own
 to prove: there is no password, email or second-factor reset on anyone's behalf, because those are
-the owner's alone. It cannot ban or reactivate an account either: that is `ban:User`, the
-[moderator's](./moderator.md) key. And it works only on customers: another staff member's account
-holds a role only a role manager may touch, so an edit is refused with
-`403 ROLE_MANAGEMENT_REQUIRED`.
+the owner's alone. It cannot ban or reactivate an account either: that is the
+[moderator's](./moderator.md) permission. And it works only on customers: another staff member's account
+holds a role only a role manager may touch, so the edit is refused.
 :::
 
 A person can see every device currently signed in to their account and end any of them, or all of
-them, themselves. → [`account`](../modules/account.md)
+them, themselves. → [Account](../modules/account.md)
 
 ::: warning An unverified account still works
 Signing up sends a verification email. An unverified customer can browse, fill a basket, keep a
@@ -167,7 +168,7 @@ The buyer cannot log in, or would rather ask. Open the order, then **Open return
 the reason, and — if they asked a few days ago — the day they asked. The return is born
 **approved** (you are the answer), and the buyer gets one email with the address to send the goods
 to. No fresh login: nothing is paid until the goods arrive.
-→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+→ [Returns](../modules/returns.md#staff-open-a-return-for-the-buyer)
 
 ## A buyer withdraws by phone, email or letter {#withdraws-by-phone}
 
@@ -180,7 +181,7 @@ The shop asks you to confirm your password first: it is a legal record, and befo
 cancels the order and sends the money back (that needs the refund and order keys, which the
 [moderator](./moderator.md) holds). A withdrawal sent after the window really closed is refused:
 that one is not yours to waive.
-→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+→ [Returns](../modules/returns.md#staff-open-a-return-for-the-buyer)
 
 ## A goodwill return after the deadline {#goodwill-after-deadline}
 
@@ -197,7 +198,7 @@ give more than two years; the same door covers it.
 Pick the reason from the list: the period ended, not returnable, no defect found, or other. The
 buyer reads one sentence in their own language. Write to the buyer only when you pick **Other**; the
 shop then needs your message, because "other" alone tells them nothing.
-→ [`returns`](../modules/returns.md#declining-a-request)
+→ [Returns](../modules/returns.md#declining-a-request)
 
 ## Declined by mistake? {#declined-by-mistake}
 
@@ -206,19 +207,19 @@ for the same lines** from the order ([a buyer phones in a return](#phones-in-a-r
 decline holds no units, so nothing is blocked. Set the day they asked to the day of the first
 request, and put the declined return's number in the note (the buyer reads the note). The buyer
 will have two emails: the decline, then the approval.
-→ [`returns`](../modules/returns.md#staff-open-a-return-for-the-buyer)
+→ [Returns](../modules/returns.md#staff-open-a-return-for-the-buyer)
 
 ## "Where is my order?"
 
 Everything a customer might ask has an answer they can already see themselves: their order list, its
 current step, the tracking code once it ships, and a PDF invoice to download.
 
-A customer who writes in quotes the order number from their mail (`2026-000041`, often typed `#2026-41`).
+A customer who writes in quotes the order number from their mail (for example 2026-000041, often typed 2026-41).
 Paste it into the Orders list's order number box: the list finds that one order.
 
 If they want to cancel, they can — and a paid order refunds itself when they do. Nobody has to
 process it.
-→ [The customer](./shopper.md) · [`orders`](../modules/orders.md)
+→ [The customer](./shopper.md) · [Orders](../modules/orders.md)
 
 ## "My order is late"
 
@@ -228,7 +229,7 @@ refund** any time before it ships. Nothing is asked of them and the shop never c
 silence means they keep waiting. Staff look at the **Late** list weekly
 ([the weekly routine](./manager.md#late-orders)). A customer who writes in about it is told the same,
 and if they want out, a staff member cancels and refunds with the ordinary cancel.
-→ [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
+→ [Delivery](../modules/delivery.md#what-staff-do-about-a-late-order)
 
 ## Leaving a note on an order {#order-notes}
 
@@ -239,12 +240,12 @@ staff-only.
 
 - **The customer does not see it on their order.** They do get it if they ask for their data, so write
   it as if they will read it. Do not write phone numbers, addresses or health details.
-- **Wrote the wrong thing?** The order page has no button to remove a note yet. The API can blank a note's
-  text (`DELETE /orders/{id}/timeline/notes/{entryId}`), and the line stays in the history.
+- **Wrote the wrong thing?** The order page has no button to remove a note yet. A developer can blank a note's
+  text, and the line stays in the history.
 - **It goes by itself.** The text is removed after three years, and sooner if the customer's data is
   erased.
 
-→ [`orders`](../modules/orders.md#staff-notes)
+→ [Orders](../modules/orders.md#staff-notes)
 
 ## "My checkout is paused"
 
@@ -254,12 +255,12 @@ to expire. The customer sees a notice on their cart and profile that says why an
 gets an email with a link to write to you. Paying an order they already have, cancelling, returning
 and their own data rights all still work.
 
-Support **cannot lift it**: that is `ban:User`, the [moderator's](./moderator.md) key. Pass the case
+Support **cannot lift it**: that is the [moderator's](./moderator.md) permission. Pass the case
 on with the customer's address and what they told you; the moderator checks the account (it shows as
 "Needs review") and lifts the pause or keeps it. Tell the customer a person will look at it, and that
 it ends by itself within seven days at the latest. They may also object to it (GDPR Art. 21): say so in
 the same task.
-→ [`orders`](../modules/orders.md#the-purchase-hold)
+→ [Orders](../modules/orders.md#the-purchase-hold)
 
 ## Languages
 
@@ -275,14 +276,14 @@ completeness, so a half-translated shop can be seen behaving.
 Editing replaces existing wording. A brand-new label still needs a developer — the application
 decides _what text exists_, the editor decides _what it says_. A product's own title and
 description are translated too, but through a different door — see
-[`products`](../modules/products.md#writing-translated-content).
+[Products](../modules/products.md#writing-translated-content).
 :::
 
 A shopper who says "the shop is in English, I picked Spanish" is looking at a language that is switched
 off, or one whose screens are not translated yet. Ask the [editor](./editor.md) to check the language's
 switch; nothing on the shopper's side needs fixing.
 
-→ [`locales`](../modules/locales.md)
+→ [Locales](../modules/locales.md)
 
 ## "Is the shop down?"
 
@@ -294,7 +295,7 @@ order, when. Most "what happened here?" questions end there, but not from this d
 [the moderator's](./moderator.md) and [the manager's](./manager.md) to read, and the desk asks one
 of them. Neither is the platform-wide view a developer or operator would use instead.
 
-→ [`observability`](../modules/observability.md) · [`audit-logs`](../modules/audit-logs.md)
+→ [Observability](../modules/observability.md) · [Audit logs](../modules/audit-logs.md)
 
 ## "Our other system stopped getting notified"
 
@@ -331,7 +332,7 @@ wrong is fixed, **replay** sends that exact attempt again immediately, right now
 for a next scheduled try or asking the other system to trigger the event over again.
 :::
 
-→ [The shop manager](./manager.md) · [`webhooks`](../modules/webhooks.md)
+→ [The shop manager](./manager.md) · [Webhooks](../modules/webhooks.md)
 
 ## What is pretend here
 
@@ -348,12 +349,18 @@ Worth knowing before promising anything to a customer:
 
 ## The words we used
 
-| Word             | In plain terms                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------- |
-| **Triage**       | Deciding what a new message is and who deals with it. → [`tasks`](../modules/tasks.md)                  |
-| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                |
-| **Session**      | One signed-in device. → [`account`](../modules/account.md)                                              |
-| **Audit log**    | The 180-day record of staff actions, read by the admin only. → [`audit-logs`](../modules/audit-logs.md) |
-| **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)          |
-| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)               |
-| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.          |
+| Word             | In plain terms                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| **Triage**       | Deciding what a new message is and who deals with it. → [Tasks](../modules/tasks.md)                  |
+| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                              |
+| **Session**      | One signed-in device. → [Account](../modules/account.md)                                              |
+| **Audit log**    | The 180-day record of staff actions, read by the admin only. → [Audit logs](../modules/audit-logs.md) |
+| **Health check** | A page that says whether the shop is running. → [Observability](../modules/observability.md)          |
+| **Delivery**     | One attempt to notify another system of one event. → [Webhooks](../modules/webhooks.md)               |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.        |
+
+## Read next
+
+- [The customer](./shopper.md): what the buyer sees.
+- [The moderator](./moderator.md): who bans, and who checks a flagged account.
+- [When something goes wrong](./when-something-goes-wrong.md): refunds, returns and late parcels.

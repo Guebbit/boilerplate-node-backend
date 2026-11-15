@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [staff, owner]
 ---
 
@@ -7,8 +7,9 @@ audience: [staff, owner]
 
 Running the shop: what is for sale, at what price, and what happens to orders after they arrive.
 
-Log in as `manager@example.com`, or as the admin, who can do this job too. The passwords are on
-[Test it yourself](./test-me.md).
+Sign in as the shop manager, or as the admin, who can do this job too. The accounts and passwords are on [Test it yourself](./test-me.md).
+
+<!-- IMG: the shop manager's dashboard after signing in · the shop manager's dashboard with orders and the catalogue -->
 
 ::: tip When something goes wrong
 Odd cases that land on you: [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [a refund owed by hand](./when-something-goes-wrong.md#refund-owed-by-hand).
@@ -47,10 +48,9 @@ a fact from outside the application, not a button:
 - **The warehouse marks it shipped by recording the handover**, not the other way around — they
   scan or type the tracking code (when the method has one; it may come later) into the shipment screen, and THAT is
   what creates the parcel record, moves the order to **shipped**, and sends the customer their
-  tracking email. There is no separate "mark shipped" switch to forget. The door is
-  `POST /delivery/fulfillment-orders/{id}/shipments`, and the order moves `processing` to `shipped`
-  only when nothing remains to ship; until then it stays `processing` (fulfilment
-  `partially_fulfilled` after a first partial shipment).
+  tracking email. There is no separate "mark shipped" switch to forget. The order moves from
+  processing to shipped only when nothing remains to ship; until then it stays in processing, and
+  the shipment group reads "Partly shipped" after a first partial shipment.
 - Cancelling a **paid** order refunds it by default. Cancelling an unpaid one has nothing to refund,
   so it does not try.
 
@@ -69,7 +69,7 @@ not: a replacement is going out, a correction is being made, or the money is bei
 other way. Cancelling and refunding are one action by default and two when you need them to be.
 :::
 
-→ [`orders`](../modules/orders.md) · [`payments`](../modules/payments.md)
+→ [Orders](../modules/orders.md) · [Payments](../modules/payments.md)
 
 ## Correcting a mistake
 
@@ -97,8 +97,7 @@ flowchart LR
 
 Neither path can move an order backward, and neither can ever mark one **paid** by hand — money
 landing is still the one fact only the payment system reports. Every correction is written down
-with who, when and why, and read back on the order's timeline (`GET /orders/{id}/timeline`, an
-entry named `status_overridden`, visible to staff only) and in the admin-only audit trail — the
+with who, when and why, and read back on the order's timeline (an entry visible to staff only) and in the admin-only audit trail — the
 customer's own view of the order never shows it, so a customer support question is answered from
 the timeline, not the customer's order page.
 
@@ -143,10 +142,10 @@ The demo has one of each, which is why the shop shows 137 products but the manag
 | Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | **switched off** | not deleted, just not for sale right now — flip it back |
 
 "Switched off" is for a seasonal item or one you are still writing the description for.
-→ [`products`](../modules/products.md)
+→ [Products](../modules/products.md)
 
 ::: tip Selling an off-sale item by hand
-An order you raise for a customer (`POST /orders`) may include a product that is hidden or switched
+An order you raise for a customer may include a product that is hidden or switched
 off for shoppers: no need to flip it live for a minute and back. Only a deleted product is refused.
 :::
 
@@ -178,14 +177,14 @@ new date yet", and how to cancel), and it never cancels on its own: a buyer who 
 waiting. So the routine is a person's:
 
 1. **About once a week**, open the Late view.
-2. For an order that is **very late** (30 days past the agreed date, `agreedAt`, the threshold this shop starts
+2. For an order that is **very late** (30 days past the agreed date, the threshold this shop starts
    from; [FTC 16 CFR 435.2(b)](https://www.ecfr.gov/current/title-16/section-435.2)), write to the buyer and ask whether they still want it.
 3. If they do not, or the goods will not come, **cancel and refund** with the ordinary staff cancel.
 
 The board lists the earliest expected date first. When stock arrives it goes to the earliest **payment** first, automatically, so the **Paid** column is the order stock is handed out in.
 
 Before you move a release or restock date, the product form shows how many orders would get an
-email. → [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
+email. → [Delivery](../modules/delivery.md#what-staff-do-about-a-late-order)
 
 ## Prices and delivery
 
@@ -198,7 +197,7 @@ Product prices are set per product. Delivery prices are fixed rules, not setting
 | Pick it up | €0    | —                           |
 
 The customer's basket is priced by those same rules, so what they are quoted at checkout and what
-they are charged cannot disagree. → [`delivery`](../modules/delivery.md)
+they are charged cannot disagree. → [Delivery](../modules/delivery.md)
 
 ::: tip Why the invoice splits shipping across rates
 Delivery has no VAT rate of its own — it is taxed as part of what it delivers. A basket with a
@@ -213,9 +212,9 @@ rather than one shipping line they have to reconcile by hand.
 
 The staff side can list, search and open a customer account — enough to answer "who is this" while
 looking at their orders. Editing an account is [the support desk's](./support.md) job; erasing one
-needs `delete:User`, which support does not hold but the moderator does alongside `admin`,
-gated on a freshly proved session either way.
-→ [`users`](../modules/users.md)
+needs the right to delete a user, which support does not hold but the moderator does alongside the admin,
+and it asks the person to prove who they are again either way.
+→ [Users](../modules/users.md)
 
 ## Notifying other systems
 
@@ -249,7 +248,7 @@ came from this shop. Copy it somewhere safe immediately; if you lose it, rotate 
 separately remove it, so the other system has time to switch over. If a delivery keeps failing —
 the other system was down, its URL changed — that shows up in the delivery log, which you read (and can
 replay from) yourself; [the support desk](./support.md) cannot open it and will pass the complaint to you.
-→ [`webhooks`](../modules/webhooks.md)
+→ [Webhooks](../modules/webhooks.md)
 
 ## An alarm: a paid order with no stock set aside
 
@@ -269,15 +268,21 @@ Every staff action — a price change, a cancellation, a deleted product — is 
 it and when; only an admin reads the record. The record is kept for **180 days** and then disappears on its own.
 
 Nobody can turn this off from inside the application, which is the point.
-→ [`audit-logs`](../modules/audit-logs.md)
+→ [Audit logs](../modules/audit-logs.md)
 
 ## The words we used
 
-| Word             | In plain terms                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Soft delete**  | Hidden from customers, kept in the records, restorable. → [`products`](../modules/products.md)               |
-| **Switched off** | Not deleted, just not currently for sale.                                                                    |
-| **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [`payments`](../modules/payments.md) |
-| **Audit log**    | The 180-day record of who did what, for admins. → [`audit-logs`](../modules/audit-logs.md)                   |
-| **Webhook**      | A message the shop sends to another system when something happens. → [`webhooks`](../modules/webhooks.md)    |
-| **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                    |
+| Word             | In plain terms                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Soft delete**  | Hidden from customers, kept in the records, restorable. → [Products](../modules/products.md)               |
+| **Switched off** | Not deleted, just not currently for sale.                                                                  |
+| **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [Payments](../modules/payments.md) |
+| **Audit log**    | The 180-day record of who did what, for admins. → [Audit logs](../modules/audit-logs.md)                   |
+| **Webhook**      | A message the shop sends to another system when something happens. → [Webhooks](../modules/webhooks.md)    |
+| **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                  |
+
+## Read next
+
+- [The warehouse](./warehouse.md): the person who packs and ships what you release.
+- [The support desk](./support.md): who answers the customer.
+- [When something goes wrong](./when-something-goes-wrong.md): the fix for a stuck order, a refund owed by hand or a lost parcel.

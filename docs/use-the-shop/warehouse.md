@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [staff, owner]
 ---
 
@@ -7,7 +7,9 @@ audience: [staff, owner]
 
 Stock, and getting parcels out of the door.
 
-Log in as `warehouse@example.com`. The password is on [Test it yourself](./test-me.md).
+Sign in as the warehouse account (see [Test it yourself](./test-me.md)).
+
+<!-- IMG: the warehouse pick list · the pick list with orders ready to ship -->
 
 ::: tip When something goes wrong
 Odd cases that land on you: [fewer on the shelf than promised](./when-something-goes-wrong.md#fewer-on-shelf), [an order stuck in processing](./when-something-goes-wrong.md#stuck-in-processing), [shipped but not arrived](./when-something-goes-wrong.md#shipped-not-arrived).
@@ -49,7 +51,7 @@ and nobody can say when it went wrong. Recording the _reason_ instead of the _re
 number can always be rebuilt from its history.
 :::
 
-→ [`inventory`](../modules/inventory.md)
+→ [Inventory](../modules/inventory.md)
 
 ## Three numbers, not one
 
@@ -95,7 +97,7 @@ When a customer checks out but never pays, their goods sit "set aside" for 15 mi
 releasing.
 
 ::: warning This does not happen by itself
-In the normal deployment a `cron` service runs the sweep every 5 minutes. **The demo (`npm run demo`)
+In the normal deployment a scheduled job runs the sweep every 5 minutes. **The demo
 has no such timer**, so somebody or something has to trigger the sweep — the job that finds expired
 holds and puts the goods back.
 
@@ -141,9 +143,9 @@ the manager's: see [Late orders](./manager.md#late-orders).
 
 The same rule as the stock diary above applies here: **you record what happened, and the status
 follows from it — you never set the status directly.** There is no "mark it shipped" switch on its
-own; recording the handover (`POST /delivery/fulfillment-orders/{id}/shipments`) IS what marks it
-shipped — once nothing remains to ship. Until then the order stays `processing`, and its fulfilment
-reads `partially_fulfilled` after a first partial shipment.
+own; recording the handover (the **Ship items** button) IS what marks it
+shipped, once nothing remains to ship. Until then the order stays in processing, and its shipment
+group reads "Partly shipped" after a first partial shipment.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -176,14 +178,14 @@ recording the handover all happen on their own: you do not separately create the
 the status field, or send the email.
 
 ::: tip Starting work on a paid order
-Marking an order in progress — `POST /orders/{id}/process` — is optional: recording the handover of
-a paid order moves it from paid to `processing` by itself (you need the start permission too). The
+Marking an order in progress is optional: recording the handover of
+a paid order moves it from paid to processing by itself (you need the start permission too). The
 one thing "in progress" changes is that the customer can no longer cancel the order themselves.
 :::
 
 **There is no courier simulation.** Recording the arrival is a real action on a real
 parcel, the same way recording the handover is — not a button standing in for a delivery company's
-own report. → [`delivery`](../modules/delivery.md)
+own report. → [Delivery](../modules/delivery.md)
 
 ::: tip A parcel that will not arrive
 If the carrier loses a parcel, or it is damaged on the way, press **Report lost / damaged** on the
@@ -216,15 +218,21 @@ arrives. Receive the return with a restock count of 0 on every line (see
 [The return parcel was lost](./when-something-goes-wrong.md#return-parcel-lost)).
 :::
 
-→ [`returns`](../modules/returns.md#what-the-customer-gets-back)
+→ [Returns](../modules/returns.md#what-the-customer-gets-back)
 
 ## The words we used
 
-| Word           | In plain terms                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| **On hand**    | Physically present on the shelf.                                                                 |
-| **Set aside**  | On the shelf, but promised to an order not yet shipped. → [`inventory`](../modules/inventory.md) |
-| **Available**  | On hand minus set aside. What can still be sold.                                                 |
-| **The sweep**  | The job that releases holds nobody paid for. Must be triggered.                                  |
-| **Adjustment** | A recorded correction after counting the shelf.                                                  |
-| **Receipt**    | A recorded delivery from a supplier.                                                             |
+| Word           | In plain terms                                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| **On hand**    | Physically present on the shelf.                                                               |
+| **Set aside**  | On the shelf, but promised to an order not yet shipped. → [Inventory](../modules/inventory.md) |
+| **Available**  | On hand minus set aside. What can still be sold.                                               |
+| **The sweep**  | The job that releases holds nobody paid for. Must be triggered.                                |
+| **Adjustment** | A recorded correction after counting the shelf.                                                |
+| **Receipt**    | A recorded delivery from a supplier.                                                           |
+
+## Read next
+
+- [The shop manager](./manager.md): who releases orders to you.
+- [The support desk](./support.md): who tells the customer.
+- [When something goes wrong](./when-something-goes-wrong.md): a parcel that came back, or fewer on the shelf than promised.
