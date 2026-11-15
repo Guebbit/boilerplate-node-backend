@@ -1,5 +1,5 @@
 ---
-type: task
+type: concept
 audience: [operator]
 ---
 
@@ -122,3 +122,8 @@ bind, which is not set up.
 [source](https://github.com/aptible/supercronic/blob/master/prometheus_metrics/prommetrics.go)
 
 Related: [The Observability Layer](../understand/observability-layer.md), [Docker & Podman](../build/docker-and-podman.md).
+
+## Read next
+
+- [Deploy and rollback](./deploy-and-rollback.md)
+- [Observability Stack Reference](./observability-reference.md)

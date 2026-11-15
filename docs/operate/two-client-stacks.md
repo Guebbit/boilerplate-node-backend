@@ -256,7 +256,7 @@ Sources:
 [Rancher k3s](https://www.rancher.com/products/k3s) ·
 [k3s networking — Traefik by default](https://docs.k3s.io/networking/networking-services)
 
-## Where to go next
+## Read next
 
 | You want to                                    | Read                                             |
 | ---------------------------------------------- | ------------------------------------------------ |

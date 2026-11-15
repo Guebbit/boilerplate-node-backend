@@ -133,3 +133,8 @@ file, with a throwaway client and generated secrets:
 
 The stack, its volumes, the drill images and the client directory are removed at the end, whatever
 happened. Needs Docker or Podman; set `DEPLOY_DRILL_PORT` if 3996 is taken.
+
+## Read next
+
+- [Getting Started — Production](./first-deploy.md)
+- [Backups](./backups.md)

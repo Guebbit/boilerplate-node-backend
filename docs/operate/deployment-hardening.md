@@ -1,5 +1,5 @@
 ---
-type: task
+type: reference
 audience: [operator]
 ---
 
@@ -258,7 +258,7 @@ habits keep it honest:
 - Re-read the DNS and CI recipes when the provider changes. A DKIM selector or an OIDC issuer is
   provider-specific even though the shape is not.
 
-## Related pages
+## Read next
 
 - [Web Attacks & Defences](../understand/defences/index.md) — the rows each recipe answers
 - [Security](../understand/security.md) — the controls this app DOES implement
