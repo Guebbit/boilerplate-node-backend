@@ -41,6 +41,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -141,8 +142,10 @@ describe('the fulfillment orders of a paid order', () => {
         expect(again[0].lines.map(({ quantity }) => quantity)).toEqual([2, 1]);
     });
 
-    // The `paid` listener can read an order paid and then lose it to a cancel before it writes. A
-    // throw there would hold up every later event of the order, the cancel's refund among them.
+    /**
+     * The `paid` listener can read an order paid and then lose it to a cancel before it writes. A
+     * throw there would hold up every later event of the order, the cancel's refund among them.
+     */
     it('are not made, and nothing fails, when the order is canceled between the read and the write', async () => {
         const user = await createUser();
         const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {

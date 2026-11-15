@@ -32,9 +32,11 @@ describe('addresses routes — what is mounted', () => {
     });
 
     it.each(routeSignatures(router))('%s is marked no-store', (signature) => {
-        // The address book is identity-adjacent data — same reasoning as account's own profile
-        // route, and the same regression shape: a route mounted above `router.use(noStore)` would
-        // be silently storable by a shared cache or a browser.
+        /**
+         * The address book is identity-adjacent data — same reasoning as account's own profile
+         * route, and the same regression shape: a route mounted above `router.use(noStore)` would
+         * be silently storable by a shared cache or a browser.
+         */
         expect(guardsOn(router, signature)).toContain('noStore');
     });
 });

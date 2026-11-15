@@ -128,8 +128,10 @@ describe('GET /inventory/movements', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(2);
-        // `totalItems` counts everything matching the filters, not the page — which is what lets
-        // an audit see that there is more history than it is currently looking at.
+        /**
+         * `totalItems` counts everything matching the filters, not the page — which is what lets
+         * an audit see that there is more history than it is currently looking at.
+         */
         expect(response.body.meta).toMatchObject({
             page: 2,
             pageSize: 2,

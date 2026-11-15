@@ -12,7 +12,7 @@ import { accountService } from '@modules/account/services';
 import * as passwordHash from '@infrastructure/security/password-hash';
 import { observePort } from '@tests/ports';
 
-/*
+/**
  * `verifyPassword` is REPLACED by a pass-through, not spied on: `jest.spyOn` cannot redefine a
  * namespace import's getter under the mutation run's swc transform — see `tests/support/ports.ts`.
  */

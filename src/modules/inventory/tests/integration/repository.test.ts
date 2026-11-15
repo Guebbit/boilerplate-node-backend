@@ -31,7 +31,7 @@ describe('an empty collection', () => {
     });
 });
 
-/*
+/**
  * `docs/modules/inventory-reservations.md` §"The threshold, and its two readers": the stock
  * board's `lowOnly` filter counts the WHOLE catalogue (an admin restocking needs an inactive
  * product too); `services/levels.ts`'s `lowStockCount` narrows `lowAvailabilityProductIds`' candidates to
@@ -42,8 +42,10 @@ describe('an empty collection', () => {
  * behaviour is asserted in `../../tests/integration/service.test.ts` instead of here.
  */
 describe('the two stock gauges count different populations', () => {
-    // Own collection, own module — clearing it (not `products`) is enough: both gauges query
-    // FROM the stock level; visibility is applied afterwards, by `products`, not by a join here.
+    /**
+     * Own collection, own module — clearing it (not `products`) is enough: both gauges query
+     * FROM the stock level; visibility is applied afterwards, by `products`, not by a join here.
+     */
     beforeEach(() => stockLevelModel.deleteMany({}));
 
     it('lowAvailabilityProductIds names every candidate, visible or not', async () => {
@@ -51,9 +53,11 @@ describe('the two stock gauges count different populations', () => {
         const alsoVisible = await createProduct({ active: true, onHand: 40, reserved: 40 }); // available 0
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 }); // available 1
 
-        // The all-reserved product is a candidate too: this is AVAILABILITY, not `onHand` — a
-        // bare `$lte: onHand` would read it as healthy while the storefront shows sold out.
-        // Visibility is deliberately NOT filtered here — see the describe block's note.
+        /**
+         * The all-reserved product is a candidate too: this is AVAILABILITY, not `onHand` — a
+         * bare `$lte: onHand` would read it as healthy while the storefront shows sold out.
+         * Visibility is deliberately NOT filtered here — see the describe block's note.
+         */
         await expect(stockLevelRepository.lowAvailabilityProductIds(5)).resolves.toEqual(
             expect.arrayContaining([
                 String(visible._id),

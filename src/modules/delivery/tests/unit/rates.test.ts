@@ -18,8 +18,10 @@ describe('SHIPPING_METHODS', () => {
     it.each(['JPY', 'EUR', 'KWD'])(
         'quotes every rate and threshold in whole units a %s shop can charge exactly',
         (currency) => {
-            // A rate with more places than the currency's minor unit would be stored as typed and
-            // charged rounded.
+            /**
+             * A rate with more places than the currency's minor unit would be stored as typed and
+             * charged rounded.
+             */
             for (const { price, freeAbove } of SHIPPING_METHODS) {
                 expect(fitsCurrency(price, currency)).toBe(true);
                 expect(fitsCurrency(freeAbove ?? '0', currency)).toBe(true);
@@ -88,8 +90,10 @@ describe('methodFitsWeight', () => {
     });
 
     it('refuses a basket under the method’s minWeight', () => {
-        // No shipped method actually declares one today — proven against a value built
-        // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
+        /**
+         * No shipped method actually declares one today — proven against a value built
+         * in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
+         */
         expect(
             methodFitsWeight(
                 {
@@ -119,21 +123,27 @@ describe('methodFitsWeight', () => {
 
 describe('SHIPPING_METHODS table shape', () => {
     it('gives every method a non-negative price', () => {
-        // The table this shop quotes from is committed data, not user input — this is the canary
-        // for a typo that would otherwise only surface as a wrong number at checkout.
+        /**
+         * The table this shop quotes from is committed data, not user input — this is the canary
+         * for a typo that would otherwise only surface as a wrong number at checkout.
+         */
         for (const method of SHIPPING_METHODS)
             expect(Number(method.price)).toBeGreaterThanOrEqual(0);
     });
 
     it('gives every method a real boolean tracked flag', () => {
-        // The door reads this to flag `awaitingTracking`; it never requires a code
-        // (docs/modules/delivery.md). A missing flag would surface there as `undefined`.
+        /**
+         * The door reads this to flag `awaitingTracking`; it never requires a code
+         * (docs/modules/delivery.md). A missing flag would surface there as `undefined`.
+         */
         for (const method of SHIPPING_METHODS) expect(typeof method.tracked).toBe('boolean');
     });
 
     it('gives every method a real boolean requiresAddress flag', () => {
-        // Checkout's shipping rule reads this to decide whether an address is mandatory — an
-        // accidentally missing flag here would surface as `undefined` there, never refusing.
+        /**
+         * Checkout's shipping rule reads this to decide whether an address is mandatory — an
+         * accidentally missing flag here would surface as `undefined` there, never refusing.
+         */
         for (const method of SHIPPING_METHODS)
             expect(typeof method.requiresAddress).toBe('boolean');
     });

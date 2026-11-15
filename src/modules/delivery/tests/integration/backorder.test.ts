@@ -26,6 +26,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
 
 setupTestDb();
@@ -41,6 +42,7 @@ afterEach(() => {
     jest.clearAllMocks();
 });
 
+/** One day in milliseconds. */
 const DAY = 86_400_000;
 
 /** A date `days` from now. */

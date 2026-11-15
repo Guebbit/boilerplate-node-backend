@@ -54,8 +54,10 @@ describe('order total + shipping — reconciliation', () => {
     });
 
     it('charges exactly the lines total once a method waives shipping', () => {
-        // `pickup` has no threshold and a zero rate — the one method always free, so the total
-        // must equal the lines alone with nothing left over from the composition.
+        /**
+         * `pickup` has no threshold and a zero rate — the one method always free, so the total
+         * must equal the lines alone with nothing left over from the composition.
+         */
         fc.assert(
             fc.property(fc.array(lineItem(), { maxLength: 20 }), (items) => {
                 const linesTotal = sumLineItems(items, EUR).price;

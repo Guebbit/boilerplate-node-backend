@@ -97,8 +97,10 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
 });
 
 describe('PUT /locales/translations/:entityType/:id', () => {
-    // Every slot, fallback included, is checked against a real `locales` row — `en` needs one
-    // registered here the same way `pt` does, since nothing else in this suite ever upserts it.
+    /**
+     * Every slot, fallback included, is checked against a real `locales` row — `en` needs one
+     * registered here the same way `pt` does, since nothing else in this suite ever upserts it.
+     */
     const FALLBACK = { tag: 'en', name: 'English', nativeName: 'English' };
 
     it('deletes a locale the body does not name, matching the spec', async () => {

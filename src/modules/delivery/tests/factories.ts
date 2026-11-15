@@ -32,7 +32,6 @@ export interface ShipEverythingOptions {
 
 /**
  * The order's fulfillment orders, made first if it has none, as the `paid` listener would.
- * @param orderId - the order
  */
 export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDocument[]> =>
     deliveryService
@@ -42,7 +41,6 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
 /**
  * Set a fulfillment order's dates to a state a test needs to start from — a promise long past, a
  * notice sent at a given moment — which only the clock reaches through the doors.
- * @param fulfillmentOrderId - the fulfillment order
  * @param fields - the fields to set
  */
 export const setFulfillmentOrderState = (
@@ -56,7 +54,6 @@ export const setFulfillmentOrderState = (
 /**
  * Set how many units of a fulfillment order's first line are recorded as shipped — a state the
  * doors only reach through a shipment, for a test about what a re-send refuses.
- * @param fulfillmentOrderId - the fulfillment order
  * @param shippedQuantity - the count to record
  */
 export const setFirstLineShipped = (
@@ -72,7 +69,6 @@ export const setFirstLineShipped = (
 
 /**
  * The order's shipments, in the order they were cut.
- * @param orderId - the order
  */
 export const shipmentsOf = (orderId: string): Promise<ShipmentDocument[]> =>
     shipmentRepository.findByOrderId(orderId);
@@ -106,7 +102,6 @@ export const shipEverything = async (
 
 /**
  * Deliver every shipment still out, as an admin.
- * @param orderId - the order
  */
 export const deliverEverything = async (orderId: string): Promise<Shipment[]> => {
     const delivered: Shipment[] = [];

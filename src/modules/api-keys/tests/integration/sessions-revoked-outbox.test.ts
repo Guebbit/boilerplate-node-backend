@@ -25,6 +25,7 @@ import { plantToken } from '@modules/account/tests/factories';
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
+/** The audit port's emitter, typed so the cases can read its calls. */
 const mockEmitAuditEvent = auditPort.emitAuditEvent as jest.MockedFunction<
     typeof auditPort.emitAuditEvent
 >;

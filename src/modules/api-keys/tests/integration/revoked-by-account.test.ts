@@ -135,9 +135,11 @@ describe('keys end with the sessions that may be compromised', () => {
 
         expect(replay.status).toBe(401);
         expect(await sessionRowsOf(user.id)).toEqual([]);
-        // A key belongs to a deliberate act, not to a browser: only the owner's "log out
-        // everywhere", a reset or an undo ends it, since a thief of one refresh token is no proof
-        // the key was seen.
+        /**
+         * A key belongs to a deliberate act, not to a browser: only the owner's "log out
+         * everywhere", a reset or an undo ends it, since a thief of one refresh token is no proof
+         * the key was seen.
+         */
         expect(await credentialOf(secret)).toBeDefined();
     });
 

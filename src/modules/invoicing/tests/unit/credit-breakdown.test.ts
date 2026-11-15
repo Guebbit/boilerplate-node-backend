@@ -42,8 +42,10 @@ describe('creditBreakdownOf', () => {
     });
 
     it('refunding 10.00 of 62.30: 2.92 at 10%, 7.08 at 22%, each rate taxed once', () => {
-        // 10%: round(292 x 0.1/1.1) = round(26.55) = 27, net 265.
-        // 22%: round(708 x 0.22/1.22) = round(127.67) = 128, net 580.
+        /**
+         * 10%: round(292 x 0.1/1.1) = round(26.55) = 27, net 265.
+         * 22%: round(708 x 0.22/1.22) = round(127.67) = 128, net 580.
+         */
         const mixed: CreditableInvoice = {
             currency: 'EUR',
             lines: [],

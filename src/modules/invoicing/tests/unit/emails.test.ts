@@ -134,8 +134,10 @@ describe('buildDocumentView — the erased buyer', () => {
 
 describe('buildDocumentView — the VAT block', () => {
     it("re-derives each line's net/tax/gross from its own frozen unitPrice/taxRate/quantity, never a float multiply", () => {
-        // 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 — a naive re-multiply here would
-        // print a wrong gross even though the order-level total (frozen, never recomputed) is right.
+        /**
+         * 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 — a naive re-multiply here would
+         * print a wrong gross even though the order-level total (frozen, never recomputed) is right.
+         */
         const vat = buildDocumentView('en', DOCUMENT).vat as {
             rows: { grossAmount: string; netAmount: string; taxAmount: string }[];
         };
@@ -351,8 +353,10 @@ describe('buildDocumentView — net unit price and once-per-rate VAT, worked exa
 });
 
 describe('buildDocumentView — the printed date', () => {
-    // 23:30 UTC on New Year's Eve is already 1 January in Rome: the zone the document froze at
-    // issue decides the day, whatever the shop is configured with when it is rendered.
+    /**
+     * 23:30 UTC on New Year's Eve is already 1 January in Rome: the zone the document froze at
+     * issue decides the day, whatever the shop is configured with when it is rendered.
+     */
     const NEW_YEARS_EVE = new Date('2026-12-31T23:30:00Z');
 
     it('reads the day in the zone the document was issued under', () => {

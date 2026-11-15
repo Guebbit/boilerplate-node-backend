@@ -29,7 +29,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext } from '@tests/callers';
 import { api, authenticateAs } from '@tests/http';
 
-/*
+/**
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes. See `tests/support/ports.ts` for the full reasoning.
  */
@@ -52,6 +52,7 @@ const orphanedCount = (stage: 'commit' | 'ship'): Promise<number> =>
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
+/** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 
 /** The status of an order's hold, or `undefined` when it has none. */
@@ -114,9 +115,11 @@ describe('reserveForOrder', () => {
             { productId: String(scarce._id), quantity: 5 }
         ]);
 
-        // A reserve and its undo, both on the row — hiding the reversal would make the ledger
-        // unreconcilable: "nothing happened" and "two things canceled out" are different facts,
-        // and only the second explains a gap in a stock take.
+        /**
+         * A reserve and its undo, both on the row — hiding the reversal would make the ledger
+         * unreconcilable: "nothing happened" and "two things canceled out" are different facts,
+         * and only the second explains a gap in a stock take.
+         */
         const rows = await inventoryService.listMovements({ productId: String(plenty._id) });
         expect(rows.items.map((row) => row.reason)).toEqual([
             StockMovementReason.release,
@@ -142,8 +145,10 @@ describe('reserveForOrder', () => {
             reserved: 3,
             available: 7
         });
-        // The cache agreeing with itself twice isn't proof `syncStockCache` mirrored the real
-        // write — `stocklevels` is the row every other assertion in this file takes on faith.
+        /**
+         * The cache agreeing with itself twice isn't proof `syncStockCache` mirrored the real
+         * write — `stocklevels` is the row every other assertion in this file takes on faith.
+         */
         expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
@@ -198,7 +203,7 @@ describe('reserveForOrder', () => {
             expect(hold!.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
         }));
 
-    /*
+    /**
      * Surfaced by mutation testing: replacing the duplicate-key check in `insertHold` with `true`
      * survived every test. Swallowing any error into `null` makes `reserveForOrder` read it as
      * "already held", so a database failure would report a hold while holding nothing and the
@@ -225,8 +230,10 @@ describe('reserveForOrder', () => {
         spy.mockRestore();
     });
 
-    // The stock write has committed by the time the catalogue's cache is refreshed: a failed read of
-    // the level there must not throw, or the units stay reserved against a hold nobody gave back.
+    /**
+     * The stock write has committed by the time the catalogue's cache is refreshed: a failed read of
+     * the level there must not throw, or the units stay reserved against a hold nobody gave back.
+     */
     it('still holds the units when the cache refresh cannot read the level afterwards', async () => {
         const realFind = stockLevelRepository.findByProductId;
         // Count the level reads one reserve makes; the LAST of them is the cache refresh's.
@@ -259,14 +266,16 @@ describe('reserveForOrder', () => {
         jest.restoreAllMocks();
 
         expect(outcome.held).toBe(true);
-        // The ledger's own level is the source of truth; the catalogue's copy catches up on the
-        // product's next stock change.
+        /**
+         * The ledger's own level is the source of truth; the catalogue's copy catches up on the
+         * product's next stock change.
+         */
         const level = await stockLevelRepository.findByProductId(String(product._id));
         expect([level?.onHand, level?.reserved]).toEqual([10, 3]);
         expect(await reservationRepository.findByOrderId(orderId)).not.toBeNull();
     });
 
-    /*
+    /**
      * A throw mid-loop (not a refusal) must not leave the hold naming a line whose counters
      * never moved: a later release would read that line's quantity off the hold and subtract it
      * from whatever the counter actually held — here, another order's own reservation.
@@ -285,9 +294,11 @@ describe('reserveForOrder', () => {
             .spyOn(stockLevelRepository, 'applyDelta')
             .mockImplementation((productId, reason, quantity, delta, session) => {
                 calls += 1;
-                // The 1st call after this spy is installed is A's own line, which must succeed so
-                // there is something to roll back; the 2nd is B's, made to throw like a database
-                // hiccup rather than a refusal.
+                /**
+                 * The 1st call after this spy is installed is A's own line, which must succeed so
+                 * there is something to roll back; the 2nd is B's, made to throw like a database
+                 * hiccup rather than a refusal.
+                 */
                 return calls === 2
                     ? Promise.reject(new Error('connection reset'))
                     : realApplyDelta(productId, reason, quantity, delta, session);
@@ -302,8 +313,10 @@ describe('reserveForOrder', () => {
         ).rejects.toThrow('connection reset');
         spy.mockRestore();
 
-        // The other order's hold on B is untouched — the bug this guards against subtracted 3
-        // from it (dropping it to 1) because the failed hold still named a line it never took.
+        /**
+         * The other order's hold on B is untouched — the bug this guards against subtracted 3
+         * from it (dropping it to 1) because the failed hold still named a line it never took.
+         */
         expect(await countersOf(String(productB._id))).toEqual({
             onHand: 10,
             reserved: 4,
@@ -357,9 +370,11 @@ describe('commitForOrder', () => {
         ]);
 
         expect(await inventoryService.commitForOrder(orderId)).toBe(true);
-        // Paying moves nothing: the units are still on the shelf, still spoken for. Read from
-        // `stocklevels`, the source of truth: the catalogue's copy is refreshed only when units
-        // were allocated, so it would keep reading the old numbers even if the commit moved them.
+        /**
+         * Paying moves nothing: the units are still on the shelf, still spoken for. Read from
+         * `stocklevels`, the source of truth: the catalogue's copy is refreshed only when units
+         * were allocated, so it would keep reading the old numbers even if the commit moved them.
+         */
         expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
@@ -877,8 +892,10 @@ describe('releaseForOrder', () => {
         ]);
         await inventoryService.releaseForOrder(abandoned, StockMovementReason.expire);
 
-        // Same arithmetic, different reasons — "changed their mind" and "never came back" are
-        // different facts about the shop, and only one of them is a conversion problem.
+        /**
+         * Same arithmetic, different reasons — "changed their mind" and "never came back" are
+         * different facts about the shop, and only one of them is a conversion problem.
+         */
         const ledger = await inventoryService.listMovements({ productId: String(product._id) });
         const reasons = ledger.items.map((row) => row.reason);
         expect(reasons).toContain(StockMovementReason.release);
@@ -975,7 +992,7 @@ describe('adjust', () => {
             testCallerContext
         );
 
-        /*
+        /**
          * Eight units are promised to an order that exists. Letting this through would make
          * availability negative and oversell everyone behind it; the fix is to cancel orders,
          * which releases holds and makes room for the correction.
@@ -1000,8 +1017,10 @@ describe('adjust', () => {
         ]);
         await inventoryService.commitForOrder(orderId);
 
-        // `onHand` is the shelf count until dispatch, so the paid units are still inside it and
-        // still promised: a correction cutting below them is refused.
+        /**
+         * `onHand` is the shelf count until dispatch, so the paid units are still inside it and
+         * still promised: a correction cutting below them is refused.
+         */
         const result = await inventoryService.adjust(
             String(product._id),
             -8,
@@ -1047,7 +1066,7 @@ describe('adjust', () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
 
-        /*
+        /**
          * The write's guard covers both "the product exists" and "the correction fits", so a
          * vanished product and a blocked correction look identical to it. Deleting between the
          * pre-check and the write is the only way to reach that ambiguity — the wrong answer
@@ -1059,9 +1078,11 @@ describe('adjust', () => {
         const spy = jest
             .spyOn(stockLevelRepository, 'applyDelta')
             .mockImplementation(async (id) => {
-                // Through the test factory's raw door, like any cross-module reach for a
-                // hydrated document — `eslint-plugin-boundaries` fails a spec that touches a
-                // sibling's model directly, and it is right to.
+                /**
+                 * Through the test factory's raw door, like any cross-module reach for a
+                 * hydrated document — `eslint-plugin-boundaries` fails a spec that touches a
+                 * sibling's model directly, and it is right to.
+                 */
                 const doomed = await readProduct(id);
                 if (doomed) await deleteProduct(doomed);
                 return false;
@@ -1134,8 +1155,10 @@ describe('runReservationSweep', () => {
         ]);
     });
 
-    // One batch per tick was 200 holds every five minutes, so anyone minting holds faster than
-    // that kept stock locked past its window. The sweep keeps reading batches until one is short.
+    /**
+     * One batch per tick was 200 holds every five minutes, so anyone minting holds faster than
+     * that kept stock locked past its window. The sweep keeps reading batches until one is short.
+     */
     it('drains every stale hold, past one batch of 200', async () => {
         const product = await createProduct({ onHand: 1000 });
         await withoutWindow(async () => {
@@ -1213,11 +1236,13 @@ describe('listLevels', () => {
 
         const result = await inventoryService.listLevels();
 
-        // The two zero-availability rows sort ahead of the plentiful one, and they are
-        // distinguishable — which is the whole reason the board shows three numbers. Which of
-        // the two comes first is deliberately unasserted: the API-composition board breaks an
-        // availability tie by `_id`, not by title (no join to sort a title by), so their relative
-        // order is an implementation detail, not a contract.
+        /**
+         * The two zero-availability rows sort ahead of the plentiful one, and they are
+         * distinguishable — which is the whole reason the board shows three numbers. Which of
+         * the two comes first is deliberately unasserted: the API-composition board breaks an
+         * availability tie by `_id`, not by title (no join to sort a title by), so their relative
+         * order is an implementation detail, not a contract.
+         */
         expect(result.items.map((level) => level.available)).toEqual([0, 0, 100]);
         expect(result.items.map((level) => level.title)).toEqual(
             expect.arrayContaining(['All held', 'Empty'])
@@ -1241,8 +1266,10 @@ describe('listLevels', () => {
         const result = await inventoryService.listLevels({ lowOnly: true });
 
         expect(result.items.map((level) => level.title)).toEqual(['Low']);
-        // The total follows the filter, not the collection — otherwise the board would report
-        // two pages of scarce products and render one row.
+        /**
+         * The total follows the filter, not the collection — otherwise the board would report
+         * two pages of scarce products and render one row.
+         */
         expect(result.meta.totalItems).toBe(1);
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
     });
@@ -1273,10 +1300,12 @@ describe('listLevels', () => {
     });
 
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
-        // docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
-        // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
-        // an inactive product too. `products_low_stock_total` (`lowStockCount`) counts PUBLIC
-        // products only. "The two numbers will not match, and should not."
+        /**
+         * docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
+         * reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
+         * an inactive product too. `products_low_stock_total` (`lowStockCount`) counts PUBLIC
+         * products only. "The two numbers will not match, and should not."
+         */
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
         await createProduct({ active: true, onHand: 2, reserved: 0 });
         await createProduct({ active: true, onHand: 40, reserved: 40 });

@@ -40,10 +40,12 @@ setupTestDb();
 afterEach(() => jest.restoreAllMocks());
 
 describe('the preset roles', () => {
-    // No seeding, no editing: a role's permissions live in `shared/rules/authorization-roles.yaml`
-    // alone — `kernel/permissions.ts` reads them at import, there is no database row to seed or
-    // to edit. `tests/cross-cutting/authorization-conformance.test.ts` is where the YAML itself
-    // gets exercised; this file is membership storage only.
+    /**
+     * No seeding, no editing: a role's permissions live in `shared/rules/authorization-roles.yaml`
+     * alone — `kernel/permissions.ts` reads them at import, there is no database row to seed or
+     * to edit. `tests/cross-cutting/authorization-conformance.test.ts` is where the YAML itself
+     * gets exercised; this file is membership storage only.
+     */
     it('resolve straight from the shared file, with no database involved', () => {
         expect(permissionsOfRole('support')).toEqual(expect.any(Array));
     });
@@ -78,8 +80,10 @@ describe('membership across tenants', () => {
 
         const held = await accessService.membershipsOf('person-1');
 
-        // Two rows would not be a wider grant; they would be two answers to "what may they do
-        // here", and the resolver would have to pick one.
+        /**
+         * Two rows would not be a wider grant; they would be two answers to "what may they do
+         * here", and the resolver would have to pick one.
+         */
         expect(held).toHaveLength(1);
         expect(held[0].role).toBe('manager');
     });
@@ -115,8 +119,10 @@ describe('the invariants', () => {
     it('refuses a granter who does not hold assign:Role', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
 
-        // The single most common way these systems fail: a role editor that lets a support agent
-        // hand out roles without the one permission that allows it.
+        /**
+         * The single most common way these systems fail: a role editor that lets a support agent
+         * hand out roles without the one permission that allows it.
+         */
         await expect(
             accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', ['read:Task'])
         ).rejects.toThrow(/privilege-escalation/);
@@ -124,8 +130,10 @@ describe('the invariants', () => {
 
     it('lets a holder of assign:Role grant an assignable tenant role', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        // A role's keys are a pure YAML lookup now — no membership or tenant involved in reading
-        // what `admin` holds, only in who holds it.
+        /**
+         * A role's keys are a pure YAML lookup now — no membership or tenant involved in reading
+         * what `admin` holds, only in who holds it.
+         */
         const granter = permissionsOfRole('admin');
 
         await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager', granter);
@@ -206,8 +214,10 @@ describe('the invariants', () => {
         const failure = new Error('mongo is down');
         const spy = jest.spyOn(membershipRepository, 'deleteById').mockRejectedValue(failure);
 
-        // Before this fix the delete was fired with `void` and never awaited — a rejection here
-        // vanished as an unhandled rejection instead of reaching the caller.
+        /**
+         * Before this fix the delete was fired with `void` and never awaited — a rejection here
+         * vanished as an unhandled rejection instead of reaching the caller.
+         */
         await expect(
             accessService.revokeRole(
                 'owner-a',
@@ -220,9 +230,11 @@ describe('the invariants', () => {
         spy.mockRestore();
     });
 
-    // `deleteRole` and the editable per-tenant role it operated on are gone — presets are the
-    // sole authority now, defined in `shared/rules/authorization-roles.yaml` alone, and nothing
-    // deletes a preset at runtime.
+    /**
+     * `deleteRole` and the editable per-tenant role it operated on are gone — presets are the
+     * sole authority now, defined in `shared/rules/authorization-roles.yaml` alone, and nothing
+     * deletes a preset at runtime.
+     */
 });
 
 describe('bootstrapAccess', () => {
@@ -230,8 +242,10 @@ describe('bootstrapAccess', () => {
         const tenant = await accessService.bootstrapAccess('Shop');
 
         expect(tenant.slug).toBe(DEPLOYMENT_TENANT_SLUG);
-        // Any id will do: bootstrapping the shop alone grants nobody a role, seeded or not — the
-        // demo's own accounts are `tests/integration/access.test.ts`'s concern, not this module's.
+        /**
+         * Any id will do: bootstrapping the shop alone grants nobody a role, seeded or not — the
+         * demo's own accounts are `tests/integration/access.test.ts`'s concern, not this module's.
+         */
         expect(await accessService.membershipsOf('nobody-yet')).toEqual([]);
     });
 

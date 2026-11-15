@@ -68,7 +68,7 @@ describe('evaluateCheckout', () => {
         });
     });
 
-    /*
+    /**
      * The catalogue join is unscoped — an inactive or soft-deleted product still joins,
      * `active`/`deletedAt` and all, unlike a hard-deleted one. This is what lets a refusal here
      * still NAME the product: the row is right there to read a title off.
@@ -145,7 +145,7 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(5, 5)])).toEqual({ ok: true });
     });
 
-    /*
+    /**
      * The case the reservation model added: units exist but are all promised, so `available` is
      * zero. The old single-count model saw this as comfortably in stock and refused it later, at
      * the write; now it's refused here, because availability — not the warehouse pile — is what a
@@ -163,7 +163,7 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(3, 3)])).toEqual({ ok: true });
     });
 
-    /*
+    /**
      * A missing `available` means REFUSE, not allow. Reading absence as "unconstrained" would let
      * any quantity through on exactly the lines nothing is known about — the safe reading of "we
      * don't know how many" is "don't sell it".
@@ -176,8 +176,10 @@ describe('evaluateCheckout', () => {
         });
     });
 
-    // Resolution outranks availability: a vanished product is the harder failure, and its 404
-    // must not be masked by a 409 about a count nobody can see.
+    /**
+     * Resolution outranks availability: a vanished product is the harder failure, and its 404
+     * must not be masked by a 409 about a count nobody can see.
+     */
     it('reports an unresolved product before an unavailable one', () => {
         expect(
             evaluateCheckout([{ quantity: 9, product: null, productId: 'gone' }, line(6, 5)])

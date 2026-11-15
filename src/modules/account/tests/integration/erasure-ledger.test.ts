@@ -278,6 +278,7 @@ const lockedInSnapshot = (email: string, purgeAt: Date) =>
         purgeAt
     });
 
+/** A snapshot instant ten days back, older than any lock these cases create. */
 const since = () => new Date(Date.now() - 10 * DAY);
 
 describe('reapplyErasures — deletion locks', () => {

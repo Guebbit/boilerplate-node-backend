@@ -53,7 +53,7 @@ describe('buildMessageTree', () => {
         });
     });
 
-    /*
+    /**
      * The two throws are the point of this builder: dropping a key instead would produce a
      * dictionary missing a string, decided by insertion order, so the bug would appear on one
      * deployment and never in a test. Both directions are asserted since they're separate
@@ -77,7 +77,7 @@ describe('buildMessageTree', () => {
         ).toThrow(/products\.list/);
     });
 
-    /*
+    /**
      * A stored `__proto__` segment must become an ordinary property rather than reassign a
      * prototype. Write-time validation refuses such keys (see `findUnsafeKeySegment`), and this is
      * the second half: a row that reached the collection some other way — a `scripts/ops/` script, a mongosh
@@ -101,8 +101,10 @@ describe('findKeyCollision', () => {
     });
 
     it('is not fooled by a shared prefix that is not a dotted ancestor', () => {
-        // `a.bc` is not below `a.b` — only a segment boundary makes an ancestor, which is why the
-        // comparison appends the dot rather than calling `startsWith` on the bare key.
+        /**
+         * `a.bc` is not below `a.b` — only a segment boundary makes an ancestor, which is why the
+         * comparison appends the dot rather than calling `startsWith` on the bare key.
+         */
         expect(localeService.findKeyCollision('a.b', ['a.bc'])).toBeUndefined();
     });
 
@@ -173,8 +175,10 @@ describe('mergeCapabilities', () => {
         expect(row?.name).toBe('Spanish');
     });
 
-    // A deployed file has no off switch of its own: a row registered for its tag switches it off,
-    // and the frontend that bundles the file needs that row to stop offering it.
+    /**
+     * A deployed file has no off switch of its own: a row registered for its tag switches it off,
+     * and the frontend that bundles the file needs that row to stop offering it.
+     */
     it('reports a deployed-file language as off when a row switches it off', () => {
         const [row] = localeService.mergeCapabilities(['it'], [], new Map(), new Set(['it']));
 
@@ -211,7 +215,7 @@ describe('mergeCapabilities', () => {
         ]);
     });
 
-    /*
+    /**
      * The flag rides the row into the manifest so the ADMIN — the only caller whose manifest
      * includes inactive languages — can tell them apart. For everyone else the repository never
      * hands an inactive row to this merge, so their manifests only ever say `true`.
@@ -226,7 +230,7 @@ describe('mergeCapabilities', () => {
         expect(rows[0]).toMatchObject({ tag: 'fr', active: false });
     });
 
-    /*
+    /**
      * The row this whole feature is arranged around. `es` is a deployed file AND a set of rows, so
      * it is one language with both capabilities — not two entries, and not one entry claiming the
      * union of two things a client cannot tell apart.
@@ -299,8 +303,10 @@ describe('describeLanguage', () => {
     });
 
     it('falls back to the tag rather than throwing on something it cannot name', () => {
-        // A manifest row reading `zz` is worse than one reading a real name and far better than a
-        // 500 — and an ICU build without the data is a deployment fact this code cannot fix.
+        /**
+         * A manifest row reading `zz` is worse than one reading a real name and far better than a
+         * 500 — and an ICU build without the data is a deployment fact this code cannot fix.
+         */
         expect(localeService.describeLanguage('zz', 'en')).toBe('zz');
     });
 });

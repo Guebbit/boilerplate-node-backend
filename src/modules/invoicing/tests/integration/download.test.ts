@@ -20,8 +20,10 @@ import { invoicingRepository } from '../../repository';
 import { eventually } from '@tests/eventually';
 import { issueCreditNote } from '../../services/issue-credit-note';
 
-/** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
- * default address, which collides the second time one test needs two customers. */
+/**
+ * A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
+ * default address, which collides the second time one test needs two customers.
+ */
 const authenticateAnotherUser = async () => {
     const user = await createUser(
         { email: 'stranger@example.com', verifiedAt: new Date() },
@@ -33,8 +35,10 @@ const authenticateAnotherUser = async () => {
     return { user, bearer: `Bearer ${String(response.body.token)}` };
 };
 
-// No real Chromium in the test environment — same stub `orders`' own contract suite used before
-// this route moved here. Captures nothing; this suite only asserts on status and headers.
+/**
+ * No real Chromium in the test environment — same stub `orders`' own contract suite used before
+ * this route moved here. Captures nothing; this suite only asserts on status and headers.
+ */
 jest.mock('@infrastructure/adapters/pdf', () => ({
     renderHtmlToPdf: jest.fn().mockResolvedValue(Buffer.from('pdf'))
 }));
@@ -185,8 +189,10 @@ describe('GET /orders/{id}/invoice', () => {
 });
 
 describe('GET /orders/{id}/invoice — when the render queue is full', () => {
-    // Retention 0 so the invoice is rendered on every download (the polling helper below included):
-    // a stored copy would answer without ever reaching the renderer this case makes refuse.
+    /**
+     * Retention 0 so the invoice is rendered on every download (the polling helper below included):
+     * a stored copy would answer without ever reaching the renderer this case makes refuse.
+     */
     it('answers 503 SERVICE_UNAVAILABLE with Retry-After', () =>
         withEnvironmentOverrides({ NODE_INVOICE_PDF_RETENTION_DAYS: '0' }, async () => {
             const { bearer, user } = await authenticateAs('user');
@@ -405,8 +411,10 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId} — who may download', ()
         expect(response.headers['content-type']).not.toMatch(/pdf/);
     });
 
-    // The note belongs to order A; the owner names it under their own order B. Dropping the order
-    // match from the lookup would hand over a document of another order.
+    /**
+     * The note belongs to order A; the owner names it under their own order B. Dropping the order
+     * match from the lookup would hand over a document of another order.
+     */
     it('answers the owner 404 ORDER_CREDIT_NOTE_NOT_ISSUED for a note that is on another of their orders', async () => {
         const { creditNoteId, owner } = await refundedOrder();
         const other = await createOrder(owner.user, [toOrderItem(await createProduct(), 1)]);

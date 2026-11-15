@@ -11,8 +11,10 @@ setupTestDb();
 describe('GET /account/sessions with its own tag', () => {
     it('answers an empty 304 that keeps the ETag and no-store', async () => {
         const { bearer } = await authenticateAs('user');
-        // One warm-up request: the session's `lastUsedAt` is throttled, so the first read after
-        // sign-in may touch the row and the body with it.
+        /**
+         * One warm-up request: the session's `lastUsedAt` is throttled, so the first read after
+         * sign-in may touch the row and the body with it.
+         */
         await api().get('/account/sessions').set('Authorization', bearer);
         const first = await api().get('/account/sessions').set('Authorization', bearer);
 

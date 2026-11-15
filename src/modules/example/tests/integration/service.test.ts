@@ -23,7 +23,7 @@ import { exampleRepository } from '../../repository';
 import { exampleService } from '../../services';
 import { createExample, fieldOf } from '../factories';
 
-/*
+/**
  * The audit and analytics ports are REPLACED, not spied on: `jest.spyOn` cannot redefine the
  * non-configurable getter a CommonJS namespace import exposes. See `tests/support/ports.ts`.
  */

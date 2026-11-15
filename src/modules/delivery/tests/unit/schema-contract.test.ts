@@ -67,10 +67,12 @@ describe('fulfillmentOrderSchema', () => {
 
 describe('shipmentSchema', () => {
     it('requires the order and fulfillment order it belongs to, its number, lines and when it left', () => {
-        // `trackingCode` is optional: a tracked parcel may get its code after it left, and an
-        // untracked one has none. `destination` is optional too: a pickup has no address.
-        // `deliveredAt` is absent until it arrives — its absence IS "in transit", which is why it
-        // carries no default.
+        /**
+         * `trackingCode` is optional: a tracked parcel may get its code after it left, and an
+         * untracked one has none. `destination` is optional too: a pickup has no address.
+         * `deliveredAt` is absent until it arrives — its absence IS "in transit", which is why it
+         * carries no default.
+         */
         expect(requiredPaths(shipmentSchema)).toEqual([
             'forced',
             'fulfillmentOrderId',
@@ -107,8 +109,10 @@ describe('shipmentSchema', () => {
     });
 
     it('restricts status to the contract enum and starts shipped', () => {
-        // A shipment exists because something was dispatched, so `shipped` is the honest initial
-        // state — there is no "pending" parcel.
+        /**
+         * A shipment exists because something was dispatched, so `shipped` is the honest initial
+         * state — there is no "pending" parcel.
+         */
         expect(enumOf(shipmentSchema, 'status')).toEqual(Object.values(ShipmentStatus));
         expect(defaultOf(shipmentSchema, 'status')).toBe(ShipmentStatus.shipped);
     });

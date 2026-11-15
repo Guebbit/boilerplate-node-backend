@@ -13,7 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../../analytics';
 
-/*
+/**
  * The analytics port is replaced with a recording wrapper around the real one: `jest.spyOn`
  * cannot redefine the non-configurable property a CommonJS namespace import exposes under swc.
  */

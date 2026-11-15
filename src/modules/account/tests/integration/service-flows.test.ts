@@ -25,7 +25,7 @@ import { observePort } from '@tests/ports';
 import { authRefreshReuseTotal } from '@modules/account/metrics';
 import { setEnvironment } from '@tests/environment';
 
-/*
+/**
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
  * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
@@ -105,8 +105,10 @@ describe('accountService.signup', () => {
         );
 
         expect(result.success).toBe(false);
-        // 422 across the board for validation failures, auth included — that is what
-        // openapi.yaml declares, and it never declares 400 at all.
+        /**
+         * 422 across the board for validation failures, auth included — that is what
+         * openapi.yaml declares, and it never declares 400 at all.
+         */
         expect((result as ResponseReject).status).toBe(422);
     });
 
@@ -128,10 +130,12 @@ describe('accountService.signup', () => {
     });
 
     it('rejects a breached password even when it satisfies every composition rule', async () => {
-        // `Password1!` is a listed, composition-valid entry in `shared/rules/breached-passwords.txt` —
-        // documented on `PLAIN_PASSWORD` above precisely so it stays available for this case.
-        // `assertPasswordNotBreached` is unit-tested on its own; this is the only case proving
-        // `accountService.signup` actually calls it.
+        /**
+         * `Password1!` is a listed, composition-valid entry in `shared/rules/breached-passwords.txt` —
+         * documented on `PLAIN_PASSWORD` above precisely so it stays available for this case.
+         * `assertPasswordNotBreached` is unit-tested on its own; this is the only case proving
+         * `accountService.signup` actually calls it.
+         */
         const result = await accountService.signup(
             {
                 email: 'breached@example.com',
@@ -325,8 +329,10 @@ describe('accountService.refreshAccessToken', () => {
         );
     });
 
-    // The whole point of rotation: the refresh token's VALUE changes on every
-    // exchange, so a stolen cookie stops being silently reusable for as long as it has left to live.
+    /**
+     * The whole point of rotation: the refresh token's VALUE changes on every
+     * exchange, so a stolen cookie stops being silently reusable for as long as it has left to live.
+     */
     it('rotates the refresh token — a new value comes back, and the new value works', async () => {
         const refreshToken = await issueRefreshToken();
 
@@ -339,18 +345,22 @@ describe('accountService.refreshAccessToken', () => {
         ).resolves.toBeDefined();
     });
 
-    // The property the step-up freshness gate depends on. Ten
-    // rotations in a row, and `auth_time` on the access token stays byte-identical to the one the
-    // very first login stamped: a client that refreshes on every 401 must never be "freshened" by
-    // that alone.
+    /**
+     * The property the step-up freshness gate depends on. Ten
+     * rotations in a row, and `auth_time` on the access token stays byte-identical to the one the
+     * very first login stamped: a client that refreshes on every 401 must never be "freshened" by
+     * that alone.
+     */
     it('does not move auth_time across ten consecutive refreshes', async () => {
         const refreshToken = await issueRefreshToken();
         const first = await accountService.refreshAccessToken(refreshToken, testCallerContext);
         const { auth_time: mintedAt } = await verifyAccessToken(first.accessToken);
 
-        // Chained from `first.refreshToken`, not the original: each iteration presents the
-        // PREVIOUS iteration's newly-rotated token, so this is ten genuine sequential rotations,
-        // not one rotation plus nine grace-window reissues of the same already-spent token.
+        /**
+         * Chained from `first.refreshToken`, not the original: each iteration presents the
+         * PREVIOUS iteration's newly-rotated token, so this is ten genuine sequential rotations,
+         * not one rotation plus nine grace-window reissues of the same already-spent token.
+         */
         let current = first.refreshToken;
         for (let i = 0; i < 10; i++) {
             const result = await accountService.refreshAccessToken(current, testCallerContext);
@@ -361,8 +371,10 @@ describe('accountService.refreshAccessToken', () => {
     });
 
     it('reissues rather than rejects a token replayed within the rotation grace window', async () => {
-        // Two tabs racing to refresh with the SAME cookie: both requests present `refreshToken`,
-        // and both must succeed — this is what stops a benign race from reading as theft.
+        /**
+         * Two tabs racing to refresh with the SAME cookie: both requests present `refreshToken`,
+         * and both must succeed — this is what stops a benign race from reading as theft.
+         */
         const refreshToken = await issueRefreshToken();
 
         const [first, second] = await Promise.all([
@@ -380,16 +392,20 @@ describe('accountService.refreshAccessToken', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         authRefreshReuseTotal.reset();
         const user = await createUser({ email: 'reuse@example.com' });
-        // A second, unrelated live session — this is what proves the revoke is account-wide, not
-        // just the one token.
+        /**
+         * A second, unrelated live session — this is what proves the revoke is account-wide, not
+         * just the one token.
+         */
         const other = await startSession(user.id, ['pwd']);
         const refreshToken = await startSession(user.id, ['pwd']);
 
         await accountService.refreshAccessToken(refreshToken, testCallerContext);
 
-        // A zero-length grace window: by the time this next call re-reads the entry, ANY elapsed
-        // time counts as outside it — the same test technique `jwt.test.ts` would use, without
-        // reaching into `users`' storage to back-date a timestamp by hand.
+        /**
+         * A zero-length grace window: by the time this next call re-reads the entry, ANY elapsed
+         * time counts as outside it — the same test technique `jwt.test.ts` would use, without
+         * reaching into `users`' storage to back-date a timestamp by hand.
+         */
         setEnvironment({ NODE_TOKEN_ROTATION_GRACE_MS: '0' });
 
         await expect(
@@ -426,8 +442,10 @@ describe('accountService.refreshAccessToken', () => {
         );
     });
 
-    // A signed token the user no longer holds. Revocation lives in the document, not the
-    // signature, so this is the case that proves logout is more than cosmetic.
+    /**
+     * A signed token the user no longer holds. Revocation lives in the document, not the
+     * signature, so this is the case that proves logout is more than cosmetic.
+     */
     it('records a revoked token as invalid rather than refreshing it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();

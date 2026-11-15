@@ -81,10 +81,12 @@ describe('checkout and the address', () => {
     });
 
     it("naming another user's real entry is refused the same way — not silently shipped nowhere", async () => {
-        // `addressForCheckout` resolves the id against the CALLER's own book, so a stranger's
-        // real entry and an invented id take the same branch — but the invariant this proves is
-        // ownership, not merely existence, and the doc's split return type exists for exactly
-        // this case: collapsing it would let a stale/foreign id silently downgrade to "no address".
+        /**
+         * `addressForCheckout` resolves the id against the CALLER's own book, so a stranger's
+         * real entry and an invented id take the same branch — but the invariant this proves is
+         * ownership, not merely existence, and the doc's split return type exists for exactly
+         * this case: collapsing it would let a stale/foreign id silently downgrade to "no address".
+         */
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         await addressService.create(owner.id, HOME);
         const ownerView = await addressService.list(owner.id);

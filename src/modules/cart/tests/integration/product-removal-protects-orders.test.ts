@@ -19,6 +19,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /** Waits for the placed-order mail, which rides `order.created` through the outbox relay. */
@@ -58,9 +59,11 @@ const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduc
     await cartRepository.setShippingMethod(user.id, 'pickup');
     const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
     if (!result.success) throw new Error('setup: checkout was refused');
-    // The confirmation email is sent at placement — every assertion below cares only about what
-    // happens AFTER the product stops being sellable. Wait for it first, so it has actually landed
-    // on the mock before this clears it.
+    /**
+     * The confirmation email is sent at placement — every assertion below cares only about what
+     * happens AFTER the product stops being sellable. Wait for it first, so it has actually landed
+     * on the mock before this clears it.
+     */
     await placedMailSent();
     mockEnqueueEmail.mockClear();
     return { user, orderId: String(result.data._id) };
@@ -208,8 +211,10 @@ describe('a write that fails must not have already announced the deletion', () =
             'mongo is down'
         );
 
-        // `cart`'s own `PRODUCT_DELETED` listener drops the line unconditionally — it never ran,
-        // because the event is only emitted AFTER `deleteOne` succeeds, and this `deleteOne` didn't.
+        /**
+         * `cart`'s own `PRODUCT_DELETED` listener drops the line unconditionally — it never ran,
+         * because the event is only emitted AFTER `deleteOne` succeeds, and this `deleteOne` didn't.
+         */
         const cart = await cartRepository.findByUserId(user.id);
         expect(cart!.items.some((item) => item.productId.toString() === String(product._id))).toBe(
             true

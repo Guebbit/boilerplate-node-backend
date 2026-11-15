@@ -73,8 +73,10 @@ describe('entry serialization', () => {
     });
 
     it('stores an empty translation, which `required: true` on a String would have refused', async () => {
-        // An untranslated row is a legitimate state — an import that supplied keys and no text —
-        // and the contract still requires the field on the wire, which the default guarantees.
+        /**
+         * An untranslated row is a legitimate state — an import that supplied keys and no text —
+         * and the contract still requires the field on the wire, which the default guarantees.
+         */
         const entry = await localeEntryRepository.create({
             locale: 'es',
             app: 'demo-fe',

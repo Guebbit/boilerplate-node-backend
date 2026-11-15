@@ -30,8 +30,10 @@ jest.mock('@modules/audit-logs/repository', () => ({
     auditLogRepository: {
         create: jest.fn(),
         search: jest.fn(),
-        // The real fragment builder, not a stub: what the service must be shown to do is hand
-        // `since` to `scope`, and a stubbed one would pass whether it did or not.
+        /**
+         * The real fragment builder, not a stub: what the service must be shown to do is hand
+         * `since` to `scope`, and a stubbed one would pass whether it did or not.
+         */
         sinceScope: (since?: Date) => (since ? { timestamp: { $gt: since } } : {}),
         ownOrderScope: () => ({})
     }
@@ -41,9 +43,12 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() }
 }));
 
+/** The audit-log repository, mocked: these cases test the service, not storage. */
 const mockedRepository = auditLogRepository as jest.Mocked<typeof auditLogRepository>;
+/** The logger, mocked so a case can assert what the service logged. */
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
+/** A valid audit entry; a case overrides only the field it tests. */
 const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry => ({
     actorUserId: 'user-1',
     actorRole: 'user',
@@ -66,8 +71,10 @@ describe('auditLogService.record', () => {
     });
 
     it('returns void rather than the write, so no caller can await it', () => {
-        // The signature is the contract: a caller that could await this would be able to make a
-        // request wait on the audit trail, which is the coupling `record` exists to avoid.
+        /**
+         * The signature is the contract: a caller that could await this would be able to make a
+         * request wait on the audit trail, which is the coupling `record` exists to avoid.
+         */
         mockedRepository.create.mockResolvedValue(asStub<AuditLogDocument>({}));
 
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -- the assertion IS that record() returns undefined (fire-and-forget contract)
@@ -84,8 +91,10 @@ describe('auditLogService.record', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        // The Error itself, not its message: `redactFormat` hands anything under `error` to
-        // `serializeError`, which keeps the name and — outside production — the stack.
+        /**
+         * The Error itself, not its message: `redactFormat` hands anything under `error` to
+         * `serializeError`, which keeps the name and — outside production — the stack.
+         */
         expect(mockedLogger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'audit entry not persisted',
@@ -96,9 +105,11 @@ describe('auditLogService.record', () => {
     });
 
     it('counts the lost row so an empty dashboard is distinguishable from a quiet one', async () => {
-        /* The gap the fail-open leaves behind: `GET /observability/audit` answering `{ items: [] }`
+        /**
+         * The gap the fail-open leaves behind: `GET /observability/audit` answering `{ items: [] }`
          * looks exactly like "nothing happened". The counter is the only thing that can tell those
-         * two apart, and it must be incremented on the SAME path that swallows the error. */
+         * two apart, and it must be incremented on the SAME path that swallows the error.
+         */
         const before = await readCounter();
         mockedRepository.create.mockRejectedValue(new Error('mongo is down'));
 
@@ -121,8 +132,10 @@ describe('auditLogService.record', () => {
     });
 
     it('produces no unhandled rejection when the write fails', async () => {
-        // The `.catch()` is what makes the floating promise safe. Without it this is an
-        // unhandled rejection, which — unlike the lost audit row — can take the process down.
+        /**
+         * The `.catch()` is what makes the floating promise safe. Without it this is an
+         * unhandled rejection, which — unlike the lost audit row — can take the process down.
+         */
         const unhandled = jest.fn();
         process.on('unhandledRejection', unhandled);
 
@@ -169,8 +182,10 @@ describe('auditLogService.search', () => {
     });
 
     it('hands `since` to the scope rather than to the filters', async () => {
-        // The scope is merged after `buildWhere` and never passes through it, which is what
-        // keeps the bound a Date instead of the number `Number()` would make of it.
+        /**
+         * The scope is merged after `buildWhere` and never passes through it, which is what
+         * keeps the bound a Date instead of the number `Number()` would make of it.
+         */
         mockedRepository.search.mockResolvedValue(emptyPage);
         const since = new Date('2026-08-02T10:00:00.000Z');
 

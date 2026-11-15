@@ -67,8 +67,10 @@ describe('the address book: /account/addresses', () => {
         ]);
     });
 
-    // The default is the book's pointer: an idempotent action of its own, not a field of
-    // one address, so it leaves the PUT and PATCH bodies and answers the address itself.
+    /**
+     * The default is the book's pointer: an idempotent action of its own, not a field of
+     * one address, so it leaves the PUT and PATCH bodies and answers the address itself.
+     */
     it('moves the default with PUT .../default, and repeating it changes nothing', async () => {
         const { bearer } = await authenticateAs('user');
         await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
@@ -130,8 +132,10 @@ describe('the address book: /account/addresses', () => {
         expect(response.status).toBe(422);
     });
 
-    // `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
-    // code both fail the contract's `CountryCode` pattern.
+    /**
+     * `country` is an ISO 3166-1 alpha-2 code, not free text — a full name or a lowercase
+     * code both fail the contract's `CountryCode` pattern.
+     */
     it.each([
         ['a full country name', 'Italy'],
         ['a lowercase code', 'it'],
@@ -156,8 +160,10 @@ describe('the address book: /account/addresses', () => {
         expect(response.status).toBe(404);
     });
 
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
-    // this resource has must be nameable, and the five identity fields are genuinely required.
+    /**
+     * A PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
+     * this resource has must be nameable, and the five identity fields are genuinely required.
+     */
     it('PUT replaces the whole entry, requiring every identity field', async () => {
         const { bearer } = await authenticateAs('user');
         const added = await api()
@@ -237,7 +243,7 @@ describe('the address book: /account/addresses', () => {
     });
 
     it('answers the same 404 when REMOVING an entry the caller does not hold', async () => {
-        /*
+        /**
          * The same ownership path as the edit above, and it was the one method never asserted
          * against the contract. Worth its own case rather than trusting the symmetry: delete is
          * the method where "not found" and "not yours" are most tempting to answer differently,

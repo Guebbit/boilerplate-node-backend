@@ -131,8 +131,10 @@ describe('POST /cart/items', () => {
         expect(response.body.summary.totalQuantity).toBe(3);
     });
 
-    // "Add to cart" GROWS a line already there (Shopify, commercetools): the same button
-    // pressed twice makes two.
+    /**
+     * "Add to cart" GROWS a line already there (Shopify, commercetools): the same button
+     * pressed twice makes two.
+     */
     it('grows an existing line, answering 200 with no Location', async () => {
         const { bearer, product } = await authenticateWithCart(2);
 
@@ -184,8 +186,10 @@ describe('POST /cart/items', () => {
     });
 
     it('matches the error contract for a product outside the public catalogue', async () => {
-        // A real row with a well-formed id, which is what separates this from the case above:
-        // the 404 is the SCOPE refusing it, not the id matching nothing.
+        /**
+         * A real row with a well-formed id, which is what separates this from the case above:
+         * the 404 is the SCOPE refusing it, not the id matching nothing.
+         */
         const { bearer } = await authenticateAs('user');
         const hidden = await createProduct({ active: false });
         const response = await api()
@@ -477,8 +481,10 @@ describe('PATCH /cart/items/{productId}', () => {
         expect(response.body.summary.totalQuantity).toBe(5);
     });
 
-    // A change never creates (a PUT that creates MUST answer 201, RFC 9110 §9.3.4, and a line has
-    // no URL to answer it with): a line the cart does not hold is a 404 and the cart is unchanged.
+    /**
+     * A change never creates (a PUT that creates MUST answer 201, RFC 9110 §9.3.4, and a line has
+     * no URL to answer it with): a line the cart does not hold is a 404 and the cart is unchanged.
+     */
     it('404s a line the cart does not hold, and creates nothing', async () => {
         const { bearer } = await authenticateAs('user');
         const product = await createProduct();
@@ -546,8 +552,10 @@ describe('PATCH /cart/items/{productId}', () => {
     });
 
     it('matches the error contract for a product that does not exist', async () => {
-        // The catalogue gate lives in the service: nothing in the route itself asks the
-        // catalogue anything.
+        /**
+         * The catalogue gate lives in the service: nothing in the route itself asks the
+         * catalogue anything.
+         */
         const { bearer } = await authenticateAs('user');
         const response = await api()
             .patch(`/cart/items/${MISSING_ID}`)
@@ -694,9 +702,11 @@ describe('GET /cart/summary', () => {
         expect(response.body.itemsCount).toBe(1);
     });
 
-    // `currency` is now required on the summary, empty cart included — the automatic
-    // contract check already enforces this; asserted directly too, since a required-but-empty
-    // string would still satisfy the schema.
+    /**
+     * `currency` is now required on the summary, empty cart included — the automatic
+     * contract check already enforces this; asserted directly too, since a required-but-empty
+     * string would still satisfy the schema.
+     */
     it('always carries the shop currency, even on an empty cart', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().get('/cart/summary').set('Authorization', bearer);
@@ -714,8 +724,10 @@ describe('POST /cart/checkout', () => {
             .send({ shippingMethodId: 'pickup' });
         const response = await checkoutAs(bearer);
 
-        // `data` is the created order itself, as `POST /orders` answers it — not a
-        // wrapper — and `Location` names it.
+        /**
+         * `data` is the created order itself, as `POST /orders` answers it — not a
+         * wrapper — and `Location` names it.
+         */
         expect(response.status).toBe(201);
         expect(response.body.items).toHaveLength(1);
         expect(response.body.order).toBeUndefined();
@@ -726,7 +738,7 @@ describe('POST /cart/checkout', () => {
         expect(response.headers['content-location']).toBe(`/orders/${String(response.body.id)}`);
     });
 
-    /*
+    /**
      * Before the checkout route carried `idempotencyKey`, a retry after a lost response saw
      * the (by-then-empty) cart and answered `CART_EMPTY` instead of the order the first attempt
      * actually placed — the buyer's own cart write cost them the order. The stock read pins the
@@ -752,8 +764,10 @@ describe('POST /cart/checkout', () => {
         });
         expect(first.status).toBe(201);
 
-        // Without `idempotencyKey`, this second call would hit the now-empty cart and answer
-        // `CART_EMPTY` instead of replaying — see this test's own docblock.
+        /**
+         * Without `idempotencyKey`, this second call would hit the now-empty cart and answer
+         * `CART_EMPTY` instead of replaying — see this test's own docblock.
+         */
         const second = await checkoutAs(bearer, requestBody, {
             'Idempotency-Key': 'checkout-replay-key-1'
         });
@@ -773,7 +787,7 @@ describe('POST /cart/checkout', () => {
         expect(after.body.available).toBe(before.body.available - 2);
     });
 
-    /*
+    /**
      * The controller cast `request.body` instead of parsing it against the contract, so
      * `notes` — a field the contract has always declared — never reached the order.
      */
@@ -796,8 +810,10 @@ describe('POST /cart/checkout', () => {
         expect(response.status).toBe(422);
     });
 
-    // `pickup.requiresAddress` is false — it ships to nobody, so naming an address for it is a
-    // client error, not a lookup that might resolve.
+    /**
+     * `pickup.requiresAddress` is false — it ships to nobody, so naming an address for it is a
+     * client error, not a lookup that might resolve.
+     */
     it('matches the error contract for an addressId sent with a method that needs none', async () => {
         const { bearer } = await authenticateWithCart();
         const address = await api().post('/account/addresses').set('Authorization', bearer).send({
@@ -819,8 +835,10 @@ describe('POST /cart/checkout', () => {
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
     });
 
-    // `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
-    // courier method resolving to an address outside it is refused before anything is written.
+    /**
+     * `NODE_SHIP_TO_COUNTRIES` defaults to the shop's own country alone (`IT` in tests) — a
+     * courier method resolving to an address outside it is refused before anything is written.
+     */
     it('matches the error contract for an address outside the configured ship-to list', async () => {
         const { bearer } = await authenticateWithCart();
         const address = await api().post('/account/addresses').set('Authorization', bearer).send({
@@ -844,8 +862,10 @@ describe('POST /cart/checkout', () => {
 
     it('a pickup method needing no address is never blocked by the shopper own country', async () => {
         const { bearer } = await authenticateWithCart();
-        // The caller's default address is outside the ship-to list — irrelevant to pickup, which
-        // resolves no shipping address at all, and to billing, which the list does not bind.
+        /**
+         * The caller's default address is outside the ship-to list — irrelevant to pickup, which
+         * resolves no shipping address at all, and to billing, which the list does not bind.
+         */
         await api().post('/account/addresses').set('Authorization', bearer).send({
             fullName: 'Ada Lovelace',
             street: '1 Kings Road',
@@ -864,8 +884,10 @@ describe('POST /cart/checkout', () => {
         expect(response.status).toBe(201);
     });
 
-    // The order answers both addresses: billing on every checkout order, shipping only when a
-    // line ships to an address.
+    /**
+     * The order answers both addresses: billing on every checkout order, shipping only when a
+     * line ships to an address.
+     */
     it('answers a billingAddress on a pickup order and no shippingAddress', async () => {
         const { bearer } = await authenticateWithCart();
         await api()
@@ -929,8 +951,10 @@ describe('POST /cart/checkout', () => {
         expect(response.body.items).toHaveLength(0);
     });
 
-    // 409, not 422: an empty cart is a state conflict, not a malformed request. The spec did not
-    // declare it until this suite was written — the implementation has answered 409 all along.
+    /**
+     * 409, not 422: an empty cart is a state conflict, not a malformed request. The spec did not
+     * declare it until this suite was written — the implementation has answered 409 all along.
+     */
     it('matches the error contract for an empty cart', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await checkoutAs(bearer);
@@ -950,7 +974,7 @@ describe('POST /cart/checkout', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
-        /*
+        /**
          * The refusal has to be actionable over the wire, not just in the service: which line, how
          * much was asked for and why it was refused — never the exact number left, which is for stock readers only.
          * `ErrorItem.details` is `additionalProperties: true`, so this rides the existing contract
@@ -967,8 +991,10 @@ describe('POST /cart/checkout', () => {
     });
 
     it('matches the error contract for an unoffered payment method', () =>
-        // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
-        // "this deployment offers no transfer" is a state this case has to create.
+        /**
+         * Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
+         * "this deployment offers no transfer" is a state this case has to create.
+         */
         withEnvironmentOverrides(
             { NODE_BANK_TRANSFER_BENEFICIARY: undefined, NODE_BANK_TRANSFER_IBAN: undefined },
             async () => {
@@ -981,8 +1007,10 @@ describe('POST /cart/checkout', () => {
             }
         ));
 
-    // `paymentMethod` defaults to `card`, so with no card provider a request that names no method
-    // is refused exactly as one that names `card`: checkout is off until some method is offered.
+    /**
+     * `paymentMethod` defaults to `card`, so with no card provider a request that names no method
+     * is refused exactly as one that names `card`: checkout is off until some method is offered.
+     */
     it.each([
         ['names card', { paymentMethod: 'card' }],
         ['names no method', {}]
@@ -1004,8 +1032,10 @@ describe('POST /cart/checkout', () => {
         )
     );
 
-    // The instructions are the payment's: the order is placed first, `order.created` opens the
-    // transfer payment, and the buyer reads the instructions off it.
+    /**
+     * The instructions are the payment's: the order is placed first, `order.created` opens the
+     * transfer payment, and the buyer reads the instructions off it.
+     */
     it('matches the contract for a bank_transfer checkout, whose payment then carries the instructions', () =>
         withEnvironmentOverrides({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' }, () =>
             withEnvironmentOverrides(
@@ -1033,8 +1063,10 @@ describe('POST /cart/checkout', () => {
                         beneficiary: 'Guebbit Shop',
                         // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                         iban: 'DE89 3704 0044 0532 0130 00',
-                        // The exact RF code is `buildReference`'s own concern
-                        // (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
+                        /**
+                         * The exact RF code is `buildReference`'s own concern
+                         * (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
+                         */
                         reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/),
                         payBy: response.body.payBy
                     });

@@ -35,6 +35,7 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
+/** One day in milliseconds. */
 const DAY = 86_400_000;
 
 /** A release date `days` away. */

@@ -51,8 +51,10 @@ describe('parseApiKeyToken', () => {
     });
 
     it('is undefined when the byte after the prefix is not the separator', () => {
-        // 8 characters after `sk_`, but the next byte is not `_` — a corrupted or foreign token,
-        // not one of ours.
+        /**
+         * 8 characters after `sk_`, but the next byte is not `_` — a corrupted or foreign token,
+         * not one of ours.
+         */
         expect(parseApiKeyToken('sk_abcdefghXsecret')).toBeUndefined();
     });
 
@@ -61,8 +63,10 @@ describe('parseApiKeyToken', () => {
     });
 
     it('does not misparse a prefix or secret that legitimately contains an underscore', () => {
-        // base64url's own alphabet includes `_` — position-based slicing (not `split('_')`) is
-        // what keeps this correct regardless of where one lands.
+        /**
+         * base64url's own alphabet includes `_` — position-based slicing (not `split('_')`) is
+         * what keeps this correct regardless of where one lands.
+         */
         const token = 'sk_ab_cdefg_z9-_-secret-with-underscores_and-dashes';
         expect(parseApiKeyToken(token)).toEqual({ publicPrefix: 'ab_cdefg' });
     });

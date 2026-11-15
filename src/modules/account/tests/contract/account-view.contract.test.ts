@@ -59,8 +59,10 @@ describe('GET /account abilities', () => {
     });
 
     it('keeps the two scopes apart in the one payload', async () => {
-        // The shop's admin AND the installation's operator — two memberships, the one caller that
-        // can prove the lists do not leak into each other.
+        /**
+         * The shop's admin AND the installation's operator — two memberships, the one caller that
+         * can prove the lists do not leak into each other.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/account').set('Authorization', bearer).expect(200);

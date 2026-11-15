@@ -135,8 +135,10 @@ const mailedGreeting = (template: string): string => {
     return (mail?.[2] as { greeting?: string } | undefined)?.greeting ?? '';
 };
 
-// `username` is a free display name. A mail to an address nobody has proven would print text of the
-// caller's choosing in a stranger's inbox, from the shop's own domain.
+/**
+ * `username` is a free display name. A mail to an address nobody has proven would print text of the
+ * caller's choosing in a stranger's inbox, from the shop's own domain.
+ */
 describe('the name in a mailed greeting', () => {
     it('prints the name in a reset mail to a VERIFIED address', async () => {
         const user = await createUser({

@@ -63,7 +63,7 @@ const failNextBump = () =>
     });
 
 describe('an entry write and its bump are one transaction', () => {
-    /*
+    /**
      * An import's `If-Match` fences on the counter. A row that landed before a bump that never did
      * would let a stale import slip past the fence, so a failed bump must take its row with it.
      */
@@ -105,7 +105,7 @@ describe('an entry write and its bump are one transaction', () => {
 });
 
 describe('the revision counter', () => {
-    /*
+    /**
      * The counter is a client's only signal that a dictionary it holds is stale. A write path that
      * forgot to move it would leave every client serving yesterday's translation forever, and
      * nothing else in this repo would notice — so each of the five write paths is asserted
@@ -157,7 +157,7 @@ describe('the revision counter', () => {
         expect(await revisionOf('es')).toBe(1);
     });
 
-    /*
+    /**
      * The same write sent twice (a PUT, a re-run import) must leave the revision where the first
      * one put it, or every client re-downloads a dictionary that did not change.
      */
@@ -225,7 +225,7 @@ describe('importEntries', () => {
         expect(counts).toEqual({ created: 1, updated: 1, removed: 0 });
     });
 
-    /*
+    /**
      * The pair this whole feature is most likely to get backwards, asserted as a pair on purpose:
      * either assertion alone passes against an implementation that ignores the flag.
      */
@@ -260,8 +260,10 @@ describe('importEntries', () => {
     });
 
     it('empties a language when a replace sends nothing', async () => {
-        // The honest reading of "the whole set becomes what the body carries". It is also why the
-        // route sits behind an admin token and an audit record rather than behind a confirmation.
+        /**
+         * The honest reading of "the whole set becomes what the body carries". It is also why the
+         * route sits behind an admin token and an audit record rather than behind a confirmation.
+         */
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
         const { counts } = await localeEntryRepository.importEntries('es', FRONTEND, [], {
@@ -281,8 +283,10 @@ describe('importEntries', () => {
         expect(await localeEntryRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 
-    // D17e-2: the upsert and the removal run in one transaction — a failure between them must
-    // roll back the whole batch, not leave the upserted keys behind with the stale ones.
+    /**
+     * D17e-2: the upsert and the removal run in one transaction — a failure between them must
+     * roll back the whole batch, not leave the upserted keys behind with the stale ones.
+     */
     it('rolls back the upserts when the removal step fails', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
 
@@ -448,7 +452,7 @@ describe('deactivating a language', () => {
 });
 
 describe('the translations collection', () => {
-    /*
+    /**
      * A write path is a check-then-insert (`upsertEntityLocale` is an upsert, not a raw insert),
      * so this is the database refusing what only a concurrent request could produce — the same
      * property `localeSchema`'s tag index and `localeEntrySchema`'s compound index each guard.
@@ -495,10 +499,12 @@ describe('the translations collection', () => {
 });
 
 describe('removeEntityTranslations', () => {
-    // `entityType: 'widget'` on purpose — no `widget` module exists. `removeEntityTranslations`
-    // is the kernel translation port's `removeAll`, called by ANY module's hard delete
-    // (`products/services/remove.ts`'s `remove`, today); this collection's own cascade guarantee holds
-    // for a caller this module has never heard of, which a real product would not prove.
+    /**
+     * `entityType: 'widget'` on purpose — no `widget` module exists. `removeEntityTranslations`
+     * is the kernel translation port's `removeAll`, called by ANY module's hard delete
+     * (`products/services/remove.ts`'s `remove`, today); this collection's own cascade guarantee holds
+     * for a caller this module has never heard of, which a real product would not prove.
+     */
     it('removes every locale row for the entity, and reports how many', async () => {
         await translationRepository.upsertEntityLocale(
             'widget',
@@ -573,7 +579,7 @@ describe('readMessages', () => {
         });
     });
 
-    /*
+    /**
      * An inactive language answers exactly as an unknown one. A 403, or a 200 with nothing in it,
      * would both tell an anonymous caller that the language exists — which is the one thing a
      * draft translation is being kept from doing.
@@ -613,9 +619,11 @@ describe('createEntry', () => {
     });
 
     it('refuses an unusable key with a 422 rather than a 409', async () => {
-        // A different answer on purpose: a collision is a statement about what is already there,
-        // an unsafe key is a statement about the key itself, and a client can only fix one of them
-        // by looking at the other rows.
+        /**
+         * A different answer on purpose: a collision is a statement about what is already there,
+         * an unsafe key is a statement about the key itself, and a client can only fix one of them
+         * by looking at the other rows.
+         */
         await givenLanguage('es');
 
         const result = await localeService.createEntry('es', FRONTEND, {
@@ -666,7 +674,7 @@ describe('importEntries, through the service', () => {
         expect(result.status).toBe(409);
     });
 
-    /*
+    /**
      * The same batch is fine as a REPLACE, and that is not an inconsistency: a replace deletes
      * `products.list.title` on its way in, so there is nothing left for `products.list` to collide
      * with. Checking a batch against rows it is about to delete would refuse imports that are
@@ -804,8 +812,10 @@ describe('searchEntries', () => {
         expect(result.data?.items.map(({ key }) => key)).toEqual(['a.key', 'b.key', 'c.key']);
     });
 
-    // The same key lives once per app, so `key` alone ties. The order is key, then app, and a page
-    // boundary inside a tie neither repeats nor skips a row.
+    /**
+     * The same key lives once per app, so `key` alone ties. The order is key, then app, and a page
+     * boundary inside a tie neither repeats nor skips a row.
+     */
     it('breaks a key shared by two apps by app, across a page boundary', async () => {
         await givenLanguage('es');
         for (const key of ['a.key', 'b.key', 'c.key']) {
@@ -839,9 +849,11 @@ describe('searchEntries', () => {
 
 describe('updateEntry and removeEntry', () => {
     it('refuses to reach a row through another language’s path', async () => {
-        // Two routes addressing one row is the shape this API uses everywhere; the path segment
-        // being decorative is not. Without the check, `PUT /locales/it/entries/<spanish row>`
-        // would silently edit Spanish.
+        /**
+         * Two routes addressing one row is the shape this API uses everywhere; the path segment
+         * being decorative is not. Without the check, `PUT /locales/it/entries/<spanish row>`
+         * would silently edit Spanish.
+         */
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         await givenLanguage('it');
         const entry = await localeEntryRepository.findOne({ locale: 'es' });
@@ -869,8 +881,10 @@ describe('updateEntry and removeEntry', () => {
     });
 
     it('refuses to reach a row through another app’s path', async () => {
-        // The app in the URI is part of the row's address, like the language: a known app that
-        // does not own the row is a 404, never an edit of another keyspace.
+        /**
+         * The app in the URI is part of the row's address, like the language: a known app that
+         * does not own the row is a 404, never an edit of another keyspace.
+         */
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
@@ -950,8 +964,10 @@ describe('countEntriesByLocale', () => {
 
 describe('list', () => {
     it('is not truncated by the shared list default, which would silently cap a manifest', async () => {
-        // `findAll` defaults to ten rows. A deployment that grew past ten languages would have lost
-        // the rest from its manifest with nothing to indicate it.
+        /**
+         * `findAll` defaults to ten rows. A deployment that grew past ten languages would have lost
+         * the rest from its manifest with nothing to indicate it.
+         */
         for (let index = 0; index < 12; index++)
             await givenLanguage(`l${index}`.padEnd(2, 'x').slice(0, 2) + String(index));
 

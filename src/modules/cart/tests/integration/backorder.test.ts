@@ -27,6 +27,7 @@ beforeEach(() => {
     registerCheckoutModules([paymentsModule]);
 });
 
+/** One day in milliseconds, for stock arrival dates. */
 const DAY_MS = 86_400_000;
 
 /** A released product open to backorder: `onHand` on the shelf and a cap of `limit`. */
@@ -135,8 +136,10 @@ describe('checking out a backorder', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
-        // The wire shape: `toJSON` is the serializer every response goes through. The cast names
-        // the one field read; the serializer's return type is the loose Document one.
+        /**
+         * The wire shape: `toJSON` is the serializer every response goes through. The cast names
+         * the one field read; the serializer's return type is the loose Document one.
+         */
         const wire = (result.success ? result.data.toJSON() : { items: [] }) as {
             items: { promisedAt?: string }[];
         };

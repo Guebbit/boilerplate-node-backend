@@ -35,9 +35,11 @@ const refuses = (call: () => void): boolean => {
 };
 
 describe('grantableRoles', () => {
-    // The rule is "hold `assign:Role`", so only a role manager hands out roles, and any of
-    // them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
-    // nothing to grant.
+    /**
+     * The rule is "hold `assign:Role`", so only a role manager hands out roles, and any of
+     * them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
+     * nothing to grant.
+     */
     it.each([
         ['admin', assignableTenantRoles],
         ['moderator', []],

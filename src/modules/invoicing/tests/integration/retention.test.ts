@@ -28,6 +28,7 @@ import { issueCreditNote, waitForInvoice } from '../factories';
 
 setupTestDb();
 
+/** Temp directory the stored files land in; removed after the suite. */
 let root: string;
 
 beforeEach(async () => {

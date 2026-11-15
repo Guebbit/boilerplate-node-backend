@@ -83,7 +83,7 @@ const oauthAccountsOf = async (userId: string) => {
 };
 
 describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => {
-    /*
+    /**
      * Recording a login is only a fact once a session actually exists, which is a CONTROLLER
      * decision (`get-oauth-callback.ts` calls `recordLoginSuccess`, reading the account's real
      * role). An audit or metric emitted here would hardcode `actorRole: 'user'` — wrong for an
@@ -111,7 +111,7 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
 });
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
-    /*
+    /**
      * NIST SP 800-63C-4 §3.8.1: linking needs an authenticated session with the account. A sign-in
      * whose email merely matches is refused, however many proofs of the address both sides hold, and
      * leaves the account exactly as it was (the owner connects the provider from their profile).
@@ -155,7 +155,7 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         expect(auditSpy).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * Pre-account-takeover. The attacker holds `victim@example.com` with their own password and
      * cannot prove it; the victim arrives through the provider. The refusal names the remedy (the
      * reset proves the same mailbox) instead of `account_exists`.
@@ -169,8 +169,10 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         ).rejects.toBeInstanceOf(OAuthAccountUnverifiedError);
 
         expect(await oauthAccountsOf(user.id)).toEqual([]);
-        // Not promoted on the way out either: the refusal must leave the squatted account exactly
-        // as unproven as it was.
+        /**
+         * Not promoted on the way out either: the refusal must leave the squatted account exactly
+         * as unproven as it was.
+         */
         const refreshed = await userRepository.findById(user.id);
         expect(refreshed?.verifiedAt ?? null).toBeNull();
         expect(auditSpy).not.toHaveBeenCalled();
@@ -476,9 +478,11 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
             testCallerContext
         );
 
-        // Two different accounts: `users_oauth_identity` scopes uniqueness to (provider,
-        // providerId) together, not `providerId` alone — different providers can coincidentally
-        // reuse the same subject shape without colliding.
+        /**
+         * Two different accounts: `users_oauth_identity` scopes uniqueness to (provider,
+         * providerId) together, not `providerId` alone — different providers can coincidentally
+         * reuse the same subject shape without colliding.
+         */
         expect(google.user.id).not.toBe(github.user.id);
     });
 });

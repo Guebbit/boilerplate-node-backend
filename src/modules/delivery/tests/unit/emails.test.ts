@@ -13,8 +13,11 @@ import {
     shipmentShippedEmail
 } from '@modules/delivery/emails';
 
+/** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+/** Tracking code printed in the shipped mail. */
 const CODE = 'TRK-99887766';
+/** The order lines the mail lists. */
 const LINES = [
     { title: 'Analytical Engine', quantity: 2 },
     { title: 'Punch cards', quantity: 1 }
@@ -128,8 +131,10 @@ describe('shipmentDeliveredEmail', () => {
     });
 
     it('prints the announced day, date only, whatever the instant it was frozen at', () => {
-        // Just after UTC midnight is the next calendar day: the mail never rounds it back, and it
-        // never adds a time or the silent grace day.
+        /**
+         * Just after UTC midnight is the next calendar day: the mail never rounds it back, and it
+         * never adds a time or the silent grace day.
+         */
         const text = shipmentDeliveredEmail('en', NAME, {
             lines: LINES,
             withdrawUntil: new Date(Date.UTC(2026, 10, 15, 0, 0, 0, 1))

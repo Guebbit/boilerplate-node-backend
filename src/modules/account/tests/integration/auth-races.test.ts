@@ -78,8 +78,10 @@ describe('R1 — concurrent signups for one address', () => {
     });
 
     it('answers one 201 and N-1 409s, with nothing in between', async () => {
-        // Both guards are necessary for this split: without `unique: true`, several participants
-        // would get a 201; without the E11000 → 409 branch, the losers would get 500s.
+        /**
+         * Both guards are necessary for this split: without `unique: true`, several participants
+         * would get a 201; without the E11000 → 409 branch, the losers would get 500s.
+         */
         const results = await raceN(RACE_SIZE, (index) =>
             api()
                 .post('/account/signup')
@@ -97,8 +99,10 @@ describe('R1 — concurrent signups for one address', () => {
     });
 
     it('leaves the surviving account usable', async () => {
-        // A race resolved into a document that cannot log in would satisfy "exactly one user"
-        // and still be broken.
+        /**
+         * A race resolved into a document that cannot log in would satisfy "exactly one user"
+         * and still be broken.
+         */
         await raceN(RACE_SIZE, (index) =>
             api()
                 .post('/account/signup')
@@ -117,8 +121,10 @@ describe('R1 — concurrent signups for one address', () => {
     });
 
     it('still rejects a duplicate signup serially, with the same 409', async () => {
-        // The pre-existing check-then-insert path still runs and still answers first when there
-        // is no contention. The index is a backstop, not a replacement for the friendly error.
+        /**
+         * The pre-existing check-then-insert path still runs and still answers first when there
+         * is no contention. The index is a backstop, not a replacement for the friendly error.
+         */
         await api().post('/account/signup').send({
             email,
             username: 'first',
@@ -143,8 +149,10 @@ describe('R1 — concurrent signups for one address', () => {
 
 describe('R4 — concurrent logins for one account', () => {
     it('keeps every issued token, losing none to a clobbering write', async () => {
-        // This is the R4 probe. Read-modify-write loses tokens silently; the count is the only
-        // thing that says so.
+        /**
+         * This is the R4 probe. Read-modify-write loses tokens silently; the count is the only
+         * thing that says so.
+         */
         const user = await createUser({ email: 'sessions@example.com' });
 
         const results = await raceN(RACE_SIZE, () =>
@@ -170,8 +178,10 @@ describe('R4 — concurrent logins for one account', () => {
     });
 
     it('removes every session under contention, not merely some', async () => {
-        // The revocation half. A delete that raced a login could leave survivors — sessions that
-        // should have been revoked and were not, which is the security-relevant direction.
+        /**
+         * The revocation half. A delete that raced a login could leave survivors — sessions that
+         * should have been revoked and were not, which is the security-relevant direction.
+         */
         const user = await createUser({ email: 'sessions@example.com' });
 
         const logins = await raceN(RACE_SIZE, () =>
@@ -228,9 +238,11 @@ describe('two simultaneous OAuth signups for one identity', () => {
             result.status === 'fulfilled' ? [result.value] : []
         );
         expect(responses).toHaveLength(RACE_SIZE);
-        // Each answer is a redirect: a session, or a refusal — never a 500. A loser either hits the
-        // unique index (`provider_error`) or finds the winner's account by email, which a sign-in
-        // never links (`account_exists`); the retry below finds the identity and logs in.
+        /**
+         * Each answer is a redirect: a session, or a refusal — never a 500. A loser either hits the
+         * unique index (`provider_error`) or finds the winner's account by email, which a sign-in
+         * never links (`account_exists`); the retry below finds the identity and logs in.
+         */
         for (const response of responses) {
             expect(response.status).toBe(302);
             const signedIn = setCookie(response, '__Host-session') !== undefined;
@@ -250,8 +262,10 @@ describe('two simultaneous OAuth signups for one identity', () => {
 
 describe('R5 — concurrent refresh-token rotation, same cookie', () => {
     it('answers every simultaneous exchange with a working access token, none rejected', async () => {
-        // Two tabs waking together, an interceptor retrying — all present the SAME cookie, and
-        // under naive rotation the losers of the atomic claim would 401 as "theft".
+        /**
+         * Two tabs waking together, an interceptor retrying — all present the SAME cookie, and
+         * under naive rotation the losers of the atomic claim would 401 as "theft".
+         */
         const { jwtCookie } = await issueSession();
 
         const results = await raceN(RACE_SIZE, () =>
@@ -279,10 +293,12 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
     });
 
     it('leaves exactly ONE superseded ancestor behind — the original, claimed once', async () => {
-        // Every racer reissues its own sibling token (RACE_SIZE new, live entries — proven above),
-        // but they all raced to supersede the SAME starting token, and `supersede`'s atomic
-        // claim means only the FIRST write can ever flip it. There is exactly one ancestor to mark,
-        // and it gets marked exactly once, however many racers tried.
+        /**
+         * Every racer reissues its own sibling token (RACE_SIZE new, live entries — proven above),
+         * but they all raced to supersede the SAME starting token, and `supersede`'s atomic
+         * claim means only the FIRST write can ever flip it. There is exactly one ancestor to mark,
+         * and it gets marked exactly once, however many racers tried.
+         */
         const { user, jwtCookie } = await issueSession();
 
         await raceN(RACE_SIZE, () => api().post('/account/refresh').set('Cookie', jwtCookie));
@@ -295,8 +311,10 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
 
 describe('one-time tokens under contention', () => {
     it('lets exactly one of two simultaneous reset-confirms through', async () => {
-        // A reset token is one-time. Two uses of it must not both change the password, and the
-        // loser must be rejected rather than 500.
+        /**
+         * A reset token is one-time. Two uses of it must not both change the password, and the
+         * loser must be rejected rather than 500.
+         */
         const user = await createUser({ email: 'reset@example.com' });
         await plantToken(user.id, 'password', 'one-time-reset-token', { ttlMs: 60 * 60 * 1000 });
 
@@ -317,9 +335,11 @@ describe('one-time tokens under contention', () => {
     });
 
     it('leaves exactly one live link after simultaneous reset requests', async () => {
-        // The issue is one atomic upsert per (account, kind): requests racing it must not leave
-        // two working links, as the old remove-then-add pair could. Driven through the service,
-        // since the route answers before its detached work has finished.
+        /**
+         * The issue is one atomic upsert per (account, kind): requests racing it must not leave
+         * two working links, as the old remove-then-add pair could. Driven through the service,
+         * since the route answers before its detached work has finished.
+         */
         const user = await createUser({ email: 'reset-twice@example.com' });
 
         const results = await raceN(RACE_SIZE, () =>
@@ -334,12 +354,14 @@ describe('one-time tokens under contention', () => {
 
 describe('the limiter is raised for these suites, not disabled', () => {
     it('still refuses an unbounded run of failed logins', async () => {
-        // `tests/support/setup-environment.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
-        // silently truncated into a vacuous pass. This case is what keeps that from quietly
-        // becoming "the limiter is off": the budget is large, finite, and still enforced.
-        //
-        // A fresh limiter with a budget of 3 rather than 1000 failed requests, because the point
-        // is that the mechanism works, not that this test can afford to spend the real budget.
+        /**
+         * `tests/support/setup-environment.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
+         * silently truncated into a vacuous pass. This case is what keeps that from quietly
+         * becoming "the limiter is off": the budget is large, finite, and still enforced.
+         *
+         * A fresh limiter with a budget of 3 rather than 1000 failed requests, because the point
+         * is that the mechanism works, not that this test can afford to spend the real budget.
+         */
         const { credentialLimiters } = await withReloadedRateLimits(
             () => import('@modules/account/rate-limits'),
             { NODE_AUTH_RATE_LIMIT_MAX: '3' },

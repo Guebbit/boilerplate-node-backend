@@ -20,6 +20,7 @@ withoutEnvironmentInThisFile([
     'NODE_FRONTEND_LINK_EMAIL_CHANGE'
 ]);
 
+/** A fixed opaque token, so an expectation can name it. */
 const TOKEN = 'a1b2c3d4e5f6';
 
 describe('accountFrontendLink — the default template per kind', () => {

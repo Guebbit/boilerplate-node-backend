@@ -66,17 +66,21 @@ describe('POST /account/export', () => {
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
-        // `paymentService.findOwnPaymentsForExport` (payments/services/retention.ts) is the only
-        // path this hits — nothing else exercises its pagination read, so a broken page-walk (or
-        // the whole read swallowed) would only ever surface here.
+        /**
+         * `paymentService.findOwnPaymentsForExport` (payments/services/retention.ts) is the only
+         * path this hits — nothing else exercises its pagination read, so a broken page-walk (or
+         * the whole read swallowed) would only ever surface here.
+         */
         expect(data.payments.map((each) => each.id)).toContain(payment.id);
         expect(data.payments.find((each) => each.id === payment.id)?.orderId).toBe(
             String(order._id)
         );
         // The caller's own login, as metadata only: never a credential, and nothing but its handle.
         expect(data.sessions).toHaveLength(1);
-        // `lastUsedAt` (once the session was used) and `device` (`cookie` mode, when the client
-        // named a browser) are metadata too; anything else would be a field that should not be here.
+        /**
+         * `lastUsedAt` (once the session was used) and `device` (`cookie` mode, when the client
+         * named a browser) are metadata too; anything else would be a field that should not be here.
+         */
         const [session] = data.sessions;
         expect(Object.keys(session ?? {}).filter((key) => !EXPORTED_SESSION_KEYS.has(key))).toEqual(
             []
@@ -88,8 +92,10 @@ describe('POST /account/export', () => {
         });
     });
 
-    // A GDPR export is legally visible: every section holds real rows here, and none of them may
-    // carry a `null` (the shared contract afterEach would also catch one; this names the path).
+    /**
+     * A GDPR export is legally visible: every section holds real rows here, and none of them may
+     * carry a `null` (the shared contract afterEach would also catch one; this names the path).
+     */
     it('holds no null anywhere in an account that has something in every section', async () => {
         await accessService.ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Export shop');
         const { user, bearer } = await authenticateAs('admin');
@@ -147,8 +153,10 @@ describe('POST /account/export', () => {
         const empty = Object.entries(response.data)
             .filter(([, rows]) => Array.isArray(rows) && rows.length === 0)
             .map(([section]) => section);
-        // Sections this seed cannot fill (a returns flow, webhooks, invoicing, examples, translation
-        // work, a system task) stay named here, so a new empty one is noticed.
+        /**
+         * Sections this seed cannot fill (a returns flow, webhooks, invoicing, examples, translation
+         * work, a system task) stay named here, so a new empty one is noticed.
+         */
         expect(empty.toSorted()).toEqual(EXPECTED_EMPTY_SECTIONS);
         expect(nullPathsIn(response.data)).toEqual([]);
     });

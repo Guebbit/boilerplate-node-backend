@@ -740,8 +740,8 @@ export default defineConfig(
         ],
         ignores: [
             'src/types/asyncapi.generated.ts',
-            'src/modules/*/tests/**',
-            'src/modules/*/**/tests/**'
+            // Module tests join in two halves; n-z are still outside.
+            'src/modules/{notifications,observability,orders,payments,products,returns,shop,shop-tasks,sitemap,stats,stock-alerts,tasks,users,webhooks,wishlist}/tests/**'
         ],
 
         plugins: {

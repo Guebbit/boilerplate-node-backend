@@ -9,7 +9,9 @@
 import { Types } from 'mongoose';
 import { makeAddressBook } from '@modules/addresses/factories';
 
+/** Owner id the factory is asked to build for. */
 const USER = '65dc8a99604c307b702b5ccc';
+/** Id given to the factory-built address. */
 const ADDRESS = '65dcdec2b18ad5e4bd597f0f';
 
 /** The fields a deliverable address must carry, per the schema. */
@@ -51,8 +53,10 @@ describe('makeAddressBook', () => {
     });
 
     it('omits the label and phone when they were not given', () => {
-        // Both are optional on the schema. Present as `undefined` they would be stored as nothing
-        // rather than left absent, which is a different document from the one intended.
+        /**
+         * Both are optional on the schema. Present as `undefined` they would be stored as nothing
+         * rather than left absent, which is a different document from the one intended.
+         */
         const book = makeAddressBook({ userId: USER, items: [{ id: ADDRESS, ...DELIVERABLE }] });
 
         expect(Object.hasOwn(book.items![0], 'label')).toBe(false);

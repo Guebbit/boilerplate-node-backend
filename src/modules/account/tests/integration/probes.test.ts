@@ -25,6 +25,7 @@ const claimedStatus = (name: string): number => {
     return Number(match[1]);
 };
 
+/** Finds a registered probe by name; a missing one fails loudly so a rename is noticed. */
 const probeByName = (name: string) => {
     const probe = probes.find((candidate) => candidate.name === name);
     if (!probe) throw new Error(`no probe named "${name}" — has account/probes.ts been renamed?`);

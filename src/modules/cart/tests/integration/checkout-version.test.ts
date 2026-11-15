@@ -29,8 +29,10 @@ describe('cart version increments on every write that changes it', () => {
 
         await cartService.setItemById(user.id, String(product._id), 1);
 
-        // Not 0: the very first write is itself a race checkout can lose against, so it must
-        // already be distinguishable from "no write happened yet".
+        /**
+         * Not 0: the very first write is itself a race checkout can lose against, so it must
+         * already be distinguishable from "no write happened yet".
+         */
         await expect(versionOf(user.id)).resolves.toBe(1);
     });
 
@@ -57,7 +59,7 @@ describe('cart version increments on every write that changes it', () => {
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
 
-    /*
+    /**
      * The one write that must NOT bump: setting a line to the quantity it already holds. A PUT
      * repeated mid-checkout would otherwise fail that checkout with CART_CHANGED over nothing.
      */

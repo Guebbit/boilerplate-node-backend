@@ -40,8 +40,10 @@ describe('addressBookSchema', () => {
 
 describe('addressBookSchema — an entry', () => {
     it('requires a deliverable address and leaves the label and phone optional', () => {
-        // The set a carrier needs. `label` is the user's own word for it ("home", "work") and
-        // `phone` is the carrier's fallback — neither is needed to deliver.
+        /**
+         * The set a carrier needs. `label` is the user's own word for it ("home", "work") and
+         * `phone` is the carrier's fallback — neither is needed to deliver.
+         */
         expect(requiredPaths(subSchema(addressBookSchema, 'items'))).toEqual([
             'city',
             'country',
@@ -52,16 +54,20 @@ describe('addressBookSchema — an entry', () => {
     });
 
     it('keeps an _id of its own, unlike a cart or wishlist line', () => {
-        // The difference that matters, asserted against its sibling so a cleanup that "aligns" them
-        // fails here: two addresses can be identical in every typed field and still be different
-        // entries, so `PUT /account/addresses/:addressId` needs something to name. `true` here, vs
-        // `false` on the cart's and wishlist's lines — see `cart/tests/unit/schema-contract.test.ts`.
+        /**
+         * The difference that matters, asserted against its sibling so a cleanup that "aligns" them
+         * fails here: two addresses can be identical in every typed field and still be different
+         * entries, so `PUT /account/addresses/:addressId` needs something to name. `true` here, vs
+         * `false` on the cart's and wishlist's lines — see `cart/tests/unit/schema-contract.test.ts`.
+         */
         expect(optionsOf(subSchema(addressBookSchema, 'items'))._id).toBe(true);
     });
 
     it('defaults an entry to not-the-default', () => {
-        // `default: false` on `default`. The first address added is promoted by the service, not
-        // by the schema — a schema-level `true` would make every added address the default.
+        /**
+         * `default: false` on `default`. The first address added is promoted by the service, not
+         * by the schema — a schema-level `true` would make every added address the default.
+         */
         expect(defaultOf(subSchema(addressBookSchema, 'items'), 'default')).toBe(false);
     });
 });

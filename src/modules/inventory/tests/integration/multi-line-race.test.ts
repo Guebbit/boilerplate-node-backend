@@ -50,8 +50,10 @@ const holdLaterReservesUntilFirstWritesLand = (firstWrites: number): void => {
             started += 1;
             const isLater = started > firstWrites;
             if (isLater) await firstWritesLanded;
-            // A write inside a transaction can reject (write conflict, then a retry): count it
-            // settled either way, or the barrier never opens.
+            /**
+             * A write inside a transaction can reject (write conflict, then a retry): count it
+             * settled either way, or the barrier never opens.
+             */
             return realApplyDelta(productId, reason, quantity, delta, session).finally(() => {
                 if (isLater) return;
                 finished += 1;

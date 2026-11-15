@@ -24,6 +24,7 @@ interface Entry {
     metadata?: Record<string, unknown>;
 }
 
+/** Spy on the audit emitter; each case reads what the flow under test recorded. */
 let auditSpy: jest.SpyInstance;
 
 beforeEach(() => {

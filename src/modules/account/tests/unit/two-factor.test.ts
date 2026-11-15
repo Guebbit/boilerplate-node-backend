@@ -31,8 +31,10 @@ import {
     BACKUP_CODE_COUNT
 } from '../../two-factor';
 
-// The crypto and version-mismatch behaviour itself is `versioned-secret.ts`'s, tested once in
-// `tests/unit/infrastructure/security/versioned-secret.test.ts` — this just holds the wiring.
+/**
+ * The crypto and version-mismatch behaviour itself is `versioned-secret.ts`'s, tested once in
+ * `tests/unit/infrastructure/security/versioned-secret.test.ts` — this just holds the wiring.
+ */
 describe('TOTP secret encryption', () => {
     it('round-trips a secret through encrypt then decrypt, under the configured TOTP key', () => {
         const secret = generateSecret();
@@ -62,8 +64,10 @@ describe('verifyTotpCode — fixed-clock vectors, never wall time', () => {
 
     it('accepts a code generated for the current step', async () => {
         const secret = generateSecret();
-        // The code an authenticator app would show at this exact instant — generated
-        // independently of `verifyTotpCode`, the same way a real device would.
+        /**
+         * The code an authenticator app would show at this exact instant — generated
+         * independently of `verifyTotpCode`, the same way a real device would.
+         */
         const code = await generate({ secret, epoch: FIXED_EPOCH_SECONDS });
 
         jest.useFakeTimers().setSystemTime(FIXED_EPOCH_SECONDS * 1000);
@@ -95,8 +99,10 @@ describe('verifyTotpCode — fixed-clock vectors, never wall time', () => {
             const first = await verifyTotpCode(secret, code);
             expect(first.valid).toBe(true);
 
-            // The identical code, presented again inside the same window: rejected once
-            // `afterTimeStep` names the step it already matched.
+            /**
+             * The identical code, presented again inside the same window: rejected once
+             * `afterTimeStep` names the step it already matched.
+             */
             const replay = await verifyTotpCode(secret, code, first.timeStep);
             expect(replay).toEqual({ valid: false });
         } finally {
@@ -148,9 +154,11 @@ const now = new Date('2026-09-04T12:00:00.000Z');
 
 describe('delivered codes — the shared machinery behind email, and every channel after it', () => {
     it('mints six digits, zero-padded', () => {
-        // 200 draws rather than one: a `randomInt` low enough to need padding is roughly a
-        // one-in-ten draw, so a single sample would pass on a broken implementation nine times out
-        // of ten.
+        /**
+         * 200 draws rather than one: a `randomInt` low enough to need padding is roughly a
+         * one-in-ten draw, so a single sample would pass on a broken implementation nine times out
+         * of ten.
+         */
         const codes = Array.from({ length: 200 }, () => generateDeliveredCode());
 
         expect(codes.every((code) => /^\d{6}$/.test(code))).toBe(true);
@@ -220,8 +228,10 @@ describe('delivered codes — the shared machinery behind email, and every chann
         armDeliveredCode(record, '123456', now);
 
         expect(record.codeHash).not.toContain('123456');
-        // The HMAC under NODE_TOTP_ENCRYPTION_KEY, not sha256: six digits is a space of a million,
-        // which a plain digest surrenders to anyone holding a database dump.
+        /**
+         * The HMAC under NODE_TOTP_ENCRYPTION_KEY, not sha256: six digits is a space of a million,
+         * which a plain digest surrenders to anyone holding a database dump.
+         */
         expect(record.codeHash).toBe(hashDeliveredCode('123456'));
         expect(record.codeHash).not.toBe(createHash('sha256').update('123456').digest('hex'));
     });

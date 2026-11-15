@@ -54,8 +54,10 @@ describe('the ship action and the ship door agree', () => {
                     status: OrderStatus.paid
                 });
                 const orderId = String(order._id);
-                // A paid order has the fulfillment orders its payment made; the status under test
-                // is then forced onto it, so even `pending` and `canceled` carry one.
+                /**
+                 * A paid order has the fulfillment orders its payment made; the status under test
+                 * is then forced onto it, so even `pending` and `canceled` carry one.
+                 */
                 const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
                 if (status !== OrderStatus.paid) await forceOrderStatus(orderId, status);
                 const view = await api()

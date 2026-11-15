@@ -288,7 +288,7 @@ describe('googleOAuthProvider.exchangeCode', () => {
         );
     });
 
-    /*
+    /**
      * `fetch` is stubbed to only ever settle when the request's OWN `AbortSignal` fires, the way a
      * real aborted fetch behaves, so this proves the deadline reaches the request rather than
      * merely proving a timer exists somewhere.

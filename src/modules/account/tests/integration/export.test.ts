@@ -40,8 +40,10 @@ import {
 } from '@modules/account/services/export';
 import { runExportJob } from '@modules/account/services/export-job';
 import { reapExpiredExports } from '@modules/account/services/export-rows';
-// Importing the HTTP harness builds the app, which runs every module's `onRegistered` and so
-// installs the real section list and the real erasers.
+/**
+ * Importing the HTTP harness builds the app, which runs every module's `onRegistered` and so
+ * installs the real section list and the real erasers.
+ */
 import '@tests/http';
 
 /** Every mail the app queued, newest last. `mock*` so the hoisted `jest.mock` may close over it. */
@@ -560,9 +562,11 @@ describe('a build that fails', () => {
         ]);
 
         await requestFor();
-        // The account vanishes between the failed build and the notice: nobody is left to tell.
-        // Set after the request, which reads the user itself. The job's first read (to build)
-        // is the real one; the second (to mail the notice) finds nobody.
+        /**
+         * The account vanishes between the failed build and the notice: nobody is left to tell.
+         * Set after the request, which reads the user itself. The job's first read (to build)
+         * is the real one; the second (to mail the notice) finds nobody.
+         */
         const readUser = accountUserService.getById;
         jest.spyOn(accountUserService, 'getById')
             .mockImplementationOnce(readUser)
@@ -581,8 +585,10 @@ describe('a build that fails', () => {
         ]);
 
         const { user } = await requestFor();
-        // Set after the request, which reads the user itself. The job reads the account twice: once
-        // to build (this must work) and once to mail the notice (this one fails).
+        /**
+         * Set after the request, which reads the user itself. The job reads the account twice: once
+         * to build (this must work) and once to mail the notice (this one fails).
+         */
         const readUser = accountUserService.getById;
         jest.spyOn(accountUserService, 'getById')
             .mockImplementationOnce(readUser)

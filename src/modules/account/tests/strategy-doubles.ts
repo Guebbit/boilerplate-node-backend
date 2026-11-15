@@ -45,7 +45,6 @@ export const recordingResponse = () => {
 /**
  * The call a named cookie was set with.
  * @param cookie - the recording mock from `recordingResponse`
- * @param name - the cookie name
  * @returns the call, or `undefined` when the cookie was not set
  */
 export const cookieSet = (cookie: jest.Mock<unknown, SetCookieCall>, name: string) =>

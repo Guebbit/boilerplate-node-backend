@@ -19,6 +19,9 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 
 import { router } from '@modules/cart/routes';
 
+/**
+ * Every route the cart module mounts, written out so a new route must be added here on purpose.
+ */
 const ALL = [
     'GET /summary',
     'POST /checkout',
@@ -63,8 +66,10 @@ describe('cart routes — the checkout budget', () => {
             expect(chainOf(router, signature)).not.toContain('checkout');
     });
 
-    // Before the permission, a refused caller would spend it; after the idempotency ledger, a
-    // replayed request would escape it, and a loop of retries is the thing being bounded.
+    /**
+     * Before the permission, a refused caller would spend it; after the idempotency ledger, a
+     * replayed request would escape it, and a loop of retries is the thing being bounded.
+     */
     it('spends after the permission check and before the idempotency ledger', () => {
         const chain = chainOf(router, 'POST /checkout');
 
@@ -88,14 +93,18 @@ describe('cart routes — a merge is a hundred writes in one request', () => {
 
 describe('cart routes — caching', () => {
     it('clears products at checkout, where stock actually changes', () => {
-        // Checkout is the one cart route with effects outside the cart: it commits reserved stock.
-        // Orders are never Redis-cached, so there is no `orders` entry to clear.
+        /**
+         * Checkout is the one cart route with effects outside the cart: it commits reserved stock.
+         * Orders are never Redis-cached, so there is no `orders` entry to clear.
+         */
         expect(chainOf(router, 'POST /checkout')).toContain('invalidateCache([products])');
     });
 
     it('caches nothing, because a cart is per-caller state', () => {
-        // A shared cache keyed without the caller would serve one shopper's cart to another. The
-        // absence is the invariant, so it is asserted rather than assumed.
+        /**
+         * A shared cache keyed without the caller would serve one shopper's cart to another. The
+         * absence is the invariant, so it is asserted rather than assumed.
+         */
         const cached = ALL.filter((signature) =>
             chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
         );
