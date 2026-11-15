@@ -291,6 +291,33 @@ export default withMermaid(
                     {
                         text: 'Deploy',
                         items: [
+                            {
+                                text: 'Ways to deploy',
+                                link: '/operate/ways-to-deploy/',
+                                collapsed: true,
+                                items: [
+                                    {
+                                        text: 'Shared hosting',
+                                        link: '/operate/ways-to-deploy/shared-hosting'
+                                    },
+                                    {
+                                        text: 'Docker server',
+                                        link: '/operate/ways-to-deploy/docker-server'
+                                    },
+                                    {
+                                        text: 'Container PaaS',
+                                        link: '/operate/ways-to-deploy/container-paas'
+                                    },
+                                    {
+                                        text: 'Kubernetes',
+                                        link: '/operate/ways-to-deploy/kubernetes'
+                                    },
+                                    {
+                                        text: 'Managed services',
+                                        link: '/operate/ways-to-deploy/managed-services'
+                                    }
+                                ]
+                            },
                             { text: 'Getting Started — Production', link: '/operate/first-deploy' },
                             { text: 'Hosting', link: '/operate/hosting' },
                             { text: 'Deploy and rollback', link: '/operate/deploy-and-rollback' },
