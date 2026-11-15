@@ -243,7 +243,7 @@ appears here by declaring them.
 Ships with every deployment, whatever the project becomes.
 
 - [`access`](./access.md) — Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.
-- [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Sessions](./account-sessions.md), [Two-factor authentication](./account-two-factor.md).
+- [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Proving an address, deletion and data export](./account-proof-and-export.md), [Sessions](./account-sessions.md), [Cookie mode and where sessions live](./account-sessions-cookie.md), [JWT mode: tokens, keys and claims](./account-sessions-jwt.md), [Freshness and step-up](./account-sessions-step-up.md), [Two-factor authentication](./account-two-factor.md).
 - [`addresses`](./addresses.md) — The address book, its own module so the cart's checkout can reach it without importing account.
 - [`analytics`](./analytics.md) — The relay a browser uses to report browsing events (a product viewed, a search made) once the visitor has agreed to be measured.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
