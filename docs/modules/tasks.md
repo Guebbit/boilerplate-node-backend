@@ -172,6 +172,8 @@ and the erasure, so they cannot disagree. The `{ subjectId }` and `{ email }` in
 
 ## Read next
 
+- [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md) — a deeper page of this module
+- [Task notices and the staff badge](./tasks-notices.md) — a deeper page of this module
 - [Users](./users.md) — the assignee, and the erase cascade this module joins
 - [Access](./access.md) — the roles a task may be given to
 - [Modules overview](./start.md) — the whole context map

@@ -303,6 +303,7 @@ npm run sync:frontend     # hands the same three to the paired frontend
 
 ## Read next
 
+- [Webhook delivery, switches and updates](./webhooks-delivery.md) — a deeper page of this module
 - [Events & Logging](../understand/events-and-logging.md) — the event bus webhooks subscribe to
 - [RabbitMQ](../understand/rabbitmq.md) — the broker behind delivery
 - [The AsyncAPI workflow](../build/asyncapi-workflow.md) — how an event is declared

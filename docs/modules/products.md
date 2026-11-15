@@ -294,6 +294,7 @@ buyer's own request.
 
 ## Read next
 
+- [Product states and backorder](./products-states.md) — a deeper page of this module
 - [Modules overview](./start.md) — the whole context map
 - [`locales`](./locales.md) — the `translations` collection and its own admin door
 - [Internationalisation](../understand/i18n.md) — the resolve/fallback mechanism translated content runs on

@@ -222,6 +222,7 @@ Identity is one generic subdomain. Keycloak, Auth0 and better-auth all keep it a
 
 ## Read next
 
+- [Proving an address, deletion and data export](./account-proof-and-export.md) — a deeper page of this module
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
 - [Two-factor authentication](./account-two-factor.md) — the registry, and the enrollment state machine
 - [OAuth](./account-oauth.md) — the provider port and the three outcomes of a callback

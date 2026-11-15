@@ -358,6 +358,11 @@ Full detail: [Disputes and writing an adapter](./payments-disputes-and-adapters.
 
 ## Read next
 
+- [Disputes and writing an adapter](./payments-disputes-and-adapters.md) — a deeper page of this module
+- [Offline and bank-transfer payments](./payments-offline.md) — a deeper page of this module
+- [Refunds and refund failures](./payments-refunds.md) — a deeper page of this module
+- [How a payment settles](./payments-settlement.md) — a deeper page of this module
+- [The staff Payments page, mails and retention](./payments-staff-and-retention.md) — a deeper page of this module
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
 - [`orders`](./orders.md) — what a payment is about
 - [Layers](../understand/layers.md) — what a port is and where it sits

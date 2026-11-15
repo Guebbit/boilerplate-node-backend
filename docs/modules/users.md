@@ -331,6 +331,7 @@ which `account` verifies against as well: no package to choose, keep patched or 
 
 ## Read next
 
+- [Sibling doors, purchase hold and erasure](./users-siblings-and-erasure.md) — a deeper page of this module
 - [Modules overview](./start.md) — the whole context map
 - [`account`](./account.md) — the other service over this collection
 - [Strategic DDD](../understand/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail

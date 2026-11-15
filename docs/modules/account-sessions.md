@@ -284,8 +284,11 @@ for where they sit among everything else this repo depends on.
 | The session row, rotation, reuse and the grace      | ours: a JWT is stateless, and the revocation rules are the point                 |
 | The epoch, the mint guard and the step-up freshness | ours: policy, not cryptography                                                   |
 
-## Related pages
+## Read next
 
+- [JWT mode: tokens, keys and claims](./account-sessions-jwt.md) — a deeper page of this module
+- [Freshness and step-up](./account-sessions-step-up.md) — a deeper page of this module
+- [Cookie mode and where sessions live](./account-sessions-cookie.md) — a deeper page of this module
 - [`account`](./account.md) — the module this belongs to
 - [Two-factor authentication](./account-two-factor.md) — the second factor a login may have to pass
 - [OAuth](./account-oauth.md) — the other way a session is minted

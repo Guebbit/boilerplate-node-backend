@@ -214,6 +214,8 @@ slice parses the environment once per process: a changed variable takes effect o
 
 ## Read next
 
+- [Orphaned holds and the ledger](./inventory-reservations-orphaned-holds.md) — a deeper page of this module
+- [Preorders and backorders](./inventory-reservations-preorders-and-backorders.md) — a deeper page of this module
 - [`inventory`](./inventory.md) — the module this belongs to
 - [Checkout](./cart-checkout.md) — where a hold is taken
 - [`payments`](./payments.md) — where a hold becomes a sale

@@ -359,6 +359,9 @@ delivery — never counts, which `requiresAddress: false` already says.
 
 ## Read next
 
+- [Cutting, shipping and delivering](./delivery-acts.md) — a deeper page of this module
+- [Lost shipments and replacements](./delivery-lost-and-replaced.md) — a deeper page of this module
+- [Fulfillment orders and shipments](./delivery-records.md) — a deeper page of this module
 - [`orders`](./orders.md) — what a fulfillment order is about, and the summary it reads
 - [`returns`](./returns.md) — what comes back, and what is cancelled before it leaves
 - [Data Retention](../understand/data-retention.md#free-text-on-holds) — why a hold note is wiped

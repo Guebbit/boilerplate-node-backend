@@ -154,6 +154,8 @@ Full detail: [Shop-tasks notices, digest and badge](./shop-tasks-notices.md#who-
 
 ## Read next
 
+- [Shop-tasks notices, digest and badge](./shop-tasks-notices.md) — a deeper page of this module
+- [Shop to-dos by situation](./shop-tasks-todos.md) — a deeper page of this module
 - [Tasks](./tasks.md) — the engine these openers feed
 - [Notifications](./notifications.md) — the inbox, the bell and the work-notice engine
 - [Extending another module's contract](../build/contract-fragmentation.md#extending-another-modules-contract) — how the kinds and codes reach the contract

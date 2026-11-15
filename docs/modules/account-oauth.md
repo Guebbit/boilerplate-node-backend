@@ -200,6 +200,7 @@ they were told about.
 
 ## Read next
 
+- [OAuth registration, outcomes and endpoints](./account-oauth-flow.md) — a deeper page of this module
 - [`account`](./account.md) — the module this belongs to
 - [Sessions](./account-sessions.md) — the session a callback mints, and `amr`
 - [Two-factor authentication](./account-two-factor.md) — the second factor this path also owes

@@ -424,6 +424,9 @@ correction takes effect on restart.
 
 ## Read next
 
+- [Creating an order, exports and mails](./orders-creation-and-exports.md) — a deeper page of this module
+- [Order status and timeline](./orders-status-and-timeline.md) — a deeper page of this module
+- [Withdrawal window, purchase hold and shop identity](./orders-withdrawal-and-hold.md) — a deeper page of this module
 - [Modules overview](./start.md) — the whole context map
 - [`inventory`](./inventory.md) — where the units actually move
 - [`payments`](./payments.md) — the money half of the same transition

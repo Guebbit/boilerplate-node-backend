@@ -355,6 +355,9 @@ The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_
 
 ## Read next
 
+- [Remedies for a return](./returns-remedies.md) — a deeper page of this module
+- [Declining, closing and cancelling a return](./returns-statuses-and-cancellation.md) — a deeper page of this module
+- [The withdrawal button and its deadlines](./returns-withdrawal.md) — a deeper page of this module
 - [`orders`](./orders.md) — the withdrawal clock and the cancel a pre-dispatch withdrawal becomes
 - [`delivery`](./delivery.md) — what has shipped, and the remainder a cancel marks
 - [`payments`](./payments.md#refund-records) — the money side
