@@ -1,39 +1,31 @@
 ---
 source: src/modules/invoicing/tests/unit/render.test.ts
-sha256: 8054d61fce67a64249b8162341d3e7b4543956f8882dc3c50bdde2f10db00bf6
-generated_at: 2026-11-08T06:19:13.221294+00:00
+sha256: 45bcdb09a953e61caf2d7511725afdfd3a34f7211e95d29606b4be71032a80f6
+generated_at: 2026-11-14T20:16:52.429144+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/invoicing/tests/unit/render.test.ts
 
 ## Purpose
-
-Unit tests for the invoice and credit-note PDF rendering service. The e-invoicing provider is fully mocked (no Chromium), while the document store is real (backed by a per-test temp directory), so the assertions target the caching and resilience behaviour that matters in production: the second download returns the stored file, `retention 0` stores nothing, and a failing store never breaks the download.
+Unit tests for the invoice and credit-note PDF rendering service (`renderInvoicePdf` / `renderCreditNotePdf`). The provider is mocked (no Chromium), while the document store runs against a real temp directory, so the assertions target caching semantics: the second download streams the stored file, retention `0` stores nothing, and a failing store never prevents a successful render.
 
 ## Key elements
-
-- **`issue` (module-level `jest.fn`)** – replaces the provider's `issue` method; returns a distinct `Buffer` per call so tests can tell a fresh render apart from a stored replay.
-- **`jest.mock('../../providers', …)`** – stubs `resolveEInvoicingProvider` to return an object whose `issue` delegates to the `issue` mock.
-- **`jest.mock('@infrastructure/adapters/document-store', …)`** – spreads the real module, then wraps `readDocument` and `writeDocument` in `jest.fn(actual.…)` pass-throughs so individual calls can be made to reject.
-- **`beforeEach` / `afterEach`** – creates a unique temp dir via `mkdtemp`, sets `NODE_DOCUMENT_STORE_PATH` and `NODE_INVOICE_PDF_RETENTION_DAYS` env vars, resets `issue`; tears down the dir with `rm`.
-- **`storedNames()`** – helper that reads the temp dir and returns sorted file names.
-- **`anInvoice(id)` / `aCreditNote(id)`** – build minimal `InvoiceDocument` / `CreditNoteDocument` stubs via `asStub` with a fixed `SELLER` block.
-- **`describe('the stored copy of a rendered invoice', …)`** – four tests: cache-hit on second call, unique filename per document id, coexistence of invoice + credit note in the same store, re-render after file is deleted.
-- **`describe('a retention of 0', …)`** – verifies `issue` is called every time and no file lands in the store.
-- **`describe('a store that fails', …)`** – makes `writeDocument` or `readDocument` reject once and asserts the PDF bytes are still returned.
+- **`renderDocument`** — module-level `jest.fn` that stands in for the provider's `render` method; returns a distinct `Buffer` (`pdf-1`, `pdf-2`, …) per call so fresh renders are distinguishable from stored copies.
+- **`anInvoice(id)` / `aCreditNote(id)`** — minimal fixture factories (via `asStub`) carrying only the fields the renderer reads.
+- **`storedNames()`** — helper that returns the sorted file names currently in the temp directory.
+- **`SELLER`** — frozen seller block shared by both fixtures.
+- **Three `describe` blocks** — *stored copy of a rendered invoice*, *a retention of 0*, *a store that fails* — covering caching, naming, credit-note isolation, re-renders after deletion, zero-retention, and write/read failure resilience.
 
 ## Relationships
-
-- **`src/modules/invoicing/services/render.ts`** – the unit under test; `renderInvoicePdf` and `renderCreditNotePdf` are the functions exercised by every test case.
-- **`src/infrastructure/adapters/document-store.ts`** – mocked as pass-throughs; `readDocument` / `writeDocument` are individually rejected in the resilience tests.
-- **`src/modules/invoicing/model.ts`** – supplies the `InvoiceDocument` and `CreditNoteDocument` types that shape the test fixtures.
-- **`tests/support/environment.ts`** – `setEnvironment` sets `NODE_DOCUMENT_STORE_PATH` and `NODE_INVOICE_PDF_RETENTION_DAYS` per test.
-- **`tests/support/stub.ts`** – `asStub` constructs the frozen document objects used as inputs.
+- **`src/modules/invoicing/services/render.ts`** — the module under test; `renderInvoicePdf` and `renderCreditNotePdf` are the SUT.
+- **`src/modules/invoicing/model.ts`** — provides the `InvoiceDocument` and `CreditNoteDocument` types used to shape fixtures.
+- **`src/infrastructure/adapters/document-store.ts`** — the real implementation runs against a temp directory; its `readDocument`/`writeDocument` are intercepted at module-mock level so individual tests can inject failures (see Notes).
+- **`tests/support/environment.ts`** — `setEnvironment` configures `NODE_DOCUMENT_STORE_PATH` and `NODE_INVOICE_PDF_RETENTION_DAYS` per test.
+- **`tests/support/stub.ts`** — `asStub` creates the typed fixture objects.
 
 ## Notes
-
-- The `documentStore` mock deliberately uses `jest.fn(actual.…)` spread rather than `jest.spyOn` on the namespace import; a comment in the file explains that `jest.spyOn` cannot redefine a namespace-import getter under the project's SWC transform (see `tests/support/ports.ts` for the same pattern).
-- The provider mock is at module level (`jest.mock` in the import section), not inside a `describe`, so it applies to the whole file.
-- `issue` returns incrementing bodies (`pdf-1`, `pdf-2`, …) specifically so "the stored file" and "a fresh render" produce different strings, making cache-hit assertions unambiguous.
-- File naming convention under test: `invoice-{_id}.pdf` and `credit-note-{_id}.pdf` in the same directory.
+- The document-store mock spreads `jest.requireActual` and then overrides `readDocument`/`writeDocument` with spy wrappers. The file comment explains why: `jest.spyOn` cannot redefine a namespace-import getter under the SWC transform used in the mutation run (see `tests/support/ports.ts`).
+- Each test gets a fresh `mkdtemp` directory; `afterEach` removes it. There is no shared state between tests.
+- The provider mock (`../../providers`) is set up with `jest.mock` at module level; `renderDocument` is `mockReset()`'d in `beforeEach` so call-count assertions are per-test.
+- Document IDs are fixed-length hex-like strings (24 chars) chosen to match the store's naming convention (`invoice-<id>.pdf`, `credit-note-<id>.pdf`).

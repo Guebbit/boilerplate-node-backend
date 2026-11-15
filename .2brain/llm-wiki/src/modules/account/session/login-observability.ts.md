@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/login-observability.ts
-sha256: e4aef5e81b71697ec73f347d0b7b9211f5ef19c2cb59688829b63f8edc545787
-generated_at: 2026-11-08T04:29:36.538657+00:00
+sha256: da250bb32cfaf265130659e1ed0ec1304906a51fe4b157889d434944c691fa4b
+generated_at: 2026-11-14T18:58:33.355570+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared observability tail (metrics, audit, analytics) that fires when a login completes—successfully or not. Extracted from `post-login.ts` so the 2FA follow-up controller (`post-login-2fa.ts`) can reuse the same "a login happened" signals without re-implementing them. Lives at the controller/session layer (not in `services/login.ts`) because the success emit must only fire after a session actually exists (cookies, access token), a fact the credential-checking services don't know about.
+The metrics, audit, and analytics "tail" that fires after a completed login. Extracted from `post-login.ts` so that `post-login-2fa.ts` (the second step of a 2FA login) reuses it instead of duplicating what "a login happened" means. It lives at the controller layer — not in `services/login.ts` — because the success signal must only fire once a session actually exists (cookies, access token), a fact the credential-check functions don't know.
 
 ## Key elements
 
-- **`attemptedIdentity`** (private) — Normalises a candidate email string, then pseudonymises it with purpose `'log'` so it correlates with the hashed address in stdout logs without storing the raw address. Returns `undefined` for non-string input.
-- **`recordLoginFailure(request)`** — Increments the `authLoginTotal{status='failure'}` metric and writes an audit record (actor = `anonymous`, action = `AUTH_LOGIN`, outcome = `failure`, optional `targetId` from the attempted email).
-- **`recordLoginSuccess(request, userId, metadata?)`** — Increments `authLoginTotal{status='success'}`, writes an audit record with the resolved role and any caller-supplied metadata (e.g. `{ via: 'google' }`), and emits a `USER_LOGGED_IN` analytics event. Role is resolved at call time via `isUnrestrictedCaller`.
+- **`attemptedIdentity`** *(internal)* — Pseudonymises a normalised email string (purpose `"log"`) for use as an audit `targetId`, or returns `undefined` if the input isn't a string.
+- **`recordLoginFailure(request: Request)`** — Increments `authLoginTotal` with `status: 'failure'` and writes an audit entry (`actorUserId: 'anonymous'`, `outcome: 'failure'`, optional `targetId` from the request body's `email` field).
+- **`recordLoginSuccess(request: Request, userId: string, metadata?: Record<string, unknown>)`** — Increments `authLoginTotal` with `status: 'success'`, writes an audit entry (resolving the actor's role via `isUnrestrictedCaller`), and emits a `USER_LOGGED_IN` analytics event. Fetches the user via `accountUserService.findAuthenticatableById` to honour the account's stored `analyticsConsent` over the request-header value.
 
 ## Relationships
 
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts IP/UA/consent-header context for both audit and analytics payloads.
-- **`@infrastructure/observability/audit`** — `recordAudit` is the single write path for audit entries.
-- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` / `buildAnalyticsBase` drive the analytics emission.
-- **`@infrastructure/persistence/normalize-email`** & **`@infrastructure/security/pseudonymise`** — Used together inside `attemptedIdentity` to produce a correlation-safe, non-reversible digest of the attempted identifier.
-- **`@modules/account/metrics`** — Source of the `authLoginTotal` Prometheus counter.
-- **`@modules/account/audit`** — Source of the `accountAuditActions.AUTH_LOGIN` action constant.
-- **`@modules/account/analytics`** — Source of the `accountAnalyticsEvents.USER_LOGGED_IN` event constant.
-- **`@modules/account/roles`** — `isUnrestrictedCaller(userId)` determines whether the actor role is `admin` or `user`.
-- **`@modules/users`** — `userService.findAuthenticatableById(userId)` fetches the user's stored `analyticsConsent` for the analytics event.
-- **`post-login.ts` / `post-login-2fa.ts` / `post-login-restore.ts` / `get-oauth-callback.ts`** — The controllers that invoke `recordLoginSuccess` or `recordLoginFailure` as the final step after a session is established.
+- **`src/modules/account/roles.ts` (`isUnrestrictedCaller`)** — Called at success time to resolve whether the signed-in account is an admin.
+- **`src/modules/account/audit.ts` (`accountAuditActions`)** — Supplies the `AUTH_LOGIN` action constant for both failure and success audit records.
+- **`src/modules/account/analytics.ts` (`accountAnalyticsEvents`)** — Supplies the `USER_LOGGED_IN` event name for the analytics emit.
+- **`src/modules/account/metrics.ts` (`authLoginTotal`)** — The Prometheus counter incremented on both outcomes.
+- **`src/infrastructure/observability/audit.ts` (`recordAudit`)** — Low-level audit writer used by both exported functions.
+- **`src/infrastructure/observability/analytics/index.ts` (`emitAnalyticsEvent`, `buildAnalyticsBase`)** — Analytics pipeline; `buildAnalyticsBase` derives the shared event envelope from the request context.
+- **`src/infrastructure/security/pseudonymise.ts` (`pseudonymise`)** — Hashes the email for audit correlation without storing the raw value.
+- **`src/infrastructure/persistence/normalize-email.ts` (`normalizeEmail`)** — Normalises the email before pseudonymisation so case variants don't produce different digests.
+- **`src/infrastructure/http/request.ts` (`callerContextOf`)** — Extracts the caller context (IP, user-agent, analytics-consent header) for audit and analytics records.
+- **`src/modules/users/friends/account.ts` (`accountUserService`)** — Looks up the account to read its stored `analyticsConsent`.
+- **`src/modules/account/controllers/post-login.ts`** — Original home of this logic before extraction; still a caller.
+- **`src/modules/account/controllers/post-login-2fa.ts`** — Reuses these exports for the second step of a 2FA login.
+- **`src/modules/account/controllers/post-login-restore.ts`** — Calls the same observability tail for restore-code logins.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — Calls `recordLoginSuccess` with a `metadata` object (such as `{ via: 'google' }`) to distinguish the OAuth path in audit.
 
 ## Notes
 
-- `recordLoginSuccess` resolves the role *fresh* from the membership table (`isUnrestrictedCaller`); the account document itself carries no role.
-- Analytics consent precedence: the user's stored `analyticsConsent` (yes/no) overrides the request's banner header. The header is only used when the account has never explicitly answered (GDPR Art. 7(3)).
-- `recordLoginFailure` hard-codes `actorUserId: 'anonymous'` and `actorRole: 'anonymous'`; it never attempts to resolve a user from the (failed) credential.
-- The module is intentionally *not* imported by any service-layer file; it is a controller-adjacent concern.
+- The SUCCESS path resolves role **fresh** from membership (`isUnrestrictedCaller`); the account document itself carries no role.
+- Analytics consent precedence: the account's stored `analyticsConsent` (yes or no) **always wins** over the request-header value. The header only matters for an account that never answered (GDPR Art. 7(3)).
+- `attemptedIdentity` uses pseudonymise purpose `"log"` specifically so the digest correlates with the same value already in stdout log lines, without persisting the raw address.
+- `recordLoginFailure` reads `request.body.email` via a narrowing cast; the body is untyped at this layer.

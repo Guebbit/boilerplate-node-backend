@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/withdrawal.test.ts
-sha256: 8491d4addf6ace2f37d801d3692d9cc22e12ce255091d883c8a07e811e9239d4
-generated_at: 2026-11-08T07:15:42.179993+00:00
+sha256: b8da0fc196b566d7fd1471fe4a3536f9d7a242a4a38b3c0dc82e528695094cd9
+generated_at: 2026-11-14T20:58:24.123258+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure, side-effect-free withdrawal and conformity-window logic in the orders domain. Each test exercises a single exported function in isolation, pinning the exact date-boundary semantics (UTC day-end, month/year rollovers, the one-day "silent grace" period) that the Consumer Rights Directive Art. 9 / 11a / 16 rules imply for a single order.
+Unit tests for the pure withdrawal-window rules that implement (as far as one order can express) Consumer Rights Directive Art. 9, 11a, and 16. The file exists to pin the exact calendar arithmetic, grace-period boundaries, and eligibility logic that the rest of the order module relies on, using only fixed-date inputs so every assertion is deterministic.
 
 ## Key elements
 
-- **`withdrawalStartFor`** — verifies the window opens at delivery for physical goods, at payment for digital goods, and falls back to delivery when `paidAt` is absent.
-- **`withdrawUntilFrom`** — pins that the 14-day count excludes the event day, always ends at `23:59:59.999Z` UTC, and is independent of the event's time-of-day; includes a month-boundary case.
-- **`withdrawalClosesAt`** — the "silent grace day": the UTC day *after* the announced last day still counts; tested across a month and year boundary (2026-12 → 2027-01-01).
-- **`conformityUntilFrom`** — two-year statutory guarantee; ends at day 7 after the same calendar date two years later (leap-year 29 Feb case included).
-- **`deliveryClockFor`** — composes `withdrawUntilFrom` (from delivery) and `conformityUntilFrom` (from arrival) into a single clock object.
-- **`canWithdraw`** — boolean gate: true for non-canceled orders within or on the grace day; false once the grace day has fully elapsed (off-by-one at the millisecond level).
-- **`isBeforeDispatch`** — status-based *plus* fulfillment-based check; a partially-shipped `processing` order is treated as past the shop's hands.
-- **`canCorrectAddress`** — open only when at least one unit remains unshipped *and* a `shippingAddress` is present.
-- **`isExcludedFromWithdrawal`** — per-line `product.noWithdrawal` flag; a mixed order is still partially withdrawable.
-- **`withdrawalRefusalOf`** — returns a `WithdrawBlockedReason` (`all_excluded`, `window_closed`, `nothing_left`) or `undefined`; first matching reason wins; a final test asserts it is the logical complement of `canWithdraw`.
-- **`repairedConformityUntil`** — extends the guarantee by 12 months, preserving month/day/hour.
+- **`withdrawalStartFor`** — verifies that the 14-day clock starts at delivery for physical goods and at `paidAt` for digital-only goods (falling back to delivery if `paidAt` is missing).
+- **`withdrawUntilFrom`** — asserts that day 0 is excluded, the deadline lands on 23:59:59.999 UTC of the 14th day, and the result is independent of the event's time-of-day; includes a month-boundary case.
+- **`withdrawalClosesAt`** — confirms the silent grace day: the window is still open through the full UTC day *after* the announced last day, and closes at 23:59:59.999 UTC of that grace day.
+- **`conformityUntilFrom`** — 2-year statutory guarantee plus 7 days, tested across a leap-year delivery (29 Feb → 8 Mar).
+- **`deliveryClockFor`** — checks that the withdrawal clock and the guarantee clock run independently (withdrawal from its own start, guarantee from arrival).
+- **`canWithdraw`** — status-gating (never on `canceled`), open-window check including the last millisecond of the grace day, and closure one millisecond after.
+- **`isBeforeDispatch`** — reads `fulfillment.shipped` as the source of truth over `status`; a `processing` order with partial shipment counts as dispatched.
+- **`canCorrectAddress`** — open when units remain after a partial ship; closed once every unit has left, on shipped/delivered/canceled, or when no shipping address exists.
+- **Art. 16 exclusions (`isExcludedFromWithdrawal`)** — line-level `noWithdrawal` flag; a mixed order still allows withdrawal of the eligible lines.
+- **`withdrawalRefusalOf`** — returns the first applicable `WithdrawBlockedReason` (`all_excluded`, `window_closed`, `nothing_left`) or `undefined`; includes an explicit consistency loop proving it agrees with `canWithdraw` on every case.
+- **`repairedConformityUntil`** — extends the guarantee by exactly 12 months preserving day and hour.
+- **`withdrawalRefundDueBy`** — 14-day refund deadline computed in the *shop's* IANA timezone (e.g. `Europe/Rome`), not UTC.
 
 ## Relationships
 
-- **`src/modules/orders/domain/index.ts`** — barrel re-export the test imports from (`../../domain`); the test never reaches into `withdrawal.ts` directly.
-- **`src/modules/orders/domain/withdrawal.ts`** — implementation module whose functions the test exercises; any signature or return-shape change here will surface as a test failure.
-- **`src/types/index.ts`** — supplies the `OrderStatus` and `WithdrawBlockedReason` enums used throughout the assertions; renaming or adding members here affects the test's `it.each` tables.
+- **`src/modules/orders/domain/withdrawal.ts`** — the implementation under test; every function asserted here is defined (or re-exported) there.
+- **`src/modules/orders/domain/index.ts`** — the barrel import (`../../domain`) through which this file pulls the twelve functions, guaranteeing the public surface stays in sync.
+- **`src/types/index.ts`** — source of the `OrderStatus` and `WithdrawBlockedReason` enums used throughout the assertions.
 
 ## Notes
 
-- All dates are **UTC**; the `.999Z` millisecond suffix is the canonical "end of day" sentinel used in every boundary assertion.
-- The fixed `NOW` constant (`2026-03-10T12:00:00Z`) makes the suite deterministic; no `jest.useFakeTimers` or `Date.now()` mocking is used.
-- The "grace day" is *not* a configuration flag — it is a hard-coded one-day extension inside `withdrawalClosesAt`. If the legal requirement changes, both the implementation and these boundary tests (the `NOW - DAY_MS - 1` cases) must move together.
-- `withdrawalRefusalOf` returns `undefined` for **canceled** orders even when items are excluded, because the UI never renders the button on a canceled order; the test explicitly locks this in.
-- The "agrees with `canWithdraw`" test at the bottom of the file is a cross-check: it asserts the two functions are logical complements for non-canceled orders. Adding a new blocked-reason enum member without updating `canWithdraw` will break it.
+- **Grace day is intentional and tested.** The window closes at 23:59:59.999 UTC of the day *after* the announced 14th day. Off-by-one regressions here are the main risk this file guards against.
+- **`isBeforeDispatch` trusts `fulfillment.shipped` over `status`.** A `processing` order with `fulfillment: { shipped: true }` is treated as dispatched even though the status hasn't advanced. Tests encode this as a deliberate invariant.
+- **`withdrawalRefundDueBy` is timezone-sensitive.** All other date helpers operate in UTC; this one converts through the shop's IANA zone before computing the deadline, so the final UTC instant differs (e.g. 22:59:59.999Z for UTC+1).
+- **Fixed `NOW` constant.** The suite pins `2026-03-10T12:00:00Z` so millisecond-boundary assertions (grace-day open/closed) are reproducible.
+- **Consistency contract.** The last `describe` block explicitly iterates shared cases and asserts `canWithdraw` is true iff `withdrawalRefusalOf` is `undefined` (and status ≠ `canceled`). Any future change to either function must keep them in lockstep.

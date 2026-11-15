@@ -1,44 +1,56 @@
 ---
 source: src/modules/example/module.ts
-sha256: 3909941786dd35efdeb32a619cff6fc1810469d444113b87cdd75d8825db1ba1
-generated_at: 2026-11-08T05:51:04.612247+00:00
+sha256: d6c104121192b8b4a1e2f8e7d8a7223f29d5c9d382de2286be0d9144030480bb
+generated_at: 2026-11-14T19:59:29.650573+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/example/module.ts
 
 ## Purpose
-Module manifest for the `example` domain. It is explicitly a **copy-paste template**: its sole job is to be duplicated when starting a new domain and then deleted. It wires together each optional capability (events, rate limits, webhooks, translations, cover images, config, personal-data) into a single `AppModule` object the kernel can boot.
+
+The manifest entry for the `example` module. It is a **template**: every capability the module wants the application to provide (event subscriptions, rate limits, webhook projections, image writeback, translations, personal-data export/erasure, routes) is declared here in one object, and the supporting files for each capability live alongside. The file's stated job is to be copied when starting a new domain and then deleted. Nothing in the codebase depends on it; it depends on `users` (via its barrel) only for the owner's name.
 
 ## Key elements
-- **`publicEvents`** – Maps the internal `EXAMPLE_PUBLISHED` domain event to a public webhook shape (`example.published` with `exampleId`, `title`). The `webhooks` kernel projects these via the registry without importing this file by name.
-- **`export default` (the manifest)** – A single object satisfying `AppModule`. Each property is one capability and can be removed independently:
-  - `mounts` – mounts `router` at `/examples`.
-  - `config` – registers `exampleConfig.slice`.
-  - `rateLimits` – exposes `exampleRateLimits`.
-  - `subscribe` – a boot-time callback that attaches `mailOwnerOfPublished` to `EXAMPLE_PUBLISHED` via `onDomainEvent`.
-  - `imageTargets` – tells the image pipeline where to write back a finished cover digest (`exampleRepository.writebackImage`).
-  - `translatables` – declares `title` as the translatable field on the `examples` collection.
-  - `personalData` – provides `collect` and `erase` callbacks for GDPR export/erasure.
-  - `locales` / `templates` – filesystem paths for i18n strings and mail templates.
+
+- **Default export** (`satisfies AppModule`) — the single object the application reads at boot. Fields:
+  - `name` — `'example'`, used for routing, config keys, and registry lookups.
+  - `mounts` — mounts the Express `router` from `src/modules/example/routes.ts` at `/examples`.
+  - `config` — registers the `exampleConfig` namespace from `src/modules/example/config.ts`.
+  - `rateLimits` — applies rules from `src/modules/example/rate-limits.ts`.
+  - `publicEvents` — maps the internal `EXAMPLE_PUBLISHED` domain event to a webhook-visible `example.published` shape.
+  - `subscribe` — **boot-time** callback (not import-time) that wires `EXAMPLE_PUBLISHED → mailOwnerOfPublished` via `onDomainEvent`.
+  - `imageTargets` — tells the image pipeline where to write a finished digest back (`exampleRepository.writebackImage`), keyed by `EXAMPLE_IMAGE_COLLECTION`.
+  - `translatables` — declares the `example` collection's translation rules, cache tag, and field rules (from `src/modules/example/model.ts`).
+  - `personalData` — GDPR-style `collect` / `erase` handlers (from `src/modules/example/services/personal-data.ts`); erasure runs inside a transaction.
+  - `locales` / `templates` — filesystem paths (relative to this file) for i18n strings and mail templates.
+
+- **`publicEvents`** (local const) — the only webhook surface; the kernel's registry projects it, so downstream consumers never import this module by name.
 
 ## Relationships
-- **`src/kernel/registry.ts`** – source of the `AppModule` and `PublicEventTarget` types that shape the manifest.
-- **`src/kernel/events.ts`** – provides `onDomainEvent` and `DomainEventMap` used inside `subscribe`.
-- **`src/modules.ts`** – the barrel that discovers and registers this module at boot.
-- **`src/modules/example/config.ts`** – supplies `exampleConfig`.
-- **`src/modules/example/events.ts`** – defines the `EXAMPLE_PUBLISHED` constant.
-- **`src/modules/example/services/notify.ts`** – supplies the `mailOwnerOfPublished` handler.
-- **`src/modules/example/services/personal-data.ts`** – supplies `collectPersonalData` / `eraseForUser`.
-- **`src/modules/example/services/cover.ts`** – supplies `EXAMPLE_IMAGE_COLLECTION` and the cover pipeline.
-- **`src/modules/example/rate-limits.ts`** – supplies `exampleRateLimits`.
-- **`src/modules/example/repository.ts`** – supplies `exampleRepository` (write-back, translatable helpers).
-- **`src/modules/example/routes.ts`** – supplies the Express `router` mounted at `/examples`.
-- **`src/modules/example/asyncapi.webhooks.yaml`** – the webhooks catalogue that `publicEvents` feeds into.
-- **`src/modules/example/tests/integration/capabilities.test.ts`** – integration tests exercising the wired-up capabilities.
+
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/registry.ts` | Provides the `AppModule` and `PublicEventTarget` **types** the manifest satisfies; at runtime the registry discovers this module by name. |
+| `src/kernel/events.ts` | Provides `onDomainEvent` (used inside `subscribe`) and the `DomainEventMap` type for typing the webhook payload. |
+| `src/modules.ts` | The module barrel; the doc comment says `example` is reached *through* the `users` barrel for the owner's name, but no runtime import of this file is visible here. |
+| `src/modules/example/config.ts` | Exports `exampleConfig` consumed by the `config` manifest entry. |
+| `src/modules/example/events.ts` | Exports the `EXAMPLE_PUBLISHED` symbol used in `publicEvents` and `subscribe`. |
+| `src/modules/example/services/cover.ts` | Exports `EXAMPLE_IMAGE_COLLECTION` used as the key in `imageTargets`. |
+| `src/modules/example/services/notify.ts` | Exports `mailOwnerOfPublished`, the handler registered in `subscribe`. |
+| `src/modules/example/services/personal-data.ts` | Exports `collectPersonalData` and `eraseForUser` for the `personalData` entries. |
+| `src/modules/example/rate-limits.ts` | Exports `exampleRateLimits`. |
+| `src/modules/example/model.ts` | Exports `exampleTranslationFieldRules` spread into `translatables`. |
+| `src/modules/example/repository.ts` | Exports `exampleRepository` (provides `writebackImage` and `translatable` helpers). |
+| `src/modules/example/routes.ts` | Exports the Express `router` mounted at `/examples`. |
+| `src/modules/example/module.yaml` | Declarative companion referenced in the doc comment; not directly `import`ed by this TS file. |
+| `src/modules/example/authorization.yaml` | Declarative auth rules companion; not directly `import`ed by this TS file. |
+| `src/modules/example/asyncapi.webhooks.yaml` | Webhook catalogue companion referenced in the doc comment; not directly `import`ed by this TS file. |
 
 ## Notes
-- **Template, not production code.** The header comment states it should be copied into a new domain and then removed; the `example` domain has no real business logic beyond a note with an owner and a draft/published/archived lifecycle.
-- **`subscribe` runs at boot, not at import time.** The kernel invokes it after all modules are known, so cross-module event ordering is safe.
-- **Translation convention:** `title` is the fallback-language column; other languages live in the `locales` directory (referenced by the `locales` path), not in the same row.
-- **Dependencies are one-directional:** this module depends on `users` (via its barrel) only for the owner's name; nothing else in the codebase imports `example`.
+
+- **Template, not production code.** The doc comment explicitly says to copy, customise, then delete. Treat every import here as a "delete me once you're done" marker.
+- **`subscribe` is deferred.** It is a closure invoked by the kernel *after* all modules are registered, not at module-evaluation time. Do not assume side-effects fire at import.
+- **`title` is the fallback-language column.** Other-language values live in the `locales` table; the `translatables` entry wires the translation pipeline to that split.
+- **Personal-data erasure is transactional.** `eraseForUser` receives a `session` (transaction handle) and must commit/abort within it.
+- **Public events are one-directional.** The kernel registry reads `publicEvents` to project webhooks; this file never imports the registry at runtime (types only), so there is no circular dependency.

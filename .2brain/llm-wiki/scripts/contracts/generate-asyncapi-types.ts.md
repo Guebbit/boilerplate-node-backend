@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-asyncapi-types.ts
-sha256: 59415df60e9bfd8bcf3377dcd90facf091b115e7edb38ba1304d2f22cd1be3f8
-generated_at: 2026-11-08T02:41:21.199425+00:00
+sha256: 5bcdf638ca0102f566a8458b1b4a143e8960ac6b7c7e5d986fc02ab979153151
+generated_at: 2026-11-14T17:24:36.354841+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Backend code-generation script that reads `asyncapi.yaml` and emits `src/types/asyncapi.generated.ts` containing payload interfaces, message aliases, per-namespace channel constants/unions, SSE event-name/payload maps, and queue-payload Zod validators. It is the backend half of a two-repo shared generator (the frontend copy additionally inlines a JSON-Schema map for runtime SSE-frame validation). Supports `--check` mode for CI gating without writing.
+Generates the backend's TypeScript realtime contract types (`src/types/asyncapi.generated.ts`) from `asyncapi.yaml`. It reads the full AsyncAPI 3.0 document and emits payload interfaces, message aliases, per-namespace channel constants/unions, SSE event-name/payload maps, and queue-payload Zod validators. A `--check` flag supports CI gating (writes nothing, exits 1 on drift).
 
 ## Key elements
 
-- **`AsyncApiChannel` / `AsyncApiMessage` / `AsyncApiServer` / `JsonSchema` / `AsyncApiDocument`** — Narrow structural interfaces describing only the fields this generator reads from the AsyncAPI 3.0 document and its JSON Schema payloads.
-- **`toPascalCase`** — Sanitises arbitrary contract names into valid `PascalCase` TS identifiers.
-- **`lastRefSegment`** — Extracts the final path segment from a `$ref` string; shared by type-name resolution and server/message lookups.
-- **`refToTypeName`** — Resolves a `$ref` to its generated TS type name via `toPascalCase(lastRefSegment(...))`.
-- **`resolveMessagePayloadType`** — Given a message key, returns the *payload* type it references (never the message's own alias, which Modelina may dedupe). Guards with `Object.hasOwn` to satisfy `no-unnecessary-condition`.
-- **`collectChannelMessageEntries(channels, messages, select)`** — Filters channels by a predicate (transport or server-binding, never name prefix) and returns sorted `{ channelName, messageType }` pairs.
-- **`channelProtocols(channel, servers)`** — Resolves a channel's `servers` `$ref` bindings to their declared protocols.
-- **`channelPayloadSchemaNames(channel, messages)`** — Collects all payload schema names a channel's messages resolve to.
-- **`renderLiteralArray` / `renderPayloadMap`** — Emit TypeScript source for `as const` string arrays and event-name→payload map interfaces respectively.
-- **`renderNamespaceConstant`** *(truncated in source)* — Converts dotted channel names under a namespace into `SCREAMING_SNAKE` keys inside a namespace constant.
-- **`ROOT` / `INPUT` / `OUTPUT`** — Path constants; `INPUT` is always the repo-root `asyncapi.yaml`, `OUTPUT` comes from the `--out` CLI flag.
-- **Main execution** *(truncated)* — Parses the YAML, invokes `@asyncapi/modelina`'s `TypeScriptGenerator` for payload interfaces, assembles the remaining exports, and calls `writeOrCheck`.
+- **`INPUT` / `OUTPUT`** — Resolved paths: `asyncapi.yaml` from repo root, and the generated file from the `--out` CLI arg.
+- **`toPascalCase` / `lastRefSegment` / `refToTypeName`** — Naming utilities that convert `$ref` fragments into TS identifiers.
+- **`resolveMessagePayloadType`** — Resolves a message key in `components.messages` to its actual payload schema type name (or `'unknown'`). Central to avoiding deduped alias names.
+- **`collectChannelMessageEntries`** — Builds sorted `{channelName, messageType}` pairs filtered by a caller-supplied predicate (transport or server binding), not by name prefix.
+- **`channelProtocols`** — Resolves the protocols a channel reaches via its explicit `servers` bindings.
+- **`channelPayloadSchemaNames`** — Collects the payload schema names behind a channel's messages (used by the Zod validator emitter).
+- **`renderLiteralArray` / `renderPayloadMap`** — Emit `as const` string arrays and typed event→payload map interfaces.
+- **`toConstantKey`** — Converts a channel name to a `SCREAMING_SNAKE` object key under a namespace prefix.
+- **Interfaces** (`AsyncApiDocument`, `AsyncApiChannel`, `AsyncApiMessage`, `AsyncApiServer`, `JsonSchema`) — Narrow structural types the generator reads from the YAML; intentionally omit everything else.
+- **CLI contract** — `tsx … --out <path> [--check]`.
 
 ## Relationships
 
-- **`scripts/cli.ts`** — Imports `requiredPath` to parse the required `--out` argument and resolve it against the repo root.
-- **`scripts/contracts/generated-file.ts`** — Imports `writeOrCheck`, which either writes the generated file or, in `--check` mode, compares content and exits non-zero on mismatch.
+- **`scripts/cli.ts`** — Imports `requiredPath` to parse and validate the `--out` argument.
+- **`scripts/contracts/generated-file.ts`** — Imports `writeOrCheck`, which handles the write-or-verify output logic (used by `--check`).
+- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` to anchor the `INPUT` and `OUTPUT` path resolutions.
 
 ## Notes
 
-- **Two-copy invariant.** This backend copy and the frontend copy must stay in step by hand (no shared package yet). A fix to the channel/message-naming machinery in one must be mirrored in the other.
-- **Input scope differs by repo.** Backend reads the *whole* contract (hence queue payloads appear); frontend reads only the public subset.
-- **`x-openapi-schema: <Name>` marker.** Any schema carrying this vendor extension is expected to be re-exported from the REST models rather than re-declared; the generator respects this and does not emit a duplicate type.
-- **ESM script.** Uses `import.meta.url` (not `__dirname`) for path resolution; run with `tsx`.
-- **`--check` is a no-write gate.** It exits 1 if the on-disk generated file disagrees with what would be emitted, catching a repo that ships types for a contract it no longer has.
-- **`Object.hasOwn` guards are intentional.** `Record<string, T>` signatures make TS treat every index access as always-present, so a plain truthiness check would fail `no-unnecessary-condition`. The guards are load-bearing for lint compliance, not optional safety.
-- **Transport identification is data-driven.** Channels are classified by their `x-transport` vendor extension or explicit `servers` bindings—never by a name prefix—so renaming a channel does not silently reclassify it.
+- **Shared with a frontend copy.** Both repos started byte-identical; they have diverged (backend emits Zod queue validators, frontend emits an inlined JSON-Schema map). Any fix to channel/message-naming logic must be applied to both copies by hand until the generator is extracted to a shared package.
+- **Input scope differs.** Backend reads the *whole* contract (includes queue payloads); frontend reads only the public subset.
+- **`x-transport` vendor extension** distinguishes SSE channels because AsyncAPI 3.0 channels omitting `servers` bind to *all* servers, making server-binding alone ambiguous.
+- **`Object.hasOwn` guards** are used in place of `?.` index access because `Record<string, T>` typing makes a plain index read always-present to TS, and the `no-unnecessary-condition` rule would flag the guard otherwise.
+- Schemas carrying an `x-openapi-schema: <Name>` marker are imported from the REST model types rather than redeclared by Modelina.
+- Unused exports are harmless: type-only in the backend, tree-shaken in the frontend.

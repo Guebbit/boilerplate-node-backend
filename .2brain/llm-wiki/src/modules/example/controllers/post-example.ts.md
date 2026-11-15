@@ -1,32 +1,30 @@
 ---
 source: src/modules/example/controllers/post-example.ts
-sha256: 95daab4309f9a27484eb6099d5c2de8249b20be9ebf5925aabcd49af681a9cc5
-generated_at: 2026-11-08T05:49:04.357563+00:00
+sha256: 1d42420de253ed54a059b5ed21096b941fafbfbb6b01f3909fbdd3969c1a7246
+generated_at: 2026-11-14T19:57:22.758892+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/example/controllers/post-example.ts
 
 ## Purpose
-
-Create controller for `POST /examples`. Validates the JSON body against a trimmed Zod schema, delegates to `exampleService.create`, and responds with `201` + `Location` header. Exists to keep the HTTP layer (parsing, status codes, headers) separate from domain logic.
+HTTP handler for `POST /examples`. Validates the JSON body against the generated Zod schema (with whitespace trimming applied), delegates to `exampleService.create`, and answers `201 Created` with a `Location` header pointing to the new resource.
 
 ## Key elements
-
-- **`createTrimmedBody`** — Extends the generated `CreateExampleBody` schema so `title` and `body` are trimmed before validation. Ensures whitespace-only strings (e.g. `"   "`) produce a field-level 422 rather than passing as non-empty.
-- **`postExample`** *(exported)* — The route handler. Wrapped in `namedHandler('postExample', …)` for observability. Flow: `parseBody` → early-return on invalid input → `exampleService.create(body, callerContext)` → `refused` check → `createdResponse` or `catchAs` error.
+- **`createTrimmedBody`** – Local schema: `CreateExampleBody` extended so `title` and `body` are whitespace-trimmed before validation. Ensures `"   "` fails as an empty-field 422 rather than passing as a valid (but meaningless) string.
+- **`postExample`** *(exported)* – The Express handler, wrapped in `namedHandler('postExample', …)`. Parses the body, calls the service, and on success sets resource identity headers (`answerAsResource`) before sending the `201` + `Location` body (`createdResponse`). Errors are funnelled through `catchAs(response, 'postExample')`.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — Supplies `namedHandler`, `parseBody`, `refused`, `catchAs`; the structural backbone of every handler.
-- **`@infrastructure/http/request`** — `readInput` extracts the raw body for validation; `callerContextOf` pulls authenticated caller identity for the service call.
-- **`@infrastructure/http/response`** — `createdResponse` writes the `201` status, body, and `Location` header.
-- **`@infrastructure/http/schemas`** — `trimmedInto` wraps an existing schema field to add `.trim()` before the original check.
-- **`src/modules/example/services/index.ts`** — `exampleService.create` performs the actual persistence; this controller is its sole HTTP caller.
-- **`src/modules/example/routes.ts`** — Registers `postExample` on the `POST /examples` path (import consumer).
+- **`src/infrastructure/http/controller.ts`** – Supplies the handler plumbing: `namedHandler`, `parseBody`, `refused`, `catchAs`.
+- **`src/infrastructure/http/request.ts`** – `readInput` extracts the raw body (tagged `surface: 'create'`); `callerContextOf` derives the authenticated caller for the service call.
+- **`src/infrastructure/http/response.ts`** – `createdResponse` sends the final `201` with body and `Location`.
+- **`src/infrastructure/http/preconditions.ts`** – `answerAsResource` emits resource-identity headers (ETag, Last-Modified) on the response.
+- **`src/infrastructure/http/schemas.ts`** – `trimmedInto` wraps an existing Zod string schema to apply `.trim()`.
+- **`src/modules/example/services/index.ts`** – Exports the `exampleService` instance whose `create` method performs the actual persistence / business logic for the new example.
+- **`src/modules/example/routes.ts`** – Imports `postExample` and mounts it on the `POST /examples` route.
 
 ## Notes
-
-- `parseBody` returns `undefined` **after** it has already sent the 422 response; the handler must short-circuit (`if (body === undefined) return`) to avoid a second write to the response.
-- The schema is extended at module scope (not inside the handler) so the trimmed variant is created once, not per request.
-- Error path uses `catchAs(response, 'postExample')` — the string is the handler name forwarded to the central error formatter for logging/correlation.
+- Whitespace-only strings are deliberately rejected at the *field* level (422) via the `trimmedInto` transform, giving a clearer error message than a "required" failure on a string that is technically present.
+- `answerAsResource` is called **before** `createdResponse`; the order matters because the preconditions helper must set headers while the response is still open.
+- The handler uses a promise chain (`.then` / `.catch`) rather than `async/await`; `catchAs` is the unified error boundary for this handler.
+- `parseBody` returning `undefined` signals validation failure has already been handled (a 422 was sent); the handler short-circuits without touching the service.

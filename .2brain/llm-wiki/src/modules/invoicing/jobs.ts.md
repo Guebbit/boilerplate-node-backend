@@ -1,31 +1,34 @@
 ---
 source: src/modules/invoicing/jobs.ts
-sha256: 2941c27283815a829d4e9cd1257a39088df27226232e48617bfece0dd9bb928f
-generated_at: 2026-11-08T06:11:23.415802+00:00
+sha256: 0ab46090f27296343a23492c16e7652d320f9f1a86fc0798b4af4dea963650f2
+generated_at: 2026-11-14T20:11:56.327857+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/invoicing/jobs.ts
 
 ## Purpose
-Declares the two scheduled jobs owned by the `invoicing` module — the stored-PDF reaper and the buyer-block reaper — as a single `JobDeclaration` array that the kernel registry can dispatch on a cron schedule.
+
+Declares the two scheduled jobs owned by the `invoicing` module: a stored-PDF reaper and a buyer-block reaper. Each job wires together a concrete action (deletion of expired documents or invoice buyer records) with logging, and is registered via the kernel job registry.
 
 ## Key elements
-- **`retentionMs()`** — internal helper; multiplies `invoicingConfig().NODE_INVOICE_PDF_RETENTION_DAYS` by `DAY_MS` to produce the retention window in milliseconds. A zero-day config means *everything* is reaped immediately.
-- **`invoicingJobs`** (exported, `readonly JobDeclaration[]`) — the sole public export. Two entries:
-  - **`reapInvoicePdfs`** — spreads `invoicingJobData.reapInvoicePdfs` (from `./jobs.generated`) and overrides `run` to call `reapDocuments(retentionMs())` then log the outcome. Sets `connectFirst: false` so the sweep skips opening a Mongo connection before execution.
-  - **`reapInvoices`** — spreads `invoicingJobData.reapInvoices` and overrides `run` to call `eraseDueBuyers()` then log the erased count.
+
+- **`invoicingJobs`** (exported, `readonly JobDeclaration[]`) — the array the module hands to the kernel. Contains two entries:
+  - *reapInvoicePdfs* — calls `reapDocuments` with a retention window derived from `invoicingConfig().NODE_INVOICE_PDF_RETENTION_DAYS × DAY_MS`, then logs the checked/reaped counts.
+  - *reapInvoices* — calls `eraseDueBuyers()` and logs the erased count.
 
 ## Relationships
-- **`src/modules/invoicing/module.ts`** — consumer; imports `invoicingJobs` to register the jobs with the kernel at module boot.
-- **`src/kernel/registry.ts`** — provides the `JobDeclaration` type that shapes each entry in `invoicingJobs`.
-- **`src/modules/invoicing/config.ts`** — source of `NODE_INVOICE_PDF_RETENTION_DAYS`; the retention window is read lazily via `invoicingConfig()` at job-run time, not at import time.
-- **`src/infrastructure/adapters/document-store.ts`** — `reapDocuments()` performs the actual PDF deletion.
-- **`src/modules/invoicing/services/retention.ts`** — `eraseDueBuyers()` performs the buyer-block erasure.
-- **`src/infrastructure/adapters/logger.ts`** — both jobs log a structured info line after completing.
-- **`src/domain-primitives/time.ts`** — provides `DAY_MS` for the retention calculation.
+
+- **`src/kernel/registry.ts`** — provides the `JobDeclaration` type that each entry conforms to.
+- **`src/modules/invoicing/module.ts`** — the consuming side; registers `invoicingJobs` with the kernel.
+- **`src/modules/invoicing/config.ts`** — supplies `invoicingConfig()` to resolve the PDF retention-days value at run time.
+- **`src/modules/invoicing/services/retention.ts`** — provides `eraseDueBuyers()` used by the buyer-block job.
+- **`src/infrastructure/adapters/document-store.ts`** — provides `reapDocuments()` used by the PDF job.
+- **`src/infrastructure/adapters/logger.ts`** — provides `logger` for post-action outcome logging.
+- **`src/domain-primitives/time.ts`** — provides the `DAY_MS` constant for the retention-window calculation.
 
 ## Notes
-- `connectFirst: false` on the PDF reaper is intentional: the sweep only writes an outcome record, so skipping the Mongo connection saves a round-trip. The comment in the file confirms "the sweep never touches Mongo."
-- Job metadata (name, schedule, etc.) comes from the generated file `./jobs.generated.ts`; this file only supplies the `run` implementation and the `connectFirst` flag.
-- The retention window is resolved inside `retentionMs()` at invocation time, meaning a config change takes effect on the *next* job run without a restart.
+
+- Job metadata (id, schedule, etc.) is spread in from `./jobs.generated` (`invoicingJobData`); the hand-written portion only supplies `run` and, where needed, `connectFirst`.
+- `connectFirst: false` on the PDF job signals that the sweep itself does **not** require a prior Mongo connection—only the downstream record-keeping step does.
+- A retention value of `0` is meaningful: it means *every* stored document is reaped, not "no retention."

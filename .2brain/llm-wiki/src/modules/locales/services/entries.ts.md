@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/entries.ts
-sha256: 6f519baa1fee52901b3c6275fcc884553c99442b24ba80b1eb2ee28a31935c15
-generated_at: 2026-11-08T06:25:16.110260+00:00
+sha256: 4d685bd53d1010b39c8111b0b490bfabcfa0c2d33277c3f499d8b0fa67e658b1
+generated_at: 2026-11-14T20:21:22.210375+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for locale entries — the individual translated keys within a language, always scoped to a single app. Provides the read (list, get), write (create, update, delete), and bulk-import operations that the translation editor routes call. Every mutation is validated against the `(locale, app)` boundary before touching the repository.
+Service layer for reading and writing individual locale entries (translated key-value pairs) within a single language and app. Translates route-level requests into repository calls, enforces per-app key uniqueness, emits audit records, and triggers overlay refresh after every mutation.
 
 ## Key elements
 
-- **`searchEntries(tag, filters?)`** — Paginated list of a language's entries, optionally narrowed to one app. Sorts by `key` then `app` for alphabetical reading. Returns `ResponseSuccess` or a 404/422 reject.
-- **`createEntry(tag, app, payload, context?)`** — Adds one key to one app's dictionary. Checks duplicate key and collision (e.g. `products.list` vs `products.list.title`) within the same app only. Emits `ADMIN_LOCALE_ENTRY_CREATED` audit; calls `refreshOverlay()`.
-- **`getEntry(tag, app, entryId)`** — Fetches one entry by ID and verifies it belongs to the given language + app; otherwise 404.
-- **`updateEntry(tag, app, entryId, payload, context?)`** — Changes an entry's translated text. Uses `auditChanges` to record what moved. Emits `ADMIN_LOCALE_ENTRY_UPDATED`; calls `refreshOverlay()`.
-- **`removeEntry(tag, app, entryId, context?)`** — Deletes one key from one language/app. Emits `ADMIN_LOCALE_ENTRY_DELETED`; calls `refreshOverlay()`.
-- **`importEntries(tag, app, entries, mode, context?)`** — Bulk import. `replace` deletes keys absent from the body; `merge` leaves them (a `null` value deletes under `merge`). Validates the entire batch (length, duplicates, collisions) before any write.
-- **`findEntryInLanguage(entryId, tag, app)`** *(internal)* — Looks up by ID, then checks `locale` and `app` match; returns `null` on mismatch so the caller emits a 404.
-- **`rejectBadBatch(inputs, mode)`** *(internal)* — Pre-write validation for imports: empty merge → 422, bad key length → 422, duplicate trimmed keys → 409.
-- **`entryNotFound()`** *(internal)* — Shared 404 response using `t('locales.error-entry-not-found')`.
+- **`searchEntries`** — Paginated, optionally app-scoped list of a language's entries, sorted alphabetically by `key`. Returns a 422 for an unconfigured app. The response carries the language's `revision` as its version (ETag).
+- **`createEntry`** — Adds one key to one language/app. Validates key length, uniqueness, and structural usability before writing. Emits `ADMIN_LOCALE_ENTRY_CREATED`.
+- **`getEntry`** — Reads a single entry by id, verifying it belongs to the requested language *and* app (404 otherwise).
+- **`updateEntry`** — Replaces one entry's value. Captures before/after diff via `auditChanges` but stores only the key name in audit metadata (never the translated text). Emits `ADMIN_LOCALE_ENTRY_UPDATED`.
+- **`removeEntry`** — Deletes one key from one language/app; other languages keep theirs. Emits `ADMIN_LOCALE_ENTRY_DELETED`.
+- **`importEntries`** — Bulk import in `replace` or `merge` mode. Validates the entire batch (length, duplicates, collisions) before any write. `null` values delete their key under `merge`; `replace` deletes all unmentioned keys.
+- **`findEntryInLanguage`** *(internal)* — Fetches by id then checks `locale` and `app` match; returns `null` on mismatch.
+- **`rejectBadBatch`** *(internal)* — Pre-flight validation for bulk imports (invalid length → 422, duplicate → 409).
+- **`entryNotFound`** *(internal)* — Shared 404 response builder.
 
 ## Relationships
 
-- **`../repository`** — Primary data access: `localeEntryRepository` (CRUD + `search`) and `localeRepository` (language lookup by tag).
-- **`./keys`** — Key-validation helpers: `findBatchCollision`, `findDuplicateKey`, `isKeyLengthValid`, `rejectUnusableKey`.
-- **`./languages`** — `languageNotFound` (404 for unknown tag) and `rejectUnknownApp` (422 for unconfigured app).
-- **`./overlay`** — `refreshOverlay()` called after every successful write to invalidate the runtime translation cache.
-- **`../audit`** — `localeAuditActions` constants (`ADMIN_LOCALE_ENTRY_CREATED/UPDATED/DELETED`) used in audit metadata.
-- **`@infrastructure/observability/audit`** — `recordAudit` emits structured audit events.
-- **`@infrastructure/observability/audit-changes`** — `auditChanges` computes a diff summary for the update audit trail.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every return value.
-- **`@infrastructure/i18n`** — `t()` for user-facing error messages.
-- **`@infrastructure/persistence/search`** — `PaginatedMeta` type for list responses.
-- **`../model`** — `LocaleEntryDocument` type and `normalizeTag` helper.
-- **`@types`** — Request/response payload types (`CreateLocaleEntryRequest`, `ReplaceLocaleEntryRequest`, `LocaleImportResult`, `LocaleApp`) and `CallerContext`.
+- **`../repository`** — All reads and writes go through `localeEntryRepository` and `localeRepository`; this file never touches persistence directly.
+- **`./keys`** — Delegates all key-validation logic (`isKeyLengthValid`, `findDuplicateKey`, `findBatchCollision`, `rejectUnusableKey`).
+- **`./languages`** — Reuses `languageNotFound` and `rejectUnknownApp` for consistent 404/422 responses.
+- **`./overlay`** — Calls `refreshOverlay()` after every successful write (create, update, remove, import) so the runtime translation cache picks up changes.
+- **`../audit`** — Imports `localeAuditActions` as the canonical action-string constants for every audit emit.
+- **`@infrastructure/observability/audit` / `audit-changes`** — `recordAudit` logs each mutation; `auditChanges` computes the before/after diff for update.
+- **`@infrastructure/persistence/versioning` / `revision-plugin`** — `carryVersion` stamps the language revision onto the paginated response; `EDIT_REVISION` names the field.
+- **`@infrastructure/http/response`** — All return values are shaped through `generateSuccess` / `generateReject`.
+- **`@infrastructure/i18n`** — `t()` localizes every error message.
+- **`@infrastructure/persistence/search`** — Supplies the `PaginatedMeta` type on list responses.
 
 ## Notes
 
-- **App-scoped uniqueness.** A key like `generic.error-internal-server-error` may exist once per app. All duplicate/collision checks are narrowed to the target app; cross-app duplicates are legal.
-- **Audit stores the key, not the text.** `updateEntry` records *which* key changed and a structural diff, but never the translated string itself, to avoid creating a second unmanaged copy of the dictionary.
-- **`context` is optional on all write operations.** Omitting it skips the audit emit entirely — this is the contract tests rely on when calling the service as a plain helper.
-- **`refreshOverlay()` fires on every successful mutation** (create, update, delete, import). Forgetting it in a new code path would leave the runtime translation cache stale.
-- **Bulk import is all-or-nothing at the validation layer.** `rejectBadBatch` runs before any repository call; a half-applied import is explicitly avoided.
-- **`replace` vs `merge` is a single flag**, not two separate functions. `replace` deletes keys absent from the body; `merge` leaves them. A `null` value means "delete" under `merge`; `replace` bodies never carry `null`.
+- **App-scoped uniqueness:** A key like `generic.error-internal-server-error` may legitimately exist in two apps. All duplicate/collision checks are narrowed to the target app; cross-app collisions are expected, not errors.
+- **Audit stores keys, not values:** The audit trail records *which* key changed and *who* changed it, never the translated text itself—avoiding a second, unmanaged copy of the dictionary.
+- **Optional `context` parameter:** `createEntry`, `updateEntry`, `removeEntry`, and `importEntries` accept `context?: CallerContext`. When omitted (as in unit tests), no audit record is emitted.
+- **Atomic bulk import:** `importEntries` validates the full batch before any repository write; a half-applied import is intentionally impossible.
+- **`replace` vs `merge` is one flag, not two endpoints:** The only behavioral difference is whether unmentioned keys are deleted.
+- **Sort order is `key` then `app`:** Deliberate alphabetical order for translators, overriding the repository's default `createdAt` sort. The unique index is `(locale, app, key)`.
+- **`findEntryInLanguage` double-checks `locale` and `app` after the id lookup:** Prevents a caller from cross-editing an entry that belongs to a different app or language by guessing its id (returns 404, not 403).

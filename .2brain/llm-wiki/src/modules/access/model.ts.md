@@ -1,37 +1,36 @@
 ---
 source: src/modules/access/model.ts
-sha256: 3e0b95be99b4249867e6cf7c0d60c853917cc9ad09aefb2b325fe8e2fdd81afe
-generated_at: 2026-11-08T03:56:28.369029+00:00
+sha256: 1f48a583bc89c39787e2e6449095d69889e06d77bb0452b801f338430bbc9aa2
+generated_at: 2026-11-14T18:26:07.312509+00:00
 model: ollama:qwen3.8:27b
 ---
 
-# src/modules/access/model.ts
+# src/modules/modules/access/model.ts
 
 ## Purpose
 
-Defines the two Mongoose collections that back the authorization domain: **Tenant** (the single shop this deployment serves) and **Membership** (which user holds which role in which scope). This file is the data-shape layer only—no business logic, no route handlers. It exists as its own module because multiple unrelated modules (`account`, `api-keys`, `users`, `db` scripts, integration scenarios) share this identity-and-access domain, and splitting it out follows the same rationale as `addresses` being split from `account`.
+Defines the two Mongoose schemas and exported models that back the authorization domain: **Tenant** (the single shop per deployment) and **Membership** (which user holds which role in which scope). This is the data-shape layer of the access module; it deliberately has no route of its own and is consumed by the kernel's permission resolvers, other modules, and test harnesses.
 
 ## Key elements
 
-- **`TenantDocument` / `tenantSchema`** — `{ slug (unique, lowercase), name }` + timestamps. Represents the single shop in a deployment.
-- **`MembershipDocument` / `membershipSchema`** — `{ userId, tenantId (nullable for platform scope), role (lowercase), scope (enum from `AUTHORIZATION_SCOPES`) }` + timestamps. One row = one person's one role in one place.
-- **Unique compound index** on `(userId, tenantId, scope)` — enforces "one membership per person per place"; a duplicate would be ambiguous for the resolver.
-- **Secondary indexes** — `(userId)` for per-request lookups; `(tenantId, role)` for audience queries (e.g. staff notices).
-- **`tenantModel` / `membershipModel`** — the exported Mongoose model instances used by the store layer.
-- **`TenantModel` / `MembershipModel`** — type aliases for typed store interactions.
+- **`TenantDocument` / `TenantModel` / `tenantModel`** — Schema for the shop: a unique lowercase `slug` (the deployment's identity) and a `name`. One row per database; multi-tenancy is a deployment concern, not an application one.
+- **`MembershipDocument` / `MembershipModel` / `membershipModel`** — Schema for "who holds which role, where." Fields: `userId`, `tenantId` (`null` = platform scope), `role` (lowercased string), `scope` (constrained to `AUTHORIZATION_SCOPES`).
+- **`membershipSchema` unique compound index** — `{ userId, tenantId, scope }` enforces one membership per person per place per scope, preventing ambiguous resolution.
+- **Secondary indexes** — `{ userId }` for per-request lookups; `{ tenantId, role }` for "who holds role X in this shop" queries.
+- **`AUTHORIZATION_SCOPES` import from `@types`** — provides the enum values that constrain the `scope` field.
 
 ## Relationships
 
-- **`src/types/index.ts`** — supplies `AUTHORIZATION_SCOPES` and the `AuthorizationScope` type used as the `scope` enum.
-- **`src/modules/access/repository.ts`** — consumes `tenantModel` / `membershipModel` to perform queries.
-- **`src/modules/access/services/memberships.ts`** — uses the models for write operations that enforce domain invariants.
-- **`src/modules/access/index.ts`** — module barrel that re-exports these symbols to other parts of the codebase.
-- **`src/modules/access/tests/factories.ts`** — builds test fixtures against these schemas.
-- **`tests/integration/scenarios/demo-restore.test.ts`** — integration scenario that reads/writes both collections.
+- **`src/types/index.ts`** — Supplies `AUTHORIZATION_SCOPES` and the `AuthorizationScope` type used in the `scope` field definition.
+- **`src/modules/access/repository.ts`** — Consumes `tenantModel` and `membershipModel` for read/write data access.
+- **`src/modules/access/services/memberships.ts`** — Uses the membership model to enforce write invariants when creating or revoking role assignments.
+- **`src/modules/access/index.ts`** — Barrel re-export of the models for external consumers.
+- **`src/modules/access/tests/factories.ts`** — Builds `TenantDocument` / `MembershipDocument` instances for unit tests.
+- **`tests/integration/scenarios/demo-restore.test.ts`** — Seeds or asserts membership/tenant state during integration scenarios.
 
 ## Notes
 
-- **Single-tenant by design.** The `Tenant` collection holds exactly one document per deployment; multi-client support is a deployment concern (separate stack + DB), not an application concern.
-- **Roles are data, permissions are code.** Role *names* appear here as free-form strings; the actual permission sets live in `shared/authorization-roles.yaml`, not in a database row. `Membership` records *who* holds a role—never *what* a role grants.
-- **`tenantId: null`** is the sentinel for a platform-level membership, matching the `null` scope value the caller passes.
-- **Routeless on purpose.** The route guard and its helpers (`permissions.ts`, `ability.ts`, `access/query.ts`) remain in the kernel; this module is the domain they query, not the asking mechanism itself.
+- **Roles are data, permissions are code.** Role *definitions* (which permissions a role grants) live in `shared/rules/authorization-roles.yaml`, not in this database. The DB stores only *assignments* (who → which role → where). Do not add a roles collection here.
+- **`tenantId: null` is meaningful** — it represents a platform-level membership, distinct from any shop-scoped membership. Queries must handle the `null` explicitly rather than treating it as "missing."
+- **Routeless by design.** This module answers to no Express route; the kernel files (`permissions.ts`, `ability.ts`, `access/query.ts`) are the asking, this file is the domain they ask about.
+- **Single-tenant per stack.** There is exactly one Tenant row per database. A second client gets a second deployment, not a second row.

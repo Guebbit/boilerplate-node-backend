@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/keys.ts
-sha256: 864d13dda7da35b39cb363053287001fac11298dfb71e2e15ef4013651a806e3
-generated_at: 2026-11-08T06:25:43.677287+00:00
+sha256: a9623bd1159b3a8b577e690d6c44bf769be7a5fc49fcd425358a850d2455610e
+generated_at: 2026-11-14T20:22:00.376304+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure, database-free validation and tree-building rules for locale translation keys. It decides whether a key is storable (length, forbidden segments, prefix collisions) and converts flat dotted-key entries into the nested object shape the `GET /locales/{locale}` endpoint returns. It exists as a shared module inside `services/` so that `entries.ts` and `messages.ts` apply identical rules without duplicating logic.
+Shared validation and tree-building logic for locale translation keys. It answers "can this key be stored and rendered?" with concrete rejections (not booleans), and converts flat dotted-key entries into the nested object shape the `GET /locales/{locale}` endpoint serves. Pure, database-free, and owned by nobody — both `entries.ts` and `messages.ts` import from it.
 
 ## Key elements
 
-- **`buildMessageTree(entries)`** — Splits each dotted key into segments and walks a null-prototype tree, creating intermediate groups via `descend` and writing leaves via `setLeaf`. Throws on a string/group collision (an invariant the write paths are expected to prevent).
-- **`isKeyLengthValid(key)`** — Returns `true` when the trimmed key is 1–200 characters.
-- **`findUnsafeKeySegment(key)`** — Returns the first empty or forbidden segment (`__proto__`, `constructor`, `prototype`) in a dotted key, or `undefined`.
-- **`findKeyCollision(key, others)`** — Returns a key from `others` that is a strict dotted prefix of `key` (or vice-versa). Identical keys are *not* collisions.
-- **`findBatchCollision(keys)`** — Finds the first pair in a batch that cannot coexist in one tree.
-- **`findDuplicateKey(keys)`** — Finds the first key that appears twice in a batch.
-- **`rejectUnusableKey(key, others)`** — Orchestrates the two user-facing checks in order: unsafe segment → **422** (`LOCALE_ENTRY_KEY_INVALID`), then prefix collision → **409** (`LOCALE_ENTRY_KEY_COLLISION`). Returns a `ResponseReject` or `undefined` when the key passes.
-- **`setLeaf` / `descend`** — Internal helpers that enforce the "a segment is either a string leaf or a group, never both" invariant while building the tree.
+- **`buildMessageTree(entries)`** — folds an array of `{ key, value }` rows into a null-prototype nested object. Throws on a key-collision invariant break (should be unreachable through the API).
+- **`isKeyLengthValid(key)`** — checks trimmed key is 1–200 chars (`KEY_MAX_LENGTH = 200`).
+- **`findUnsafeKeySegment(key)`** — returns the first segment that is empty or in `{ __proto__, constructor, prototype }`, or `undefined` if the key is safe.
+- **`findKeyCollision(key, others)`** — returns the first `other` where one key is a strict dotted-prefix of the other. Identical keys are *not* collisions (they are duplicates).
+- **`findBatchCollision(keys)`** — first `[key, collidingKey]` pair within a single batch.
+- **`findDuplicateKey(keys)`** — first key that appears more than once in a batch.
+- **`rejectUnusableKey(key, others)`** — orchestrates the checks in order (unsafe segment → collision) and returns a `ResponseReject` (422 or 409) or `undefined`. Does **not** validate that the key actually maps to a renderable message.
+- **`UNSAFE_KEY_SEGMENTS`** (module-private) — the forbidden-segment set.
+- **`setLeaf` / `descend`** (module-private) — internal tree-walk helpers used only by `buildMessageTree`.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Imports `generateReject` and the `ResponseReject` type to shape the 422/409 error payloads in `rejectUnusableKey`.
-- **`src/infrastructure/i18n/index.ts`** — Imports the `t` function to produce localized error messages for invalid and colliding keys.
-- **`src/infrastructure/object-guards.ts`** — Imports `isPlainObject` to distinguish group nodes from leaf strings during tree construction.
-- **`src/modules/locales/repository.ts`** — Imports the `EntryInput` type; `buildMessageTree` accepts `Pick<EntryInput, 'key' | 'value'>[]`.
-- **`src/modules/locales/services/entries.ts`** — Consumes the exported validators and `rejectUnusableKey` when processing single-entry create/update requests.
-- **`src/modules/locales/services/messages.ts`** — Consumes `buildMessageTree` to assemble the nested payload returned by the read endpoint, and the collision helpers for bulk writes.
-- **`src/modules/locales/services/index.ts`** — Barrel re-export; makes the key-rule functions available to the rest of the module.
+- **`src/infrastructure/http/response.ts`** — imports `generateReject` and the `ResponseReject` type used by `rejectUnusableKey`.
+- **`src/infrastructure/i18n/index.ts`** — imports `t` to localize the two error messages returned by `rejectUnusableKey`.
+- **`src/infrastructure/object-guards.ts`** — imports `isPlainObject` for the type-narrowing checks inside `setLeaf` and `descend`.
+- **`src/modules/locales/repository.ts`** — imports the `EntryInput` type (only its `key` and `value` fields are used by `buildMessageTree`).
+- **`src/modules/locales/services/entries.ts`** and **`messages.ts`** — both consume the exported validators and `buildMessageTree`; neither re-exports them.
+- **`src/modules/locales/services/index.ts`** — barrel re-export for the `services/` directory.
 
 ## Notes
 
-- All tree nodes are created with `Object.create(null)`, so even a stored `__proto__` segment would produce an ordinary own property rather than mutating `Object.prototype`. The `UNSAFE_KEY_SEGMENTS` guard is a second, write-time line of defence.
-- **Collision ≠ duplicate.** Two identical keys are a duplicate (different message, different caller expectation); a key that is a strict dotted prefix of another is a collision. `findKeyCollision` explicitly skips the equality case.
-- `buildMessageTree` *throws* on a string/group collision rather than silently overwriting. The write paths are expected to call `findKeyCollision` first; reaching the throw means an invariant was violated behind the API (covered by unit tests).
-- The module deliberately does **not** validate that a key maps to an existing dictionary entry or belongs to a known frontend keyspace. Typos save cleanly and simply render nowhere; the checks here guard against structural damage only.
-- `rejectUnusableKey` checks unsafe segments before collisions, so a caller sees a 422 (their input is malformed) before a 409 (their input conflicts with stored data).
+- All tree nodes are created via `Object.create(null)`, so a stored `__proto__` segment becomes an ordinary property rather than a prototype mutation. The `UNSAFE_KEY_SEGMENTS` check is a belt-and-suspenders guard on the *storage* side.
+- "Collision" and "duplicate" are deliberately distinct: collision = one key is a dotted-prefix of another; duplicate = two identical keys. `rejectUnusableKey` covers only collision; duplicate detection is the caller's job via `findDuplicateKey`.
+- `rejectUnusableKey` intentionally does **not** verify that the key resolves to a defined translation — entries may carry keys for front-end keyspace or as-yet-undefined messages.
+- The 200-char `KEY_MAX_LENGTH` constant mirrors the API-level bound on `CreateLocaleEntryRequest.key`; keep them in sync if either changes.

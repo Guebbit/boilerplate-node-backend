@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/contract/api.contract.test.ts
-sha256: 2e4298c7a1b1b77474593587a50b441b036d08de7ab313aaa9d5cb427b8856bb
-generated_at: 2026-11-08T08:53:03.229913+00:00
+sha256: ab33b04ee00e2cd3a2b81a92cc8c06159fd1b40d0fbc660868968e51a3682bfd
+generated_at: 2026-11-14T22:32:59.567196+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/users` and `/account` endpoints that act as a **credential-leak guard**: because the OpenAPI `User` schema declares `additionalProperties: false`, any undeclared field (a raw password, an argon2 hash) in a response fails here regardless of whether a developer thought to name it. The file also validates request-body strictness (422 on undeclared fields), PUT full-replacement semantics (RFC 9110 §9.3.4), and cache-control headers.
+Contract tests for the user-facing API surface (`GET /users`, `GET /users/{id}`, `GET /account`, `POST /account/signup`, `POST /users`, `PUT /users/{id}`). The primary guarantee is a **credential-leak guard**: because `openapi.yaml` declares `additionalProperties: false` on the `User` schema, any undeclared field (a plaintext password, an argon2 hash) causes a test failure even if no one wrote an explicit assertion for it. Secondary guarantees cover response shape, locale normalization, PII exclusion, domain-event emission, and error-status correctness.
 
 ## Key elements
 
-- **`assertNoCredentials(payload)`** — serialises the response body to JSON and asserts the strings `'password'` and `'$argon2'` do not appear anywhere. Used in every GET/POST/PUT assertion.
-- **`storePhone(userId, phone)`** — writes an encrypted phone via `userRepository.updateMany`, using `encryptPii(phone, phoneAad(userId))`. Needed because the factory stores plaintext but production encrypts under the account's AAD binding.
-- **`activeOf(id)`** — reads the stored `active` flag through `userRepository.findById`.
-- **`describe('GET /users')`** — 200 + no-credentials + every item carries a `role` (guards a regression where the list path's `toJSON` omitted the role that `GET /users/:id` resolves from the membership store).
-- **`describe('GET /users/{id}')`** — 200 + no-credentials.
-- **`describe('GET /account')`** — 200 + no-credentials + `cache-control: no-store` (a profile is the caller's identity; browsers must not cache it).
-- **`describe('POST /account/signup')`** — 201 + no-credentials; duplicate email returns **409** (well-formed request, conflicting resource).
-- **`describe('POST /users')`** — admin create: rejects `null` `imageUrl`, rejects `password`/`sendSetupEmail`/`verifiedAt`/`analyticsConsent`/`phone` with 422 and no row created; on success emits `USER_SETUP_REQUESTED` (verified via `onDomainEvent` + `settleOutboxNudges`).
-- **`describe('PUT /users/{id}')`** — full-replacement semantics: omitted optional fields are cleared (`phone` gone), `imageUrl` survives (owned by the upload flow); missing `username` or `role` → 422; `email`/`password` in body → 422 with stored values unchanged.
+- **`assertNoCredentials(payload)`** — serialises the full JSON body and asserts it contains neither the string `"password"` nor `"$argon2"`. Applied to every response that returns a user object.
+- **`activeOf(id)` / `roleOf(id)`** — small async helpers that read the stored `active` flag and the tenant role directly from `userRepository` / the access service, used to assert side-effects of mutations.
+- **`storePhone(userId, phone)`** — writes an encrypted phone number (via `encryptPii` + `phoneAad`) the way production does, so list-vs-detail PII tests exercise the real cipher path rather than the factory's plaintext.
+- **`describe` blocks** — one per endpoint; each verifies status code, contract shape, and endpoint-specific invariants (e.g. `purchaseHeld` flag present, `purchaseHold` details absent from list but present on detail; `cache-control: no-store` on `/account`; 409 vs 422 on duplicate signup; 422 on `password`, `sendSetupEmail`, `verifiedAt`, `analyticsConsent`, raw `phone` in create body).
+- **Audit-port mock** — `jest.mock` replaces the entire `@infrastructure/observability/audit` module with `auditPortMock()` because `jest.spyOn` cannot redefine the non-configurable getter on a CommonJS namespace import under SWC.
+- **Domain-event wiring** — `markDomainEventsWired()`, `onDomainEvent(USER_SETUP_REQUESTED, …)`, and `settleOutboxNudges()` verify that admin-created accounts emit the setup-requested event and the outbox settles.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported for side-effect; registers the global OpenAPI contract matcher that every `expect(response.body)` implicitly invokes.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once before the suite to reset the test database.
-- **`tests/support/http.ts`** — provides `api()` (request helper), `authenticateAs`, `authenticateAsRole` for building authenticated requests.
-- **`src/modules/users/tests/factories.ts`** — `createUser` (seed a user), `PLAIN_PASSWORD` (known constant), `userRepository` (direct DB access for assertions).
-- **`src/infrastructure/observability/audit.ts`** — **replaced** (not spied) via `jest.mock` with `auditPortMock()` from `tests/support/ports.ts`, because `jest.spyOn` cannot redefine the non-configurable getter on a CJS namespace import under SWC.
-- **`tests/support/ports.ts`** — `auditPortMock()` and `observePort` (the latter likely used in the truncated portion for outbox/audit observation).
-- **`src/kernel/events.ts`** — `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` to capture and reset the `USER_SETUP_REQUESTED` domain event.
-- **`src/modules/users/events.ts`** — source of the `USER_SETUP_REQUESTED` event constant.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` flushes queued outbox messages so the event is observable.
-- **`src/infrastructure/security/pii-encryption.ts`** — `encryptPii` used by `storePhone`.
-- **`src/modules/users/model.ts`** — `phoneAad` (the AAD binding string for PII encryption).
-- **`src/kernel/config.ts`** — `reauthWindowSeconds` (used in the truncated reauth-related tests).
-- **`tests/support/credentials.ts`** — `credentialHolding` (used in the truncated credential-guard tests).
-- **`tests/support/clock.ts`** — `freezeDate`, `advanceDate` for time-dependent assertions in the truncated section.
-- **`src/modules/users/repository.ts`** — accessed indirectly through `userRepository` from the factory for post-condition checks.
+- **`tests/support/contract.ts`** — imported side-effect-only; installs the OpenAPI schema matcher that enforces `additionalProperties: false` on every response.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser`, `PLAIN_PASSWORD`, and the shared `userRepository` instance used for seeding and post-condition queries.
+- **`src/modules/users/repository.ts`** — the repository used by the factories and by direct queries (`findById`, `findOne`, `updateMany`) to verify persisted state.
+- **`src/modules/users/model.ts`** — `phoneAad` supplies the associated-data binding for PII encryption in `storePhone`.
+- **`src/modules/users/events.ts`** — exports `USER_SETUP_REQUESTED`, the domain event the create-account path must emit.
+- **`src/modules/access/index.ts`** — re-exports the access service used to verify tenant-role assignment after mutations.
+- **`src/modules/access/services/index.ts`** — the concrete access service whose `rolesOf` method is queried to assert role state.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` scopes the role lookup to the correct tenant.
+- **`src/kernel/config.ts`** — `reauthWindowSeconds` (imported, used in the reauth-window tests).
+- **`src/kernel/events.ts`** — `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` manage the in-memory event bus for assertions.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes pending outbox entries so async side-effects complete before assertions.
+- **`src/infrastructure/observability/audit.ts`** — fully mocked via `jest.mock`; the real module is never invoked.
+- **`src/infrastructure/security/pii-encryption.ts`** — `encryptPii` encrypts phone numbers for the list-vs-detail PII tests.
+- **`tests/support/clock.ts`** — `freezeDate` / `advanceDate` pin the clock for time-sensitive assertions (purchase-hold expiry, reauth windows).
+- **`tests/support/credentials.ts`** — `credentialHolding` helper for credential-related test setup.
 
 ## Notes
 
-- **Audit port is replaced, not spied.** `jest.spyOn` fails on the non-configurable getter that a CommonJS namespace import exposes under SWC; the file uses `jest.mock` + `requireActual('@tests/ports').auditPortMock()` instead.
-- **`?role=` filter is intentionally absent.** `role` is a membership fact, not a searchable document column; no current caller needs it on `GET /users`, so the test is deliberately omitted.
-- **PUT ≠ PATCH.** The body is the complete new resource (RFC 9110 §9.3.4); every omitted *optional* field is cleared. `imageUrl` is the sole exception because it is managed by the upload flow, not this endpoint.
-- **`assertNoCredentials` is a substring scan, not a key check.** It catches both the literal key name and any argon2 hash prefix (`$argon2`), so it guards against the value leaking even if the key were renamed.
-- **Factory writes plaintext phone.** `storePhone` exists to mimic the production encryption path; any test that reads `phone` back must go through this helper, not the raw factory value.
-- **`POST /users` is explicitly *not* a password-set path.** Those are covered in `tests/contract/password-set-paths.test.ts`.
+- The `?role=` filter on `GET /users` was intentionally **removed** from the API and is **not** tested here; the comment explains that role is now a membership fact requiring a two-step resolve the generic repository spec cannot express.
+- `PUT /users/{id}` tests treat the body as the full replacement resource per RFC 9110 §9.3.4 — omitted optional fields are cleared, not preserved.
+- `POST /users` (admin create) explicitly **rejects** `password` and `sendSetupEmail` in the body (422); the owner sets their own password via the setup email. This is a deliberate API contract, not an oversight.
+- The audit mock uses `jest.requireActual` of `@tests/ports` to pull the mock factory — a workaround for the SWC + CJS namespace-getter issue, not a standard pattern.
+- PII (phone) is stored encrypted in these tests to match production; the factory's plaintext path is never read back by the presenter, so an unencrypted value would cause a 500 on read.

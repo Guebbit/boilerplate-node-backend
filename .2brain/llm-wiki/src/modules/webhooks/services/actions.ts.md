@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/actions.ts
-sha256: 40844b13e9445ca2ce05bed9853d1d2d59f3c73e1f4c3ea590d89bade1941111
-generated_at: 2026-11-08T09:05:30.661973+00:00
+sha256: 363a1d7ad617da22d4478087a02706b60c9448c4259a028ce82dc6e79e5dcb8d
+generated_at: 2026-11-14T22:45:11.188088+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralizes the ability-to-act rules for webhook subscriptions and deliveries. Given a caller's ability keys and a subscription's minimal state, it computes the exact set of actions the caller may perform. Existing so that every controller and service reads the same single source of truth rather than re-deriving permission logic independently.
+Computes the per-caller permission flags ("actions") that the API returns alongside each webhook subscription and delivery. By centralising the rules here, controllers and services simply read a boolean off the payload instead of re-deriving capability checks at the edge.
 
 ## Key elements
 
-- **`Standing`** (interface) — The two boolean flags a caller holds: `update` (`update:WebhookSubscription`) and `delete` (`delete:WebhookSubscription`).
-- **`standingOn(caller)`** — Resolves a `TenantCaller` into a `Standing` via the kernel's `holds` check.
-- **`SubscriptionState`** (interface) — The minimal record facts a rule reads: `enabled` and `secretCount`.
-- **`subscriptionActions(state, standing)`** — Returns the full `WebhookSubscriptionActions` object (`update`, `delete`, `enable`, `disable`, `createSecret`, `deleteSecret`) computed from state + standing.
-- **`withSubscriptionActions(row, standing)`** — Spreads a `StoredWebhookSubscription` wire row and appends its `actions` field. Used in list responses where the lean row already carries `enabled` and `secretIds`.
-- **`viewSubscription(subscription, caller)`** — Transforms a full `WebhookSubscriptionDocument` into the wire `WebhookSubscription` shape (via `presentWebhookSubscription`), injecting caller-specific `actions`. Used in detail responses.
-- **`deliveryActions(subscriptionEnabled, standing)`** — Returns `WebhookDeliveryActions`; the sole action `replay` requires both `update` standing and a live subscription.
+- **`Standing` (interface)** — The caller-side half of every rule: `update`, `delete` booleans plus a `reads(eventTypes)` predicate backed by the event catalogue.
+- **`standingOn(caller)`** — Resolves a `TenantCaller` into a `Standing` by calling `holds()` for the two ACL keys and wrapping `unreadableEventTypes` into the `reads` closure.
+- **`withSubscriptionActions(row, standing)`** — Spreads a lean stored list row and attaches a computed `WebhookSubscriptionActions` object. Used on the list path where no extra data is loaded.
+- **`viewSubscription(doc, caller)`** — Builds the full wire shape for a single subscription detail response: calls `presentWebhookSubscription` with actions derived from the document's secrets and event filter.
+- **`deliveryActions(subscriptionEnabled, eventType, standing)`** — Returns a `WebhookDeliveryActions` object; `replay` is gated on `update` + subscription still enabled + caller can read that specific event type.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Imports `holds` to check whether the caller possesses a given ability key.
-- **`src/types/index.ts`** — Imports the shared type aliases `TenantCaller`, `WebhookSubscription`, `WebhookSubscriptionActions`, `WebhookDeliveryActions`.
-- **`src/modules/webhooks/repository.ts`** — Imports `StoredWebhookSubscription` (the lean list row type).
-- **`src/modules/webhooks/model.ts`** — Imports `WebhookSubscriptionDocument` (the full detail document type).
-- **`src/modules/webhooks/presenters.ts`** — Imports `presentWebhookSubscription` to shape the detail wire response.
-- **`src/modules/webhooks/secrets.ts`** — Imports `liveRingEntries` to count active signing secrets in the detail path.
-- **Controllers** (`post-subscription`, `update-subscription`, `post-subscription-enable`, `post-subscription-disable`, `post-subscription-secret`, `delete-subscription-secret`) and **`services/deliveries.ts`** / **`services/subscriptions.ts`** — Consume the exported action functions to gate their endpoint logic.
+- **`src/kernel/ability.ts`** — Imports `holds`, the single permission-check primitive used to evaluate `update:WebhookSubscription` and `delete:WebhookSubscription`.
+- **`src/types/index.ts` / `src/types/auth-context.ts`** — Source of the `TenantCaller`, `WebhookSubscriptionActions`, `WebhookDeliveryActions`, and `WebhookSubscription` type contracts this module implements.
+- **`src/modules/webhooks/repository.ts`** — Supplies the `StoredWebhookSubscription` type (the lean list row) that `withSubscriptionActions` annotates.
+- **`src/modules/webhooks/model.ts`** — Supplies `WebhookSubscriptionDocument`, the full persisted document consumed by `viewSubscription`.
+- **`src/modules/webhooks/presenters.ts`** — Provides `presentWebhookSubscription`, the shape mapper `viewSubscription` delegates to for the non-action fields.
+- **`src/modules/webhooks/secrets.ts`** — Provides `liveRingEntries` to count active secrets for the `deleteSecret` / `createSecret` flags.
+- **`src/modules/webhooks/services/catalog.ts`** — Provides `unreadableEventTypes`, the catalogue rule that feeds the `reads` predicate.
+- **Controllers (`post-subscription.ts`, `post-subscription-enable.ts`, `post-subscription-disable.ts`, `post-subscription-secret.ts`, `update-subscription.ts`)** — Downstream consumers that gate their mutations on the flags this file defines.
+- **`src/modules/webhooks/services/subscriptions.ts` / `deliveries.ts`** — Service-layer orchestrators that call into the action helpers to build responses or enforce preconditions.
 
 ## Notes
 
-- **Two state-derivation paths.** In list context `enabled` comes from `row.enabled` (boolean) and `secretCount` from `row.secretIds.length`. In detail context `enabled` is `!subscription.disabledAt` (timestamp absence) and `secretCount` is `liveRingEntries(subscription.secrets).length`. Both feed the same `subscriptionActions` function, so the rule logic stays identical.
-- **`deleteSecret` guard.** The ring is never allowed to go empty (deleting the last secret returns 422 upstream), so the flag requires `secretCount > 1`.
-- **`Standing` is computed once per request** and threaded into every per-row call, avoiding repeated `holds` lookups when rendering a list.
+- The module deliberately splits each rule into a **standing** (caller capability) half and a **state** (record fact) half so the list endpoint can compute flags from the lean stored row without an extra query.
+- `reads` is a *function* rather than a fixed boolean because the catalogue rule is per-event; callers pass whichever event set is relevant (all filter types for `createSecret`, a single type for `replay`).
+- `deleteSecret` requires `secretCount > 1` — a subscription's secret ring is never allowed to become empty (enforced as a 422 elsewhere).
+- `createSecret` requires the caller to pass `reads` for **every** event type in the stored filter, not just one, because a newly minted secret signs for the whole filter.

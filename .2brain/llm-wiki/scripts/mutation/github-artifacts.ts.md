@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/github-artifacts.ts
-sha256: df94cc9af296faaa3106293eeb10f00e4d53436775aaa37a3cda317a679bc989
-generated_at: 2026-11-08T02:53:31.996226+00:00
+sha256: 3615db46c499120b3b2a093ede9dbc0d7958a0ba978dc5169a1507efd54bdfe4
+generated_at: 2026-11-14T17:37:26.626932+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure module that defines *which* `mutation-report` GitHub artifact the sweep's merge job uploads and provides the selection logic for picking the newest downloadable one. It contains no I/O or network calls—`pull-report.ts` performs the actual GitHub API requests and file writes using the exports from this file.
+Pure data-selection module for the mutation-testing GitHub sweep. It defines the artifact name to look for and the filtering/sorting logic that picks the newest downloadable `mutation-report` artifact from `main`, delegating all I/O (GitHub API calls, file writes) to `pull-report.ts`.
 
 ## Key elements
 
-- **`REPORT_ARTIFACT`** (exported `const`) — the artifact name (`'mutation-report'`) that `npm run mutation:pull` targets when downloading.
-- **`REPORT_BRANCH`** (internal `const`) — hardcoded to `'main'`; the only branch whose sweep reports are considered valid for this checkout.
-- **`GitHubArtifact`** (exported interface) — a structural subset of GitHub's "list artifacts" response, narrowing to just `name`, `expired`, `created_at`, and the nested `workflow_run` (`id`, `head_branch`) fields actually read here.
-- **`newestReport(artifacts)`** (exported function) — filters to non-expired artifacts on `REPORT_BRANCH` with the correct name, sorts by `created_at` descending, and returns the first (or `undefined`).
+- **`REPORT_ARTIFACT`** (`const`, exported) — The artifact name (`'mutation-report'`) that the sweep's merge job uploads and `npm run mutation:pull` downloads.
+- **`REPORT_BRANCH`** (`const`, private) — The branch (`'main'`) whose sweep runs are eligible; artifacts from other branches are skipped.
+- **`GitHubArtifact`** (interface, exported) — Minimal shape of a GitHub "list artifacts" response item: `name`, `expired`, `created_at`, and `workflow_run` (with `id` and `head_branch`).
+- **`MissingReason`** (type, exported) — Discriminant explaining *why* no artifact was selected: `'none-uploaded' | 'none-from-main' | 'all-expired'`.
+- **`NewestReport`** (type, exported) — Discriminated union: either `{ artifact: GitHubArtifact }` to download or `{ missing: MissingReason }`.
+- **`newestReport`** (function, exported) — Filters artifacts by name → branch → non-expired, then sorts by `created_at` descending and returns the first match, or the first failing check as a `MissingReason`.
 
 ## Relationships
 
-- **`github/workflows/mutation.yml`** — the sweep's merge job uploads the artifact named `REPORT_ARTIFACT`; this file documents/encodes that contract.
-- **`scripts/mutation/pull-report.ts`** — the caller. It fetches the artifact list from the GitHub API, passes the array to `newestReport`, then uses the returned `workflow_run.id` with `gh run download`.
-- **`tests/unit/scripts/mutation/github-artifacts.test.ts`** — unit tests exercising `newestReport` (ordering, expiry, branch filtering, empty input).
+- **`github/workflows/mutation.yml`** — Produces the artifact named by `REPORT_ARTIFACT`; the merge job in that workflow is the uploader this module looks for.
+- **`scripts/mutation/pull-report.ts`** — Consumes `newestReport`, `REPORT_ARTIFACT`, and `GitHubArtifact` to perform the actual `gh run download` call and write the report files locally.
+- **`tests/unit/scripts/mutation/github-artifacts.test.ts`** — Unit-tests the filtering/sorting logic of `newestReport`.
 
 ## Notes
 
-- `REPORT_BRANCH` is intentionally hardcoded to `'main'` and is **not** exported. Changing the target branch means editing this file, not the caller.
-- The module is side-effect-free by design (the doc comment calls it "Pure"). Do not add `fetch`, `fs`, or `child_process` here; those belong in `pull-report.ts`.
-- `newestReport` uses `.toSorted` (non-mutating) rather than `.sort`, so the caller's array is left untouched.
+- The module is intentionally **pure** (no I/O, no network). All side effects live in `pull-report.ts`.
+- Sorting uses `Array.prototype.toSorted` (non-mutating), available in Node 20+ / ES2023.
+- The `workflow_run.id` field on `GitHubArtifact` is what `gh run download` expects; it is part of the interface here only so the caller can pass it through.
+- `MissingReason` values are ordered by elimination priority in `newestReport`; the first rule that yields an empty set is the one reported.

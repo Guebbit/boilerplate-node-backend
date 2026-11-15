@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/openapi.yaml
-sha256: 25857e677d3b5b3a251afedac5eef09081b29b823a3503e0315f3ab1c84d01a2
-generated_at: 2026-11-08T05:15:11.817782+00:00
+sha256: a84da4f3a6716a2f63434623a6fd8c399faebf94139eb4598a094869a6c38868
+generated_at: 2026-11-14T19:29:20.715174+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 contract for the cart module. Defines the HTTP surface for reading, mutating, and checking out the signed-in user's cart, plus the module's custom error-code vocabulary and its slice of the account data export.
+OpenAPI 3.1.0 contract for the cart module. It defines the HTTP surface for reading, mutating, and clearing the signed-in user's cart (add, set-quantity, remove, clear) and declares the module's error-code vocabulary and its contribution to the account data export. It exists so that every consumer—front-end, SDK, test harness—shares a single machine-readable source of truth for the cart API.
 
 ## Key elements
 
-- **Tags** – Single tag `Cart` (x-family `Buying`); all operations file under it.
-- **`x-error-codes`** – Module-specific error catalogue (~20 codes). Covers address validation, stock refusal (`CART_INSUFFICIENT_STOCK`, `CART_PRODUCT_UNAVAILABLE`), checkout preconditions (`CART_EMPTY`, `CART_TOTAL_CHANGED`, `CART_PURCHASE_HOLD`, `CART_OPEN_ORDER_LIMIT_REACHED`), shipping-method selection, and email-verification gating.
-- **`x-personal-data`** – Declares the `cart` section of `POST /account/export` (`CartItem[]`), so the bundler can compose it into `AccountExportResponse`.
-- **`GET /cart`** (`getCart`) – Returns the full cart with a computed `summary`.
-- **`POST /cart/items`** (`addCartItem`) – Adds or *grows* a line; always returns `200` with the whole cart (no `201`/`Location`).
-- **`DELETE /cart/items`** (`clearCart`) – Empties the cart; bodyless by design (a body triggers `415`).
-- **`PATCH /cart/items/{productId}`** (`updateCartItemByProductId`) – Sets (not increments) a line's quantity. Accepts both `application/json` and `application/merge-patch+json`. Never creates a line; unknown product → `404`.
-- **`DELETE /cart/items/{productId}`** (`deleteCartItemByProductId`) – Removes one line; returns the updated cart.
-- **`PUT /cart/shipping-method`** – Chooses or clears (`null`) the cart's shipping method; re-validated at checkout.
-- **Referenced schemas** – `CartResponse`, `CartItem`, `AddCartItemRequest`, `UpdateCartItemByProductIdRequest` (defined in this file's `components/schemas`, truncated in the excerpt).
+- **`x-error-codes`** — Module-scoped error-code table (`CART_ADDRESS_NOT_APPLICABLE`, `CART_CHANGED`, `CART_EMPTY`, `CART_INSUFFICIENT_STOCK`, `CART_LINE_LIMIT_REACHED`, `CART_OPEN_ORDER_LIMIT_REACHED`, `CART_PAYMENT_METHOD_NOT_AVAILABLE`, `CART_PRODUCT_UNAVAILABLE`, `CART_PURCHASE_HOLD`, `CART_QUANTITY_LIMIT`, `CART_SHIPPING_*`, `CART_TOTAL_CHANGED`, `EMAIL_NOT_VERIFIED`, `REORDER_UNAVAILABLE`, etc.). Each entry carries the HTTP status and a human-readable description; many include `errors[].details` shape guidance.
+- **`x-personal-data`** — Declares the `cart` section of `POST /account/export`; the bundler splices it into `AccountExportResponse`. Removing this key removes the section.
+- **`tags`** — Single tag `Cart` (x-family: Buying) under which all operations are grouped.
+- **`paths`**
+  - `GET /cart` (`getCart`) — returns `CartResponse`; never paginated.
+  - `POST /cart/items` (`addCartItem`) — adds or grows a line; requires `Idempotency-Key` header; returns the full cart.
+  - `DELETE /cart/items` (`clearCart`) — empties the cart; bodyless by design (415 if a body is sent).
+  - `PATCH /cart/items/{productId}` (`updateCartItemByProductId`) — sets (not increments) a line's quantity; never creates a line.
+  - `DELETE /cart/items/{productId}` — removes one line (content truncated in source).
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** – `$ref`s for shared responses (`Unauthorized`, `Forbidden`, `NotFound`, `ValidationError`, `UnsupportedMediaType`) and the `ProductIdPathParam` parameter. This file is a leaf that composes those shared definitions.
-- **`src/modules/cart/module.ts`** – Runtime implementation of every operation declared here.
-- **`src/modules/cart/module.yaml`** – Module metadata (routing, bundling) that pairs with this contract.
-- **`src/modules/cart/authorization.yaml`** – Defines the `bearerAuth` security scheme used by every operation in this file.
-- **`src/modules/orders/openapi.yaml`** – The checkout endpoints (`POST /orders`, `POST /orders/{id}/cancel`) that `CART_OPEN_ORDER_LIMIT_REACHED` and the tag description point to as the next step after cart operations.
+- **`shared/contracts/openapi.root.yaml`** — All shared responses (`Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, `UnsupportedMediaType`) and parameters (`IdempotencyKeyHeader`, `ProductIdPathParam`) are pulled in via `$ref` into that file's `#/components/…`. This file never redefines them.
 
 ## Notes
 
-- **Add vs. set semantics:** `POST /cart/items` *grows* an existing line (Shopify-style); `PATCH /cart/items/{productId}` *sets* the absolute quantity. They are deliberately different verbs on different URLs.
-- **No `201` / no `Location`:** because a line has no independent URL, all mutations return `200` with the full `CartResponse`.
-- **Bodyless delete:** `DELETE /cart/items` refuses any body with `415` to prevent a payload from accidentally targeting a single line.
-- **Error-code status mapping:** `409` for conflict/state-precondition failures, `422` for validation, `404` for not-found, `403` for `EMAIL_NOT_VERIFIED` (auth-adjacent but not a credentials problem).
-- **`x-personal-data` is additive:** removing this key removes the cart section from the account export; it does not alter any endpoint.
+- The file uses OpenAPI **3.1.0** (JSON Schema 2020-12 semantics), not 3.0.
+- `POST /cart/items` is idempotency-keyed: the same key with the same body replays the first response; the same key with a *different* body yields 422 `IDEMPOTENCY_KEY_MISMATCH`.
+- `PATCH` accepts both `application/json` and `application/merge-patch+json` content types but rejects other media types with 415.
+- `DELETE /cart/items` (clear-all) is deliberately bodyless to distinguish it from the single-line `DELETE /cart/items/{productId}`; sending a body to the clear endpoint returns 415.
+- Error-code descriptions reference server-side env vars (`NODE_CART_MAX_LINES`, `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`) and sibling operations (`POST /payments`, `POST /orders/{id}/cancel`, `POST /account/email-verification/resend`) for client-side guidance.
+- The content in this repo is truncated after the single-line DELETE; the full spec (checkout, reorder, and remaining schemas) lives in the complete file.

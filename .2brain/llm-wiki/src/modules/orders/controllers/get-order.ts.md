@@ -1,37 +1,37 @@
 ---
 source: src/modules/orders/controllers/get-order.ts
-sha256: 03555e002775ece89d263c78f905f6a4b8d8049d09ca5a5933ed5817532fa350
-generated_at: 2026-11-08T06:46:07.248833+00:00
+sha256: e3fc73f66fe3fd3c4aa90536f077e76538f81ed5e07ab61b836ced8e16980db8
+generated_at: 2026-11-14T20:32:43.114029+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/controllers/get-order.ts
 
 ## Purpose
-
-Handles `GET /orders/:id` — fetches a single order for the authenticated caller and returns a permission-aware view. It exists to isolate the read path (validation → scoped fetch → audit → ETag → response) from the shared response formatter and the order service, keeping the route handler thin.
+Handles `GET /orders/:id`. Validates the path id before any service call, fetches the order scoped to the caller's role (non-admins see only their own), records a staff-read audit event, and serialises the order into a response that includes caller-specific permissions and a version token for optimistic concurrency.
 
 ## Key elements
-
-- **`getOrderItem(request, response)`** — The sole export. Validates the path id, fetches the order via `orderService.getForCaller`, records a staff-read audit entry, sets an ETag, and delegates body construction to `respondWithOrder`. Returns early (or catches) on any failure.
+- **`getOrderItem(request, response)`** — Sole export. Orchestrates the full read pipeline:
+  1. `requireId` validates the `:id` param; malformed and unknown ids both short-circuit to 404.
+  2. `orderService.getForCaller(id, authContext)` fetches the order scoped to the caller.
+  3. If no order is returned, sends a 404 via `rejectResponse`.
+  4. `recordStaffRead` logs the view with the `ADMIN_ORDER_VIEWED` audit action and the buyer id as subject.
+  5. `respondWithOrder` serialises the order, stamps an `If-Match` version, and attaches caller-specific permission flags to the body.
+  6. Any thrown error is funnelled through `catchAs`.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** — Calls `orderService.getForCaller(id, authContext)`; the service applies role scoping (non-admins only see their own orders).
-- **`src/modules/orders/controllers/respond.ts`** — Calls `respondWithOrder(response, order, authContext, 'getOrderItem')` to build the JSON body, including the set of actions this caller is permitted to perform.
-- **`src/modules/orders/routes.ts`** — Registers `getOrderItem` as the handler for the `GET /orders/:id` route.
-- **`src/infrastructure/http/ids.ts`** — Uses `requireId` to validate the path parameter; a malformed id short-circuits to a 404 before any DB query.
-- **`src/infrastructure/http/response.ts`** — Uses `rejectResponse` to emit the 404 body when the order is not found or the id is invalid.
-- **`src/infrastructure/http/preconditions.ts`** — Calls `setEtag(response, order)` so the client can send `If-Match` on subsequent edits.
-- **`src/infrastructure/http/controller.ts`** — Wraps the `.catch` in `catchAs(response, 'getOrderItem')` for uniform error serialization.
-- **`src/infrastructure/i18n/index.ts`** — Uses `t('orders.not-found')` for the i18n'd 404 message.
-- **`src/kernel/staff-read.ts`** — Calls `recordStaffRead` to log the view as an audit event.
-- **`src/modules/orders/audit.ts`** — Imports `ordersAuditActions.ADMIN_ORDER_VIEWED` as the audit action token.
-- **`src/modules/orders/domain/index.ts`** — Uses `buyerIdOf(order)` to resolve the owning buyer for the audit record.
+- **`src/infrastructure/http/ids.ts`** → `requireId` gates the request before the service is touched.
+- **`src/infrastructure/http/response.ts`** → `rejectResponse` produces the 404 body.
+- **`src/infrastructure/http/controller.ts`** → `catchAs` wraps the async chain in a standard error responder.
+- **`src/infrastructure/i18n/index.ts`** → `t` localises the 404 message.
+- **`src/modules/orders/services/index.ts`** → provides the order service whose `getForCaller` method is the sole data-access call; role scoping happens inside the service.
+- **`src/kernel/staff-read.ts`** → `recordStaffRead` writes a structured audit record.
+- **`src/modules/orders/audit.ts`** → provides the audit action constants used for the staff-read log.
+- **`src/modules/orders/domain/index.ts`** → `buyerIdOf(order)` extracts the buyer id for the audit record.
+- **`src/modules/orders/controllers/respond.ts`** → `respondWithOrder` builds the final JSON body, version header, and permission flags.
 
 ## Notes
-
-- A **malformed** `:id` and an **unknown** `:id` intentionally produce the *same* 404 response (`orders.not-found`). This is a deliberate security choice: do not reveal whether an id format is valid.
-- The ETag set here is the value the client must echo back as `If-Match` when editing; it is derived from `order` (see `setEtag` implementation for the exact field).
-- The response body is **permission-aware**: `respondWithOrder` receives `authContext` and includes only the actions this caller may take, so the UI never relies on a local copy of the lifecycle rules.
-- `getForCaller` returning `null` (as opposed to throwing) is the "not found / not yours" signal; it is handled inline, not via the `.catch` path.
+- A malformed `:id` and a genuinely missing order are deliberately indistinguishable to the client (both return the same 404 and i18n string) to avoid leaking existence.
+- The response body embeds the set of actions **this caller** may perform on the order; the client is expected to render its UI controls from that payload rather than re-deriving permissions locally.
+- `respondWithOrder` sets a version token intended to be echoed back as `If-Match` on subsequent mutations—treat it as an optimistic-concurrency guard, not a plain ETag.
+- `routes.ts` wires this handler to the `GET /orders/:id` path (not visible in this file but implied by the module docstring).

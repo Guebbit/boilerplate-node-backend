@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/services/outcome.ts
-sha256: 0d8ff5943a91f64457e336a46ef93fd6f318dfccf786a074828c6a7c54b9e3f7
-generated_at: 2026-11-08T08:04:48.771095+00:00
+sha256: 361b2f897f0b4f474ecc67e07d49f1be810f52e36a496a6630820ef17036cae1
+generated_at: 2026-11-14T21:39:17.292679+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,46 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared response and side-effect builders for "opening a return." Both the goods-return path (`create.ts`) and the cancel-remainder path (`cancel-remainder.ts`) import from this single module so neither needs to import the other. It centralises the 201 success shape, every 409/422/403 refusal the two paths can produce, the outbox event writes that accompany a freshly created return, and the audit row.
+Shared outcome builders for the two paths that write a return — `create.ts` (goods coming back) and `cancel-remainder.ts` (canceling an unshipped remainder). Centralizing the 201 success, all 4xx/5xx refusals, outbox-event writes, and the audit row here lets both callers import from one place without importing each other.
 
 ## Key elements
 
-- **`CreateReturnInput`** — the DTO a customer (or staff acting for one) submits: order id, reason, optional `kind` (`return` | `cancellation`), `fulfillmentOrderId`, preferred remedy, line quantities, and staff-only `requestedAt` / `statedVia`.
-- **`Opener`** — small struct pairing a `Statement` with the optional `staffId`; shared by both write paths.
-- **`CreateReturnOutcome`** — union of `ResponseSuccess<ReturnDocument>` and `ResponseReject`; the return type of every builder below.
-- **`opened(created)`** — 201 success wrapper.
-- **`badRemedy`, `notReturnable`, `windowClosed`, `badLines`, `badCancellation`, `withdrawalIsTheBuyers`, `badStatement`, `forbidden`, `nothingToCancel`** — one function per distinct refusal the two paths can emit. Each returns a `ResponseReject` with a stable `ERROR_CODES.*` value and an i18n message.
-- **`enqueueRequested` / `enqueueApproved` / `enqueueClosed`** — write `return.requested`, `return.decided`, and `return.closed` outbox events inside the caller's Mongoose transaction, keyed on `orderId` for ordering.
-- **`returnClosedEvent(closed)`** — pure builder that produces the `OutboxAnnouncement` payload (including `padDecimal`-formatted refund amount); consumed by `enqueueClosed` and available for other callers.
-- **`recordOpened(order, created, context)`** — writes the `recordAudit` row for a freshly created return; flags `onBehalfOfBuyer` when staff opened it.
+- **`CreateReturnInput`** — request shape a customer (or staff) sends to open a return or withdrawal; includes optional `kind`, `fulfillmentOrderId`, `lines`, `preferredRemedy`, and staff-only `requestedAt`/`statedVia`.
+- **`Opener`** — bundles the `Statement` (date + optional channel) and `staffId` shared by both write-paths.
+- **`CreateReturnOutcome`** — union of `ResponseSuccess<ReturnDocument>` | `ResponseReject`; the return type every builder below yields.
+- **`opened`** — wraps a freshly-written `ReturnDocument` in a 201 success.
+- **`badRemedy`** — 422 field-error when a remedy has no guarantee behind it.
+- **`notReturnable`** — 409 when the order cannot accept a return.
+- **`windowClosed`** — 409 when the return/withdrawal/guarantee window has expired; `guarantee` flag picks the message.
+- **`badLines`** — 422 for a specific line-level failure (`nothing-returnable`, `unknown-product`, `too-many`, `excluded`).
+- **`badCancellation`** — 422 for a structurally invalid cancellation request.
+- **`badStatement`** — 422 field-error for an invalid `StatementVerdict` (missing date, wrong channel, future date, etc.).
+- **`forbidden`** — 403 for a staff caller missing a permission key; calls `auditForbidden` before returning.
+- **`nothingToCancel`** — 409 when there is no remainder to cancel or nothing has shipped.
+- **`enqueueRequested`** — writes `return.requested` to the outbox inside the creating transaction, keyed on the order.
+- **`enqueueApproved`** — writes `return.decided{approved}` immediately after `requested` for staff-pre-approved returns.
+- **`returnClosedEvent`** — builds the `OutboxAnnouncement` for `return.closed` (shared payload shape for all three close-reasons).
+- **`enqueueClosed`** — persists the `return.closed` announcement in the creating transaction.
+- **`recordOpened`** — writes the audit row (`returnsAuditActions.RETURN_REQUESTED`) for a newly created return, noting `onBehalfOfBuyer` when staff acted.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — provides `generateSuccess`, `generateReject`, `fieldError`, and the `ResponseSuccess`/`ResponseReject` types every builder returns.
-- **`@infrastructure/i18n`** — `t()` resolves every user-facing message key.
-- **`@domain-primitives/money`** — `padDecimal` formats `refundAmount` in `returnClosedEvent`.
-- **`@infrastructure/observability/audit`** — `recordAudit` called by `recordOpened`.
-- **`@infrastructure/observability/forbidden`** — `auditForbidden` called inside `forbidden()` before returning the 403.
-- **`@kernel/outbox`** — `enqueueOutboxEvent` and the `OutboxAnnouncement` type back all three enqueue helpers.
-- **`../model`** — `ReturnDocument` is the domain shape every function reads or returns.
-- **`../events`** — `RETURN_REQUESTED`, `RETURN_DECIDED`, `RETURN_CLOSED` names passed to the outbox.
-- **`../audit`** — `returnsAuditActions.RETURN_REQUESTED` used as the audit action key.
-- **`@modules/orders`** — `OrderDocument` type for the `forbidden` and `recordOpened` signatures.
-- **`../domain`** — `ReturnReason`, `ProductQuantity`, `Statement`, `StatementVerdict` used in input types and the `badStatement` verdict parameter.
+- **`@domain-primitives/money`** — imports `padDecimal` to format `refundAmount` in the `returnClosedEvent` payload.
+- **`@infrastructure/i18n`** — imports `t` for every localized error/success message.
+- **`@infrastructure/http/response`** — imports `generateSuccess`, `generateReject`, `fieldError` and the `ResponseSuccess`/`ResponseReject` types; all outcome builders return one of these.
+- **`@infrastructure/observability/audit`** — calls `recordAudit` inside `recordOpened`.
+- **`@infrastructure/observability/forbidden`** — calls `auditForbidden` inside `forbidden`.
+- **`@kernel/outbox`** — calls `enqueueOutboxEvent` in `enqueueRequested`, `enqueueApproved`, and `enqueueClosed`; imports the `OutboxAnnouncement` type for `returnClosedEvent`.
+- **`@modules/orders`** — imports `OrderDocument` type used in `forbidden` and `recordOpened`.
+- **`../domain`** — imports `ReturnReason`, `ProductQuantity`, `Statement`, `StatementVerdict` for typing inputs and the `badStatement` verdict parameter.
+- **`../events`** — imports `RETURN_CLOSED`, `RETURN_DECIDED`, `RETURN_REQUESTED` event-name constants.
+- **`../model`** — imports `ReturnDocument` (the aggregate shape returned in 201 responses and passed to all event/audit builders).
+- **`../audit`** — imports `returnsAuditActions` for the action string in `recordOpened`.
 
 ## Notes
 
-- The module is intentionally dependency-free of `create.ts` and `cancel-remainder.ts`; the design note in the file header calls out that neither imports the other. This file is the single place that knows every refusal shape.
-- `windowClosed` takes a single boolean (`guarantee`) rather than a union to pick between two i18n sentences — the error code is the same (`RETURN_WINDOW_CLOSED`).
-- `forbidden` is the one builder that *audits before returning*; no route-level guard can see this refusal because the missing permission depends on order state resolved at runtime.
-- All three `enqueue*` helpers accept a `ClientSession` and are meant to be called inside the same Mongoose transaction that writes the return document, guaranteeing event/return atomicity.
-- `returnClosedEvent` is exported separately from `enqueueClosed` so other callers (e.g., a later close transition) can reuse the payload shape without a transaction.
+- The file is deliberately a leaf: it imports types and helpers but is imported only by the two write-paths (`create.ts`, `cancel-remainder.ts`). It must not import either of them.
+- All outbox writes (`enqueueRequested`, `enqueueApproved`, `enqueueClosed`) accept a Mongoose `ClientSession` and are expected to run inside the same transaction that inserts the `ReturnDocument`, so the event and the document commit atomically.
+- `forbidden` is the only builder that performs a side-effect (audit) before returning the rejection; every other builder is a pure response shape.
+- `returnClosedEvent` is exported separately from `enqueueClosed` so callers can inspect or transform the announcement (e.g., for testing) without triggering a write.
+- The `kind` discriminator (`return` vs `cancellation`) on `CreateReturnInput` gates which fields are meaningful: `fulfillmentOrderId` is required only for cancellations, `lines` must be absent for them.

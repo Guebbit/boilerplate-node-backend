@@ -1,7 +1,7 @@
 ---
 source: src/modules/shop-tasks/config.ts
-sha256: 1bed7274db3802cd8c1694e3b29f689d8e6622b1688174ec410d6b76a2705f1d
-generated_at: 2026-11-08T08:14:05.007352+00:00
+sha256: 4497a75a2f7838cbedcedf4fe0f2393bf48e3281d0ac10e9fed6988379e8a5d4
+generated_at: 2026-11-14T21:49:57.640478+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the tunable thresholds (in hours or days) that control when shop items become eligible for the staff daily digest. It centralises these "knobs" so that the digest logic and any future consumers read from a single, validated source.
+Declares the configuration schema for the shop-tasks module's staff digest timing thresholds. Each knob controls how long a given workflow stage (transfer, hold, return, unshipped, tracking, undelivered) must elapse before the daily digest counts it as actionable.
 
 ## Key elements
 
-- **`shopTasksConfig`** (exported const) — The sole export. A config object created via `defineConfig` with name `"shop-tasks"` and a shape of six `int` fields, each with a positive integer default and a `min: 1` constraint:
-  - `NODE_STAFF_TRANSFER_DUE_HOURS` (default 24)
-  - `NODE_STAFF_HOLD_OPEN_DAYS` (default 3)
-  - `NODE_STAFF_RETURN_DECISION_DAYS` (default 3)
-  - `NODE_STAFF_UNSHIPPED_DAYS` (default 3)
-  - `NODE_STAFF_TRACKING_MISSING_HOURS` (default 24)
-  - `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` (default 14)
+- **`shopTasksConfig`** — the sole export; a `defineConfig` object named `'shop-tasks'` whose `shape` maps seven `int` fields (each with a `default` and a `min` bound) to their environment-variable-style names.
+- **Fields** (all integer, non-negative):
+  - `NODE_STAFF_TRANSFER_DUE_HOURS` (default 24, min 1)
+  - `NODE_STAFF_HOLD_OPEN_DAYS` (default 3, min 1)
+  - `NODE_STAFF_RETURN_DECISION_DAYS` (default 3, min 1)
+  - `NODE_STAFF_RETURN_TRANSIT_DAYS` (default 7, min 0)
+  - `NODE_STAFF_UNSHIPPED_DAYS` (default 3, min 1)
+  - `NODE_STAFF_TRACKING_MISSING_HOURS` (default 24, min 1)
+  - `NODE_DELIVERY_UNDELIVERED_REMINDER_DAYS` (default 14, min 1)
 
 ## Relationships
 
-- **`@infrastructure/config/define`** — provides `defineConfig`, the factory used to build `shopTasksConfig`.
-- **`@infrastructure/config/fields`** — provides the `int` field type used for every entry in the shape.
-- **`module.ts` (same module)** — registers / re-exports this config as the module's configuration surface.
-- **`services/digest.ts`** — consumes the threshold values to decide which items appear in the daily staff digest.
+- **`src/infrastructure/config/define.ts`** — provides `defineConfig`, the factory that wraps the shape into a typed config object.
+- **`src/infrastructure/config/fields.ts`** — provides the `int` field descriptor used to declare each knob's type, default, and minimum.
+- **`src/modules/shop-tasks/module.ts`** — consumes `shopTasksConfig` to register it with the module.
+- **`src/modules/shop-tasks/services/digest.ts`** — reads the resolved values to decide which items are due for the daily digest.
 
 ## Notes
 
-- All fields are constrained to integers ≥ 1; there is no upper bound. If a downstream service reads a value it will always receive a positive integer (post-validation), not `undefined`.
-- Units are mixed (hours vs. days) across fields — the suffix in the key name (`_HOURS` vs `_DAYS`) is the only indicator; consumers must not assume a uniform unit.
+- Unit is encoded in the field name suffix (`_HOURS` vs `_DAYS`); there is no shared unit metadata in the schema.
+- Only `NODE_STAFF_RETURN_TRANSIT_DAYS` allows `0`; every other field enforces a minimum of `1`.
+- The `NODE_DELIVERY_*` prefix breaks the otherwise uniform `NODE_STAFF_*` pattern — it refers to a delivery-level reminder rather than a staff workflow step.

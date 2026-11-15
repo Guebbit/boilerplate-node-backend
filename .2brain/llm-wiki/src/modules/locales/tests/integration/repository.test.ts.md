@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/integration/repository.test.ts
-sha256: ff50b93a5b75b1f771c82a39592b57ef632251b7e63238657505062be1080b1c
-generated_at: 2026-11-08T06:28:25.475314+00:00
+sha256: b93baa4cf97f9b9d7a64a4bff7163a679cd10c6b649523028840d5561c91b8d3
+generated_at: 2026-11-14T20:24:14.834410+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the locale write paths that run against a real MongoDB instance. They verify behaviors an in-memory fake cannot catch: revision-counter semantics across all five write paths, cascade spans across two collections, import effects on rows the caller did not supply, and transactional rollback of a mid-batch failure.
+Integration tests for the locales repository **write paths** against a real MongoDB instance. The file exists because the properties under test—transactional atomicity between a row write and its revision bump, cascade deletion across collections, and an import's side-effect on rows it was not given—cannot be meaningfully faked in memory. Despite the "integration" label, the repo's convention treats these as unit tests: no HTTP, no auth, no network beyond the local Mongo.
 
 ## Key elements
 
-- **`givenLanguage(tag, entries?, overrides?)`** — Creates a locale via `localeRepository.create` and optionally seeds `localeEntryRepository` rows. Accepts an `active` flag for inactive-language scenarios.
-- **`givenEntry(locale, app, key, value)`** — Writes a single entry directly through the repository (bypassing the service layer) so the test controls the exact `app` field.
-- **`revisionOf(tag)`** — Reads the current `revision` field from the locale document; returns `-1` if the language is absent.
-- **`describe('the revision counter')`** — Asserts that each write path (add, edit, remove, import) bumps revision by exactly 1, that idempotent writes and reads do *not* bump it, and that one language's write leaves other languages' revisions untouched.
-- **`describe('importEntries')`** — Covers `counts` reporting, `replace: true` vs `replace: false` semantics, empty-body replace (empties the language), cross-language isolation, and a mocked `deleteMany` failure to prove the upsert + removal run in one transaction (rollback leaves pre-import state intact).
-- **`describe('deleting a language')** — Exercises `localeService.removeLanguage`: cascade deletion of entries *and* translation rows, correct `removedEntries`/`removedTranslations` counts, 404 for unregistered tags, and isolation of other languages' data.
+- **`givenLanguage(tag, entries?, overrides?)`** — Creates a locale via `localeRepository.create` and seeds any number of frontend-app entries. The standard setup for every test case.
+- **`givenEntry(locale, app, key, value)`** — One-row insert through the repository (bypassing the service layer so the app is exactly what the test specifies).
+- **`valuesOf(tag)`** — Reads all frontend entries for a tag and returns them as a `Map<key, value>` for assertion.
+- **`revisionOf(tag)`** — Reads the current `revision` counter from the locale document (returns `-1` if the locale is absent).
+- **`failNextBump()`** — Spies on `localeModel.findOneAndUpdate` to throw on the next call, simulating a database error mid-transaction.
+- **`describe('an entry write and its bump are one transaction')`** — Three tests verifying that a failed revision bump rolls back the row create, value save, or entry removal.
+- **`describe('the revision counter')`** — Eight tests asserting the counter moves exactly once per write (add, edit, remove, import) and does **not** move on idempotent edits, no-op imports, reads, or writes to other languages.
+- **`describe('importEntries')`** — Six tests covering created/updated/removed counts, `replace` vs. merge semantics, empty-body replace (full wipe), cross-language isolation, and transactional rollback when the deletion step fails mid-import.
+- **`describe('deleting a language')`** — Verifies `localeService.removeLanguage` cascades to entries and translations, returns accurate counts, and (in the truncated remainder) likely covers edge cases like deleting an inactive or nonexistent language.
 
 ## Relationships
 
-- **`@modules/locales/repository`** — Primary subject under test; exercises `localeRepository`, `localeEntryRepository`, and `translationRepository` directly.
-- **`@modules/locales/factories`** — Provides `makeLocale` and `makeLocaleEntry` used by the setup helpers.
-- **`@modules/locales/model`** — Imports `localeEntryModel` (spied on to simulate a `deleteMany` failure) and the `LocaleDocument` type.
-- **`@modules/locales/services`** — Calls `localeService.readMessages`, `localeService.searchEntries`, and `localeService.removeLanguage` to test service-mediated reads and deletion.
-- **`@modules/locales/tests/unit/apps.fixture`** — Imports the `FRONTEND` (and `BACKEND`) app-identifier constants.
-- **`@tests/setup-test-db`** — Calls `setupTestDb()` at module top level to provision the real Mongo connection.
+- **`src/modules/locales/repository.ts`** — The system under test. `localeRepository`, `localeEntryRepository`, and `translationRepository` are the only repositories exercised.
+- **`src/modules/locales/model.ts`** — `localeModel` and `localeEntryModel` are spied on (`findOneAndUpdate`, `deleteMany`) to inject controlled failures and assert transaction rollback.
+- **`src/modules/locales/factories.ts`** — `makeLocale` and `makeLocaleEntry` produce deterministic fixture objects passed to repository creates.
+- **`src/modules/locales/services/index.ts`** — `localeService` is used for `removeLanguage`, `readMessages`, and `searchEntries` (to confirm reads don't mutate the counter and that deletion cascades correctly).
+- **`src/modules/locales/tests/unit/apps.fixture.ts`** — Supplies the `FRONTEND` (and `BACKEND`) app constants shared with the unit-test suite so both layers agree on the discriminator value.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to provision and reset a real Mongo instance before the suite runs.
 
 ## Notes
 
-- **Requires a live Mongo.** The file's doc comment explicitly states these are "unit tests in this repo's sense" only because there is no HTTP/auth layer, but they need a real database. CI must have Mongo available.
-- **`FALLBACK = 'en'` is declared** but the test bodies use `'es'`, `'it'`, and `'zz'`; the constant documents the expected deployment fallback rather than being consumed by any assertion.
-- **Transactional test (D17e-2)** mocks `localeEntryModel.deleteMany` to throw after the upsert step; it asserts the upserted rows are rolled back. This is the only test in the file that uses `jest.spyOn`.
-- **`givenEntry` writes past the service** intentionally — the comment notes this so the `app` field is exactly what the test specifies, avoiding any service-layer transformation.
-- The file is placed under `tests/integration/` despite the "unit tests" comment; the directory convention, not the comment, governs how it is discovered and run.
+- The file is truncated in the source shown here; the "deleting a language" block likely contains additional cases (inactive language, already-deleted language, translation cascade) beyond the single visible test.
+- `FALLBACK = 'en'` is defined with a comment referencing `.env-example` but is not referenced by any visible test—likely used in the truncated remainder or as documentation of the environment contract.
+- Tests use `Array.prototype.toSorted()` (ES2023), implying the project targets Node ≥ 20 / a modern TS lib.
+- The `translationRepository` import is present in the visible content but not yet exercised by any test shown; it is presumably used in the truncated deletion tests to assert translation rows are removed alongside entries.
+- Conventions: each write path's revision bump is asserted in isolation (not via a shared helper) so a regression in one path fails loudly without masking the others. Failure-injection is always done via `jest.spyOn` + `mockImplementationOnce`, cleaned up in `afterEach` with `restoreAllMocks()`.

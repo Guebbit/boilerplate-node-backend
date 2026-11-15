@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/controllers/get-return.ts
-sha256: 9c5f2ab25ea9431728c8aef893f3f883b6ac9ba7c2976e3df22bc9a6cccdc4c9
-generated_at: 2026-11-08T07:55:59.293115+00:00
+sha256: 0e3bb8547f3c78ba14adb123f1cd0e1acfee4a818084559fa413556a7e865da1
+generated_at: 2026-11-14T21:32:42.154445+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `GET /returns/:id`. Retrieves a single return by ID scoped to the authenticated caller's permissions and returns the return document with the caller's available `actions`. Returns a 404 (not 403) when the return belongs to someone else's order, so existence is not leaked.
+Controller for `GET /returns/:id`. Resolves a single return for the authenticated caller, records a staff-read audit event, and returns the return payload. A return belonging to another buyer is indistinguishable from a missing one (both yield 404).
 
 ## Key elements
 
-- **`getReturnById(request, response)`** – The sole export. Validates the `:id` route param, calls `returnService.getReturn(id, authContext)`, records a staff-read audit event, and sends a `200` with the `Return` payload. Errors are delegated to `catchAs`; authorization rejections to `refused`.
+- **`getReturnById`** (exported) — The sole handler. Validates the `:id` param, fetches the return via `returnService.getReturn`, resolves the associated order to obtain the buyer ID, records the audit row, and sends a `200` response with the `Return` object.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@infrastructure/http/controller` | Imports `catchAs` (unified error catch) and `refused` (auth/permission rejection check). |
-| `@infrastructure/http/ids` | Imports `requireId` to extract and validate the `:id` param; short-circuits with 404 on failure. |
-| `@infrastructure/http/response` | Imports `successResponse` to emit the final JSON `200` response. |
-| `@kernel/staff-read` | Calls `recordStaffRead` after a successful fetch to log the audit entry. |
-| `@modules/returns/audit` | Imports `returnsAuditActions.ADMIN_RETURN_VIEWED` as the action name for the audit record. |
-| `@modules/returns/services` | Imports `returnService.getReturn` — the actual data/authorization logic. |
-| `@modules/returns/routes` | Registers this handler on the `GET /returns/:id` route (consumer side). |
-| `@types` | Imports the `Return` type used as the response payload shape. |
+- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` (error → HTTP mapping) and `refused` (short-circuits when the service returns a refusal instead of data).
+- **`src/infrastructure/http/ids.ts`** — Imports `requireId` to extract and validate the route param, short-circuiting with a 404 if absent.
+- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to serialize the final 200 body.
+- **`src/kernel/staff-read.ts`** — Calls `recordStaffRead` to persist an audit row keyed `read:Return` with action `ADMIN_RETURN_VIEWED`.
+- **`src/modules/orders/index.ts`** — Imports `buyerIdOf` and `orderService`; the latter is used to look up the parent order so the buyer ID can be attached to the audit event.
+- **`src/modules/returns/services/index.ts`** — Imports `returnService`; delegates the actual fetch + authorization to `getReturn`.
+- **`src/modules/returns/audit.ts`** — Imports `returnsAuditActions` to supply the enum value (`ADMIN_RETURN_VIEWED`) used in the audit record.
+- **`src/modules/returns/routes.ts`** — Registers this handler on the `GET /returns/:id` route (not imported here, but this file is its target).
+- **`src/types/index.ts`** — Imports the `Return` type for the response generic.
 
 ## Notes
 
-- **404 vs 403 on foreign returns:** The service layer (or `refused`) converts "not yours" into a 404 rather than a 403. Do not "fix" this to a 403 without confirming the intent.
-- **`request.authContext!`** – The non-null assertion relies on the `isAuth` middleware having already run. If this handler is ever mounted without that middleware, it will throw at runtime.
-- **Audit key is `read:Return`** (capital R), distinct from any `read:return` convention elsewhere. The `targetType` field, however, uses lowercase `'return'`.
+- **404 over 403**: Cross-buyer access is deliberately indistinguishable from a missing return; the service layer (`returnService.getReturn`) is responsible for enforcing ownership, and the controller treats any refusal as a 404 via `refused`.
+- **Buyer is not on the Return model**: The return entity intentionally omits the buyer. The controller resolves it from the parent order *solely* for the `subjectId` field on the audit row. The returned payload does not include it.
+- **Auth context via non-null assertion**: `request.authContext!` is safe only because the route is guarded by an `isAuth` middleware; there is no runtime guard in this function.
+- **No pagination or list logic**: This is strictly a single-entity fetch; the list endpoint lives elsewhere.

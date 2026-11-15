@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/items.ts
-sha256: 9de8d686b8ae2561759b6107ee2acd3ca6123b6173fc40ad97473b92c1361944
-generated_at: 2026-11-08T05:17:17.677586+00:00
+sha256: cc7a5024651769644bdb0dcdb8da3bc3f2c71c57d53650339bdd7b6d7a5985b0
+generated_at: 2026-11-14T19:31:18.353511+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,47 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for reading a cart and mutating its line items (add, set, update, remove, clear) plus setting the cart's shipping method. Every write returns a response envelope (`ResponseSuccess | ResponseReject`) so callers can distinguish a created line (201) from a changed one (200) and surface structured errors (404, 409, 422). The file also splits the "view cart" read into two variants so analytics can attribute `CART_VIEWED` only to a human opening the basket, not a badge poll.
+Service-layer operations for reading a cart and mutating its lines (add, set, remove, clear, shipping-method selection). Every write path funnels through a single `upsertCartItem` helper that enforces the catalogue gate, per-line quantity ceiling, and line-count limit, then prices the result via a join. The file also splits the "view the cart" read into a badge-polling variant and a `cart_viewed` analytics variant so analytics intent is encoded at the call site, not inferred from the route.
 
 ## Key elements
 
-- **`cartGet`** – Returns `CartLine[]` joined with product data for a user.
-- **`cartGetForBadge` / `cartGetForView`** – Two named exports over the same `cartViewOf` read. The badge variant is analytics-free; the view variant emits `CART_VIEWED`.
-- **`upsertCartItem`** (private) – Core write path. Validates product existence, applies the per-line quantity ceiling (`cartLineMax()`), delegates to `cartRepository.upsertLine`, and maps sentinel results (`QUANTITY_LIMIT`, `NO_LINE`) to 422/404 envelopes.
-- **`cartItemSetById` / `cartItemAddById`** – Public wrappers calling `upsertCartItem` in `'set'` or `'add'` mode; no `CallerContext` required.
-- **`cartItemAdd` / `cartItemUpdateQuantity`** – Same operations plus analytics via `emitItemWritten` (emits `CART_ITEM_ADDED` or `CART_ITEM_UPDATED`).
-- **`trackLineWrite`** – Standalone analytics helper: picks the event name based on the `created` flag.
-- **`cartItemRemoveById`** – Removes one line; 404 if cart or line is absent. Emits audit record (`USER_CART_ITEM_REMOVED`) and `CART_ITEM_REMOVED` analytics.
-- **`cartRemove`** – Clears all lines. Idempotent (no cart → empty view, no error). Emits `CART_CLEARED`.
-- **`cartShippingMethodSet`** – Validates a method against the current basket (unknown → 404, digital-only or out-of-weight → 409) before persisting; `null` clears the choice unconditionally.
-- **`quantityLimit`** (private) – Builds the shared 422 `CART_QUANTITY_LIMIT` reject envelope.
+- **`cartGet`** – raw read: returns `CartLine[]` with product join, no summary, no analytics.
+- **`cartGetForBadge`** – read shaped as `CartView` for header-badge polling; intentionally emits no analytics.
+- **`cartGetForView`** – same read as badge, wrapped to emit a `CART_VIEWED` analytics event.
+- **`upsertCartItem`** *(internal)* – shared write core for modes `'set'` | `'add'` | `'update'`. Gates the product via `productService.findPublicById`, checks `cartLineMax()` for non-add modes, delegates to `cartRepository.upsertLine`, maps sentinel results (`QUANTITY_LIMIT`, `LINE_LIMIT`, `NO_LINE`) to the appropriate reject envelope, and returns 201 vs 200 based on whether the line was created.
+- **`cartItemSetById`** – public wrapper calling `upsertCartItem` in `'set'` mode (default qty 1).
+- **`cartItemAddById`** – public wrapper calling `upsertCartItem` in `'add'` mode (grows existing line).
+- **`cartItemAdd`** – `'add'` mode + `emitItemWritten` analytics wrapper (the `POST /cart/items` path).
+- **`cartItemUpdateQuantity`** – `'update'` mode + analytics (the `PATCH /cart/items/{productId}` path; 404 if line absent).
+- **`trackLineWrite`** – emits `CART_ITEM_ADDED` or `CART_ITEM_UPDATED` based on the `created` flag; reused by the merge/reorder service.
+- **`emitItemWritten`** *(internal)* – inspects the success envelope's status code to decide which analytics event to fire; no-op on rejects.
+- **`cartItemRemoveById`** – removes one line; 404 if absent; records an audit entry and emits `CART_ITEM_REMOVED`.
+- **`cartRemove`** – clears all lines; idempotent (empty cart → empty view, 200); emits `CART_CLEARED`.
+- **`cartShippingMethodSet`** – sets or clears the cart's shipping method (`null` clears). Validates against current basket weight and digital-only state before writing; delegates to `cartRepository.setShippingMethod`.
+- **`lineLimitReached`** – exported 409 reject helper (`CART_LINE_LIMIT_REACHED`), also consumed by `./reorder`.
+- **`quantityLimit`** *(internal)* – 422 reject helper (`CART_QUANTITY_LIMIT`).
 
 ## Relationships
 
-- **`../repository` (`cartRepository`)** – All persistence (`findByUserId`, `upsertLine`, `removeLine`, `clearLines`, `setShippingMethod`). Sentinels `QUANTITY_LIMIT` and `NO_LINE` are returned by the repository and mapped here to HTTP errors.
-- **`../domain` (`basketWeight`, `needsShipping`)** – Used by `cartShippingMethodSet` to reject mismatched method/basket combinations.
-- **`../config` (`cartLineMax`)** – Supplies the shop-level per-line ceiling enforced in the `'set'` path.
-- **`../analytics` / `../audit`** – Provide the typed event/action constants consumed by the analytics and audit emissions.
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` build every envelope this file returns.
-- **`@infrastructure/i18n`** – `t()` supplies user-facing error messages.
-- **`@infrastructure/observability/analytics` / `audit`** – `emitAnalyticsEvent`, `buildAnalyticsBase`, `recordAudit` are the observation primitives.
-- **`./view` (`readCartLines`, `toCartView`, `isJoined`)** – Transform repository rows into the joined line list and the `CartView` summary.
-- **`../presenter` (`CartView`)** – Type for the computed cart summary returned to callers.
-- **`./errors` (`shippingMethodNotFound`)** – Pre-built 404 reject for an unknown shipping method.
-- **`@modules/products` (`productService.findPublicById`)** – Catalogue gate: confirms the product exists and is public before any write.
-- **`@modules/delivery` (`findShippingMethod`, `methodFitsWeight`)** – Resolves and weight-validates the shipping method.
-- **`./merge`** – Sibling service; the module docstring notes reorder goes through merge's own rule rather than `upsertCartItem`.
+- **`src/modules/cart/repository.ts`** – primary data access: `findByUserId`, `upsertLine`, `removeLine`, `clearLines`, `setShippingMethod`; sentinel constants `QUANTITY_LIMIT`, `LINE_LIMIT`, `NO_LINE` drive error mapping.
+- **`src/modules/cart/presenter.ts`** – source of the `CartView` type used as the success payload shape.
+- **`src/modules/cart/config.ts`** – `cartLineMax()` supplies the shop-specific per-line quantity ceiling checked before any write.
+- **`src/modules/cart/domain/index.ts`** – `basketWeight` and `needsShipping` are used inside `cartShippingMethodSet` for weight/digital validation.
+- **`src/modules/cart/analytics.ts`** – `cartAnalyticsEvents` provides the event-name constants (`CART_VIEWED`, `CART_ITEM_ADDED`, `CART_ITEM_UPDATED`, `CART_ITEM_REMOVED`, `CART_CLEARED`).
+- **`src/modules/cart/audit.ts`** – `cartAuditActions` provides the `USER_CART_ITEM_REMOVED` action constant.
+- **`src/infrastructure/observability/analytics/index.ts`** – `emitAnalyticsEvent` / `buildAnalyticsBase` are the analytics sink.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit` logs the removal action.
+- **`src/infrastructure/http/response.ts`** – `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types shape every return.
+- **`src/infrastructure/i18n/index.ts`** – `t()` translates user-facing error messages.
+- **`src/modules/cart/services/errors.ts`** – `shippingMethodNotFound` reject helper used in the shipping-method path.
+- **`src/modules/cart/services/merge.ts`** – consumes `trackLineWrite` and `lineLimitReached` exported from this file; goes through a different rule path (reports unavailable lines rather than refusing outright).
+- **`src/modules/cart/services/index.ts`** – barrel that re-exports the public functions from this file.
 
 ## Notes
 
-- The response envelope's status (201 vs 200) is the **service-level** signal for created-vs-updated; HTTP routes always answer 200 because the line is written through its parent cart.
-- `cartItemAdd` wraps `cartItemAddById` rather than inlining the analytics emit, so callers without a `CallerContext` (tests, wishlist move-to-cart) can use the bare variant.
-- Stock availability is deliberately **not** checked here; it is validated only at checkout.
-- The per-line ceiling is enforced in two places: `cartLineMax()` in the `'set'` path (before the write) and the repository in the `'add'` path (after the write). Both produce the same 422 code.
-- `cartRemove` has no envelope because it cannot fail—clearing an empty cart is the requested end state.
+- **Envelope status ≠ HTTP status.** `upsertCartItem` returns 201 in the *envelope* when a line is created, but every HTTP route answers 200 because the cart is the parent resource (no `Location` header). Callers read `result.status` for analytics branching, not for the HTTP response.
+- **Two read exports, one query.** `cartGetForBadge` and `cartGetForView` call the same `cartViewOf`; the only difference is the analytics emit. Adding a third caller with different intent means another thin wrapper here, not a new repository call.
+- **Stock is intentionally absent.** `upsertCartItem` checks catalogue visibility and quantity/line limits but does *not* check stock. Stock is enforced only at checkout, where units are actually held.
+- **`'update'` is `'set'` minus create.** A cart without the named line returns 404 in `'update'` mode; `'set'` would have created it.
+- **`cartRemove` carries no reject envelope.** Clearing an already-empty cart is the desired end-state, so the function always resolves to a `CartView` (200) and never rejects.
+- **Shipping-method validation is advisory.** `cartShippingMethodSet` checks weight/digital constraints as a UX courtesy; `services/checkout.ts` re-validates from scratch at the point of no return.

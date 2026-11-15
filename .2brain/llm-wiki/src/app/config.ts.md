@@ -1,7 +1,7 @@
 ---
 source: src/app/config.ts
-sha256: cc4b96fce87ce0a9c7ac6e888a58e8fe04e47364f6eaa36c614b390332d407b0
-generated_at: 2026-11-08T03:12:50.018647+00:00
+sha256: 158f9cc4686cd3b018351d2a9b82513744a1e2aa34bc5cc2f5767e9eca218a9e
+generated_at: 2026-11-14T17:47:58.753602+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the application tier's own environment variables (HTTP server bounds, security.txt contact fields) and assembles the single flat list of every configuration slice that a process must validate at boot. This is the one place where "the whole environment" is judged in a pass, shared by the app, the cluster primary, and ops scripts.
+Central assembly point for every configuration slice a process validates at boot. It defines the app tier's own variables (HTTP server bounds, `security.txt` fields), imports every infrastructure/kernel slice, and exposes a single list plus a validation entry point so that app boot, the cluster primary, and ops scripts all judge the environment identically.
 
 ## Key elements
 
-- **`appConfig`** — `defineConfig` slice for app-tier variables: JSON body limit, HTTP header/request/keep-alive timeouts, trust-proxy hops, and the three `security.txt` contact fields.
-- **`infrastructureRateLimits`** (module-local) — wraps `INFRASTRUCTURE_RATE_LIMITS` from the rate-limit middleware into a `ConfigSlice` so it participates in boot validation.
-- **`securityTxtSettings()`** — merges `appConfig()` with `siteConfig().NODE_URL` and returns a `SecurityTxtSettings` object for the security.txt route builder.
-- **`APP_CONFIG_SLICES`** — ordered, readonly array of every infrastructure, kernel, and app `ConfigSlice` (including provider probes). This is the stable "non-module" baseline.
-- **`allConfigSlices(appModules)`** — returns `APP_CONFIG_SLICES` followed by each enabled module's own slices, in stable order.
-- **`assertProcessConfig()`** — calls `assertConfig(allConfigSlices(enabledModules))`; throws `ConfigError` on any invalid value. Intended for entry points that bypass `createApp()`.
+- **`appConfig`** – `defineConfig` block for the app tier's own env vars: JSON body limit, header/request/keep-alive timeouts, trust-proxy hop count, and `NODE_SECURITY_*` fields.
+- **`infrastructureRateLimits`** – Wraps `INFRASTRUCTURE_RATE_LIMITS` as a named config slice (budgets that no single module owns).
+- **`securityTxtSettings()`** – Convenience accessor returning `SecurityTxtSettings` (app contact fields + `NODE_URL` from `siteConfig`).
+- **`APP_CONFIG_SLICES`** – Readonly array of every non-module config slice (runtime, security, adapters, HTTP, i18n, observability, kernel, app). Each entry is the `.slice` property of its accessor.
+- **`allConfigSlices(appModules)`** – Concatenates `APP_CONFIG_SLICES` with the slices contributed by each enabled module's manifest.
+- **`assertProcessConfig()`** – Calls `assertConfig(allConfigSlices(enabledModules))`; the single gate for entry points that bypass `createApp()` (cluster primary, `runScript`).
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** — source of `defineConfig`, `assertConfig`, and the `ConfigSlice` type used throughout.
-- **`src/infrastructure/config/fields.ts`** — provides the `int` and `text` field constructors for `appConfig`'s shape.
-- **`src/infrastructure/adapters/config.ts`** — supplies the adapter-level slices (mail, redis, queue, image, pdf, etc.) included in `APP_CONFIG_SLICES`.
-- **`src/infrastructure/adapters/mail-transports.ts`** / **`src/infrastructure/adapters/antibot-providers/index.ts`** — contribute `mailTransportProbe` and `humanChallengeProviderProbe`; their valid provider names are checked at boot, not at first request.
-- **`src/infrastructure/http/config.ts`** — provides site, rate-limit, upload, response-cache, and idempotency slices.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — exports `INFRASTRUCTURE_RATE_LIMITS`, folded into `infrastructureRateLimits`.
-- **`src/infrastructure/i18n/config.ts`** — provides `localeConfig` slice.
-- **`src/domain-primitives/time.ts`** — `MINUTE_MS` used as the default for `NODE_HTTP_REQUEST_TIMEOUT_MS`.
-- **`src/app/security-txt.ts`** — defines the `SecurityTxtSettings` type that `securityTxtSettings()` returns.
-- **`scripts/run-script.ts`** — calls `assertProcessConfig()` so every ops script fails fast on a bad environment.
-- **`src/app.ts`** — the app creation path that also validates config (via `registerModules`); this file's `assertProcessConfig` mirrors that same check for non-app entry points.
+- **`src/infrastructure/config/define.ts`** – Source of `defineConfig`, `assertConfig`, and the `ConfigSlice` type used throughout.
+- **`src/infrastructure/config/fields.ts`** – Provides `int` and `text` field constructors used in `appConfig`.
+- **`src/infrastructure/adapters/config.ts`** – Supplies the adapter slices (mail, queue, redis, image, pdf, export-store, outbound, antibot).
+- **`src/infrastructure/adapters/antibot-providers/index.ts`** – Provides `humanChallengeProviderProbe`, a boot-time validation of the selected provider name.
+- **`src/infrastructure/adapters/mail-transports.ts`** – Provides `mailTransportProbe`, similarly a boot-time selector check.
+- **`src/infrastructure/http/config.ts`** – Supplies HTTP-layer slices (site, rate-limit, upload, cache, idempotency, SSE).
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** – Source of `INFRASTRUCTURE_RATE_LIMITS`, wrapped into the `infrastructureRateLimits` slice.
+- **`src/infrastructure/i18n/config.ts`** – Supplies `localeConfig`.
+- **`src/domain-primitives/time.ts`** – Provides `MINUTE_MS` used for the default request timeout.
+- **`src/app/security-txt.ts`** – Type source for `SecurityTxtSettings`, consumed by `securityTxtSettings()`.
+- **`src/app.ts`** – App boot path that ultimately calls `assertConfig` via module registration; this file ensures the same slice list is used.
+- **`scripts/run-script.ts`** – Calls `assertProcessConfig()` so ops scripts fail fast on a bad environment.
+- **`scripts/setup/required-keys.ts`** – Consumes the slice list to enumerate required environment keys for setup tooling.
 
 ## Notes
 
-- `APP_CONFIG_SLICES` is a **snapshot** (`.map` at module load). The order is stable and matters for error-message readability; don't reorder casually.
-- `assertProcessConfig` is the "fail before the process starts" gate. The cluster primary calls it once so a single clean error replaces N worker crash-loops.
-- Provider probes (`mailTransportProbe`, `humanChallengeProviderProbe`, `analyticsProviderProbe`) are slices whose valid *names* live in a registry that imports its own config — a typo is caught at boot, not on the first incoming request.
-- Module-specific slices are **not** in `APP_CONFIG_SLICES`; they are appended by `allConfigSlices` per the enabled `AppModule` list from `src/modules`.
+- The file intentionally does **not** import module-specific slices directly; those are attached at call time via `moduleConfigSlices(enabledModules)` inside `allConfigSlices`. This keeps the import graph acyclic (modules import from `@infrastructure/*`, not back to `@app/config`).
+- Probe entries (`mailTransportProbe`, `humanChallengeProviderProbe`, `analyticsProviderProbe`) are not simple `defineConfig` slices—they are validation closures that check a provider *name* against a registry. A typo is caught at boot, not on the first request.
+- `APP_CONFIG_SLICES` order is stable and deliberate; consumers that enumerate keys (e.g. `required-keys.ts`) may rely on it.

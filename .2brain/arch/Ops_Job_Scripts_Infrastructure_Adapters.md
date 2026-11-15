@@ -12,10 +12,11 @@ graph LR
     Kernel_Module_Registry_Capability_Resolvers["Kernel Module Registry & Capability Resolvers"]
     Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_["Ops Job Scripts & Infrastructure Adapters (2.4.2)"]
     Module_Discovery_Tickets_Domain_Services["Module Discovery & Tickets Domain Services"]
-    Kernel_Module_Registry_Capability_Resolvers -- "Flattens module declarations into executable job lists and reencrypt walks" --> Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_
+    Kernel_Module_Registry_Capability_Resolvers -- "Resolves module declarations into executable work lists and dispatches lifecycle hooks" --> Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_
+    Kernel_Module_Registry_Capability_Resolvers -- "Dispatches lifecycle hooks (subscribe, onRegistered) into registered modules at boot" --> Module_Discovery_Tickets_Domain_Services
     Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_ -- "calls" --> Kernel_Module_Registry_Capability_Resolvers
-    Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_ -- "Invokes domain callbacks (job.run, reencrypt, subscribe) via runtime dispatch into module code" --> Module_Discovery_Tickets_Domain_Services
     Module_Discovery_Tickets_Domain_Services -- "Supplies the enabled module list as typed AppModule[] instances" --> Kernel_Module_Registry_Capability_Resolvers
+    Module_Discovery_Tickets_Domain_Services -- "Provides the active module list as the execution scope boundary" --> Ops_Job_Scripts_Infrastructure_Adapters_2_4_2_
 ```
 
 ## Details
@@ -27,8 +28,8 @@ The contract backbone that every ops script depends on. AppModule is the single 
 
 **Related Classes/Methods**:
 
-- `src.kernel.registry.AppModule`:382-546
-- `src.kernel.registry.resolvePersonalDataSections`:676-681
+- `src.kernel.registry.AppModule`:361-525
+- `src.kernel.registry.resolvePersonalDataSections`:655-660
 - `src.infrastructure.object-guards.stripUndefined`:29-32
 
 **Source Files:**
@@ -38,31 +39,30 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.infrastructure.object-guards.stripUndefined.filter() callback` (L32-L32) - Function
 - `src/kernel/registry.ts`
   - `src.kernel.registry.ImageTarget` (L31-L49) - Interface
-  - `src.kernel.registry.TranslatableTarget` (L93-L159) - Interface
-  - `src.kernel.registry.TranslationFieldIssue` (L162-L167) - Interface
-  - `src.kernel.registry.PublicEventProjection` (L175-L181) - Interface
-  - `src.kernel.registry.PersonalDataSubject` (L236-L253) - Interface
-  - `src.kernel.registry.PersonalDataSection` (L310-L340) - Interface
-  - `src.kernel.registry.RouteMount` (L364-L370) - Interface
-  - `src.kernel.registry.AppModule` (L382-L546) - Interface
-  - `src.kernel.registry.resolvePersonalDataSections` (L676-L681) - Class
-  - `src.kernel.registry.resolvePersonalDataSections.appModules.flatMap() callback` (L679-L680) - Function
-  - `src.kernel.registry.resolvePersonalDataErasers` (L693-L698) - Class
-  - `src.kernel.registry.resolvePersonalDataErasers.flatMap() callback` (L696-L697) - Function
-  - `src.kernel.registry.resolvePersonalDataMinimisers` (L707-L712) - Class
-  - `src.kernel.registry.resolvePersonalDataMinimisers.flatMap() callback` (L710-L711) - Function
+  - `src.kernel.registry.TranslatableTarget` (L93-L150) - Interface
+  - `src.kernel.registry.PublicEventProjection` (L158-L164) - Interface
+  - `src.kernel.registry.PersonalDataSubject` (L222-L239) - Interface
+  - `src.kernel.registry.PersonalDataSection` (L289-L319) - Interface
+  - `src.kernel.registry.RouteMount` (L343-L349) - Interface
+  - `src.kernel.registry.AppModule` (L361-L525) - Interface
+  - `src.kernel.registry.resolvePersonalDataSections` (L655-L660) - Class
+  - `src.kernel.registry.resolvePersonalDataSections.appModules.flatMap() callback` (L658-L659) - Function
+  - `src.kernel.registry.resolvePersonalDataErasers` (L672-L677) - Class
+  - `src.kernel.registry.resolvePersonalDataErasers.flatMap() callback` (L675-L676) - Function
+  - `src.kernel.registry.resolvePersonalDataMinimisers` (L686-L691) - Class
+  - `src.kernel.registry.resolvePersonalDataMinimisers.flatMap() callback` (L689-L690) - Function
 - `src/modules/access/module.ts`
   - `src.modules.access.module.default.personalData.collect` (L27-L33) - Method
   - `src.modules.access.module.default.personalData.collect.then() callback` (L28-L32) - Function
   - `src.modules.access.module.default.personalData.collect.then() callback.memberships.map() callback` (L29-L32) - Function
   - `src.modules.access.module.default.personalData.erase` (L35-L35) - Method
 - `src/modules/account/emails.ts`
-  - `src.modules.account.emails.reauthCodeEmail` (L222-L239) - Class
-  - `src.modules.account.emails.reauthCodeEmail.body` (L232-L237) - Method
+  - `src.modules.account.emails.reauthCodeEmail` (L234-L251) - Class
+  - `src.modules.account.emails.reauthCodeEmail.body` (L244-L249) - Method
 - `src/modules/account/module.ts`
-  - `src.modules.account.module.personalData.collect` (L89-L89) - Method
-  - `src.modules.account.module.personalData.erase` (L90-L90) - Method
-  - `src.modules.account.module.default.personalData.collect` (L106-L106) - Method
+  - `src.modules.account.module.personalData.collect` (L85-L85) - Method
+  - `src.modules.account.module.personalData.erase` (L86-L86) - Method
+  - `src.modules.account.module.default.personalData.collect` (L102-L102) - Method
 - `src/modules/account/services/sessions.ts`
   - `src.modules.account.services.sessions.exportSessions` (L50-L53) - Class
   - `src.modules.account.services.sessions.exportSessions.then() callback` (L53-L53) - Function
@@ -92,7 +92,8 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.api-keys.services.resolver.fromBearerToken.then() callback.then() callback.held` (L108-L108) - Class
   - `src.modules.api-keys.services.resolver.fromBearerToken.then() callback.then() callback.held.apiKey.permissions.filter() callback` (L108-L108) - Function
 - `src/modules/audit-logs/module.ts`
-  - `src.modules.audit-logs.module.default.personalData.collect` (L43-L43) - Method
+  - `src.modules.audit-logs.module.personalData.collect` (L43-L43) - Method
+  - `src.modules.audit-logs.module.default.personalData.collect` (L47-L47) - Method
 - `src/modules/cart/module.ts`
   - `src.modules.cart.module.default` (L25-L58) - Class
   - `src.modules.cart.module.default.personalData.collect` (L36-L41) - Method
@@ -107,21 +108,21 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.cart.services.cleanup.productRemoveFromCartsById.then() callback` (L43-L48) - Function
   - `src.modules.cart.services.cleanup.productRemoveFromCartsById.then() callback.then() callback` (L46-L46) - Function
 - `src/modules/cart/services/merge.ts`
-  - `src.modules.cart.services.merge.announceRemoved` (L145-L156) - Class
-  - `src.modules.cart.services.merge.announceRemoved.then() callback` (L155-L155) - Function
+  - `src.modules.cart.services.merge.announceRemoved` (L154-L165) - Class
+  - `src.modules.cart.services.merge.announceRemoved.then() callback` (L164-L164) - Function
 - `src/modules/delivery/module.ts`
-  - `src.modules.delivery.module.default` (L88-L157) - Class
+  - `src.modules.delivery.module.default` (L88-L158) - Class
   - `src.modules.delivery.module.personalData.collect` (L107-L113) - Method
   - `src.modules.delivery.module.default.personalData.collect.then() callback.shipments.map() callback` (L112-L112) - Function
   - `src.modules.delivery.module.default.personalData.collect` (L117-L121) - Method
   - `src.modules.delivery.module.default.personalData.collect.then() callback` (L121-L121) - Function
   - `src.modules.delivery.module.default.personalData.collect.then() callback.all.map() callback` (L121-L121) - Function
-  - `src.modules.delivery.module.default.subscribe` (L129-L154) - Method
-  - `src.modules.delivery.module.default.subscribe.onDomainEvent() callback` (L151-L152) - Function
+  - `src.modules.delivery.module.default.subscribe` (L130-L155) - Method
+  - `src.modules.delivery.module.default.subscribe.onDomainEvent() callback` (L152-L153) - Function
 - `src/modules/example/module.ts`
-  - `src.modules.example.module.default` (L55-L86) - Class
-  - `src.modules.example.module.default.subscribe` (L62-L64) - Method
-  - `src.modules.example.module.default.personalData.erase` (L81-L81) - Method
+  - `src.modules.example.module.default` (L56-L87) - Class
+  - `src.modules.example.module.default.subscribe` (L63-L65) - Method
+  - `src.modules.example.module.default.personalData.erase` (L82-L82) - Method
 - `src/modules/inventory/module.ts`
   - `src.modules.inventory.module.default` (L31-L74) - Class
   - `src.modules.inventory.module.default.subscribe` (L44-L63) - Method
@@ -136,8 +137,8 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.invoicing.module.default.subscribe.onDomainEvent() callback.then() callback` (L65-L65) - Function
   - `src.modules.invoicing.module.default.subscribe.onDomainEvent() callback` (L68-L75) - Function
 - `src/modules/invoicing/services/issue-credit-note.ts`
-  - `src.modules.invoicing.services.issue-credit-note.creditSettledRefunds` (L216-L221) - Class
-  - `src.modules.invoicing.services.issue-credit-note.creditSettledRefunds.then() callback` (L217-L221) - Function
+  - `src.modules.invoicing.services.issue-credit-note.creditSettledRefunds` (L226-L231) - Class
+  - `src.modules.invoicing.services.issue-credit-note.creditSettledRefunds.then() callback` (L227-L231) - Function
 - `src/modules/invoicing/services/personal-data.ts`
   - `src.modules.invoicing.services.personal-data.collectPersonalData` (L19-L38) - Class
   - `src.modules.invoicing.services.personal-data.collectPersonalData.then() callback` (L22-L37) - Function
@@ -160,21 +161,25 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.locales.module.default.personalData.collect` (L90-L90) - Method
   - `src.modules.locales.module.default.personalData.erase` (L91-L91) - Method
 - `src/modules/locales/repository.ts`
-  - `src.modules.locales.repository.countEntriesByLocale` (L119-L129) - Class
-  - `src.modules.locales.repository.countEntriesByLocale.then() callback` (L129-L129) - Function
-  - `src.modules.locales.repository.countEntriesByLocale.then() callback.rows.map() callback` (L129-L129) - Function
-  - `src.modules.locales.repository.servedTags` (L378-L387) - Class
-  - `src.modules.locales.repository.servedTags.then() callback` (L387-L387) - Function
-  - `src.modules.locales.repository.findServedEntityTranslations` (L393-L403) - Class
-  - `src.modules.locales.repository.findServedEntityTranslations.then() callback` (L397-L402) - Function
-  - `src.modules.locales.repository.resolveEntityFields` (L415-L454) - Class
-  - `src.modules.locales.repository.resolveEntityFields.then() callback.locale.$in.localeCandidates.filter() callback` (L427-L427) - Function
-  - `src.modules.locales.repository.resolveEntityFields.then() callback` (L433-L454) - Function
-  - `src.modules.locales.repository.findEntityIdsByFieldMatch` (L467-L488) - Class
-  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.locale.$in.localeCandidates.filter() callback` (L479-L479) - Function
-  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.$or.fields.map() callback` (L480-L482) - Function
-  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback` (L488-L488) - Function
-  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.rows.map() callback` (L488-L488) - Function
+  - `src.modules.locales.repository.countEntriesByLocale` (L125-L135) - Class
+  - `src.modules.locales.repository.countEntriesByLocale.then() callback` (L135-L135) - Function
+  - `src.modules.locales.repository.countEntriesByLocale.then() callback.rows.map() callback` (L135-L135) - Function
+  - `src.modules.locales.repository.servedTags` (L448-L457) - Class
+  - `src.modules.locales.repository.servedTags.then() callback` (L457-L457) - Function
+  - `src.modules.locales.repository.findServedEntityTranslations` (L463-L473) - Class
+  - `src.modules.locales.repository.findServedEntityTranslations.then() callback` (L467-L472) - Function
+  - `src.modules.locales.repository.resolveEntityFields` (L485-L530) - Class
+  - `src.modules.locales.repository.resolveEntityFields.then() callback.locale.$in.localeCandidates.map() callback` (L499-L499) - Function
+  - `src.modules.locales.repository.resolveEntityFields.then() callback.locale.$in.filter() callback` (L500-L500) - Function
+  - `src.modules.locales.repository.resolveEntityFields.then() callback` (L507-L530) - Function
+  - `src.modules.locales.repository.resolveEntityFields.then() callback.leastSpecificFirst` (L515-L517) - Class
+  - `src.modules.locales.repository.resolveEntityFields.then() callback.leastSpecificFirst.localeCandidates.map() callback` (L516-L516) - Function
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch` (L543-L568) - Class
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.locale.$in.localeCandidates.map() callback` (L557-L557) - Function
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.locale.$in.filter() callback` (L558-L558) - Function
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.$or.fields.map() callback` (L560-L562) - Function
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback` (L568-L568) - Function
+  - `src.modules.locales.repository.findEntityIdsByFieldMatch.then() callback.rows.map() callback` (L568-L568) - Function
 - `src/modules/notifications/module.ts`
   - `src.modules.notifications.module.default` (L27-L58) - Class
   - `src.modules.notifications.module.personalData.collect` (L34-L35) - Method
@@ -186,7 +191,7 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.orders.config.orderPagePath` (L104-L106) - Class
   - `src.modules.orders.config.orderPagePath.NODE_FRONTEND_LINK_ORDER.replaceAll('{id}') callback` (L106-L106) - Function
 - `src/modules/orders/factories.ts`
-  - `src.modules.orders.factories.makeOrder.items.map() callback` (L144-L150) - Function
+  - `src.modules.orders.factories.makeOrder.items.map() callback` (L145-L151) - Function
 - `src/modules/orders/module.ts`
   - `src.modules.orders.module.default` (L71-L171) - Class
   - `src.modules.orders.module.personalData.collect` (L84-L84) - Method
@@ -196,12 +201,12 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.orders.module.default.subscribe.onDomainEvent() callback` (L118-L122) - Function
   - `src.modules.orders.module.default.subscribe.onDomainEvent() callback.then() callback` (L122-L122) - Function
 - `src/modules/payments/module.ts`
-  - `src.modules.payments.module.default` (L114-L172) - Class
+  - `src.modules.payments.module.default` (L114-L174) - Class
   - `src.modules.payments.module.default.personalData.collect` (L134-L134) - Method
   - `src.modules.payments.module.default.personalData.erase` (L137-L137) - Method
-  - `src.modules.payments.module.default.subscribe` (L140-L160) - Method
-  - `src.modules.payments.module.default.subscribe.onDomainEvent() callback.then() callback` (L146-L147) - Function
-  - `src.modules.payments.module.default.subscribe.onDomainEvent() callback` (L152-L152) - Function
+  - `src.modules.payments.module.default.subscribe` (L140-L162) - Method
+  - `src.modules.payments.module.default.subscribe.onDomainEvent() callback.then() callback` (L148-L149) - Function
+  - `src.modules.payments.module.default.subscribe.onDomainEvent() callback` (L154-L154) - Function
 - `src/modules/returns/module.ts`
   - `src.modules.returns.module.default` (L69-L106) - Class
   - `src.modules.returns.module.default.subscribe` (L82-L90) - Method
@@ -209,41 +214,42 @@ The contract backbone that every ops script depends on. AppModule is the single 
   - `src.modules.returns.module.default.subscribe.onDomainEvent() callback.then() callback` (L84-L84) - Function
   - `src.modules.returns.module.default.personalData.collect` (L94-L94) - Method
 - `src/modules/stock-alerts/module.ts`
-  - `src.modules.stock-alerts.module.default` (L21-L43) - Class
-  - `src.modules.stock-alerts.module.default.personalData.collect` (L28-L28) - Method
-  - `src.modules.stock-alerts.module.default.personalData.erase` (L30-L30) - Method
-  - `src.modules.stock-alerts.module.default.subscribe` (L33-L40) - Method
-  - `src.modules.stock-alerts.module.subscribe.onDomainEvent() callback` (L34-L35) - Function
-  - `src.modules.stock-alerts.module.default.subscribe.onDomainEvent() callback` (L37-L38) - Function
+  - `src.modules.stock-alerts.module.default` (L22-L49) - Class
+  - `src.modules.stock-alerts.module.default.personalData.collect` (L30-L30) - Method
+  - `src.modules.stock-alerts.module.default.personalData.erase` (L32-L32) - Method
+  - `src.modules.stock-alerts.module.default.subscribe` (L35-L46) - Method
+  - `src.modules.stock-alerts.module.subscribe.onDomainEvent() callback` (L36-L37) - Function
+  - `src.modules.stock-alerts.module.default.subscribe.onDomainEvent() callback` (L41-L44) - Function
+  - `src.modules.stock-alerts.module.default.subscribe.onDomainEvent() callback.then() callback` (L44-L44) - Function
 - `src/modules/tasks/module.ts`
   - `src.modules.tasks.module.default` (L23-L55) - Class
   - `src.modules.tasks.module.personalData.collect` (L35-L35) - Method
   - `src.modules.tasks.module.default.personalData.erase` (L37-L37) - Method
   - `src.modules.tasks.module.default.personalData.collect` (L43-L43) - Method
 - `src/modules/users/module.ts`
-  - `src.modules.users.module.personalData.collect` (L89-L89) - Method
-  - `src.modules.users.module.default.personalData.collect` (L94-L94) - Method
+  - `src.modules.users.module.personalData.collect` (L95-L95) - Method
+  - `src.modules.users.module.default.personalData.collect` (L100-L100) - Method
 - `src/modules/webhooks/module.ts`
   - `src.modules.webhooks.module.default.personalData.collect` (L81-L81) - Method
   - `src.modules.webhooks.module.default.personalData.erase` (L82-L82) - Method
 - `src/modules/wishlist/module.ts`
-  - `src.modules.wishlist.module.default` (L21-L44) - Class
-  - `src.modules.wishlist.module.default.personalData.collect` (L27-L27) - Method
-  - `src.modules.wishlist.module.default.personalData.erase` (L29-L29) - Method
-  - `src.modules.wishlist.module.default.subscribe` (L32-L42) - Method
-  - `src.modules.wishlist.module.default.subscribe.onDomainEvent() callback` (L35-L40) - Function
-  - `src.modules.wishlist.module.default.subscribe.onDomainEvent() callback.then() callback` (L38-L39) - Function
+  - `src.modules.wishlist.module.default` (L22-L46) - Class
+  - `src.modules.wishlist.module.default.personalData.collect` (L29-L29) - Method
+  - `src.modules.wishlist.module.default.personalData.erase` (L31-L31) - Method
+  - `src.modules.wishlist.module.default.subscribe` (L34-L44) - Method
+  - `src.modules.wishlist.module.default.subscribe.onDomainEvent() callback` (L37-L42) - Function
+  - `src.modules.wishlist.module.default.subscribe.onDomainEvent() callback.then() callback` (L40-L41) - Function
 - `src/modules/wishlist/service.ts`
-  - `src.modules.wishlist.service.removeByProductId` (L159-L165) - Class
-  - `src.modules.wishlist.service.removeByProductId.then() callback` (L160-L165) - Function
-  - `src.modules.wishlist.service.removeByProductId.then() callback.then() callback` (L163-L163) - Function
+  - `src.modules.wishlist.service.removeByProductId` (L169-L175) - Class
+  - `src.modules.wishlist.service.removeByProductId.then() callback` (L170-L175) - Function
+  - `src.modules.wishlist.service.removeByProductId.then() callback.then() callback` (L173-L173) - Function
 
 ### Ops Job Scripts & Infrastructure Adapters (2.4.2)
 The operational surface itself. Three one-shot scripts form the entry points: run-job.ts (the generic runner for every scheduled job), reencrypt.ts (the key-rotation sweep), and refresh-breached-passwords.ts (the corpus rebuild). These scripts exercise five infrastructure adapters: the Redis cache, the RabbitMQ queue, the mail-spool, image-signatures, and the export-store. Together they form the rewrite-or-inspect-stored-data path: the scripts decide what to do via the registry, the adapters decide how to persist, queue, or transmit the result.
 
 **Related Classes/Methods**:
 
-- `scripts.ops.run-job.execute`:54-61
+- `scripts.ops.run-job.execute`:38-43
 - `scripts.ops.reencrypt.walks`:34-36
 - `scripts.security.refresh-breached-passwords.downloadCorpus`:70-77
 
@@ -256,10 +262,10 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `scripts.ops.reencrypt.walks` (L34-L36) - Class
   - `scripts.ops.reencrypt.then() callback` (L56-L56) - Function
 - `scripts/ops/run-job.ts`
-  - `scripts.ops.run-job.execute` (L54-L61) - Class
-  - `scripts.ops.run-job.then() callback` (L57-L57) - Function
-  - `scripts.ops.run-job.execute.then() callback` (L61-L61) - Function
-  - `scripts.ops.run-job.runScript() callback` (L89-L89) - Function
+  - `scripts.ops.run-job.execute` (L38-L43) - Class
+  - `scripts.ops.run-job.then() callback` (L40-L40) - Function
+  - `scripts.ops.run-job.execute.then() callback` (L43-L43) - Function
+  - `scripts.ops.run-job.runScript() callback` (L74-L74) - Function
 - `scripts/security/refresh-breached-passwords.ts`
   - `scripts.security.refresh-breached-passwords.downloadCorpus` (L70-L77) - Class
   - `scripts.security.refresh-breached-passwords.downloadCorpus.map() callback` (L76-L76) - Function
@@ -267,30 +273,35 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `scripts.security.refresh-breached-passwords.survivors` (L85-L85) - Class
   - `scripts.security.refresh-breached-passwords.runScript() callback` (L100-L100) - Function
 - `src/infrastructure/adapters/cache.ts`
-  - `src.infrastructure.adapters.cache.startCache` (L92-L92) - Class
-  - `src.infrastructure.adapters.cache.startCache.then() callback` (L92-L92) - Function
+  - `src.infrastructure.adapters.cache.startCache` (L89-L89) - Class
+  - `src.infrastructure.adapters.cache.startCache.then() callback` (L89-L89) - Function
 - `src/infrastructure/adapters/export-store.ts`
-  - `src.infrastructure.adapters.export-store.openExport` (L87-L99) - Class
-  - `src.infrastructure.adapters.export-store.then() callback` (L92-L92) - Function
-  - `src.infrastructure.adapters.export-store.openExport.then() callback` (L93-L97) - Function
+  - `src.infrastructure.adapters.export-store.openExport` (L96-L108) - Class
+  - `src.infrastructure.adapters.export-store.then() callback` (L101-L101) - Function
+  - `src.infrastructure.adapters.export-store.openExport.then() callback` (L102-L106) - Function
 - `src/infrastructure/adapters/image-signatures.ts`
   - `src.infrastructure.adapters.image-signatures.ImageFormat` (L20-L33) - Interface
   - `src.infrastructure.adapters.image-signatures.extensionForImage` (L142-L143) - Class
   - `src.infrastructure.adapters.image-signatures.extensionForImage.SUPPORTED_IMAGE_FORMATS.find() callback` (L143-L143) - Function
+- `src/infrastructure/adapters/logger.ts`
+  - `src.infrastructure.adapters.logger.redactWalk.result` (L215-L217) - Class
+  - `src.infrastructure.adapters.logger.redactWalk.result.input.map() callback` (L216-L216) - Function
+  - `src.infrastructure.adapters.logger.traceContextFormat` (L322-L327) - Class
+  - `src.infrastructure.adapters.logger.traceContextFormat.winston.format() callback` (L322-L327) - Function
 - `src/infrastructure/adapters/mail-spool.ts`
   - `src.infrastructure.adapters.mail-spool.spoolAttachment` (L46-L51) - Class
   - `src.infrastructure.adapters.mail-spool.spoolAttachment.then() callback` (L50-L50) - Function
 - `src/infrastructure/adapters/queue.ts`
-  - `src.infrastructure.adapters.queue.stopQueue` (L312-L335) - Class
-  - `src.infrastructure.adapters.queue.stopQueue.then() callback` (L329-L332) - Function
-  - `src.infrastructure.adapters.queue.stopQueue.catch() callback` (L333-L333) - Function
-  - `src.infrastructure.adapters.queue.cancelConsumers` (L345-L350) - Class
-  - `src.infrastructure.adapters.queue.cancelConsumers.tags.map() callback` (L349-L349) - Function
-  - `src.infrastructure.adapters.queue.cancelConsumers.then() callback` (L349-L349) - Function
+  - `src.infrastructure.adapters.queue.stopQueue` (L346-L370) - Class
+  - `src.infrastructure.adapters.queue.stopQueue.then() callback` (L364-L367) - Function
+  - `src.infrastructure.adapters.queue.stopQueue.catch() callback` (L368-L368) - Function
+  - `src.infrastructure.adapters.queue.cancelConsumers` (L380-L385) - Class
+  - `src.infrastructure.adapters.queue.cancelConsumers.tags.map() callback` (L384-L384) - Function
+  - `src.infrastructure.adapters.queue.cancelConsumers.then() callback` (L384-L384) - Function
 - `src/infrastructure/adapters/ssrf-guard.ts`
-  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort` (L210-L218) - Class
-  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort.<function>` (L211-L218) - Function
-  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort.<function>.signal.addEventListener('abort') callback` (L217-L217) - Function
+  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort` (L211-L219) - Class
+  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort.<function>` (L212-L219) - Function
+  - `src.infrastructure.adapters.ssrf-guard.rejectOnAbort.<function>.signal.addEventListener('abort') callback` (L218-L218) - Function
 - `src/infrastructure/observability/analytics/index.ts`
   - `src.infrastructure.observability.analytics.index.AnalyticsProvider` (L83-L119) - Interface
   - `src.infrastructure.observability.analytics.index.AnalyticsProvider.capture` (L91-L91) - Method
@@ -307,13 +318,13 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `src.infrastructure.observability.analytics.none.noneAnalyticsProvider.shutdown` (L31-L33) - Method
 - `src/infrastructure/observability/analytics/posthog.ts`
   - `src.infrastructure.observability.analytics.posthog.BulkDeleteResponse` (L54-L57) - Interface
-  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider` (L79-L165) - Class
+  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider` (L79-L167) - Class
   - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.configured` (L82-L84) - Method
   - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.capture` (L86-L112) - Method
-  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget` (L122-L148) - Method
-  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget.then() callback` (L140-L147) - Function
-  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget.then() callback.then() callback` (L143-L146) - Function
-  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.shutdown` (L154-L164) - Method
+  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget` (L122-L150) - Method
+  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget.then() callback` (L140-L149) - Function
+  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.forget.then() callback.then() callback` (L145-L148) - Function
+  - `src.infrastructure.observability.analytics.posthog.posthogAnalyticsProvider.shutdown` (L156-L166) - Method
 - `src/infrastructure/observability/analytics/umami.ts`
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider` (L78-L165) - Class
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.configured` (L83-L85) - Method
@@ -348,70 +359,77 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback.rows.map() callback` (L106-L111) - Function
   - `src.infrastructure.persistence.lease.then() callback.then() callback.then() callback` (L259-L259) - Function
 - `src/infrastructure/runtime/database.ts`
-  - `src.infrastructure.runtime.database.stopDatabase` (L202-L220) - Class
-  - `src.infrastructure.runtime.database.stopDatabase.then() callback` (L208-L215) - Function
-  - `src.infrastructure.runtime.database.stopDatabase.finally() callback` (L217-L219) - Function
+  - `src.infrastructure.runtime.database.stopDatabase` (L201-L219) - Class
+  - `src.infrastructure.runtime.database.stopDatabase.then() callback` (L207-L214) - Function
+  - `src.infrastructure.runtime.database.stopDatabase.finally() callback` (L216-L218) - Function
 - `src/infrastructure/runtime/otel-sdk.ts`
-  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator` (L103-L113) - Class
-  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.inject` (L106-L108) - Method
-  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.extract` (L110-L110) - Method
-  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.fields` (L111-L111) - Method
+  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator` (L165-L175) - Class
+  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.inject` (L168-L170) - Method
+  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.extract` (L172-L172) - Method
+  - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.fields` (L173-L173) - Method
 - `src/infrastructure/runtime/server-lifecycle.ts`
-  - `src.infrastructure.runtime.server-lifecycle.listenOn` (L43-L53) - Class
-  - `src.infrastructure.runtime.server-lifecycle.listenOn.<function>` (L44-L53) - Function
-  - `src.infrastructure.runtime.server-lifecycle.closeServer` (L104-L121) - Class
-  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>` (L105-L121) - Function
-  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.cutTimer` (L106-L109) - Class
-  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.cutTimer.setTimeout() callback` (L107-L107) - Function
-  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.server.close() callback` (L112-L119) - Function
-  - `src.infrastructure.runtime.server-lifecycle.shutdownInfra` (L134-L161) - Class
-  - `src.infrastructure.runtime.server-lifecycle.shutdownInfra.then() callback` (L161-L161) - Function
-  - `src.infrastructure.runtime.server-lifecycle.onProcessSignal.then() callback` (L197-L197) - Function
+  - `src.infrastructure.runtime.server-lifecycle.listenOn` (L44-L54) - Class
+  - `src.infrastructure.runtime.server-lifecycle.listenOn.<function>` (L45-L54) - Function
+  - `src.infrastructure.runtime.server-lifecycle.closeServer` (L111-L128) - Class
+  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>` (L112-L128) - Function
+  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.cutTimer` (L113-L116) - Class
+  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.cutTimer.setTimeout() callback` (L114-L114) - Function
+  - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>.server.close() callback` (L119-L126) - Function
+  - `src.infrastructure.runtime.server-lifecycle.shutdownInfra` (L141-L171) - Class
+  - `src.infrastructure.runtime.server-lifecycle.shutdownInfra.then() callback` (L171-L171) - Function
+  - `src.infrastructure.runtime.server-lifecycle.onProcessSignal.then() callback` (L207-L207) - Function
 - `src/infrastructure/runtime/settle.ts`
   - `src.infrastructure.runtime.settle.settleWithin` (L14-L30) - Class
   - `src.infrastructure.runtime.settle.settleWithin.then() callback` (L27-L27) - Function
   - `src.infrastructure.runtime.settle.settleWithin.finally() callback` (L27-L28) - Function
+- `src/infrastructure/runtime/span-scrub.ts`
+  - `src.infrastructure.runtime.span-scrub.scrubSpan` (L27-L56) - Class
+  - `src.infrastructure.runtime.span-scrub.scrubSpan.get` (L48-L54) - Method
+  - `src.infrastructure.runtime.span-scrub.scrubbingExporter` (L63-L72) - Class
+  - `src.infrastructure.runtime.span-scrub.scrubbingExporter.export` (L64-L69) - Method
+  - `src.infrastructure.runtime.span-scrub.scrubbingExporter.export.spans.map() callback` (L66-L66) - Function
+  - `src.infrastructure.runtime.span-scrub.scrubbingExporter.shutdown` (L70-L70) - Method
+  - `src.infrastructure.runtime.span-scrub.scrubbingExporter.forceFlush` (L71-L71) - Method
 - `src/kernel/registry.ts`
   - `src.kernel.registry.ModuleConsumer` (L65-L81) - Interface
   - `src.kernel.registry.ModuleConsumer.handler` (L70-L70) - Method
-  - `src.kernel.registry.resolveTranslatables` (L616-L624) - Class
-  - `src.kernel.registry.resolveTranslatables.appModules.flatMap() callback` (L622-L622) - Function
-  - `src.kernel.registry.resolveBrowserEvents` (L656-L663) - Class
-  - `src.kernel.registry.resolveBrowserEvents.appModules.flatMap() callback` (L661-L661) - Function
+  - `src.kernel.registry.resolveTranslatables` (L595-L603) - Class
+  - `src.kernel.registry.resolveTranslatables.appModules.flatMap() callback` (L601-L601) - Function
+  - `src.kernel.registry.resolveBrowserEvents` (L635-L642) - Class
+  - `src.kernel.registry.resolveBrowserEvents.appModules.flatMap() callback` (L640-L640) - Function
 - `src/modules/account/emails.ts`
-  - `src.modules.account.emails.verifyRequestEmail` (L101-L118) - Class
-  - `src.modules.account.emails.verifyRequestEmail.body` (L111-L116) - Method
-  - `src.modules.account.emails.emailChangeNoticeEmail` (L129-L146) - Class
-  - `src.modules.account.emails.emailChangeNoticeEmail.body` (L139-L143) - Method
-  - `src.modules.account.emails.setupRequestEmail` (L169-L181) - Class
-  - `src.modules.account.emails.setupRequestEmail.body` (L174-L179) - Method
-  - `src.modules.account.emails.resetConfirmEmail` (L332-L358) - Class
-  - `src.modules.account.emails.resetConfirmEmail.body` (L341-L355) - Method
-  - `src.modules.account.emails.resetConfirmEmail.body.providers.providers.providers.map() callback` (L349-L349) - Function
-  - `src.modules.account.emails.deletionScheduledEmail` (L407-L427) - Class
-  - `src.modules.account.emails.deletionScheduledEmail.body` (L417-L424) - Method
-  - `src.modules.account.emails.accountRestoredEmail` (L435-L451) - Class
-  - `src.modules.account.emails.accountRestoredEmail.body` (L444-L448) - Method
+  - `src.modules.account.emails.verifyRequestEmail` (L107-L124) - Class
+  - `src.modules.account.emails.verifyRequestEmail.body` (L117-L122) - Method
+  - `src.modules.account.emails.emailChangeNoticeEmail` (L135-L152) - Class
+  - `src.modules.account.emails.emailChangeNoticeEmail.body` (L145-L149) - Method
+  - `src.modules.account.emails.setupRequestEmail` (L176-L193) - Class
+  - `src.modules.account.emails.setupRequestEmail.body` (L181-L191) - Method
+  - `src.modules.account.emails.resetConfirmEmail` (L344-L370) - Class
+  - `src.modules.account.emails.resetConfirmEmail.body` (L353-L367) - Method
+  - `src.modules.account.emails.resetConfirmEmail.body.providers.providers.providers.map() callback` (L361-L361) - Function
+  - `src.modules.account.emails.deletionScheduledEmail` (L419-L439) - Class
+  - `src.modules.account.emails.deletionScheduledEmail.body` (L429-L436) - Method
+  - `src.modules.account.emails.accountRestoredEmail` (L447-L463) - Class
+  - `src.modules.account.emails.accountRestoredEmail.body` (L456-L460) - Method
 - `src/modules/account/module.ts`
-  - `src.modules.account.module.default` (L74-L158) - Class
-  - `src.modules.account.module.default.personalData.erase` (L107-L107) - Method
-  - `src.modules.account.module.default.subscribe` (L127-L155) - Method
-  - `src.modules.account.module.subscribe.onDomainEvent() callback` (L133-L134) - Function
-  - `src.modules.account.module.default.subscribe.onDomainEvent() callback.then() callback` (L134-L134) - Function
-  - `src.modules.account.module.default.subscribe.onDomainEvent() callback` (L152-L153) - Function
+  - `src.modules.account.module.default` (L70-L154) - Class
+  - `src.modules.account.module.default.personalData.erase` (L103-L103) - Method
+  - `src.modules.account.module.default.subscribe` (L123-L151) - Method
+  - `src.modules.account.module.subscribe.onDomainEvent() callback` (L129-L130) - Function
+  - `src.modules.account.module.default.subscribe.onDomainEvent() callback.then() callback` (L130-L130) - Function
+  - `src.modules.account.module.default.subscribe.onDomainEvent() callback` (L148-L149) - Function
 - `src/modules/account/services/account-deletion.ts`
-  - `src.modules.account.services.account-deletion.AccountDeletionSchedule` (L37-L42) - Interface
-  - `src.modules.account.services.account-deletion.scheduleAccountDeletion` (L59-L107) - Class
-  - `src.modules.account.services.account-deletion.scheduleAccountDeletion.userService.scheduleOwnDeletion() callback` (L69-L70) - Function
-  - `src.modules.account.services.account-deletion.scheduleAccountDeletion.then() callback` (L80-L105) - Function
-  - `src.modules.account.services.account-deletion.then() callback` (L209-L209) - Function
+  - `src.modules.account.services.account-deletion.AccountDeletionSchedule` (L39-L44) - Interface
+  - `src.modules.account.services.account-deletion.scheduleAccountDeletion` (L61-L109) - Class
+  - `src.modules.account.services.account-deletion.scheduleAccountDeletion.accountUserService.scheduleOwnDeletion() callback` (L71-L72) - Function
+  - `src.modules.account.services.account-deletion.scheduleAccountDeletion.then() callback` (L82-L107) - Function
 - `src/modules/account/services/deletion-sign-in.ts`
-  - `src.modules.account.services.deletion-sign-in.buildDeletionPending` (L33-L45) - Class
-  - `src.modules.account.services.deletion-sign-in.buildDeletionPending.then() callback` (L38-L44) - Function
-  - `src.modules.account.services.deletion-sign-in.RestoredSignIn` (L48-L51) - Interface
+  - `src.modules.account.services.deletion-sign-in.buildDeletionPending` (L34-L46) - Class
+  - `src.modules.account.services.deletion-sign-in.buildDeletionPending.then() callback` (L39-L45) - Function
+  - `src.modules.account.services.deletion-sign-in.RestoredSignIn` (L49-L52) - Interface
 - `src/modules/account/services/email-change.ts`
-  - `src.modules.account.services.email-change.sendEmailChangeMail` (L135-L148) - Class
-  - `src.modules.account.services.email-change.sendEmailChangeMail.then() callback` (L148-L148) - Function
+  - `src.modules.account.services.email-change.sendEmailChangeMail` (L181-L194) - Class
+  - `src.modules.account.services.email-change.sendEmailChangeMail.then() callback` (L194-L194) - Function
 - `src/modules/account/services/export.ts`
   - `src.modules.account.services.export.ExportRowChoice` (L137-L140) - Interface
   - `src.modules.account.services.export.openOwnExport` (L247-L265) - Class
@@ -423,11 +441,11 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `src.modules.account.services.export.eraseExports.then() callback.<function>.files.map() callback` (L280-L280) - Function
   - `src.modules.account.services.export.eraseExports.then() callback.<function>.then() callback` (L280-L280) - Function
 - `src/modules/account/services/password-reset-request.ts`
-  - `src.modules.account.services.password-reset-request.requestAccountSetup` (L145-L155) - Class
-  - `src.modules.account.services.password-reset-request.requestAccountSetup.then() callback` (L146-L155) - Function
+  - `src.modules.account.services.password-reset-request.requestAccountSetup` (L142-L152) - Class
+  - `src.modules.account.services.password-reset-request.requestAccountSetup.then() callback` (L143-L152) - Function
 - `src/modules/account/services/password-reset.ts`
-  - `src.modules.account.services.password-reset.afterReset.mail` (L78-L85) - Class
-  - `src.modules.account.services.password-reset.afterReset.mail.map() callback` (L84-L84) - Function
+  - `src.modules.account.services.password-reset.afterReset.mail` (L85-L92) - Class
+  - `src.modules.account.services.password-reset.afterReset.mail.map() callback` (L91-L91) - Function
 - `src/modules/account/services/previous-email-cleanup.ts`
   - `src.modules.account.services.previous-email-cleanup.reapLapsedPreviousEmails` (L22-L25) - Class
   - `src.modules.account.services.previous-email-cleanup.reapLapsedPreviousEmails.then() callback` (L25-L25) - Function
@@ -435,13 +453,13 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `src.modules.account.services.sessions.eraseSessionsAndTokens` (L62-L65) - Class
   - `src.modules.account.services.sessions.eraseSessionsAndTokens.then() callback` (L65-L65) - Function
 - `src/modules/account/services/tokens.ts`
-  - `src.modules.account.services.tokens.issueToken` (L35-L54) - Class
-  - `src.modules.account.services.tokens.issueToken.then() callback` (L53-L53) - Function
+  - `src.modules.account.services.tokens.issueToken` (L39-L58) - Class
+  - `src.modules.account.services.tokens.issueToken.then() callback` (L57-L57) - Function
 - `src/modules/account/services/verification.ts`
-  - `src.modules.account.services.verification.VERIFICATION_TARGETS.[EMAIL_VERIFY_TOKEN_TYPE].addressOf` (L63-L63) - Method
-  - `src.modules.account.services.verification.VERIFICATION_TARGETS.[EMAIL_CHANGE_TOKEN_TYPE].addressOf` (L64-L64) - Method
-  - `src.modules.account.services.verification.sendVerificationEmail` (L75-L102) - Class
-  - `src.modules.account.services.verification.sendVerificationEmail.then() callback` (L87-L101) - Function
+  - `src.modules.account.services.verification.VERIFICATION_TARGETS.[EMAIL_VERIFY_TOKEN_TYPE].addressOf` (L65-L65) - Method
+  - `src.modules.account.services.verification.VERIFICATION_TARGETS.[EMAIL_CHANGE_TOKEN_TYPE].addressOf` (L66-L66) - Method
+  - `src.modules.account.services.verification.sendVerificationEmail` (L77-L107) - Class
+  - `src.modules.account.services.verification.sendVerificationEmail.then() callback` (L92-L106) - Function
 - `src/modules/observability/metrics.ts`
   - `src.modules.observability.metrics._dependencyUp` (L21-L31) - Class
   - `src.modules.observability.metrics._dependencyUp.collect` (L26-L30) - Method
@@ -457,23 +475,26 @@ The operational surface itself. Three one-shot scripts form the entry points: ru
   - `src.modules.observability.services.job-health.jobHealth.then() callback` (L20-L25) - Function
   - `src.modules.observability.services.job-health.jobHealth.then() callback.summaries.map() callback` (L21-L25) - Function
 - `src/modules/users/module.ts`
-  - `src.modules.users.module.default` (L64-L101) - Class
-  - `src.modules.users.module.default.subscribe` (L72-L78) - Method
-  - `src.modules.users.module.default.subscribe.onDomainEvent() callback` (L77-L77) - Function
+  - `src.modules.users.module.default` (L67-L107) - Class
+  - `src.modules.users.module.default.subscribe` (L78-L84) - Method
+  - `src.modules.users.module.default.subscribe.onDomainEvent() callback` (L83-L83) - Function
 
 ### Module Discovery & Tickets Domain Services
 The bridge between the static module list on disk and the dynamic runtime registration that the ops scripts consume. enabledModuleDirectories resolves which module folders are active, and the tickets module's system/workflow services represent the domain logic that the seeded demo flows and the run-job runner exercise when they emit events or sweep stale records. The tickets module's subscribe hook registers event handlers that the run-job.ts prepare step installs before running a sweep. This group is the module-knows-its-own-work side of the contract.
 
 **Related Classes/Methods**:
 
-- `src.modules.enabledModuleDirectories`:84-87
+- `src.modules.enabledModuleDirectories`:92-95
 
 **Source Files:**
 
 - `scripts/ops/reapply-erasures.ts`
   - `scripts.ops.reapply-erasures.replay` (L69-L78) - Class
   - `scripts.ops.reapply-erasures.replay.then() callback.then() callback` (L76-L76) - Function
+- `src/app/boot-rendering.ts`
+  - `src.app.boot-rendering.bootRendering` (L23-L30) - Class
+  - `src.app.boot-rendering.bootRendering.then() callback` (L30-L30) - Function
 - `src/modules.ts`
-  - `src.modules.enabledModuleDirectories` (L84-L87) - Class
-  - `src.modules.enabledModuleDirectories.enabledModules.map() callback` (L86-L86) - Function
-  - `src.modules.enabledModuleDirectories.filter() callback` (L87-L87) - Function
+  - `src.modules.enabledModuleDirectories` (L92-L95) - Class
+  - `src.modules.enabledModuleDirectories.enabledModules.map() callback` (L94-L94) - Function
+  - `src.modules.enabledModuleDirectories.filter() callback` (L95-L95) - Function

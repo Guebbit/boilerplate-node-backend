@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/login.ts
-sha256: 9341b46366fae5dc835873890192306b895da0fd6bdfda3b4073dd933bfeef48
-generated_at: 2026-11-08T04:18:35.901420+00:00
+sha256: a4845300f38693edffa1531a75a6aa4121292234aaa7f9fcd4066beeb0ebdc60
+generated_at: 2026-11-14T18:45:32.556768+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles password-based identity proofing for the account module: `login` authenticates an unauthenticated email/password pair, and `verifyOwnPassword` re-confirms a signed-in caller's password before a sensitive action. Neither function creates or invalidates a session — that is the responsibility of `../session/session`.
+Password-verification service for two distinct flows: `login` (stranger proves credentials by email/password) and `verifyOwnPassword` (signed-in caller re-proves identity before a sensitive action). It deliberately does **not** mint a session—that responsibility belongs to the sibling `session` module.
 
 ## Key elements
 
-- **`DUMMY_PASSWORD_HASH`** — module-level constant; an argon2id hash of 32 random bytes computed once at import. Used as the comparison target when no user row is found, so an unknown email incurs the same CPU cost as a wrong password (prevents a timing-based account-enumeration oracle).
-- **`login(email?, password?)`** — validates input via `LoginBody.safeParse`, looks up the user with `userService.findForLogin`, verifies the password (or the dummy hash), then checks `isAuthenticatable`/`isRestorable`. Returns `ResponseSuccess<UserDocument>` or a 401 reject with an i18n message. DB errors are caught and reshaped through `rejectDatabaseEnvelope('auth', …)`.
-- **`verifyOwnPassword(userId, password, wrongKey)`** — runs inside `withOwnAccount` (which supplies the caller's own row). Rejects with **422** (not 401) on mismatch or when the account has no stored password (OAuth-only). The `wrongKey` parameter lets each calling flow supply its own i18n error string.
+- **`DUMMY_PASSWORD_HASH`** (module-level constant) — an argon2id hash of random bytes computed once at import time. Used as the verification target when the email lookup misses, so "unknown account" and "wrong password" cost identical CPU time.
+- **`login(body: unknown)`** — validates the body against the `LoginBody` zod schema (422 on failure), looks up the user via `accountUserService.findForLogin`, verifies the password against the stored hash (or the dummy hash), and returns `ResponseSuccess<UserDocument>` or a 401 reject. Accounts in deletion-grace (`isRestorable`) are still returned so the caller can offer a restore.
+- **`verifyOwnPassword(userId, password, wrongKey)`** — fetches the caller's own account via `withOwnAccount`, compares the supplied password to the stored hash, and returns 422 (never 401) on a mismatch or a missing password (OAuth-only account). The `wrongKey` parameter lets each caller supply its own i18n rejection message.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`src/infrastructure/i18n/index.ts`) — `t()` localises both rejection messages.
-- **`@infrastructure/security/password-hash`** — `hashPasswordSync` (boot-time dummy hash) and `verifyPassword` (per-request argon2id check).
-- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject`, `validationErrors`, and the `ResponseSuccess` / `ResponseReject` types shape every return.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope('auth', …)` normalises unexpected DB exceptions into the API's error envelope.
-- **`@modules/users`** (`src/modules/users/index.ts`) — provides `userService.findForLogin`, the type guards `isAuthenticatable` / `isRestorable` (the latter defined in `src/modules/users/authenticatable.ts`), and the `UserDocument` type (`src/modules/users/model.ts`).
-- **`./caller`** (`src/modules/account/services/caller.ts`) — `withOwnAccount` loads the caller's row and scopes the callback in `verifyOwnPassword`.
-- **`src/modules/account/services/index.ts`** — barrel that re-exports this module for the rest of the account service layer.
+- **`src/modules/users/friends/account.ts`** — imports `accountUserService` to load the user row (including the `select:false` password field) for login verification.
+- **`src/modules/users/index.ts`** — imports `isAuthenticatable`, `isRestorable`, and the `UserDocument` type for post-verification state checks.
+- **`src/infrastructure/security/password-hash.ts`** — calls `verifyPassword` (per-request) and `hashPasswordSync` (once, at import, for the dummy hash).
+- **`src/infrastructure/http/response.ts`** — shapes every return value via `generateSuccess` / `generateReject` / `validationErrors` and uses the `ResponseSuccess` / `ResponseReject` types.
+- **`src/infrastructure/http/errors.ts`** — funnels database-level failures through `rejectDatabaseEnvelope('auth', error)`.
+- **`src/infrastructure/i18n/index.ts`** — resolves user-facing error strings via `t(key)`.
+- **`src/modules/account/services/caller.ts`** — uses `withOwnAccount` to load the signed-in caller's record inside `verifyOwnPassword`.
 
 ## Notes
 
-- **401 vs 422 is deliberate.** `login` uses 401 (no session context). `verifyOwnPassword` uses 422 so that a client-side interceptor doesn't misread a wrong-password response as a session expiry and drop a still-valid token.
-- **`password` column is `select: false`** on the user model; `findForLogin` is one of the few queries that opts in. Avoid adding ad-hoc `.select('password')` elsewhere.
-- **Zod parse result, not raw params, is passed to the DB layer.** The outer signature accepts `email?: string` (to keep the public API loose), but `parseResult.data.email` is what's used downstream so TypeScript narrows the type.
-- **Restorable accounts are returned, not rejected.** If the user is in deletion grace (`isRestorable`), `login` still succeeds; the *caller* decides whether to offer a restore UI or proceed. A grace-expired account is treated identically to a wrong password.
-- **Dummy hash is computed at import time**, not per request — the argon2id cost is a one-time boot cost, not added to every login latency.
+- **Timing-oracle guard:** the dummy-hash comparison is intentional; removing the `user?.password ?? DUMMY_PASSWORD_HASH` fallback would let an attacker enumerate registered addresses by response time.
+- **422 vs 401 in `verifyOwnPassword`:** a 401 here would be indistinguishable from "session expired" to a client interceptor and could force an unwanted logout. 422 is the contract.
+- **`password` is `select:false`** on the user model; the lookup in `login` is one of the few queries that deliberately opts in. Do not add ad-hoc `.select('password')` elsewhere.
+- **Restorable accounts:** `login` returns them on a valid credential match. The *caller* (not this module) decides whether to offer restore or reject.

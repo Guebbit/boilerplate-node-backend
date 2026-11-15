@@ -1,7 +1,7 @@
 ---
 source: tests/integration/conditional-writes.test.ts
-sha256: 439f8a2fbf3dfa903ca290da06a7997f315e1db2efc6188c4e16d6cb38239798
-generated_at: 2026-11-08T09:37:05.673049+00:00
+sha256: b3b2955f29c3a647bc2a10bf0e0a14b98eb97735f1e9099e11cda9261ae17ce2
+generated_at: 2026-11-14T23:11:58.926505+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-End-to-end integration test for optimistic concurrency control (RFC 9110 §13.1.1): verifies that `ETag` is issued on reads, `If-Match` is enforced on PUT/PATCH/DELETE, a stale tag yields **412 Precondition Failed** with the row unchanged, and concurrent writers are correctly fenced. Exercises all four versioned resources (product, user, order, own account) through the real HTTP API so that controller → repository → error-interpreter interactions are covered together.
+Integration test that verifies the full conditional-writes flow (RFC 9110 §13.1.1) across all versioned resources. It asserts that reads emit an `ETag` rooted in the row's `editRevision` counter, that `If-Match` on PATCH/PUT/DELETE gates the write, and that a stale tag yields a `412 PRECONDITION_FAILED` without mutating the row. Because the property spans controller → repository → error-interpreter, it is driven through the real HTTP API rather than unit tests of any single layer.
 
 ## Key elements
 
-- **`Resource` (interface)** — Uniform descriptor for a versioned resource: seed path, edit body, expected value, and a direct-read function for the stored field. Lets one `describe.each` suite drive all four resources identically.
-- **`RESOURCES` (array of `Resource`)** — Concrete entries for product, user, order, and the caller's own `/account`. Orders additionally define `readyToDelete` (cancellation via `forceOrderStatus`) because hard-delete requires a terminal status.
-- **`storedRevision(collection, id)`** — Reads the `editRevision` counter directly from the Mongoose connection, bypassing the API, to assert the exact increment.
-- **`etagOf(response)`** — Extracts the `ETag` header, throwing if absent.
-- **Main suite (`describe.each(RESOURCES)`)** — Covers: ETag equals the stored counter (quoted); counter increments by 1 per edit; `If-Match` with current tag writes and returns a *new* tag; stale tag → 412 + row untouched; no header → last-writer-wins; `*` wildcard accepted; malformed values (`garbage`, `"unclosed`, `W/"1"`) → 412 (not silently ignored); two concurrent same-tag PATCHes → exactly one 200, one 412.
-- **`DELETABLE` + DELETE suite** — Same precondition checks for `DELETE ?hardDelete=true`; the account resource is excluded (it uses a two-step deletion flow).
-- **`describe('PUT')` block** — Confirms PUT on an order obeys the same `If-Match` semantics as PATCH.
+- **`Resource` interface** – A uniform shape (`seed`, `edit`, `expected`, `stored`, `readyToDelete`, `deleteQuery`) that lets `describe.each` run the same seven test cases against every versioned resource.
+- **`RESOURCES` array** – Six entries: a product, a user, an order, the caller's own account (`/account`), a webhook subscription, and a language (locale). Each seeds a row, defines a one-field edit, and reads it back from the Mongoose model.
+- **`storedRevision(collection, id)`** – Reads `editRevision` straight from the Mongoose collection to verify the counter without trusting the API response.
+- **`etagOf(response)`** – Extracts and asserts the presence of the `ETag` response header.
+- **`editPartOf(response)`** – Splits the two-part tag (`"<editRevision>.<digest>"`) and returns the revision number used for comparison.
+- **`describe.each(RESOURCES)` block** – Seven `it` cases per resource: ETag presence & correctness, counter increments by 1 per edit, matching tag succeeds and returns a new tag, stale tag → 412 + row unchanged, no header → last-writer-wins, `If-Match: *` accepted, malformed tags (`garbage`, `"unclosed`, `W/"1"`) rejected with 412, and a concurrent-edit race where exactly one of two same-tag writes lands.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/versioning.ts`** — Source of `PreconditionFailedError`, `runWithPrecondition`, `versionOf`, and `etagOf` (imported as `etagFor`). This test is the integration-level proof that the module's contract holds end-to-end.
-- **`tests/support/http.ts`** — Provides `api()` (supertest wrapper) and `authenticateAs` for issuing authenticated requests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises a clean in-memory / seeded MongoDB per test run.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product row.
-- **`src/modules/users/tests/factories.ts`** — `createUser` seeds a user row.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `forceOrderStatus`, `readOrder` seed and manipulate order rows.
-- **`src/modules/locales/tests/factories.ts`** — `givenLocale` (imported; likely used in the truncated portion for locale-dependent assertions).
-- **`src/modules/products/model.ts`** / **`src/modules/users/model.ts`** — `productModel`, `userModel` used to read back the stored field after an edit and verify the row is unchanged after a 412.
-- **`src/modules/products/repository.ts`** / **`src/modules/users/repository.ts`** — Imported; the repository layer is where the precondition check and fence actually execute.
+- **`src/infrastructure/persistence/versioning.ts`** – Source of the core logic under test: `PreconditionFailedError`, `runWithPrecondition`, `versionOf`, and `etagOf`. The test imports them to understand the tag format and to verify the 412 error type.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds the product resource; `productModel`/`productRepository` read it back for assertions.
+- **`src/modules/users/tests/factories.ts`** – `createUser` seeds the user and account resources; `userModel`/`userRepository` verify edits; `setPassword` (from `src/modules/users/services/credentials.ts`) is available for auth setup.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `forceOrderStatus`, `toOrderItem`, `readOrder` seed and manage the order resource; `orderRepository` provides direct DB access.
+- **`src/modules/delivery/services/index.ts`** / **`src/modules/delivery/tests/factories.ts`** – `deliveryService` and `fulfillmentOrdersOf` are imported (likely used in order-state transitions or teardown).
+- **`src/modules/locales/tests/factories.ts`** – `givenLocale` seeds the language resource; `localeModel`/`localeRepository` read it back.
 
 ## Notes
 
-- The test deliberately reads `editRevision` **directly from the collection** rather than through the API, because the field is internal and intentionally absent from response bodies (`expect(response.body).not.toHaveProperty('editRevision')`).
-- The "caller's own account" resource is seeded as a non-admin `user` and addresses `/account`; it is excluded from the DELETE suite because that endpoint uses a separate two-step confirmation flow.
-- Malformed `If-Match` values must produce **412**, not be treated as a missing header. This is a security-relevant contract (a mis-specified tag must not silently disable the precondition).
-- The concurrent-edit test fires two PATCHes via `Promise.all` with the **same** previously-read tag and asserts the multiset of statuses is `[200, 412]` — exactly one writer wins.
-- Orders require `forceOrderStatus(id, 'canceled')` before a hard-delete will be accepted; the `readyToDelete` hook in the `Resource` interface handles this transparently.
+- The test is deliberately **HTTP-level**: it exercises the controller → repository → error-interpreter chain together, which is why the docstring calls out that a unit test of any one layer is insufficient.
+- **Locale is the odd one out**: its URL path uses a tag (`pt-BR`) rather than the Mongoose `_id`, so `seed` maps the path back to the internal id via the factory's return value.
+- **Order requires `readyToDelete`** (`forceOrderStatus(id, 'canceled')`) before a DELETE can succeed; the `if-match` and stale-tag tests call it defensively even on PATCH to mirror the delete path's state requirements.
+- The `W/"1"` (weak-validator) rejection test guards against a regression where the server might silently treat an unparseable `If-Match` as "no precondition" (i.e., last-writer-wins) instead of answering 412.
+- `setupTestDb()` runs at module scope; the test file assumes a fresh Mongoose connection per suite (standard in this repo's test setup).

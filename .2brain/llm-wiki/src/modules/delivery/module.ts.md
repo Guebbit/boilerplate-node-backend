@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/module.ts
-sha256: a3db904688fbfc070f29b9431957325e64269b48d507ea7ccd5df5ccebf792ed
-generated_at: 2026-11-08T05:31:16.045894+00:00
+sha256: 139e07ff025adc07ba6e7090398aac556e0694d3ab1fcbdbff54092f924af1bb
+generated_at: 2026-11-14T19:41:53.387508+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **delivery** domain (shipping rates, fulfillment orders, shipments). It wires together the module's HTTP routes, background jobs, event subscriptions, public webhook projections, PII export sections, and config into a single `AppModule` object consumed by the kernel at startup. It exists so the rest of the system (routing, webhooks, outbox, jobs, personal-data export) can discover delivery's surface through the generic `AppModule` contract rather than importing delivery internals.
+Module manifest entry that wires the delivery domain (shipping rates, fulfillment orders, shipments) into the application kernel. It registers HTTP mounts, subscribes to domain events from `orders`/`inventory`/`products`, declares the public webhook projections, and declares GDPR export/re-encryption sections — all in a single object the kernel registry consumes at boot.
 
 ## Key elements
 
-- **`shipmentData(payload)`** — helper that normalises a `ShipmentEventPayload` into the flat shape every `shipment.*` webhook body carries (`orderId`, `shipmentId`, `fulfillmentOrderId`, `lines`).
-- **`publicEvents`** — `Readonly<Record<string, PublicEventTarget>>` mapping three domain events (`SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`) to public webhook payloads. `SHIPMENT_LOST` additionally exposes `reason` (the code, not the free-text buyer message). The `webhooks` module resolves these via the kernel registry; it never imports this module directly.
-- **Default export (`AppModule`)** — the manifest object with:
-  - `mounts` — two route tables: `/delivery` (delivery's own routes) and `/orders` (order-scoped routes like `POST /orders/{id}/process`).
-  - `jobs` — background jobs from `./jobs`.
-  - `config` — slice of delivery configuration.
-  - `publicEvents` — the webhook map above.
-  - `reencrypt` — `deliveryService.reencryptShipments` for PII re-encryption of destination copies.
-  - `personalData` — two export sections (`shipments`, `fulfillmentOrders`) that resolve the subject's order IDs via `orderService.ownOrderIds`, fetch the delivery records, and shape them through the presenter.
-  - `subscribe()` — registers all domain-event handlers (see Relationships).
-  - `locales` / `templates` — filesystem paths for i18n strings and notification templates.
+- **`shipmentData(payload)`** — Projects a shipment event payload into the flat shape every public webhook carries (orderId, shipmentId, fulfillmentOrderId, lines).
+- **`publicEvents`** — Maps the three internal shipment events (`SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`) to public webhook targets consumed by the `webhooks` module via the kernel registry.
+- **Default export (`AppModule`)** — The manifest object with:
+  - `mounts` — Two route groups: `/delivery/*` (general) and `/orders/*` (the `POST /orders/{id}/process` endpoint).
+  - `jobs` — Background jobs from `./jobs`.
+  - `config` — The delivery config slice.
+  - `reencrypt` — Re-encrypts PII on shipment destinations (destinations are stored encrypted).
+  - `personalData` — Two export sections (`shipments`, `fulfillmentOrders`) that resolve a user's data via `orderService.ownOrderIds` then the delivery service.
+  - `subscribe` — Registers ~11 `onDomainEvent` handlers reacting to order status changes, cancellation, redaction, pre-order allocation, date changes, and the module's own shipment events (for outgoing mail).
+  - `locales` / `templates` — Filesystem paths relative to this directory.
 
 ## Relationships
 
-- **`@kernel/events`** (`src/kernel/events.ts`) — `onDomainEvent` is the subscription mechanism; `DomainEventMap` provides payload types for the `publicEvents` handlers.
-- **`@kernel/registry`** (`src/kernel/registry.ts`) — supplies the `AppModule` and `PublicEventTarget` types that shape this file's exports. The kernel's `resolvePublicEvents` reads the `publicEvents` record at webhook-dispatch time.
-- **`@modules/orders`** — imports `orderService` and four event constants (`ORDER_CANCELED`, `ORDER_REDACTED`, `ORDER_STATUS_CHANGED`, `ORDER_STATUS_OVERRIDDEN`). The subscribe block reacts to all four; `personalData` collectors call `orderService.ownOrderIds` to resolve the subject's orders before querying delivery data.
-- **`@modules/inventory`** — imports `PREORDER_ALLOCATED`; a subscription releases a fulfillment order when backorder stock is allocated.
-- **`@modules/products`** — imports `PRODUCT_RELEASE_DATE_CHANGED` and `PRODUCT_RESTOCK_DATE_CHANGED`; a subscription calls `deliveryService.onDateChanged` to notify already-paid buyers.
-- **`./routes`** — provides the `router` mounted at `/delivery`.
-- **`./order-routes`** — provides `orderRouter` mounted at `/orders`.
-- **`./config`** — provides `deliveryConfig.slice` for the module's configuration section.
-- **`./services/index`** — provides `deliveryService`, the primary business-logic object used in every subscription handler, the reencrypt hook, and both personal-data collectors.
-- **`./presenter`** — provides `presentExportShipment` and `presentExportFulfillmentOrder` for shaping personal-data export output.
-- **`./events`** — imports five event constants and `ShipmentEventPayload`. The comment explicitly notes this import is reached directly (not via the module barrel) to install the module's event declarations per the project's module-barrel rule.
-- **`./jobs`** — provides `deliveryJobs` registered in the manifest.
-- **`src/modules/delivery/asyncapi.webhooks.yaml`** / **`openapi.yaml`** / **`module.yaml`** — declarative specs that mirror the routes and public events declared here.
-- **`src/modules.ts`** — the top-level module registry that loads this manifest.
-- **`src/modules/delivery/tests/integration/backorder.test.ts`** — integration test exercising the backorder-allocation flow wired in `subscribe`.
+- **src/kernel/events.ts** — Provides `onDomainEvent` and `DomainEventMap` used in `subscribe` and the `publicEvents` type annotations.
+- **src/kernel/registry.ts** — Supplies the `AppModule` and `PublicEventTarget` types; its `resolvePublicEvents` is what the `webhooks` module calls to project this module's events without importing it by name.
+- **src/modules.ts** — The application-level barrel where this module is composed (the file's own events are imported directly, not via this barrel, per the module-barrel rule).
+- **src/modules/delivery/routes.ts** — Provides the `router` mounted at `/delivery`.
+- **src/modules/delivery/order-routes.ts** — Provides `orderRouter` mounted at `/orders` (the order-scoped processing endpoint).
+- **src/modules/delivery/services/index.ts** — Provides `deliveryService`; every event handler and the `reencrypt`/`personalData` collectors delegate to it.
+- **src/modules/delivery/presenter.ts** — Provides `presentExportShipment` / `presentExportFulfillmentOrder` used by the GDPR export collectors.
+- **src/modules/delivery/config.ts** — Provides `deliveryConfig` exposed in the manifest.
+- **src/modules/delivery/jobs.ts** — Provides `deliveryJobs` registered in the manifest.
+- **src/modules/delivery/events.ts** — Provides the event constant names and `ShipmentEventPayload` type; importing it also installs this module's event declarations into the kernel.
+- **src/modules/delivery/module.yaml** — Static manifest metadata paired with this file.
+- **src/modules/delivery/openapi.yaml**, **src/modules/delivery/authorization.yaml**, **src/modules/delivery/asyncapi.webhooks.yaml** — API/auth/webhook specs describing the surface declared here.
+- **src/modules/delivery/tests/integration/backorder.test.ts** — Integration test exercising the backorder → allocation → release flow that `subscribe` wires up.
 
 ## Notes
 
-- The `events.ts` import is deliberately bypassed through the module barrel; the file-level comment and the project's CLAUDE.md "module-barrel rule" mandate reaching `./events` directly so that the event declarations register without triggering circular barrel loads.
-- `ORDER_STATUS_CHANGED` is subscribed but the handler only acts when `to === OrderStatus.paid`; all other status changes are ignored (`undefined`).
-- The `SHIPMENT_LOST` public event intentionally omits the free-text buyer sentence; only the machine-readable `reason` code is exposed to webhooks.
-- Personal-data collectors resolve order IDs through `orderService.ownOrderIds` specifically to avoid paging full order documents or hitting the `.search()` `_id`/`id` normalisation trap documented in the comment.
-- The `reencrypt` hook exists because shipment destination copies are PII-encrypted at rest and must be re-keyed on re-encryption requests.
+- **Events are imported directly from `src/modules/delivery/events.ts`**, never through this module's own barrel — a convention enforced by CLAUDE.md's module-barrel rule.
+- **`SHIPMENT_LOST` projection** intentionally exposes only the `reason` code; the free-text sentence staff write for the buyer is stripped out.
+- **`subscribe` handlers are fire-and-forget by design**: failures are logged by `emitDomainEvent` and retried by the outbox. Missing fulfillment orders from a lost `paid` event are recovered by `start`, a pre-order allocation, or an operator re-emit.
+- **`personalData` collectors** use `orderService.ownOrderIds` to obtain only the IDs, avoiding a full-order paged read and the `_id`/`id` normalization pitfall in `.search()`.
+- **`shipmentData` projects lines to `{ productId, quantity }` only**, dropping any other fields present on the internal line objects.

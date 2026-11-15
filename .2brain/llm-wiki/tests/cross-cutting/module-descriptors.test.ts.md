@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/module-descriptors.test.ts
-sha256: f38440e7cd55d72b342d8eb2f9de83b15f7c7749f00aa7bc5b704e4e0cc04db3
-generated_at: 2026-11-08T09:28:11.815829+00:00
+sha256: f1cc549d03e08543d7f177b2974ea1183f8f1ba5613417883557105133ff3d45
+generated_at: 2026-11-14T23:04:47.391869+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates that every module's `module.yaml` descriptor is well-formed: it exists, parses against the strict schema, references only real sibling modules, contains no self-reference, and has no duplicate entries. This is the "catch the sloppy descriptor" half of the rule that `.dependency-cruiser.cjs` enforces at build time.
+Cross-cutting test that verifies every `dependsOn` entry in each module's descriptor references a directory that actually exists on disk. It is the "dangling reference" guard for module descriptors; other hygiene checks (presence, schema strictness) are handled by the `module-graph` step of `npm run check`.
 
 ## Key elements
 
-- **`moduleNames`** — derived from `readdirSync(MODULES_ROOT)`; lists every subdirectory (i.e. every module folder) on disk, sorted. Sourced from the filesystem, not a registry, so a module is checked even if it is disabled.
-- **`describe.each(moduleNames)('%s/module.yaml', …)`** — one test suite per module folder containing three assertions:
-  - *exists* — the `module.yaml` file is present.
-  - *parses against the strict schema* — `readModuleDescriptor` does not throw.
-  - *names only real modules, never itself, with no duplicates* — every entry in `dependsOn` is a member of `moduleNames`, the module's own name is absent, and no entry appears twice.
+- **`moduleNames`** — Derived from `readdirSync(MODULES_ROOT)`, filtered to directory entries and sorted alphabetically. This is the source-of-truth list of real modules (read from the filesystem, not from any registry).
+- **`describe.each(moduleNames)`** — Parametrises one suite per module folder.
+- **`'names only real modules'`** — Reads the descriptor via `readModuleDescriptor`, then asserts every entry in `dependsOn` is present in `moduleNames`.
 
 ## Relationships
 
-- **`scripts/docs/module-descriptor.ts`** — provides `readModuleDescriptor`, the function under test. The test exercises its validation logic (schema parsing and `dependsOn` extraction) against every real descriptor in the repo.
-- **`tests/support/paths.ts`** — supplies the `MODULES_ROOT` constant (imported via the `@tests/paths` alias) that anchors all filesystem lookups.
+- **`scripts/docs/module-descriptor.ts`** — Supplies `readModuleDescriptor`, the shared descriptor parser used by both the docs tooling and this test.
+- **`tests/support/paths.ts`** — Supplies the `MODULES_ROOT` constant (imported as `@tests/paths`) so the test resolves the modules directory the same way the rest of the codebase does.
 
 ## Notes
 
-- Module discovery is disk-based (`readdirSync` + `withFileTypes`), so adding a new folder under `MODULES_ROOT` immediately makes its descriptor a test subject without updating any registry.
-- The file deliberately complements `.dependency-cruiser.cjs` rather than duplicating it: that config *fails closed* on a bad descriptor at build time; this test *flags the descriptor itself* in CI so the author fixes the source.
-- Uses `.toSorted()` (non-mutating, ES2023) rather than `.sort()` — the array is not reassigned afterward.
+- The test deliberately reads module names from disk rather than from a registry/enablement list, so a descriptor is validated even when the module is disabled.
+- Only `dependsOn` is checked here; the file does **not** assert that the descriptor exists or that its shape is valid — those concerns are owned by the `npm run check` module-graph step (as stated in the header comment).
+- Uses `Array.prototype.toSorted` (non-mutating), available in Node ≥ 20.

@@ -1,7 +1,7 @@
 ---
 source: docker/observability/validate-configs.sh
-sha256: f320f7405b903c9d1b4fe2fccd63e5bddd13fee1b88b73541535c60c4d1ad4a7
-generated_at: 2026-11-08T02:24:33.003320+00:00
+sha256: 58978b16184a589f82d63abe78cc1c1de98636507af56c66276442bc0ea50e5a
+generated_at: 2026-11-14T17:12:49.088677+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates every observability configuration file against the exact Docker image tag named in the relevant compose file. This prevents a situation where an image version bump and a config the new version rejects are merged independently, since each check runs the tool's own validate/parse command inside the mounted image.
+Validates the Loki and Alloy configs that production actually runs by executing each tool's built-in config check (`loki -verify-config`, `alloy validate`) inside the exact Docker image named in the compose files. This catches the failure mode where an image version bump and a config the new version rejects land in separate commits. Dev-only configs are intentionally out of scope.
 
 ## Key elements
 
-- **`image_in(file, repository)`** — extracts the full image tag (repo:version) for a given repository name from a compose YAML file. Tolerates an optional `docker.io/` prefix.
-- **`check(label, image, …)`** — wraps a single `docker run` invocation. Mounts `docker/observability/` read-only at `/obs` and `docker/` at `/docker`, streams stdout to `/dev/null`, and exits non-zero if no image was resolved.
-- **Per-tool validation blocks** — sequential calls for:
-  - `otelcol validate` (dev compose)
-  - `loki -verify-config` (both dev and prod compose, same config file)
-  - `alloy validate` (dev: single file; prod: directory containing `logs.alloy` plus an optional audit-forwarder file)
-  - `promtail -check-syntax` (both `promtail.config.yaml` and `promtail.podman.config.yaml`)
-  - `caddy adapt` (validates the Caddyfile without loading certificates)
+- **`image_in <compose-file> <repository>`** — Extracts the fully-qualified image tag for a given repository from a compose file. Matches the `image:` key with an optional `docker.io/` prefix stripped, so both `grafana/loki` and `docker.io/grafana/loki` resolve.
+- **`check <label> <image> <docker-run-args…>`** — Runs a single validation via `docker run --rm`, mounting `docker/observability/` read-only at `/obs`. Exits 1 if no image was found.
+- **Loki loop** — Resolves the `grafana/loki` image from both `docker-compose.yml` and `docker-compose.production.yml`, then validates `loki.config.yaml` against each.
+- **Alloy check** — Resolves the `grafana/alloy` image from the production compose file and runs `alloy validate /conf` with the logs config (and the optional audit-forwarder file) bind-mounted into `/conf`.
 
 ## Relationships
 
-No graph neighbors recorded.
+No graph neighbors are recorded for this file. It is a standalone script that depends only on a container engine (`docker` or the podman shim) being on `PATH` at invocation time.
 
 ## Notes
 
-- Requires a running container engine (`docker` or a podman shim providing the `docker` CLI). No build step; images must already be pulled or pullable.
-- The script `cd`s to the repository root (two levels up from its own location) before any relative-path mounts are resolved.
-- Alloy **production** validation is structurally different from dev: it mounts `alloy.logs.config.alloy` to `/conf/logs.alloy` and points `alloy validate` at the `/conf` directory, reflecting how production loads a directory of config files rather than a single file.
-- The Caddyfile being validated lives outside `docker/observability/` (at `docker/webhook-tester-tls.Caddyfile`), which is why the `docker/` directory is also mounted at `/docker`.
-- `set -euo pipefail` means any single failed check aborts the whole run; there is no retry or partial-reporting logic.
+- The script `cd`s to the repo root (`$(dirname "$0")/../..`) before running, so relative paths like `docker/observability` are anchored there.
+- Alloy validation mounts only the specific config files needed; the broader `/obs` mount used by the Loki check is not available to Alloy by default.
+- A missing image in a compose file is a hard error (exit 1), not a skip — this is deliberate so a typo in the image name fails loudly rather than silently skipping validation.
+- The `set -euo pipefail` guard means any single failed `docker run` aborts the whole script before the "all configs accepted" message prints.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/factories.ts
-sha256: f0fd137638928e8610cbe40d0e2132242ead0608343c43d29662fe1dad245632
-generated_at: 2026-11-08T08:07:10.864655+00:00
+sha256: e03800b2dc686e36c820d18bce4d1597688f971bb052ee64a2d133eaacdfe4f2
+generated_at: 2026-11-14T21:42:15.187531+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a minimal, validation-free way to seed return documents into the database for integration tests that live **outside** the returns module. It exists so those tests can create the few fields a "count by status and age" query actually reads, without constructing full return objects with lines, orders, or monetary amounts.
+Provides a minimal return-document factory for integration tests *outside* the returns module (e.g. shop-tasks tests) that only need to seed rows for a "count by status and age" query. It deliberately bypasses the service layer and validation so tests can insert bare documents without setting up orders, lines, or money.
 
 ## Key elements
 
-- **`BareReturn`** (interface) — The minimal shape a consumer passes in: `status` (`'requested' | 'approved'`), `reason`, and `daysAgo` (age in days).
-- **`insertBareReturns`** (exported const, `(rows: readonly BareReturn[]) => Promise<unknown>`) — Maps each `BareReturn` into a MongoDB document (`status`, `kind: 'return'`, `reason`, `createdAt`) and calls `returnModel.collection.insertMany`. Returns whatever `insertMany` resolves to (typed as `unknown`).
+- **`BareReturn`** (interface) — The subset of fields a count-by-status-and-age query reads: `status` (`'requested' | 'approved'`), `reason`, `daysAgo`, and optional `proof` flag.
+- **`insertBareReturns(rows)`** (exported function) — Maps each `BareReturn` to a minimal MongoDB document (`kind: 'return'`, a single `createdAt`/`requestedAt`/`decidedAt` timestamp derived from `daysAgo`, optional `proofOfSendingAt`) and calls `returnModel.collection.insertMany` directly.
 
 ## Relationships
 
-- **`src/modules/returns/model.ts`** — Imports `returnModel` and uses its `.collection.insertMany` to write documents directly.
-- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` to convert the human-friendly `daysAgo` value into a concrete `createdAt` timestamp.
-- **`src/modules/shop-tasks/tests/integration/digest.test.ts`** and **`work-summary.test.ts`** — Downstream consumers that seed bare returns and then assert on aggregate counts, without needing full return documents.
+- **`src/modules/returns/model.ts`** — Imports `returnModel` to access the underlying collection for the raw `insertMany` call.
+- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` to convert the `daysAgo` field into a concrete `Date` offset.
+- **`src/modules/shop-tasks/tests/integration/digest.test.ts`** and **`work-summary.test.ts`** — Downstream consumers that seed bare returns via `insertBareReturns` to exercise their count/aggregation logic.
 
 ## Notes
 
-- The module doc explicitly states the factory is for tests **outside** the returns module; do not reach for it from within `src/modules/returns/tests/`.
-- `insertBareReturns` deliberately skips all application-level validation (lines, order linkage, money). If a test needs a *full* return, this factory will not help.
-- The return type is `Promise<unknown>` — callers should not rely on the insert result carrying typed information.
+- The function intentionally skips the returns service and any validation (no order reference, no line items, no monetary fields). If a test needs full referential integrity, this factory is the wrong tool.
+- `kind` is hardcoded to `'return'` on every inserted document; callers do not supply it.
+- All timestamp fields (`createdAt`, `requestedAt`, `decidedAt`, `proofOfSendingAt`) share the same computed date. There is no way to express, for example, a decision made later than the request.

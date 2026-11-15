@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/permission-conditions-stay-null-free.test.ts
-sha256: 43bec64c5d41711c0b6132e95cfc07c3337366201af585382c1d389a7b954962
-generated_at: 2026-11-08T09:29:24.527626+00:00
+sha256: 3c63fc53eaf52e99c71a8f05e71ec25dfc8f2e94daf860a7c9936f7470dda9aa
+generated_at: 2026-11-14T23:05:43.769041+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards against permission rule conditions that would serialize `null` (other than the sanctioned `deletedAt: null`) or use an `$exists`-style operator onto the wire in session-answer responses. Because the never-null response check exempts exactly one null slot, any rule that introduces another null or an existence-operator would break the contract; this test catches that at rule-definition time rather than at runtime.
+Cross-cutting guard that inspects every condition value inside `PERMISSION_RULES` and asserts two invariants before they can leak onto the wire: the only permitted `null` is a top-level `deletedAt`, and no `$exists`-style operator key may appear at any nesting depth. It exists so that a rule accidentally introducing a new null or a Mongo-existence operator is caught at the permission-definition level rather than surfacing in a session answer.
 
 ## Key elements
 
-- **`entriesDeep`** – Recursively flattens an arbitrary (possibly nested) object into a flat list of `[path, value]` pairs using dotted-notation keys (e.g. `deletedAt`, `foo.bar.$eq`).
-- **`conditions`** – Precomputed array of `{ id, path, value }` tuples covering every leaf value across all `PERMISSION_RULES` conditions.
-- **"has conditions to judge" (canary)** – Asserts `conditions.length > 0` so the two invariant tests below cannot pass vacuously if rules lose their conditions.
-- **"holds a null only as the top-level deletedAt"** – Filters for any entry where `value === null` and `path !== 'deletedAt'`; expects zero strays.
-- **"uses no $exists-style operator"** – Filters entries whose path's last segment matches `$exists` (via `/(^|\.)\$exists$/`); expects zero strays.
+- **`entriesDeep(value, path?)`** — Recursive helper that walks a (potentially nested) object and returns a flat `[dotPath, leafValue][]` list. Non-object and `null` values yield no entries.
+- **`conditions`** (computed once per suite) — `PERMISSION_RULES` flattened via `entriesDeep` into `{ id, path, value }` tuples for every rule.
+- **Canary test** — Asserts `conditions.length > 0` so the two substantive checks cannot pass vacuously.
+- **"holds a null only as the top-level deletedAt"** — Filters for entries whose value is `null` and whose path is not exactly `deletedAt`; expects none.
+- **"$exists-style operator" test** — Filters for any path whose last segment matches `$exists` (regex `(?:^|\.)\$exists$`); expects none.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** – Source of the `PERMISSION_RULES` constant that this test flattens and inspects. The test is a pure consumer; it mutates nothing and adds no runtime behavior.
+- **`src/kernel/permissions.ts`** — Imports `PERMISSION_RULES`, the single source of truth for every permission rule's `id` and `conditions` object. This test is the downstream consumer that validates the shape of that data without exercising any runtime path.
 
 ## Notes
 
-- The null exemption is path-anchored: only the exact top-level key `deletedAt` is allowed to be null. A nested `deletedAt` (e.g. `sub.deletedAt`) would still be flagged.
-- The `$exists` regex intentionally matches the *last* path segment only, so a hypothetical field literally named `$exists` at the root or after a dot is caught, while keys merely containing the substring elsewhere (e.g. `is$existsCheck`) are not.
-- The canary test is deliberate: without it, deleting all conditions from `PERMISSION_RULES` would make both invariant tests trivially pass.
+- The canary test is intentional: if `PERMISSION_RULES` were ever empty or every rule had `conditions: undefined`, the null and `$exists` assertions would trivially pass. The canary fails in that scenario.
+- `entriesDeep` skips `null` leaves (returns `[]`), so a *top-level* `null` in a condition object is only visible through the parent's `Object.entries` entry—consistent with the check that only `deletedAt` may hold it.
+- The `$exists` regex is anchored to the final path segment (`(?:^|\.)\$exists$`), so a key like `foo$exists` would **not** be flagged; only a key that is exactly `$exists` is.

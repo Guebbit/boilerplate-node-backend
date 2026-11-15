@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/integration/hand-paid-refund.test.ts
-sha256: d9b8aca63a17a371ae90bcfcb93d4cafc8f3e5ab022d5a341995dc8d5df974a6
-generated_at: 2026-11-08T08:08:19.078320+00:00
+sha256: 5194ee0aac87a849e1043dd2a10d9e7804f83f8804e0b7fade3e0e7af5921a88
+generated_at: 2026-11-14T21:43:35.700099+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying the lifecycle of refunds on offline (cash / manual-transfer) payments. Because no external gateway can confirm the money was returned, these tests assert that a received return or a buyer cancellation only *opens* a refund in `pending` state, and that only an explicit operator call to `settleRefundByHand` transitions it to settled and closes the return.
+Integration tests for refunds on offline (cash / transfer) payments. Because no external system can verify that physical money was returned, these tests assert the full lifecycle: a received return or buyer cancellation only **opens** the refund (status `pending`, audit row `payment.refund_owed_by_hand`), and the refund stays pending until an operator calls `settleRefundByHand`, at which point the `payment.refunded` event closes the return.
 
 ## Key elements
 
-- **`paidInCash`** (local helper) — Creates a user, two products, an order (2 shirts + 1 mug), reserves inventory, and records an offline cash payment. Returns the fixture objects needed by both test suites.
-- **`paymentOf`** (local helper) — Reads a payment record for a given order ID via `paymentService.getForOrder` as admin.
-- **`owedRows`** (local helper) — Filters the accumulated `AuditEntry[]` for entries with action `payment.refund_owed_by_hand`.
-- **`describe('a received return on a cash-paid order')`** — Asserts that `receiveReturn` leaves the refund `pending` with `settledByHand` undefined, writes exactly one owed audit row, and that `settleRefundByHand` flips the return to `closed` (via the `payment.refunded` event) without adding a second owed row.
-- **`describe('a buyer cancelling the unshipped remainder…')`** — Ships one fulfillment line, then asserts that a cancellation-type `createReturn` opens a single `pending` refund with reason `cancellation` and one owed audit row.
+- **`paidInCash()`** – Fixture helper. Creates a user, two products (shirt × 2 @ 30.00, mug × 1 @ 10.00), an order, reserves real inventory, and records an offline cash payment. Returns the IDs needed by each test.
+- **`paymentOf(orderId)`** – Reads the payment document for an order via the payments service (admin caller context).
+- **`owedRows()`** – Filters the collected audit entries to rows with action `payment.refund_owed_by_hand`; used to assert the "owed" state.
+- **`describe('a received return on a cash-paid order')`** – Verifies that receiving goods leaves the refund `pending` / `settledByHand` undefined, then that settling the refund flips the return to `closed` (asserted via `eventually` + the returns repository).
+- **`describe('a refund that pays for no return')`** – Emits a raw `PAYMENT_REFUNDED` domain event **without** a `returnId`; asserts the unrelated return remains `received`.
+- **`describe('a buyer cancelling the unshipped remainder…')`** – Ships one fulfillment line, then cancels the remainder; asserts the refund is `pending` with reason `cancellation` and an owed audit row exists.
 
 ## Relationships
 
-- **`src/modules/returns/services/index.ts`** — Calls `returnService.createReturn` and `returnService.receiveReturn` to drive the return lifecycle.
-- **`src/modules/returns/repository.ts`** — Reads the stored return via `returnRepository.findById` inside the `eventually` assertion to confirm the event-driven close.
-- **`src/modules/returns/module.ts`** — Imported and registered with the checkout module registry in `beforeEach`.
-- **`src/modules/payments/services/index.ts`** — Calls `paymentService.recordOfflinePayment`, `paymentService.getForOrder`, and `paymentService.settleRefundByHand`.
-- **`src/modules/payments/module.ts`** — Registered alongside `returnsModule` so both modules' event handlers are active.
-- **`src/infrastructure/observability/audit.ts`** — `registerAuditSink` captures entries into the local `audited` array; the tests assert on `owedRows()` derived from it.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` in `afterEach` clears the in-memory event bus between tests.
-- **`src/modules/delivery/index.ts`** / **`services/index.ts`** — `deliveryService.shipFulfillmentOrder` used to partially ship the order in the cancellation test.
-- **`src/modules/delivery/tests/factories.ts`** — `carryOrderTo` (advances order to `delivered`) and `fulfillmentOrdersOf` (retrieves fulfillment orders).
-- **`src/modules/inventory/index.ts`** / **`services/index.ts`** — `inventoryService.reserveForOrder` holds real stock units.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `forceOrderStatus`, `toOrderItem` for order setup.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` for fixture items.
+- **`src/modules/returns/services/index.ts`** – Provides `returnService`, whose `createReturn` and `receiveReturn` are the primary subject of every test.
+- **`src/modules/returns/repository.ts`** – Provides `returnRepository`, used to read the persisted return status after settlement.
+- **`src/modules/returns/module.ts`** – `returnsModule` is registered in `beforeEach` so its event handlers are active.
+- **`src/modules/payments/module.ts`** – `paymentsModule` is registered alongside returns for the same reason.
+- **`src/modules/payments/index.ts`** – Re-exports `paymentService` and the `PAYMENT_REFUNDED` constant used in the synthetic-event test.
+- **`src/modules/payments/services/index.ts`** – Also provides `paymentService` (the concrete implementation the test calls).
+- **`src/kernel/events.ts`** – `emitDomainEvent` fires a synthetic `PAYMENT_REFUNDED` event; `resetDomainEvents` cleans up between tests.
+- **`src/infrastructure/observability/audit.ts`** – `registerAuditSink` captures audit rows into the `audited` array; the `AuditEntry` type is used by `owedRows()`.
+- **`src/modules/inventory/index.ts`** – Re-exports `inventoryService` for stock reservation in the fixture.
+- **`src/modules/inventory/services/index.ts`** – Provides the concrete `inventoryService` used to reserve units.
+- **`src/modules/delivery/index.ts`** – Re-exports `deliveryService` for the partial-cancellation test.
+- **`src/modules/delivery/services/index.ts`** – Provides the concrete `deliveryService` used to ship a fulfillment order.
+- **`src/modules/delivery/tests/factories.ts`** – `carryOrderTo` advances the order to `delivered`; `fulfillmentOrdersOf` retrieves the fulfillment order to ship.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `forceOrderStatus` build and manipulate the order fixture.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` creates the shirt and mug.
 
 ## Notes
 
-- The "owed" state is verified exclusively through the **audit sink**, not a direct DB query. If the `payment.refund_owed_by_hand` audit action is removed or renamed, these assertions silently pass with zero rows.
-- The return-close assertion in the first suite uses the `eventually` retry helper because the close is driven by an asynchronous `payment.refunded` event, not a synchronous return from `settleRefundByHand`.
-- The `customers` module-level counter ensures each call to `paidInCash` produces a unique email; this matters if the users collection enforces uniqueness across tests within the same process.
-- The test file is intentionally scoped to the *hand-paid* path; automated (card / gateway) refunds follow a different code path and are covered elsewhere.
+- The `eventually` helper (from `@tests/eventually`) is used because the `payment.refunded` → return-closed transition is driven by an async domain-event handler, not a synchronous return from the settle call.
+- The module doc-comment intentionally frames the "why": for hand-paid money, *receiving goods ≠ returning cash*; only an operator's explicit settle action closes the loop.
+- The "refund that pays for no return" test deliberately emits the event without a `returnId` field to prove the return-closing handler ignores refunds not linked to a specific return.
+- The `customers` counter guarantees unique emails across tests within the same suite (avoids factory collisions in a shared in-memory DB).

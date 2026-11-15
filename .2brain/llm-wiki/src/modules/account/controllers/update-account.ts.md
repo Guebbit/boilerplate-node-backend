@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/update-account.ts
-sha256: 264e23a5cd117352038d14af89b138ac2fae18ef4f4870da4f4db6ac5c3e2f1f
-generated_at: 2026-11-08T04:08:24.181124+00:00
+sha256: 0ac61b3e79618bcc2254881e52ce2c64f5fd1bec392e1c0a3ada2568b52a8d43
+generated_at: 2026-11-14T18:35:03.063493+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the `PUT /account` (full replace) and `PATCH /account` (partial merge) handlers. Both operate exclusively on the authenticated caller's record and delegate all business logic — field merging, email-change verification flow, and audit logging — to `accountService.updateProfile`. The file exists solely to wire HTTP input parsing and response shaping around that service call.
+Implements the `PUT /account` (full replace) and `PATCH /account` (partial merge) handlers for the caller's own account record. Both are produced in one call to the shared `createUpdateController` factory. The handler never reads an `id` from the request; it always targets `request.authContext.id`. Email changes are explicitly excluded and handled by a separate `POST /account/email-change` endpoint.
 
 ## Key elements
 
-- **`replaceAccount`** — Exported handler for `PUT /account`. Accepts a full `ReplaceAccountBody`; missing fields reset to defaults *except* `imageUrl` (see `keptWhenOmitted`).
-- **`updateAccount`** — Exported handler for `PATCH /account`. Accepts a partial `UpdateAccountBody`; only supplied fields are changed.
-- **`createUpdateController({...})`** — Shared factory call that builds both handlers. Notable options:
-  - `idFrom`: always derives the target id from `request.authContext.id`; no client-supplied id is accepted.
-  - `keptWhenOmitted: ['imageUrl']`: a PUT that omits the avatar preserves the existing one.
-  - `input.booleans: ['analyticsConsent']`: coerces the string `"true"/"false"` that multipart uploads send into a real boolean.
-  - `update`: passes the (possibly image-augmented) payload into `accountService.updateProfile` with the caller context.
-  - `present`: maps the resolved user to an account DTO via `userService.toAccount`, reading the tenant role from `authContext.roles.tenant` (no extra lookup).
+- **`replaceAccount`** – `PUT /account` handler. Replaces the account profile with the full body validated against `ReplaceAccountBody` (with a `wellFormedLocale` check on `locale`).
+- **`updateAccount`** – `PATCH /account` handler. Merges a partial body validated against `UpdateAccountBody` (same `locale` refinement).
+- **`idFrom`** – Resolves the target id from `request.authContext.id`; the handler is guaranteed to run after the `isAuth` middleware.
+- **`update` callback** – Delegates to `writeWithUploadedImage`, which streams any multipart avatar upload, then calls `accountService.updateProfile(id, changes, callerContext)`.
+- **`present` callback** – Shapes the response via `accountUserService.toAccount(user, tenantRole)`, pulling the role straight from the already-resolved auth context.
+- **`keptWhenOmitted: ['imageUrl']`** – A `PUT` that does not include `imageUrl` preserves the existing avatar rather than clearing it.
+- **`input: { booleans: ['analyticsConsent'] }`** – Treats `analyticsConsent` as a string in multipart requests and coerces it to a boolean.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-update-controller`** — Provides the `createUpdateController` factory that assembles the replace/update pair, enforces schema validation, and invokes the `idFrom` / `update` / `present` callbacks defined here.
-- **`@infrastructure/http/request`** — `callerContextOf` extracts the per-request context (IP, user-agent, etc.) forwarded into the service call for audit.
-- **`@infrastructure/http/uploads`** — `writeWithUploadedImage` persists an uploaded avatar image and returns the resulting `{ imageUrl }` fragment that is spread into the service payload.
-- **`@modules/account/services/index`** — `accountService.updateProfile` performs the actual merge, email-pending flow, and audit write. This controller holds no business rules beyond wiring.
-- **`@modules/users/index` / `@modules/users/services/index`** — `userService.toAccount` shapes the final response DTO using the caller's tenant role (same pattern as `get-account.ts`).
-- **`@modules/account/routes.ts`** — Registers `replaceAccount` and `updateAccount` under their respective HTTP methods, mounted behind the `isAuth` guard that guarantees `authContext` is populated.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — Provides the `createUpdateController` factory that wires validation, ID resolution, update, and response-shaping into a ready-made handler pair.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, used to extract the caller context passed to the service call.
+- **`src/infrastructure/http/uploads.ts`** — Supplies `writeWithUploadedImage`, which handles multipart avatar upload/streaming before the profile write.
+- **`src/infrastructure/http/schemas.ts`** — Supplies `wellFormedLocale`, a Zod refinement applied to the `locale` field on both schemas.
+- **`src/modules/account/services/index.ts`** — Exports `accountService`, the domain object whose `.updateProfile` method performs the actual merge and audit of the profile change.
+- **`src/modules/users/friends/account.ts`** — Exports `accountUserService`, whose `.toAccount` method maps the stored user record into the API response shape using the tenant role.
+- **`src/modules/account/routes.ts`** — Mounts `replaceAccount` and `updateAccount` on the `PUT`/`PATCH /account` routes (behind the `isAuth` guard).
 
 ## Notes
 
-- `authContext` is accessed with a non-null assertion (`!`). This is safe *only* because every route mount places `isAuth` before these handlers; adding a new unauthenticated mount would break at runtime.
-- Email-change side effects (pending-email record, verification link) are intentionally **not** handled here — they live inside `accountService.updateProfile`. Do not add them to this file.
-- `imageUrl` is the one field that survives a PUT when omitted (`keptWhenOmitted`). All other fields in a PUT are treated as "set to default" when absent.
-- The role/tenant used for the response DTO is read from the already-resolved `authContext.roles.tenant`, not re-fetched from the database.
+- **Email is intentionally absent.** Both `ReplaceAccountBody` and `UpdateAccountBody` reject an `email` key. Email changes follow a separate verification flow (`POST /account/email-change`); do not add it to these schemas.
+- **No second role lookup.** The response `present` callback reads `request.authContext.roles.tenant` directly. A profile edit never changes the role, so a service-level re-fetch is unnecessary.
+- **Multipart boolean quirk.** Clients that send `analyticsConsent` as part of a multipart (avatar) request will transmit it as the string `"true"`/`"false"`; the `input.booleans` config handles the coercion.

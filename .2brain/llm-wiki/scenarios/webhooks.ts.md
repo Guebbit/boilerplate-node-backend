@@ -1,7 +1,7 @@
 ---
 source: scenarios/webhooks.ts
-sha256: 3757a2d3e9800181d6189118af8db526c88d06025aac28f5d96b53305fa84405
-generated_at: 2026-11-08T02:36:38.865270+00:00
+sha256: 3566b1abb6de228b95d76ef9cc97edd1195ae17fde0675631f79fa0214c95cbb
+generated_at: 2026-11-14T17:19:06.625233+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Seeds a single demo webhook subscription (pointing at a `webhook-tester` sink) as part of the `shopModules` fixture table. It is inert by default: when `NODE_WEBHOOK_DEMO_SINK_URL` is unset (the common case), it seeds nothing and produces no log noise. When the sink URL is set (via the `integrations` Docker profile or the frontend's Cypress listener), it upserts one subscription so a developer can watch deliveries in `webhook-tester` without manually creating a session first.
+Seeds a single demo webhook subscription (pointing at the `webhook-tester` sink) as part of the `shop` fixture dataset. It is intentionally inert by default: when `NODE_WEBHOOK_DEMO_SINK_URL` is unset it seeds nothing, so developers who never enable the `integrations` docker profile are never left with a dead subscription auto-disabling in their logs.
 
 ## Key elements
 
-- **`seedWebhooksCollection`** — The seed function. Reads `demoSinkConfig().NODE_WEBHOOK_DEMO_SINK_URL`; returns `[]` if unset. Otherwise builds a `WebhookSubscriptionDocument` literal (fixed `_id`, `eventTypes: ['*']`, one ring entry) and upserts it via `insertIfAbsent`. Returns `Promise<SeedOutcome[]>`.
-- **`shopModule`** — Exports `{ seed: seedWebhooksCollection }` for registration in the generated `shopModules` table (`scenarios/shop-modules.generated.ts`).
-- **`WEBHOOK_SUBSCRIPTION_ID`** — Fixed ObjectId (`65e0…00a1`) used as `_id`; makes re-seeding a no-op.
-- **`WEBHOOK_SESSION_ID`** — Fixed UUID that `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` will materialise on first POST, so `GET /api/session/<uuid>/requests` works out of the box.
-- **`WEBHOOK_DEMO_SECRET_ID` / `WEBHOOK_DEMO_SECRET`** — Fixed ring-entry UUID and Standard-Webhooks-shaped secret whose base64 half decodes to a human-readable string. Chosen deliberately so the plaintext is known (a `mintRingSecret()` value would be unrecoverable).
+- **`seedWebhooksCollection`** – The seed function. Reads the sink base URL from `demoSinkConfig()`, returns `[]` immediately if unset. Otherwise upserts one subscription fixture (fixed ObjectId, `*` event types, one ring entry) via `insertIfAbsent`.
+- **`shopModule`** – The `{ seed: seedWebhooksCollection }` entry consumed by `scenarios/shop-modules.generated.ts` (regenerated via `npm run regenerate`).
+- **`WEBHOOK_SUBSCRIPTION_ID`** – Fixed ObjectId (`65e0000000000000000000a1`) making re-seeds idempotent no-ops.
+- **`WEBHOOK_SESSION_ID`** – Fixed UUID used as the path segment in the sink URL; works because `webhook-tester` runs with `AUTO_CREATE_SESSIONS=true`.
+- **`WEBHOOK_DEMO_SECRET`** – Fixed Standard-Webhooks-shaped plaintext (`whsec_…`) that decodes to a human-readable string. Chosen over `mintRingSecret()` so the plaintext is knowable for signature-verification copy-paste in the UI.
+- **`WEBHOOK_DEMO_SECRET_ID`** – Fixed UUID for the single ring entry's `id` field.
 
 ## Relationships
 
-- **`scenarios/config.ts`** — Calls `demoSinkConfig()` to read `NODE_WEBHOOK_DEMO_SINK_URL` from the environment.
-- **`scenarios/seed.ts`** — Uses `insertIfAbsent` (upsert-if-not-present helper) and the `SeedOutcome` type.
-- **`src/kernel/access/tenant.ts`** — Imports `DEPLOYMENT_TENANT_ID` to scope the subscription to the deployment tenant.
-- **`src/modules/webhooks/model.ts`** — Imports `WebhookSubscriptionDocument` as the type for the fixture literal.
-- **`src/modules/webhooks/repository.ts`** — Passes `webhookSubscriptionRepository` to `insertIfAbsent` for the actual DB write.
-- **`src/modules/webhooks/secrets.ts`** — Calls `encryptRingSecret` to produce the ciphertext half of the ring entry.
-- **`tests/integration/scenarios/webhooks-seed.test.ts`** — Integration test exercising the seed (and the no-op path when the env var is absent).
+- **`scenarios/config.ts`** – `demoSinkConfig()` supplies the `NODE_WEBHOOK_DEMO_SINK_URL` value that gates whether anything is seeded.
+- **`scenarios/seed.ts`** – Provides `insertIfAbsent` (upsert helper) and the `SeedOutcome` return type.
+- **`src/kernel/access/tenant.ts`** – `DEPLOYMENT_TENANT_ID` scopes the fixture to the demo tenant.
+- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` is the Mongoose repository passed to `insertIfAbsent`.
+- **`src/modules/webhooks/secrets.ts`** – `encryptRingSecret` encrypts the fixed plaintext into the `ciphertext` field of the ring entry.
+- **`tests/integration/scenarios/webhooks-seed.test.ts`** – Integration test that exercises the seed path (likely asserts the inert default and the seeded fixture shape).
 
 ## Notes
 
-- The secret is **fixed plaintext**, not a `mintRingSecret()` result, because `secrets.ts` only exposes the plaintext in the mint response; a generated secret could never be handed to `webhook-tester` for signature verification. This is demo-only and must never back a production ring.
-- The URL is always `https://` (even for loopback) so the subscription's edit form accepts it. The SSRF guard (`@infrastructure/adapters/ssrf-guard`) whitelists the sink's origin in the dev preload; every other loopback address is refused.
-- Neither `createdAt`/`updatedAt` on the subscription nor on the ring entry are set in the literal — Mongoose's `{ timestamps: true }` / `{ timestamps: { createdAt: true }` stamps them at insert time.
-- The trailing-slash strip on `sinkBaseUrl` (`replace(/\/+$/, '')`) prevents double slashes when the session UUID is appended.
+- The ring entry's `createdAt` is set manually in this file to satisfy the subdocument type; the subdocument's own `timestamps: { createdAt: true }` stamps the same instant on insert—don't remove the explicit field without checking the type.
+- The sink URL must be `https://` (every webhook URL is) and the origin must be allow-listed in the SSRF guard (`scenarios/support/doubles/webhook-sink.ts` registers it). The sink is loopback-only; the guard refuses all other loopback addresses.
+- The secret is **demo-only** and never meant for a real ring. Its plaintext is documented in `.env-example` next to `NODE_WEBHOOK_DEMO_SINK_URL` so a developer can verify `webhook-signature` headers by hand.

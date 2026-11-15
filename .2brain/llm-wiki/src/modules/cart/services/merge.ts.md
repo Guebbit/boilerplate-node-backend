@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/merge.ts
-sha256: fd27679ea5e85966a6946d0a27e40ac1bf2bac772039612cc88ff9e61f50e296
-generated_at: 2026-11-08T05:17:37.058445+00:00
+sha256: ce6efd6c0fb83d579498bc02b5bed06217ea88a9cf4553759c5a8624ff5fe029
+generated_at: 2026-11-14T19:31:55.489751+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Folds a guest cart (built while signed out) into the signed-in user's cart in a single server-side call. It lives here rather than in the browser because refused lines must become persistent notifications (via a domain event) and the per-line cap + stock read must be applied atomically per line — something a client-side loop of `POST /cart/items` cannot do.
+Server-side implementation of `POST /cart/merge`: folds a guest (signed-out) cart into the signed-in cart in a single call. It exists here rather than as a browser-side loop of `POST /cart/items` because (1) refused lines must produce a durable notification event, and (2) per-line caps and stock availability must be evaluated against the cart's own state in one place.
 
 ## Key elements
 
-- **`cartMerge`** (exported) — Entry point for `POST /cart/merge`. Orchestrates `mergeLines` → `announceRemoved` → `cartGetForBadge`, returning a `MergeResult`.
-- **`MergeResult`** (exported) — Response shape: `{ cart: CartView, lines: MergeLineResult[] }`.
-- **`mergeLines`** (exported) — Iterates guest lines **sequentially** in request order, threading the updated `CartDocument` into each step. Reads all product shelves once up front.
-- **`mergeLine`** (internal) — Processes one line: calls `planMergeLine` for the decision, writes via `writeAdd` if `plan.add > 0`, then reads back `resulting` from the post-write cart. On a lost cap race, forces `reason: 'capped'`.
-- **`writeAdd`** (internal) — Calls `cartRepository.upsertLine(userId, productId, qty, 'add')`. Treats `QUANTITY_LIMIT` as a concurrent-write race and re-reads the cart. Emits `trackLineWrite` for analytics on success.
-- **`heldIn`** (internal) — Reads the current quantity of a product from a `CartDocument` (zero if absent).
-- **`MergeStep`** (internal) — Per-line intermediate: `{ result: MergeLineResult, cart: CartDocument | null }`.
-- **`announceRemoved`** (internal) — Filters results for `reason === 'removed'`, fetches product names via `productService.titlesById` (names are snapshotted because the product may be deleted before the notification is read), and emits `CART_MERGE_REFUSED`. No-op if no lines were removed.
+- **`MergeResult`** (exported interface) — the response shape: the updated `CartView` plus one `MergeLineResult` per submitted guest line.
+- **`mergeLine`** (internal) — processes a single guest line: calls the domain rule (`planMergeLine`), performs a conditional `upsertLine` write if the rule allows an add, then re-reads the resulting quantity from the returned cart document. Detects lost-cap races (`QUANTITY_LIMIT` / `LINE_LIMIT`) and reports them as `capped` / `cart_full`.
+- **`mergeLines`** (exported) — iterates all guest lines **sequentially** (each write rewrites the same cart document, so a duplicate product must see the prior line's result). Reads the shelf once for the whole batch. Never throws on a bad line; every line yields a result.
+- **`announceRemoved`** (internal) — filters results for `removed` or `cart_full` reasons, fetches product titles via the products service, and emits `CART_MERGE_REFUSED` so the `notifications` module can persist a durable message.
+- **`cartMerge`** (exported) — the public entry point: runs `mergeLines`, fires `announceRemoved`, then fetches the badge cart via `cartGetForBadge` and returns `MergeResult`.
+- **`writeAdd`** (internal) — wraps the repository's `upsertLine` in `'add'` mode; on a cap sentinel, re-reads the cart so downstream `resulting` stays truthful.
+- **`heldIn`** (internal helper) — looks up a product's current quantity in a `CartDocument` (0 if absent).
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — Imports `emitDomainEvent` to fire `CART_MERGE_REFUSED`.
-- **`src/modules/cart/config.ts`** — Imports `cartLineMax()` for the per-line quantity cap.
-- **`src/modules/cart/domain/index.ts`** (→ `domain/merge.ts`) — Imports `planMergeLine`, the pure decision function that maps `{requested, held, listed, lineMax}` to `{add, reason}`.
-- **`src/modules/cart/events.ts`** — Imports the `CART_MERGE_REFUSED` event constant.
-- **`src/modules/cart/model.ts`** — Imports the `CartDocument` type (the persisted cart shape).
-- **`src/modules/cart/presenter.ts`** — Imports the `CartView` type used in the response.
-- **`src/modules/cart/repository.ts`** — Imports `cartRepository` (for `upsertLine`, `findByUserId`), `QUANTITY_LIMIT`, and `NO_LINE` sentinels.
-- **`src/modules/cart/services/items.ts`** — Imports `cartGetForBadge` (final cart read) and `trackLineWrite` (analytics).
-- **`src/modules/cart/services/shelf.ts`** — Imports `readShelf`, `isListed`, `shelfAvailability`, and the `Shelf` type for catalogue/stock lookups.
-- **`src/modules/cart/services/reorder.ts`** — Reuses the same sequential-loop pattern (documented in a comment here).
-- **`src/modules/products/index.ts`** — Imports `productService` to resolve `titlesById` for removed-line notifications.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Exercises merge behavior indirectly through delivery fulfillment scenarios.
+- **`src/modules/cart/domain/index.ts`** — imports `planMergeLine`, the pure rule that decides how many units to add given requested/held/lineMax/maxLines.
+- **`src/modules/cart/repository.ts`** — source of `cartRepository` (for `findByUserId` and `upsertLine`) and the sentinel constants `QUANTITY_LIMIT`, `LINE_LIMIT`, `NO_LINE` used to detect lost races.
+- **`src/modules/cart/services/shelf.ts`** — uses `readShelf` (batch product/stock read), `isListed`, and `shelfAvailability` to compute per-line availability.
+- **`src/modules/cart/services/items.ts`** — reuses `cartGetForBadge` (final cart view) and `trackLineWrite` (analytics per successful write).
+- **`src/modules/cart/events.ts`** — imports the `CART_MERGE_REFUSED` event constant.
+- **`src/modules/cart/config.ts`** — reads `cartLineMax()` and `cartMaxLines()` caps.
+- **`src/kernel/events.ts`** — calls `emitDomainEvent` to fire `CART_MERGE_REFUSED`.
+- **`src/modules/products/index.ts`** — source of `productService`; calls `titlesById` to snapshot product names into the refusal event (product may be delisted before the user reads it).
+- **`src/modules/cart/presenter.ts`** — provides the `CartView` type for the returned cart shape.
+- **`src/modules/cart/services/reorder.ts`** — reuses the same sequential-loop pattern (noted in this file's docstring) for re-applying lines after a reorder.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — exercises merge-related cart state as part of fulfillment testing.
 
 ## Notes
 
-- **Sequential, not parallel.** Each `mergeLine` reads and rewrites the same `CartDocument`; the loop threads `step.cart` into the next iteration. A product listed twice in the guest cart must see its first line's result.
-- **Stock never reduces quantity.** A short line keeps its requested quantity and merely carries an `availability` annotation. Lowering quantity would leak exact stock to a caller (see `docs/theory/defences/authorization.md`).
-- **`QUANTITY_LIMIT` on add = race, not cap.** The conditional write in the repository is the cap's real guard; hitting `QUANTITY_LIMIT` during an *add* means a concurrent write consumed the room. The code re-reads the cart and forces `reason: 'capped'`.
-- **`NO_LINE` is checked defensively.** It is an `'update'`-mode sentinel that an add should never encounter, but the type system does not exclude it.
-- **`requested` vs `resulting`.** `requested` is always the guest's submitted number; `resulting` is always what the cart actually holds after the write (or after the race re-read). They are independent of whatever `reason` string is attached.
-- **Removed-line names are snapshotted at event time.** `productService.titlesById` is called before the event is emitted because the product may be deleted before a notification reader looks it up. An empty title map is the reader's signal that the product no longer exists.
+- **Sequential, not parallel, by design.** Lines are processed one at a time because each `upsertLine` rewrites the shared cart document; a product appearing twice must see its first line's result. Do not "optimize" to `Promise.all`.
+- **Stock never lowers a quantity.** A line that is short of stock keeps its full quantity and simply carries an `availability` field. This is intentional (see `docs/theory/defences/authorization.md`): lowering would let a caller read exact stock by probing with large quantities.
+- **`resulting` is always re-read from the cart document** after the write, not computed from `held + plan.add`. This keeps it truthful even when a concurrent add consumed the cap room.
+- **`requested` is always the guest's original number**, regardless of what was actually written. The two fields (`requested` vs. `resulting`) are deliberately independent so the caller can see both the intent and the outcome.
+- **`announceRemoved` copies product titles into the event payload.** By the time the user reads the notification the product may be gone; `titlesById` returning an empty map is the intended "no longer available" signal.

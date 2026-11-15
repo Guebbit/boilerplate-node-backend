@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/pii.ts
-sha256: 83dde9f092dc068932b184ed065b2fd68a83ebe4e4b980d26503432fb51fe9ee
-generated_at: 2026-11-08T06:53:52.836111+00:00
+sha256: e7deb1c2b329ab958b846cba183bb63ff15d6253c382a9304599ff95976feedc
+generated_at: 2026-11-14T20:40:01.466089+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Explicit field-level encryption/decryption codec for the PII an order freezes: the two embedded postal addresses (shipping, billing) and the buyer's free-text notes. It exists as a deliberate alternative to Mongoose getters/setters, avoiding the pitfalls where `toJSON` leaks ciphertext, subdocument copies double-encrypt, or query filters silently match nothing. It is the order-side twin of `addresses/pii.ts` under the same `NODE_PII_ENCRYPTION_KEY` ring.
+Field-level encryption/decryption of personal text in an order record: the embedded shipping/billing addresses and the buyer's notes. It is the order-side twin of `addresses/pii.ts`, sharing the same `NODE_PII_ENCRYPTION_KEY` ring. It deliberately avoids mongoose getters/setters (ciphertext leaks through `toJSON`, double-encryption on subdoc copies, and encrypted paths silently break query filters) in favour of an explicit codec applied at the repository boundary.
 
 ## Key elements
 
-- **`encryptOrderPii(data, orderId)`** — Takes the order being created and returns a new object with every present address field and `notes` encrypted. Absent fields stay absent. `orderId` must already be assigned because it is baked into every AAD.
-- **`decryptOrderAddress(address, path, orderId)`** — Decrypts a single stored address back to plaintext, for readers that hold the ciphertext row directly (e.g. invoice issuers).
-- **`decryptSerializedOrder(serialized)`** — Decrypts a serialized order (where `_id` → `id`) in place; the shape every wire reader sees.
-- **`mapAddress(address, convert)`** — Internal helper that walks `POSTAL_ADDRESS_FIELDS`, applying `convert` only to fields that are present so optional `phone` never becomes `"undefined"`.
-- **`addressAad(path, field, orderId)` / `notesAad(orderId)` / `timelineNoteAad(orderId)`** — AAD string constructors binding each ciphertext to a specific order and field.
-- **`ADDRESS_PATHS`** — `['shippingAddress', 'billingAddress']`; the two paths walked on every order.
-- **`OrderAddressPath`** — Union type of the two address paths.
+- **`ORDER_ADDRESS_PII_FIELDS`** — the shared `POSTAL_ADDRESS_FIELDS` list, with a compile-time assertion: any `OrderAddress` key not in `PostalAddressField` collapses the type to `never`, failing `tsc` before it can be stored as plaintext.
+- **`OrderAddressPath` / `ADDRESS_PATHS`** — the two optional address subdocuments (`shippingAddress`, `billingAddress`) walked on every order.
+- **`addressAad`, `notesAad`, `timelineNoteAad`** — AAD (Associated Authenticated Data) string builders that bind a field to a specific order `_id`, so a field copied to another order fails its auth tag.
+- **`encryptOrderPii(data, orderId)`** — returns a new object with every present PII field encrypted. Absent fields stay absent. The `orderId` must already be assigned (it is in every AAD).
+- **`decryptOrderAddress(address, path, orderId)`** — decrypts a single stored address for a reader that holds the ciphertext row.
+- **`decryptSerializedOrder(serialized)`** — decrypts a serialized order (post-`toJSON`, `_id` → `id`) in place; this is what wire-level readers see.
+- **`mapAddress`** (internal) — iterates `ORDER_ADDRESS_PII_FIELDS`, applying a transform only to defined values.
 
 ## Relationships
 
-- **`src/infrastructure/security/pii-encryption.ts`** — Source of the `encryptPii` / `decryptPii` primitives this module wraps with order-specific AADs.
-- **`src/domain-primitives/postal-address.ts`** — Provides `POSTAL_ADDRESS_FIELDS` (the list of fields iterated in `mapAddress`) and the `PostalAddressField` type used in AAD construction.
-- **`src/types/index.ts`** — Supplies the `OrderAddress` type that shapes the embedded address documents.
-- **`src/modules/orders/repository.ts`** — `orderRepository.create` calls `encryptOrderPii` before persisting.
-- **`src/modules/orders/services/read.ts`** — `applyOrderTransform`'s `after` hook calls `decryptSerializedOrder` so every read path returns plaintext.
-- **`src/modules/orders/services/timeline.ts`** — `appendTimeline` encrypts a staff note's text with the same codec (`timelineNoteAad`).
-- **`src/modules/orders/presenter.ts`** — Decrypts timeline note text on output using the same AAD scheme.
+- **`src/infrastructure/security/pii-encryption.ts`** — provides `encryptPii` / `decryptPii`; this module is the orders-domain caller.
+- **`src/domain-primitives/postal-address.ts`** — supplies `POSTAL_ADDRESS_FIELDS` and `PostalAddressField`, the shared vocabulary that keeps the order and address modules in lock-step.
+- **`src/types/index.ts`** — source of the `OrderAddress` contract type used for the compile-time field check.
+- **`src/modules/orders/repository.ts`** — calls `encryptOrderPii` before persisting a new order.
+- **`src/modules/orders/services/read.ts`** — `applyOrderTransform`'s `after` hook calls `decryptSerializedOrder` so readers get plaintext.
+- **`src/modules/orders/services/timeline.ts`** — `appendTimeline` encrypts a staff note's text with `timelineNoteAad`.
+- **`src/modules/orders/presenter.ts`** — decrypts timeline note text for presentation.
+- **`src/modules/orders/model.ts`** — defines the Mongoose schema whose address subdocuments and `notes` field are the targets of this codec.
+- **`src/modules/orders/services/reencrypt.ts`** — re-encrypts existing ciphertext (key rotation) using the same AAD helpers.
 
 ## Notes
 
-- `orders.email` is intentionally **not** encrypted here — login-style lookups require it in plaintext.
-- The AAD embeds the order `_id`, so a ciphertext field moved to a different order will fail its authentication tag. This is the primary cross-order tamper-detection mechanism.
-- `orderId` must be assigned **before** calling `encryptOrderPii`; it is not derived from the document.
-- The module doc references `addresses/pii.ts` as a structural twin; the two share the key ring but have independent AAD namespaces (`orders:` vs. the addresses namespace).
-- `decryptSerializedOrder` mutates its argument in place — callers pass the serialized object expecting it to be transformed, not copied.
+- **AAD is order-scoped.** Because every AAD embeds the order `_id`, a PII field moved to a different order (or deserialised under the wrong id) will fail authentication rather than silently decrypting.
+- **`orders.email` is intentionally plaintext** — login-style lookups depend on querying it.
+- **`orderId` must exist before `encryptOrderPii` is called**; there is no way to re-bind the AAD afterwards without re-encryption.
+- **Optional fields stay optional.** `mapAddress` skips `undefined` values, so an absent `phone` never becomes the string `"undefined"`.
+- **Compile-time completeness guard:** adding a personal-data field to `OrderAddress` without also adding it to `PostalAddressField` makes `ORDER_ADDRESS_PII_FIELDS` type `never` and breaks the build.

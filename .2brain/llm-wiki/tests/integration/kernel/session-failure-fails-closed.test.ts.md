@@ -1,7 +1,7 @@
 ---
 source: tests/integration/kernel/session-failure-fails-closed.test.ts
-sha256: 3033024acd526d6800d36368ed5cfcb571ea42a95f25dfd9cb909732cfd22030
-generated_at: 2026-11-08T09:41:59.329364+00:00
+sha256: 5a1485200487afb67ed9d0118c9120c6fc0072f41b74572d768e52a506e38957
+generated_at: 2026-11-14T23:17:15.437909+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies, over real HTTP, that a *fault* in session resolution (the bearer resolver throwing) fails closed with a 500 or 503 rather than silently degrading to guest access. A deliberate *refusal* (a `miss` result) still yields 401 `invalid_token`, except on a route whose contract marks `security: []`.
+Verifies the fail-closed contract of the authentication layer over real HTTP: when a session resolver throws (unexpected error → 500, DB outage → 503), the request must **not** silently degrade to a guest. Only an explicit resolver "miss" yields a 401 `invalid_token`. Exercises `getAuth`, `isAuth`, the two stream-cookie guards, and the global error handler together, with only the resolver faked.
 
 ## Key elements
 
-- **`fromBearer` (jest mock)** — stands in for the sole resolver method under test; every other resolver slot is stubbed to a static `{ miss: 'malformed' }`.
-- **`registerAuthResolver({ … })`** — installs the fake resolver once so `getAuth` picks it up during the request cycle.
-- **Express `app`** — three routes exercising different auth postures:
-  - `GET /public` — behind `getAuth` only (no `isAuth` guard).
-  - `GET /protected` — behind `getAuth` + `isAuth`.
-  - `POST /account/login` — `getAuth` present but the operation is contract-exempt (`security: []`).
-- **`handleUncaughtError`** — mounted as the final Express error handler; receives unexpected throws and outage errors.
-- **`describe("a session that cannot be resolved")`** — six `it` cases covering: unexpected throw → 500 (protected & public), Mongoose outage → 503, `miss: 'expired'` → 401, `miss: 'malformed'` → 401 with `WWW-Authenticate` header, and `miss` on the security-open route → 200 passthrough.
+- **`fromBearer` / `watchCookie`** – `jest.fn` mocks injected via `registerAuthResolver`; simulate the three resolver outcomes (throw, 503-named error, `{ miss }`).
+- **Express `app`** – real Express instance with five routes (`/public`, `/protected`, `/account/login`, `/stream/session`, `/stream/permission`) wired to the real middleware stack (`getAuth`, `isAuth`, `requireSessionViaCookie`, `requirePermissionViaCookie`) and terminated by `handleUncaughtError`.
+- **`describe('a session that cannot be resolved')`** – six assertions covering bearer-token paths: unexpected throw → 500 (both public & protected), outage → 503, miss → 401 (with `WWW-Authenticate` header check), and security-open route still 200.
+- **`describe('a stream cookie that cannot be resolved')`** – parameterized (`it.each`) over both stream routes, asserting the same 500 / 503 / 401 triad via the `__Host-session` cookie.
 
 ## Relationships
 
-- **`src/app/error-handling.ts`** — `handleUncaughtError` is the global handler the test mounts last; the 500 and 503 assertions confirm it catches resolver throws and maps `MongooseServerSelectionError` to 503.
-- **`src/kernel/authentication.ts`** — `registerAuthResolver` is called to inject the fake; the test relies on `getAuth` reading the registered `fromBearer` during each request.
-- **`src/kernel/middlewares/authorizations.ts`** — `getAuth` runs on all three routes (drives the resolver call and the 401/500/503 branching); `isAuth` additionally rejects unauthenticated requests on `/protected`.
+- **`src/kernel/middlewares/authorizations.ts`** – source of `getAuth`, `isAuth`, `requireSessionViaCookie`, `requirePermissionViaCookie`; these are the middleware units under test.
+- **`src/kernel/authentication.ts`** – source of `registerAuthResolver`; the test calls it once at module load to swap in the faked resolver before any request runs.
+- **`src/app/error-handling.ts`** – source of `handleUncaughtError`; mounted last on the Express app, it is the component that converts resolver rejections into 500/503 responses. The test asserts its status-code and header behavior.
 
 ## Notes
 
-- Only `fromBearer` is truly faked; `fromCookie`, `watchCookie`, `cookieAuthenticates`, and `clearDeadCookie` are inert stubs, isolating the bearer path.
-- The 503 case is triggered by setting `name` to `'MongooseServerSelectionError'` on the thrown error — the error handler keys off that name, not the message.
-- The security-open route test (`/account/login`) asserts a **200**, confirming `getAuth` short-circuits for contract-exempt operations even when the token is refused.
-- Tests use `supertest` against a live Express instance (not isolated function calls) so the full middleware + error-handler chain is exercised.
+- The 503 path is triggered specifically by the error's `name` being `'MongooseServerSelectionError'` (set via `Object.assign`). Any other rejection name yields 500.
+- `/account/login` is the only route that accepts a refused token (200) because `getAuth` looks up the route's OpenAPI operation and exempts it when `security: []` is declared.
+- `cookieAuthenticates` is hard-coded to `false` and `clearDeadCookie` is a no-op mock; the tests never exercise the cookie-clearing branch.
+- All requests go through `supertest` against a live Express instance — no handler-level unit mocking beyond the resolver itself.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/sitemap/controllers/get-sitemap-products.ts
-sha256: db6cb6700f84681b4ae5d88177a3b826621925bff0dd4e62fbadcea70417ed96
-generated_at: 2026-11-08T08:22:09.329443+00:00
+sha256: 6202541f03a256bf35ee3d3253cf313c9b3e5b8d00b2069e1961538eeab6a043
+generated_at: 2026-11-14T21:59:36.559079+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `GET /sitemap/products-{page}.xml`. Validates the page number, fetches the corresponding product entries from the sitemap service, and streams them back as an XML sitemap document. Returns 404 for invalid page numbers or pages the index does not contain.
+HTTP controller that handles `GET /sitemap/products-{page}.xml`. It validates the page number, fetches the corresponding catalogue slice from the sitemap service, and streams the result as an XML sitemap response. It exists to isolate the request-parsing/validation logic from the service and the XML serialization.
 
 ## Key elements
 
-- **`PAGE_NUMBER`** (regex) — `^[1-9]\d*$`; enforces a positive whole number with no sign, no leading zeros, no padding. Used as a gate before any service call.
-- **`getSitemapProducts`** (exported function) — Express route handler. Accepts `{ page: string }` in `request.params`. On a valid page it calls `sitemapService.listProducts(page)`; if the result is falsy it sends 404; otherwise it pipes the entries through `sendXml` using a `SitemapStream`. Errors are funneled into `catchAs`.
+- **`PAGE_NUMBER`** — Module-level regex (`/^[1-9]\d*$/`) enforcing a positive integer with no sign, leading zeros, or padding. Used before numeric conversion.
+- **`getSitemapProducts`** *(exported)* — Express handler. Validates `request.params.page` against `PAGE_NUMBER` and `Number.isSafeInteger`; calls the service to list products for that page; on a successful non-null result delegates to `sendXml`; on missing data or invalid input sends a 404 via `rejectResponse`; on thrown errors delegates to `catchAs`.
 
 ## Relationships
 
-- **`src/modules/sitemap/service.ts`** — `sitemapService.listProducts(n)` is the sole data source for the entries this controller serializes.
-- **`src/modules/sitemap/controllers/send-xml.ts`** — `sendXml(response, entries, stream)` performs the actual XML write to the HTTP response.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` wraps the promise rejection path into a structured error response.
-- **`src/infrastructure/http/response.ts`** — `rejectResponse` sends the 404 (and any error-status) HTTP responses.
-- **`src/modules/sitemap/routes.ts`** — registers this handler on the `/sitemap/products-:page.xml` route.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, which wraps `.catch` to log and emit a standard error response.
+- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse`, used to short-circuit with a 404 (invalid page or no entries).
+- **`src/modules/sitemap/service.ts`** — Source of product data; the controller imports `sitemapService` and calls its `listProducts` method to retrieve entries for the given page.
+- **`src/modules/sitemap/controllers/send-xml.ts`** — `sendXml(response, entries, stream)` serializes the entries into an XML sitemap and writes them to the response.
+- **`src/modules/sitemap/routes.ts`** — Registers this handler as the GET controller for the products-sitemap route.
 
 ## Notes
 
-- Page `"0"` is **not** valid; the regex requires the first digit to be `1–9`, so the lowest addressable page is `1`.
-- A `null`/`undefined` return from `listProducts` is indistinguishable from a missing page and yields the same 404 — there is no separate "empty page" vs. "no page" branch.
-- The handler returns `void` on the early-404 paths but returns the promise chain on the success path; callers in Express do not rely on the return value, but it means the function is not a uniform `Promise`-returning handler.
+- Validation is deliberately strict: `"01"`, `"-1"`, `"1.0"`, and empty strings all produce a 404 before any DB call. The `Number.isSafeInteger` guard prevents a digit-string exceeding 2⁵³ from reaching the database as an absurd `skip` offset.
+- The handler uses a promise chain (`.then`/`.catch`) rather than `async/await`; the 404 branches return `undefined`, which Express ignores.
+- The `SitemapStream` instance is created inline per request rather than shared, so each response builds its own stream.

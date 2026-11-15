@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/repository.ts
-sha256: 00c6c22eb487df1c8150dd3e0612536dd2fffc1e4ec9fd3100cc79b264ca9ec9
-generated_at: 2026-11-08T08:47:49.065031+00:00
+sha256: 2bf827a65c0da64a7244b73062f1b3c7d2d616eb7c6fb10ed2b1053bb8fb77e0
+generated_at: 2026-11-14T22:25:05.299920+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The persistence (data-access) layer for the user collection. It wraps the Mongoose `userModel` with standard CRUD via the shared repository factory, then layers on every credential, MFA/2FA, activity-tracking, inactivity-reaping, purchase-hold, OAuth-link, and soft-delete operation that the `account` module needs across the domain-primitives boundary. All writes to sensitive fields flow through this single file so that credential re-selection, throttling, and atomicity guarantees are enforced in one place.
+The persistence layer for the `users` collection. It composes the generic `createRepository` factory (standard CRUD, search, sort) with the credential, 2FA/MFA, OAuth, deletion-lifecycle, and activity-tracking operations that the `account` module needs. All credential fields are `select: false` on the schema; this file centralises the only sanctioned re-selection paths.
 
 ## Key elements
 
-- **`userRepository`** (exported const) — The single public handle. Extends `Repository<UserDocument, UserWire>` (from the factory) with ~30 domain-specific methods: credential reads, MFA reservation/spend, 2FA write pipeline, delivered-code arming/spending, OAuth link/unlink, activity stamps, inactivity-reaper queries, purchase-hold claims, and scheduled-deletion lifecycle.
-- **`CREDENTIAL_FIELDS`** (module-private) — The `+password +twoFactorMethods …` projection string. The *only* sanctioned way to re-select `select: false` fields; prevents scattered `.select('+password')` calls.
-- **`TRUSTED_AUTHENTICATABLE_FILTER`** (exported) — `AUTHENTICATABLE_FILTER` with `$or` wrapped in Mongoose `trusted()` so it survives filter sanitization on queries that pass through the sanitizer.
-- **`LAST_ACTIVE_EXPR`** (module-private) — `{$max: ['lastActiveAt','lastApiKeyUseAt','createdAt']}`; the single source of truth for "how recently was this account used", shared by every `findInactive*` query.
-- **`stampDaily`** (module-private) — Throttles `lastActiveAt` / `lastApiKeyUseAt` to at most one write per day; uses `$max` to prevent the timestamp from moving backwards.
-- **`codeSlotFilter` / `codeSlotPath`** (module-private) — Resolve the correct Mongoose path (`reauthCode.*` vs `twoFactorMethods.$.*`) for a given `DeliveredCodeSlot`, keeping 2FA-method and step-up code logic in one pair of helpers.
-- **`trustedSignInFilter`** (module-private) — Extends the authenticatable filter to also admit owner-scheduled deletions still inside their grace window.
-- **`reencrypt`** — Delegated to `reencryptOf(userModel)`; batch re-encryption of credential fields with dry-run support.
-- **`writebackImage`** — Delegates to `imageWritebackFor`, tying the user document to the image-worker adapter for avatar/profile-image persistence.
-- **`searchable` config** (passed to `createRepository`) — Defines object-id, text, regex, boolean (`active`), presence (`deletedAt`), and sort keys. Notably excludes a `role` filter (role is resolved via a separate membership collection in `@modules/access`).
+- **`userRepository`** — the single exported object. Extends `Repository<UserDocument, UserWire>` with ~40 domain-specific methods (MFA reservation/spend, OAuth link/unlink, scheduled-deletion state, purchase holds, inactivity reaping, credential reads, image writeback, reencrypt).
+- **`CREDENTIAL_FIELDS`** — the `+password +twoFactorMethods …` select string. The *only* place that re-selects hidden fields; do not add ad-hoc `.select('+…')` calls elsewhere.
+- **`LAST_ACTIVE_EXPR`** — a Mongoose `$expr` (`$max` of `lastActiveAt`, `lastApiKeyUseAt`, `createdAt`) shared by every `findInactive*` query so "how recently was this account used" is defined once.
+- **`stampDaily`** — throttles `lastActiveAt` / `lastApiKeyUseAt` updates to once per day (`ACTIVITY_THROTTLE_MS = DAY_MS`); uses `$max` so the stamp never moves backwards.
+- **`codeSlotFilter` / `codeSlotPath`** — resolve a `DeliveredCodeSlot` (reauth vs. a specific 2FA method) to the correct document path and `$elemMatch` filter.
+- **`TRUSTED_AUTHENTICATABLE_FILTER` / `trustedSignInFilter`** — wrap `AUTHENTICATABLE_FILTER` operators in `mongoose.trusted()` so they survive Mongoose's query sanitization; the sign-in variant also admits owner-scheduled deletions still inside their grace window.
+- **`clearedCode`** — builds the `$unset` document that zeroes every field of a delivered-code slot.
+- **`searchable` config** passed to `createRepository` — defines object-id, text, regex, boolean, presence, and sort facets. Note: no `role` facet (requires a two-step membership resolve that the generic filter cannot express).
 
 ## Relationships
 
-- **`@infrastructure/persistence/create-repository`** — Supplies the generic `Repository` implementation (find, findById, insert, update, delete, `toObjectId`). This file spreads it into `userRepository` and adds domain methods on top.
-- **`@infrastructure/security/reencrypt`** — Provides `reencryptOf`, `ReencryptSpec`, `ReencryptReport`; this file re-exports the bound `reencrypt` method.
-- **`@infrastructure/persistence/external-key-query`** — Supplies `EXTERNAL_KEY_QUERY`, applied as a query option on `findOneWithCredentials` for external-key lookups.
-- **`@infrastructure/persistence/image-writeback` / `@infrastructure/adapters/image.worker`** — Provide `imageWritebackFor` and the `ImageWriteback` type for avatar image persistence.
-- **`@domain-primitives/time`** — Supplies `DAY_MS`, used as the `ACTIVITY_THROTTLE_MS` constant.
-- **`./model`** — Source of `userModel`, `applyUserTransform`, `DELIVERED_CODE_FIELDS`, and all domain types (`UserDocument`, `OAuthAccount`, `MfaReservation`, `DeliveredCodeSlot`, etc.).
-- **`./authenticatable`** — Source of `AUTHENTICATABLE_FILTER`, wrapped into `TRUSTED_AUTHENTICATABLE_FILTER`.
-- **`./two-factor-write`** — Source of `twoFactorWritePipeline` and the `TwoFactorWrite` / `TwoFactorWriteOutcome` types consumed by `writeTwoFactor`.
-- **`scenarios/users.ts`** — Scenario definitions that exercise this repository in integration/e2e tests.
-- **`src/modules/account/tests/**`** — Contract and integration tests (auth races, delete-account, login paths, OAuth, reauth, lifecycle, code-delivery) that call `userRepository` methods directly or through the account module to verify persistence behavior.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies `createRepository`, `toObjectId`, and the base `Repository` type that `userRepository` spreads.
+- **`src/infrastructure/security/reencrypt.ts`** — `reencryptOf(userModel)` is attached as `userRepository.reencrypt` for bulk key-rotation.
+- **`src/infrastructure/persistence/versioning.ts`** — `fencedSave` provides optimistic-concurrency saves used by `saveWithoutEdit`.
+- **`src/infrastructure/persistence/external-key-query.ts`** — `EXTERNAL_KEY_QUERY` builds the `(provider, providerId)` lookup for `findForSignInByOAuthIdentity`.
+- **`src/infrastructure/persistence/image-writeback.ts`** — `imageWritebackFor` backs the `writebackImage` method.
+- **`src/infrastructure/adapters/image.worker.ts`** — supplies the `ImageWriteback` type for that method's signature.
+- **`src/domain-primitives/time.ts`** — `DAY_MS` sets the activity-stamp throttle.
+- **`./authenticatable`** (local) — `AUTHENTICATABLE_FILTER` is the base filter re-wrapped with `trusted()`.
+- **`./two-factor-write`** (local) — `twoFactorWritePipeline` and the `TwoFactorWrite` / `TwoFactorWriteOutcome` types drive `writeTwoFactor`.
+- **`./model`** (local) — `userModel` (Mongoose model), `applyUserTransform`, `DELIVERED_CODE_FIELDS`, and all document/wire types.
+- **`scenarios/users.ts`** and the **`account` contract/integration tests** — consume `userRepository` to exercise sign-in, OAuth, reauth, code-delivery, lifecycle, and race-condition paths.
 
 ## Notes
 
-- **Type written out explicitly.** The `userRepository` annotation is spelled out rather than inferred because Mongoose's generics are too large for TypeScript to serialize across an export boundary (error TS7056). Don't try to "simplify" it to a `const x = {…}` without a type.
-- **`trusted()` is load-bearing.** `TRUSTED_AUTHENTICATABLE_FILTER` and `trustedSignInFilter` wrap `$or` operators in Mongoose's `trusted()` so they survive the query sanitizer. Removing the wrapper will silently drop the `$or` clause on sanitized queries.
-- **`CREDENTIAL_FIELDS` is the only door.** Any new code that needs `password`, 2FA fields, `reauthCode`, `oauthAccounts`, or `pendingEmail` must go through `findByIdWithCredentials` / `findOneWithCredentials` / `findByIdWithPendingEmail`, not a raw `.select('+…')`.
-- **Activity stamps are throttled.** `touchLastActive` / `touchApiKeyUse` write at most once per calendar day per field; calling them on every request is a no-op after the first, but the filter check still hits the database.
-- **`active` vs `deletedAt`.** The `searchable.booleans.active` filter targets the `active` column, *not* `deletedAt`. "Deactivated" and "deleted" are different queries.
-- **No `role` filter.** The document has no `role` column; role-based search requires a two-step resolve through the membership collection (`@modules/access`) and is deliberately not expressed here.
-- **`timestamps: false` on activity stamps.** `stampDaily` passes `timestamps: false` because a `lastActiveAt` update is not a profile edit; Mongoose's `updatedAt` is intentionally left untouched.
+- The explicit type annotation on `userRepository` (rather than `satisfies` or inference) exists because Mongoose's generics produce a type too large for TS to serialize at an export boundary (TS7056). Don't remove it.
+- `timestamps: false` is passed to `stampDaily`'s update: activity stamps are not profile edits and must not bump `updatedAt`.
+- `fencedSave` (from `versioning`) is the concurrency-safe save path; plain `.save()` is avoided for mutations that can race.
+- `trusted()` wrappers are load-bearing: without them Mongoose's `sanitizeFilter` strips the `$or` / `$eq` operators and the sign-in queries silently return no rows.
+- The reaper "not yet warned" check (`NOT_WARNED_THIS_STRETCH`) uses `$type: 'missing'` *or* `lastActive > warnedAt` so a returning user is re-warnable without a write at login time.

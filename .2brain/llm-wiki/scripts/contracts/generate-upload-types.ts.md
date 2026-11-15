@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-upload-types.ts
-sha256: ffd171c4ab69390009b9fce7f6e5da75d3b6a1fe32b5084377f38d9e5691e69e
-generated_at: 2026-11-08T02:42:30.782604+00:00
+sha256: 435c677e7bbfae02f3e96f35a3c50710b3fc5e55b8f026e9dbd97a6bc8b5042b
+generated_at: 2026-11-14T17:26:37.222660+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Reads the bundled `openapi.yaml` contract, extracts the single `imageUpload` contentType shared across all multipart upload bodies, and emits a small TypeScript file exporting `ACCEPTED_UPLOAD_TYPES` (a `const` tuple) and `AcceptedUploadType` (a union type). This makes the OpenAPI contract the single source of truth for which media types the backend's `fileFilter` and the frontend's file picker accept.
+Extracts the single accepted upload media-type list from the bundled `openapi.yaml` (the `encoding.imageUpload.contentType` field on every multipart request body) and emits a small TypeScript module exporting a frozen array and a union type. It exists so the backend's `fileFilter` and the frontend's file picker share one canonical source for "what can be uploaded," with a `--check` mode for CI drift detection.
 
 ## Key elements
 
-- **`MediaType` / `OpenApiDocument` interfaces** — minimal structural types that narrow the parsed YAML to the two fields this script reads (`encoding.imageUpload.contentType` under `multipart/form-data`).
-- **Validation loop** — walks every `paths[*][*].requestBody.content['multipart/form-data'].encoding.imageUpload.contentType`, collecting distinct values into a `Map<string, string[]>` keyed by the type string.
-- **Single-list invariant** — if the map has 0 entries (no upload declared) or >1 distinct contentTypes (bodies disagree), prints a diagnostic and `process.exit(1)`.
-- **Output generation** — splits the comma-separated type string into an array, then builds a file containing a generated-file banner, the `as const` array, and the indexed-access union type.
-- **`writeOrCheck(OUTPUT, output, 'openapi.yaml')`** — writes the result, or (with `--check`) diffs against disk and exits 1 on mismatch.
+- **`MediaType` / `OpenApiDocument`** — Narrow structural interfaces describing the only slice of the parsed YAML this script reads (request body → multipart → encoding → imageUpload → contentType).
+- **`declared` (Map)** — Accumulates each distinct `contentType` string alongside the `METHOD route` operations that declare it; the script then asserts exactly one key exists.
+- **`types`** — The single comma-separated `contentType` value, split and trimmed into an array.
+- **`output`** — The full generated file text: a `const ACCEPTED_UPLOAD_TYPES` (typed as `readonly string[]`) and a derived `AcceptedUploadType` union type, preceded by a "DO NOT EDIT" banner.
+- **`writeOrCheck(OUTPUT, output, 'openapi.yaml')`** — Persists the file or, under `--check`, exits 1 if the on-disk copy differs.
 
 ## Relationships
 
-- **`scripts/contracts/generated-file.ts`** — supplies `writeOrCheck`, the shared helper that handles `--out`/`--check` semantics for all generated contract files.
-- **`scripts/cli.ts`** — supplies `requiredPath`, which reads the required `--out` CLI argument (resolved against the repo root) and exits with a usage error if absent.
+- **`scripts/cli.ts`** — Imports `requiredPath` to resolve the `--out` CLI argument relative to the repo root.
+- **`scripts/contracts/generated-file.ts`** — Imports `writeOrCheck`, the shared helper that either writes the generated file or diffs it against the existing one (`--check`).
+- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` to locate `openapi.yaml` at the repository root.
 
 ## Notes
 
-- Runs as **ESM** via the `#!/usr/bin/env tsx` shebang; paths are derived from `import.meta.url`, not `__dirname`.
-- The `contentTypes` value in the YAML is a **comma-separated string** (e.g. `"image/png,image/jpeg"`); the script splits and trims it into the tuple.
-- The frontend repo keeps its **own copy** of this script, writing under its `contracts/` folder rather than `api/`.
-- Intended invocation: `tsx scripts/contracts/generate-upload-types.ts --out <path> [--check]`; typically wired to `npm run gen:api`.
+- The script hard-fails (`process.exit(1)`) if **zero** operations declare the field or if **more than one** distinct `contentType` value appears across the document. There is no "merge" or "first-wins" path.
+- The `contentType` value is expected to be a comma-separated list (e.g. `"image/png, image/jpeg"`); the script splits on commas and trims. It does **not** validate individual MIME strings.
+- The frontend keeps its own copy of this script (writing under its `contracts/` folder); this copy writes under `api/`. The logic is identical, so the two generated files must stay in sync manually or by convention.
+- `REPO_ROOT` is resolved at import time; the script assumes `openapi.yaml` sits directly at that root.

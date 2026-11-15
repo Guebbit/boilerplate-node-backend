@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/signup.ts
-sha256: de5f5786f9ae57b658f34232719b633a4430487c909dfd3fb19b8fce8e58a6ea
-generated_at: 2026-11-08T04:23:17.742027+00:00
+sha256: 363c5222e79b18ad317f60a6149d103c510755ea7da19bece12d73fb2233baf8
+generated_at: 2026-11-14T18:51:35.706113+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the `POST /account/signup` handler. Validates the submitted fields, runs two anti-automation gates (breached-password check, email-policy check), and—if the email is free—creates the account and its starting role. All success and failure paths are funnelled into a uniform `ResponseSuccess | ResponseReject` envelope.
+Implements the `POST /account/signup` handler: validates the request body, runs two anti-abuse gates (breached-password corpus, anti-automation email policy), then creates the account and its starting role in a single database round trip. Returns a unified `ResponseSuccess<UserDocument> | ResponseReject` envelope.
 
 ## Key elements
 
-- **`SignupInput`** (interface) — Flat object holding `email`, `username`, `password`, `passwordConfirm`, `analyticsConsent` (optional boolean), and `termsAccepted` (must be `true`). Replaces a positional parameter list.
-- **`guardBreachedPassword`** (internal) — Calls `assertPasswordNotBreached`; returns a 422 reject if any breach errors are found, otherwise `undefined` to continue.
-- **`guardEmailPolicy`** (internal) — Calls `checkEmailPolicy` (antibot adapter). On a `'refused'` verdict it returns a **decoy success** built from `userService.buildSignupDecoy` (never persisted); otherwise `undefined`.
-- **`createAccountIfEmailFree`** (internal) — Single DB path: checks `userService.emailTaken`, rejects 409 on a collision, or calls `userService.registerSelfService` + `enqueueIfPending` to create and return the user. All DB errors are caught by `rejectDatabaseEnvelope`.
-- **`signup`** (exported) — Orchestrator. Validates via Zod (`SignupBody` extended with `analyticsConsent` and `termsAccepted` checks, plus a `superRefine` for password match), then chains the three gates in order. Post-processing records an audit entry (distinguishing real success from decoy/failure via `data.isNew`) and emits an analytics event on success.
+- **`signupSchema`** (private) — Zod schema built from the API contract's `SignupBody`, extended with `analyticsConsent` (optional boolean), `termsAccepted` (must decode to `true`), and a `superRefine` that enforces `password === passwordConfirm`. Unknown keys are rejected (strict).
+- **`SignupInput`** (exported type) — `z.infer<typeof signupSchema>`; the fully-parsed shape the handler works with.
+- **`guardBreachedPassword`** (private) — Calls `assertPasswordNotBreached`; returns a 422 reject on match, `undefined` to continue.
+- **`guardEmailPolicy`** (private) — Calls `checkEmailPolicy`; on `'refused'` returns a *decoy* `ResponseSuccess` built from an unsaved Mongoose document (so the caller gets a shape-indistinguishable success with nothing persisted). Otherwise returns `undefined`.
+- **`createAccountIfEmailFree`** (private) — Single DB round trip: `emailTaken` check → 409 reject, or `registerSelfService` + `enqueueIfPending` → 200 success. Database errors are caught by the same `.catch` and returned via `rejectDatabaseEnvelope`.
+- **`signup`** (exported) — The public handler. Parses the body, chains the three gates in order (first non-`undefined` result wins), then post-processes the outcome to record audit and analytics. Distinguishes a real signup from a rung-2 decoy via `result.data.isNew`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `infrastructure/adapters/antibot.ts` | Calls `checkEmailPolicy` for the rung-2 anti-automation gate. |
-| `infrastructure/http/errors.ts` | Uses `rejectDatabaseEnvelope` to shape unexpected DB failures. |
-| `infrastructure/http/request.ts` | Uses `parseFormBoolean` to decode multipart boolean fields. |
-| `infrastructure/http/response.ts` | Builds every response via `generateSuccess`, `generateReject`, and `validationErrors`. |
-| `infrastructure/http/schemas.ts` | Imports `optionalBooleanSchema` for `analyticsConsent` parsing. |
-| `infrastructure/i18n/index.ts` | Calls `getCurrentLocale` (captured into the new user doc) and `t` for all user-facing messages. |
-| `infrastructure/observability/analytics/index.ts` | Emits `emitAnalyticsEvent` + `buildAnalyticsBase` on successful signup. |
-| `infrastructure/observability/audit.ts` | Calls `recordAudit` on every outcome (success, decoy, failure). |
-| `infrastructure/security/breached-passwords/index.ts` | Calls `assertPasswordNotBreached` as the first gate. |
-| `modules/account/analytics.ts` | Reads `accountAnalyticsEvents.USER_SIGNED_UP` for the analytics event name. |
-| `modules/account/audit.ts` | Reads `accountAuditActions.AUTH_SIGNED_UP` for the audit action name. |
-| `modules/account/consent-record.ts` | Calls `analyticsAnswer` and `termsAcceptance` to build the consent payload stored on the document. |
-| `modules/account/services/index.ts` | Re-exports this file's `signup` as part of the account service surface. |
+- **`@infrastructure/adapters/antibot`** — calls `checkEmailPolicy` for the rung-2 gate.
+- **`@infrastructure/security/breached-passwords`** — calls `assertPasswordNotBreached` before any other check.
+- **`@infrastructure/http/response`** — uses `generateSuccess` / `generateReject` / `validationErrors` for all response shapes.
+- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` wraps unexpected DB failures.
+- **`@infrastructure/http/request`** — `parseFormBoolean` decodes multipart boolean strings for `termsAccepted`.
+- **`@infrastructure/http/schemas`** — `optionalBooleanSchema` reused for `analyticsConsent`.
+- **`@infrastructure/i18n`** — `t` for user-facing messages; `getCurrentLocale` stored on the new account for later async work.
+- **`@infrastructure/observability/audit`** — `recordAudit` logs success/failure of signup.
+- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` / `buildAnalyticsBase` fire the `USER_SIGNED_UP` event.
+- **`../consent-record`** — `analyticsAnswer` and `termsAcceptance` shape the consent data passed to account creation and the decoy.
+- **`../analytics` / `../audit`** — event-name and action-name constants.
 
 ## Notes
 
-- **Decoy detection in the audit block:** `result.data.isNew` (Mongoose) is still `true` for the rung-2 decoy document because it was never `.save()`-ed. The code treats `isNew === true` as "no real account was created" and records the audit as a failure. This is the *only* path that returns an unsaved document, so the check is safe—but it inverts the intuition that `isNew` means "just created."
-- **`termsAccepted` vs `analyticsConsent`:** `termsAccepted` must be the literal `true` (Zod `z.literal(true)` after `parseFormBoolean`); any other value is a 422. `analyticsConsent` is genuinely optional—absent parses to `undefined` and is stored as `false`. Both use the same multipart-string decode, hence the separate schema treatments.
-- **Gate order is intentional and cheap-first:** breached-password → email-policy → DB lookup. Each gate that answers short-circuits the rest, so a rejected request avoids the single DB round trip.
-- **Locale is snapshotted at signup time** (`getCurrentLocale()`) and stored on the user document so later background work (queued emails, nightly jobs) can act in the user's language without a live request.
+- **Gate order is load-bearing:** breached-password → email-policy → DB lookup. A breached password short-circuits before the email policy runs, so a script with a known-bad hash never hits the decoy path.
+- **`isNew` is read backwards in the audit block:** a *new* (unsaved) Mongoose document on a "success" result means the decoy was returned — i.e., no account exists. `result.data.isNew === true` is therefore treated as a *failure* for audit purposes.
+- **`analyticsConsent` has no "leave unchanged" meaning at signup** (there is no prior value); absent is stored as `false`. This differs from the same field's semantics on `PUT/PATCH /account`.
+- **The decoy document is never persisted.** The only observable difference from a real success is that `isNew` remains `true` and no DB write occurred — the audit path relies on exactly that.
+- **`locale` is captured at signup time** (`getCurrentLocale()`) so downstream jobs (queued email, nightly batch) can render without needing the original `Accept-Language` header.

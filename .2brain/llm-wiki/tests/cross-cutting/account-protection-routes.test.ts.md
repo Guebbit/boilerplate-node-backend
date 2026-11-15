@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/account-protection-routes.test.ts
-sha256: c693df0a32435ae601858d233cc562e2977a5fa8a007bf023b087cda2f1022ea
-generated_at: 2026-11-08T09:22:20.918314+00:00
+sha256: 63a9d4e9a63fea677ac8beb62c23a1b7d19095d388ac2e09ec3de646ad48a021
+generated_at: 2026-11-14T23:00:10.458885+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guarantees that every write route mounted on the `users` module is explicitly accounted for in the account-protection matrix. A new write route added to `users` will fail this test until it is either added to `PROTECTION_ROWS` or documented in `UNOWNED_WRITES` with a reason, making the protection rule only as strong as the list it audits.
+Guarantees that every state-changing (write) route mounted on the `users` module is explicitly accounted for in the account-protection matrix. A route must appear either as a row in `PROTECTION_ROWS` or as an entry in `UNOWNED_WRITES` with a justification; any unlisted write route causes the test to fail, and any listed route that is no longer mounted (or is listed twice) also fails. This keeps the protection matrix honest as routes are added or removed.
 
 ## Key elements
 
-- **`WRITE_METHODS`** – `Set` of state-changing HTTP verbs (`POST`, `PUT`, `PATCH`, `DELETE`) used to filter the route table.
-- **`mountedWrites()`** – Builds the canonical list of write routes (`"users METHOD path"`) from `effectiveRouteTable(ROUTED_MODULES.users)`.
-- **Test: "lists every write route of users, as a row or as unowned"** – Asserts no mounted write is missing from the union of `PROTECTION_ROWS` routes and `UNOWNED_WRITES` keys (completeness).
-- **Test: "has no stale entry"** – Asserts every route in `PROTECTION_ROWS` ∪ `UNOWNED_WRITES` actually exists in the mounted table (no dead entries).
-- **Test: "never lists a route as both a row and unowned"** – Asserts the two lists are disjoint (no ambiguity).
+- **`WRITE_METHODS`** — `Set` of `POST | PUT | PATCH | DELETE`; the definition of "write" for this test.
+- **`mountedWrites()`** — Collects every write route of the `users` module (via `routersOfModule` + `effectiveRouteTable`) and returns them as strings in the form `` `users ${method} ${path}` ``.
+- **Test 1** (`lists every write route…`) — Asserts `mountedWrites()` ⊆ listed routes (no unclassified write).
+- **Test 2** (`has no stale entry…`) — Asserts listed routes ⊆ `mountedWrites()` (no orphaned rows or exemptions).
+- **Test 3** (`never lists a route as both…`) — Asserts `PROTECTION_ROWS` and `UNOWNED_WRITES` are disjoint on route keys.
 
 ## Relationships
 
-- **`tests/support/account-protection-rows.ts`** – Source of `PROTECTION_ROWS` and `UNOWNED_WRITES`, the two disjoint lists this test cross-checks against the live route table.
-- **`tests/support/routed-modules.ts`** – Provides `ROUTED_MODULES.users`, identifying which module's routes to inspect.
-- **`tests/support/routes.ts`** – Provides `effectiveRouteTable` for building the route list and four mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) that this file uses to stub infrastructure middleware.
+- **`tests/support/account-protection-rows.ts`** — Source of `PROTECTION_ROWS` (the classified rows) and `UNOWNED_WRITES` (exemptions with reasons). This test is the completeness/liveness check for that file.
+- **`tests/support/routed-modules.ts`** — Provides `routersOfModule('users')`, the entry point for discovering which routers belong to the `users` module.
+- **`tests/support/routes.ts`** — Provides `effectiveRouteTable(router)`, which flattens a router into a list of `{ method, path }` entries consumed by `mountedWrites()`.
 
 ## Notes
 
-- The bidirectional check pattern (completeness + no-stale + no-overlap) means the test suite catches both omissions and rot: adding a route without a row fails test 1; removing a route without cleaning up the row fails test 2.
-- All four middleware mocks are wired through `jest.requireActual('@tests/routes')` rather than defined inline, so the mock logic lives in `routes.ts` and stays in sync with other test files that mock the same middleware.
+- The `jest.mock` blocks target infrastructure middleware modules (`cache`, `route-flag`, `upload`, `rate-limit`) and source their factories from `@tests/routes` via `jest.requireActual`. This couples the mock definitions to the same support module that defines `effectiveRouteTable`.
+- Route strings are the identity key across all three checks. If a route's spelling changes (e.g., a parameterised path format), both the support file and any manual entries in `PROTECTION_ROWS`/`UNOWNED_WRITES` must be updated in lockstep.
+- The test only inspects the `users` module. Other modules are not checked here; the file docstring frames the rule as applying to "every write route on `users`".

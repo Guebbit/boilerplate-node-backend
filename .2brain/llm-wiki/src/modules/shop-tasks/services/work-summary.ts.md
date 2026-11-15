@@ -1,7 +1,7 @@
 ---
 source: src/modules/shop-tasks/services/work-summary.ts
-sha256: aba618ed4188fbbc21d46e2a47c8ce925b446edcab25afd41ba69f9d162484d0
-generated_at: 2026-11-08T08:17:22.120759+00:00
+sha256: 69f0423a4d4d5b625cbb0cdd9f0fddcb24bac518274cd80b683be34546e51818
+generated_at: 2026-11-14T21:54:35.697476+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Computes the per-screen "work badge" counts shown in staff navigation. Each count is read through the owning module's own list function with the caller's context, so the badge number always matches what the corresponding screen would display.
+Provides the open-work counts that populate the staff navigation badges in the shop-tasks module. Each count is fetched through the owning domain module's own list service using the caller's context, so a badge number and the screen it points to can never disagree. The only export is `workSummary`, which returns a `ShopWorkSummary` object containing only the badges the caller is permitted to see.
 
 ## Key elements
 
-- **`workSummary(caller)`** *(exported)* — Filters `BADGES` by permission, runs each allowed count in parallel, and returns a `ShopWorkSummary` object. Only keys the caller may open are present; zero counts are still included.
-- **`BADGES`** — Read-only array of five `Badge` entries in nav order: `salesOrders`, `salesPayments`, `returns`, `salesPreorders`, `inventory`.
-- **`Badge`** *(interface)* — `key`, `opens` (synchronous permission gate), `count` (async count).
-- **`mayOpen(action, subject)`** — Curried permission check combining `callerForSubject` + `holds`.
-- **`ONE_ROW`** — `{ pageSize: 1 }`; every list call fetches one row only to read `meta.totalItems`.
-- **`totalOf`** — Extracts `meta.totalItems` from a paginated response.
-- **`ordersWith(status, caller)`** — Queries `orderService.search` for a single status with `deleted: false`; used twice to sum `paid` + `processing` for `salesOrders`.
+- **`Badge`** (internal interface) — shape of one nav badge: `key` (which `ShopWorkSummary` field it fills), `opens` (permission gate), and `count` (async count fetch).
+- **`mayOpen(action, subject)`** — curried permission helper; returns a `(caller) => boolean` that asks `holds` whether the caller satisfies the given action on the subject.
+- **`ONE_ROW`** — `{ pageSize: 1 }`, passed to every list call so only the `meta.totalItems` field is needed.
+- **`totalOf(page)`** — extracts `meta.totalItems` from a paginated response.
+- **`BADGES`** — ordered array of the five badge definitions: `salesOrders`, `salesPayments`, `returns`, `salesPreorders`, `inventory`.
+- **`workSummary(caller)`** (export) — filters `BADGES` by the caller's permissions, resolves all counts in parallel, and returns a `ShopWorkSummary` object (absent key = no access; `0` = accessible but empty).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@kernel/ability` | Imports `holds` for permission evaluation in `mayOpen`. |
-| `@kernel/permissions` | Imports `callerForSubject`, `ActionOn`, `PermissionSubject`. |
-| `@types/auth-context` | Imports `AuthContext` and `ShopWorkSummary` types. |
-| `@modules/orders` | Calls `orderService.search` for the `salesOrders` count. |
-| `@modules/payments` | Calls `paymentService.listAttention` for the `salesPayments` count. |
-| `@modules/returns` | Calls `returnService.listReturns` for the `returns` count. |
-| `@modules/delivery` | Calls `deliveryService.listPreorderFulfillmentOrders` for the `salesPreorders` count. |
-| `@modules/inventory` | Calls `inventoryService.listLevels` for the `inventory` count. |
-| `shop-tasks/controllers/get-shop-work-summary.ts` | Upstream controller that invokes `workSummary`. |
-| `shop-tasks/services/index.ts` | Barrel re-exports `workSummary`. |
+- **`src/kernel/ability.ts`** — provides `holds`, the permission check used by `mayOpen`.
+- **`src/kernel/permissions.ts`** — provides `callerForSubject` and the `ActionOn`/`PermissionSubject` types that scope the caller and type the action/subject pair.
+- **`src/modules/orders/index.ts`** (→ `src/modules/orders/services/index.ts`) — re-exports `orderService`; its `search` method supplies the `salesOrders` badge count (awaiting shipment, not deleted).
+- **`src/modules/payments/index.ts`** (→ `src/modules/payments/services/index.ts`) — re-exports `paymentService`; its `listAttention` method supplies the `salesPayments` badge count.
+- **`src/modules/returns/index.ts`** (→ `src/modules/returns/services/index.ts`) — re-exports `returnService`; its `listReturns` method supplies the `returns` badge count (status `requested`).
+- **`src/modules/delivery/index.ts`** (→ `src/modules/delivery/services/index.ts`) — re-exports `deliveryService`; its `listPreorderFulfillmentOrders` method supplies the `salesPreorders` badge count (late preorders).
+- **`src/modules/inventory/index.ts`** (→ `src/modules/inventory/services/index.ts`) — re-exports `inventoryService`; its `listLevels` method supplies the `inventory` badge count (low stock only).
+- **`src/types/auth-context.ts`** — `AuthContext` (caller identity) and `ShopWorkSummary` (return shape).
+- **`src/modules/shop-tasks/controllers/get-shop-work-summary.ts`** — the HTTP controller that invokes `workSummary`.
+- **`src/modules/shop-tasks/services/index.ts`** — barrel re-export of this module.
 
 ## Notes
 
-- The `ordersWith` call deliberately **omits the third argument** to `orderService.search`; passing a caller context there would fire an `orders_viewed` analytics event, which is undesirable for a passive badge refresh.
-- `salesOrders` requires **two** list calls because the order status filter accepts only a single value.
-- Permission actions are intentionally varied: `display` on `Order`/`Payment` vs. `read` on `Return`/`StockLevel` — matching each screen's route gate rather than a uniform action.
-- `salesPayments` and `inventory` counts take **no caller argument** (no caller-scoped filtering needed), while the other three do.
-- `Object.fromEntries` types keys as `string`; the `as ShopWorkSummary` cast is safe because every key is a `Badge.key` (`keyof ShopWorkSummary`).
+- Every count call passes `pageSize: 1` and reads only `meta.totalItems`; no full list is ever materialized.
+- The `salesOrders` badge intentionally omits the third argument to `orderService.search` to avoid triggering an `orders_viewed` analytics event on badge refresh.
+- `workSummary` omits keys the caller cannot open (no key in the object) rather than returning `0`, so consumers can distinguish "no access" from "empty queue."
+- `Object.fromEntries` is typed with `string` keys, hence the final `as ShopWorkSummary` cast — safe because every key is a literal `Badge.key`.
+- Badge order in `BADGES` mirrors the navigation display order; the object key order is not semantically significant to consumers.

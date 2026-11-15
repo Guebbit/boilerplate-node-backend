@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/index.ts
-sha256: 3d3468a11bc0ff855e0c1fe6e55a48036cae537cd59ce414cffbf1957748e996
-generated_at: 2026-11-08T05:36:19.444871+00:00
+sha256: dde41b71361dfdbac09a0b63431d177a1d4c5c4af785d515f7715be28ed09cf3
+generated_at: 2026-11-14T19:46:56.606024+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel/facade for the delivery service layer. It aggregates every operation (reads, writes, acts, notifications, retention, preorders) into a single `deliveryService` object so that controllers and sibling modules interact with the domain through one door instead of reaching into individual sub-files. The header docstring references `docs/theory/layers.md` for the layering rationale.
+Aggregation facade for the delivery service layer. It imports every operation (reads, state-changing acts, administrative utilities) from the individual flow files in `src/modules/delivery/services/` and bundles them into a single `deliveryService` object that controllers and cross-module consumers call. This keeps the import surface to one name per module rather than scattering imports across a dozen siblings.
 
 ## Key elements
 
-- **`deliveryService`** (const object) — the single public surface. Groups ~35 functions under one name, spanning:
-  - *Reads:* `listMethods`, `listFulfillmentOrdersForOrder`, `listShipmentsForOrder`, `getShipment`, `getFulfillmentOrder`, `shippedQuantities`, `remainderOptions`, `findShipmentsForOrders`, `findFulfillmentOrdersForOrders`, `listPreorderFulfillmentOrders`, `summarizePreorders`.
-  - *Acts (transactional writes):* `processOrder`, `shipFulfillmentOrder`, `deliverShipment`, `markShipmentLost`, `reopenForReplacement`, `fulfillFulfillmentOrder`, `holdFulfillmentOrder`, `releaseFulfillmentOrder`, `editShipmentTracking`, `cancelRemainder`, `cancelAllForOrder`, `ensureFulfillmentOrders`, `syncWithOverride`.
-  - *Preorder / date logic:* `runPreorderSweep`, `previewDateImpact`, `onDateChanged`.
-  - *Allocation:* `splitForAllocation`, `releaseAllocated`.
-  - *Retention & security:* `scrubHoldNotes`, `scrubLostNotes`, `scrubDestinations`, `reencryptShipments`.
-  - *Notifications:* `mailShipped`, `mailDelivered`, `mailLost`, `mailDelayed`, `mailHoldNoticed`.
-  - *Digest:* `deliveryDigest`.
-- **Re-exported types:** `RemainderOption`, `ShipInput`, `LostInput`, `HoldInput`, `RemainderCancel`, `Split`, `PreorderSweepResult`, `BoardQuery`.
-- **`ActRefusal`** — exported error/rejection type from `./act`, used when a transactional act is refused.
+- **`deliveryService`** (const object) — The single exported facade. Groups all reads (`listMethods`, `listFulfillmentOrdersForOrder`, `getShipment`, `getFulfillmentOrder`, `shippedQuantities`, `remainderOptions`, `findShipmentsForOrders`, `findFulfillmentOrdersForOrders`), acts (`shipFulfillmentOrder`, `deliverShipment`, `markShipmentLost`, `reopenForReplacement`, `fulfillFulfillmentOrder`, `holdFulfillmentOrder`, `releaseFulfillmentOrder`), lifecycle ops (`ensureFulfillmentOrders`, `processOrder`, `cancelRemainder`, `cancelAllForOrder`), sync/admin (`syncWithOverride`, `splitForAllocation`, `releaseAllocated`, `onDateChanged`, `runPreorderSweep`, `previewDateImpact`), retention (`scrubHoldNotes`, `scrubLostNotes`, `scrubDestinations`, `reencryptShipments`), reporting (`deliveryDigest`, `listPreorderFulfillmentOrders`, `summarizePreorders`), tracking (`editShipmentTracking`), and notifications (`mailShipped`, `mailDelivered`, `mailLost`, `mailDelayed`, `mailHoldNoticed`).
+- **Re-exported types** — `RemainderOption`, `ShipInput`, `LostInput`, `HoldInput`, `RemainderCancel`, `Split`, `PreorderSweepResult`, `BoardQuery` for consumers that need the input/shape contracts without importing the leaf files.
+- **`ActRefusal`** — Error type from `./act`, re-exported for callers that need to catch specific act failures.
 
 ## Relationships
 
-- **Consumed by all delivery controllers** (`get-shipment`, `get-shipping-methods`, `post-deliver-shipment`, `post-ship-fulfillment-order`, `post-fulfill-fulfillment-order`, `post-hold-fulfillment-order`, `post-mark-shipment-lost`, `post-process-order`, `patch-shipment`, `get-date-impact`, `get-fulfillment-order`, `get-order-fulfillment-lists`, `get-preorder-fulfillment-orders`). Each controller calls the relevant method on `deliveryService` rather than importing sub-files directly.
-- **Re-exported by `src/modules/delivery/index.ts`** — the module's public entry point, which exposes `deliveryService` (and the types) to the rest of the application.
-- **Exercised by `src/modules/account/tests/contract/shop.contract.test.ts`** — contract tests drive `deliveryService` operations to verify cross-module invariants.
+- **Controllers** (`get-fulfillment-order`, `get-shipment`, `get-shipping-methods`, `get-order-fulfillment-lists`, `get-preorder-fulfillment-orders`, `get-date-impact`, `patch-shipment`, `post-ship-fulfillment-order`, `post-deliver-shipment`, `post-mark-shipment-lost`, `post-fulfill-fulfillment-order`, `post-hold-fulfillment-order`, `post-process-order`) — Each controller imports specific members of `deliveryService` and delegates the business logic to this file's facade. This file is their sole service-layer entry point.
+- **`src/modules/delivery/index.ts`** — The module's public barrel; it re-exports `deliveryService` (and the types) upward so other modules can reach the delivery service without knowing the internal layout.
+- **`src/modules/account/tests/contract/shop.contract.test.ts`** — Cross-module contract test that exercises the delivery service surface (likely via `deliveryService` methods) to verify shop-level invariants around fulfillment.
 
 ## Notes
 
-- This file is purely a re-assembly point; no logic lives here. All behavior resides in the imported sub-files (`./ship`, `./deliver`, `./act`, etc.).
-- The module is intentionally **not** split into a per-concern namespace—controllers import one object and pick methods. Adding a new operation means adding an import line and a key on `deliveryService`.
-- `ActRefusal` is exported as a named value (not a type), suggesting it is a class or sentinel used in `catch`/`instanceof` checks by controllers.
+- The file is purely declarative: it contains no logic of its own. All behavior lives in the imported sibling files (`./ship`, `./deliver`, `./lost`, etc.). Changes to a flow's signature mean editing that sibling, not this index.
+- `orderIdOfFulfillmentOrder` and `shippedQuantities` are thin reads exposed alongside the heavier acts; they exist so callers can derive order context or quantity state without importing `./read` directly.
+- The comment block references `docs/theory/layers.md` for the "one file per flow, not one big file" convention.
+- `ActRefusal` is the only class-level export; everything else is a function or type.

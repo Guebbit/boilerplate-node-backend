@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/domain/transitions.ts
-sha256: 106c2e08dbdfdac7c8f601a0a8fcc8e90b6eaba09b3697fdf5f5aec500549bd1
-generated_at: 2026-11-08T05:58:51.958271+00:00
+sha256: bd6107d3c392688ad954575bbcafe8a1b57b3a4589813267e0a2c3bb97e465c0
+generated_at: 2026-11-14T20:03:24.306958+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure inventory-domain rules that translate a stock-movement reason and quantity into deterministic counter deltas (`onHand`, `reserved`, `backordered`). It is the single source of truth for what each of the ten transitions does to those counters, with no side effects, status codes, i18n, or database access.
+Pure, side-effect-free rules that map a `StockMovementReason` to the exact deltas applied to a stock level's three counters (`onHand`, `reserved`, `backordered`). It exists as the single authoritative place defining what each inventory transition does, so that services, repositories, and tests all read the same semantics without duplicating the logic.
 
 ## Key elements
 
-- **`HoldKind`** — union `'stock' | 'backorder'`; distinguishes whether held units are real shelf stock or a claim on the preorder allowance.
-- **`CounterDelta`** — interface with three signed numeric fields (`onHandDelta`, `reservedDelta`, `backorderedDelta`) describing one transition's effect. Recording all three on every ledger row keeps the ledger replayable.
-- **`counterDeltaFor(reason, quantity, kind?)`** — the core function. Switches over `StockMovementReason` and returns the corresponding `CounterDelta`. Ten cases: `reserve`, `ship`, `release`/`expire`, `backorder`/`owed`, `allocate`, `receive`, `restock`, `adjust`.
-- **`roomOn(level)`** — returns the remaining preorder allowance (`backorderLimit − backordered`, floored at 0). Returns `Infinity` when `backorderLimit` is explicitly `null` (no cap) or when `level` itself is `null`.
+- **`HoldKind`** — `'stock' | 'backorder'`. Distinguishes units that physically exist from units that are only a claim on the preorder allowance.
+- **`CounterDelta`** — interface with `onHandDelta`, `reservedDelta`, `backorderedDelta`. Every transition returns all three fields (possibly zero) so the ledger stays replayable.
+- **`counterDeltaFor(reason, quantity, kind?)`** — the core lookup. Switches on `StockMovementReason` and returns the corresponding `CounterDelta`. Handles `reserve`, `ship`, `release`/`expire`, `backorder`/`owed`, `allocate`, `receive`, `restock`, and `adjust`.
+- **`roomOn(level)`** — computes remaining preorder allowance from a level row. Returns `Infinity` when `backorderLimit` is explicitly `null` (no cap), and `0` when the level row is absent.
 
 ## Relationships
 
-- **`src/types/index.ts`** — provides `StockMovementReason`, the enum this file switches over.
-- **`src/modules/inventory/domain/index.ts`** — barrel for the inventory domain; re-exports this file alongside `hold-lines.ts`.
-- **`src/modules/inventory/domain/hold-lines.ts`** — sibling domain file; `HoldKind` shared here is the same notion used to tag hold-line records there.
-- **`src/modules/inventory/services/transition.ts`** — service layer that calls `counterDeltaFor` and persists the resulting deltas.
-- **`src/modules/inventory/services/reserve.ts`** — uses `roomOn` (and/or `counterDeltaFor`) when creating a hold.
-- **`src/modules/inventory/services/levels.ts`** — provides the `backorderLimit` / `backordered` values that `roomOn` consumes.
-- **`src/modules/inventory/model.ts`** — defines the stock entity whose three counters this file's deltas apply to.
-- **`src/modules/inventory/repository.ts`** — persistence boundary; the caller of services that, in turn, call into this file.
-- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit tests for `counterDeltaFor` and `roomOn`.
+- **`src/types/index.ts`** — provides the `StockMovementReason` enum that `counterDeltaFor` switches on.
+- **`src/modules/inventory/domain/index.ts`** — barrel re-export; consumers import from the domain barrel rather than this file directly.
+- **`src/modules/inventory/services/transition.ts`** — service layer that calls `counterDeltaFor` and then persists the result.
+- **`src/modules/inventory/services/reserve.ts`** — builds reserve/release/expire flows that depend on the deltas returned here.
+- **`src/modules/inventory/services/levels.ts`** — likely consumes `roomOn` for preorder-capacity checks.
+- **`src/modules/inventory/repository.ts`** — persists the counter changes produced by applying the deltas.
+- **`src/modules/inventory/model.ts`** — defines the stock-level shape (`onHand`, `reserved`, `backordered`) that the deltas mutate.
+- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit tests covering every branch of `counterDeltaFor` and edge cases of `roomOn`.
 
 ## Notes
 
-- `adjust` is the **only** case where `quantity` is expected to be pre-signed (negative = shrinkage). All other cases take a positive magnitude.
-- `release`/`expire` and `backorder`/`owed` are arithmetic duplicates; they exist as separate enum values solely so the ledger can record *which story* prompted the change.
-- `ship` decrements both `onHand` and `reserved` simultaneously so a dispatch does not alter the product's sellable availability.
-- Adding a new transition is a two-file change: one `case` here + one value in `openapi.yaml`'s `StockMovementReason` enum.
-- `roomOn` deliberately returns `Infinity` (not `null`/`undefined`) for an uncapped product so that caller arithmetic (`Infinity − n = Infinity`) works without a guard.
+- `adjust` is the **only** transition where `quantity` is signed (negative = shrinkage). All others expect a positive magnitude.
+- `release`/`expire` and `backorder`/`owed` are arithmetic-identical pairs kept as separate enum values purely so the ledger can record *why* the same delta happened.
+- For `release`/`expire` on a `'backorder'` hold, the delta touches `backorderedDelta` (negative), not `reservedDelta`, because a preorder claim never incrementing `reserved`.
+- `roomOn` deliberately returns `Infinity` (not a large number) when `backorderLimit` is `null`, and returns `0` when the level object itself is `null`. Callers must treat a missing level as "closed."
+- Adding a new transition requires: one `case` here **and** one enum value in `openapi.yaml`.
+- This module does **not** decide purchasable availability; that logic lives in `src/modules/products/domain/stock.ts` (`availableStock`).

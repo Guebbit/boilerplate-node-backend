@@ -1,28 +1,31 @@
 ---
 source: docker/crontab
-sha256: b0deacc79358ea72c7062866e2066bbbdbf96b306960807a7d63b3da18dbaf6c
-generated_at: 2026-11-08T02:19:45.366652+00:00
+sha256: 03a0dfcd9cc290862f82955f5e4bae2250dffc4c0c5bcdfd27404ca7fa1cc43f
+generated_at: 2026-11-14T17:11:11.139843+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # docker/crontab
 
 ## Purpose
-Crontab file consumed by the `cron` service container (defined in `docker-compose.yml`) via supercronic. It is **generated** by `npm run regenerate` from the `jobs` declared on each module's manifest (`AppModule.jobs`) and `src/app/jobs.ts`. It should never be hand-edited; changes belong in the declaring module, and deleting a module removes its entries on the next regeneration.
+
+Generated crontab consumed by the `cron` service container (supercronic). It declares every scheduled job for the deployment—cleanup, backstop sweeps, staff notifications—each routed through a single wrapper script. The file is **not hand-edited**; it is produced from per-module job declarations on every regeneration.
 
 ## Key elements
-- **`reap:*` jobs** — idempotent cleanup/deletion tasks (quarantine files, orphaned images, mail spool, inactive accounts, previous emails, account exports, scheduled deletions, delivery notes, invoice PDFs, invoice buyer blocks, order PII, payments, return notes, purchase holds). Each runs `scripts/ops/run-job.ts reap:<name>`.
-- **`sweep:*` jobs** — recurring action/notification tasks (outbox publish, preorder reminders, reservation expiry, payment-effect retries, staff digest, staff weekly, stock alerts, task-overdue notices, webhook retries). Each runs `scripts/ops/run-job.ts sweep:<name>`.
-- **`scripts/ops/run-job.ts`** — shared runner that guarantees a non-zero exit on failure, closes the Mongo connection on both paths, and records each run's outcome for `/observability/health`.
-- **`node --import tsx`** — every entry invokes Node with the `tsx` loader so the TypeScript job files run directly.
-- **`cd /app &&`** — every line changes into the app root before spawning Node.
+
+- **`npm run regenerate`** – the only supported way to (re)create this file. It reads `AppModule.jobs` from each module's manifest plus `src/app/jobs.ts`. Deleting a module removes its entries on the next run.
+- **`scripts/ops/run-job.ts <job:slug>`** – universal wrapper invoked by every line. Guarantees non-zero exit on failure, closes the Mongo connection on both paths, and records the run's outcome for `/observability/health`.
+- **Reap jobs** (one-shot deletions / field unsetting, mostly at 02:xx): `quarantine`, `orphaned-images`, `mail-spool`, `inactive-accounts`, `previous-emails`, `account-exports`, `scheduled-deletions`, `delivery`, `invoice-pdfs`, `invoices`, `orders`, `payments`, `returns`, `purchase-holds`.
+- **Sweep jobs** (active processing / backstops, higher frequency): `outbox` (every min), `preorders` (daily), `reservations` (every 5 min), `payment-effects` (every 5 min), `stock-alerts` (every 5 min), `staff-digest` (daily 06:30), `staff-weekly` (Monday 06:30), `tasks-overdue` (daily 06:40), `webhook-retries` (every min).
 
 ## Relationships
-- **`docker-compose.yml`** — defines the `cron` service (and `docker-compose.production.yml` its production variant) that starts supercronic with `-passthrough-logs` and mounts this file at `/app/crontab`. Supercronic's own log stream is what Promtail ships as the container log; this file deliberately contains no output redirects because of that.
+
+- **`docker-compose.yml`** – defines the `cron` service that mounts this file at `/app/crontab` and runs supercronic with `--passthrough-logs`. Without the container, this file has no runtime consumer.
 
 ## Notes
-- **Generated artifact**: treat as read-only. Editing this file directly will be overwritten on the next `npm run regenerate`.
-- **No stdout/stderr redirects**: supercronic is launched with `-passthrough-logs`, so each job's output flows straight into the container log stream. Adding `> /dev/null` or `2>&1` here would break that pipeline.
-- **Scheduling conventions**: `reap` jobs are mostly daily (various minutes past 02:00) to batch cleanup; `sweep` jobs that need high frequency (outbox, reservations, payment-effects) run every minute or every 5 minutes. Staff-digest and staff-weekly run at 06:30.
-- **Retention windows** are driven by environment variables (e.g. `NODE_INACTIVE_MINIMISE_DAYS`, `NODE_ACCOUNT_EXPORT_TTL_DAYS`, `NODE_ACCOUNT_DELETION_GRACE_DAYS`) rather than values baked into the crontab.
-- See `docs/reference/ops.md#scheduled-jobs` for per-job rationale and safety notes.
+
+- **Never edit by hand.** Change the `jobs` declaration on the owning module (or `src/app/jobs.ts`) and run `npm run regenerate`.
+- **No `>` / `>>` redirects.** Supercronic's `--passthrough-logs` hands stdout/stderr straight to the container log stream (shipped by Alloy). Adding redirects would suppress them.
+- **Retention windows are env-driven** (`NODE_INACTIVE_MINIMISE_DAYS`, `NODE_ACCOUNT_EXPORT_TTL_DAYS`, `NODE_ACCOUNT_DELETION_GRACE_DAYS`, etc.), so behaviour changes without touching this file.
+- The `cd /app &&` prefix on every line is load-bearing: supercronic does not set the working directory.
+- `node --import tsx` means jobs run as TypeScript directly—no build step required at deploy time.

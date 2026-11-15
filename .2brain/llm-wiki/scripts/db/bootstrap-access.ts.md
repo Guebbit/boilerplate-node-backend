@@ -1,7 +1,7 @@
 ---
 source: scripts/db/bootstrap-access.ts
-sha256: ee1d70b8cd0d29274dd0903e58b531809e47d148e23695bd3ce2879b9e0cb3f0
-generated_at: 2026-11-08T02:45:26.514019+00:00
+sha256: 6214491a3f4e35ab011a22fe766e1048dfd2b6946273d6dec30f7ded5bdb98f2
+generated_at: 2026-11-14T17:30:03.518418+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Deploy-time setup script (`npm run access:bootstrap`) that upserts the fixed "Shop" tenant into a fresh production database. Because the write is an idempotent upsert keyed on `DEPLOYMENT_TENANT_ID`, it is safe to re-run at any time — no `NODE_ENV` guard required. Runs before `app`/`cron` start via the `setup` service in `docker-compose.production.yml`.
+One-shot production bootstrap script (`npm run access:bootstrap`) that creates the initial "Shop" tenant via an idempotent upsert. Intended to run as the `setup` service in `docker-compose.production.yml` before the `app` and `cron` containers start. Unlike `scenarios/apply.ts`, it is safe to re-run against an already-seeded database because the write is keyed on the fixed `DEPLOYMENT_TENANT_ID`.
 
 ## Key elements
 
-- **`main()`** — Connects via `startJob()`, calls `accessService.bootstrapAccess('Shop')`, and logs the resulting tenant `_id` for operator records.
-- **`runScript(undefined, main, stopDatabase)`** — Wires `main` as a deploy-time setup job (not a crontab job); `stopDatabase` is the cleanup callback. The `undefined` first argument is the convention that distinguishes setup scripts from scheduled ones.
-- **Import ordering** — `dotenv` → `mongoose-boot` → `database` → `access` → `logger` → `run-script`. Mongoose defaults are read at schema build time, so `mongoose-boot` must precede any model import.
+- **`main`** — Connects the database (`startJob`), calls `accessService.bootstrapAccess('Shop')`, logs the resulting tenant ID, then hands shutdown back to `runScript`.
+- **`runScript(undefined, main, stopDatabase)`** — Wraps `main` with process-exit and error-handling conventions. The `undefined` first argument marks this as a deploy-time script (not a `docker/crontab` job).
+- **Import ordering** — `@infrastructure/config/dotenv` and `@infrastructure/runtime/mongoose-boot` are imported before anything else so Mongoose schema defaults are applied at build time.
 
 ## Relationships
 
-- **`scripts/run-script.ts`** — Provides the `runScript` wrapper that manages process lifecycle and exit-code reporting; this file passes `undefined` as the schedule argument to mark itself as a one-shot setup step.
-- **`src/infrastructure/runtime/database.ts`** — Source of `startJob()` (DB connect) and `stopDatabase()` (teardown passed to `runScript`).
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Configures Mongoose global defaults before any schema is built.
-- **`src/infrastructure/config/dotenv.ts`** — Loads environment variables; must be the first import.
-- **`src/modules/access/index.ts`** — Exports `accessService`, whose `bootstrapAccess(name)` method performs the actual upsert.
-- **`src/infrastructure/adapters/logger.ts`** — Provides the structured `logger` used for the single info-level log line.
+- **`src/infrastructure/config/dotenv.ts`** — Loaded first; populates environment variables before any other module reads config.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Loaded second; sets Mongoose connection defaults that are captured at schema-definition time.
+- **`src/infrastructure/runtime/database.ts`** — Provides `startJob` (connect) and `stopDatabase` (disconnect) used by `main` and passed to `runScript`.
+- **`src/modules/access/index.ts`** — Exports `accessService`, whose `bootstrapAccess` method performs the actual upsert.
+- **`src/modules/access/services/index.ts`** — The service layer behind `accessService`; holds the `bootstrapAccess` implementation.
+- **`scripts/run-script.ts`** — Generic script runner; handles top-level error catching, process-exit-code, and graceful shutdown.
 
 ## Notes
 
-- The script is explicitly **idempotent** (upsert on a fixed key). This is what makes it production-safe without an env guard, in contrast to `scenarios/apply.ts` which is not.
-- **Preset roles are not stored** by this script; they are read from `shared/authorization-roles.yaml` at module import time.
-- The `eslint-disable` for `@typescript-eslint/no-floating-promises` is intentional: `runScript` never rejects; failures surface via `process.exitCode`.
-- The `void` before `runScript` is the type-level acknowledgment of that never-rejecting contract.
+- **No `NODE_ENV` guard** is present intentionally: the upsert is idempotent, so there is no destructive path to protect against. This is the explicit contrast with `scenario:apply`, which *does* guard against production.
+- **Preset roles are not created here.** They are read from `shared/rules/authorization-roles.yaml` at import time and are never persisted to the database.
+- **Eslint suppression** on the `void runScript(...)` line documents that `runScript` signals failure via `process.exitCode` rather than rejecting, so the floating promise is intentional.
+- The script is a **deploy-time one-shot**, not a scheduled job; the `undefined` argument to `runScript` encodes that distinction.

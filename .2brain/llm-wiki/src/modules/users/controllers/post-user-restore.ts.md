@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/post-user-restore.ts
-sha256: f19ec8339b1b1613036e493842a62a043e79c4ea32697ccaeaeb9bff8b88ab4c
-generated_at: 2026-11-08T08:44:38.133780+00:00
+sha256: 96b807b7ce06f38f041bfa4393818bedb22699135046ea57420bf354c9f16aec
+generated_at: 2026-11-14T22:20:53.434909+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `POST /users/:id/restore`, which undoes an admin soft delete of a user account. It delegates all domain logic to the user service and returns a 409 if the account is not in a deleted state.
+Controller for `POST /users/:id/restore`. Undoes an admin soft-delete of a user account, returning the restored user in its standard contract shape. Returns **409** if the account is not currently in a deleted state.
 
 ## Key elements
 
-- **`restoreUsers`** (exported) — The controller instance built by `createRestoreController`. Configures:
-  - `entity: 'user'` — identifies the resource type for the generic restore machinery.
-  - `restore(id, request)` — calls `userService.restoreById(id, callerContextOf(request))`; the service owns the `ADMIN_USER_RESTORED` audit emit.
-  - `present(user, request)` — serializes the restored user via `userService.toUserContract(user, caller)`, passing the caller identity for permission-aware field shaping.
-  - `notFoundKey: 'users.not-found'` — i18n key used for the 404 response.
+- **`restoreUsers`** (exported) — the route handler, built via `createRestoreController`. Configures:
+  - `entity: 'user'`
+  - `restore` — delegates to `userService.restoreById(id, callerContext)`
+  - `present` — serializes the restored user via `userService.toUserContract(user, caller)`
+  - `notFoundKey: 'users.not-found'`
+  - `basePath: '/users'`
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-restore-controller.ts`** — Provides the `createRestoreController` factory. This file supplies the entity-specific callbacks (`restore`, `present`) and receives a ready-to-mount route handler in return.
-- **`src/infrastructure/http/request.ts`** — Source of `callerContextOf`, used to extract the authenticated caller's identity from the incoming request for both the restore call and the serialization step.
-- **`src/modules/users/services/index.ts`** — Source of `userService`, which implements `restoreById` (domain logic + audit) and `toUserContract` (DTO mapping).
-- **`src/modules/users/routes.ts`** — Consumes the exported `restoreUsers` handler and mounts it at the `POST /users/:id/restore` route.
+- **`src/infrastructure/surfaces/create-restore-controller.ts`** — supplies the `createRestoreController` factory that assembles the HTTP handler (status codes, error shape, audit wiring) from the config object passed here.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, used to extract the authenticated caller's context from the incoming request and forward it to the service layer.
+- **`src/modules/users/services/index.ts`** — exports `userService`; this controller calls `userService.restoreById` (business logic + `ADMIN_USER_RESTORED` audit emit) and `userService.toUserContract` (domain→DTO mapping) on that service instance.
+- **`src/modules/users/routes.ts`** — imports `restoreUsers` and registers it as the handler for the `POST /users/:id/restore` route.
 
 ## Notes
 
-- This file contains no business logic or validation beyond what `createRestoreController` provides generically. All domain rules (e.g., "account must be deleted", audit emission) live in `userService.restoreById`.
-- The `present` callback receives the *caller's* identity, meaning the serialized response may differ depending on who is performing the restore (e.g., an admin sees different fields than a self-service restore would).
-- The 409-on-not-deleted behavior is implied by the module JSDoc; the actual check is enforced inside `userService.restoreById`.
+- The audit event (`ADMIN_USER_RESTORED`) is emitted inside the service layer, not in this controller. Keep audit logic in the service.
+- The 409 "not deleted" guard is handled by the `createRestoreController` factory (or the service), not by an explicit `if` in this file.
+- Caller identity is passed through to the service; this controller does no authorization checks itself.

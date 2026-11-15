@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/contract/api.contract.test.ts
-sha256: 4fbab4b35017cdea6eee1559528222a57732ff7f8ea27b20380a1bcb3068db46
-generated_at: 2026-11-08T07:02:23.779137+00:00
+sha256: aac62ce24846c0173bd7c2b8df8409f6168226a3968f3a91bc17a6bb641081ad
+generated_at: 2026-11-14T20:48:55.032651+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract (integration) tests for the `/orders` HTTP API. They exist because unit-level tests never crossed the HTTP boundary, so a shape mismatch between the implementation and `openapi.yaml` (e.g. `totalItems`/`totalQuantity`/`totalPrice` vs. a single `total`, or role-dependent response shapes on `GET /orders/{id}`) went undetected. This suite asserts actual HTTP responses against the published contract, covering list filters, scoped visibility, cancel authorization, and re-authentication.
+Contract tests for the `/orders` HTTP surface. This suite exists because no prior test exercised the API over HTTP: the list endpoint once returned `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` specified a single `total`, and `GET /orders/{id}` answered a different shape per caller role. Every test here asserts that the live response matches the published contract for each role.
 
 ## Key elements
 
-- **`seedOrderFor(user, status?)`** — creates a product and a two-quantity order for the given user; the standard fixture for most tests.
-- **`describe('GET /orders — the filters it now publishes')`** — asserts the `status` filter works, a moderator's `userId` filter is honoured (pinned to a scope-wildcard bug), batch `id` filter works, and a repeated scalar `userId` still returns 422.
-- **`describe('GET /orders')`** — validates contract shape for unrestricted and scoped callers; confirms a customer's `deleted=true` query returns an empty list (privacy guard); asserts the three-field total (`totalItems`, `totalQuantity`, `totalPrice`) and absence of a collapsed `total`.
-- **`describe('GET /orders/{id}')`** — asserts contract compliance for both the unscoped (admin) and scoped (user) code paths; parameterised 404-on-malformed-id test for each role.
-- **`describe('POST /orders/{id}/cancel')`** — covers owner cancel, admin cancel of another's order, peer-operator cancel, `REAUTH_REQUIRED` 401 for a stale admin session (with assertion that nothing was mutated), no re-auth prompt for the buyer's own stale-session cancel, and 404 (not 403) for a non-owner's order to avoid existence leakage.
+- **`seedOrderFor(user, status?)`** – module-level helper that creates a product, then an order with one line item (qty 2); optionally pins a status.
+- **`describe('GET /orders — the filters it now publishes')`** – verifies `status`, `userId`, and batch `id` query filters; confirms repeated `userId` still 422s (scalar, not array).
+- **`describe('GET /orders')`** – asserts list response shape per role (admin unrestricted, user scoped), that `deleted=true` is ignored for customers, that list items omit personal data (`email`, `shippingAddress`, `notes`, etc.), and that the single-order read retains `totalItems`/`totalQuantity`/`email`.
+- **`describe('GET /orders/{id}')`** – asserts both unscoped (admin) and scoped (user) paths match the contract; a parameterised case confirms a malformed id returns 404 (not 422) for each role.
+- **`describe('POST /orders/{id}/cancel')`** – covers owner cancel, admin cancel of another's order, operator cancelling a peer's order, and the reauth (401 `REAUTH_REQUIRED`) guard on stale operator sessions.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as a side-effect (`@tests/contract`); likely installs contract-validation middleware or global expect extensions.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the isolated test database before the suite runs.
-- **`tests/support/http.ts`** — provides `api` (HTTP client), `authenticateAs`, `authenticateAsRole`, and `loginBearer` used by every test.
-- **`tests/support/clock.ts`** — `freezeDate` / `advanceDate` drive the re-auth staleness tests.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` and `toOrderItem` build the order fixtures.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` supplies the line-item product.
-- **`src/modules/users/tests/factories.ts`** — `createUser` creates callers and peer accounts.
-- **`src/modules/orders/repository.ts`** — `orderRepository.updateStatusIfIn` is used to transition an order to `paid` (exercising the real transition path rather than a raw column write); `orderRepository.findById` verifies the cancel was a no-op after a re-auth 401.
-- **`src/modules/orders/model.ts`** — `orderModel` imported (available for schema-level assertions, if used in the truncated portion).
-- **`src/modules/orders/services/index.ts`** — `orderService` imported (available for service-level assertions, if used in the truncated portion).
-- **`src/types/index.ts`** — `OrderStatus` enum for type-safe status parameters.
-- **`src/kernel/config.ts`** — `reauthWindowSeconds('critical')` determines how far the clock must be advanced to make a session stale.
+| Neighbor | Interaction |
+|---|---|
+| `tests/support/contract.ts` | Side-effect import; registers contract matchers used implicitly by `api()` assertions. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the test database before the suite runs. |
+| `tests/support/http.ts` | Provides `api()`, `authenticateAs`, `authenticateAsRole`, `loginBearer` for making authenticated HTTP calls. |
+| `tests/support/clock.ts` | `freezeDate` / `advanceDate` control time for the reauth-window test. |
+| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` build order fixtures. |
+| `src/modules/products/tests/factories.ts` | `createProduct` supplies the line-item product. |
+| `src/modules/users/tests/factories.ts` | `createUser` mints accounts for role-specific scenarios. |
+| `src/modules/orders/model.ts` | `orderEventModel`, `orderModel` referenced for typing or assertion helpers. |
+| `src/modules/orders/repository.ts` | `orderRepository` imported for direct repository access in the status-filter test. |
+| `src/modules/orders/friends/payments.ts` | `markPaid` used to mark an order paid before the cancel/reauth tests. |
+| `src/infrastructure/persistence/create-repository.ts` | `toObjectId` for id conversion. |
+| `src/types/index.ts` | `OrderStatus` enum used in `seedOrderFor` and filter assertions. |
+| `src/kernel/config.ts` | `reauthWindowSeconds` sets the reauth threshold for the 401 test. |
 
 ## Notes
 
-- The file's module doc comment records *why* the suite was written (two specific undetected bugs). Treat it as a changelog entry, not just flavour.
-- `seedOrderFor` always creates a line item with quantity **2**, so `totalItems` is 1 while `totalQuantity` is 2 — the totals test relies on this distinction.
-- The re-auth tests call `jest.useRealTimers()` after `advanceDate`; any new test in that block that uses fake timers must also restore them, or later tests in the file will run on a frozen clock.
-- The moderator `userId`-filter test is a regression pin for a scope-wildcard permission bug; the comment explicitly says "asking for the wildcard alone silently dropped this filter." Do not simplify that test without understanding the permission model in `get-order.ts`.
-- `orderModel` and `orderService` are imported but not visibly exercised in the shown portion of the file; they may be used in the truncated tail.
+- Status transitions are reached through the repository rather than by writing the column directly; the comment explains that a status the application cannot naturally produce is not worth filtering on.
+- `id` is a **batch** filter (repeated `?id=` allowed); `userId` and `productId` are intentionally **scalar** — a repeated key must 422, not silently take the first value.
+- The `@tests/contract` import is side-effect-only (no named binding); it likely registers global expect matchers or serialises the OpenAPI spec for comparison.
+- The file's leading doc block documents the *origin* of the suite (two specific bugs it was created to pin) — useful context if someone questions why both `totalItems` and `total` shapes are asserted.
+- The reauth test uses `freezeDate()` and `reauthWindowSeconds` together; advancing the clock past that window is what triggers the 401.

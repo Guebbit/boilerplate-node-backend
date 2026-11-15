@@ -1,7 +1,7 @@
 ---
 source: jest.config.js
-sha256: 83a4ca18ff8fcabffccce3647708de20840d513da728fc3523d42492ed9f61f1
-generated_at: 2026-11-08T02:25:31.663485+00:00
+sha256: b38f2dfe530c1877aefd43e48ab468ad7c8d0571ce6633e84f9c43b1a788d388
+generated_at: 2026-11-14T17:13:30.927697+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Jest configuration for the **unit** test run and the **base** that the broker, cluster, and mutation configs extend. Written as a `.js` file (rather than `.json`) so settings can carry inline explanations and the file can perform small runtime logic (reading `.env`, resolving worker counts). Coverage is intentionally not measured here; mutation score is the project's test-quality metric.
+Base Jest configuration for the unit-test run. Every other jest config in the repo (broker, cluster, mutation) extends this file. It is a `.js` (not `.json`) so each setting can carry an inline explanation, and it is the single place that wires up transforms, path aliases, environment promotion, and worker sizing for the unit lane.
 
 ## Key elements
 
-- **`readEnvFile()`** — Reads the project `.env` via `node:util`'s `parseEnv` *without* merging into `process.env`, avoiding the side-effect of `process.loadEnvFile()` leaking values into jest workers before `tests/support/setup.ts` can adjust them.
-- **`envFileValues`** — Memoised result of `readEnvFile()`; consulted by every subsequent knob lookup so the file is read exactly once.
-- **`DEPTH_KNOBS`** — Allowlist of test-depth variables (`TEST_FUZZ_RUNS`, `TEST_PROPERTY_RUNS`, `TEST_PROPERTY_RUNS_DB`, `TEST_RACE_SIZE`) promoted from `.env` into `process.env` so they cross the jest-worker boundary. Deliberately an allowlist, never a wholesale merge.
-- **`DEFAULT_MAX_WORKERS` / `DEFAULT_WORKER_MEMORY_MB`** — Conservative fallbacks (2 workers, 1400 MB) used only when no npm script / `machine-budget.ts` has already set `--maxWorkers` / `--workerIdleMemoryLimit` on the CLI.
-- **`fromEnvironment(name, fallback)`** — Resolves a numeric setting from `process.env` first, then `.env`, falling back to the supplied default. Used for `JEST_WORKERS` and `JEST_WORKER_MEMORY_MB`.
-- **`maxWorkers`** — Resolved worker count; gates whether `workerIdleMemoryLimit` is set at all (undefined when `maxWorkers === 1` to prevent jest's in-band path from stalling).
-- **`module.exports`** — The full Jest config object: `ts-jest` preset, custom test environment, `testMatch`, `testPathIgnorePatterns`, `globalSetup`/`globalTeardown`, `setupFiles` / `setupFilesAfterEnv`, `transform` (ts-jest + a targeted babel-jest for ESM-only transitive deps), `transformIgnorePatterns`, and `moduleNameMapper` (path aliases + `puppeteer-core` stub).
+- **`readEnvFile` / `envFileValues`** – Reads the project `.env` via `node:util#parseEnv` without merging it into `process.env`. Memoised so the file is read exactly once regardless of how many knobs consult it.
+- **`DEPTH_KNOBS` loop** – Promotes four specific variables (`TEST_FUZZ_RUNS`, `TEST_PROPERTY_RUNS`, `TEST_PROPERTY_RUNS_DB`, `TEST_RACE_SIZE`) into `process.env` so they reach jest workers. Strictly an allowlist, never a wholesale merge.
+- **`fromEnvironment`** – Resolves a numeric setting from `process.env` first, then `.env`, then a fallback. Used for `JEST_WORKERS` and `JEST_WORKER_MEMORY_MB`.
+- **`maxWorkers` / `workerIdleMemoryLimit`** – `workerIdleMemoryLimit` is set only when `maxWorkers > 1`; a single-worker (in-band) run must leave it `undefined` or Jest misbehaves.
+- **`transform`** – `ts-jest` for `.ts/.tsx` (with `tsconfig.jest.json` and a suppressed diagnostic 151002); `babel-jest` with `@babel/plugin-transform-modules-commonjs` scoped to `.js` files to handle the two ESM-only transitive deps of `otplib` (`@scure/base`, `@noble/hashes`).
+- **`transformIgnorePatterns`** – Carves an exception in `node_modules` for `@scure`, `@noble`, `@mdit-vue`, `jose`, `openid-client`, `oauth4webapi`. The pattern is unanchored to handle nested/unhoisted copies.
+- **`moduleNameMapper`** – Maps `@api`, `@types`, `@tests`, `@app`, `@infrastructure`, `@kernel`, `@modules`, `@domain-primitives`, `@scenarios` to their source paths, and stubs `puppeteer-core` (ESM-only, v25).
+- **`setupFilesAfterEnv`** – Ordered: file-sandbox → environment-reset → fail-on-warning. Order matters (sandbox marks, reset then starts from that state).
+- **`testPathIgnorePatterns`** – Excludes `tests/cluster/` and `tests/broker/` (each has its own config), plus `tmp/` and `.claude/worktrees/`.
+- **`globalSetup` / `globalTeardown` / `setupFiles`** – Point to `tests/support/` scripts for harness bootstrap, teardown, and per-test-file setup (rate-limit raising, etc.).
+- **`testEnvironment`** – Custom `tests/support/test-environment.ts` that extends `node` and clears leftover timers (prevents a single-process Stryker dry-run from leaking the whole module graph).
 
 ## Relationships
 
-- **`jest.config.cluster.js`** — Extends this file; excludes `tests/cluster/` from this config's `testPathIgnorePatterns` because cluster tests spawn `src/cluster.ts` as a child process with their own Mongo/Redis. Runs no `globalSetup` of its own, which is why DEPTH_KNOBS promotion lives here rather than in `globalSetup`.
-- **`jest.config.broker.js`** — Extends this file; `tests/broker/` is ignored here because broker tests require a live RabbitMQ and no database.
-- **`jest.config.mutation.js`** — Extends this file; must drop `workerIdleMemoryLimit` when it narrows `maxWorkers` to 1 (the comment in this file calls out this coupling explicitly).
+- **`jest.config.broker.js`** – Extends this file. Tests under `tests/broker/` are excluded from this config via `testPathIgnorePatterns`; the broker config provides its own RabbitMQ connection and omits the database setup defined here.
+- **`jest.config.cluster.js`** – Extends this file. Tests under `tests/cluster/` are excluded here; the cluster lane boots its own Mongo and Redis and runs no `globalSetup` (which is why DEPTH_KNOBS are promoted at config-load time rather than in `globalSetup`).
+- **`jest.config.mutation.js`** – Extends this file. When it narrows `maxWorkers` it must also drop `workerIdleMemoryLimit` to `undefined` (in-band path), per the comment in this file.
 
 ## Notes
 
-- **`workerIdleMemoryLimit` is conditional.** It is set to `undefined` when `maxWorkers === 1`. Any config that spreads this file and then lowers `maxWorkers` to 1 **must** also unset this key, or jest takes the implicit in-band path and can hang (observed: 87-minute silent run).
-- **`.env` is read, never merged.** The only values that reach `process.env` are the four `DEPTH_KNOBS` and the two worker knobs, and only via `??=` (real environment variables always win).
-- **`transformIgnorePatterns` is deliberately unanchored.** The regex checks whether `@scure`, `@noble`, `jose`, `oauth4webapi`, or `openid-client` appears *anywhere* past `node_modules/`, because `@noble/hashes` can be nested in an unhoisted copy.
-- **`puppeteer-core` is stubbed**, not transformed — v25 is ESM-only and jest's CJS runtime cannot parse it; the stub at `tests/support/puppeteer-core.stub.ts` replaces it wholesale.
-- **`cacheDirectory` is under `node_modules/.cache/jest`** so multiple lane slots (symlinked `node_modules`) share the transform cache; entries are keyed by absolute path to avoid collisions.
-- **`testEnvironment` is a custom TS file** (`tests/support/test-environment.ts`) that additionally clears leftover timers, preventing the entire module graph from staying alive in single-process runs (e.g., Stryker dry runs).
+- This file is **CommonJS** (`require`/`module.exports`) and therefore cannot import the ESM module `scripts/testing/machine-budget.ts`. The "real" worker sizing for `npm test` is passed on the CLI by `scripts/testing/run-suite.ts` and overrides everything here. The defaults in this file (`2` workers, `1400 MB`) are deliberately small fallbacks for ad-hoc runs (`npx jest --onlyChanged`, IDE gutter, single file).
+- `workerIdleMemoryLimit` must be **above** a worker's steady-state baseline; setting it lower causes Jest to recycle every worker after each file, which is slower than the memory it saves.
+- The `.env` is read with `parseEnv` deliberately, **not** `process.loadEnvFile()`, because the latter merges into `process.env` and would hand real rate limits to workers before `tests/support/setup.ts` can raise them—causing 429s in concurrency suites.
+- `clearMocks: true` is set globally; individual tests that need a mock to persist must re-establish it.
+- The `transformIgnorePatterns` regex is intentionally unanchored (`.*?:`) because `@noble/hashes` can land in a nested unhoisted copy under its parent package.

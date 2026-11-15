@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/backorder.test.ts
-sha256: 673a49e178755e5bcb670291298df9606a3cadd030cc2feccdb63d12ac1c5a8f
-generated_at: 2026-11-08T07:50:35.156398+00:00
+sha256: 2e8fb479af1c5452914088be38c31f5a5cc626df7a83ec2be1acfea7297d5b15
+generated_at: 2026-11-14T21:30:41.857812+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that exercise the backorder feature over HTTP: verifying the `allowBackorder` switch and `restockDate` can be set, cleared, and read back; that the derived `backorder` flag (never stored) reflects the correct combination of stock, date, and cap; that the restock date is bounded to one year ahead; and that the `product.restock_date_changed` and `product.buyable_again` outbox events fire with correct payloads and only on meaningful transitions.
+Integration tests for the product backorder feature over HTTP. Verifies that `allowBackorder` and `restockDate` round-trip through GET and PATCH, that the derived `backorder` flag is computed correctly (never persisted), that restock dates are bounded to one year ahead, that a passed date makes the product read sold out, and that the correct outbox events (`product.restock_date_changed`, `product.buyable_again`) are emitted with the right payloads and cardinality.
 
 ## Key elements
 
-- **`inDays(days)`** — converts a day offset from now into the `YYYY-MM-DD` shop-day string a client would send.
-- **`stored(day)`** — converts a shop-day string into the ISO instant (shop midnight) that the factory and outbox payloads use.
-- **`backorderProduct(overrides?)`** — creates a product with `onHand: 0`, `allowBackorder: true`, then writes `backorderLimit: 5, backordered: 0` directly via `productModel.updateOne` (simulating inventory sync).
-- **`announced()`** — reads all `PRODUCT_RESTOCK_DATE_CHANGED` outbox rows in insertion order and returns their payloads.
-- **`fired(id)`** — counts `PRODUCT_BUYABLE_AGAIN` outbox rows for a given product.
-- **`idOf(product)`** — stringifies a document's `_id`.
-- **`describe('GET /products/:id')`** — five cases covering: backorder flag + restock date on a released product; no flag when switch is off; sold-out read once restock date passes; preorder vs. backorder distinction before release; cap-full closes the backorder.
-- **`describe('PATCH /products/:id')`** — set/clear restockDate round-trip; 422 rejection for >1-year-ahead date (nothing written); past date accepted but product reads sold-out.
-- **`describe('PATCH /products/:id restockDate announcements')`** — outbox payloads for set → move → clear sequence; no event when the same date is saved again.
-- **`describe('product.buyable_again')`** — event fires exactly once per transition to buyable (stock sync and edit-triggered transitions), not on repeated or unrelated changes.
+- **`inDays(days)`** — returns a `YYYY-MM-DD` shop-day string offset from today.
+- **`stored(day)`** — converts a shop-day string to the ISO instant the factory expects.
+- **`backorderProduct(overrides?)`** — creates a product with `onHand: 0`, `allowBackorder: true`, then directly sets `backorderLimit: 5` / `backordered: 0` via the model.
+- **`announced()`** — reads all `PRODUCT_RESTOCK_DATE_CHANGED` outbox rows in insertion order, returning their payloads.
+- **`fired(id)`** — counts `PRODUCT_BUYABLE_AGAIN` outbox rows for a given product id.
+- **`describe('GET /products/:id')`** — five cases covering: backorder flag + restock date echo, product without the flag, passed restock date → sold out, preorder vs. backorder distinction, and cap-full → backorder closes.
+- **`describe('PATCH /products/:id')`** — editor-authenticated writes: set/clear restock date, 422 on >1-year date, past-date acceptance.
+- **`describe('PATCH … restockDate announcements')`** — verifies outbox event sequence for set → move → clear, and no-op on unchanged value.
+- **`describe('product.buyable_again')`** — verifies stock-synchronization fires the event exactly once per sold-out→orderable transition, and that PATCH edits (enable backorder, unhide, fix a passed date) each fire it once.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — provides `api()` (Supertest-style HTTP client) and `authenticateAsRole('editor')` for all request calls.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to initialise and isolate the test database.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds product documents with the given overrides.
-- **`src/modules/products/model.ts`** — `productModel` is used for direct `$set` updates (simulating inventory sync) and for asserting DB state after a rejected write.
-- **`src/modules/products/services/index.ts`** — `productService.syncStockCache` drives the stock-change path that triggers `product.buyable_again`.
-- **`src/modules/products/events.ts`** — provides the `PRODUCT_RESTOCK_DATE_CHANGED` and `PRODUCT_BUYABLE_AGAIN` event name constants used to query the outbox.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` is the Mongoose model queried to verify which events were written and their payloads.
-- **`src/modules/shop/index.ts`** — `shopDayOf` and `startOfShopDay` supply the shop-local date arithmetic the helpers rely on.
+- **`tests/support/http.ts`** — source of `api()` (Supertest-style HTTP client) and `authenticateAsRole()` for editor tokens.
+- **`tests/support/setup-test-db.ts`** — called once at module top to isolate each test against a clean database.
+- **`src/modules/products/tests/factories.ts`** — provides `createProduct()` for building fixture products.
+- **`src/kernel/outbox.ts`** — provides `outboxEventModel` used to assert event emission.
+- **`src/modules/shop/index.ts`** — re-exports `shopDayOf` and `startOfShopDay`, used for date math in helpers.
+- **`src/modules/products/model.ts`** — provides `productModel` for direct Mongo reads/writes (bypassing services) in setup and assertions.
+- **`src/modules/products/services/index.ts`** — provides `productService`, used to trigger stock-synchronization in the `buyable_again` tests.
+- **`src/modules/products/events.ts`** — provides the `PRODUCT_RESTOCK_DATE_CHANGED` and `PRODUCT_BUYABLE_AGAIN` name constants.
 
 ## Notes
 
-- `backorder` is **derived at read time** and never persisted; the tests confirm this by asserting it flips to `false` when the date passes or the cap fills, without any write.
-- `backorderProduct` writes `backorderLimit` / `backordered` **directly on the model** (bypassing the API) because those fields are managed by the inventory sync job, not by product edits.
-- A past `restockDate` is a **valid input** (200 OK) — the product simply reads as sold-out. Only a date **more than one year in the future** is rejected (422).
-- The `product.buyable_again` test calls `syncStockCache` four times in sequence to prove the event fires only on the *transition* into buyable state (twice: 0→4 and 0-reserved→4-free), not on every sync.
-- The `announced()` helper relies on `_id` insertion order as a substitute for an explicit timestamp; this is correct under the outbox append-only contract.
+- `backorder` is a **derived** response field; tests assert it in the JSON body but never write it to the DB. The `backorderProduct` helper writes `backorderLimit` directly via `productModel.updateOne` to simulate inventory-sync state.
+- Date validation is tested at the HTTP boundary (422 on 400-day date) rather than by inspecting a service-layer error type.
+- The `fired()` helper confirms **at-most-once** semantics: repeated stock-synchronization calls while the product is already orderable do not re-emit `PRODUCT_BUYABLE_AGAIN`.
+- All PATCH tests use the `editor` role; no tests exercise the unauthenticated path for writes.

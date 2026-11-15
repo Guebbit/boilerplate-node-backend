@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/read.ts
-sha256: c7e8acfa21acf363d81599eefc6347555b877d173667410e06f75fcdfdfb9684
-generated_at: 2026-11-08T08:51:04.549112+00:00
+sha256: ffa13a9ebf2f24c077889929dd48b08c1df071ca9fb2365e43c9893660cc0a48
+generated_at: 2026-11-14T22:30:31.536703+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-facing read operations for the user domain: searching, single-document fetches, batch/single resolution of a user's live role + permitted actions into the public `User` contract, and a helper to collect eligible staff contacts for outbound notifications. It sits between the repository (raw documents) and the API layer (serialisable DTOs), adding the role/action logic that a raw `UserDocument` lacks.
+Admin-facing read operations for the user module: searching, fetching by ID or email, and projecting already-loaded user documents into the outward contract shapes (`User`, `UserListItem`, `StaffContact`). It sits between the repository (raw documents) and the HTTP layer (serialised responses), adding role resolution, permission-aware actions, and pagination.
 
 ## Key elements
 
-- **`search(filters?)`** — Searches users via `userRepository.search`, injecting a dynamic MongoDB scope for the temporal `purchaseHold` filter. Returns `{ items: UserWire[], meta: PaginatedMeta }`.
-- **`getById(id?)`** — Fetches a single `UserDocument` by id; resolves to `undefined` when id is falsy or not found.
-- **`findByEmail(email)`** — Looks up a user by email *with credentials included* (bypasses the usual `select: false`). Used by reset/setup flows that immediately attach a token.
-- **`staffContacts(ids)`** — Narrows a list of account ids to live, enabled, authenticator-armed staff members, returning `{ id, email, locale }[]` with a locale fallback via `getDefaultLocale()`.
-- **`toUserContract(user, caller)`** — Resolves a single already-loaded `UserDocument`'s current role (via `accessService.rolesOf`) and staff status, then delegates to `presentUser` with `userActionsFor` to produce the public `User` shape.
-- **`toUserContracts(rows, caller)`** — Batch counterpart: resolves roles for all ids in **one** `rolesOfMany` query and staff membership in **one** `staffHoldersAmong` query, then maps each `UserWire` row through `presentUser`.
-- **`StaffContact`** — Exported interface: `{ id, email, locale }` for notification targets.
-- **`searchScopeOf`** *(internal)* — Builds the MongoDB scope object from `purchaseHold` / `purchaseHoldReview` filters; returns `undefined` when neither is set.
+- **`search(filters)`** — Returns a page of `UserWire` rows plus `PaginatedMeta`. Delegates to `userRepository.search`, passing a computed scope for the time-sensitive `purchaseHold` filter.
+- **`getById(id?)`** — Single-document fetch by ID; resolves `undefined` when the id is absent.
+- **`findByEmail(email)`** — Looks up a user by email, deliberately including credential fields so callers (reset/setup flows) can attach a token immediately.
+- **`staffContacts(ids)`** — Narrows a list of account IDs to staff who are live, enabled, and have an authenticator armed; returns `{ id, email, locale }` tuples.
+- **`toUserContract(user, caller)`** — Projects one loaded `UserDocument` into the full `User` contract: resolves current roles via `accessService`, computes `userActionsFor`, and hands both to `presentUser`.
+- **`toUserListItems(rows, caller)`** — Batch-projects a page of `UserWire` rows into `UserListItem` shapes using two bulk queries (`rolesOfMany`, `staffHoldersAmong`) instead of per-row lookups.
+- **`StaffContact`** (interface) — Minimal contact record (id, email, locale) consumed by notification/digest services.
+- **`searchScopeOf`** (private) — Builds the MongoDB scope object for `purchaseHold` (date comparison) and `purchaseHoldReview` (flag existence) filters.
 
 ## Relationships
 
-- **`../repository`** (`userRepository`) — All data access (search, findById, findStaffContacts, findOneWithCredentials) delegates here.
-- **`../presenter`** (`presentUser`) — Shaping raw documents into the public `User`/`UserWire` contract.
-- **`../model`** — Type definitions `UserDocument`, `UserWire` consumed throughout.
-- **`./actions`** (`userActionsFor`) — Computes the per-caller action list passed into the presenter.
-- **`@modules/access`** (`accessService`) — Role resolution (`rolesOf`, `rolesOfMany`) and staff-membership check (`staffHoldersAmong`).
-- **`@kernel/access/tenant`** (`DEPLOYMENT_TENANT_ID`) — Tenant scoping for every `accessService` call.
-- **`@infrastructure/i18n`** (`getDefaultLocale`) — Locale fallback in `staffContacts`.
-- **`@infrastructure/persistence/search`** — `PaginatedMeta` type for the search response.
-- **`@types`** — `Caller`, `SearchUsersRequest`, `User` type imports.
-- **`./index`** — This module's exports are re-exported through the users services barrel.
+- **`src/modules/users/repository.ts`** — All data access (`search`, `findById`, `findOneWithCredentials`, `findStaffContacts`) goes through `userRepository`.
+- **`src/modules/access/index.ts`** — `accessService` (imported from this barrel) provides `rolesOf`, `rolesOfMany`, and `staffHoldersAmong` used by the projection functions.
+- **`src/kernel/access/tenant.ts`** — Supplies `DEPLOYMENT_TENANT_ID`, the tenant scope passed to every `accessService` call.
+- **`src/modules/users/presenter.ts`** — `presentUser` and `presentUserListItem` turn documents + roles + actions into the final wire shapes.
+- **`src/modules/users/services/actions.ts`** — `userActionsFor` computes the per-caller permission flags embedded in each projected row.
+- **`src/modules/users/model.ts`** — Source of the `UserDocument` and `UserWire` type contracts.
+- **`src/infrastructure/persistence/search.ts`** — Provides the `PaginatedMeta` type for the search response.
+- **`src/infrastructure/i18n/index.ts`** — `getDefaultLocale` fallback in `staffContacts`.
+- **`src/modules/notifications/services/staff.ts`** — Downstream consumer of `StaffContact` for routing notices.
+- **`src/types/auth-context.ts`** — Source of the `Caller` type used in every projection function's signature.
 
 ## Notes
 
-- `purchaseHold: true` is a **temporal** question (`until > now`), so it cannot be a plain column filter; it is injected as a scope argument to the repository search. `purchaseHoldReview` is a simple existence check and combines additively.
-- `active` is an ordinary searchable boolean column (handled by the repository's `searchable.booleans`) and is **independent** of `deletedAt`.
-- `findByEmail` deliberately includes credential fields because callers immediately `push` a token onto the document; a `select: false` projection would leave the field `undefined`.
-- `staffContacts` **silently drops** ineligible users (no error, no partial result) — the caller must treat the returned list as the complete set of reachable staff.
-- `toUserContracts` avoids N+1 by batching into exactly two additional queries regardless of page size.
+- `purchaseHold: true` is a *point-in-time* question (is the hold still active?), so it is expressed as a scope with `$gt: new Date()` rather than a stored-column filter. `purchaseHoldReview: true` is orthogonal — it asks whether the flag was ever set, regardless of the hold's expiry. The two combine via AND when both are present.
+- `findByEmail` intentionally bypasses the repository's `select: false` credential exclusion. If callers start stripping credentials upstream, the token-push pattern in reset/setup flows will break silently.
+- `toUserListItems` expects pre-loaded `UserWire` rows (the lean shape from `search`). Passing a full `UserDocument` will type-check but is unnecessary and carries extra fields into the presenter.
+- `staffContacts` drops ineligible users silently (no error, no log). Callers that need to know *why* someone was excluded must inspect the document fields themselves.

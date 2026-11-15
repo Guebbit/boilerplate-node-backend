@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/update.ts
-sha256: 62643acb52b705f34918f3f26350132eba2b6ceb8e3ab74e5a4bdae7c99c1ae6
-generated_at: 2026-11-08T08:52:35.345192+00:00
+sha256: f3bda8bc4a593df1f16608f42f3470a852153c80faee356e0420de5c3ef3ba12
+generated_at: 2026-11-14T22:32:27.268877+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-side user update service. Assigns field changes (username, phone, website, image, locale, consent) onto a loaded user document, optionally grants or revokes a staff role, writes an audit row, emits a GDPR Art. 19 rectification event, and commits everything in a single transaction. Returns a `ResponseSuccess` / `ResponseReject` envelope rather than throwing.
+Admin-side user update service: assigns requested fields onto a loaded `UserDocument`, saves it inside a database transaction (atomically with any caller-supplied `SaveHook`), cleans up a replaced avatar image, and enqueues a GDPR rectification event only when a personal-data field actually changed. It also exposes the public `updateById` entry point that wraps the core `update` with a staff-role check and an admin audit row.
 
 ## Key elements
 
-- **`update`** (exported, `@internal`) — Main entry point. Reads the "before" state, mutates the document, resolves the role change, and delegates to `saveWithRole`. Typed off `UpdateUserByIdRequest` so new contract fields reach the write automatically.
-- **`rectifiedFields`** — Compares the incoming change-set against the stored document *before* mutation and returns the list of fields that actually moved. Handles the encrypted-phone comparison by decrypting in plaintext.
-- **`announcing`** — Wraps the caller's optional `SaveHook` with a `USER_PROFILE_CHANGED` outbox enqueue, so the rectification event commits with the document or not at all.
-- **`SaveHook`** (exported type) — `(session: ClientSession) => Promise<unknown>`; a write that joins the update's transaction (e.g. `account` writing its own outbox row).
-- **`RoleChange`** (internal type) — `{ grant: string } | { revoke: string } | undefined`.
-- **`changedRole`** — Resolves the request's `role` field against the held membership (via `accessService.rolesOf`) and returns the actual change, filtering out no-op re-grants.
-- **`roleChangeRequested`** (exported) — Route-level guard: given an id and raw `role` value, returns whether a real role change is pending. Used *before* the controller to decide if the caller owes a fresh login.
-- **`writeRole`** — Executes the membership write (`assignRole` or `revokeRole`) inside the caller's transaction.
-- **`saveWithRole`** — The write half: document save + membership write + audit row, all within `withTransaction`.
+- **`update`** *(internal)* — Core write. Assigns `username`, `imageUrl`, `locale`, `phone` (PII-encrypted), `website`, and optionally `analyticsConsent` onto the document; then delegates to `saveThenClean`. Returns a `ResponseSuccess | ResponseReject` envelope (never throws).
+- **`updateById`** *(public)* — Loads the document via `withClearedAccount` (staff-role gate), then calls `applyUpdate`, which records an admin audit row on success.
+- **`SaveHook`** *(exported type)* — `(session: ClientSession) => Promise<unknown>`; a write that joins the update's transaction so it commits or rolls back atomically.
+- **`rectifiedFields`** *(private)* — Compares incoming vs. stored values (decrypting phone first) and returns the list of `UserChangedField`s that genuinely moved. Must be called *before* assignment.
+- **`announcing`** *(private)* — Wraps the caller's `SaveHook` with an outbox row for `USER_PROFILE_CHANGED` when `rectifiedFields` is non-empty, so the event commits in the same transaction.
+- **`saveInTransaction`** *(private)* — Runs `userRepository.save` inside `withTransaction`, calling `rearmPrecondition` on each attempt for optimistic-concurrency retry.
+- **`saveThenClean`** *(private)* — After a successful commit, removes the old avatar via `imageStore.remove`, then calls `enqueueIfPending` (deferred image upload) and wraps the result in `generateSuccess`.
+- **`applyUpdate`** *(private)* — Captures audit metadata via `userAuditChanges` *before* `update` mutates the document, then records the audit row on success.
 
 ## Relationships
 
-- **`@infrastructure/security/pii-encryption`** — Encrypts the phone on write (`encryptPii` with `phoneAad`); decrypts for the before/after comparison in `rectifiedFields`.
-- **`@infrastructure/adapters/image-store`** — `applyImageWriteback` captures the old image URL so the save can delete the old file + thumbnail after the new one is durable.
-- **`@infrastructure/persistence/changes`** — `clearedOrValue` normalises `null` vs. value for nullable string fields (locale, website).
-- **`@infrastructure/persistence/versioning`** — `rearmPrecondition` re-arms the optimistic-lock token after save.
-- **`@infrastructure/runtime/database`** — `withTransaction` provides the `ClientSession` that all writes (document, role, audit, outbox) join atomically.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit row inside the transaction.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the return envelope.
-- **`@kernel/outbox`** — `enqueueOutboxEvent` writes the `USER_PROFILE_CHANGED` row in-transaction; `nudgeOutbox` (post-commit) wakes the relay.
-- **`@kernel/access/tenant`** — `DEPLOYMENT_TENANT_ID` scopes all role lookups and writes.
-- **`@modules/access`** (`accessService`) — `rolesOf` reads the held tenant role; `assignRole` / `revokeRole` write the membership. The caller's `permissions` are passed as the granter check.
-- **`@modules/users/audit`** — `usersAuditActions` supplies the action identifier for the audit row.
-- **`@modules/users/events`** — `USER_PROFILE_CHANGED` event name and `UserChangedField` union type for the outbox payload.
+- **`src/infrastructure/adapters/image-store.ts`** — `applyImageWriteback` assigns the new image URL and returns the old one; the exported `imageStore` is used post-commit to delete the replaced file and thumbnail.
+- **`src/infrastructure/http/response.ts`** — All return values are `ResponseSuccess<UserDocument>` or `ResponseReject`; `generateSuccess` wraps the final envelope.
+- **`src/infrastructure/security/pii-encryption.ts`** — `encryptPii` / `decryptPii` (with `phoneAad` as AAD) protect the `phone` field on write and enable plaintext comparison in `rectifiedFields`.
+- **`src/infrastructure/persistence/changes.ts`** — `clearedOrValue` maps `null` → `$unset` for `locale` and `website`.
+- **`src/infrastructure/persistence/versioning.ts`** — `rearmPrecondition` re-checks the caller's `If-Match` header on each transaction retry.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` provides the `ClientSession` and retry loop.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the admin audit row after a successful save.
+- **`src/kernel/outbox.ts`** — `enqueueOutboxEvent` writes the `USER_PROFILE_CHANGED` row inside the transaction; `nudgeOutbox` triggers the relay after commit.
+- **`src/modules/users/model.ts`** — `UserDocument` type and `phoneAad` (AEAD associated-data helper).
+- **`src/modules/users/repository.ts`** — `userRepository.save` performs the actual Mongoose write.
+- **`src/modules/users/audit.ts`** — Provides the `ADMIN_USER_UPDATED` action constant for the audit row.
+- **`src/modules/users/events.ts`** — `USER_PROFILE_CHANGED` event name and `UserChangedField` union type.
+- **`src/modules/users/services/image.ts`** — `enqueueIfPending` queues a deferred image upload if the avatar field is set.
+- **`src/modules/users/services/audit-changes.ts`** — `userAuditChanges` snapshots which fields differ for the audit metadata.
+- **`src/modules/users/services/cleared-account.ts`** — `withClearedAccount` enforces the staff-role protection and loads the document.
 
 ## Notes
 
-- `update` is deliberately `@internal`; it sits beneath `updateById` (which checks staff-role permissions first) and `updateOwnProfile`. Calling it directly skips the privilege check.
-- `analyticsConsent` is **not** on the admin `UpdateUserByIdRequest` contract. It rides in via the `account` module's `updateProfile` caller and is intentionally excluded from the admin surface — consent belongs to the data subject.
-- The phone field is stored with a random IV, so two identical numbers never match byte-for-byte. `rectifiedFields` decrypts before comparing; calling it *after* assignment would be a bug.
-- `role` is not a column on the user document. It is a separate membership record written by `writeRole` in the same transaction.
-- `nudgeOutbox` fires **after** the transaction commits, never inside it — the relay must read durable rows.
-- `roleChangeRequested` and `changedRole` share the same `roleDiffers` comparison so the route-level guard and the in-service logic cannot disagree.
+- **`update` is intentionally `@internal`.** A sibling service could bypass the staff-role check by calling it directly; always go through `updateById` (admin) or the self-service path.
+- **`analyticsConsent` is deliberately absent from `UpdateUserByIdRequest`.** Consent is a data-subject self-service field; it rides along via the single caller (`account`'s `updateProfile`) through the widened parameter type.
+- **Phone comparison requires decryption.** The stored value uses a random IV, so two identical plaintexts never match as ciphertext. `rectifiedFields` decrypts before comparing.
+- **Order matters:** `rectifiedFields` and `userAuditChanges` must be called *before* any field is assigned onto the document; `applyImageWriteback` captures the old URL before overwriting.
+- **Image cleanup is post-commit.** `imageStore.remove` runs only after the transaction succeeds, so a rollback leaves the old file intact.
+- **`nudgeOutbox` fires after commit**, not inside the transaction, because the relay reads durable rows.
+- **`rearmPrecondition` inside the transaction callback** ensures each retry attempt re-validates the caller's `If-Match` against the current row, not the first attempt's already-consumed token.

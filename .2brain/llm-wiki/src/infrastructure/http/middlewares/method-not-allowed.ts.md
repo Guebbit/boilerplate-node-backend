@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/method-not-allowed.ts
-sha256: 6f4cda157a98116e948ef1be7e54eb1c58bd4355cd46e12a2ba32d46809af66d
-generated_at: 2026-11-08T03:31:37.164253+00:00
+sha256: 42536a4dcb68cdd13b62a74cdba878b05aef056f3b6bde8146e395664b224db3
+generated_at: 2026-11-14T18:02:45.523681+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware that returns **405 + `Allow`** (per RFC 9110 §15.5.6) when a request targets a path the API contract defines but with a method that path does not support. It prevents these requests from falling through to the catch-all 404, which would be semantically wrong.
+Implements two Express middlewares that enforce HTTP method semantics before or around the routers: a **405 guard** that answers `405 + Allow` (RFC 9110 §15.5.6) when a request hits a known path with a method the contract does not declare, and an **OPTIONS handler** that answers `204 + Allow` (plus `Accept-Patch` when PATCH is available) for every `OPTIONS` request before any router runs. Both derive the allowed-method set from the generated path table and the set of modules this build actually serves.
 
 ## Key elements
 
-- **`methodNotAllowed(routes, served, literalOnly?)`** – exported factory that returns an Express `RequestHandler`. Accepts the generated path table (`OperationRoute[]`), the set of module names this build actually mounts, and an optional `literalOnly` flag. The returned handler either calls `next()` or responds 405 with an `Allow` header.
-- **`allowedMethods(routes, served, path, literalOnly)`** – internal helper that computes the sorted set of HTTP methods a given path template permits, filtered to served modules only. Automatically adds `HEAD` when `GET` is present (Express routes HEAD through the GET handler).
+- **`allowedMethods`** (private) — Given the route table, the served-module set, a request path, and a `literalOnly` flag, returns the sorted list of methods that path supports. Adds `HEAD` whenever `GET` is present and `OPTIONS` whenever any method exists. Returns `[]` when no served path matches.
+- **`methodNotAllowed`** (exported) — Factory returning a `RequestHandler`. Accepts `routes`, `served`, and `literalOnly` (default `false`). Passes through when the path is unknown, the method is `OPTIONS`, or the method is allowed; otherwise sets the `Allow` header and calls `rejectResponse(response, 405)`.
+- **`answerOptions`** (exported) — Factory returning a `RequestHandler` for `OPTIONS` only. Computes allowed methods (preferring literal templates), sets `Allow` and optionally `Accept-Patch`, and responds `204`. Falls back to a 404 problem when no served module owns the path and the request is neither `OPTIONS *` nor a CORS preflight.
+- **`withoutTrailingSlash`** (private) — Strips a single trailing slash; root `/` is unchanged.
+- **`patchTypes`** (private) — Looks up the PATCH row for a path via `declaredOperation` and returns its declared media types (empty array when absent).
 
 ## Relationships
 
-- **`src/app/routes.ts`** – caller. Mounts `methodNotAllowed` twice: once with `literalOnly: true` before the parameterised routers (so `DELETE /products/facets` is judged before it could match `/products/{id}`), and once with the default `literalOnly: false` immediately before the 404 catch-all for all remaining requests.
-- **`src/infrastructure/http/response.ts`** – provides `rejectResponse`, which this middleware calls to send the 405 body.
-- **`tests/unit/infrastructure/http/middlewares/method-not-allowed.test.ts`** – unit tests for the guard's method matching, `Allow` header construction, and pass-through conditions.
+- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse`, used to send the 405 and the 404 problem body.
+- **`src/infrastructure/http/middlewares/content-type.ts`** — Imports `declaredOperation`, used by `patchTypes` to read the same PATCH row the 415 guard uses.
+- **`src/app/routes.ts`** — The consumer that mounts both middlewares: `methodNotAllowed` twice (once with `literalOnly=true` before the routers, once with `literalOnly=false` before the 404 catch-all) and `answerOptions` right after `cors`.
+- **`src/app/security.ts`** — Part of the broader middleware chain ordering; sits in the same security/contract-enforcement layer.
+- **`tests/unit/infrastructure/http/middlewares/method-not-allowed.test.ts`** — Unit tests covering both exports.
 
 ## Notes
 
-- **`OPTIONS` is never rejected.** The CORS preflight layer answers before any route runs, and a bare `OPTIONS` is not treated as a contract omission.
-- **Trailing-slash normalisation:** the handler strips a single trailing slash from `request.path` before matching, but only when the path is longer than one character (so `/` is left as-is).
-- **`literalOnly` matters for ordering.** When `true`, only templates with `parameterCount === 0` are considered, ensuring a literal path like `/products/facets` is judged before it could be shadowed by `/products/{id}`.
-- **Undelivered modules stay 404.** If a path belongs to a module not in the `served` set, `allowedMethods` returns an empty array and the middleware calls `next()`, letting the 404 fire.
-- **`OperationRoute` comes from `@api/operation-routes`** (a generated path table), not hand-written. The `module` field on each route is nullable (`null` means framework-level).
+- **Two mount points, different scope.** The `literalOnly` flag controls whether templated paths (`/products/{id}`) are considered. The pre-router mount uses `literalOnly=true` so `DELETE /products/facets` does not accidentally match `/products/{id}`. The pre-404 mount uses `literalOnly=false` to cover everything else.
+- **OPTIONS is exempt from the 405 guard.** `methodNotAllowed` passes `OPTIONS` through unconditionally; `answerOptions` is the sole authority on that method.
+- **Unserved modules stay 404.** A path whose owning module is not in the `served` set produces an empty allowed list, so the guard calls `next()` and the 404 catch-all handles it.
+- **204 has no `Content-Length`.** The `answerOptions` handler calls `response.status(204).end()` deliberately (RFC 9110 §8.6).
+- **Trailing-slash normalisation** is applied inline in both handlers; the root path `/` is special-cased to avoid becoming an empty string.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/stock-alerts/service.ts
-sha256: 9378fc443774b137cfd8386275cb9e9c672ed8a8280ad7a11d64ab38dc6465ab
-generated_at: 2026-11-08T08:30:00.636341+00:00
+sha256: 17fd076242b96fceb2aeeadb7d0c48698fbae75f068be125ab84f42c96433bb8
+generated_at: 2026-11-14T22:04:34.062285+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Core service for back-in-stock alerts. It manages the full lifecycle of a "notify me" request — create, cancel, list, and delete — and handles the "buyable again" signal by sending exactly one email and one inbox row per waiting request, then deleting the request. The click on "Notify me" is the buyer's sole consent for that single mail; nothing else is ever sent on that request.
+Service layer for the back-in-stock (stock-alerts) feature. It exposes the buyer-facing operations (ask, cancel, list, export, hard-delete) and the "buyable again" reaction that answers every pending request with exactly one email and one inbox row, then deletes the request. The single click on "Notify me" is the buyer's sole consent for that one notification; no further mail is ever sent on the same request.
 
 ## Key elements
 
-- **`stockAlertService`** (export) — the single module handle bundling all public operations.
-- **`list(userId)`** — fetches the user's alerts (newest first) and shapes them via `presentStockAlerts`.
-- **`ask(userId, productId)`** — creates a request. Rejects 404 if product is missing, 409 if the product is already buyable. Idempotent: asking twice is the same request.
-- **`cancel(userId, productId)`** — removes the caller's request; 404 if none exists.
-- **`exportRows(userId)`** — returns raw items for personal-data export.
-- **`removeByUserId(userId, session)`** — cascading delete inside a hard-delete transaction.
-- **`removeByProductId(productId)`** — cascading delete when a product leaves the catalogue.
-- **`titleFor(titles, locale)`** — resolves a product title with locale → default-locale → any-key fallback.
-- **`answerOne(alert, titles)`** — deletes the request and emits the `STOCK_ALERT_SENT` inbox event in one transaction, then mails the buyer. The successful delete is the idempotency guard.
-- **`mailBuyer(userId, productId, titles)`** — resolves the user, skips locked/erased accounts, builds the email via `backInStockEmail`, and calls `enqueueEmail`. Failures are logged, never thrown.
-- **`onBuyableAgain(productId)`** — answers all waiting requests for one product, sequentially (one transaction each).
-- **`sweepBuyable(now)`** — periodic sweep that answers preorders whose release date has passed (the "buyable again" signal only fires on a write, so this pass covers date-based preorders).
+- **`stockAlertService`** (export) — the module's single service handle bundling all public functions.
+- **`list`** — returns a user's own requests (newest first) via `stockAlertRepository.findByUserId` → `presentStockAlerts`.
+- **`ask`** — registers a back-in-stock request. Rejects 404 if the product is missing, 409 (`STOCK_ALERT_PRODUCT_BUYABLE`) if the product is already buyable, or 409 (`STOCK_ALERT_LIMIT_REACHED`) if the per-account cap is hit.
+- **`cancel`** — removes the caller's request; 404 if not found.
+- **`exportRows`** — raw stored items for the personal-data (GDPR) export.
+- **`removeByUserId`** — deletes all requests inside the caller's hard-delete Mongoose transaction (`ClientSession`).
+- **`removeByProductId`** — cascades when a product leaves the catalogue.
+- **`answerOne`** — atomically deletes the alert row and announces the `STOCK_ALERT_SENT` inbox event in one transaction (`announceInTransaction`); only then calls `mailBuyer`. The delete acts as an idempotency guard.
+- **`mailBuyer`** — resolves the user, skips if the account is erased/banned/unverified, builds a localized email via `backInStockEmail` and enqueues it with `enqueueEmail`.
+- **`onBuyableAgain`** — fetches all waiting alerts for a product, resolves titles, and calls `answerOne` sequentially (each in its own transaction).
+- **`sweepBuyable`** — periodic sweep: iterates distinct product IDs, checks `isBuyable` against the current instant, and calls `onBuyableAgain`. Exists because a preorder whose release date passes produces no write event.
+- **`titleFor`** — locale-aware product-name picker: buyer's locale → `getDefaultLocale()` → any available value → `''`.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** — `t()` for user-facing error strings; `getDefaultLocale()` for locale fallback in emails and titles.
-- **`@infrastructure/adapters/logger`** — error logging in the `mailBuyer` catch path.
-- **`@infrastructure/adapters/mailer`** — `enqueueEmail` delivers the back-in-stock email (fire-and-forget; never rejects).
-- **`@infrastructure/http/frontend-link`** — builds the product-page URL embedded in the email body.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape HTTP responses for `ask`, `cancel`, `list`.
-- **`@kernel/outbox`** — `announceInTransaction` pairs the alert-row delete with the `STOCK_ALERT_SENT` inbox event atomically.
-- **`@modules/products`** (`src/modules/products/index.ts`) — `isBuyable` (gate for `ask` and `sweepBuyable`), `productPagePath` (email link), `productService.findPublicById` / `.titlesById` (product lookup).
-- **`./repository`** — all persistence (`findByUserId`, `ask`, `cancel`, `deleteById`, `findByProductId`, `distinctProductIds`, `deleteByUserId`, `deleteByProductId`).
-- **`./emails`** — `backInStockEmail` builds the email template and data.
-- **`./events`** — `STOCK_ALERT_SENT` constant used as the outbox event name.
-- **`./presenter`** — `presentStockAlerts` maps stored alerts to the response shape.
-- **`src/modules/stock-alerts/controllers/delete-stock-alert.ts`** — consumes `stockAlertService.cancel` (or a related delete path) to handle the HTTP delete endpoint.
-- **`src/modules/shop-tasks/tests/integration/notices.test.ts`** and **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — integration/unit tests that exercise the alert lifecycle through this service.
+- **`@infrastructure/i18n`** (`t`, `getDefaultLocale`) — localizes user-facing error messages and provides the fallback locale for product titles.
+- **`@infrastructure/adapters/logger`** — logs an error in `mailBuyer` when the user lookup or email construction throws.
+- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — fires the actual back-in-stock email from `mailBuyer`.
+- **`@infrastructure/http/frontend-link`** (`frontendLink`) — builds the product URL (locale-aware) embedded in the email body.
+- **`@infrastructure/http/response`** (`generateSuccess`, `generateReject`) — shapes the HTTP responses for `ask` and `cancel`.
+- **`@kernel/outbox`** (`announceInTransaction`) — creates the `STOCK_ALERT_SENT` inbox row atomically with the alert-row deletion in `answerOne`.
+- **`@modules/products`** (`isBuyable`, `productPagePath`, `productService`) — checks buyability in `ask`/`sweepBuyable`, resolves product titles, and provides the page path for the email link.
 
 ## Notes
 
-- **Idempotency via delete:** `answerOne` relies on the row-delete succeeding as the guard. A re-delivered "buyable again" signal or a concurrent cancel simply finds no row and sends nothing.
-- **Sequential processing:** `onBuyableAgain` answers alerts one-by-one (`for…await`), each in its own transaction, to avoid row-lock contention.
-- **`sweepBuyable` necessity:** Preorders whose release date passes are never *written* to, so no "buyable again" signal fires. This sweep is the only path that answers them.
-- **`enqueueEmail` never rejects:** the eslint-disable comment and the module docstring both confirm it logs its own failure. The `void` operator is intentional.
-- **Locked accounts skipped:** `isAuthenticatable` gates the mail step; banned or deletion-grace accounts get the inbox row (already committed) but no email.
-- **Single-consent contract:** the module docstring makes explicit that the one mail per request is the full scope of the buyer's consent; no follow-up or reminder is sent.
+- **Idempotency guard:** `answerOne` deletes the row *before* mailing. A redelivered signal or a concurrent cancel finds nothing to delete and sends nothing — no double-mail is possible.
+- **Mail eligibility:** `mailBuyer` silently skips users who are erased, non-authenticatable (banned or in deletion grace), or unverified (`verifiedAt` falsy). The inbox row still stands in those cases.
+- **`enqueueEmail` never rejects** — failures are logged internally; the `void` + eslint-disable is intentional.
+- **`sweepBuyable` is the only path that answers preorders** whose release date passed without a write. It is safe to run repeatedly: answered alerts are already deleted.
+- **Sequential processing:** `onBuyableAgain` awaits each `answerOne` in order, giving each request its own transaction rather than batching. This keeps partial-failure isolation per row.

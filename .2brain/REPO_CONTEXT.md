@@ -16,22 +16,23 @@ _Canonical 2brain context source for AI editors._
 - **Editing or reading a source file** → read `.2brain/llm-wiki/<path>.md` first (page path = source path + `.md`). It carries the file's purpose, key elements, graph neighbours, and gotchas not in the source.
 - **"How is this structured?" / "where does X live?"** → `.2brain/arch/overview.md`, then the component page it points to.
 - **"How do I run / build / test / deploy this?"** → `.2brain/EXECUTION.md`.
+- **"How does X reach Y?" / "what depends on X?"** → `2brain structure <repo-path> path <fileA> <fileB>` or `show <file>` (JSON, from the dependency graph).
 - **Anything else, or you don't know which file** → `2brain query <repo-path> "question"`.
 
-Artifacts describe commit `20ac75dd577ae2cf177b1daa0f81bdd44962c97f`. Before relying on a wiki page, check its source: `git diff --quiet 20ac75dd577ae2cf177b1daa0f81bdd44962c97f -- <file>` (and `git status` for uncommitted edits). Changed → prefer the source for that file and say so. Unchanged → trust the page.
+Artifacts describe commit `411d7d2f05bb1e4d78404ea10b0859c026d063e6`. Before relying on a wiki page, check its source: `git diff --quiet 411d7d2f05bb1e4d78404ea10b0859c026d063e6 -- <file>` (and `git status` for uncommitted edits). Changed → prefer the source for that file and say so. Unchanged → trust the page.
 
 ## Most-used code
 Change these with care — widely depended on:
-- `createUser()` (401 edges)
-- `setupTestDb()` (388 edges)
-- `t` (368 edges)
-- `createProduct()` (336 edges)
-- `catchAs()` (326 edges)
-- `api()` (318 edges)
-- `generateReject()` (288 edges)
-- `successResponse()` (256 edges)
-- `refused()` (239 edges)
-- `callerContextOf()` (234 edges)
+- `createUser()` (429 edges)
+- `setupTestDb()` (416 edges)
+- `t` (370 edges)
+- `api()` (365 edges)
+- `createProduct()` (360 edges)
+- `catchAs()` (332 edges)
+- `generateReject()` (284 edges)
+- `successResponse()` (260 edges)
+- `asStub()` (249 edges)
+- `refused()` (245 edges)
 
 ## Cross-cutting flows
 - Layered Architecture (kernel → infrastructure → modules → app)
@@ -73,7 +74,6 @@ Change these with care — widely depended on:
 - Image Upload and Processing Pipeline
 - Transactional Outbox Lifecycle
 - Account Module Dependency Graph
-- Staff Role Demo Personas
 - Account Email Change Workflow
 - Account Step-Up Authentication Flow
 - Antibot Challenge Issuance and Verification
@@ -83,19 +83,13 @@ Change these with care — widely depended on:
 - Delivery Shipment Webhook Events (shipped, delivered, lost)
 - Delivery Module Contract Bundle (webhooks + auth + openapi + module)
 - Module Pattern: example as template for delivery
-- Example Lifecycle State Machine (draft → published → archived → draft)
 - Inventory Stock Movement Ledger (receive, adjust, sweep → StockMovement rows)
 - Shop Bounded Context (inventory, invoicing, products, orders, payments, account)
 - Locales CRUD Operation Set
-- Notifications SSE Event Flow
 - Locales Permission Hierarchy
 - Observability SSE Stream Flow (channels, messages, payload)
-- Staff Notification Code Variants (task lifecycle + webhook + outbox)
-- ObservabilityHealth Schema Composition
-- Orders Module Contract Surface (REST + Events + Auth)
 - Order-Payment Lifecycle Event Flow
 - Order PII Retention and Redaction Flow
-- Payments Authorization Permission Sets
 - Products Authorization Permission Sets
 - Payments Staff Operations Requiring display:Payment
 - Return Lifecycle Webhook Events
@@ -107,7 +101,6 @@ Change these with care — widely depended on:
 - Stats Module Dashboard Operations
 - Task Lifecycle State Transitions
 - Stock-Alerts Request Lifecycle
-- Webhook Event Delivery Flow (fire → subscribe → enqueue → deliver)
 - Users Module Contract Surface
 - Webhooks Module Contract Surface
 - Webhook Subscription Lifecycle (CRUD + Enable/Disable + Secret Rotation)
@@ -117,11 +110,12 @@ Change these with care — widely depended on:
 ## Index Metadata
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `6bb3f940666dbcec8760408212b2747f01f4395ecfea5a347e849da6df3ddbb0`
-- Indexed chunks: `16848`
+- Index revision: `d21fa590261b1fd5bfc391d3467b810dd42f899674422f6ffe2b145b34a6a6c9`
+- Indexed chunks: `17440`
 - Memory entries: `0`
 
 ## Query
 - Semantic query: `2brain query <repo-path> "your question" --top-k 5`
+- Structure (how things connect, JSON): `2brain structure <repo-path> overview`, `find <words>`, `show <file-or-symbol>`, `path <from> <to>`
 - Add durable memory: `2brain remember <repo-path> "fact/decision/runbook" --kind fact`
 

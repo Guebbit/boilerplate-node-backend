@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/services/create.ts
-sha256: 1894071b55c451d139cef5e38ba21ee484a2fdd89119ad82e9d4062a002253b1
-generated_at: 2026-11-08T08:48:53.248693+00:00
+sha256: e4f475f23ee42c372bbc5bfe739f84a5f7c67e08d2f540a47c04372b5ea623c9
+generated_at: 2026-11-14T22:27:19.034430+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-side user creation service. An operator creates a user account (no self-service email confirmation), optionally assigns a staff role, and triggers a one-time password-setup email — all committed in a single MongoDB transaction.
+Admin-side user creation endpoint service. It atomically creates a user document, grants a role (if specified), and enqueues a setup-password event—all in a single transaction—then records audit and analytics side-effects. It exists as the privileged alternative to the self-service `accountService.signup` flow.
 
 ## Key elements
 
-- **`create(data, context)`** — the sole export. Orchestrates role-refusal check → transactional user insert + role assignment + outbox event → post-commit audit/analytics → image-queue enqueue. Returns `Promise<ResponseSuccess<UserDocument> | ResponseReject>`.
+- **`create(data, context)`** — The sole export. Accepts a `WithServerImage<CreateUserRequest>` and a `CallerContext`; returns `Promise<ResponseSuccess<UserDocument> | ResponseReject>`.
+  - Generates a random 32-byte hex password (never surfaced to anyone) so the account is unusable until the owner sets their own via the reset-confirm link.
+  - If `data.role` is present, calls the access service's refusal check **before** any write; a refusal short-circuits to a rejection envelope.
+  - Within `announceInTransaction`: writes the user via the repository, optionally assigns the role, and enqueues a `USER_SETUP_REQUESTED` outbox event—all or nothing.
+  - Post-commit: audits the role assignment (if any), records an `ADMIN_USER_CREATED` audit entry, emits a `USER_CREATED` analytics event (no user id—consent is the admin's), and calls `enqueueIfPending` for image processing.
+  - Returns `generateSuccess(user, 201)`.
 
 ## Relationships
 
-- **`@kernel/outbox`** (`announceInTransaction`) — wraps the user insert, role assignment, and `USER_SETUP_REQUESTED` event in one ACID unit; the event is the only way the setup email is dispatched.
-- **`@modules/access` / `accessService`** — `grantRefusalAudited` gates the role before any write; `assignRole` persists the grant inside the transaction; `auditRoleAssigned` records it post-commit.
-- **`./role-refusal`** (`roleRefusalReject`) — formats the early-return `ResponseReject` when the caller lacks permission for the requested role.
-- **`../repository`** (`userRepository.create`) — persists the `UserDocument` within the session.
-- **`../events`** (`USER_SETUP_REQUESTED`) — outbox event name that downstream consumers turn into a password-reset link email.
-- **`./image`** (`enqueueIfPending`) — posts the user to the image-processing queue if an image was attached.
-- **`@infrastructure/observability/audit`** / **`../audit`** (`recordAudit`, `usersAuditActions`) — logs `ADMIN_USER_CREATED`.
-- **`@infrastructure/observability/analytics`** / **`../analytics`** (`emitAnalyticsEvent`, `buildAnalyticsBase`, `usersAnalyticsEvents`) — emits `USER_CREATED` with `admin_created: true`.
-- **`@infrastructure/http/response`** (`generateSuccess`) — wraps the final 201 envelope.
-- **`@kernel/access/tenant`** (`DEPLOYMENT_TENANT_ID`) — the fixed tenant scope for role grants.
-- **`../model`** (`UserDocument`) — the shape returned to the caller.
+- **`src/kernel/outbox.ts`** — Imports `announceInTransaction`, which wraps the user write, role assignment, and event emission in a single MongoDB transaction with the outbox.
+- **`src/modules/access/index.ts`** — Imports `accessService`, used for the pre-write role-grant refusal check, the in-transaction role assignment, and the post-commit role-assignment audit.
+- **`src/modules/access/services/index.ts`** — Part of the access module chain that `@modules/access` resolves through; supplies the concrete service methods invoked above.
+- **`src/kernel/access/tenant.ts`** — Imports `DEPLOYMENT_TENANT_ID`, the tenant scope passed to role-assignment calls.
+- **`src/modules/users/repository.ts`** — Imports `userRepository`; its `create` method performs the actual document insert within the transaction session.
+- **`src/modules/users/model.ts`** — Imports the `UserDocument` type, the shape returned in the success envelope.
+- **`src/modules/users/events.ts`** — Imports `USER_SETUP_REQUESTED`, the outbox event name emitted inside the transaction.
+- **`src/modules/users/audit.ts`** — Imports `usersAuditActions`; the `ADMIN_USER_CREATED` action constant is used in the post-commit audit record.
+- **`src/modules/users/analytics.ts`** — Imports `usersAnalyticsEvents`; the `USER_CREATED` event constant is used in the analytics emission.
+- **`src/modules/users/services/image.ts`** — Imports `enqueueIfPending`, called last to kick off avatar processing if an image was supplied.
+- **`src/modules/users/services/role-refusal.ts`** — Imports `roleRefusalReject`, which builds the rejection envelope when a role grant is denied.
+- **`src/infrastructure/http/response.ts`** — Imports `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types that shape the return envelope.
+- **`src/infrastructure/observability/audit.ts`** — Imports `recordAudit`, which writes the `ADMIN_USER_CREATED` audit row post-commit.
+- **`src/infrastructure/observability/analytics/index.ts`** — Imports `emitAnalyticsEvent` and `buildAnalyticsBase` for the analytics emission.
+- **`src/modules/users/services/index.ts`** — Barrel that re-exports `create` for consumers of the users services module.
 
 ## Notes
 
-- **Password is always random** (`randomBytes(32).toString('hex')`). It is never communicated; the owner must self-serve via the `USER_SETUP_REQUESTED` reset link. This is deliberate — a credential belongs to its owner.
-- **`verifiedAt` is set to `now` unconditionally.** The act of an admin typing the address serves as the verification vouch; no separate confirmation step exists on this path.
-- **Role refusal is checked before any write.** A denied grant produces an audit row but no user document, no outbox event, and no partial state.
-- **`imageUrl: data.imageUrl ?? undefined`** — the `??` matters because the schema default applies to `undefined` only; an explicit `null` would be stored as "no image" rather than triggering the default.
-- **Analytics event carries no `targetId`.** Consent for personal data is the data subject's, not the admin's, so the user's pseudonymous id is intentionally omitted.
-- **Post-commit side effects** (role audit, user audit, analytics, image enqueue) run in the `.then` chain after the transaction resolves, so a failure there does not roll back the account.
+- The password is deliberately random and never transmitted. The user must go through `POST /account/password/reset/confirm` (triggered by the `USER_SETUP_REQUESTED` event) to set their own. This is a security property, not a bug.
+- `verifiedAt` is hardcoded to `new Date()` at creation time—an admin typing the address *is* the verification. Do not treat this as a data-entry mistake.
+- The spread `...data` is typed off `CreateUserRequest` (not a hand-picked `Pick`) specifically to avoid silently dropping fields like `active`. If you add a field to the request type, it flows into the insert automatically.
+- `imageUrl: data.imageUrl ?? undefined` is intentional: `null` means "no image" at the DB level, while `undefined` lets the schema default apply. The `??` normalises the wire-level `null`.
+- Analytics deliberately omit the target user id; including a pseudonymous user id would make it personal data, and consent belongs to that data subject, not the admin.
+- Role-refusal audit happens **before** the transaction (so no user row exists); the successful grant audit happens **after** commit. This ordering is a deliberate invariant.

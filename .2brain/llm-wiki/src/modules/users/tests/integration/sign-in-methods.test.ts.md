@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/sign-in-methods.test.ts
-sha256: d0b8de83e305e7b521fda06f278db2ac34402d44638d84a9c4c2d365ca2ba5d7
-generated_at: 2026-11-08T08:57:35.914562+00:00
+sha256: 63117723d32f599317640bba4e13c1857ebce6303fea6376e47d03e8c5a51ccf
+generated_at: 2026-11-14T22:39:25.534387+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `userService.exportSignInMethods`. It verifies that the export section returns only the linked OAuth providers and the armed second-factor methods as opaque facts (method + enrollment date), and that it never leaks secrets, in-flight codes, or backup-code digests. It also pins the behavior for edge cases: unconfirmed factors, password-only accounts, and deleted users.
+Integration tests for `exportSignInMethods`. They verify the exported section returns only the factual "what" (linked OAuth providers, armed two-factor methods with their enrollment date) and never the "how-to-open" material (secrets, in-flight codes, backup-code digests, salts). They also pin the exclusion rules: unconfirmed factors are omitted, and a missing user yields `undefined` so the caller can drop the section.
 
 ## Key elements
 
-- **`setupTestDb()`** — bootstraps a real (non-mocked) database so the test exercises the full repository → service path.
-- **`LINKED_AT` / `ARMED_AT`** — fixed `Date` constants used so the ISO-string assertions in `toEqual` are exact and deterministic.
-- **`describe('userService.exportSignInMethods', …)`** — the test suite containing four cases:
-  - *Lists linked providers and armed factors, and nothing that opens them* — asserts the happy-path shape: `providers[]` with `provider`/`providerId`/`connectedAt` and `twoFactor[]` with only `method`/`enrolledAt`, no secret, no code fields, no backup codes.
-  - *Leaves out a factor whose setup was never confirmed* — a factor lacking `enrolledAt` is excluded entirely.
-  - *Answers empty lists for a password-only account* — both arrays are `[]`.
-  - *Answers nothing for a gone account* — returns `undefined`, signalling the export assembler should omit the section.
+- **`describe('exportSignInMethods')`** – single suite covering four scenarios.
+- **Test 1 – full export shape** – Creates a user with a Google OAuth link and two 2FA methods (TOTP + email) plus backup codes, then asserts the result contains *only* `{provider, providerId, connectedAt}` and `{method, enrolledAt}` entries. Implicitly asserts absence of `secret`, `codeHash`, `codeExpiresAt`, `codeAttempts`, `twoFactorBackupCodes`, and `twoFactorBackupCodeSalt`.
+- **Test 2 – unconfirmed factor excluded** – A TOTP entry that has a `secret` but no `enrolledAt` is treated as not-yet-active; the export returns empty lists.
+- **Test 3 – password-only account** – No providers, no 2FA → both arrays empty.
+- **Test 4 – non-existent user** – Passing a fabricated 24-char hex ID is asserted with `toBeUndefined()`, signalling the assembly layer should omit the section entirely.
+- **`LINKED_AT` / `ARMED_AT`** – Fixed `Date` constants so `.toISOString()` comparisons are exact rather than relative.
 
 ## Relationships
 
-- **`src/modules/users/services/index.ts`** — imports `userService`; calls `exportSignInMethods` (the SUT).
-- **`src/modules/users/tests/factories.ts`** — imports `createUser` and `userRepository`; `createUser` seeds the user document, `userRepository.linkOAuthAccount` attaches the OAuth provider row.
-- **`tests/support/setup-test-db.ts`** — imports and calls `setupTestDb()` to provision the integration database before the suite runs.
-- **`src/modules/users/repository.ts`** — reached indirectly through the `userRepository` factory for the `linkOAuthAccount` call; the service under test also reads from this repository internally.
+- **`src/modules/users/services/sign-in-methods.ts`** – Source of `exportSignInMethods`, the function under test.
+- **`src/modules/users/tests/factories.ts`** – Provides `createUser` (seeds a user document with 2FA fields and backup codes) and `userRepository` (used here to attach an OAuth link to the test user).
+- **`tests/support/setup-test-db.ts`** – Called once at module level via `setupTestDb()` to initialise the in-memory test database.
+- **`src/modules/users/repository.ts`** – Indirect dependency; the `userRepository` exported by the factories delegates to the real repository for the OAuth-link write, so the test exercises the actual persistence path.
 
 ## Notes
 
-- This is an **integration** test: no mocks on the repository. The service reads from the same DB the factory wrote to.
-- The "unconfirmed factor" case encodes a domain rule: a factor without `enrolledAt` is not yet armed and must not appear in the export.
-- The "gone account" test passes a hardcoded 24-char hex string as the user ID rather than creating-then-deleting, so it exercises the not-found branch without a teardown.
-- The module doc-comment states the security intent explicitly: the export is a *what-is-linked* fact sheet, never a *how-to-open* credential dump.
+- The module doc comment states the contract explicitly: the section is "facts" (links, armed factors); secrets, in-flight codes, and backup-code digests must never appear. The tests encode that contract.
+- "Unconfirmed" is defined by the *absence* of `enrolledAt`, not by a flag. A TOTP entry with a secret but no `enrolledAt` is considered pending setup and is filtered out.
+- The non-existent-user case asserts `toBeUndefined()`, not an empty object. Callers that build a composite user payload rely on this to skip the section rather than render empty arrays.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/session-jwt.test.ts
-sha256: 345f4de3469ec2f6df3beeb15e22940a1c338fb29cd973e7a697b39ecee1ed0b
-generated_at: 2026-11-08T04:49:55.308377+00:00
+sha256: 15ec5c999e732aa09d61654f54e939a443c391763ccd0460b6354819ce55e724
+generated_at: 2026-11-14T19:16:36.479015+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit-level security tests for the JWT token layer (`src/modules/account/session/jwt.ts`). Asserts the invariants that keep it safe: the access and refresh secrets never cross-verify, a refresh token is only valid while still stored, `jti` prevents same-second mutual revocation, and key-ring rotation does not mass-logout. The session store and user service are **stubbed**, not driven—query-shape assertions live in `../integration/auth-storage.test.ts`.
+Unit test suite for the session JWT token layer (`src/modules/account/session/jwt.ts`). It asserts security invariants at the token level—secret separation (access vs. refresh), refresh-token validity tied to a stored row, `jti` uniqueness, key-ring rotation without mass logout, and claim-shape enforcement—while the session store and user service are stubbed out. Query-level correctness is deliberately left to `../integration/auth-storage.test.ts`.
 
 ## Key elements
 
-- **`signAs(secret, payload, opts?)`** — Signs a JWT fixture the way `jwt.ts` itself does: stamps `kid: keyId(secret)`, sets `typ` (`at+jwt` / `rt+jwt` per RFC 9068), fills `auth_time`/`amr`, and uses `null` vs `undefined` in `issuer`/`audience` options to omit vs. default a claim.
-- **`holdingLive()`** — Configures `sessionRepository.findByHash` and `userService.findAuthenticatableById` so `verifyRefreshToken` sees a live, unexpired row.
-- **`mintable()`** — Configures the same doubles plus `touchLastActive` and `sessionRepository.insert` so `startSession` can proceed.
-- **`accessWith(options)`** — Convenience wrapper around `signAs` that overrides one registered claim (`iss` or `aud`) to test RFC 8725 / 9068 enforcement.
-- **`jest.mock('@modules/users')`** — Spreads the real module, then replaces `findAuthenticatableById` and `touchLastActive` with `jest.fn()`.
-- **`jest.mock('@modules/account/repository')`** — Same pattern for `sessionRepository.findByHash` and `.insert`.
-- **`describe('verifyAccessToken')`** — Happy-path, cross-secret rejection, error-reason taxonomy (expired / forged / retired key / malformed / missing claims), `alg:none` forgery (with and without a real `kid`).
-- **`describe('the registered claims')`** — Parametrized table (`it.each`) over wrong/missing `iss` and `aud`.
+- **`signAs(secret, payload, opts)`** — Signs a JWT fixture exactly as `jwt.ts` does: stamps `kid: keyId(secret)`, sets `typ` (`at+jwt` / `rt+jwt`), fills in `iss`/`aud` from `config.ts` defaults, and includes `auth_time` + `amr` which `TokenData` requires. Central helper for every fixture in the file.
+- **`holdingLive()`** — Configures `sessionRepository.findByHash` and `accountUserService.findAuthenticatableById` to return a live session row and a sign-in-eligible user (used by `verifyRefreshToken` cases).
+- **`mintable()`** — Configures the mocks so `startSession` can find its user and insert a session row.
+- **`accessWith(options)`** — Convenience wrapper around `signAs` that varies only `iss`/`aud` for registered-claim tests.
+- **`beforeEach`** — Calls `jest.resetAllMocks()` (not `clearAllMocks`) and sets `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_TOKEN_ACCESS_TIME`, `NODE_SESSION_TIME_SHORT`, `NODE_SESSION_TIME_LONG` via `setEnvironment`.
+- **`describe('verifyAccessToken')`** — Covers: valid token resolution, missing `sid`, cross-secret rejection, refusal reasons (`expired`, `invalid_signature`, `malformed`, `Unknown signing key`), infinite-expiry tokens, missing `auth_time`/`amr`, and `alg:none` forgeries (with and without a real `kid`).
+- **`describe('the registered claims')`** — RFC 8725 §3.10 / RFC 9068 §2.2 table-driven tests: wrong or missing `iss`/`aud` must be refused.
+- **`jest.mock('@modules/users/friends/account', …)`** — Spreads the real module, then overrides only `findAuthenticatableById` and `touchLastActive` on `accountUserService`.
+- **`jest.mock('@modules/account/repository', …)`** — Same pattern for `sessionRepository.findByHash` and `insert`.
 
 ## Relationships
 
-- **`src/modules/account/session/jwt.ts`** — System under test; imports `verifyAccessToken`, `verifyRefreshToken`, `createAccessToken`, `startSession`, `FIRST_PARTY_CLIENT_ID`.
-- **`src/modules/account/session/key-ring.ts`** — Imports `keyId` to compute the `kid` value stamped into every fixture header.
-- **`src/modules/account/session/config.ts`** — Imports `getAccessTokenAudience`, `getRefreshTokenAudience`, `getTokenIssuer` so fixtures carry the same registered claims the app uses.
-- **`src/infrastructure/security/hash-token.ts`** — Imports `hashToken` for refresh-token hash comparisons.
-- **`src/modules/users/index.ts`** — Mocked; doubles `userService.findAuthenticatableById` and `.touchLastActive`.
-- **`src/modules/account/repository.ts`** — Mocked; doubles `sessionRepository.findByHash` and `.insert`.
-- **`tests/support/stub.ts`** — Provides `asStub<T>` for typed access to the `jest.fn()` handles.
-- **`tests/support/environment.ts`** — Provides `setEnvironment` to set `NODE_TOKEN_*` vars before each test.
+- **`src/modules/account/session/jwt.ts`** — Module under test; the file imports `verifyAccessToken`, `verifyRefreshToken`, `createAccessToken`, `startSession`, and `FIRST_PARTY_CLIENT_ID`.
+- **`src/modules/account/session/config.ts`** — Provides `getAccessTokenAudience`, `getRefreshTokenAudience`, `getTokenIssuer` used to build claim-realistic fixtures.
+- **`src/modules/account/session/key-ring.ts`** — Provides `keyId(secret)` so fixtures carry the same `kid` the ring expects.
+- **`src/modules/account/repository.ts`** — `sessionRepository` is mocked (only `findByHash`, `insert` replaced; other members pass through).
+- **`src/modules/users/friends/account.ts`** — `accountUserService` is partially mocked (only `findAuthenticatableById`, `touchLastActive` replaced).
+- **`src/infrastructure/security/hash-token.ts`** — `hashToken` is imported, used to compute the digest the refresh-token store is expected to look up.
+- **`tests/support/environment.ts`** — `setEnvironment` injects the `NODE_TOKEN_*` / `NODE_SESSION_TIME_*` variables each test depends on.
+- **`tests/support/stub.ts`** — `asStub` gives a typed handle over the mocked objects for clean call-assertion syntax.
 
 ## Notes
 
-- `beforeEach` uses `jest.resetAllMocks()` (not `clearAllMocks`) so that a rejection set in one test cannot leak into the next and fail it with the wrong error.
-- Every fixture **must** carry `kid: keyId(secret)` in the protected header. A fixture signed without one will never resolve a ring member and fails with `invalid_signature` / "Unknown signing key" rather than exercising the intended assertion.
-- In `signAs`, passing `issuer: null` or `audience: null` **omits** the claim; passing `undefined` stamps the real app value. This distinction is what lets the registered-claims table exercise "no `iss`" vs. "another `iss`".
-- The `alg: none` forgery test with a real `kid` is the case that actually exercises the `algorithms: ['HS256']` pin in `jose`'s verify options—the no-`kid` variant stops at the ring lookup.
-- What this file does **not** cover: the shape of SQL/repository queries, two-factor gating logic, or integration-level session lifecycle—those are delegated to `../integration/auth-storage.test.ts` and other suites.
+- **`kid` is mandatory on fixtures.** A token signed without `kid` will not match any ring member and is rejected at lookup, before signature verification. `signAs` always stamps it via `keyId(secret)`.
+- **`resetAllMocks` vs. `clearAllMocks`.** The file deliberately uses `resetAllMocks` in `beforeEach` so that a `mockRejectedValue` set in one test does not leak into the next (only the call log would be wiped with `clear`).
+- **`alg:none` attack is tested twice:** once with no `kid` (fails at key lookup) and once naming a real `kid` (gets past lookup, then fails on the `algorithms: ['HS256']` pin). The second case is the one that actually exercises the algorithm whitelist.
+- **Scope boundary.** The file asserts *what* the token layer rejects/accepts, not *how* the repository queries behave. If a test seems to need a real store, it belongs in `../integration/auth-storage.test.ts`.
+- **`auth_time` and `amr` are hard requirements** in the `TokenData` shape; `signAs` injects them by default. Passing `undefined` for either (as the "bare" test does) deliberately omits them to verify the rejection path.

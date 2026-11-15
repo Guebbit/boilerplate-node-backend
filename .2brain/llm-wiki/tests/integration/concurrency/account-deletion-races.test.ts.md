@@ -1,7 +1,7 @@
 ---
 source: tests/integration/concurrency/account-deletion-races.test.ts
-sha256: afbf47e4f0b37910b49f1bbdbac5e48caca0d5309355aa4431c9f31e6e78fb7d
-generated_at: 2026-11-08T09:36:02.453843+00:00
+sha256: 7219e587de32d2779898f3f1d0ffa9784cf2aa38e4e3c127aa1c7332c975a787
+generated_at: 2026-11-14T23:10:45.345149+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that when a scheduled purge and a self-restore race at the exact boundary of the grace period (simulated by two disagreeing clocks), each account is handed to exactly one operation — never both, never neither, and never an error. It guards the invariant that the purge claims `purgeAt <= now` while the restore matches only `purgeAt > now`, so with consistent clocks they are mutually exclusive.
+Verifies the invariant that a concurrent account **erase** (purge) and **restore** at the grace-period boundary resolves to exactly one outcome per account — erased *or* restored, never both, never an error. The test simulates the worst-case split: two app nodes whose clocks disagree by one second, so both the purge predicate (`purgeAt <= now`) and the restore predicate (`purgeAt > now`) are simultaneously true from each node's perspective.
 
 ## Key elements
 
-- **`onTheEdge(index)`** – Creates a user whose `purgeAt` is 1 second in the past, simulating the edge where one node sees the grace expired and another still running. Returns `{ user, purgeAt }` for use in the race.
-- **`"gives each account to exactly one of them"`** (the single test) – Spawns `RACE_SIZE` parallel rounds; in each round fires `userService.eraseScheduledDeletion` (with `now`) and `userService.restoreOwnAccount` (with `purgeAt − 1 ms`) concurrently via `Promise.allSettled`, then asserts a strict XOR: exactly one succeeds and the DB row reflects that outcome.
+- **`onTheEdge(index)`** — factory helper that creates a user with `deletedAt` = 1 day ago, `deletedBy = 'owner'`, and `purgeAt` = `now − 1 s`, placing the account exactly on the grace boundary.
+- **`describe('restore against the purge at the boundary')`** — single test that fires `RACE_SIZE` concurrent erase/restore pairs via `Promise.allSettled` and asserts the XOR invariant per account.
+- **Erase call** — `accountUserService.eraseScheduledDeletion(user, systemCallerContext('User'), new Date())`: uses the real "now", so the purge predicate is satisfied.
+- **Restore call** — `accountUserService.restoreOwnAccount(user, new Date(purgeAt − 1), session)`: wrapped in `withTransaction`, uses a clock 1 ms behind `purgeAt`, so the restore predicate is also satisfied.
+- **Final assertion loop** — checks both promises fulfilled, exactly one returned truthy (`erasedOk !== restoredOk`), and `userRepository.findById` confirms the row's final state matches.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** → `setupTestDb()` initializes the test database before all tests.
-- **`tests/support/checkout-modules.ts`** → `registerCheckoutModules()` wires the users module into the kernel each test run.
-- **`tests/support/race.ts`** → `RACE_SIZE` controls how many concurrent account pairs are raced in a single test.
-- **`src/kernel/events.ts`** → `resetDomainEvents()` clears the event bus in `afterEach` to prevent cross-test leakage.
-- **`src/kernel/permissions.ts`** → `systemCallerContext('User')` supplies the caller identity for the system-initiated erase path.
-- **`src/modules/users/index.ts`** → Exports `userService`, the service whose two methods (`eraseScheduledDeletion`, `restoreOwnAccount`) are the racing actors.
-- **`src/modules/users/repository.ts`** → `userRepository.findById` is used after the race to assert the final row state (present or null).
-- **`src/modules/users/tests/factories.ts`** → `createUser` builds the fixture accounts with the specific `purgeAt` / `deletedAt` timestamps.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` bootstraps an isolated database before the suite.
+- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules()` wires the module graph in `beforeEach`.
+- **`src/kernel/events.ts`** — `resetDomainEvents()` clears the domain-event bus in `afterEach` to prevent cross-test leakage.
+- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` supplies the caller identity required by the erase path.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser` (test fixture) and `userRepository` (post-race state check).
+- **`src/modules/users/friends/account.ts`** — `accountUserService` exposes the two competing operations under test.
+- **`tests/support/race.ts`** — exports `RACE_SIZE`, the number of concurrent account pairs to create.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the restore so it runs as an atomic write, mirroring the production erase-transaction path.
 
 ## Notes
 
-- The "clock skew" is simulated purely by passing two different `Date` objects to the two service calls — no actual multi-node setup. The restore call uses `purgeAt − 1 ms` so it lands on the "grace still running" side of the boundary.
-- The test asserts `erasedOk !== restoredOk` (XOR) rather than checking which one won, making the test order-independent and tolerant of whichever side the DB happens to favor.
-- Both calls are wrapped in `Promise.allSettled`, so a rejection on either side is still observable and asserted on (the test expects `fulfilled` for both, meaning neither should throw).
+- The "two nodes" are simulated in a single process by passing different `Date` values to the two service methods; there is no actual network or multi-process concurrency.
+- `Promise.allSettled` (not `Promise.all`) is deliberate: both operations must complete even if one would throw, so the test can assert the *result* rather than aborting on the first failure.
+- The core correctness guarantee is expected to come from the database layer (unique constraint, row-level locking, or `purgeAt` re-read inside the transaction), not from application-level checks — this test exercises that guarantee.

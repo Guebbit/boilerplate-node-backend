@@ -1,7 +1,7 @@
 ---
 source: docker/observability/grafana.datasources.yaml
-sha256: 250bb3d4e3a9aefde826c0466d57aec2d003a2c8518d1e5e30b1385ea5913288
-generated_at: 2026-11-08T02:22:04.815401+00:00
+sha256: f6ba9f74df9d28a1dc4aeaf3ca7e71c0de22bb41535843ea27654e80a3397c22
+generated_at: 2026-11-14T17:11:30.130731+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Grafana datasource provisioning file that auto-wires Grafana to Tempo, Prometheus, and Loki on container start, eliminating manual UI configuration. It also encodes the cross-signal jump logic (trace → logs, trace → service map, log → trace) that makes the three panels interoperate.
+Grafana datasource provisioning file. It eliminates manual UI configuration on every container restart by declaring Tempo, Prometheus, and Loki connections declaratively, so Grafana is query-ready the moment it starts.
 
 ## Key elements
 
-- **Tempo datasource** (`uid: tempo`, default) — trace query endpoint at `http://tempo:3200`.
-  - `serviceMap.datasourceUid: prometheus` — tells Grafana which Prometheus instance to read service-graph series from (the series themselves are produced by the collector's `servicegraph` connector).
-  - `tracesToLogsV2` — enables the "view logs for this trace" jump into Loki; `filterByTraceID: true` scopes the Loki query to the current trace.
-  - `tags` mapping (`service.name` → `service`) — maps the span attribute onto the Loki stream label so the generated log query actually matches. Covers both Promtail-promoted Winston logs and Alloy-attached frontend telemetry.
-- **Prometheus datasource** (`uid: prometheus`) — metrics endpoint at `http://prometheus:9090`; used for alert-rule visualizations and as the backing store for Tempo's service map.
-- **Loki datasource** (`uid: loki`) — log endpoint at `http://loki:3100`.
-  - `derivedFields` — regex-extracts `trace_id` from log lines and renders a clickable Tempo link, closing the log → trace loop.
-- All three use `access: proxy` (Grafana server proxies the request rather than the browser calling the backend directly).
+- **Tempo datasource** (`uid: tempo`, default) — trace backend at `http://tempo:3200`. Carries two cross-datasource integrations:
+  - `serviceMap.datasourceUid: prometheus` — enables service-graph panels; the graph *data* comes from the collector's `servicegraph` connector, this setting only tells Grafana which Prometheus to read the resulting series from.
+  - `tracesToLogsV2` — enables "view logs for this trace". Maps the span attribute `service.name` to the Loki stream label `service` (the label Alloy promotes from Winston's `service` field).
+- **Prometheus datasource** (`uid: prometheus`) — metrics backend at `http://prometheus:9090`.
+- **Loki datasource** (`uid: loki`) — log backend at `http://loki:3100`. Declares a `derivedFields` entry that regex-extracts `"trace_id":"(\w+)"` from log lines and renders a clickable Tempo link.
 
 ## Relationships
 
-- **`docker/observability/grafana.dashboard-providers.yaml`** — sibling provisioning file mounted alongside this one into Grafana's `/etc/grafana/provisioning/` directory; together they fully configure a fresh Grafana container (dashboards + datasources).
-- **`docker/observability/loki.config.yaml`** — Loki's own config defines how it ingests and labels streams; the `tags` mapping in this file targets the `service` label that Loki exposes, and `derivedFields` matches the `trace_id` key Loki stores per log line.
-- **`docker/observability/otel-collector.config.yaml`** — the collector's `servicegraph` connector produces the Prometheus series that Tempo's `serviceMap` reads; this file's comment explicitly references that connector as the data source for the graph.
+- **otel-collector.config.yaml** — The Tempo `serviceMap` series are produced by the collector's `servicegraph` connector (referenced explicitly in this file's comments); Tempo itself receives OTLP traces from the collector.
+- **loki.config.yaml** — Defines how Loki ingests and serves the log streams that this file's `derivedFields` regex and `tracesToLogsV2` query against. The `service` stream label referenced in `tracesToLogsV2.tags` is set by Alloy's log pipeline upstream of Loki.
+- **grafana.dashboard-providers.yaml** — Dashboards loaded by that file reference these datasources by the stable `uid` values (`tempo`, `prometheus`, `loki`) rather than by name.
 
 ## Notes
 
-- **`tags` is not optional in a harmless way.** Omitting it does *not* mean "match everything." Grafana falls back to default labels (`cluster`, `hostname`, `namespace`, `pod`, `service.name`) and builds a query like `{service_name="api"}` — a label this stack never sets, so the logs panel opens on an empty result with no visible error. Always keep the `service.name → service` mapping.
-- The `service` label is the single shared key: Promtail promotes it from Winston's `service` field, and Alloy attaches it to frontend telemetry. One mapping covers both halves of a stitched trace.
-- `derivedFields` matcher uses the OpenTelemetry Logs Data Model key `trace_id` verbatim; the logger renames other OTel fields but not this one.
-- Tempo is marked `isDefault: true`, so it becomes the first datasource Grafana selects in the Explore panel.
+- **`tracesToLogsV2.tags` is load-bearing.** Omitting it does *not* mean "match all"; Grafana falls back to default labels (`service_name`, etc.) and builds a query like `{service_name="api"}` that this stack never sets — the panel opens empty with no error. The single `service.name → service` mapping covers both backend and frontend telemetry because Alloy promotes Winston's `service` field into that label for both.
+- **`derivedFields` regex is format-specific.** It matches the JSON log shape `"trace_id":"(\w+)"`. If the logger's field renaming or serialization changes, the clickable-trace link silently breaks.
+- All `uid` values are stable contract points: other provisioning files and dashboard JSON reference them, so renaming a uid is a breaking change.
+- `access: proxy` on every datasource means queries go through Grafana's backend proxy, not the browser — relevant when running behind a network that doesn't expose the backend ports directly.

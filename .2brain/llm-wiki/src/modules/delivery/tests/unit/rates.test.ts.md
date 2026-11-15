@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/rates.test.ts
-sha256: 2f2124e051f7094432c63c56c37b4b4023c89e8224c3e2779d7706817b086ba0
-generated_at: 2026-11-08T05:46:53.004035+00:00
+sha256: 4455198316d3b07a0a4288e46471d4d5fd1869c18f19a1c341d1569032cf922c
+generated_at: 2026-11-14T19:55:23.896892+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure pricing/lookup functions in the delivery rates domain. Because the tested code operates over a static in-memory table with no I/O, this file needs no mocks or database—unlike the service-level tests that live in `tests/integration/`.
+Unit tests for the pure-function shipping-rates domain (`rates.ts`). Validates pricing rules, method lookup, weight constraints, and the static `SHIPPING_METHODS` table shape without mocks or a database. The file header explicitly contrasts this with `tests/integration/service.test.ts`, which needs a real database to prove persistence — the pricing rule itself does not.
 
 ## Key elements
 
-- **`SHIPPING_METHODS` table tests** — Two `describe` blocks guard the committed data: every price/threshold must fit JPY, EUR, and KWD minor units (`fitsCurrency`); prices must be ≥ 0; `tracked` and `requiresAddress` must be real booleans; address requirement is true for all methods except `pickup`.
-- **`findShippingMethod` tests** — Verifies lookup by ID returns the expected record (`express`) and returns `undefined` for an unoffered ID (`overnight`).
-- **`priceShipping` tests** — Flat rate below the free-shipping threshold; zero at/above threshold; flat rate when no threshold exists (`express`); zero for `pickup`.
-- **`methodFitsWeight` tests** — No range → any weight passes; over `maxWeight` → rejected; under `minWeight` → rejected. The `minWeight` case constructs a method object inline (no current table entry declares one).
-- **`cheapestStandardShipping` tests** — Returns the standard flat rate on small orders; returns `'0.00'` once the standard threshold is met.
+- **`SHIPPING_METHODS` currency-fit suite** — Iterates JPY, EUR, KWD and asserts every `price` and `freeAbove` value passes `fitsCurrency`, catching rates that would round when charged.
+- **`SHIPPING_METHODS` table-shape suite** — Asserts non-negative prices, boolean `tracked` and `requiresAddress` flags, and that only `pickup` has `requiresAddress: false`. Acts as a canary for typos in committed data.
+- **`findShippingMethod` suite** — Verifies exact-match lookup by id and `undefined` for an id the shop doesn't offer.
+- **`priceShipping` suite** — Covers flat rate below threshold, free shipping at/above threshold, no-threshold methods (always flat), and pickup returning `'0.00'`.
+- **`methodFitsWeight` suite** — Covers methods with no weight range (always fits), `maxWeight` boundary (express at 5000/5001), and `minWeight` boundary using an inline object (see Notes).
+- **`cheapestStandardShipping` suite** — Confirms it returns the standard flat rate on small orders and zero once the threshold is met; pickup is excluded as "collection, not delivery."
 
 ## Relationships
 
-- **`src/modules/delivery/domain/rates.ts`** — The module under test. All imports (`cheapestStandardShipping`, `findShippingMethod`, `priceShipping`, `methodFitsWeight`, `SHIPPING_METHODS`) come from here.
-- **`src/domain-primitives/money.ts`** — Provides `fitsCurrency`, used to assert that every price and threshold in the table is expressible in the currency's minor unit (guards against a rate like `'5.50'` being charged rounded in a 0-decimal currency such as JPY).
+- **`src/domain-primitives/money.ts`** — Provides `fitsCurrency`, used in the currency-fit suite to verify every quoted rate and threshold is representable in the currency's minor unit.
+- **`src/modules/delivery/domain/rates.ts`** — The unit under test. All five imports (`cheapestStandardShipping`, `findShippingMethod`, `priceShipping`, `methodFitsWeight`, `SHIPPING_METHODS`) come from this module.
 
 ## Notes
 
-- The `minWeight` test deliberately builds its method object inline rather than pulling from `SHIPPING_METHODS`, because no shipped method currently declares a `minWeight`. This keeps the branch covered even if the table is edited.
-- Currency cases are JPY (0 dp), EUR (2 dp), KWD (3 dp) to span the minor-unit spectrum.
-- The file header explicitly notes that `service.test.ts` is in `tests/integration/` because it needs a real database to prove shipment persistence; the pricing rule itself does not.
+- The `minWeight` test constructs a synthetic method object inline rather than referencing `SHIPPING_METHODS`, because no shipped method currently declares a `minWeight`. The comment flags this so the rule stays covered even if a future method adds one.
+- All monetary values are decimal strings (e.g. `'5.00'`), consistent with the `money` primitive convention.
+- The `tracked` and `requiresAddress` shape tests exist because downstream consumers (the door's `awaitingTracking` flag; checkout's shipping rule) would silently receive `undefined` if a flag were accidentally omitted from the table.

@@ -1,7 +1,7 @@
 ---
 source: tests/integration/journeys/an-accounts-whole-security-life.test.ts
-sha256: 8ff6cc5209f1f50b850da1354a7c2185803001b70740a57c257561f30ac7ab71
-generated_at: 2026-11-08T09:39:43.268324+00:00
+sha256: ea3b8f093a40f3fe372b5c8fcf304ba687540f294280bdc8d27d1f0d7fb022ad
+generated_at: 2026-11-14T23:14:48.851252+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A single end-to-end journey test that walks one account through its entire security lifecycle: signup behind a human check, email verification, TOTP enrollment, API-key minting, password reset (which revokes all sessions and keys), step-up re-auth for an email change, the 7-day undo window, and the 7-day data-export retention window. It exists to prove that every security invariant—session invalidation, credential revocation, link expiry, and audit completeness—holds when the clock only moves forward.
+End-to-end journey test that walks a single account through its full security lifecycle in one `it` block: Altcha-gated signup, email verification, admin role grant, TOTP enrolment, API-key mint, password reset (which must revoke every session and credential), step-up reauth for email change, 7-day undo-link expiry, and data-export expiry. It exists to verify that every security control composes correctly and that the audit trail and outbound mail reflect the same sequence.
 
 ## Key elements
 
-- **`signIn(email, password, code)`** — Private helper. Performs a two-step login (password → TOTP), extracts the `__Host-session` cookie, and returns the response plus cookie for one-time bearer conversion via `bearerForCookie`.
-- **`ACCOUNT`** — Constant holding the test identity: original email, username, two passwords, and the target email for the change journey.
-- **`DAY_MS`** — `86_400_000`; used to compute expiry offsets (7-day API-key TTL, 7-day undo window, 7-day export retention).
-- **`it('keeps the account safe from signup to the last lapsed link')`** — The sole test. Sequentially exercises: altcha-gated signup → email-verify → TOTP arm (which kills the session) → API-key mint → password reset (kills session + key, sends revocation mail) → frozen-clock step-up re-auth → email change + confirm → undo-link 422 after 8 days → `reap:previous-emails` job → export request/settle/fetch → export 404 after 8 days → `reap:account-exports` job → audit-trail and mail assertions.
-- **`beforeEach`** — Activates the outbox mail sink and the altcha solver.
-- **`afterEach`** — Restores real timers (the test freezes the clock mid-journey).
+- **`ACCOUNT`** – constant holding the email, username, two passwords, and the moved-to address used throughout the journey.
+- **`signIn(email, password, code)`** – performs a two-step login (password → 2FA), extracts the `__Host-session` cookie, and returns it so the caller can mint a one-use bearer via `bearerForCookie`.
+- **`beforeEach` / `afterEach`** – resets the outbox-mail sink, installs the Altcha stub, and restores real Jest timers.
+- **`it('keeps the account safe…')`** – the single test body; ~120 lines of sequential assertions covering every stage listed in Purpose.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once at module load to provision an isolated database.
-- **`tests/support/contract.ts`** — Side-effect import; registers API-contract guards for every `api()` call.
-- **`tests/support/http.ts`** — Provides `api()` (supertest wrapper), `bearerForCookie` (cookie → bearer, single-use refresh), and `loginBearer` (convenience for the pre-2FA token used during TOTP setup).
-- **`tests/support/altcha.ts`** — `useAltcha()` enables the challenge solver; `solvedChallenge()` produces the header for signup and password-reset requests.
-- **`tests/support/cookies.ts`** — `setCookie` extracts the `__Host-session` cookie from the login response.
-- **`tests/support/clock.ts`** — `freezeDate()` / `advanceDate()` simulate time passing so TOTP steps advance and TTL windows elapse deterministically.
-- **`tests/support/totp.ts`** — `codeFor(secret, step)` computes the TOTP code for a given 30-second step, letting the test sign in with the "next" code after each clock advance.
-- **`tests/support/journey-mail.ts`** — `useOutboxMail()` captures mail; `waitForMail` blocks until a specific template arrives; `mailsTo` inspects all messages to an address.
-- **`tests/support/drain.ts`** — `runJob('reap:previous-emails')` and `runJob('reap:account-exports')` trigger the maintenance sweeps and assert their effects.
-- **`tests/support/body-of.ts`** — `bodyOf(response, Schema)` parses a response body against a Zod schema for typed assertions on the audit list.
-- **`src/modules/account/services/export.ts`** — `settleInlineExports()` forces pending export jobs to complete synchronously so the test can fetch the file immediately.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` is the tenant ID passed to `seedMembership` to make the account a tenant admin (required before minting an API key).
-- **`src/modules/access/tests/factories.ts`** — `seedMembership` inserts the admin role row so the account can hold a machine credential.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/access/tenant.ts` | Imports `DEPLOYMENT_TENANT_ID` to seed the account as tenant admin via `seedMembership`. |
+| `src/modules/access/tests/factories.ts` | Imports `seedMembership` to grant the admin role after signup. |
+| `src/modules/account/services/export.ts` | Imports `settleInlineExports` to synchronously run the export pipeline before asserting the file is downloadable. |
+| `tests/support/altcha.ts` | `useAltcha()` installs the human-check stub; `solvedChallenge()` produces the header value for signup and password-reset requests. |
+| `tests/support/body-of.ts` | `bodyOf` parses the audit-list response into a typed Zod object for the final trail assertion. |
+| `tests/support/clock.ts` | `freezeDate` / `advanceDate` drive every time-sensitive check (session staleness, TOTP step rotation, 7-day link expiry). |
+| `tests/support/contract.ts` | Side-effect import that wires contract-test assertions into the supertest setup. |
+| `tests/support/cookies.ts` | `setCookie` extracts the session cookie from a raw response. |
+| `tests/support/drain.ts` | `runJob('reap:previous-emails')` and `runJob('reap:account-exports')` trigger the background sweeps that must clear stale rows. |
+| `tests/support/http.ts` | `api()` for supertest calls, `loginBearer` for the initial TOTP setup, `bearerForCookie` for converting session cookies to one-use bearer tokens. |
+| `tests/support/journey-mail.ts` | `useOutboxMail`, `waitForMail`, `mailsTo` for capturing and asserting outbound mail (verification, reset, revocation, export-ready, undo). |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory/test database before any test runs. |
+| `tests/support/totp.ts` | `codeFor(secret, step)` generates a TOTP code for a specific time-step, letting the test pin the 30-second window. |
 
 ## Notes
 
-- **TOTP step discipline.** Each `codeFor(secret, n)` call refers to a 30-second window. After `advanceDate(60_000)` the next code must use step `0` of the *new* window, not a continuation of the old sequence. The test is written so every sign-in uses a step the account has not consumed yet; using a repeated step will cause a 401.
-- **Bearer vs. cookie sessions.** After re-auth the response may carry a `token` (JWT) or a `sessionToken` (cookie-based session ID). The test normalises both into a single `Bearer` header. Mixing the two (e.g., sending a raw `sessionToken` without the `Bearer` prefix) will fail.
-- **Arming TOTP kills the session that performed it.** The test asserts a 401 on the pre-arm token immediately after `confirm`, then signs in fresh. Forgetting this step causes every subsequent call to 401.
-- **`settleInlineExports` is a production import**, not a test mock. It forces the export pipeline to run synchronously so the test does not need to poll.
-- **Audit assertion uses `arrayContaining`, not exact equality.** The audit log may contain entries the test does not explicitly check; only the listed actions are required to be present.
-- **Clock is frozen for the second half.** All time advances after `freezeDate()` are relative to the frozen point. `advanceDate` calls accumulate; the test never calls `restoreDate` except via the `afterEach` `jest.useRealTimers()`.
+- **One `it` block, many stages.** The entire journey is a single test; a failure mid-stream leaves earlier assertions unreported. Read the `expect` calls in order to find the first break.
+- **Single-use refresh token.** `signIn` deliberately returns the cookie, not a bearer, because calling `bearerForCookie` a second time on the same cookie will 401. Every stage mints its own bearer from a fresh sign-in.
+- **TOTP step indices are load-bearing.** The test advances the clock enough between sign-ins that reusing step `0` is valid (≥ 30 s have passed). If you shorten a `advanceDate` call, a subsequent `codeFor(secret, 0)` may collide with a previously used step and the server will reject it.
+- **Session staleness window.** After `freezeDate` + 60 s, the session is "fresh." After an additional ~15 min (`901_000` ms) it enters the sensitive window, which is what triggers `REAUTH_REQUIRED` on the email-change call. Adjusting either value changes which path is exercised.
+- **Export sweep vs. retention.** The test asserts two distinct states for a lapsed export: the file route returns 404 immediately after expiry, while the metadata route also returns 404 *before* the `reap:account-exports` job runs (the export "counts as none"). Only after the job does the row disappear from the DB.
+- **Clock is forward-only.** The file never calls `freezeDate` to go backwards; every `advanceDate` is strictly positive. This mirrors production semantics where a session or token cannot become "less expired."

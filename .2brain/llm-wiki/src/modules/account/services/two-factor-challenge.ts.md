@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/two-factor-challenge.ts
-sha256: f3e7450f92c2dad658d82c12b40b5795cc623a1b6231ba90249d47040aaa4e9e
-generated_at: 2026-11-08T04:24:00.795291+00:00
+sha256: 3af53cc673892b720e718a10aab2fbe8e6c04f99dd239494cf18e1cf7d082859
+generated_at: 2026-11-14T18:52:49.313827+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the second step of a two-factor login: building an MFA challenge, delivering a code against it, and verifying a submitted code. It deliberately stops short of minting a session — that is the job of `../controllers/post-login-2fa.ts`, which receives the `VerifiedChallenge` this module returns.
+Implements the second factor of a login: building the MFA challenge, delivering a code against it, and verifying a submitted code. It deliberately stops short of minting a session or setting cookies — the `post-login-2fa` controller performs that final step. All logic here is reusable service-level code that the controllers call.
 
 ## Key elements
 
-- **`MFA_CHALLENGE_TTL_MS`** — 5-minute lifetime for challenges whose armed factors are all read-off-device. Also consumed by the deletion-restore claim check.
-- **`MFA_CHALLENGE_DELIVERED_TTL_MS`** — 10-minute lifetime when at least one armed factor delivers via SMTP. Also the window used by `../rate-limits.ts` for the MFA challenge budgets.
-- **`buildLoginChallenge(user, amr)`** — Issues a single-use `MFA_CHALLENGE_TOKEN_TYPE` token (via `issueToken`) and returns the `{ mfaRequired, challenge, expiresAt, methods, defaultMethod }` body for `POST /account/login`. TTL is chosen based on whether any armed handler delivers.
-- **`sendLoginCode(challenge, method, context)`** — Handles `POST /account/login/2fa/send`. Validates the live challenge, delegates to `deliverArmedCode`, and wraps the result in an audit envelope (`AUTH_2FA_CODE_SENT`).
-- **`VerifiedChallenge`** (interface) — `{ user, amr }` returned on successful verification; the controller uses it to mint the session.
-- **`verifyLoginChallenge(challenge, code, context)`** — Handles `POST /account/login/2fa`. Looks up the live token entry, verifies the code via `verifyArmedFactor`/`settleVerdict`, then **spends** the token (only the request that removes it may proceed). Audits failures only (`AUTH_2FA_CHALLENGE_FAILED`); success is left to the controller's `AUTH_LOGIN` audit.
+- **`MFA_CHALLENGE_TTL_MS`** (exported) — 5-minute lifetime for challenges whose armed factors are all device-read.
+- **`MFA_CHALLENGE_DELIVERED_TTL_MS`** (exported) — 10-minute lifetime when at least one armed factor delivers (e.g. email). Consumed by `../rate-limits.ts` to window the two MFA challenge budgets.
+- **`buildLoginChallenge(user, amr)`** (exported) — Mints a single-use `MFA_CHALLENGE_TOKEN_TYPE` token via `issueToken`, picks the correct TTL based on whether any armed handler delivers, and returns the `{ mfaRequired, challenge, expiresAt, methods, defaultMethod }` body for `POST /account/login`.
+- **`sendLoginCode(challenge, method, context)`** (exported) — Handler logic for `POST /account/login/2fa/send`. Looks up the live challenge, delegates to `deliverArmedCode`, and wraps the result in an audit record (`AUTH_2FA_CODE_SENT`).
+- **`VerifiedChallenge`** (exported interface) — `{ user, amr }` shape handed to the controller on a successful verify.
+- **`redeemChallenge(user, amr, challenge)`** (internal) — Atomically spends the challenge token via `spendThen`; only the request whose own write removed it may proceed to `persistTwoFactorMethods`.
+- **`verifyLoginChallenge(challenge, code, context)`** (exported) — Handler logic for `POST /account/login/2fa`. Looks up the live token, verifies the code via `verifyArmedFactor`, settles the verdict through `settleVerdict`, and redeems the challenge. Records an audit entry (`AUTH_2FA_CHALLENGE_FAILED`) **only on failure**; success auditing is left to the controller.
 
 ## Relationships
 
-- **`./tokens`** — `issueToken`, `findLiveToken`, `findLiveTokenEntry`, `spendLiveToken` provide the single-use, hashed-at-rest token store underlying the challenge.
-- **`./two-factor-outcomes`** — `armedEntries` resolves which factors are active; `deliverArmedCode` handles the actual code dispatch; `audited` wraps results in an audit envelope; `summarize` produces the per-method descriptor in the challenge body.
-- **`./two-factor-lockout`** — `verifyArmedFactor` checks the code against the user's factors; `settleVerdict` records the attempt and returns a success/failure verdict consumed here.
-- **`../audit`** — `accountAuditActions` supplies the action identifiers (`AUTH_2FA_CODE_SENT`, `AUTH_2FA_CHALLENGE_FAILED`) for audit records.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every return value.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` normalises unexpected DB failures into a safe HTTP response.
-- **`@infrastructure/i18n`** — `t` provides user-facing error messages.
-- **`@infrastructure/observability/audit`** — `recordAudit` fires the failure audit in `verifyLoginChallenge`.
-- **`@domain-primitives/time`** — `MINUTE_MS` is the unit for the two TTL constants.
-- **`../services/deletion-sign-in`** (via comment) — reuses `MFA_CHALLENGE_TTL_MS` for its restore-claim window.
+- **`src/modules/account/services/tokens.ts`** — Primary token lifecycle: `issueToken` mints, `findLiveToken` / `findLiveTokenEntry` read, `spendThen` atomically consumes.
+- **`src/modules/account/services/two-factor-lockout.ts`** — `verifyArmedFactor` checks the submitted code; `settleVerdict` applies lockout/counter logic before allowing redemption.
+- **`src/modules/account/audit.ts`** — Provides `accountAuditActions` enum values used in audit records.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every return.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` normalises unexpected DB errors.
+- **`src/infrastructure/i18n/index.ts`** — `t` for user-facing error strings.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the failure audit entry.
+- **`src/domain-primitives/time.ts`** — `MINUTE_MS` base unit for the two TTL constants.
+- **`src/modules/account/services/index.ts`** — Re-exports the public API of this module for consumer convenience.
+- **`src/modules/account/services/deletion-sign-in.ts`** — Consumes `MFA_CHALLENGE_TTL_MS` for the deletion-restore claim-check window (noted in the TTL doc comment).
 
 ## Notes
 
-- The challenge token is **single-use and revocable**, not a JWT. A correct code triggers `spendLiveToken`; a wrong code leaves it live and relies on `mfaChallengeLimiter` to bound retries.
-- Only the request whose own write removed the token may proceed (`spentByThisRequest` guard). A concurrent twin receives a 401 as if the challenge never existed.
-- Both "invalid challenge" and "account has no 2FA" return the same `401` with no distinguishing message, to avoid leaking which condition was hit.
-- `amr` is stored on the token entry and must be present; a missing `amr` causes a 401 rather than silently defaulting to a password proof.
-- Success in `verifyLoginChallenge` is intentionally **not** audited here — the session does not exist yet. The controller fires `AUTH_LOGIN` after cookies are set.
+- The challenge is a **hashed, single-use token** (same mechanism as password-reset / deletion confirmation), not a JWT. A second presentation of a redeemed challenge is refused, not merely re-checked.
+- TTL selection is **content-dependent**: any armed handler with `handler.delivers` true bumps the window from 5 min to 10 min. Do not hardcode a single TTL externally.
+- `verifyLoginChallenge` intentionally omits a success audit record; the controller fires `AUTH_LOGIN` once a session actually exists. Adding one here would double-count.
+- `redeemChallenge` is **not exported**. The `@internal` JSDoc on `buildLoginChallenge` notes it should stay out of the public `twoFactorService` surface — only the login controllers may mint sign-in challenges.
+- A 401 response is used for both "challenge not found / expired" and "account has no 2FA enabled" to avoid leaking which condition triggered.

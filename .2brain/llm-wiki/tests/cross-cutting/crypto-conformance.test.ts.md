@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/crypto-conformance.test.ts
-sha256: 855fa1efbeb4a49c4f871d7103c3152a096a0936c8d0ffb7a54415e575639ee9
-generated_at: 2026-11-08T09:26:40.932015+00:00
+sha256: 8fcf36effc47248a7d564f7e7debb8f78c559544ced3bdbad44186ce8a8ef991
+generated_at: 2026-11-14T23:03:09.796506+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Conformance test that verifies this repository's four crypto primitives produce byte-identical output to the PHP twin, driven by a shared case file (`shared/cases/crypto.cases.yaml`). It guarantees cross-language interoperability for pseudonymisation, HKDF subkey derivation, versioned-secret decryption, and argon2id password verification.
+Cross-language conformance test that asserts this repository's cryptographic primitives (pseudonymisation, HKDF subkey derivation, versioned-secret decryption, and argon2id password verification) produce byte-identical results to the PHP twin. Cases are defined in a shared YAML fixture (`shared/cases/crypto.cases.yaml`) so both stacks validate against the same expected outputs.
 
 ## Key elements
 
-- **`cryptoCase`** — Zod `discriminatedUnion` on the `kind` field; defines the four case shapes (`pseudonym`, `subkey`, `decrypt`, `verify-password`) and their required inputs/expected outputs.
-- **`describeCases('crypto', cryptoCase, …)`** — The single test entry point. Switches on `one.kind` and asserts the corresponding primitive's output matches the shared expectation.
+- **`cryptoCase`** – Zod discriminated union (discriminator `kind`) with four variants:
+  - `pseudonym` – root key + purpose + value → expected hex digest.
+  - `subkey` – root + HKDF info → expected hex key.
+  - `decrypt` – versioned ring, purpose, AAD, ciphertext → expected plaintext or the sentinel `'reject'`.
+  - `verify-password` – password + stored hash → expected boolean.
+- **`describeCases('crypto', cryptoCase, …)`** – harness entry point; iterates every YAML case and dispatches on `one.kind` to call the matching implementation and assert equality.
 
 ## Relationships
 
-- **`src/infrastructure/security/pseudonymise.ts`** — Calls `pseudonymise(purpose, value)` and compares the digest to the case expectation.
-- **`src/infrastructure/security/subkey.ts`** — Calls `deriveSubkey(root, info)` and hex-compares the exported key.
-- **`src/infrastructure/security/versioned-secret.ts`** — Calls `decryptVersionedSecret(stored, ring, {purpose, aad}, …)`; asserts either a successful decrypt or a thrown rejection.
-- **`src/infrastructure/security/password-hash.ts`** — Calls `verifyPassword(password, stored)` (async); asserts the boolean result resolves to the expected value.
-- **`tests/support/cases.ts`** — Provides `caseBase` (shared Zod fields every case inherits) and `describeCases` (the harness that loads YAML, validates, and iterates).
-- **`tests/support/environment.ts`** — Provides `setEnvironment`, used to inject `NODE_PSEUDONYM_KEY` before each pseudonym case.
+| Neighbor | Interaction |
+|---|---|
+| `src/infrastructure/security/pseudonymise.ts` | Calls `pseudonymise(purpose, value)` for `pseudonym` cases; requires `NODE_PSEUDONYM_KEY` env var set via `setEnvironment`. |
+| `src/infrastructure/security/subkey.ts` | Calls `deriveSubkey(root, info)` and hex-exports the result for `subkey` cases. |
+| `src/infrastructure/security/versioned-secret.ts` | Calls `decryptVersionedSecret(stored, ring, {purpose, aad}, 'shared case')` for `decrypt` cases. |
+| `src/infrastructure/security/password-hash.ts` | Calls `verifyPassword(password, stored)` (async) for `verify-password` cases. |
+| `tests/support/cases.ts` | Provides `caseBase` (shared schema fields) and `describeCases` (YAML-driven test runner). |
+| `tests/support/environment.ts` | Provides `setEnvironment` to inject `NODE_PSEUDONYM_KEY` before each pseudonym case. |
 
 ## Notes
 
-- The `verify-password` case is the only **async** branch: it returns a promise that the `describeCases` harness awaits. All other branches are synchronous.
-- `setEnvironment` is called **per case** inside the `pseudonym` branch; no global setup resets it between cases—rely on the harness or the key being overwritten each time.
-- The `decrypt` branch encodes failure as the string `'reject'` in `one.expect` (not a boolean), then asserts `toThrow()`.
-- Case data lives outside this file (in the shared YAML), so this file contains no hardcoded vectors—add cases by editing `shared/cases/crypto.cases.yaml`.
+- The `decrypt` case uses the string `'reject'` as a sentinel to mean "expect a throw" rather than a literal expected value; any other string is compared with `toBe`.
+- `verify-password` is the only **async** case—the switch arm returns a promise so the `describeCases` harness can `await` it. All other arms use synchronous `expect(…).toBe(…)`.
+- `setEnvironment` is called **per case** (inside the `pseudonym` arm), not once before the suite, because the root key can differ between cases.
+- The AAD / purpose metadata passed to `decryptVersionedSecret` comes from the case itself, not from a global config, keeping each case self-contained.

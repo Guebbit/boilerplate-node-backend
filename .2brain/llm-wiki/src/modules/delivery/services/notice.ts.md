@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/notice.ts
-sha256: 683faff8fcc187975ccebdf93310fbcb4b782ddea3644d54df41376ef2c5a6b2
-generated_at: 2026-11-08T05:36:51.229445+00:00
+sha256: dadd3741cee5ceb32b51ff6489561f8b7fe897c14bdaba84b7433b71bed41360
+generated_at: 2026-11-14T19:48:00.867151+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single place where a preorder buyer's notice is built and recorded when their delivery date moves (admin edit) or will be missed (daily sweep). It writes the fulfillment order's new state and the `FulfillmentOrderDelayed` event in the caller's transaction; the actual email is dispatched by the announce layer after commit.
+Single point where a preorder's buyer is notified that their delivery date moved (admin edit) or will be missed (daily sweep). It stamps the fulfillment order with notice metadata, applies the new/cleared expected date, records the `FulfillmentOrderDelayed` event, and delegates the actual announcement to the announce service — all within the caller's Mongoose transaction.
 
 ## Key elements
 
-- **`NoticeInput`** (exported interface) — Caller's decision: `reason` (`'moved'` | `'due'`) and `expectedAt` (`Date` to set, `null` to clear, `undefined` to leave unchanged).
-- **`SentNotice`** (exported interface) — Return value after a successful write; carries the updated `FulfillmentOrderDocument`.
-- **`payloadOf`** (private) — Assembles the `FulfillmentOrderDelayed` event payload from the fulfillment order, order, input, and the buyer's prior `promisedAt`. Omits optional fields (`userId`, `promisedAt`, `shipCountry`, `expectedAt`) when they are absent.
-- **`recordNotice`** (exported, main entry point) — Inside the caller's `ClientSession`: reads the order, computes the post-notice promise, builds a `FulfillmentOrderPatch` (stamps `lastNoticeAt`, sets/unsets `expectedAt`/`promisedAt`, records `dueNoticeFor` for sweep dedupe), claims the write via optimistic revision check, then calls `announceDelayed`. Returns `undefined` if the order is gone or the revision is stale.
+- **`NoticeInput`** (exported interface) — Caller-decided notice shape: `reason` (`'moved'` | `'due'`) and optional `expectedAt` (`Date` to move, `null` to clear, `undefined` to leave alone).
+- **`SentNotice`** (exported interface) — Return value: the fulfillment order document as written.
+- **`recordNotice`** (exported function) — Main entry point. Reads the parent order, computes the post-notice `promisedAt`, builds a `FulfillmentOrderPatch`, performs a revision-checked `claim` write via the repository, then calls `announceDelayed` with the event payload. Returns `undefined` if the claim (optimistic concurrency) fails.
+- **`payloadOf`** (module-private) — Assembles the `FulfillmentOrderDelayed` event object from the fulfillment order, order, input, and the pre-notice `promisedAt`.
 
 ## Relationships
 
-- **`../domain` (index)** — imports `promisedAfterNotice` to compute what `promisedAt` should become after the notice (defined in `domain/preorder.ts`).
-- **`../repository`** — calls `fulfillmentOrderRepository.claim` for the revision-guarded write; uses the `FulfillmentOrderPatch` type.
-- **`../model`** — reads/writes `FulfillmentOrderDocument` shape (fields like `lines`, `agreedAt`, `expectedAt`, `promisedAt`, `revision`).
-- **`../events`** — constructs a `FulfillmentOrderDelayed` event via `payloadOf`.
-- **`./announce`** — delegates the post-commit email to `announceDelayed`.
-- **`@modules/orders` (index)** — uses `orderService.readOrder` and `buyerIdOf`; the `OrderDocument` type flows through `payloadOf`.
-- **`./preorder-sweep.ts`** (caller) — invokes `recordNotice` with `reason: 'due'` when the daily sweep finds a date that will be missed.
-- **`./slip.ts`** (caller) — invokes `recordNotice` with `reason: 'moved'` when an admin changes the release date.
+- **`src/modules/delivery/domain/index.ts`** — Provides `promisedAfterNotice`, which computes the updated `promisedAt` given the current value and the new `expectedAt`.
+- **`src/modules/delivery/repository.ts`** — `fulfillmentOrderRepository` performs the revision-guarded `claim` write; `FulfillmentOrderPatch` types the patch.
+- **`src/modules/delivery/model.ts`** — `FulfillmentOrderDocument` type used throughout.
+- **`src/modules/delivery/events.ts`** — `FulfillmentOrderDelayed` is the event shape that `payloadOf` constructs.
+- **`src/modules/delivery/services/announce.ts`** — `announceDelayed` receives the payload and `session` to dispatch the announcement within the transaction.
+- **`src/modules/orders/index.ts`** — `orderService` provides `readOrder` to fetch the parent order; `buyerIdOf` extracts the buyer's user ID for the event payload.
+- **`src/modules/orders/model.ts`** — `OrderDocument` type of the parent order.
 
 ## Notes
 
-- **Optimistic concurrency:** the write is guarded by `fulfillmentOrder.revision`. If a ship or allocation commits first, `claim` fails and the notice is silently dropped — no retry, no error thrown to the caller.
-- **Sweep dedupe:** `dueNoticeFor` is set to the *current* `expectedAt` only when `reason === 'due'` and `expectedAt` is present. A subsequently moved date produces a fresh notice because `dueNoticeFor` no longer matches.
-- **Date clearing:** `expectedAt: null` in `NoticeInput` triggers `unset` of both `expectedAt` and (conditionally) `promisedAt`. A cleared date leaves no promise, so a later redelivery finds nothing to move.
-- **No buyer interaction:** this is a one-way notification. The code does not prompt or block on the buyer; "silence keeps them waiting."
-- **Email is not sent here:** `announceDelayed` is called inside the transaction but is responsible for scheduling the send after commit (see `announce.ts`).
+- **Optimistic concurrency:** `recordNotice` passes `fulfillmentOrder.revision` to `claim`. If the order was shipped or allocated between the caller's read and this write, `claim` returns falsy and the notice is silently dropped — no error, no email.
+- **Sweep dedupe:** When `reason` is `'due'`, the patch sets `dueNoticeFor` to the *current* `expectedAt`, preventing the daily sweep from re-noticing the same date. A subsequent `moved` notice (different date) will still fire.
+- **Cleared dates:** Passing `expectedAt: null` unsets both `expectedAt` and (if `promisedAfterNotice` returns `null`) `promisedAt` from the document, so a later redelivery sweep finds nothing to track.
+- **Email timing:** The top-level doc comment states "the email follows the commit," yet `announceDelayed` is called with the `session` argument inside the transaction. The announcement is therefore recorded atomically; actual delivery is presumably triggered post-commit by the announce layer.

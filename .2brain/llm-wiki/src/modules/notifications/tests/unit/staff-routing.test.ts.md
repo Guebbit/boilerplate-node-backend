@@ -1,7 +1,7 @@
 ---
 source: src/modules/notifications/tests/unit/staff-routing.test.ts
-sha256: 001dc90bc118657eb869b635079348e60131d7091a28811b46c72f040cd99a24
-generated_at: 2026-11-08T06:37:21.715402+00:00
+sha256: f8c665ea7588084cd220701a0dfc5ad857332d0151c7e6d5a70e4964e638fcdd
+generated_at: 2026-11-14T20:27:49.238191+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the staff-notification routing layer. Verifies that every project notice has a route with valid permission sets, that email dispatch timing matches urgency, that generated links point to the correct staff pages, that rendered emails carry proper locale text and links, and that access-control helpers behave correctly for each role.
+Unit tests for the staff-notification routing layer. Verifies that the `STAFF_ROUTES` table is complete and self-consistent (every notice has a valid route, referenced permission sets exist, email timing matches intent), and that the helper functions (`staffLinkOf`, `setsOfRoute`, `callerHoldsAnySet`, `staffNoticeEmail`) resolve links, permission gating, and localized email content correctly across the two served locales.
 
 ## Key elements
 
-- **`BODIES`** — Fixture map with one valid notice body per routed code (`webhook-disabled`, `task-opened`, `task-overdue`, `task-due-soon`, `task-assigned`, `outbox-dead`).
-- **`describe('STAFF_ROUTES')`** — Asserts route-key completeness against `BODIES`, that declared permission sets exist in `PERMISSION_SETS`, and that email timing (`'now'` vs `'none'`) follows the "act-soon" rule.
-- **`describe('staffLinkOf')`** — Verifies link generation: task pages for generic tasks, the opener's named work screen when present, webhook subscription page for disabled webhooks, and that `task-assigned` always opens the to-do page.
-- **`describe('staffNoticeEmail')`** — Renders emails in `en` and `it`; checks that subject/summary contain no internal code prefix, that the link is locale-prefixed, that contact tasks are labelled by category (or "none"), and that every `TaskKind` has a translation.
-- **`describe('setsOfRoute')`** — Confirms fixed routes return their own sets, `per-notice` routes return the caller-supplied list, and an empty list means administrators-only.
-- **`describe('callerHoldsAnySet')`** — Validates role-based access: admins see everything, members see only their role's sets, empty set list restricts to admins.
+- **`PAGES`** – alias for `FRONTEND_LINK_RULES.staffPages`; the canonical link templates asserted against throughout the file.
+- **`BODIES`** – one valid notice body (code + params) per staff notice code; serves as the fixture set and the expected key set for `STAFF_ROUTES`.
+- **`describe('STAFF_ROUTES')`** – asserts route-key parity with `BODIES`, validates that every declared permission set exists in `PERMISSION_SETS`, and checks email timing (`'now'` vs `'none'`) and per-notice set inheritance.
+- **`describe('staffLinkOf')`** – verifies link resolution: task notices fall back to the task page, an explicit `work` param takes precedence, assigned tasks stay on the task page, and webhook-disabled notices point at the subscription page.
+- **`describe('staffNoticeEmail')`** – parameterized over `en`/`it`; asserts localized subject/summary, correct link with locale prefix and URL-encoding, category/kind naming, and that raw code strings never leak into output.
+- **`describe('setsOfRoute')`** – confirms fixed routes return their own sets while `per-notice` routes return the caller-supplied list (or `[]` if none given).
+- **`describe('callerHoldsAnySet')`** – exercises the admin-bypass rule and role-based set matching using `callerAs` fixtures.
 
 ## Relationships
 
-- **`src/modules/notifications/staff-routing.ts`** — Primary module under test; exports `STAFF_ROUTES`, `staffLinkOf`, `setsOfRoute`, `callerHoldsAnySet`.
-- **`src/modules/notifications/emails.ts`** — Provides `staffNoticeEmail`, the rendering function exercised in the email tests.
-- **`src/kernel/permissions.ts`** — Supplies `PERMISSION_SETS`; tests cross-check that every set named in a route actually exists.
-- **`src/infrastructure/http/frontend-link.ts`** — Source of `FRONTEND_LINK_RULES.staffPages`, the canonical staff page templates used as expected link values.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `translator` helper used to fetch locale strings for assertions on email content.
-- **`src/types/index.ts`** — `TaskKind` enum; tests iterate its values to confirm a translation exists for each.
-- **`tests/support/callers.ts`** — `callerAs` factory used to build role-scoped callers for access-control tests.
+- **`src/modules/notifications/staff-routing.ts`** – the module under test; provides `STAFF_ROUTES`, `staffLinkOf`, `setsOfRoute`, `callerHoldsAnySet`.
+- **`src/modules/notifications/emails.ts`** – provides `staffNoticeEmail`, tested for correct i18n output and link embedding.
+- **`src/kernel/permissions.ts`** – `PERMISSION_SETS` is the authoritative list used to validate route declarations.
+- **`src/infrastructure/http/frontend-link.ts`** – exports `FRONTEND_LINK_RULES`; its `staffPages` member supplies the expected link templates (`PAGES`) used in assertions.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** – `translator` is used to resolve expected localized strings for assertions.
+- **`src/types/index.ts`** – `TaskKind` enum is iterated to ensure every kind has a label in every locale.
+- **`tests/support/callers.ts`** – `callerAs` builds role-tagged caller fixtures for permission tests.
 
 ## Notes
 
-- `per-notice` routes deliberately carry no sets of their own; the producing module is responsible for supplying them at emission time. An empty set list on such a route means "administrators only."
-- The `outbox-dead` notice is excluded from email-rendering tests because it mails nobody and carries no link.
-- Tests assert that the internal code prefix `notifications.staff-mail` never leaks into subject lines or summary text — a guard against shipping raw i18n keys to users.
-- Link assertions expect a locale-prefixed path (e.g. `/en/tasks/t1`) and URL-encoding of special characters (`o%201`).
+- `per-notice` routes are a special case: they declare no sets of their own; the producer is responsible for naming sets at emit time. Tests treat `sets === 'per-notice'` as "no sets to validate here."
+- `notifications.staff.outbox-dead` is the only notice with `email: 'none'` and no link; email tests explicitly skip it.
+- The i18n leak guard checks that the literal string `notifications.staff-mail` (an internal code fragment) never appears in subject or summary output.
+- Locale tests are limited to `en` and `it`; adding a served language requires extending the `it.each` arrays and the `BODIES`-driven loops.
+- Uses `Array.prototype.toSorted()` (ES2023) rather than in-place `sort()`.

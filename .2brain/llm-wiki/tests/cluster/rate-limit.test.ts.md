@@ -1,7 +1,7 @@
 ---
 source: tests/cluster/rate-limit.test.ts
-sha256: c146f89c03485f04e658cc5e1e3bf108c349268aa90cfd3e621c2665e46a766c
-generated_at: 2026-11-08T09:17:48.024767+00:00
+sha256: 42dbdf7a2ce0767b326d17e5d971faba0d281cedb3c4502dbd0da597b1de10e8
+generated_at: 2026-11-14T22:56:45.282881+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that the rate-limit budget is **shared across all cluster workers** when a Redis store is configured, and deliberately reproduces the per-process bug when it is not. A single-process test cannot distinguish a shared counter from a per-process one, so without this suite a regression back to the in-memory store would pass the entire repository's test run.
+Verifies that `express-rate-limit` enforces a single shared budget across all forked workers when counters are stored in Redis, and demonstrates (as a deliberate control) that per-process in-memory counters grant `LIMIT × workers` instead. The suite exists because no single-process test can observe the bug this file guards against: a regression to the in-memory store would pass every other test in the repository.
 
 ## Key elements
 
-- **`LIMIT` (5), `WORKERS` (2), `BURST` (30)** — the three constants that shape both test cases. Chosen so an off-by-one is not the only explanation for a passing/failing assertion.
-- **`keyPrefix()`** — returns `cluster-test-<pid>-<timestamp>` so consecutive runs do not collide within Redis's 60-second sliding window.
-- **`burstAgainst(cluster)`** — fires `BURST` simultaneous requests, each on a **fresh TCP connection** (via `getOnFreshConnection`), then tallies status codes.
-- **`'spends one budget across every worker'`** — the positive assertion: exactly `LIMIT` responses are `200`, the rest `429`, with two workers behind the cluster.
-- **`'gives each worker its own budget when the counters are in memory'`** — the control: identical scenario with `NODE_RATE_LIMIT_REDIS_URL` explicitly blanked. Asserts exactly `LIMIT × WORKERS` are `200`, proving both workers actually served traffic (otherwise the positive case would be vacuous).
-- **`jest.setTimeout(240_000)`** — 4-minute ceiling for the suite (two cluster boots + Redis container pull).
+- **`LIMIT`, `WORKERS`, `BURST`** — constants: 5, 2, 30. Chosen so the burst exceeds the budget but the margin isn't an off-by-one.
+- **`keyPrefix()`** — generates a unique Redis key prefix per run (`cluster-test-<pid>-<timestamp>`) to avoid cross-run contamination within the 60-second rate-limit window.
+- **`burstAgainst(cluster)`** — fires `BURST` requests concurrently, each on a fresh connection (`getOnFreshConnection`), then tallies status codes via `tally`.
+- **`'spends one budget across every worker'`** — the fix case. Spins up a 2-worker cluster with `NODE_RATE_LIMIT_REDIS_URL` set; asserts exactly `LIMIT` 200s and `BURST − LIMIT` 429s.
+- **`'gives each worker its own budget when the counters are in memory'`** — the control case. Same scenario with `NODE_RATE_LIMIT_REDIS_URL` explicitly blanked; asserts `LIMIT × WORKERS` 200s. Proves both workers actually served requests, making the first assertion meaningful.
+- **`beforeAll` guard** — throws (does not skip) if no container engine or `NODE_TEST_REDIS_URL` is available, treating missing Redis as a fatal test error rather than a skip.
 
 ## Relationships
 
-- **`tests/cluster/support/cluster.ts`** — supplies `withCluster` (forks a real multi-worker app with the given env), `getOnFreshConnection` (opens a one-shot HTTP connection to a port), `tally` (counts status codes), and the `Cluster` type.
-- **`tests/cluster/support/redis.ts`** — supplies `startRedis` (boots a Redis instance, either in a container or via `NODE_TEST_REDIS_URL`) and the `TestRedis` type.
-- **`tests/support/container-engine.ts`** — `containerEngineAvailable` is checked in `beforeAll`; if neither a container engine nor an explicit Redis URL is available the suite **throws** rather than skips.
+- **`tests/cluster/support/cluster.ts`** — provides `withCluster` (spawns a real multi-worker process cluster with given env), `getOnFreshConnection` (opens a new TCP connection per request), `tally` (counts HTTP status codes), and the `Cluster` type.
+- **`tests/cluster/support/redis.ts`** — provides `startRedis` (boots a disposable Redis instance, returns a `TestRedis` handle with `.url` and `.stop()`).
+- **`tests/support/container-engine.ts`** — provides `containerEngineAvailable`, used to decide whether the suite can start its own Redis container or must fall back to an externally provided `NODE_TEST_REDIS_URL`.
 
 ## Notes
 
-- **Not in `npm run complete`.** Two cluster boots plus a Redis image pull take roughly 20 s each; see `docs/tools/cluster-testing.md` for the intended invocation path.
-- **Refuses to skip.** The `beforeAll` guard throws an error if no Redis can be reached. The rationale (in the file header): an unchecked security control is the entire point of this suite.
-- **The control test blanked URL is deliberate.** A developer's local `.env` may carry `NODE_RATE_LIMIT_REDIS_URL`; leaving it unset would silently route counters back to Redis and collapse the control into a duplicate of the positive case.
-- **Fresh connections matter.** `getOnFreshConnection` ensures the OS does not round-robin a burst across workers on a single reused socket, which would mask a per-process counter.
-- **Historical bug documented in the header:** the first run revealed that `RedisStore.init()` issued two `connect()` calls on the same node-redis client, destroying the socket the first was using. The fix lives in `rate-limit-store.ts` (a shared `connecting` promise); these tests keep it from regressing.
+- **Not in `npm run complete`.** Booting two clusters plus a Redis container takes ~40 s total; see `docs/tools/cluster-testing.md` for the rationale.
+- **Jest timeout is 240 s** (4 min) to accommodate both cluster boots.
+- **The control case explicitly sets `NODE_RATE_LIMIT_REDIS_URL` to `''`.** A developer's `.env` may carry a real URL; leaving it unset would silently put counters back in Redis and turn the control into a duplicate of the fix case.
+- **The suite refuses to skip.** The file's docblock argues that an unverified security control is worse than a failing test, so the `beforeAll` throws rather than calling `describe.skip`.
+- **Historical bug it pins down:** on first run, `RedisStore.init()` issued two script loads back-to-back; both saw `isReady === false`, both called `connect()`, node-redis rejected the second with "Socket already opened", and the failure path destroyed the shared client — leaving every request unbudgeted while logs reported Redis unreachable. The fix is a shared `connecting` promise in `rate-limit-store.ts`; these two cases are what keep it in place.

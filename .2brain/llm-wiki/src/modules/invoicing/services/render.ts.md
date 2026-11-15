@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/services/render.ts
-sha256: 677e1065facd1ba818ad39b2558e4b69e03f1bfb3c98062ac4c5e79ed27010ca
-generated_at: 2026-11-08T06:15:44.968945+00:00
+sha256: a85ec5cb661cb87f7c991a7b780bb54d36029b4a437f06fafb87b9a60f707ed9
+generated_at: 2026-11-14T20:13:57.098626+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single rendering point for both invoice and credit-note PDFs. It lazily renders on first download (not at issue time), optionally caches the bytes on disk, and shields controllers from the e-invoicing provider port. The frozen row in Mongo is the source of truth; the stored file is a regenerable copy.
+The single entry point that turns a frozen `InvoiceDocument` or `CreditNoteDocument` into PDF bytes. Controllers never resolve the e-invoicing provider port themselves; they call one of this file's two exports and receive a `Buffer`. Rendering is deferred to the **first** download (not issue time) and the result is cached on disk, making the stored PDF a regenerable copy of the Mongo source of truth.
 
 ## Key elements
 
-- **`renderInvoicePdf(invoice)`** *(exported)* — Renders an invoice's PDF via the provider port, returning `Buffer`.
-- **`renderCreditNotePdf(creditNote)`** *(exported)* — Same for credit notes; additionally passes `reversalOf.invoiceNumber` to the provider.
-- **`storedDocumentName(kind, id)`** *(exported)* — Builds the cache filename: `invoice-<id>.pdf` or `credit-note-<id>.pdf`.
-- **`sharedFields(document, kind)`** *(internal)* — Maps a stored document to the provider's `EInvoicingDocument` shape. **Sole call-site** for `decryptInvoiceParty` on the billing address.
-- **`storedOrRendered(name, render)`** *(internal)* — Orchestrates the read-cache → render → write-cache flow. Skips caching entirely when retention is `0`.
-- **`readStored(name)`** *(internal)* — Reads a cached PDF; swallows errors into a `warn` log and returns `undefined`.
-- **`storeBestEffort(name, bytes)`** *(internal)* — Writes a rendered PDF; a write failure logs a warning but still resolves with `bytes`.
+- **`renderInvoicePdf(invoice)`** *(exported)* — Returns the invoice's PDF bytes. Reads the cached copy if one exists, otherwise renders via the provider and stores the result.
+- **`renderCreditNotePdf(creditNote)`** *(exported)* — Same flow for a credit note; additionally passes `reversalOf` (the original invoice number) to the provider.
+- **`storedDocumentName(kind, id)`** *(exported)* — Builds the deterministic storage key, e.g. `invoice-<id>.pdf` or `credit-note-<id>.pdf`.
+- **`sharedFields(document, kind)`** *(internal)* — Projects the document into the `EInvoicingDocument` shape the provider expects. The **only** place the encrypted billing address is decrypted (via `decryptInvoiceParty`).
+- **`storedOrRendered(name, render)`** *(internal)* — Orchestrates the read → fallback-render → best-effort-store sequence. Skips storage entirely when `NODE_INVOICE_PDF_RETENTION_DAYS` is `0`.
+- **`readStored(name)`** *(internal)* — Wraps `readDocument` so a read failure logs a warning and resolves `undefined` instead of rejecting.
+- **`storeBestEffort(name, bytes)`** *(internal)* — Wraps `writeDocument` so a write failure logs a warning but still resolves the bytes.
 
 ## Relationships
 
-- **`document-store.ts`** — Consumes `readDocument` / `writeDocument` as the PDF cache backend.
-- **`logger.ts`** — Emits `warn`-level entries when a cache read or write fails.
-- **`config.ts`** — Reads `NODE_INVOICE_PDF_RETENTION_DAYS` to decide whether caching is active.
-- **`model.ts`** — Types the inputs (`InvoiceDocument`, `CreditNoteDocument`).
-- **`pii.ts`** — Provides `decryptInvoiceParty` (the one plaintext reader for stored addresses) and the `InvoiceDocumentKind` discriminator.
-- **`providers/index.ts`** — Resolves the e-invoicing provider port and supplies the `EInvoicingDocument` contract.
-- **`services/index.ts`** — Barrel that re-exports the public API of this module.
-- **`render.test.ts`** — Unit tests covering rendering, caching, and failure paths.
+- **`src/modules/invoicing/providers/index.ts`** — Calls `resolveEInvoicingProvider().render(...)` to actually produce the PDF. This file is the sole caller of the provider port in the invoicing module.
+- **`src/infrastructure/adapters/document-store.ts`** — Uses `readDocument` / `writeDocument` for the on-disk PDF cache.
+- **`src/modules/invoicing/pii.ts`** — Calls `decryptInvoiceParty` to obtain the plaintext billing address; imports the `InvoiceDocumentKind` union type.
+- **`src/modules/invoicing/model.ts`** — Imports `InvoiceDocument` and `CreditNoteDocument` types.
+- **`src/modules/invoicing/config.ts`** — Reads `NODE_INVOICE_PDF_RETENTION_DAYS` to decide whether to cache.
+- **`src/infrastructure/adapters/logger.ts`** — Emits warnings on read/store failures.
+- **`src/modules/invoicing/services/index.ts`** — Barrel re-export surface for this module.
+- **`src/modules/invoicing/tests/unit/render.test.ts`** — Unit tests covering the render, store, and fallback paths.
 
 ## Notes
 
-- **Lazy, not eager.** PDFs are produced on first download, not at issue time, to avoid Chromium/disk cost for never-opened invoices.
-- **Concurrent first downloads are safe.** Two simultaneous renders produce identical bytes; the store write is atomic, so last-writer-wins is harmless.
-- **Retention = 0 disables caching entirely** — every download triggers a fresh render.
-- **No error propagates from the cache layer.** Both read and write failures degrade gracefully: the caller always receives PDF bytes.
-- **PII boundary.** `sharedFields` is the only place the encrypted billing address is decrypted; no other code in the module sees plaintext party data.
-- **Stryker annotations** on the catch/reject handlers suppress mutation testing for the intentionally-no-op fallback branches.
+- **Fault tolerance is one-directional:** both read and store failures are swallowed (logged + fallback). A download never 500s because of the cache layer.
+- **Concurrent first downloads** of the same document both render; this is safe because the render is deterministic (same frozen row) and the store write is atomic.
+- **`retentionDays === 0`** is a valid config meaning "never cache, always render fresh."
+- **`sharedFields` is the sole decryptor** of the billing address — do not add another plaintext reader elsewhere without going through this function.
+- **Stryker mutation-testing disables** are present on the two `logger.warn` lines, meaning those log calls are excluded from mutation coverage expectations.

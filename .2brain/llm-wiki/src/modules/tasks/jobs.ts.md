@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/jobs.ts
-sha256: 3ba71e9c883484ad9fcf8aeed8075da0d0dffc82457e3e6389b179424d9ee171
-generated_at: 2026-11-08T08:34:32.158578+00:00
+sha256: c3a67f12ff2b66c2dccdf5b768788a8100aa6e236bc9685b1df823f78381ee24
+generated_at: 2026-11-14T22:08:20.004424+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the scheduled job(s) owned by the `tasks` module. Currently a single job — the **sweep** — which reminds staff of overdue tasks and tasks due soon, then flushes the resulting outbox nudges before the process exits.
+Declares the scheduled job(s) owned by the `tasks` module: a single "sweep" job that fires reminders for overdue and due-soon tasks. It wires the generated job metadata to the actual execution logic and sets the lease window.
 
 ## Key elements
 
-- **`tasksJobs`** (exported `readonly JobDeclaration[]`) – The job registry entry for this module. Contains one declaration built from `tasksJobData.sweepTasksOverdue` (imported from `./jobs.generated`):
-  - **`run`** – Fires `taskService.remindOverdue()` and `taskService.remindDueSoon()` concurrently via `Promise.all`, then calls `settleOutboxNudges()` so the outbox rows are delivered before the process exits, and finally logs a summary (`overdue` / `dueSoon` counts) via `logger.info`.
-  - **`needs`** – `{ subscriptions: true, i18n: true }`; the job only writes `task.overdue` / `task.due_soon` rows and relies on the `notifications` subscription and translation lookups for delivery.
-  - **`lease`** – `{ ttlMs: 30 * MINUTE_MS }`; ensures a single sweep runs at a time.
+- **`tasksJobs`** (`readonly JobDeclaration[]`) — The exported array of job declarations for this module. Currently contains one entry.
+- **`sweepTasksOverdue`** (inline in the array) — Spreads pre-generated metadata from `tasksJobData.sweepTasksOverdue` (imported from `./jobs.generated`) and overrides `run` and `lease`.
+  - `run` — Calls `taskService.remindOverdue()` and `taskService.remindDueSoon()` concurrently via `Promise.all`, then logs a structured info message with the counts from both passes.
+  - `lease` — Sets `ttlMs` to `30 * MINUTE_MS` (30 minutes), ensuring only one sweep runs at a time.
 
 ## Relationships
 
-- **`src/modules/tasks/service.ts`** – Calls `taskService.remindOverdue()` and `taskService.remindDueSoon()`, the two reminder passes that produce the outbox rows.
-- **`src/kernel/outbox.ts`** – Calls `settleOutboxNudges()` to flush pending nudge rows before the job completes.
-- **`src/kernel/registry.ts`** – Supplies the `JobDeclaration` type that shapes each entry in `tasksJobs`.
-- **`src/domain-primitives/time.ts`** – Imports `MINUTE_MS` to express the 30-minute lease TTL.
-- **`src/infrastructure/adapters/logger.ts`** – Imports `logger` for the completion info line.
-- **`tests/integration/ops-task-overdue-job.test.ts`** – Integration test that exercises this sweep job end-to-end.
+- **`src/kernel/registry.ts`** — Provides the `JobDeclaration` type that shapes each entry in `tasksJobs`.
+- **`src/modules/tasks/services/index.ts`** — Exports `taskService`, whose `remindOverdue` / `remindDueSoon` methods are the actual work performed by the job.
+- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` used for the post-sweep info log.
+- **`src/domain-primitives/time.ts`** — Provides the `MINUTE_MS` constant used to compute the lease TTL.
+- **`src/modules/tasks/module.ts`** — The module entry point that registers `tasksJobs` into the kernel.
+- **`tests/integration/ops-task-overdue-job.test.ts`** — Integration test exercising the overdue-reminder path of this job.
 
 ## Notes
 
-- Both passes (overdue + due-soon) are deliberately combined into **one** job because a task is due-soon *or* overdue, never both; splitting them would only add complexity.
-- The `settleOutboxNudges()` call is a best-effort in-process flush; a separate "minute backstop" (outside this file) catches any nudge rows that are still pending after the job returns.
-- The job does **not** send notifications or render staff mail itself — it writes task-status rows and depends on the `notifications` subscription and i18n translations to do the actual delivery.
+- The job file is intentionally thin: all scheduling metadata (cron/schedule, names) lives in `jobs.generated.ts`. The hand-written file only supplies `run` and `lease`.
+- Both reminder passes run in a **single** job invocation. The inline comment clarifies the design intent: a task is "due soon" or "overdue", never both, so one job covers both without double-firing.
+- `tasksJobs` is typed `readonly`; consumers should treat it as immutable.

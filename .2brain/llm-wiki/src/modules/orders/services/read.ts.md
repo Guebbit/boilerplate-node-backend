@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/read.ts
-sha256: 60e80d555cf3454597f42d41c73d7fde578175bce6d665253124a3da7c420b65
-generated_at: 2026-11-08T06:59:46.707873+00:00
+sha256: c8983e9bad660ec5276c14af35052fcdf3f09d473741c811f0d3409f6d2d2fef
+generated_at: 2026-11-14T20:45:51.128952+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-All read-side operations for the orders module: searching, single-order retrieval by ID, narrow batch lookups for sibling modules (delivery, checkout, admin boards, data export), and decryption of stored PII addresses. Writes live in `./crud` and `./remove`; this file is the read counterpart.
+Provides all read-side operations for orders: paginated search, single-order retrieval by ID, narrow batch lookups (IDs, briefs, references), PII address decryption, and the open-unpaid-order check that checkout's stock cap depends on. It is the read counterpart to the write services in `./crud` and `./remove`, and the entry point controllers use when they need order data without side effects.
 
 ## Key elements
 
-- **`withFulfillmentFilter`** – Rewrites `fulfillmentStatus` (derived, not a column) and `orderNumber` (canonicalised via `parseOrderNumber`) into repository conditions; ANDs them into the caller scope. An unparseable order number yields `$in: []` (empty page, not an error).
-- **`search`** – Primary search handler. Delegates to `orderRepository.search`, resolves current product images via `resolveCurrentImages`, and optionally emits the `orders_viewed` analytics event. Returns `{ items: ExportOrder[], meta }`.
-- **`ownOrderIds`** – All order IDs for a user, paged internally with `readAll`. Returns bare string IDs (wire shape `id`), no image resolution or analytics.
-- **`OrderBrief`** (interface) – Minimal per-order data for admin boards: `id`, `orderNumber`, `userId?`, `email`, `paidAt?`.
-- **`orderBriefsByIds`** – Batch-fetches briefs by ID (`$in` query) in one round-trip. Returns `Map<string, OrderBrief>`; unmatched IDs are simply absent.
-- **`findOwnOrders`** – All orders for a user in `ExportOrder` shape, routed through `search` (so image resolution runs). No analytics emit — an export is not a view.
-- **`getById`** – Single `OrderDocument` by ID with optional scope filter. Returns `undefined` for falsy ID or not-found.
-- **`getForCaller`** – `getById` wrapped in `callerScope(authContext)`; a missing, malformed, or foreign order all resolve to `undefined` so the controller can 404 uniformly.
-- **`billingAddressOf` / `shippingAddressOf`** – Decrypt the stored ciphertext address on an `OrderDocument` via `decryptOrderAddress`. `billingAddressOf` is for invoice issuance; `shippingAddressOf` is for delivery's copy onto a shipment.
-- **`openUnpaidOrderIds`** – IDs of a user's currently open, unpaid orders (regardless of payment method). Used by checkout's open-order stock cap.
-- **`findManyByIds`** – Returns `OrderReference[]` (order number + email) for a set of IDs. No lines, no addresses.
+- **`withFulfillmentFilter`** – Translates the two non-column filters (`fulfillmentStatus`, `orderNumber`) into repository conditions and ANDs them with the caller scope. Canonicalises `orderNumber` via `parseOrderNumber`; a non-numeric value yields an empty page (`$in: []`) rather than an error.
+- **`search`** – Paginated order search. Resolves current images in one batched call, then optionally emits the `orders_viewed` analytics event. Returns `{ items: ExportOrder[], meta: PaginatedMeta }`.
+- **`ownOrderIds(userId)`** – Every order ID for a user, paged internally with `readAll`. Returns the wire-shape `id` field, not full documents.
+- **`OrderBrief`** – Minimal shape (id, orderNumber, email, optional userId, optional paidAt) for admin boards.
+- **`orderBriefsByIds`** – Batch lookup returning a `Map<string, OrderBrief>`; unmatched IDs are simply absent.
+- **`findOwnOrders(userId)`** – All orders for a user in `ExportOrder` wire shape. Routes through `search` (so image resolution runs) but passes no `context`, suppressing the analytics emit.
+- **`getById(id, scope?)`** – Single order by ID as a hydrated `OrderDocument`. Returns `undefined` for falsy id or no match.
+- **`getForCaller(id, authContext?)`** – `getById` wrapped in `callerScope`; missing, malformed, or another user's order all resolve to `undefined` (controllers map to 404).
+- **`billingAddressOf` / `shippingAddressOf`** – Decrypt the stored ciphertext on an `OrderDocument` into a plaintext address object; return `undefined` if the field is absent.
+- **`openUnpaidOrderIds(userId)`** – IDs of a user's currently open-and-unpaid orders; the input to checkout's open-order cap.
+- **`findManyByIds(ids)`** – Batch lookup of `OrderReference` (order number + email) for display beside other lists (e.g. payments).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/search.ts`** – Provides `readAll`, `MAX_CONFIGURED_PAGE_SIZE`, and `PaginatedMeta` for internal pagination in `ownOrderIds` and `findOwnOrders`.
-- **`src/infrastructure/persistence/create-repository.ts`** – Provides `toObjectId` used in `orderBriefsByIds` to convert string IDs for the `$in` query.
-- **`src/infrastructure/observability/analytics/index.ts`** – Provides `emitAnalyticsEvent` / `buildAnalyticsBase`; called in `search` when a `CallerContext` is present.
-- **`src/modules/orders/repository.ts`** – Supplies `orderRepository`, the sole data-access object used by every function in this file.
-- **`src/modules/orders/model.ts`** – Source of the `OrderDocument` and `OrderReference` type shapes.
-- **`src/modules/orders/pii.ts`** – Provides `decryptOrderAddress` used by `billingAddressOf` and `shippingAddressOf`.
-- **`src/modules/orders/domain/index.ts`** – Re-exports `buyerIdOf` and `fulfillmentStatusFilter` (the latter defined in `domain/fulfillment.ts`) used in `orderBriefsByIds` and `withFulfillmentFilter` respectively.
-- **`src/modules/orders/analytics.ts`** – Supplies the `ordersAnalyticsEvents.ORDERS_VIEWED` event name.
-- **`src/modules/orders/services/current.ts`** – Provides `resolveCurrentImages`, batched per page in `search`.
-- **`src/modules/orders/services/export.ts`** – Consumer of `findOwnOrders` for the account data-export flow.
-- **`src/modules/delivery/presenter.ts`** – Consumer of `shippingAddressOf` to copy the plaintext address onto a shipment.
-- **`src/modules/orders/services/index.ts`** – Re-exports the public surface of this file for other modules.
+| Neighbor | Interaction |
+|---|---|
+| `../repository` (`orderRepository`) | All data access: `search`, `findByIdScoped`, `findByIds`, `findOpenUnpaidIdsOf`, `findManyReferences`. |
+| `./current` (`resolveCurrentImages`) | `search` calls it once per page to swap in the latest product images. |
+| `./scope` (`callerScope`, `ownerScope`) | Builds the scope object passed to the repository for `getForCaller`, `ownOrderIds`, `findOwnOrders`. |
+| `../domain` (`buyerIdOf`, `fulfillmentStatusFilter`) | Derives the buyer ID for `OrderBrief` and builds the fulfillment-status filter condition. |
+| `../pii` (`decryptOrderAddress`) | `billingAddressOf` and `shippingAddressOf` decrypt stored ciphertext. |
+| `@infrastructure/persistence/search` (`readAll`, `MAX_CONFIGURED_PAGE_SIZE`) | Internal pagination loop in `ownOrderIds` and `findOwnOrders`. |
+| `@infrastructure/observability/analytics` | `search` emits `ORDERS_VIEWED` via `emitAnalyticsEvent` + `buildAnalyticsBase`. |
+| `../analytics` (`ordersAnalyticsEvents`) | Supplies the event constant for the analytics emit. |
+| `../model` (`OrderDocument`, `OrderReference`) | Type imports for the hydrated document and the narrow reference shape. |
+| `./order-numbering` (`parseOrderNumber`) | Canonicalises the `orderNumber` filter in `withFulfillmentFilter`. |
+| `src/modules/delivery/presenter.ts` | Consumer: copies `shippingAddressOf` output onto a shipment (noted in docstring). |
 
 ## Notes
 
-- `getById` always returns a hydrated `OrderDocument` (ciphertext addresses), **not** the wire-shape `Order`. Only `toJSON` or the explicit `billingAddressOf` / `shippingAddressOf` helpers decrypt. Callers must not assume the address fields are already plaintext.
-- `search` emits analytics only when a `CallerContext` is supplied. `findOwnOrders` deliberately omits context so an export does not register as a "view."
-- `ownOrderIds` and `findOwnOrders` both page internally with `readAll`, but `ownOrderIds` hits the repository directly (no image resolution), while `findOwnOrders` goes through `search` (image resolution runs). Pick the one matching your need.
-- `orderBriefsByIds` and `findManyByIds` both short-circuit on an empty input array, returning an empty `Map` or `[]` without hitting the database.
-- `withFulfillmentFilter` is exported and can be composed by callers who need to add their own scope conditions before calling the repository directly.
+- **`fulfillmentStatus` is derived, not stored.** The filter is built from the same table that serialises the value at read time, so it cannot disagree with the displayed status.
+- **`orderNumber` canonicalisation is silent.** A non-numeric input (e.g. a quoted word) produces an empty page, not a 400/500—mirroring how payments handle a bad `transferReference`.
+- **`getById` always returns a hydrated `OrderDocument`** (ciphertext addresses included). Use `billingAddressOf`/`shippingAddressOf` to get plaintext; calling `toJSON` is an alternative but these helpers are the sanctioned path.
+- **`findOwnOrders` intentionally omits the analytics context** so a data-export does not register as a "view" in dashboards.
+- **`ownOrderIds` reads the wire shape (`Order.id`)**, not the `OrderDocument._id`. Don't confuse the two when mapping results.
+- **`openUnpaidOrderIds` is order-method-agnostic** (card, bank transfer, `processing` card all hold stock); the cap exists to prevent one account exhausting inventory.

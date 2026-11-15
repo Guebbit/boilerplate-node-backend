@@ -1,7 +1,7 @@
 ---
 source: src/modules/shop-tasks/asyncapi.notifications.yaml
-sha256: 9c5b22314493f55410ea739ca74bec437948636684dfab81846bbefd183e45bb
-generated_at: 2026-11-08T08:13:54.882248+00:00
+sha256: 2fdf30e5678f442a6175ae7eb2655d24a155f2f292e80540bc48bcb581107872
+generated_at: 2026-11-14T21:49:49.429879+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-An AsyncAPI **fragment** (not a standalone document) that extends the global `NotificationPayload` union with every buyer-message and staff-work-notice payload the shop-tasks module emits. It is the AsyncAPI-side mirror of `./openapi.notifications.yaml`; the bundler (`scripts/contracts/asyncapi-section-fragments.ts`) merges it into the `notifications` section only while this module exists. Deleting the module removes these payloads and the stream falls back to the five base notices every project shares.
+An AsyncAPI **fragment** (not a standalone document) that extends the shared `notifications` stream with 19 shop-specific payload variants — buyer messages and staff work notices. The bundler merges it into the stream's `NotificationPayload` union via `x-extends`; it only participates in the contract while the `shop-tasks` module exists.
 
 ## Key elements
 
-- **`x-extends.NotificationPayload`** – Lists 19 payload schemas appended to the shared `NotificationPayload` union (e.g. `NotificationStaffPurchaseHoldPlacedPayload`, `NotificationFulfillmentHeldPayload`, `NotificationShipmentLostPayload`, `NotificationStockAlertPayload`, `NotificationFulfillmentDelayedPayload`, `NotificationCartLineRemovedPayload`, `NotificationWishlistItemRemovedPayload`, `NotificationCartMergeRefusedPayload`, plus several `NotificationStaff*` variants).
-- **`components.schemas.*ParamsPayload`** – Parameter sub-objects shared across notification payloads (e.g. `PurchaseHoldPlacedParamsPayload`, `FulfillmentHeldParamsPayload`, `ShipmentLostParamsPayload`, `FulfillmentDelayedParamsPayload`, `CartLineRemovedParamsPayload`, `CartMergeRefusedLinePayload` / `CartMergeRefusedParamsPayload`).
-- **`components.schemas.Notification*Payload`** – Full notification envelope schemas, each requiring `id`, `audience` (`own` | `staff`), `code` (a single `shop-tasks.*` string), `params`, `severity` (`info` | `success` | `warning` | `error`), and `createdAt`; `readAt` is optional.
+- **`x-extends: NotificationPayload`** — appends 19 payload schema names to the stream's discriminated union (e.g. `NotificationStaffPurchaseHoldPlacedPayload`, `NotificationFulfillmentHeldPayload`, `NotificationCartLineRemovedPayload`, etc.).
+- **`components/schemas/*ParamsPayload`** — the `params` objects each notification carries (e.g. `FulfillmentHeldParamsPayload`, `CartMergeRefusedParamsPayload`, `PurchaseHoldPlacedParamsPayload`).
+- **`components/schemas/Notification*Payload`** — full notification envelopes: `id`, `audience` (`own` | `staff`), `code` (dotted enum like `shop-tasks.fulfillment-held`), `params` (ref to the matching `*ParamsPayload`), `severity`, `readAt` (optional), `createdAt`.
+- All schemas use `additionalProperties: false` and a fixed `required` list.
 
 ## Relationships
 
-- **`src/modules/shop-tasks/module.ts`** – The module's existence is the merge condition: the bundler includes this fragment in the generated AsyncAPI contract only while this module is present. Removing the module (or deleting this file) drops all listed payloads from the stream.
-- **`src/modules/shop-tasks/openapi.notifications.yaml`** – The OpenAPI/REST counterpart defining the same notification variants for the HTTP API. Schemas are **repeated** here rather than cross-referenced so each document validates and generates Zod schemas independently; the producer is typed against both to keep them in sync.
+- **`src/modules/shop-tasks/openapi.notifications.yaml`** — the OpenAPI twin. This file intentionally **repeats** the same payload shapes (rather than `$ref`-ing across formats) because each document is validated and code-generated independently; the two are kept in sync only by the producer being typed against both.
+- **`src/modules/shop-tasks/module.ts`** — the module's existence is what keeps this fragment active. Deleting the module removes these 19 variants from the stream union, reverting it to the five base notices shared by all projects.
 
 ## Notes
 
-- This is a **fragment**, not a complete AsyncAPI document. It has no top-level `channels` or `operations`; it only contributes schemas and the `x-extends` directive.
-- Schemas are deliberately duplicated from the OpenAPI file (not `$ref`'d across files) because each contract is validated and code-generated in isolation.
-- Order matters: member schemas are listed **before** the `x-extends` union entry that references them, because the generated Zod schemas are emitted as `const` declarations.
-- `additionalProperties: false` is set on every object schema; adding a new field requires updating both this file and its OpenAPI twin.
-- The `titles` field in several param schemas is a locale-keyed map (`Record<string, string>`), not a single string.
+- **Fragment, not document.** Do not open this file expecting a full AsyncAPI `channels`/`operations` block; it only contributes schema names and definitions.
+- **Ordering matters.** Schemas are listed before the `x-extends` union that names them because the generated Zod types are `const` bindings — a forward reference would break generation.
+- **Duplicated, not shared.** The schemas mirror `openapi.notifications.yaml` verbatim. If you change a shape, you must update **both** files; there is no cross-document `$ref`.
+- **`NotificationStockAlertPayload` reuses `CartLineRemovedParamsPayload`** as its `params` — a deliberate shortcut, not a typo.

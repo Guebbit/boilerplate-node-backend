@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-role-matrix.ts
-sha256: f54d8f4f65ad466ee0ebac450e61f19331707d615a6246bb2e96254604566684
-generated_at: 2026-11-08T02:48:39.426975+00:00
+sha256: d4f886cfcd4fbbd9d3e34ec2a12675467afd2c1df9e7cd13d45e377d4a5aa38a
+generated_at: 2026-11-14T17:33:43.210148+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates and maintains role-permission matrix tables in the docs. For `docs/demo-ecommerce/index.md` it writes the full "effective role matrix" (which action codes each role/audience holds, per module), and for each module's page under `docs/modules/` it writes a per-rule "who can do what" table. The effective matrix is computed by asking the kernel's `heldRules` evaluator rather than re-expanding permission sets locally, because the result (set expansion, audience folding, implied actions, conditions) is too complex to derive by hand.
+Generates and maintains the **effective role matrix** tables in documentation: one role × module summary table on `docs/demo-ecommerce/index.md` and one "who can do what" per-rule table on each module's docs page. All tables live inside HTML-comment markers so surrounding prose stays hand-written. In `--check` mode it reports drift without rewriting (used by `complete`). The matrix is produced by asking the real evaluator (`heldRules`) rather than re-expanding permission sets, keeping a single source of truth for "what may this role do."
 
 ## Key elements
 
-- **`personas`** — Ordered list of rows: audience names (`guest`, `unverified`, `customer`, …) followed by preset roles (excluding `system`). Each carries a `scope`, optional `role` name, and `audience`.
-- **`modules`** — Unique module names from `PERMISSION_RULES`, in declaration order; these form the table columns.
-- **`callerFor(persona)`** — Resolves a persona into a `Caller` via `keysInScope` + `assembleCaller`, using literal `'generated'` for identity/org (no real request context exists).
-- **`cell(caller, module)`** — Produces one cell in the index matrix: one-letter action codes (`r`, `c`, `u`, `d`, `x`, `s`, `o`), **uppercase** when the rule is unconditional, lowercase when conditioned, `—` for nothing. Expands `IMPLIED_ACTIONS` (e.g. `display` → also `r`).
-- **`effectiveTable()` / `body()`** — Assembles the full Markdown block (header row, separator, data rows, legend prose) for the index page.
-- **`ruleCell(rule, caller)`** — One cell in a module page: `✅`, `✅ own` (condition pins to caller's rows), or `⚡c`/`⚡s` (step-up tier); `—` if not held.
-- **`moduleBody(pageModules)`** — Builds the per-rule table for a module docs page, including the permission sets that bundle each rule and a credential-mintability column.
-- **`pageOf(module)` / `modulesByPage()`** — Maps modules to their docs pages; `core` → `locales`, `example` → no page.
-- **`pages`** — Flat list of every `{ file, blocks, label }` this script owns (index page first, then module pages).
-- **`run()`** — Iterates all pages, calls `applyMarkerBlocks` on each, returns the worst exit code. Supports `--check` mode (report drift, don't write).
+- **`personas`** – The rows: every `AUDIENCE_NAMES` entry (guest, unverified, verified, etc.) plus every `PRESET_ROLES` entry except `system`, each resolved with the `customer` audience.
+- **`modules`** – Deduplicated module names extracted from `PERMISSION_RULES`; these become the column headers.
+- **`callerFor(persona)`** – Builds a `Caller` via `keysInScope` + `assembleCaller`, mimicking what the runtime evaluator would see for that persona.
+- **`cell(caller, module)`** – Produces one compact cell: one-letter action codes (`r c u d x s o`), **UPPERCASE** when the rule is unconditional, lowercase when a condition narrows it, em-dash when nothing is held. Also folds in `IMPLIED_ACTIONS`.
+- **`effectiveTable()` / `body()`** – Assemble the full index-page block (table + legend + reading guidance) that replaces the content between `<!-- role-matrix:start -->` and `<!-- role-matrix:end -->`.
+- **`ruleCell(rule, caller)`** – Per-rule cell for module pages: ✅ / ✅ own / ⚡c / ⚡s / —, reflecting held status, caller-scoped conditions, and step-up tier.
+- **`moduleBody(pageModules)`** – Builds the per-module table (rule × persona grid with set membership, credential flag, and description).
+- **`pageOf(module)` / `modulesByPage()`** – Maps module names to their docs page (`core` → `locales`, `example` → no page); groups modules by page.
+- **`pages`** – The list of all target files and their marker blocks the script owns.
+- **`run()`** – Iterates every page, calls `applyMarkerBlocks`, and returns the worst exit code across pages.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/kernel/permissions.ts` | Source of `PERMISSION_RULES`, `PERMISSION_SETS`, `PRESET_ROLES`, `AUDIENCE_NAMES`, `IMPLIED_ACTIONS`, `keysInScope`, `assembleCaller` — the entire permission model the matrix is built from. |
-| `src/kernel/ability.ts` | Imports `heldRules`, the single authoritative "which rule IDs does this caller hold" function. The script never re-expands sets itself. |
-| `scripts/docs/marker-block.ts` | Imports `applyMarkerBlocks` to write or check the `<!-- role-matrix:… -->` / `<!-- permissions:… -->` delimited blocks in each page. |
-| `scripts/modules-on-disk.ts` | Imports `REPO_ROOT` as the base path for resolving doc file locations. |
+| `src/kernel/permissions.ts` | Source of truth: imports `AUDIENCE_NAMES`, `IMPLIED_ACTIONS`, `PERMISSION_RULES`, `PERMISSION_SETS`, `PRESET_ROLES`, `assembleCaller`, `keysInScope`, and the `AudienceName` type. |
+| `src/kernel/ability.ts` | Imports `heldRules` — the single evaluator the script asks "can this caller do this rule?" for every cell. |
+| `scripts/docs/marker-block.ts` | Imports `applyMarkerBlocks` to write or check the content between start/end markers on each page. |
 | `scripts/cli.ts` | Imports `hasFlag` to detect `--check`. |
-| `scripts/fail-script.ts` | Imported as the `catch` handler on the top-level `run()` promise. |
+| `scripts/fail-script.ts` | Imports `failScript` as the top-level error handler. |
+| `scripts/modules-on-disk.ts` | Imports `REPO_ROOT` for resolving doc file paths. |
 
 ## Notes
 
-- **`system` is excluded** from `personas` deliberately: it is an alias for `admin`'s permission list in `authorization-roles.yaml` and is never a role an operator assigns, so including it would duplicate `admin`'s row.
-- **`callerFor` uses `'generated'`** for identity and org IDs because the script has no `AuthContext`. The comment notes this is safe because `permissions` (the only field the evaluator consults for rule matching) is derived solely from `keysInScope`.
-- **`core` maps to `locales`** and **`example` has no page** — both are special-cased in `pageOf`.
-- **One-letter codes** keep the wide matrix table legible; the legend in `body()` documents the mapping and the uppercase/lowercase convention.
-- The script follows the same marker-block pattern as `generate-module-graph.ts`: prose outside the markers is never touched; only the content between `START`/`END` is regenerated.
+- **`system` is excluded** from `personas` by design: it is `admin`'s permission list under an alias (see `authorization-roles.yaml`), never a role an operator assigns, and its row would duplicate `admin`'s exactly.
+- **`guest` and `unverified` are included** even though nobody "holds" them as roles; they serve as the baseline every other row is compared against.
+- **Staff rows are always evaluated with the `customer` audience** — a signed-in caller is a customer first (`keysInScope` enforces this); the script mirrors that by hard-coding `audience: 'customer'` for preset roles.
+- **`core` maps to the `locales` page; `example` has no page.** `pageOf` encodes this one-off mapping.
+- **One table per page.** The generated block is self-contained; all surrounding prose is hand-written and must not be regenerated.
+- **Uppercase vs. lowercase in the effective table** is the primary readability signal: uppercase = the rule applies to every row; lowercase = narrowed to the caller's own or published rows.
+- **The script never re-expands `PERMISSION_SETS`** for the effective table; it asks `heldRules` (which already resolves sets → rules). Sets are only listed as text in the module-level tables for context.

@@ -1,34 +1,33 @@
 ---
 source: src/modules/users/services/signup.ts
-sha256: 5669c5d016dca2b22b56a4dd83b1458ff004d18fa58dcafb3253a289427af8f2
-generated_at: 2026-11-08T08:52:16.252133+00:00
+sha256: f725cc20d1635604c38c30de21951ab3f1fd19fd476764a48ba37a65d801c011
+generated_at: 2026-11-14T22:31:46.531829+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/users/services/signup.ts
 
 ## Purpose
-Thin service layer for every account-creation path in the system: self-service signup, OAuth-vouched signup, the anti-automation decoy response, and attaching/detaching federated identities. Each entry point is a one-line delegation to `userRepository`, distinguished from its siblings only by a compile-time `Pick<>` field type that encodes which account fields that path is allowed to write.
+
+Service layer that encapsulates the four account-creation paths (self-service, OAuth-vouched, anti-automation decoy, and the link/unlink operations) and delegates all persistence to the repository. Its primary design goal is compile-time enforcement of which fields each path is allowed to set, so a caller cannot accidentally grant a self-service signup the privileges of a provider-vouched one.
 
 ## Key elements
 
-- **`SignupDecoyFields`** (type) — `Pick<UserDocument, …>` for the decoy path. Excludes `verifiedAt`; the decoy document is *built*, never persisted.
-- **`buildSignupDecoy(data)`** — Calls `userRepository.build()` to return a fully-shaped document without writing it. Used to make a policy-refused attempt indistinguishable from a genuine one.
-- **`SelfServiceSignupFields`** (type) — `Pick` that deliberately omits `verifiedAt`, `active`, and `oauthAccounts`, so a self-service caller cannot grant itself verified/active status at compile time.
-- **`registerSelfService(data)`** — Calls `userRepository.create()`. The account lands in the `unverified` audience; `verifiedAt` is set later by the verification-email flow, not here.
-- **`OAuthSignupFields`** (type) — `Pick` that *includes* `verifiedAt`, `active`, and `oauthAccounts`, reflecting provider vouching.
-- **`registerFromOAuth(data)`** — Same one-line `userRepository.create()` call as self-service, but typed against `OAuthSignupFields`. Split into a separate function purely so the two field sets are enforced independently at the type level.
+- **`SignupDecoyFields`** / **`buildSignupDecoy(data)`** — Anti-automation deception path. Calls `userRepository.build` (constructs a document *without* persisting). Excludes `verifiedAt`; the returned doc looks real to an attacker but was never written.
+- **`SelfServiceSignupFields`** / **`registerSelfService(data)`** — Standard email/password signup. Deliberately excludes `verifiedAt`, `active`, and `oauthAccounts`. Delegates to `userRepository.create`.
+- **`OAuthSignupFields`** / **`registerFromOAuth(data)`** — Provider-vouched signup; *may* set `verifiedAt`, `active`, and `oauthAccounts`. Body is identical to `registerSelfService` but the type constraint is the safety mechanism.
 - **`unlinkOAuthAccount(userId, provider)`** — Detaches one provider link; returns `false` if the provider was never linked.
-- **`linkOAuthAccount(userId, account)`** — Attaches a federated identity to an existing account; returns `false` if the provider is already linked.
+- **`linkOAuthAccount(userId, account, session)`** — Attaches a federated identity inside a transaction (same `ClientSession` also deletes the link token). Performs **no** verification itself.
 
 ## Relationships
 
-- **`../model.ts`** — Source of the `UserDocument` type. Every exported field type in this file is a `Pick<>` over `UserDocument`, so adding or renaming a column there propagates as a compile error here.
-- **`../repository.ts`** — Supplies `userRepository`, whose `build`, `create`, `linkOAuthAccount`, and `unlinkOAuthAccount` methods are the actual data-access calls. This file contains no persistence logic of its own.
-- **`services/index.ts`** — Barrel/re-export neighbor in the same service directory; consumers import from the barrel rather than from this module directly.
+- **`src/modules/users/model.ts`** — Imports the `UserDocument` type; every exported `Pick<>` field type is derived from it.
+- **`src/modules/users/repository.ts`** — Imports `userRepository`; every exported function is a thin delegation to a repository method (`build`, `create`, `unlinkOAuthAccount`, `linkOAuthAccount`).
+- **`src/modules/users/friends/account.ts`** — Referenced in the `linkOAuthAccount` doc comment: `account` verifies the provider's claim *before* calling this function. No import; the contract is documented, not enforced by this file.
 
 ## Notes
 
-- `registerSelfService` and `registerFromOAuth` have **identical runtime bodies** (`userRepository.create(data)`). They exist as separate functions solely so TypeScript rejects a self-service caller that passes `verifiedAt`/`active`/`oauthAccounts`, and an OAuth caller that omits them. Do not merge them.
-- `buildSignupDecoy` uses `userRepository.build`, **not** `create` — it intentionally skips any write. The return value is a plain document object for the anti-automation response.
-- None of the exported functions contain orchestration (anti-automation checks, duplicate-email pre-check, verification-email send). Those live in the caller layer ("`account`'s OWN orchestration" per the doc comment) and run *around* these calls.
+- `buildSignupDecoy` uses `userRepository.build` (non-persisting) rather than `create`; this is the only export that does not write to the database.
+- `registerFromOAuth` is intentionally kept as a separate function from `registerSelfService` despite an identical one-line body — the *type* is the guard. Merging them would lose the compile-time distinction.
+- `linkOAuthAccount` accepts a `ClientSession` parameter, meaning the caller is responsible for wrapping it in a transaction alongside the link-token deletion.
+- The `account` module (orchestration layer) is responsible for anti-automation checks, duplicate-email pre-checks, verification emails, and provider verification. This file contains none of that logic.

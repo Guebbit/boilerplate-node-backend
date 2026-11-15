@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/step-up-otp.test.ts
-sha256: ca9cc130b881e8c78fafa57e17d3acb757c0431884f23325b43f447bbfe42e64
-generated_at: 2026-11-08T04:44:20.780008+00:00
+sha256: 809fe2d34ba107965a8bcf51c2fa27fb2d2cb042078225950da70c48f5716895
+generated_at: 2026-11-14T19:12:19.641178+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests covering the step-up (second-factor) authentication flow on account identity routes: verifying that email-change, password-change, and deletion endpoints require an `otp` proof when 2FA is armed, that re-authentication earns only the claims it proved, and that an email change can be undone from the old address's link. Also confirms that accounts without 2FA are unaffected.
+Integration tests covering the step-up OTP requirement for identity-sensitive account routes (email change, password change, account deletion). Verifies that sessions proven only by password are challenged for an `otp` method, that re-authentication via `POST /account/reauth` earns or denies OTP proof correctly, and that email changes can be undone from the old address's mailed link.
 
 ## Key elements
 
-- **`mockOutbox`** — Array capturing every queued email (recipient, template, data) via a `jest.mock` of the mailer adapter's `enqueueEmail`.
-- **`sessionWith(userId, amr)`** — Mints a re-minted session (refresh + access token) carrying the given `amr` claims, returning `bearer` and `cookie` headers. Used to simulate pre-existing sessions with varying proof levels.
-- **`armedAccount(email?)`** — Creates a verified user, logs in, sets up and confirms TOTP 2FA, then calls `forgetSessionEpoch`. Returns the user and the backup codes.
-- **`tokenOfLastMail(template)`** — Scans `mockOutbox` for the most recent email of a given template and extracts the token from its `linkUrl`.
-- **`requestChange(bearer, email?)`** — `PATCH /account` with a new email.
-- **`undo(token)`** — `POST /account/email-change/undo` to spend an undo token.
-- **`requested()`** — Sets up a full email-change scenario (create user → request change) and returns both the undo token and the confirm token from the mocked outbox.
-- **Three `describe` blocks** — (1) identity routes gated by OTP, (2) `POST /account/reauth` with OTP (including wrong-code 422, locked 429, and no-attempt-spend on wrong password), (3) undoing an email change (restores old email, bumps `tokensValidAfter`, cancels pending confirmation).
+- **`mockOutbox` / `jest.mock('@infrastructure/adapters/mailer')`** — intercepts `enqueueEmail` so tests can read queued mail (template, recipient, link tokens) without a real transport.
+- **`sessionWith(userId, amr)`** — mints a session token pair (bearer + cookie) via `continueSession` + `createAccessToken` with a chosen `amr` array, standing in for a pre-existing session rather than a first login.
+- **`armedAccount(email?)`** — creates a verified user, logs in, arms TOTP (setup + confirm with `codeFor`), forgets the session epoch, and returns the user plus backup codes.
+- **`tokenOfLastMail(template)`** — scans `mockOutbox` for the newest mail of a given template and extracts the `token` query-param from its `linkUrl`.
+- **`requested()`** — orchestrates a full email-change request (create user → session → `requestChange`) and returns the user, bearer, undo token, and confirm token.
+- **`undo(token)` / `requestChange(bearer, email?)`** — thin API-call helpers for the undo and email-change endpoints.
+- **`statusOf(pending)` / `emailOf(userId)`** — small async helpers to flatten a Promise into a status code or read the stored email from `userRepository`.
+- **Three `describe` blocks**: (1) identity-route gating with/without a second factor, (2) `POST /account/reauth` with OTP (valid, invalid, locked, wrong-password, no-2FA), (3) undoing a pending or confirmed email change.
 
 ## Relationships
 
-- **`src/modules/account/session/jwt.ts`** — Imports `createAccessToken` and `continueSession` to mint sessions with specific `amr` claims without going through the login endpoint.
-- **`src/modules/users/tests/factories.ts`** — Imports `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` for user setup and password payloads.
-- **`src/modules/users/repository.ts`** — Imports `userRepository` to assert on stored state (email, `mfaFailures`, `mfaLockedUntil`, `tokensValidAfter`, `pendingEmail`) and to directly update lock fields for the 429 test.
-- **`tests/support/http.ts`** — Imports `api` as the supertest-style HTTP client for all route calls.
-- **`tests/support/setup-test-db.ts`** — Imports `setupTestDb` (called once at module scope) to provision/tear down the test database.
-- **`tests/support/environment.ts`** — Imports `setEnvironment` to set `NODE_MAIL_TRANSPORT: 'outbox'` so the mailer mock is active.
-- **`tests/support/totp.ts`** — Imports `codeFor` to generate a valid TOTP code during the 2FA confirmation step in `armedAccount`.
-- **`tests/support/session-epoch.ts`** — Imports `forgetSessionEpoch` to clear the session-epoch cache after TOTP setup so subsequent assertions aren't affected.
-- **`src/modules/account/tests/factories.ts`** — Imports `plantToken`, `removeTokensOfKind` (used in the truncated portion, likely for token-state setup in the undo/confirmation tests).
+- **`@tests/http` → `api()`** — all HTTP assertions go through this helper (supertest-style client).
+- **`@tests/setup-test-db` → `setupTestDb()`** — called once at module top to provision/tear down the test database.
+- **`@tests/environment` → `setEnvironment`** — sets `NODE_MAIL_TRANSPORT: 'outbox'` so the mailer mock is the active transport.
+- **`@tests/totp` → `codeFor`** — generates a valid TOTP code from a secret for the setup-confirm step.
+- **`@tests/session-epoch` → `forgetSessionEpoch`** — resets the session-epoch guard after the login that arms 2FA, so subsequent `sessionWith` calls aren't blocked.
+- **`@modules/users/tests/factories`** — provides `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and re-exports `userRepository`.
+- **`@modules/users/repository` → `userRepository`** — used to read stored state (`email`, `mfaFailures`, `tokensValidAfter`, `previousEmail`, `pendingEmail`) and to update lock state (`updateMany`).
+- **`../../session/jwt` → `createAccessToken`, `continueSession`** — used by `sessionWith` to mint a session from the token layer directly, bypassing the HTTP login flow.
+- **`../factories` → `plantToken`, `removeTokensOfKind`** — imported for token-seeding utilities (available for test setup if needed).
 
 ## Notes
 
-- `sessionWith` deliberately creates a **re-mint** (not a first session) to stand in for a session that existed *before* 2FA was armed; a first-session mint would be refused by the server.
-- `armedAccount` calls `forgetSessionEpoch` after TOTP confirmation to reset the session-epoch tracker, preventing stale epoch state from leaking into subsequent assertions.
-- The mailer mock is applied via `jest.mock` at module scope; `mockOutbox` is cleared in `beforeEach` alongside the environment reset.
-- The 429 (locked) test writes `mfaFailures: 10` and a future `mfaLockedUntil` directly via `userRepository.updateMany`, bypassing the API to set the locked state.
-- The "no attempt spent on wrong password" test asserts `mfaFailures` remains `0` after a failed password + OTP combo, confirming the OTP check is short-circuited when the password is invalid.
+- The mailer mock spreads `requireActual` so non-`enqueueEmail` exports remain functional; only the enqueue function is replaced.
+- `sessionWith` deliberately uses `continueSession` (a re-mint) rather than a first-session path; the comment notes a first-session mint would be refused by the app for an already-armed account.
+- `forgetSessionEpoch` is called inside `armedAccount` after the login that triggers TOTP setup — without it, the epoch guard would reject the subsequent `sessionWith` call.
+- The "wrong password does not spend an attempt" test asserts `mfaFailures` remains `0`, confirming the app validates password before touching the MFA counter.
+- The undo test checks that `tokensValidAfter` is set (epoch bump), invalidating all outstanding sessions — a security invariant worth preserving.
+- `tokenOfLastMail` uses `findLast` (ES2023); the build target must support it.

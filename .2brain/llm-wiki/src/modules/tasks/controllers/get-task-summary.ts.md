@@ -1,7 +1,7 @@
 ---
 source: src/modules/tasks/controllers/get-task-summary.ts
-sha256: 46f6c4a840047f511b9ea1c3241b66c045f497d0ffc6f089817d64b618b67430
-generated_at: 2026-11-08T08:31:44.734267+00:00
+sha256: 6f3d58f66fbb76c309f1ae8c49114a4bfdebe8986929c6ce95e0f2802918b589
+generated_at: 2026-11-14T22:05:48.898144+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `GET /tasks/summary`. It extracts the caller context from the request, delegates to the task service to fetch staff badge counts, and returns them as a 200 JSON response. Exists to separate the Express plumbing from the domain logic in `service.ts`.
+Thin HTTP controller for the `GET /tasks/summary` endpoint, which returns aggregate task counts for the staff badge. It extracts the caller context, delegates to the task service, and formats the JSON response.
 
 ## Key elements
 
-- **`getTaskSummary(request, response)`** – Exported Express handler. Calls `taskService.summary(callerContextOf(request))`, sends the result via `successResponse(response, counts, 200)`, and funnels errors through `catchAs(response, 'getTaskSummary')`.
+- **`getTaskSummary(request, response)`** — The sole export. An Express handler that calls `taskService.summary(callerContextOf(request))`, sends a `200` success response with the returned counts object, and routes any thrown error through `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** – Supplies `catchAs`, the shared error-catch wrapper that serializes failures into a standard HTTP error response.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf`, which extracts the authenticated caller's identity/context from the Express request for service use.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, which wraps a payload into the project's standard success envelope and sets the status code.
-- **`src/modules/tasks/service.ts`** – Provides `taskService.summary(ctx)`, the actual business logic that computes the badge counts.
-- **`src/modules/tasks/routes.ts`** – Registers `getTaskSummary` as the handler for the `GET /tasks/summary` route (staff-guarded).
+- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, the shared error-handler factory used in the `.catch` chain.
+- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to derive the authenticated caller's context from the raw Express request.
+- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to build the standard `{ data }` JSON envelope.
+- **`src/modules/tasks/routes.ts`** — Registers `getTaskSummary` as the handler for the `GET /tasks/summary` route (with staff-level auth).
+- **`src/modules/tasks/services/index.ts`** — Imports `taskService`; the controller calls its `summary()` method.
 
 ## Notes
 
-- The handler is intentionally minimal: no validation, no branching, no state. All logic lives in `taskService.summary`.
-- JSDoc links to `docs/modules/tasks.md` for broader module context.
-- The endpoint is marked **(staff)**; authorization enforcement is expected to be handled upstream (routes or middleware), not inside this controller.
+- The handler is a single-expression arrow function (no explicit `return`); it returns the promise chain from `taskService.summary(...)`.
+- Error handling is delegated entirely to `catchAs(response, 'getTaskSummary')` — no local try/catch or status-code logic in this file.
+- The `counts` payload shape is defined by `taskService.summary()`, not by this controller; the controller is purely a pass-through.

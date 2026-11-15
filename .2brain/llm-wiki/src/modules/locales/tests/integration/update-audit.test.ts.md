@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/integration/update-audit.test.ts
-sha256: 57fa59d4577b57e675e5a2b7c4074f6365c4a409afc3aff65ea35a37a76876a7
-generated_at: 2026-11-08T06:28:51.624674+00:00
+sha256: 2fe221df2469e8e0053e6291a861ad1f459294247ea8d01e83cfca3cf8cb0b7a
+generated_at: 2026-11-14T20:25:07.267949+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify the **metadata shape** of audit events emitted by the three locale-service write operations (`updateLanguage`, `deactivateLanguage`, `updateEntry`). The file exists to pin down the audit contract: which fields are recorded, how "from/to" deltas are shaped, and what is deliberately *excluded* (entry text is never copied into the audit trail).
+Integration tests that verify the audit metadata emitted when locale service mutations occur. It encodes the project's audit design principle: language-level changes record each display field's old/new values, while entry-level changes record only the key and the fact that `value` moved — never the text itself.
 
 ## Key elements
 
-- **`metadataOf(spy, action)`** — helper that pulls the `metadata` object from the first `emitAuditEvent` call matching a given `action` string.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the entire audit port with the shared `auditPortMock()` from `tests/support/ports.ts`; the port is *replaced*, not spied on.
-- **`describe('localeService.updateLanguage — the audit row')`** — asserts that changed display fields (`name`, `direction`) appear as `{ from, to }` pairs under `metadata.changes`.
-- **`describe('localeService.deactivateLanguage — the audit row')`** — asserts the `active` flag delta (`true → false`) is recorded.
-- **`describe('localeService.updateEntry — the audit row')`** — asserts the audit records `locale`, `app`, `key`, and `changedFields: ['value']`, but **not** the actual text.
+- **`metadataOf`** – local helper that pulls the `metadata` object out of the first matching audit-spy call for a given action string.
+- **`describe('localeService.updateLanguage …')`** – asserts the audit row carries per-field `{ from, to }` diffs for `name` and `direction`.
+- **`describe('localeService.deactivateLanguage …')`** – asserts the audit row carries the `active` flag transition (`true → false`).
+- **`describe('localeService.updateEntry …')`** – asserts the audit row names `locale`, `app`, `entryKey`, and `changedFields` but omits the actual text.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** — the SUT; all three service methods are exercised.
-- **`src/modules/locales/audit.ts`** — provides the `localeAuditActions` constants used as expected `action` values.
-- **`src/infrastructure/observability/audit.ts`** — the audit port module that is fully mocked at the module level.
-- **`src/modules/locales/repository.ts`** — `localeRepository` / `localeEntryRepository` seed test data before each assertion.
-- **`src/modules/locales/factories.ts`** — `makeLocale` / `makeLocaleEntry` build the fixture rows.
-- **`src/modules/locales/tests/unit/apps.fixture.ts`** — supplies the `FRONTEND` app identifier.
-- **`tests/support/ports.ts`** — provides `observePort` (spies a specific port function) and the `auditPortMock` used by the `jest.mock` factory.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies a standard caller identity for service calls.
-- **`tests/support/setup-test-db.ts`** — in-memory DB setup called once before all tests.
+- **`src/modules/locales/services/index.ts`** – the system under test; three mutation methods are exercised here.
+- **`src/infrastructure/observability/audit.ts`** – the audit port whose `emitAuditEvent` is fully replaced at module level (not spied on).
+- **`src/modules/locales/audit.ts`** – source of the `localeAuditActions` constants used in assertions.
+- **`src/modules/locales/factories.ts`** – `makeLocale` / `makeLocaleEntry` used to seed test rows.
+- **`src/modules/locales/repository.ts`** – `localeRepository` / `localeEntryRepository` used to create preconditions.
+- **`tests/support/ports.ts`** – supplies `observePort` (spy wrapper) and the mock factory used in the module-level replacement.
+- **`tests/support/callers.ts`** – supplies `testCallerContext` passed as the caller argument to every service call.
+- **`tests/support/setup-test-db.ts`** – initialises a real test database (this is an integration test, not a unit test).
+- **`src/modules/locales/tests/unit/apps.fixture.ts`** – provides the `FRONTEND` app-identifier constant.
 
 ## Notes
 
-- The module docblock states the design intent explicitly: the audit trail records *which* fields moved and the entry key, but **never** the entry's text value. The `updateEntry` test enforces this by asserting `changedFields: ['value']` with no text payload.
-- `metadataOf` finds the first matching call by `action`; if a service emitted the same action twice in one test, only the first would be inspected.
-- `afterEach` calls `jest.restoreAllMocks()`, so any spy created by `observePort` is torn down between tests; the module-level `jest.mock` persists for the whole file.
+- The audit port is **replaced at module level**, not spied on: the entire `src/infrastructure/observability/audit.ts` module is swapped with the factory from `tests/support/ports.ts`. Do not add `jest.spyOn` here; follow the port-replacement pattern.
+- `afterEach(jest.restoreAllMocks)` is the sole cleanup; there is no explicit `teardownDb`.
+- The header comment is load-bearing: it states the project rule that the audit trail is *not* a second copy of the dictionary. Any new test for entry updates should assert the *absence* of text in the metadata.

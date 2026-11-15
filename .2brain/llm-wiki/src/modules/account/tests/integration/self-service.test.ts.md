@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/self-service.test.ts
-sha256: 895083bb89dab486834eba639c9ed726e9fef03ad8c184375805f0643742b783
-generated_at: 2026-11-08T04:41:40.180819+00:00
+sha256: 8259fe4df47c3bd290bea559f7db59eeff0c3d096d7f2055b82759311712b18e
+generated_at: 2026-11-14T19:09:27.181214+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the self-service account surface (profile update, password change, session revocation, email verification) exercised at the service/repository layer. Tests are grouped by the invariant each defends: profile updates must not alter role/state/password; a wrong current password yields 422 (never 401); at most one email-verification link is valid (always the newest); email changes are staged as `pendingEmail` with strict collision and no-op semantics.
+Integration tests for the self-service account service surface (profile update, password change, session revocation, email verification/confirmation). Each test group defends a specific invariant: a profile update cannot mutate role/state/password, a wrong current password yields 422 (never 401), and at most one verification link is valid (always the newest). Tests run against a real test database via `setupTestDb`.
 
 ## Key elements
 
-- **`describe('updateProfile')`** — covers field updates, avatar removal (`imageUrl: null` triggers `imageStore.remove`), 401-on-deleted-account, pending-email staging, case-insensitive no-op detection, and 409 collision checks (including another user's `pendingEmail`).
-- **`describe('cancelPendingEmailChange')`** — clears `pendingEmail`, is idempotent when nothing is pending, revokes the live `EMAIL_CHANGE_TOKEN_TYPE` token, and emits `AUTH_EMAIL_CHANGE_CANCELED` audit only when a change was actually pending.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — full port replacement (not `jest.spyOn`) because CJS namespace getters are non-configurable and break under SWC + Stryker.
-- **`jest.mock('@infrastructure/observability/analytics', …)`** — same replacement pattern; `emitAnalyticsEvent` becomes a plain `jest.fn()`.
-- **`readTokens` (alias for `tokenRowsOf`)** — helper to fetch a user's stored one-time tokens as rows.
-- **`sessionIdOfRow`** — extracts `familyId` from a possibly-undefined session lookup row.
+- **Module docblock** — declares the invariants this file defends and the grouping principle (one `describe` per invariant).
+- **Port mocks (`jest.mock`)** — `@infrastructure/observability/audit` and `@infrastructure/observability/analytics` are *replaced* (not spied) because `jest.spyOn` cannot redefine the non-configurable getter on a CJS namespace import under the SWC transform / Stryker sandbox. See `tests/support/ports.ts` for full reasoning.
+- **`readTokens`** — alias for `tokenRowsOf` from `../factories`; reads a user's stored one-time tokens.
+- **`sessionIdOfRow`** — helper extracting `familyId` from a session row (may be undefined).
+- **`describe('updateProfile')`** — covers field updates, avatar unset + `imageStore.remove` call, 401-on-deleted-account, email-change request semantics (pendingEmail, 409 codes for current/pending/taken addresses).
+- **`describe('cancelPendingEmailChange')`** — covers clearing `pendingEmail`, no-op when nothing pending, revoking the live email-change token, and conditional `AUTH_EMAIL_CHANGE_CANCELED` audit emission.
+- **`afterEach(() => jest.restoreAllMocks())`** — resets all spies (including `imageStore.remove`) after each test.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — imports `accountService` (the SUT) plus token-type constants (`PASSWORD_RESET_TOKEN_TYPE`, `EMAIL_VERIFY_TOKEN_TYPE`, `EMAIL_CHANGE_TOKEN_TYPE`) and rate-limit seconds.
-- **`src/modules/account/services/tokens.ts`** — imports `findLiveToken` / `spendLiveToken` for token lifecycle assertions.
-- **`src/modules/account/tests/factories.ts`** — imports `ageTokenSend`, `plantSession`, `plantToken`, `sessionRowsOf`, `tokenRowsOf` to seed and inspect DB state directly.
-- **`src/modules/users/tests/factories.ts`** — imports `createUser`, `userRepository`, and password constants (`PASSPHRASE_PASSWORD`, `REPLACEMENT_PASSWORD`).
-- **`src/modules/users/repository.ts`** — exercised via `userRepository` for direct row assertions (e.g. `findByIdWithCredentials`, `deleteOne`).
-- **`src/infrastructure/security/hash-token.ts`** — imports `hashToken` for verifying stored token hashes.
-- **`src/infrastructure/observability/audit.ts`** — replaced via `jest.mock`; assertions go through `observePort(auditPort.emitAuditEvent)`.
-- **`src/infrastructure/observability/analytics/index.ts`** — replaced via `jest.mock`; `emitAnalyticsEvent` is a plain mock.
-- **`src/modules/account/audit.ts`** — imports `accountAuditActions` for action-name assertions.
-- **`src/modules/account/analytics.ts`** — imports `accountAnalyticsEvents` for event-name assertions.
-- **`src/infrastructure/adapters/image-store.ts`** — `imageStore.remove` is spied on to assert the old avatar file is deleted after a null-`imageUrl` save.
-- **`src/infrastructure/adapters/logger.ts`** — imported (likely to silence or capture log output in the Stryker sandbox).
-- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` for multi-tenant context setup.
-- **`src/modules/access/index.ts`** — imports `accessService` (used in truncated session-revocation tests).
+- **`src/modules/account/services/index.ts`** — primary SUT: `accountService`, token-type constants (`PASSWORD_RESET_TOKEN_TYPE`, `EMAIL_VERIFY_TOKEN_TYPE`, `EMAIL_CHANGE_TOKEN_TYPE`), and timing constants (`RESET_REQUEST_SECONDS`, `VERIFY_RESEND_SECONDS`).
+- **`src/modules/account/services/tokens.ts`** — imports `findLiveToken`, `spendLiveToken` (used in token-spending tests beyond the truncated portion).
+- **`src/modules/account/services/verification.ts`** — imports `confirmEmailChange`, `confirmEmailVerification` (confirmation-flow tests).
+- **`src/infrastructure/runtime/database.ts`** — imports `withTransaction` (transactional assertions).
+- **`src/infrastructure/security/hash-token.ts`** — imports `hashToken` (validating stored token hashes).
+- **`src/infrastructure/observability/audit.ts`** — mocked; assertions check `emitAuditEvent` calls with actions from `accountAuditActions`.
+- **`src/infrastructure/observability/analytics/index.ts`** — mocked; `emitAnalyticsEvent` replaced with a mock function.
+- **`src/modules/account/audit.ts`** — imports `accountAuditActions` for audit assertions.
+- **`src/modules/account/analytics.ts`** — imports `accountAnalyticsEvents` for analytics assertions.
+- **`src/modules/account/tests/factories.ts`** — `ageTokenSend`, `plantSession`, `plantToken`, `sessionRowsOf`, `tokenRowsOf` for seeding and reading DB state.
+- **`src/modules/access/index.ts`** — imports `accessService` (permission-boundary checks).
+- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` for tenant-scoped test contexts.
+- **`src/infrastructure/adapters/image-store.ts`** — spied on to assert avatar file deletion after profile update.
+- **`src/infrastructure/adapters/logger.ts`** — imported for log-related assertions.
 
 ## Notes
 
-- **Port replacement vs. `jest.spyOn`:** The audit and analytics ports are fully replaced with `jest.mock` factories because `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes. This is required for the SWC transform and Stryker's mutation sandbox to work correctly.
-- **401-not-404 convention:** A verified token referencing a deleted account must return 401, not 404. The `openapi.yaml` spec declares no 404 on `PUT/PATCH /account`, and the `isAuth` guard treats this as unauthenticated everywhere else.
-- **Email no-op semantics:** Restating the current address (any case) or the already-pending address must be a no-op that preserves the existing verification token hash — the mailed link must remain valid.
-- **Avatar thumbnail:** The store derives the thumbnail path from the main `imageUrl`, so a single `imageStore.remove(url)` call is expected to cover both files.
-- **`afterEach(() => jest.restoreAllMocks())`** runs globally; individual spies (e.g. `imageStore.remove`) are also explicitly restored in-test to avoid cross-test leakage.
+- **Audit/analytics mocking is replacement, not spying.** The file header comment and inline `jest.mock` blocks explain why: `jest.spyOn` fails on non-configurable CJS namespace getters under the project's SWC config and Stryker sandbox. Use `observePort` from `@tests/ports` to read call counts from the mock.
+- **401 vs 404 on deleted accounts.** The test explicitly asserts 401 (not 404) when a verified token references a deleted user, matching `openapi.yaml` and the `isAuth` middleware convention.
+- **Email-change 409 codes are distinct** (`EMAIL_ALREADY_CURRENT`, `EMAIL_CHANGE_ALREADY_PENDING`, `EMAIL_ALREADY_USED`) and the tests verify that a rejected request does *not* cancel an already-pending change or invalidate an already-mailed token.
+- **Avatar removal is a single `imageStore.remove` call** on the main URL; the store derives the thumbnail path internally, so tests assert one call covering both files.
+- The file content shown here is truncated; the full file additionally covers password-change (422-on-wrong-password), session revocation, and email-verification confirmation tests referenced in the module docblock.

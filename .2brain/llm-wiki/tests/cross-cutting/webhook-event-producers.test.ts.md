@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/webhook-event-producers.test.ts
-sha256: f9e062225920344b57124d9da4a11dc3d2058591a2608d38aa05ee273b00a669
-generated_at: 2026-11-08T09:33:55.655857+00:00
+sha256: e4dd4c18c3da045e365ffdf476e6979b44b9232f2f924ded3a2c7667d1e6cdab
+generated_at: 2026-11-14T23:08:58.236383+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that proves, by actual execution rather than source inspection, that every public webhook event declared in the registered modules' `asyncapi.webhooks.yaml` fragments has a real producer, and that no producer fires an event the catalogue does not declare. It drives the domain-event bus through the real kernel registry so that `webhooks/module.ts`'s `onRegistered` hook wires subscribers the same way production does.
+Cross-cutting integration test that proves two invariants simultaneously: every public webhook event declared in the registered modules' `asyncapi.webhooks.yaml` fragments is actually produced when the corresponding domain events fire, **and** no delivery row ever names an event the catalogue does not declare. It does this end-to-end through the real registry and domain-event bus rather than by inspecting source text.
 
 ## Key elements
 
-- **`ORDER_ID` / `PAYMENT_ID`** — Distinct synthetic 24-char hex strings used as Mongo-shaped IDs so that a payment's `orderId` field is never mistaken for the order's own identity.
-- **`REGISTERED_OWNERS`** — Tuple `['orders','payments','returns','example','users']`; the set of modules whose AsyncAPI fragments define the expected event catalogue.
-- **`declaredCatalog()`** — Calls the shared `declaredWebhookEvents` helper (from `@tests/webhook-events`) to get the expected event-name list.
-- **`createCatchAllSubscription()`** — Creates a `webhookSubscriptionRepository` entry with `eventTypes: ['*']` and a fresh ring secret, so any fan-out is captured.
-- **`describe` block** — Two test cases:
-  1. Emits every relevant domain event (orders, users, payments, returns, example) and asserts the set of `eventType` values on the resulting `webhookDeliveryRepository` rows equals the declared catalogue (sorted, bidirectional).
-  2. Asserts `webhooksService.listWebhookEventCatalog()` names match the same catalogue.
+- **`REGISTERED_OWNERS`** – Tuple of module names (`orders`, `payments`, `returns`, `example`, `users`) whose asyncapi fragments define the expected event set.
+- **`declaredCatalog()`** – Calls the shared `declaredWebhookEvents` helper with `REGISTERED_OWNERS` to get the full list of declared public event names.
+- **`createCatchAllSubscription()`** – Mints a ring secret and inserts a subscription with `eventTypes: ['*']` so any fan-out lands in the delivery table.
+- **Main test (`it('every declared event is produced…')`)** – Emits every domain event (orders, users, payments, returns, example), reads back all `webhookDeliveryRepository` rows, and asserts the sorted set of `eventType` values equals the sorted declared catalogue.
+- **Catalogue-listing test** – Asserts `webhooksService.listWebhookEventCatalog` returns exactly the declared event names, confirming the service-side view matches.
+- **`ORDER_ID` / `PAYMENT_ID`** – Distinct, syntactically-valid Mongo IDs used in synthetic payloads; `PAYMENT_ID` differs from `ORDER_ID` so a payment's `orderId` field is never confused with the order's own id.
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — `emitDomainEvent` / `resetDomainEvents` drive and clean the in-memory domain-event bus.
-- **`src/kernel/registry.ts`** — `registerModules` performs the real registry indirection; `webhooks/module.ts` reads other modules' `publicEvents` from it during `onRegistered`.
-- **`src/modules/orders/index.ts` + `module.ts`** — Exports `ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED`, `ORDER_REDACTED` and the module instance for registration.
-- **`src/modules/payments/index.ts` + `module.ts`** — Exports the seven `PAYMENT_*` constants and the module instance.
-- **`src/modules/users/index.ts` + `module.ts`** — Exports `USER_ERASED`, `USER_PROFILE_CHANGED` and the module instance.
-- **`src/modules/returns/index.ts` + `module.ts`** — Exports `RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED` and the module instance.
-- **`src/modules/example/index.ts` + `module.ts`** — Exports `EXAMPLE_PUBLISHED` and the module instance.
-- **`src/modules/webhooks/module.ts`** — The subscriber under test; its `onRegistered` hook resolves `publicEvents` from the registry and wires the generic fan-out.
-- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` (create catch-all) and `webhookDeliveryRepository` (read back produced deliveries).
-- **`src/modules/webhooks/secrets.ts`** — `mintRingSecret` generates the cryptographic ring secret stored on the subscription.
+- **`src/kernel/events.ts`** – Source of `emitDomainEvent` (the bus the test drives) and `resetDomainEvents` (teardown between tests).
+- **`src/kernel/registry.ts`** – `registerModules` is the real registry indirection; the webhooks module's `onRegistered` hook reads other modules' `publicEvents` declarations through it.
+- **`src/modules/orders/module.ts`**, **`src/modules/payments/module.ts`**, **`src/modules/returns/module.ts`**, **`src/modules/users/module.ts`**, **`src/modules/example/module.ts`** – Each module's `publicEvents` manifest is what `webhooks/module.ts` resolves and wires into the generic subscriber.
+- **`src/modules/orders/index.ts`**, **`src/modules/payments/index.ts`**, **`src/modules/returns/index.ts`**, **`src/modules/users/index.ts`**, **`src/modules/example/index.ts`** – Export the domain-event name constants (`ORDER_CREATED`, `PAYMENT_SUCCEEDED`, `RETURN_REQUESTED`, `USER_ERASED`, `EXAMPLE_PUBLISHED`, etc.) used as emit arguments.
+- **`src/modules/webhooks/module.ts`** – Its `onRegistered` hook performs the fan-out wiring; the test must register it *after* the other modules so the lookup is non-empty.
+- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` (subscription creation) and `webhookDeliveryRepository` (reading back produced delivery rows).
+- **`src/modules/webhooks/secrets.ts`** – `mintRingSecret` generates the secret entry stored on the test subscription.
 
 ## Notes
 
-- **All modules must be registered, not just `webhooks`.** `webhooks/module.ts`'s `onRegistered` hook looks up other modules' `publicEvents` in the registry; registering only the webhooks module would resolve an empty set and produce zero deliveries.
-- **`ORDER_STATUS_CHANGED` is emitted twice** (with different `from`/`to` pairs) because it projects to two distinct public events (`order.paid`, `order.shipped`).
-- Comparisons use `.toSorted()` to make the assertion order-independent.
-- The test does not use HTTP; it operates entirely through the domain-event bus and the repository layer.
+- The test must register **all** modules, not just `webhooksModule`. Registering the webhooks module alone causes its `onRegistered` hook to resolve an empty `publicEvents` lookup and wire no subscriber.
+- `ORDER_STATUS_CHANGED` is emitted **twice** (`to: 'paid'` and `to: 'shipped'`) because two distinct public events (`order.paid`, `order.shipped`) both derive from that single domain event.
+- `ORDER_ID` is a valid 24-hex-char Mongo ID because `payments`' `ORDER_CANCELED` handler performs a lookup by it; a malformed id would break that listener.
+- The assertion is a **set equality** (sorted array comparison), not a per-event assertion, so adding a new domain event without a corresponding catalogue entry (or vice versa) fails immediately in either direction.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/post-subscription-enable.ts
-sha256: 45958972b013d05728f30b1d7d3c0dc3b43e4dc4d263cf73bd41988fe6037518
-generated_at: 2026-11-08T09:01:46.632912+00:00
+sha256: b2a48e12ff38491ab958fafab7c53c5a11157d9838e37c6a2e54f4dbe9de6a26
+generated_at: 2026-11-14T22:41:48.158682+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller handler for `POST /webhooks/subscriptions/:id/enable`. It validates the subscription ID, assembles a tenant caller context, delegates to the webhooks service to re-enable the subscription, and shapes the success or refusal response.
+Controller handler for `POST /webhooks/subscriptions/:id/enable`. Re-enables a previously disabled webhook subscription (from either "off" state). Returns **409** if the subscription is already active.
 
 ## Key elements
 
-- **`enableWebhookSubscription`** (exported function) — Express route handler. Extracts the `:id` param, builds the caller context, calls `webhooksService.enableSubscription`, and returns either a `refused` (e.g. 409 if already enabled) or a `successResponse` containing the subscription view.
+- **`enableWebhookSubscription`** (sole export) — Express handler that:
+  1. Extracts and validates the `:id` param via `requireId`.
+  2. Derives the tenant/caller context from the request.
+  3. Delegates to `webhooksService.enableSubscription(id, context)`.
+  4. Maps the returned record through `viewSubscription` to the API view model.
+  5. Responds with `successResponse`, setting the resource representation per RFC 9110 §8.8.3.
+  6. Catches and maps unexpected errors via `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/ids.ts`** — `requireId` validates the `:id` route param and short-circuits with a 404 when missing.
-- **`src/infrastructure/http/request.ts`** — `tenantCallerContextOf` derives the tenant + caller context from the incoming request.
-- **`src/infrastructure/http/controller.ts`** — `refused` maps service-level rejection results to the appropriate HTTP error response; `catchAs` wraps unhandled promise rejections into a standard error response.
-- **`src/infrastructure/http/response.ts`** — `successResponse` serialises the 200 body.
-- **`src/modules/webhooks/services/index.ts`** — provides `webhooksService`, whose `enableSubscription` method performs the actual state transition.
-- **`src/modules/webhooks/services/actions.ts`** — `viewSubscription` projects the full subscription entity into the public API shape for the caller.
+- **`src/modules/webhooks/services/index.ts`** — imports `webhooksService`; calls its `enableSubscription` method.
+- **`src/modules/webhooks/services/actions.ts`** — imports `viewSubscription` to shape the raw data into the public `WebhookSubscription` view.
+- **`src/infrastructure/http/controller.ts`** — imports `refused` (detects the 409 "already enabled" result) and `catchAs` (wraps the `.catch` handler).
+- **`src/infrastructure/http/ids.ts`** — imports `requireId` to pull and validate the `:id` route parameter.
+- **`src/infrastructure/http/request.ts`** — imports `tenantCallerContextOf` to build the scoped execution context.
+- **`src/infrastructure/http/preconditions.ts`** — imports `answerAsResource` to set the ETag / resource link on the response.
+- **`src/infrastructure/http/response.ts`** — imports `successResponse` for the final 200 body.
+- **`src/types/index.ts`** — imports the `WebhookSubscription` type used in the response generic.
 - **`src/modules/webhooks/routes.ts`** — registers this handler on the `POST /webhooks/subscriptions/:id/enable` route.
-- **`src/types/index.ts`** — supplies the `WebhookSubscription` type used in the response generic.
 
 ## Notes
 
-- The 404 for a missing ID uses the generic `'generic.error-item-gone'` message rather than a webhook-specific one.
-- The "already enabled → 409" logic lives in the service layer; the controller only translates the service's refusal via `refused`. The controller itself contains no conditional on subscription status.
+- "Either kind of off" (per the doc comment) implies two distinct disabled states (e.g. paused vs. hard-disabled); the endpoint treats both identically for re-enablement.
+- `refused(response, result)` is called **before** any further work; it both inspects the service result and writes the 409 response, short-circuiting the `.then` chain.
+- The `notFound` token passed to `requireId` is the string `'generic.error-item-gone'`, a project-wide error-code convention rather than a raw message.
+- File is a `@module` (no default export); only the single named function is public.

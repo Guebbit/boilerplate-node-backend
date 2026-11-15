@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/unit/routes.test.ts
-sha256: a1f3510897519e928c80555d6bf5aaf3a682b645d3ec5afd001899a2ee758bdd
-generated_at: 2026-11-08T08:58:56.028763+00:00
+sha256: 9bcf5da88001289078579f884f3a138024661294be4f1b1e79ef42e6d97527f6
+generated_at: 2026-11-14T22:40:51.542668+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the user-administration router that asserts, **per endpoint**, three invariants: the exact set and order of mounted routes, the authorization guard chain on every route, and the caching/upload middleware composition. It exists so that a route accidentally mounted above the shared `use(getAuth, isAuthOrCredential)` guard, or a missing `requirePermissionGuard`, is caught by a failing test rather than by a customer reading another tenant's data.
+Unit test for the user-administration router. Asserts, per endpoint, that the full route table matches the documented set and order, that every route carries the correct guard chain (`getAuth` → identity guard → `requirePermissionGuard`), that no endpoint is publicly accessible, that reads are never Redis-cached, and that mutating routes handle uploads and feature-flag gating correctly.
 
 ## Key elements
 
-- **`ALL`** – Ordered array of every documented route signature on the users router (14 entries from `POST /search` through `DELETE /:id/hard`). Serves as the single expected-list for the mount-order test and as the iteration source for per-endpoint guard and cache assertions.
-- **`jest.mock` blocks** (× 3) – Stub out `cache`, `route-flag`, and `upload` infrastructure middlewares using mock factories exported from `tests/support/routes.ts` (`cacheMock`, `routeFlagMock`, `storageMock`), so the router's middleware chain can be inspected without hitting Redis or object storage.
-- **"what is mounted" block** – Asserts `routeSignatures(router)` equals `ALL` exactly and that `/search` precedes `/:id` (otherwise the literal path would be shadowed by the parameterized one).
-- **`it.each(ALL)` authorization block** – For every signature, pulls the guard list via `guardsOn` and asserts the ordered triple `getAuth → identityGuard (isAuthOrCredential) → requirePermissionGuard`. A separate test confirms zero endpoints lack `requirePermissionGuard` (i.e. no public route exists).
-- **"caching and uploads" block** – Verifies `GET /` and `GET /:id` carry `privateNoCache` but never a `setCache*` entry; `POST /search` carries `noStore`; write endpoints that accept avatars include `upload.image`, `validateUploadedImages`, and `quarantineUploadedImages`; and `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while `DELETE /:id` is not.
+- **`ALL`** – Array of the 14 documented endpoint signatures in mount order; drives every `it.each` loop so adding or removing a route breaks all suites at once.
+- **`describe('user routes — what is mounted')`** – Verifies the router exposes exactly `ALL` in order, and that `/search` is declared before `/:id` (Express matches greedily; the literal path must come first).
+- **`describe('user routes — authorization')`** – Per-endpoint check that `getAuth` precedes the identity guard (`isAuthOrCredential`) which precedes `requirePermissionGuard`; also asserts zero routes lack the permission guard (i.e. no public endpoint exists).
+- **`describe('user routes — caching and uploads')`** – Confirms `GET` routes use `privateNoCache` (never `setCache*`), `POST /search` is `noStore`, write routes chain `upload.image` → `validateUploadedImages` → `quarantineUploadedImages`, and `DELETE /:id/hard` is gated by `routeFlag(hardDelete)` while `DELETE /:id` is not.
+- **Three `jest.mock` calls** – Stub the `cache`, `route-flag`, and `upload` middleware modules by delegating to factory functions imported from the shared test-support module, isolating the router under test from real infrastructure.
 
 ## Relationships
 
-- **`src/modules/users/routes.ts`** – The module under test; imported as `router` and passed to every assertion helper.
-- **`tests/support/routes.ts`** – Supplies all inspection utilities (`routeTable`, `routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) and the three mock factories used by the `jest.mock` calls. This file is the only bridge between the test and the router internals.
+- **`src/modules/users/routes.ts`** – System under test. The test imports `{ router }` from this module and inspects its mounted layers via the helper functions below.
+- **`tests/support/routes.ts`** – Provides the inspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `identityGuardIndex`, `chainOf`) used throughout the assertions, as well as the mock-factory functions (`cacheMock`, `routeFlagMock`, `storageMock`) that this file's `jest.mock` setup calls to replace the three middleware modules with test doubles.
 
 ## Notes
 
-- The `jest.mock` factories call `jest.requireActual<typeof import('@tests/routes')>` rather than `require`-ing the real middleware directly; the test-support module re-exports them so the mock shape stays in one place.
-- Authorization is asserted **per endpoint**, not once on the router, deliberately: a route mounted *above* the `router.use(...)` gate would pass a single top-level check but still fail here.
-- The `ALL` array is the de-facto contract for which routes exist. Adding a new endpoint to `routes.ts` without updating this list will break the mount-order test on the next run.
-- Cache assertions reference RFC 9111 §3.5 (private caching) to justify why `privateNoCache` is acceptable on an admin-only `GET` while any shared-cache (`setCache*`) header is not.
+- Assertions are deliberately **per endpoint** (`it.each`) rather than a single bulk check. A route accidentally mounted *above* the shared `router.use(getAuth, isAuthOrCredential, requirePermissionGuard(...))` line will still fail the individual guard-order assertion, which a "at least one guard exists" check would miss.
+- The identity guard is specifically `isAuthOrCredential` (not bare `isAuth`): the user directory doubles as a tenant-surface API-key sync target, so credential-based callers are a first-class identity here.
+- The `/search`-before-`/:id` ordering test is a regression guard against a future refactor that reorders route declarations and silently shadows the literal path with the parameterised one.

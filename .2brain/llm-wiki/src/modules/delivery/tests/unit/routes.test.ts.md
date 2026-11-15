@@ -1,30 +1,36 @@
 ---
 source: src/modules/delivery/tests/unit/routes.test.ts
-sha256: 31ea74307c616a1829e27288ffc6c6bf2af05a9710ab28eec11a78d34d6646e3
-generated_at: 2026-11-08T05:47:13.265898+00:00
+sha256: ae9a5f07cf0ffe5ad00d8d528942850d647832f74505784d882c0b48da14aaaa
+generated_at: 2026-11-14T19:55:34.101406+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/tests/unit/routes.test.ts
 
 ## Purpose
-Unit test that pins the delivery module's route table to its documented shape: exact endpoint list and order, per-route guard assignments, and permission-key pairs. Its most important role is the final "sweep" test, which fails if any route is added without an `isAuth` guard, catching the drift risk called out in the file's module doc comment.
+
+Unit test suite that locks down the delivery module's route surface: the exact set of endpoints, their mount order, and the authentication/permission guards applied to each. It exists to catch two failure modes — a route silently added without a guard, or a guard silently removed — by asserting the full guard contract rather than individual behaviors.
 
 ## Key elements
-- **`WRITES`** — Array of the seven write-endpoint signatures (shipments, fulfill, hold, release, deliver, lost, PATCH shipment). Used by a `it.each` block that asserts every one carries `requirePermissionGuard`.
-- **Route-signature / order test** — Asserts `router` exposes exactly 14 endpoints in a fixed order.
-- **Public-methods test** — Asserts `GET /methods` has **no** `isAuth` guard (pre-purchase pricing must be public).
-- **Per-order read tests** — `GET /:id/fulfillment-orders` and `GET /:id/shipments` on `orderRouter` must have both `isAuth` and `requirePermissionGuard`.
-- **Order-router structure test** — `orderRouter` exposes exactly three routes (`POST /:id/process`, two `GET` lists); the process door requires `requirePermissionGuard`.
-- **Date-impact preview tests** — `release-date-impact` and `restock-date-impact` routes must carry `isAuth` **and** the permission pair `update:Product` + `display:Order` (dual-key: editor + order owner).
-- **Sweep test** — Filters all router signatures for missing `isAuth`; the only allowed unauthenticated route is `GET /methods`.
+
+- **`WRITES`** — constant array listing the seven write endpoints (shipments, fulfill, hold, release, patch shipment, deliver, mark-lost). Drives a `it.each` block that asserts `requirePermissionGuard` on every one.
+- **`describe('delivery routes', …)`** — the single suite; contains no nested `describe`. All cases are flat `it` / `it.each` blocks.
+- **`it('mounts exactly the documented endpoints…')`** — asserts the full ordered signature list of `router` (14 routes).
+- **`it('keeps the shipping methods public')`** — asserts `GET /methods` has no `isAuth` guard.
+- **`it.each(['GET /:id/fulfillment-orders', 'GET /:id/shipments'])`** — asserts `orderRouter` routes carry both `isAuth` and `requirePermissionGuard`.
+- **`it('mounts the process door and the two lists under /orders…')`** — pins `orderRouter`'s three signatures and the `requirePermissionGuard` on `POST /:id/process`.
+- **`it.each(WRITES)`** — each write route must carry `requirePermissionGuard`.
+- **`it.each(['release-date-impact', 'restock-date-impact'])`** — asserts both `isAuth` and the exact permission pair `['update:Product', 'display:Order']` on the two preview endpoints.
+- **`it('leaves nothing but the methods list unauthenticated')`** — the "sweep": filters every route on `router` for absence of `isAuth` and asserts the only survivor is `GET /methods`.
 
 ## Relationships
-- **`src/modules/delivery/routes.ts`** — Source of `router`; the test reads its route table via the shared helpers to verify signatures, guards, and permission entries.
-- **`src/modules/delivery/order-routes.ts`** — Source of `orderRouter`; same verification pattern applied to the per-order sub-router.
-- **`tests/support/routes.ts`** — Provides `routeSignatures`, `routeTable`, and `guardsOn`, the three helpers that extract metadata from an Express/Connect router so the test can assert without issuing HTTP calls.
+
+- **`src/modules/delivery/routes.ts`** — exports `router`, the primary delivery router under test (14 routes).
+- **`src/modules/delivery/order-routes.ts`** — exports `orderRouter`, the order-scoped sub-router (3 routes) also asserted here.
+- **`tests/support/routes.ts`** — provides the three introspection helpers used throughout: `routeSignatures` (ordered method+path list), `routeTable` (array of route descriptors with `method`, `path`, `permissions`), and `guardsOn` (guard/middleware names attached to a given route).
 
 ## Notes
-- Guards are **per-route**, not inherited from a router-level middleware. A new route added to either router has no guard until one is explicitly attached; the sweep test exists to catch exactly that.
-- The test checks guard *names* (e.g. `requirePermissionGuard`) and permission *action:subject* pairs, but does not exercise the guard logic itself — that lives in the service/middleware layer.
-- Route order is asserted (not just set membership), so reordering routes in `routes.ts` will break this test.
+
+- The module-level JSDoc explicitly warns that per-route guards (rather than a router-level default) are the arrangement most prone to drift; the final "sweep" test is the compensating control.
+- Permission assertions on the date-impact routes check the **exact** array `['update:Product', 'display:Order']` via `toEqual`, so adding or reordering a permission on those routes will break the test even if the existing ones are still present.
+- `routeTable` is used only in the date-impact test to reach the `permissions` array; `guardsOn` (which reports middleware names) is used everywhere else. The two helpers expose different aspects of a route's security metadata.

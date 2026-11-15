@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/get-user.ts
-sha256: f3d1bb8f8484a99ce08faf6de6d956d452b835f0ea99e261fa74d46d34f95f22
-generated_at: 2026-11-08T08:44:06.766751+00:00
+sha256: a164954c29e1617778169f1d46f4d50359b5da8459a43d3cfbe5e8ae73a4d28a
+generated_at: 2026-11-14T22:19:29.605977+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /users/:id` (admin-only). Resolves a single user by path id, records a staff-read audit event, and returns the user serialized through the standard contract.
+Controller for `GET /users/:id`. Resolves a single user by path id for admin callers, shapes the response via the user service's contract mapper, and records the read in the staff-audit log.
 
 ## Key elements
 
-- **`getUserItem`** (export) — The controller instance, built via `createItemController`. Accepts `{ entity, notFoundKey, fetch }` config:
-  - `entity: 'user'` / `notFoundKey: 'users.not-found'` — standard 404 handling for the entity.
-  - `fetch(id, request)` — delegates to `userService.getById(id)`; on a non-null result, fires `recordStaffRead` with the `ADMIN_USER_VIEWED` audit action, then returns `userService.toUserContract(user, caller)`.
+- **`getUserItem`** (exported) — the route handler, produced by `createItemController`. Declares entity `'user'`, not-found key `'users.not-found'`, and a `fetch` callback that:
+  1. Loads the user by id via the user service.
+  2. If absent, returns `undefined` (the factory emits the standard 404).
+  3. Calls `recordStaffRead` with the audit action for admin user-view, targeting the viewed user id as both `targetId` and `subjectId`.
+  4. Returns the user service's contract mapping of the user, passing the caller identity extracted from the request.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-item-controller`** — Provides the `createItemController` factory that wraps `fetch` with standard routing, error, and response plumbing.
-- **`@infrastructure/http/request`** — Provides `callerContextOf(request)` to extract the authenticated caller identity for contract serialization.
-- **`../services` (`userService`)** — `getById` loads the document; `toUserContract` shapes the response.
-- **`@kernel/staff-read`** — `recordStaffRead` writes the audit entry keyed to the caller's staff record.
-- **`../audit`** — Supplies `usersAuditActions.ADMIN_USER_VIEWED` (the action token for the audit log).
-- **`../routes`** — Graph neighbor; expected to register this controller under the `/users/:id` GET route.
+- **`src/infrastructure/surfaces/create-item-controller.ts`** — provides the `createItemController` factory that supplies standard not-found handling and the item-controller shape.
+- **`src/infrastructure/http/request.ts`** — provides the helper to extract the authenticated caller's identity from the request object.
+- **`src/kernel/staff-read.ts`** — provides the generic staff-read audit-logging helper invoked once per successful read.
+- **`src/modules/users/audit.ts`** — provides the audit action identifiers used to tag this read in audit trails.
+- **`src/modules/users/services/index.ts`** — provides the user service used for the id-based lookup and the response contract mapping.
+- **`src/modules/users/routes.ts`** — mounts `getUserItem` as the handler for the `GET /users/:id` route.
 
 ## Notes
 
-- `toUserContract` does **not** read role from the user document. It performs a separate indexed lookup against the membership store to resolve the caller's *current* role. This is intentional (role is never persisted on the user doc) and adds one indexed lookup per request.
-- The `ownerId` in the `recordStaffRead` payload is set to the target user's `id`, not the caller's — the audit treats the viewed user as the "owner" of the read event.
-- If `getById` returns a falsy value, `fetch` returns `undefined`, which `createItemController` interprets as a 404 using `notFoundKey`.
+- The contract mapping re-reads the caller's **current** role from the membership store on every request; the user document itself carries no role. This is an intentional extra indexed lookup (same cost class as the other auth checks on the endpoint) to guarantee the response reflects the caller's live permissions rather than a stale snapshot.
+- The audit record sets both `targetId` and `subjectId` to the viewed user's id — the admin is the implicit actor, not a separate field here.

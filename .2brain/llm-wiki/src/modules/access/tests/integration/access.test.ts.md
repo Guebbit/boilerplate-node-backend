@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/tests/integration/access.test.ts
-sha256: bd3e89b7c16d4b228db6ade07596f1654f379e3f042c3fc9ef64d94e72d681cf
-generated_at: 2026-11-08T03:58:51.568484+00:00
+sha256: c2a5ae2d0f8acc1507345ca1319dcca443150d9227815e3b5642617b85ffea38
+generated_at: 2026-11-14T18:28:55.207413+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the access module's **storage layer** (membership rows in the in-memory Mongo wired up by `setupTestDb`). It verifies that the module's writers (`services/`, `repository.ts`) correctly create, replace, and refuse membership records, that the invariants those writers enforce are enforced, and that audit events are emitted for role changes. It is the storage-level counterpart to `tests/cross-cutting/authorization-conformance.test.ts` (which proves both backends *decide* the same way); this file proves the data those decisions read *from* behaves correctly.
+Integration test suite that exercises the authorization module's **storage and writer layer** against an in-memory MongoDB (wired up by `setupTestDb`). It verifies that membership rows can be created, reassigned, and refused correctly, that every invariant enforced by the services is actually executable, and that `bootstrapAccess` behaves idempotently. It is deliberately distinct from the cross-cutting conformance suite: this file proves the data *can be written*, not that two backends *decide the same way*.
 
 ## Key elements
 
-- **`setupTestDb()`** — initialises the in-memory MongoDB before the suite; called once at module scope.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — *replaces* the audit port with `auditPortMock()` (not a spy), so all audit emissions are observable and non-persistent.
-- **`describe('the preset roles')`** — confirms `permissionsOfRole` resolves from the shared YAML with zero DB involvement.
-- **`describe('membership across tenants')`** — multi-tenant role holding, single-role-per-scope replacement semantics, and platform-vs-tenant scope separation.
-- **`describe('the invariants')`** — the bulk of the suite: refuses undeclared roles, privilege-escalation grants, empty key-set grants, anonymous/unauthorised revokes, and asserts that a rejecting `deleteById` surfaces to the caller rather than vanishing.
-- **`describe('bootstrapAccess')`** — idempotent tenant creation; no accounts are seeded by bootstrap alone.
-- **`describe('a role lives in exactly one place…')`** — null membership resolves to `null` roles; audience tokens (`customer`, `unverified`, `guest`) are rejected by `assignRole`.
-- **`describe('auditing a role change')`** — verifies `emitAuditEvent` is called with actor, target, role, and outcome for successful and failed operations.
+- **`describe('the preset roles')`** — asserts `permissionsOfRole` resolves from the shared YAML file with zero database involvement.
+- **`describe('membership across tenants')`** — verifies a person can hold different roles in different tenants, enforces one-role-per-person-per-tenant (reassignment replaces), and confirms `platform` vs `tenant` scopes are independent.
+- **`describe('the invariants')`** — the core block. Covers: refusal of undeclared roles, refusal of unauthorized grantors (no `assign:Role`), valid grant + read-back, last-admin revocation, revocation by unprivileged / anonymous callers (with audit-failure assertion), empty-key-set grant refusal, and surfacing a rejected `deleteById` instead of swallowing it.
+- **`describe('bootstrapAccess')`** — shop creation grants nobody a role; a second call is idempotent and preserves the original `_id` and name.
+- **`describe('a role lives in exactly one place, the membership row')`** — no membership ⇒ `null` role (not a default); `assignRole` rejects audience strings (`customer`, `unverified`, `guest`).
+- **`describe('auditing a ro…')`** (truncated) — audit-emission assertions for role operations.
 
 ## Relationships
 
-- **`src/modules/access/services/index.ts`** — primary SUT: `accessService` (ensure/assign/revoke/bootstrap), `AccessInvariantError`, `assertCanGrant`, `DEPLOYMENT_TENANT_SLUG`.
-- **`src/modules/access/repository.ts`** — `membershipRepository` is imported and spied on (`deleteById`) to simulate a storage failure.
-- **`src/kernel/permissions.ts`** — `permissionsOfRole` supplies the canonical key sets used as grant arguments and as the "granter holds" baseline.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` constant for platform-scope assertions.
-- **`src/modules/access/audit.ts`** — `accessAuditActions` provides the stable action strings asserted in audit-event expectations.
-- **`src/infrastructure/observability/audit.ts`** — the real module is *replaced* (not spied) via `jest.mock`; actual calls are captured through `observePort`.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` is imported (used by service-internal writes).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` boots the in-memory Mongo.
-- **`tests/support/ports.ts`** — `observePort` for reading mock call logs; `auditPortMock` for the replacement.
-- **`tests/support/callers.ts`** — `testCallerContext` (anonymous) and `callerContextAs('admin' | 'moderator')` fabricate caller identity for authorisation checks.
-- **`src/modules/access/tests/factories.ts`** — `seedMembership` inserts known membership rows without going through the service layer.
+- **`src/modules/access/services/index.ts`** — primary SUT; imports `accessService`, `AccessInvariantError`, `DEPLOYMENT_TENANT_SLUG`. Every `it` block calls into `accessService`.
+- **`src/modules/access/repository.ts`** — `membershipRepository` is spied on to simulate a `deleteById` rejection.
+- **`src/modules/access/audit.ts`** — `accessAuditActions` used to assert the `action` field in emitted audit events.
+- **`src/kernel/permissions.ts`** — `permissionsOfRole` provides the key-set passed as the granter argument to `assignRole`.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` / `DEPLOYMENT_TENANT_SLUG` constants.
+- **`src/infrastructure/observability/audit.ts`** — imported as `auditPort`; the module is replaced at load time with `auditPortMock()` from the test ports so that assertions in this file observe emitted events without hitting the real transport.
+- **`tests/support/ports.ts`** — provides `auditPortMock()` (the replacement for the audit module above) and `observePort()` for capturing emitted audit events.
+- **`tests/support/callers.ts`** — `testCallerContext` (anonymous) and `callerContextAs(role)` build the granter identity for each invocation.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to create the in-memory Mongo.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` helper inserts rows directly, bypassing the service for setup.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` imported (available for transactional test paths).
+- **`src/modules/access/services/grants.ts`** — part of the `accessService` surface; not directly imported but exercised through the service.
 
 ## Notes
 
-- The audit port is **replaced, not spied**: the file's own comment links to `tests/support/ports.ts` for the rationale. Do not add a second `jest.spyOn` on the same module; use `observePort` to read emitted events.
-- `afterEach(() => jest.restoreAllMocks())` runs after every test, so any `jest.spyOn` set up inside a test (e.g. `membershipRepository.deleteById`) is automatically cleaned up — the one explicit `spy.mockRestore()` in the "surfaces a rejecting delete" test is belt-and-suspenders.
-- The module doc-comment explicitly warns that this suite and the cross-cutting conformance suite answer *different* questions. Do not duplicate conformance assertions here.
-- `assignRole` signature: the last argument is the **granter's key set** (an array of permission strings), not the target's role permissions. Passing `[]` or a subset the granter doesn't hold triggers the invariant rejection.
+- The audit port is **replaced** (module-level mock pointing at `tests/support/ports.ts`), not spied on. See `tests/support/ports.ts` for the rationale.
+- `setupTestDb()` runs at **module top-level**, not inside a `beforeAll`; the in-memory Mongo is created once for the entire file.
+- `afterEach` restores all mocks (`jest.restoreAllMocks()`), but the audit mock is a module-level replace and is not affected by that call.
+- The "one role per person per tenant" invariant is enforced by the **repository/service** (upsert semantics), not by a unique index visible in tests; the test asserts the observable result (length 1 after two `seedMembership` calls with different roles).
+- The `deleteById` rejection test documents a historical bug: the call was previously fired-and-forgotten (`void`), turning a rejection into an unhandled-promise warning.
+- `withTransaction` is imported but does not appear in the visible portion of the file; it may be used in the truncated auditing section.

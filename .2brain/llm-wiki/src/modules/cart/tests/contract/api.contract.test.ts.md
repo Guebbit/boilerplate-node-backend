@@ -1,48 +1,42 @@
 ---
 source: src/modules/cart/tests/contract/api.contract.test.ts
-sha256: 461ae1bbe0e68ff2b01e5505eeb53c08b7efdcfa4dc64ec85594d189e9c16481
-generated_at: 2026-11-08T05:18:54.010081+00:00
+sha256: 4f439f4087a7299ed880a734d809b359ba49e68b3d1959558f961c9233bc23b0
+generated_at: 2026-11-14T19:32:50.266077+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/cart/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for every `/cart` route. Because `CartResponse` is a computed view (not a direct serialization of the document), these tests exercise the actual HTTP API to verify that each endpoint's response shape, status codes, and error envelopes match the documented contract. They deliberately build carts through the API rather than fixture builders, and they assert only shape/reachability — behavioural rules live in the service suites.
+Contract tests that verify every `/cart` endpoint returns the correct `CartResponseEnvelope` shape, status codes, and error structure. Because `CartResponse` is a computed view (not a document serialization), tests exercise the real API rather than hand-written fixtures, ensuring each contract branch—stock flags, ceiling enforcement, merge results, role-gating—is actually reached through the HTTP boundary.
 
 ## Key elements
-
-- **`authenticateWithCart(quantity?)`** — logs in a `user`-role account, attaches an address, creates a product, and POSTs it to `/cart/items`. Returns `{ bearer, product }` for subsequent assertions.
-- **`mergeOnce(bearer, key?, quantity, id)`** — issues `POST /cart/merge` with a single guest line, optionally setting an `Idempotency-Key` header.
-- **`heldOf(bearer, id)`** — reads `GET /cart` and extracts the current quantity for a given product id (returns `0` if absent).
-- **`describe('GET /cart')`** — asserts empty-cart, populated-cart, insufficient-stock flag (`availability: 'insufficient_stock'`, `canIncrease`), per-line ceiling (`canIncrease: false`), and decimal-text `summary.totalPrice` + `currency`.
-- **`describe('POST /cart/items')`** — verifies 200 (not 201, no `Location` header), line-growth on repeat add, 422 `CART_QUANTITY_LIMIT` for both ceiling-exceeding adds, and 404 for missing vs. inactive products.
-- **`describe('POST /cart/items — who may shop')`** — parametrised over all eight roles (customer → admin) confirming no role gate on the basket.
-- **`describe('POST /cart/merge')`** — happy-path result shape, 100-line limit (101 → 422), per-line reason codes in request order, and idempotency-key replay.
+- **`authenticateWithCart(quantity?)`** – Helper that logs in a user, attaches a billing address, creates a product, and POSTs one cart line; returns `{ bearer, product }` for subsequent assertions.
+- **`mergeOnce(bearer, key, quantity, id)`** – Sends a single-line `POST /cart/merge`, optionally attaching an `Idempotency-Key` header.
+- **`heldOf(bearer, id)`** – Reads back the quantity of a product from `GET /cart` to verify post-merge state.
+- **`describe('GET /cart')`** – Covers empty cart, populated cart, `insufficient_stock` flag + `canIncrease`, per-line ceiling (`canIncrease: false`), and the `summary.totalPrice` / `currency` decimal-text format.
+- **`describe('POST /cart/items')`** – Covers add-new (200, no `Location`), add-grow (existing line increments), 422 `CART_QUANTITY_LIMIT` (both over-cap and already-over), 404 for missing product, and 404 for inactive product (scope refusal).
+- **`describe('POST /cart/items — who may shop')`** – Parameterized over all eight roles confirming every authenticated user can add to the basket.
+- **`describe('POST /cart/merge')`** – Covers successful merge, the 100-line cap (101 → 422), per-line result reasons in request order, idempotency-key replay, and guest-to-user line transfer.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers global contract-matching helpers or jest setup.
-- **`tests/support/http.ts`** — provides `api` (supertest wrapper), `authenticateAs`, `authenticateAsRole`, and `staleBearerFor`.
-- **`tests/support/checkout-as.ts`** — provides `checkoutAs` and `shownTotal` (used to cross-check cart totals against what checkout expects).
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` temporarily sets `NODE_CART_LINE_MAX` for ceiling tests.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity context for API calls.
-- **`tests/support/ids.ts`** — `MISSING_ID` is a well-formed-but-nonexistent id used for the 404 scope test.
-- **`src/modules/addresses/tests/factories.ts`** — `giveAddress` attaches a billing address so checkout-precondition tests can run.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds catalogue items with configurable `onHand`, `price`, `active`.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` (imported for downstream checkout assertions in the merge/checkout cross-checks).
-- **`src/modules/users/tests/factories.ts`** — `createUser` (used indirectly by `authenticateAs` / role provisioning).
-- **`src/modules/products/index.ts`** — exports `productService`, likely consulted for catalogue-scope verification.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` drains pending outbox events so post-mutation side-effects are observable before assertions.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t` for i18n-aware error-message assertions in contract branches.
+- **`tests/support/http.ts`** – Provides `api()`, `authenticateAs`, `authenticateAsRole`, and `staleBearerFor` for all HTTP calls and bearer-token setup.
+- **`tests/support/contract.ts`** – Imported for side effects (registers contract matchers / global setup before tests run).
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` wraps tests that need a specific `NODE_CART_LINE_MAX_QUANTITY` value.
+- **`tests/support/checkout-as.ts`** – `checkoutAs` and `shownTotal` are used in later checkout-related contract blocks to cross-check cart totals.
+- **`tests/support/callers.ts`** – `testCallerContext` supplies a caller identity for request-scoped assertions.
+- **`tests/support/ids.ts`** – `MISSING_ID` is the canonical invalid-object-id used to trigger 404 paths.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds catalogue items (with configurable `onHand`, `price`, `active`).
+- **`src/modules/products/index.ts`** – `productService` is imported for inventory mutation within a test.
+- **`src/modules/addresses/tests/factories.ts`** – `giveAddress` attaches a billing address required by checkout.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` used in post-checkout assertions.
+- **`src/modules/users/tests/factories.ts`** – `createUser` for role-specific or multi-user scenarios.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes outbox side-effects so tests observe settled state.
+- **`src/infrastructure/i18n/index.ts` / `src/infrastructure/i18n/context.ts`** – `t` is imported for locale-sensitive string assertions.
 
 ## Notes
-
-- **200, not 201, on `POST /cart/items`.** A cart line is a sub-resource of the user's cart; the response body is the *whole* cart, never a `Location` header. Tests explicitly assert `headers.location` is `undefined`.
-- **"Add" means "grow".** Re-adding the same product increments the existing line (Shopify/commercetools convention). Two adds of qty 2 → 5 total.
-- **Price is decimal text, not a number.** `summary.totalPrice` is a string like `'51.00'`; the contract forbids a numeric `expectedTotal` field.
-- **Per-line ceiling defaults to 10** (`NODE_CART_LINE_MAX`). Tests use `withEnvironmentOverrides` to exercise both "would exceed" and "already exceeds" branches.
-- **Merge line limit is 100.** The 101st line returns 422; the boundary is inclusive.
-- **Cart is a computed view.** The file's docblock warns that a hand-written fixture would assert a shape the app never produces — always build through the API in these tests.
-- **Role-gate is absent by design.** No role (including `customer`, `unverified`) is excluded from adding to the basket; the parametrised test guards against accidental gating.
+- **200, not 201:** `POST /cart/items` deliberately returns 200 with the full cart body and no `Location` header. Tests assert `response.headers.location` is `undefined` to lock this in.
+- **Grow semantics:** Re-posting the same product *increments* the existing line (Shopify/commercetools convention), not upserts. The "grows an existing line" test exists to guard against a future "replace" regression.
+- **Scope vs. missing:** Two distinct 404 cases are tested—`MISSING_ID` (no row) vs. a real row with `active: false` (scope refusal). Both must return the same 404 shape.
+- **Computed view:** The file's module comment explicitly warns that `CartResponse` is derived at read time; a fixture would assert a shape the app never produces.
+- **`@tests/contract` is a side-effect import** (no named bindings); it likely registers global matchers or interceptors that other tests in the suite depend on.

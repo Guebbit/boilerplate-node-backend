@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/email-change-ttl.test.ts
-sha256: 34430e4c69fb5077cea9382731fb8e0a4246c6ca0ab8bfde44d9e18e9dfab137
-generated_at: 2026-11-08T04:36:00.076154+00:00
+sha256: a09bcd8d4baa5089bf2bccdb23628b529e81a729da89b46d8ce21ee91798df7d
+generated_at: 2026-11-14T19:02:35.710593+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the expiration durations of the two tokens issued during an email-change request: the confirmation link (24 hours) and the undo link (7 days). It asserts against **literal** millisecond values rather than importing the app's TTL constants, so the test fails if the code drifts from the durations the UI and outbound mail promise.
+Integration test that pins the user-facing TTLs of the two tokens issued by an email-change request: the confirmation link (24 h) and the undo link (7 days). The durations are asserted against **literal** millisecond values rather than the constants the production code reads, so the test guards the promise made on the account page and in the mail, not internal consistency.
 
 ## Key elements
 
-- **`HOUR_MS`** — local constant (`3 600 000`) used to express expected lifetimes.
-- **`lifetimeOf(type)`** — small helper (defined inside the test) that finds a token row by `type` and returns `expiresAt − sentAt` in ms.
-- **Single test case** — authenticates as a user, `PATCH /account` with a new email, then queries the token table and asserts:
-  - `email-change` row lifetime equals `24 × HOUR_MS`
-  - `email-change-undo` row lifetime equals `7 × 24 × HOUR_MS`
+- **`HOUR_MS`** — local constant (3 600 000 ms) used to build the expected durations.
+- **`describe('an email change request')` / `it(…)`** — the single test case. Authenticates as a user, POSTs to `/account/email-change`, then inspects the token rows for that user and asserts `expiresAt − sentAt` equals `24 * HOUR_MS` for `email-change` and `7 * 24 * HOUR_MS` for `email-change-undo`.
+- **`beforeEach`** — forces `NODE_MAIL_TRANSPORT` to `'outbox'` so no real mail is sent.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` (called once at module level) provisions and resets the test database before the suite runs.
-- **`tests/support/environment.ts`** — `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` in `beforeEach` ensures mail is captured, not sent.
-- **`tests/support/http.ts`** — `api()` builds the HTTP client used for the `PATCH /account` request; `authenticateAs('user')` returns a user fixture and a bearer token.
-- **`src/modules/account/tests/factories.ts`** — `tokenRowsOf(userId)` queries the token table so the test can inspect `type`, `sentAt`, and `expiresAt` directly.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to provision a clean database before the suite runs.
+- **`tests/support/environment.ts`** — `setEnvironment()` overrides the mail-transport setting per test.
+- **`tests/support/http.ts`** — `api()` provides the HTTP client for the POST; `authenticateAs('user')` creates a user and returns a bearer token.
+- **`src/modules/account/tests/factories.ts`** — `tokenRowsOf(userId)` queries the token table and returns the stored rows (with `type`, `sentAt`, `expiresAt`), which the test inspects.
 
 ## Notes
 
-- The module doc comment explicitly states the durations are "pinned against literal durations, not the constants the code reads." If you change the TTL constants in application code, this test will fail until the literals are updated to match — that is intentional.
-- `setupTestDb()` runs at import time (top-level), not inside `beforeEach`; the environment override does run per-test.
-- Only the `outbox` transport is exercised; there is no assertion on mail content or delivery.
+- The test intentionally avoids importing the production TTL constants. If the constants change, this test will fail, forcing a conscious decision about the user-facing promise.
+- Lifetime is derived as `expiresAt − sentAt` (both stored on the token row), so it is independent of when the assertion runs.
+- Only one user (`'user'`) is exercised; there is no multi-user or re-request scenario.

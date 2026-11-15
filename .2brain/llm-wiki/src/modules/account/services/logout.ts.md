@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/logout.ts
-sha256: d4fb7678480b5e0859e8295279060965a7c1b21469f2a59571a979563c43e6c6
-generated_at: 2026-11-08T04:18:53.586020+00:00
+sha256: 3c06bc41bb1ec6a0d95e4ae0cf733dfcb7c1c624e18f21b3edac8bdec82654cb
+generated_at: 2026-11-14T18:45:47.868106+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the three logout operations an account can perform: revoke a specific session the caller owns, sign out of only the current session (cookie-based), and revoke every session plus invalidate the session epoch so outstanding access tokens die. Each operation is accompanied by an audit record and an analytics event.
+Implements the three logout operations for the account domain: revoke a single session by ID, log out the current (cookie-bearing) session, and log out every session across all devices (advancing the session epoch so outstanding access tokens are invalidated). Each path emits the correct audit record and analytics event, with intentionally different success/failure semantics.
 
 ## Key elements
 
-- **`SessionRevocation`** (interface) — result shape for `sessionRevoke`: whether a row was actually removed (`revoked`) and whether it was the caller's own session (`current`).
-- **`isOwnFamily`** (private helper) — hashes the presented credential, looks it up in the session repository, and checks that the row's `userId` and `familyId` match. Must run *before* the delete because the row no longer exists afterwards.
-- **`sessionRevoke(userId, sessionId, credential, context)`** — reads the "own family" flag, then calls `sessionRepository.removeFamily`. Emits `AUTH_SESSION_REVOKED` audit only when `removed > 0` to avoid recording a phantom revocation.
-- **`logoutCurrentSession(credential, context)`** — if a credential is present, deletes its session family by hash; otherwise is a no-op. Always records `AUTH_LOGGED_OUT` audit and fires the `USER_LOGGED_OUT` analytics event with `scope: 'session'`.
-- **`logoutEverywhere(userId, context)`** — resolves the user via `userService.findAuthenticatableById`, returns 401 if the user is gone, otherwise delegates to `revokeFor('logout-all', …)`. Returns a typed `ResponseSuccess<UserDocument> | ResponseReject`. Records `AUTH_LOGGED_OUT_EVERYWHERE` audit with the real outcome and fires the same `USER_LOGGED_OUT` event with `scope: 'everywhere'`.
+- **`SessionRevocation`** (exported interface) — Result shape for `sessionRevoke`: `{ revoked: boolean; current: boolean }`.
+- **`isOwnFamily`** (private helper) — Resolves a presented credential via `sessionRepository.findByHash` and checks whether the row belongs to the given `userId` + `familyId`. Matches at the *family* level so a rotated credential still resolves to the same session.
+- **`sessionRevoke`** (exported) — Revoke one session by ID. Calls `isOwnFamily` *before* the delete (the row must still exist), then `sessionRepository.removeFamily`. Records an audit row **only** when `removed > 0` to avoid logging a no-op as a success.
+- **`logoutCurrentSession`** (exported) — Deletes the session the presented credential names (if any) via `sessionRepository.removeFamilyByHash`. Always records an audit row and emits an analytics event, even when no credential was supplied.
+- **`logoutEverywhere`** (exported) — Looks up the user via `accountUserService.findAuthenticatableById`, calls `revokeFor('logout-all', user.id)`, and returns a `ResponseSuccess<UserDocument>` or a 401 `ResponseReject`. Catches DB errors into `rejectDatabaseEnvelope('auth', …)`. Records audit with the *actual* outcome and emits the same analytics event name as single-session logout, distinguished by `scope: 'everywhere'`.
 
 ## Relationships
 
-- **`src/modules/account/services/revocation.ts`** — `logoutEverywhere` calls `revokeFor` to perform the full session-epoch rotation.
-- **`src/modules/account/repository.ts`** — `sessionRevoke` and `logoutCurrentSession` call `sessionRepository.removeFamily` / `removeFamilyByHash`; `isOwnFamily` calls `findByHash`.
-- **`src/modules/users/index.ts`** (and its `model.ts` / `services/index.ts`) — `logoutEverywhere` fetches the user document via `userService.findAuthenticatableById` and returns it in the success envelope.
-- **`src/infrastructure/security/hash-token.ts`** — every credential passed by a caller is hashed with `hashToken` before hitting the repository.
-- **`src/infrastructure/http/response.ts`** — `logoutEverywhere` builds its return value with `generateSuccess` / `generateReject`.
-- **`src/infrastructure/http/errors.ts`** — database failures in `logoutEverywhere` are wrapped by `rejectDatabaseEnvelope('auth', error)`.
-- **`src/infrastructure/observability/audit.ts`** — all three functions call `recordAudit` with actions from `accountAuditActions`.
-- **`src/infrastructure/observability/analytics/index.ts`** — `logoutCurrentSession` and `logoutEverywhere` fire events via `emitAnalyticsEvent` + `buildAnalyticsBase`.
-- **`src/modules/account/analytics.ts` / `src/modules/account/audit.ts`** — provide the enum constants (`accountAnalyticsEvents`, `accountAuditActions`) used in audit and analytics calls.
-- **`src/types/auth-context.ts`** — `CallerContext` is threaded through every public function as the authenticated-caller envelope.
-- **`src/modules/account/services/index.ts`** — barrel that re-exports this module's public API.
+- **`./revocation`** — `revokeFor` is the shared mechanism that invalidates a user's sessions and bumps the session epoch; `logoutEverywhere` delegates to it.
+- **`../repository`** (`sessionRepository`) — All three functions read or delete session rows through this repository.
+- **`@infrastructure/security/hash-token`** — Every credential is hashed with `hashToken` before hitting the repository; no plaintext tokens are stored or compared.
+- **`@infrastructure/http/response` / `@infrastructure/http/errors`** — `logoutEverywhere` shapes its return via `generateSuccess`/`generateReject`; unexpected DB errors are wrapped by `rejectDatabaseEnvelope`.
+- **`@infrastructure/observability/audit`** (`recordAudit`) and **`../audit`** (`accountAuditActions`) — Every operation writes an audit row using the action constants defined in the account module.
+- **`@infrastructure/observability/analytics`** and **`../analytics`** (`accountAnalyticsEvents`) — Emits `USER_LOGGED_OUT` events; the two variants share the event name and differ only in the `scope` property.
+- **`@modules/users/friends/account`** (`accountUserService`) — `logoutEverywhere` resolves the user document here.
+- **`@modules/users`** — Provides the `UserDocument` type returned on success.
+- **`@types`** — `CallerContext` is threaded into every audit/analytics call.
 
 ## Notes
 
-- **Audit-only-on-success for `sessionRevoke`:** `removeFamily` returns `removed = 0` both for a stale/foreign session id and a genuinely absent one; recording an audit row in that case would fabricate a security event.
-- **Same analytics event name, different `scope`:** `logoutCurrentSession` and `logoutEverywhere` both emit `USER_LOGGED_OUT` but are distinguished by `properties.scope` (`'session'` vs `'everywhere'`). Splitting them into two event names would break any single-funnel rate built on `USER_LOGGED_OUT`.
-- **401, not 404, for a missing user in `logoutEverywhere`:** the OpenAPI spec (`openapi.yaml`) declares no 404 for the `logoutAll` route; semantically the caller's own session is what no longer exists, so 401 is the correct signal.
-- **Anonymous analytics attribution:** `logoutCurrentSession` is cookie-authenticated only, so `distinctId` falls back to `'anonymous'`. Under Umami the visitor is still separable via IP + UA hash; under PostHog those rows do not attribute to a person.
-- **`isOwnFamily` must run before the delete:** after `removeFamily` the credential's row is gone, so the lookup would always miss.
+- **Ordering matters in `sessionRevoke`:** `isOwnFamily` must run *before* `removeFamily`; once the row is deleted the credential resolves to nothing and `current` would always be false.
+- **Audit is conditional in `sessionRevoke` but unconditional in the other two.** A 404-like no-op (invented ID, already-expired row) produces no audit row for `sessionRevoke`; `logoutCurrentSession` and `logoutEverywhere` always write one because the route contract returns 200 / 401 respectively.
+- **401, not 404, for a missing user in `logoutEverywhere`.** The OpenAPI spec (`openapi.yaml`) declares no 404 for `logoutAll`; the caller's own session is the resource that no longer exists, so 401 is the chosen signal.
+- **Shared analytics event name.** `USER_LOGGED_OUT` is used for both single-session and everywhere logouts, split by `properties.scope` (`'session'` vs `'everywhere'`). Renaming one would break any downstream funnel or rate calculation built on the single event name.
+- **Cookie-only authentication.** Because the route authenticates via cookie (no bearer token), `buildAnalyticsBase` yields `distinctId: 'anonymous'`. Under PostHog these events do not attribute to a person; under Umami the visitor is still identifiable by IP + user-agent hash.

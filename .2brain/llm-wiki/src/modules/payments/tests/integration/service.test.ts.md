@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/service.test.ts
-sha256: 0fad00c08e3230435570486afcd9f9f43b49be536a372ecdd1c37a552cb53b76
-generated_at: 2026-11-08T07:37:05.786163+00:00
+sha256: 96e1bb01540df88bba86b046c4f46703c16822530cb1c82672ed3e54a4c5f71c
+generated_at: 2026-11-14T21:19:12.697686+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that pin the payments service's core invariants against real MongoDB: the intent freezes the order's published total (shipping included), confirmation moves order `pending → paid` and payment `→ succeeded` as a conditional write, a decline is retryable (not terminal), and one payment per order is a database fact. The provider is the `fake` double; everything else (orders, inventory, outbox, events) runs for real.
+Integration tests that pin the payment service's core invariants against a **real Mongo** database: the intent freezes the order's published total (shipping included), confirm moves the order `pending → paid` only when the payment row goes `succeeded`, a decline is retryable on the same document, and refunds are at-most-once. The fake provider is the only non-real component; the conditional writes are the subject under test.
 
 ## Key elements
 
-- **`createIntent` suite** — verifies the payment amount equals `order.toJSON().totalPrice` (not a recomputed sum), idempotent re-creation, 404 for non-owner, 409 `PAYMENT_ORDER_NOT_PAYABLE` for non-pending orders, and `method: 'card'` on the row.
-- **`confirmPayment` suite** — verifies order→paid / payment→succeeded ordering, card-last-4 capture, decline returns 409 `PAYMENT_DECLINED` with order still `pending` and the same document retriable, double-confirm rejected with 409 `PAYMENT_NOT_CONFIRMABLE`, and 404 for non-owner.
-- **JB8 test** — an order created as `bank_transfer` but paid via card has its `paymentMethod` rewritten to `'card'`; `recordOfflinePayment` leaves it as `'bank_transfer'`.
-- **`orderFor` / `paidOrder`** — shared fixtures: one customer, one two-line order; `paidOrder` additionally creates an intent and confirms with a good card.
-- **`GOOD_METHOD` (`'pm_card_visa'`) / `FAKE_DECLINE_METHOD`** — opaque provider handles driving success and decline paths.
-- **Audit port mock** — `jest.mock('@infrastructure/observability/audit')` replaces the port with `auditPortMock()` (full replacement, not a spy).
-- **`setupTestDb()`** — ensures a clean real Mongo connection before the suite.
+- **`orderFor(price?, quantity?)`** — Fixture returning a user, product, and pending order. The starting point for most tests.
+- **`paidOrder()`** — Runs `createIntent` + `confirmPayment` via `payByCard`; returns a fully-paid order for money-movement tests.
+- **`auth(user)`** — Wraps a user ID into a customer caller context via `asCustomer`.
+- **`GOOD_METHOD` / `FAKE_DECLINE_METHOD`** — Opaque card references passed to the fake provider to simulate success or decline.
+- **`describe('createIntent')`** — Asserts total freezing (compared against `order.totalPrice`, not a literal), idempotency (one payment per order), 404 for non-owner, 409 for non-pending orders, and method vocabulary.
+- **`describe('confirmPayment')`** — Asserts order→paid / payment→succeeded ordering, decline → 409 `PAYMENT_DECLINED` with retryability, double-confirm → 409 `PAYMENT_NOT_CONFIRMABLE`, auth isolation, and offline-vs-card payment-method propagation.
+- **Jest mock of `@infrastructure/observability/audit`** — Replaced with `auditPortMock` (not spied), per the project's port-replacement convention.
+- **`refundOrderPayment`** (imported from `../factories`) — Used in the (truncated) refund section to verify at-most-once semantics.
 
 ## Relationships
 
-- **`scenarios/support/doubles/payments/fake.ts`** — source of `fakePaymentProvider`, `setFakeOutcome`, and `FAKE_DECLINE_METHOD`; the only payment-provider interaction in these tests.
-- **`src/infrastructure/observability/audit.ts`** — fully replaced at module-load time via `jest.mock`; the test never hits the real audit sink.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between tests.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` / `settleOutboxNudges` used to assert or drain outbox rows written by conditional confirms.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` scopes tenant context.
-- **`src/modules/orders/index.ts`** — `orderService` reads back order state; `ORDER_STATUS_CHANGED` event used for assertions.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `forceOrderStatus`, `readOrder`, `toOrderItem` build the order fixtures.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** — `inventoryService` participates in the checkout flow the test exercises.
-- **`src/modules/payments/model.ts`** — `paymentModel` used directly in repository-level assertions.
-- **`src/modules/payments/events.ts`** — `PAYMENT_SUCCEEDED` event constant for outbox/event assertions.
-- **`src/modules/payments/module.ts`** — `paymentsModule` registered via `registerCheckoutModules`.
-- **`src/modules/payments/providers/index.ts`** — `WebhookRejected`, `ProviderWebhookEvent` types for webhook-related assertions.
-- **`src/modules/access/tests/factories.ts`** — `seedMembership` for RBAC fixtures.
+- **`scenarios/support/doubles/payments/fake.ts`** — Source of `fakePaymentProvider`, `FAKE_DECLINE_METHOD`, `signFakeDelivery`, `setFakeOutcome`; the sole stub in an otherwise real-stack test.
+- **`src/infrastructure/observability/audit.ts`** — Mocked at module level; the test never hits real audit logging.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` used in caller-context construction.
+- **`src/kernel/events.ts`** — `resetDomainEvents` called between tests to clear the in-memory event bus.
+- **`src/kernel/outbox.ts`** — `outboxEventModel` / `settleOutboxNudges` for asserting published events such as `PAYMENT_SUCCEEDED`.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `forceOrderStatus`, `toOrderItem` build the order fixture.
+- **`src/modules/orders/index.ts`** — `orderService` imported for reading back order state in assertions.
+- **`src/modules/payments/model.ts`** — `paymentModel` used to inspect persisted payment documents.
+- **`src/modules/payments/events.ts`** — `PAYMENT_SUCCEEDED` constant for outbox assertions.
+- **`src/modules/payments/module.ts`** — `paymentsModule` registered via `registerCheckoutModules` to wire the service under test.
+- **`src/modules/payments/providers/index.ts`** — `WebhookRejected`, `ProviderWebhookEvent` types used in webhook-delivery tests.
+- **`src/modules/access/tests/factories.ts`** — `seedMembership` for admin/moderator role tests.
 
 ## Notes
 
-- **Real Mongo is intentional.** The guarantees under test (conditional writes, idempotency, one-payment-per-order) are database-level; mocking the repository would make the tests tautological.
-- **The under-charge test asserts against `order.toJSON().totalPrice`, not a literal.** This catches the class of bug where the intent summed line items in a second file and silently dropped shipping.
-- **The audit port is *replaced*, not spied on.** The test imports `auditPortMock()` from `@tests/ports`, which returns a fresh object; there is no `jest.spyOn`.
-- **Decline is a state, not a terminal failure.** The test explicitly re-confirms the same payment document with a different method to prove retryability.
+- **Real Mongo is deliberate.** The file's docstring states the guarantees *are* the conditional writes; mocking the DB would defeat the purpose. `setupTestDb()` is called at module scope.
+- **Total assertion compares against `order.totalPrice`**, not a hardcoded string. The comment explicitly calls out the historical bug where shipping was silently dropped because two files computed the total independently.
+- **Audit is replaced, not spied** — the mock is injected via `jest.mock` → `auditPortMock()`, following the convention documented in `tests/support/ports.ts`.
+- **One-payment-per-order is a database fact** (unique index), not an application guard; the test verifies via `paymentRepository.count({})` after two `createIntent` calls.
+- **Decline is a state, not a terminal state.** The same payment document is confirmed again with a good card after a decline, and the test asserts it succeeds.

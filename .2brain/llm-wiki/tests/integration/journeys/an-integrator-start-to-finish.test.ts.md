@@ -1,7 +1,7 @@
 ---
 source: tests/integration/journeys/an-integrator-start-to-finish.test.ts
-sha256: bcbfb41b06745fd3b9eb153c53aa1df4738686e774558d5b8fb363423abfbb4f
-generated_at: 2026-11-08T09:40:00.164986+00:00
+sha256: 299b85bc4f463477d17337a9c918518dd1808244134febf4867482f219e7e887
+generated_at: 2026-11-14T23:15:17.091146+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-End-to-end integration test that walks a single integrator's full lifecycle: an admin mints an API key, the integrator subscribes a webhook to all events, a customer then performs a series of order/payment/shipping/return/cancel actions, and the test asserts the webhook endpoint received each event exactly once, signed, in causal order. A second block verifies that a minted key inherits its minter's permission changes (403 on demotion, 401 on deactivation).
+End-to-end integration test that walks the full lifecycle a third-party integrator experiences: an admin mints an API key, the integrator subscribes a webhook to all events, a customer performs every shop action (buy → decline → pay → ship → deliver → return → cancel), and the test asserts each webhook arrives exactly once, signed, in causal order. It also verifies that revoking the key immediately kills access, and that a key's permissions track its minter's role/status.
 
 ## Key elements
 
-- **`it('delivers every event once, signed, in causal order', …)`** — The main test. Mints a key, creates a webhook subscription, drives Order A (place → declined card → good card → ship → deliver → return → receive → refund) and Order B (place → cancel), then asserts the exact sorted event-type sequence per step, that every payload is signed, that IDs are unique, and that 11 distinct types were delivered. Finally revokes the key and confirms 401.
-- **`adminWithKey(n)`** — Helper that creates a fresh admin user via `createUser`, logs in, and mints a `read:WebhookSubscription` key with a one-week expiry. Returns the user record and the Bearer key string.
-- **`describe('a key follows its minter')`** — Verifies permission inheritance: demoting the minter to `editor` causes the key to get 403; deactivating the minter causes 401.
-- **`afterEach`** — Stops the webhook receiver started by the main test to avoid leaking listeners.
-- **`inAWeek()`** — Returns an ISO timestamp 7 days out, used as the `expiresAt` for minted keys.
-- **`arrivals()` (local)** — Drains the `sweep:webhook-retries` queue, then returns only newly-received (post-`seen`) event type names, sorted.
+- **`it('delivers every event once, signed, in causal order')`** — The main journey. Mints a key, subscribes with `eventTypes: ['*']`, then drives an order through payment failure, payment success, shipping, delivery, return, and a second order cancellation. After each action it calls `arrivals()` and asserts the exact set of event types that step produced. Finally checks all payloads are signed, all IDs are unique (11 total), and revokes the key expecting 401.
+- **`arrivals()` (local async fn)** — Drains the `sweep:webhook-retries` queue, then slices the receiver's recorded deliveries past the high-water mark `seen` and returns the new event types sorted.
+- **`inAWeek()`** — Returns an ISO timestamp 7 days out; used as `expiresAt` for minted keys.
+- **`adminWithKey(n)`** — Creates a verified admin user, logs in, mints a key with only `read:WebhookSubscription`, and returns `{ user, key }`. Used by the "key follows its minter" suite.
+- **`describe('a key follows its minter')`** — Two sub-assertions: demoting a minter to `editor` makes their key return **403** (credential valid, rule missing); deactivating a minter makes their key return **401** (credential no longer resolves).
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to configure a clean test database.
-- **`tests/support/contract.ts`** — Imported for global API request/response contract enforcement.
-- **`tests/support/http.ts`** — Provides `api()`, `authenticateAs()`, and `loginBearer()` used for every HTTP call and auth setup.
-- **`tests/support/body-of.ts`** — `bodyOf` unwraps and Zod-validates response bodies before the test reads fields from them.
-- **`tests/support/drain.ts`** — `drain('sweep:webhook-retries')` flushes pending retry jobs so webhook deliveries are observable before assertions.
-- **`tests/support/webhook-receiver.ts`** — `startWebhookReceiver` spins up a local HTTP server that records incoming webhook calls; `endpoint.received([secret])` returns the captured events; `endpoint.stop()` tears it down.
-- **`tests/support/journey-orders.ts`** — `newShopper`, `placeOrder`, `openIntent`, `confirmCard` encapsulate the customer-facing order/payment steps.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds the product that gets ordered.
-- **`src/modules/users/tests/factories.ts`** — `createUser` creates the admin minters in the permission-inheritance test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` at top level provisions an isolated database before any test runs.
+- **`tests/support/http.ts`** — `api()` (supertest client), `authenticateAs('admin')`, and `loginBearer(email)` are the sole HTTP/auth entry points.
+- **`tests/support/body-of.ts`** — `bodyOf(response, zodSchema)` parses and type-narrows every JSON response.
+- **`tests/support/drain.ts`** — `drain('sweep:webhook-retries')` flushes the webhook retry queue so `arrivals()` sees the final set.
+- **`tests/support/webhook-receiver.ts`** — `startWebhookReceiver()` (imported with the `WebhookReceiver` type) spins up a local HTTP server that records signed webhook deliveries; the returned receiver instance is inspected for recorded events and stopped in `afterEach`.
+- **`tests/support/journey-orders.ts`** — `newShopper()`, `placeOrder()`, `openIntent()`, `confirmCard()` encapsulate the customer-side purchase flow.
+- **`tests/support/contract.ts`** — Imported for side-effect: registers global contract assertions that validate every response against its OpenAPI/zod schema.
+- **`src/modules/users/tests/factories.ts`** — `createUser()` creates admin users with specific roles for the key-follows-minter suite.
+- **`src/modules/products/tests/factories.ts`** — `createProduct()` creates the "dog food" product used in both orders.
 
 ## Notes
 
-- **Replay is explicitly out of scope** here; the file's docstring defers it to the frontend's journeys.
-- Event-order assertions use `toSorted()` on the type array per step, so within a single step the order is alphabetical, not causal. Causal ordering is asserted *across* steps (the `steps` array).
-- `drain('sweep:webhook-retries')` must be called before reading arrivals; without it, async retry delivery may not have completed and the test will flake.
-- The 403-vs-401 distinction in the "key follows its minter" test is intentional: a demoted user still *resolves* (so it's an authorization failure) whereas a deactivated user does not (so it's an authentication failure).
-- The test uses `@tests/` path aliases throughout; ensure the project's tsconfig/vitest config maps these.
+- The wildcard subscription (`eventTypes: ['*']`) requires the API key to carry **each event's read/display permission** individually (`display:Order`, `read:Return`, etc.). Omitting any one silently drops that event from delivery.
+- Replay/webhook-retry is **explicitly out of scope** here (see file header comment); it is covered by the frontend's journey tests.
+- The `afterEach` stops the webhook receiver defensively (`receiver?.stop()`), so a mid-test failure won't leak the server.
+- Banned-minter key → **401** vs. demoted-minter key → **403** is an intentional distinction: 401 means the credential itself is unresolvable; 403 means the credential resolved but the caller lacks the rule.
+- `arrivals()` uses `.toSorted()` (non-mutating) so the shared recorded-deliveries array is not reordered.

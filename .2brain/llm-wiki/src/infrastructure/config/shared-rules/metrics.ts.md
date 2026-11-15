@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/shared-rules/metrics.ts
-sha256: 3977f1a75eeedefaea3bd23bc87f081ccbe086c54847c8a9592414b1cc8cf022
-generated_at: 2026-11-08T03:27:09.722003+00:00
+sha256: cf53b385f09823bce2df4b8bce627f034c29ab5aed2010c9d4a3a3b0c965fe59
+generated_at: 2026-11-14T17:58:21.337832+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Zod schemas that validate the `shared/rules/metrics.yaml` file, which declaratively declares the name, kind, help text, labels, and buckets of every infrastructure metric. It keeps the *identity* of metrics (the parts dashboards and alert rules reference) in data while leaving recording and `collect()` hooks in code, giving both a single typed source of truth.
+Defines the Zod validation schema for `shared/rules/metrics.yaml`, which declaratively captures the metadata (name, kind, help, label names, histogram buckets) of every infrastructure metric. Dashboards and alert rules depend on these names, so the data lives in the YAML twin; the recording logic and `collect()` hooks remain in code. This file enforces that the YAML is structurally correct at load time.
 
 ## Key elements
 
-- **`metricDataSchema`** – Zod strict-object schema for one metric entry. Fields: `name` (Prometheus snake_case), `kind` (`counter` | `gauge` | `histogram`), `help` (≥ 15 chars), optional `labelNames`, optional `buckets`. Two refinements enforce: (a) buckets exist *iff* kind is `histogram`, (b) `counter` names end in `_total`.
-- **`metricsBlockSchema`** – `z.record` keyed by camelCase constant names, each value matching `metricDataSchema`.
-- **`metricsSchema`** – Top-level strict object `{ metrics: metricsBlockSchema }` with an additional refinement that all Prometheus `name` values across the block are unique.
+- **`metricDataSchema`** (internal) — Validates a single metric entry. Enforces: snake_case Prometheus name, kind is `counter | gauge | histogram`, `help` ≥ 15 chars, optional `labelNames` (each a valid identifier), optional `buckets` (positive ascending numbers). Two refinements: buckets exist *iff* kind is `histogram`; a counter's name must end in `_total`.
+- **`metricsBlockSchema`** (internal) — `z.record` keyed by camelCase constant names, each value validated by `metricDataSchema`.
+- **`metricsSchema`** (exported) — Top-level strict object `{ metrics: metricsBlockSchema }` with a cross-field refinement that no two metrics share the same Prometheus name.
 
 ## Relationships
 
-- **`src/infrastructure/config/shared-rules/registry.ts`** – Registers and loads these schemas so that the YAML file is parsed and validated at startup against `metricsSchema`.
-- **`tests/unit/infrastructure/config/ops-rules-schemas.test.ts`** – Unit-tests the three exported schemas, covering happy paths and the refinement edge cases (non-counter `_total`, missing buckets on histogram, duplicate names, extra keys).
+- **`src/infrastructure/config/shared-rules/registry.ts`** — Sits on the same dependency path; imports `metricsSchema` to validate parsed rule data during registry assembly.
+- **`tests/unit/infrastructure/config/ops-rules-schemas.test.ts`** — Exercises `metricsSchema` (and its sub-schemas) with valid and invalid fixtures to pin the contract.
 
 ## Notes
 
-- **Strict objects throughout** – any key not listed in the schema is rejected; the module doc explicitly calls this out as a design choice ("an extra key is a typo, or a behaviour that belongs in code").
-- **Naming duality** – YAML keys are camelCase (matching code constants), while the `name` field inside each entry is Prometheus snake_case. Don't confuse the two.
-- **`_total` is one-directional** – every counter *must* end in `_total`, but a gauge *may* legitimately carry that suffix; the refinement only constrains counters.
-- **Relative imports only** – the module doc references `load.ts` for the import-path convention; avoid absolute or package-style imports in this directory.
-- **`help` minimum of 15 chars** – a soft guard against placeholder strings like `"TODO"`; no semantic validation beyond length.
+- All imports must be **relative** paths (no bare/aliased specifiers); see `load.ts` for the rationale.
+- The `_total` counter-suffix rule is asymmetric: a gauge *may* legitimately end in `_total` (observed in the wild), so only counters are constrained.
+- `labelNames` is intentionally optional (`.optional()`) rather than defaulting to `[]`; downstream code must guard for its absence.
+- The schema is `strictObject` throughout — any unexpected key is a rejected input, not silently ignored.

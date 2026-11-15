@@ -1,7 +1,7 @@
 ---
 source: src/modules/returns/tests/unit/public-events.test.ts
-sha256: 9d15fbf5352dabb61ef7887cb652b8b3abd23f80ca16aceb857edb452ad08eec
-generated_at: 2026-11-08T08:12:58.613044+00:00
+sha256: de4bf015beb7a93e348c4e2631a188ffc86c4bfd2849d7e4b9025a4004583106
+generated_at: 2026-11-14T21:48:55.463963+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that the returns module's `publicEvents` registry projects domain events into the correct external shape—right event name, right payload fields—and that sensitive fields (e.g. the customer's free-text note) are stripped before reaching webhook subscribers.
+Unit tests that verify the returns module's public event projections—i.e., the event name and payload delivered to webhook subscribers—correctly map from the internal domain events and never expose sensitive fields (such as a customer's free-text note).
 
 ## Key elements
 
-- **`describe('the returns module's public events')`** — the single test suite in this file.
-- **Test: "tells subscribers a return was requested…"** — asserts `returnsModule.publicEvents[RETURN_REQUESTED].toPublicEvent(…)` yields `{ eventType: 'return.requested', data: { returnId, orderId, reason } }`.
-- **Test: "never carries the customer's own words…"** — feeds a `note` field into the domain event and asserts it is absent from both the JSON stringification and the `data` object.
-- **Test: "tells subscribers the goods were received…"** — asserts `returnsModule.publicEvents[RETURN_RECEIVED].toPublicEvent(…)` yields `{ eventType: 'return.received', data: { returnId, orderId } }`.
+- **`describe('the returns module's public events')`** – suite grouping all projection assertions.
+- **`RETURN_REQUESTED` projection test** – asserts `toPublicEvent` yields `{ eventType: 'return.requested', data: { returnId, orderId, reason } }`.
+- **Privacy-leak test** – feeds a domain event that *includes* a `note` field and asserts the projected output contains neither the note text nor a `note` key.
+- **`RETURN_RECEIVED` projection test** – asserts `toPublicEvent` yields `{ eventType: 'return.received', data: { returnId, orderId } }`.
 
 ## Relationships
 
-- **`src/modules/returns/module.ts`** — imports `returnsModule` (default export) and reads its `publicEvents` record; this test exercises the `toPublicEvent` projection functions registered under each event key.
-- **`src/modules/returns/events.ts`** — imports the `RETURN_REQUESTED` and `RETURN_RECEIVED` string constants, which serve as the keys to look up the correct projection in `publicEvents`.
+- **`src/modules/returns/events.ts`** – source of the `RETURN_REQUESTED` / `RETURN_RECEIVED` constants used as keys into the module's `publicEvents` registry.
+- **`src/modules/returns/module.ts`** – default-exports the returns module; tests read its `publicEvents` property and call each entry's `toPublicEvent` method.
+- **`tests/support/stub.ts`** – exports `asStub`, used to coerce an object literal into the `never` parameter type so the test can call `toPublicEvent` without a real domain-event instance.
 
 ## Notes
 
-- Every call to `toPublicEvent` casts its argument with `as never`. This is intentional: the registry signature types the input as `never` so a single generic registry can hold every module's heterogeneous projections without widening.
-- The PII-stripping test checks both the serialized JSON *and* the `data` object property. If you add a new field to the public payload, confirm it does not accidentally pass through the customer's free-text `note`.
+- The `toPublicEvent` slot is typed `(e: never) => …` so one registry shape can hold projections for *every* module. Tests therefore must route their fixtures through `asStub<never>`; omitting that cast will fail type-checking, not just at runtime.
+- The privacy-leak test asserts on the **serialised** JSON (`JSON.stringify`) as well as the `data` object shape, guarding against the field hiding under an unexpected key.

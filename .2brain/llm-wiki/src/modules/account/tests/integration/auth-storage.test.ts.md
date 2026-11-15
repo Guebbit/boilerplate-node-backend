@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/auth-storage.test.ts
-sha256: 4245644b321d1e8bae943476759f1817ca89e2cb9033380b2dce4e30000bb3ca
-generated_at: 2026-11-08T04:34:42.842866+00:00
+sha256: d1ee7f8497885f4683c4028dbdc54b5e1b60877db8cf1e9d1079355fc70a8bbe
+generated_at: 2026-11-14T19:01:44.366668+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify `sessionRepository` and `verificationTokenRepository` behave correctly against a **real database** (via Mongoose + `setupTestDb`). They cover behaviours that unit-level mocks cannot validate: atomic "one-live-link" upserts, concurrent-claim races, TTL/purge semantics, family-level deletion, and the closed vocabulary of verification-token kinds.
+Integration tests for `sessionRepository` and `verificationTokenRepository` that run against a real database. They verify behaviours a mock can only self-confirm: atomic single-claim under concurrency, one-live-link upsert semantics, TTL/purge date clamping, family-scoped cascading deletes, and the closed-vocabulary guard on token kinds.
 
 ## Key elements
 
-- **`requestWithCookie(credential?)`** – Builds a `SessionRequest` stub (via `asStub`) carrying an optional `__Host-session` cookie, used by the `sessionsList` tests.
-- **`describe('sessionRepository.supersede')`** – Verifies exactly one concurrent caller wins a claim, that `purgeAt` is clamped to the row's own `expiresAt`, and that `cookie`-mode rows are never rotated.
-- **`describe('sessionRepository.listLive')`** – Confirms filtering by owner, mode (`jwt`), liveness, and newest-first ordering.
-- **`describe('sessionRepository.removeFamily')`** – Checks bulk deletion of a family (live + predecessors) and that it cannot target another account's sessions.
-- **`describe('sessionRepository.removeByHash')`** – Single-row deletion and no-op on unknown hash.
-- **`describe('sessionRepository.touch')`** – `lastUsedAt` stamping on the matched row only, plus throttled write (at most once per interval).
-- **`describe('what the TTL monitor deletes')`** – `reapDueSessions()` removes only past-`purgeAt` rows.
-- **`describe('sessionsList')`** – One row per session (deduplicated by family), marks the caller's own session `current`, and leaks no credential/token material.
-- **`describe('verificationTokenRepository.issue')`** – One-live-kind replacement (atomic, race-safe), many-live-kind retention, `amr` not carried across replacement, and schema-level rejection of unknown kinds.
-- **`describe('verificationTokenRepository.findLive / spend')`** – Correct lookup by kind + digest + expiry, and single-winner spend under concurrent race.
+- **`requestWithCookie(credential?)`** — local helper that builds a stub `SessionRequest` carrying an optional `__Host-session` cookie, used by the `sessionsList` tests.
+- **`describe('sessionRepository.supersede')`** — asserts exactly one winner among `RACE_SIZE` concurrent callers; `purgeAt` is clamped to `expiresAt` when the retention window would overshoot it; `cookie`-mode rows are never rotated.
+- **`describe('sessionRepository.listLive')`** — filters by account, mode, and liveness; orders newest sign-in first.
+- **`describe('sessionRepository.removeFamily')`** — removes the live row plus rotated predecessors in one call; cannot cross account boundaries.
+- **`describe('sessionRepository.removeByHash')`** — single-row delete; unknown hash is a no-op (returns 0).
+- **`describe('sessionRepository.touch')`** — stamps `lastUsedAt` only on the matching row; throttled writes fire at most once per interval.
+- **`describe('what the TTL monitor deletes')`** — exercises `reapDueSessions` (from factories) to confirm only past-`purgeAt` rows are removed.
+- **`describe('sessionsList')`** — API-level: deduplicates same-family rows, marks the caller's session `current`, never leaks token hashes or raw tokens in the JSON payload; no-credential callers get all `current: false`.
+- **`describe('verificationTokenRepository.issue')`** — one-live-kind replaces prior link atomically (race-safe); many-live-kind accumulates; `amr` is cleared when not re-supplied; unknown `type` is rejected by the Mongoose schema enum.
+- **`describe('verificationTokenRepository.findLive / spend')`** — `findLive` matches on kind + digest + liveness; `spend` uses `withTransaction` so exactly one of `RACE_SIZE` concurrent callers wins.
 
 ## Relationships
 
-- **`@modules/account/repository`** – The primary system under test: `sessionRepository` and `verificationTokenRepository`.
-- **`@modules/account/services/sessions`** – Tests the higher-level `sessionsList` service (and imports `eraseSessionsAndTokens`, `exportSessions` though the visible portion exercises `sessionsList`).
-- **`@modules/account/tests/factories`** – Provides all seeding and inspection helpers (`plantSession`, `plantToken`, `reapDueSessions`, `sessionRowFor`, `tokenRowsOf`, etc.).
-- **`@modules/users/tests/factories`** – `createUser` to provision accounts before seeding sessions/tokens.
-- **`@tests/support/race`** – `raceN` / `RACE_SIZE` drive the concurrency-atomicity assertions.
-- **`@tests/support/setup-test-db`** – `setupTestDb()` initialises the real in-memory/test database at module scope.
-- **`@tests/support/stub`** – `asStub` wraps a plain object into a typed `SessionRequest` without pulling in an HTTP framework.
-- **`@infrastructure/security/hash-token`** – `hashToken` produces the deterministic digests that every session/token row stores.
-- **`@infrastructure/runtime/database`** – `withTransaction` is imported (available for the repository's atomic writes under test).
-- **`@modules/account/session/strategy`** – Source of the `SessionRequest` type used to shape test requests.
-- **`@modules/account/model`** – `sessionModel` is imported (used by the test DB setup / Mongoose registration).
+- **`src/modules/account/repository.ts`** — the primary subject under test; `sessionRepository` and `verificationTokenRepository` are called directly.
+- **`src/modules/account/services/sessions.ts`** — provides `sessionsList` (and `eraseSessionsAndTokens`, `exportSessions`) tested at the service level.
+- **`src/modules/account/tests/factories.ts`** — supplies `plantSession`, `plantToken`, `reapDueSessions`, and all row/query helpers used to seed and inspect state.
+- **`src/modules/users/tests/factories.ts`** — `createUser` seeds a real user row before each test.
+- **`tests/support/race.ts`** — `raceN` / `RACE_SIZE` drive the concurrency assertions.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` connects a real (or in-memory) DB at module load.
+- **`tests/support/stub.ts`** — `asStub` casts a plain object to the `SessionRequest` interface for the `sessionsList` tests.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the atomic spend operation.
+- **`src/infrastructure/security/hash-token.ts`** — `hashToken` produces the digests stored and queried throughout.
+- **`src/modules/account/session/strategy.ts`** — source of the `SessionRequest` type used by the cookie helper.
 
 ## Notes
 
-- `setupTestDb()` runs at **module top-level** (not inside `beforeAll`), so the test database is ready before any `describe` block registers.
-- Concurrency tests rely on `raceN(RACE_SIZE, …)`; the exact `RACE_SIZE` lives in `tests/support/race` and is intentionally larger than 1 to make race conditions observable.
-- The "refuses a kind outside the closed vocabulary" test uses `@ts-expect-error` to deliberately pass an invalid enum value into `issue`, confirming the **schema** (not application code) rejects it.
-- The file is truncated in the visible portion; the `findLive / spend` suite likely continues with additional spend-semantics cases beyond what is shown.
+- `setupTestDb()` runs at module top-level (outside `beforeAll`), so the DB is ready before any `describe` body executes.
+- The `@ts-expect-error` on the `verificationTokenRepository.issue` call is intentional: it passes a `type` outside the schema enum to prove the DB (not TypeScript) rejects it.
+- `sessionModel` is imported from `../../model` but is not referenced in the visible test bodies; it may be used in the truncated tail or is a residual import.
+- The "duplicate-a / duplicate-b" family test encodes the invariant that two refreshes inside the grace window leave two rows, but `sessionsList` collapses them into one displayed session.

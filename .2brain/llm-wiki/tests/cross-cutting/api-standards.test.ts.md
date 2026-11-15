@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/api-standards.test.ts
-sha256: 30ed1c55416762a6e387d3a33fd60faae0c6f38df17ec1d797164ee23f08338a
-generated_at: 2026-11-08T09:23:33.475560+00:00
+sha256: c10561c6101178cb0dfc32cd87093d0ef8c57ca0eee63fd7265e657db8875f1a
+generated_at: 2026-11-14T23:01:08.332556+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Enforces two REST standards that the docs state in prose but nothing else mechanically checks: (1) every resource whose `status` enum has more than one value must list `actions` as required, and (2) every 409 refusal in source must carry an error code that a contract fragment declares. Both rules read from **source** (module `openapi.yaml` fragments and `.ts` files under `src/`), never from a generated bundle, so a failure points at a file a developer edits.
+Enforces two REST-contract standards as executable checks against **source** files (module `openapi.yaml` fragments and `.ts` code), so a module author cannot ship a resource or a 409 response that violates the rules stated in `docs/theory/tactical-ddd.md` and `docs/api/write-methods.md`. Failures name the file a human edits, not a generated bundle.
 
 ## Key elements
 
-- **`Fragment`, `SchemaNode`, `OperationNode`** – narrow interfaces describing only the slice of the OpenAPI/JSON-Schema document the checks actually read.
-- **`contracts`** – every module under `MODULES_ROOT` that ships an `openapi.yaml`, parsed into a `Fragment`.
-- **`enumValues(fragment, node)`** – resolves an `enum` by following `allOf` wrappers and local `#/components/schemas/…` `$ref`s.
-- **`sourceFiles(directory)`** – recursively collects `.ts` files, skipping any directory named `tests`.
-- **`callText(source, start)`** – returns the balanced-parenthesis call text starting at `start`.
-- **`NOT_A_RECORD`** – regex of schema name prefixes (Search, Export, Update, Create, Observability) that carry a `status` field but are request/response envelopes, not actionable records.
-- **`EXEMPT`** – map of `module.Schema` names that intentionally publish no `actions`, each with a one-line reason.
-- **`lifecycleRecords`** – computed list of all non-exempt, non-envelope schemas whose `status` enum has > 1 value.
-- **`CALL`** – regex matching the three call shapes that produce a 409 response (`generateReject`, `refuse`, `rejectResponse`).
-- **`refusals`** – every 409 call site in `src/`, with a `file:line` location and the full call text.
-- **Canary assertions** (`>= 3` records, `>= 20` refusals) – fail loudly if a layout change makes the sweep silently empty.
+- **`contracts`** (module-level constant) — discovers every module directory under `MODULES_ROOT` that ships an `openapi.yaml`, parses it with the `yaml` library, and narrows the result to the `Fragment` interface.
+- **`Fragment` / `SchemaNode` / `OperationNode`** — minimal structural interfaces describing only the slice of OpenAPI the tests read (error codes, paths, component schemas, `$ref`, `enum`, `allOf`, `required`, `properties`).
+- **`enumValues(fragment, node)`** — resolves a schema's `enum` by following local `#/components/schemas/…` `$ref`s and flattening `allOf` wrappers.
+- **`sourceFiles(directory)`** — recursively collects `.ts` files, skipping any `tests/` sub-directory.
+- **`callText(source, start)`** — returns the text of a call expression (name through matching closing paren) starting at a character offset.
+- **`describe('a resource with a lifecycle status publishes required actions')`** — three tests: (1) a canary floor (≥ 3 records found), (2) every non-exempt record lists `actions` in its `required` array, (3) no entry in the `EXEMPT` map still qualifies (i.e. the exemption hasn't gone stale).
+- **`describe('a 409 refusal carries an error code')`** — three tests: (1) a canary floor (≥ 20 refusals found), (2) every 409 call site references a `code` key or `ERROR_CODES`, (3) every `ERROR_CODES.*` identifier used in source is declared in some module fragment's `x-error-codes` or in the shared root contract.
+- **`EXEMPT`** (local to first describe) — a hand-maintained map of `module.Schema` → reason, for records that legitimately carry a multi-valued `status` without publishing their own `actions`.
+- **`NOT_A_RECORD`** (local to first describe) — a regex (`Search|Export|Update|Create|Observability` prefix) that excludes request-body / log-row schemas from the sweep.
+- **`CALL`** (local to second describe) — a regex matching `generateReject(…409)` and `refuse(…409)` call sites.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** – supplies `MODULES_ROOT` (base dir of module contracts) and `REPO_ROOT` (base for `src/` walks and the root `shared/contracts/openapi.root.yaml` lookup).
+- **`tests/support/paths.ts`** — imports `MODULES_ROOT` (used to locate per-module contract fragments) and `REPO_ROOT` (used as the base for walking `src/` and for resolving the shared root contract path).
 
 ## Notes
 
-- The `EXEMPT` map is a **deliberate allowlist**, not a TODO. A companion test (`keeps no exemption that has since published required actions`) fails if an exempted schema later adds `actions` to its `required`, forcing the entry to be removed.
-- The 409 error-code check pulls declared codes from **both** the per-module fragments **and** the shared root contract (`shared/contracts/openapi.root.yaml`), since the root owns cross-cutting codes (idempotency, rate-limit).
-- `enumValues` only resolves **local** `$ref`s within the same fragment; a cross-fragment reference would silently return `[]`.
-- `sourceFiles` hard-excludes directories named `tests` at any depth to avoid matching test fixtures or mocks.
-- The `CALL` regex is the single definition of "what counts as a 409-producing call." Adding a new helper that emits 409 requires extending this regex or the bare-code test will not see it.
+- The 409-detection regex (`CALL`) is intentionally narrow: it only catches the named helper functions it matches. A new 409-emitting helper that doesn't use one of these will silently escape the sweep.
+- The `EXEMPT` map is a **negative** allow-list: adding a new record that legitimately has no `actions` requires an entry here, and the third test in the first `describe` will fail if you forget to remove an entry once the record *does* publish `actions`.
+- `enumValues` only resolves `$ref`s whose target lives in the **same** fragment (`#/components/schemas/…`); cross-fragment refs will silently return `[]`.
+- The `sourceFiles` walker excludes directories named `tests` at any depth, so helper utilities under `src/**/tests/` are not scanned for 409 calls.
+- Both `describe` blocks include a "finds the records/refusals" canary test with a `toBeGreaterThanOrEqual` floor. If a fragment layout change or a source restructure drops the count below the floor, the canary fails *before* the real assertion can pass vacuously.

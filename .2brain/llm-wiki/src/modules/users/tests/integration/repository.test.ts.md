@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/repository.test.ts
-sha256: 1ef22ec03aa1074628dfbcb7bd13b2d742cf6d7d3149b719e3fd2b8f717dfd5f
-generated_at: 2026-11-08T08:56:23.364268+00:00
+sha256: bf425e159b2ebd9ee43bfb97a0296159299b7f936ff86bc8f737fe36f3fa3695
+generated_at: 2026-11-14T22:37:40.020104+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for `userRepository`, exercising the full CRUD surface and the module-specific `writebackImage` method against a real (in-memory) MongoDB instance provided by `setupTestDb`. It validates persistence semantics, filtering, pagination, bulk updates, and the image-digest writeback protocol end-to-end.
+Integration test suite for `userRepository`, executed against an in-memory MongoDB instance. It validates the full CRUD surface (`create`, `findById`, `findOne`, `findAll`, `save`, `deleteOne`, `updateMany`, `count`) plus the module-specific `search` and `writebackImage` methods, confirming correct filtering, pagination, soft-delete semantics, and lean-object return types.
 
 ## Key elements
 
-- **`setupTestDb()`** (module-level call) — boots the in-memory Mongo that every test in the file shares.
-- **`create`** — verifies insertion, returned Mongoose document shape, and that the pre-save hook hashes the password.
-- **`findById` / `findOne`** — happy-path retrieval and `null` on miss.
-- **`findAll`** — unfiltered listing, `limit`, `skip` (cursor pagination), query filtering, and that results are **lean** (plain JS objects, confirmed via `asStub` absence of `save`).
-- **`count`** — total and filtered document counts; empty-collection edge case.
-- **`save`** — flushes in-memory Mongoose mutations back to the DB.
-- **`deleteOne`** — permanent removal; subsequent `findById` returns `null`.
-- **`updateMany`** — bulk `$set` with filter; confirms non-matching documents are untouched.
-- **`writebackImage`** — the token/optimistic-concurrency protocol: returns `true` on a matching `pendingImageKey` (idempotent on duplicate calls) and `false` when the document's key has advanced (stale job).
+- **`setupTestDb()`** — called at module scope (top-level, outside any `describe`/`it`) to start and configure the in-memory Mongo before any test runs.
+- **`liveAndDeleted()`** — local helper that seeds one active user (`live@example.com`) and one soft-deleted user (`gone@example.com`, with `deletedAt` set) for the `search` tests.
+- **`describe('userRepository')`** — the root suite; each nested `describe` block maps to one repository method.
+- **`it.each` in `search`** — parameterized cases covering `deleted: true`, `deleted: false`, and omitted (returns both).
+- **`writebackImage` block** — uses `Users.updateOne` (direct model access) to plant a `pendingImageKey`, then asserts the repository method resolves `true` (match), `true` (duplicate), or `false` (stale key).
+- **`asStub`** — imported from the test-support layer solely to cast a lean object so the spec can assert the absence of a `save` method.
 
 ## Relationships
 
-- **`src/modules/users/repository.ts`** — the system under test; imports the `userRepository` instance.
-- **`src/modules/users/model.ts`** — imports `userModel` (aliased `Users`) *directly*, bypassing the barrel, solely to seed `pendingImageKey` in `writebackImage` tests.
-- **`src/modules/users/tests/factories.ts`** — supplies `makeUser`, `createUser`, and the `PLAIN_PASSWORD` constant.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` (in-memory Mongo lifecycle).
-- **`tests/support/stub.ts`** — provides `asStub` for type-cast assertions (used to assert absence of Mongoose methods).
+- **`src/modules/users/repository.ts`** — the system under test; every assertion targets `userRepository` methods.
+- **`src/modules/users/model.ts`** — imported directly as `userModel` (aliased `Users`) to set `pendingImageKey` behind the repository in `writebackImage` tests, and to understand the Mongoose document shape.
+- **`src/modules/users/tests/factories.ts`** — provides `makeUser` (factory for a user spec object), `createUser` (persists one into the test DB), and `PLAIN_PASSWORD` (to assert the pre-save hook replaced it).
+- **`tests/support/setup-test-db.ts`** — wires up the in-memory MongoDB that all tests in this file run against.
+- **`tests/support/stub.ts`** — exports `asStub`, used for a single type-level cast in the lean-object assertion.
 
 ## Notes
 
-- `findAll` returns **lean** objects while `create`, `findById`, `findOne`, and `save` return full Mongoose documents. Tests explicitly distinguish these (the `save` test mutates a Mongoose doc; the `findAll` lean test checks for missing `save`).
-- `userModel` is imported from `@modules/users/model` rather than the barrel export. The inline comment notes this is intentional: a spec is allowed to reach into its own module's internals per `eslint-plugin-boundaries`.
-- `writebackImage` tests set `pendingImageKey` via a raw `Users.updateOne` call (not through the repository) to simulate the intermediate state a background digest job would leave behind.
-- `setupTestDb()` runs once at module scope; individual tests do **not** reset the collection, so `findAll`/`count` tests that expect exact counts rely on ordering and the fact that earlier suites' documents are still present (e.g., `count` "returns 0 when empty" passes only because it runs in a fresh describe block after other tests have already inserted rows — the assertion is actually against the *current* collection state, not a guaranteed empty state).
+- `setupTestDb()` runs at **module load time** (top-level call), not inside any Jest lifecycle hook. This means the DB is created once for the whole file and shared across all `it` blocks; each test is expected to operate on the collection state left by prior tests (e.g., `count` tests run after `createUser` calls in other suites).
+- The direct import of `userModel` from `model.ts` (bypassing the barrel) is intentional and explicitly sanctioned by `eslint-plugin-boundaries` for a spec reaching into its own module's internals.
+- `findAll` is contractually a **lean** query (plain JS objects). The test pins this by asserting the returned object has no `save` method — a regression to Mongoose Documents would break callers that spread or serialize the result.
+- `writebackImage` tests deliberately set `pendingImageKey` via the model layer rather than the repository, isolating the repository's key-matching logic from any write-path it might own.

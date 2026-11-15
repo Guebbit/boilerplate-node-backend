@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/openapi.yaml
-sha256: 40273072fe2d620d7595c02aa117cbbf2b6b728d5aaf7bdd534e203a88c96aa2
-generated_at: 2026-11-08T05:03:13.751027+00:00
+sha256: fe1853d555be97630d68ffbd80515ae315e1dfe2799942b87b7781e41158c815
+generated_at: 2026-11-14T19:20:40.018371+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.1.0 module contract defining the machine-to-machine credential API (list, mint, get, revoke) for the `api-keys` module. It specifies the REST surface, request/response schemas, sorting grammar, and the module's section of the account data export, serving as the single source of truth for both implementation and client codegen.
+OpenAPI 3.1.0 module contract for the **api-keys** module. Defines the list, get, create, and revoke endpoints for machine-to-machine credentials, their request/response schemas, and the module's contribution to the account data export via `x-personal-data`. Serves as the single source of truth for this module's HTTP surface, security requirements, and data model.
 
 ## Key elements
 
-- **Paths**
-  - `GET /api-keys` (`listApiKeys`) — paginated, sortable list of credentials; never exposes secrets.
-  - `POST /api-keys` (`createApiKey`) — mints `sk_<prefix>_<secret>`; secret returned exactly once; requires critically fresh session, non-empty permission subset of caller's current permissions, and `expiresAt` ≤ 1 year ahead.
-  - `GET /api-keys/{id}` (`getApiKey`) — single credential detail; secret never included.
-  - `DELETE /api-keys/{id}` (`revokeApiKey`) — soft-revoke (stamps `revokedAt`); row and audit history remain readable.
-
-- **Schemas (components)**
-  - `ApiKeySort` — JSON:API-style sort grammar (1–3 fields, `-` prefix for descending); ties broken by `id`.
-  - `ApiKeyStatus` — server-decided enum: `active | expired | revoked | suspended`; `suspended` is transient (tied to minter's account state).
-  - `ApiKey` — full credential object including `publicPrefix`, `permissions`, `actions`.
-  - `ApiKeyActions` — per-caller capability flags (currently `revoke: boolean`).
-  - `ExportApiKey` — `ApiKey` minus `actions`; used in the account data export.
-  - `CreateApiKeyRequest`, `ApiKeysResponse`, `ApiKeyCreated` — request/response envelopes (truncated in view).
-
-- **Extensions**
-  - `x-personal-data.apiKeys` — declares this module's slice in `POST /account/export`; the bundler merges it into `AccountExportResponse`.
-  - `x-error-codes` on `createApiKey` — `401: [REAUTH_REQUIRED]`.
-  - Tag `ApiKeys` carries `x-family: Core`.
+- **Tags** — `ApiKeys` (x-family: Core); scopes all operations under one tag.
+- **`x-personal-data`** — Declarative extension the bundler merges into `AccountExportResponse`. Contributes an `apiKeys` array of `ExportApiKey` (metadata only; no secret, no `actions`).
+- **`GET /api-keys`** (`listApiKeys`) — Paginated, sortable list of the shop's credentials. Never returns a secret. Requires `read:ApiKey`.
+- **`POST /api-keys`** (`createApiKey`) — Mints a credential; returns the one-time plaintext secret. Requires `create:ApiKey`, a critically fresh session, a non-empty permission subset of the caller's own permissions, and `expiresAt` ≤ 1 year.
+- **`GET /api-keys/{id}`** (`getApiKey`) — Single credential lookup; same secret-redaction rule as list.
+- **`DELETE /api-keys/{id}`** (`revokeApiKey`) — Soft-revokes (stamps `revokedAt`); immediate, no grace period. Requires `delete:ApiKey`.
+- **`ApiKeySort`** — Shared sort-grammar schema (1–3 fields from `createdAt`, `expiresAt`, `lastUsedAt`, with `-` for descending).
+- **`ApiKeyStatus`** — Enum: `active`, `expired`, `revoked`, `suspended` (suspended = minter can no longer sign in; auto-recovers).
+- **`ApiKey`** — Full credential object including `publicPrefix`, `permissions` (mint-time snapshot), `actions`, and timestamps.
+- **`ApiKeyActions`** — Per-caller capability flags (e.g. `revoke` boolean).
+- **`ExportApiKey`** — Export variant of `ApiKey` without the per-caller `actions` field.
 
 ## Relationships
 
-- **shared/contracts/openapi.root.yaml** — Referenced via relative `$ref` for shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `NoContent`), the `Location` header, and the `Id` schema. Removing or renaming any of these breaks this file.
-- **src/modules/audit-logs/openapi.yaml** — The revoke endpoint's description notes that audit history for a revoked key remains readable, implying the audit-logs module exposes entries for this module's mutations. No direct `$ref` coupling visible here.
-- **src/modules/cart/openapi.yaml** — Graph neighbor; no direct reference or shared schema is visible in this file. Interaction is likely at the bundler/aggregation level only.
+- **`shared/contracts/openapi.root.yaml`** — Heavy `$ref` dependency for shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`, `NoContent`), headers (`Location`), and the `Id` schema. This file cannot be validated or consumed without the root contract.
+- **`src/modules/audit-logs/openapi.yaml`** / **`src/modules/cart/openapi.yaml`** — Sibling modules in the same graph. They share the `x-personal-data` bundler pattern: each module's extension section is combined by the bundler into a single `AccountExportResponse`. Changes to the bundler contract or the root schemas in `openapi.root.yaml` affect all three files simultaneously.
 
 ## Notes
 
-- The secret (`sk_…`) appears **only** in the `201` response of `POST /api-keys`; every other endpoint omits it by design.
-- `suspended` status is checked *after* `revoked`/`expired`, so a revoked key will never read as `suspended` even if the minter is also banned.
-- Permissions are re-floored against the minter's **current** tenant permissions on every authenticated request, not just at mint time. A key whose minter is banned/erased is refused with `401` until the minter is restored.
-- `DELETE /api-keys/{id}` is a state transition, not a row deletion; the row persists for audit purposes.
-- The `x-personal-data` block intentionally excludes `actions` (caller-specific) and the secret; `publicPrefix` is included so an account can identify which key is which.
-- Sorting uses a single shared grammar (see `docs/api/sorting.md` referenced in the file); the sort array is capped at 3 entries.
+- **Secret is one-time:** The credential secret appears only in the `201` response of `createApiKey`. Every other endpoint (list, get, export) deliberately omits it.
+- **Permission floor is re-evaluated live:** The `permissions` array stored on a key is a *snapshot* at mint time, but the server re-checks it against the minter's *current* permissions on every request. A key cannot outgrow its minter, even if the minter gains new permissions later.
+- **`suspended` vs `revoked`:** Checked in order (revoked → expired → suspended), so a revoked key will never surface as `suspended` even if the minter is also banned.
+- **Sorting grammar is JSON:API-style:** `?sort=-lastUsedAt,expiresAt` (comma-separated, `-` prefix for descending, max 3 fields, ties broken by `id`). Defined once in `ApiKeySort` and documented as shared with every list endpoint.
+- **`x-error-codes` on `createApiKey`** is present but empty in the visible content — likely a placeholder or extension consumed by tooling.
+- **Truncated content:** The file content provided ends mid-schema (`ExportApiKey`); additional schemas (`ApiKeysResponse`, `CreateApiKeyRequest`, `ApiKeyCreated`) are referenced but not shown.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/catalog.ts
-sha256: 77f392bace29792e004745647e6bea1a7cf03f298cbd52a565bbb5a9d568a797
-generated_at: 2026-11-08T09:06:00.646457+00:00
+sha256: 636566e506b43b4a1887f334560884d381917ee3dae7cce13959cc8167f1ed61
+generated_at: 2026-11-14T22:46:17.778454+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the public webhook event catalogue by reading each registered module's `asyncapi.webhooks.yaml` fragment once at boot. The resulting in-memory list serves the `GET /webhooks/events` endpoint and powers subscription validation, guaranteeing that the listed events, the subscribe check, and the bundled AsyncAPI contract all derive from the same per-module files.
+Builds a static, in-memory event catalogue from each registered module's `asyncapi.webhooks.yaml` fragment, then answers three questions: which events exist, which events a given caller may subscribe to, and which requested event names are unknown. Centralising the source so the public endpoint, the subscribe permission check, and the generated contract can never drift.
 
 ## Key elements
 
-- **`registerWebhookCatalog(moduleNames)`** — called once during `onRegistered` (after all modules are known). Reads each module's YAML fragment, flattens channel entries into the module-level `catalogue` array.
-- **`listWebhookEventCatalog()`** — returns the readonly catalogue for public consumption (e.g. the events endpoint).
-- **`unknownEventTypes(eventTypes)`** — validates a subscription's event filter against the catalogue; returns the names that are neither in the catalogue nor the `*` wildcard (`ALL_EVENTS`). Deduplicates while preserving request order.
-- **`eventsOf(moduleName)`** *(internal)* — reads and parses a single module's `asyncapi.webhooks.yaml` from disk; returns `[]` if the file is absent.
-- **`catalogue`** *(module-level)* — the mutable store, empty until `registerWebhookCatalog` runs.
+- **`registerWebhookCatalog(moduleNames)`** – Exported; called once at boot (from `onRegistered`). Reads each module's `asyncapi.webhooks.yaml`, validates its `x-read-rule`, and populates the module-level `catalogue` array. No disk I/O on later requests.
+- **`listWebhookEventCatalog(caller)`** – Exported; returns every catalogue entry annotated with a `subscribe` boolean indicating whether the caller may receive the event.
+- **`unknownEventTypes(eventTypes)`** – Exported; returns requested event names absent from the catalogue (the `ALL_EVENTS` wildcard is always accepted). Used for 422 validation.
+- **`unreadableEventTypes(eventTypes, caller)`** – Exported; returns catalogue events the caller does not hold a read rule for. Skips unknown names (that is `unknownEventTypes`'s concern).
+- **`assertReadRule`** (internal) – Validates at boot that each event declares either `"public"` or a tenant-scoped, unconditioned permission rule; throws otherwise.
+- **`eventsOf`** (internal) – Reads and parses one module's YAML fragment into `CatalogEvent[]`.
+- **`mayRead`** (internal) – Returns a boolean: the event is `public`, or the caller's `heldRules` set contains the event's read rule.
+- **`catalogue`** (module state) – `readonly CatalogEvent[]`, empty until `registerWebhookCatalog` runs.
 
 ## Relationships
 
-- **`src/modules/webhooks/domain/index.ts`** — provides `ALL_EVENTS`, the `*` constant that `unknownEventTypes` always allows.
-- **`src/modules/webhooks/services/index.ts`** — barrel that re-exports this module's public API to the rest of the webhooks service layer.
-- **`src/modules/webhooks/services/subscriptions.ts`** — calls `unknownEventTypes` when validating a new or updated subscription's event filter.
-- **`src/types/index.ts`** — source of the `WebhookEventCatalogEntry` and `WebhookEventName` types used throughout.
-- **`src/modules/webhooks/tests/unit/catalog.test.ts`** — unit tests for the catalogue functions.
-- **`src/modules/webhooks/tests/integration/subscription-lifecycle.test.ts`** — integration tests exercising subscription flows that depend on the catalogue.
+- **`src/kernel/ability.ts`** – Imports `heldRules` to check whether a caller holds a rule at request time.
+- **`src/kernel/permissions.ts`** – Imports `findRule` and `PermissionRuleId` to validate and type `x-read-rule` values at boot.
+- **`src/modules/webhooks/domain/index.ts`** – Imports `ALL_EVENTS` (the `"*"` wildcard) for the unknown/unreadable filter helpers.
+- **`src/types/index.ts`** – Imports `Caller`, `WebhookEventCatalogEntry`, `WebhookEventName`.
+- **`src/modules/webhooks/services/index.ts`** – Barrel that re-exports this module's public API for consumers within the webhooks service layer.
+- **`src/modules/webhooks/services/subscriptions.ts`**, **`actions.ts`**, **`deliveries.ts`** – Sibling webhooks services in the dependency graph that consume this module's exported helpers.
+- **`src/modules/webhooks/tests/unit/catalog.test.ts`** – Unit-tests the catalogue build, permission filtering, and wildcard handling.
+- **`src/modules/webhooks/tests/integration/event-read-rule.test.ts`** – Integration test for read-rule enforcement.
+- **`src/modules/webhooks/tests/integration/subscription-lifecycle.test.ts`** – Exercises the subscribe path that depends on `listWebhookEventCatalog` / `unreadableEventTypes`.
 
 ## Notes
 
-- The catalogue is populated once at boot; subsequent reads are pure memory access (no disk I/O per request).
-- Module names are folder names under `src/modules/` (matching `AppModule.name`); the file path is derived as `<module>/asyncapi.webhooks.yaml`.
-- The `as WebhookEventName` cast on the channel key is unavoidable: the enum is generated from the same YAML files at bundle time (`npm run contracts:bundle`), so the compiler cannot verify a disk-read string against it.
-- A module that is not registered (or ships no fragment file) simply contributes zero events — there is no fallback or warning.
+- **Boot-time only.** Fragments are static YAML files read once; a request path never touches the filesystem.
+- **Module folder = registry name.** `MODULES_DIRECTORY/<moduleName>/asyncapi.webhooks.yaml` maps a module's `AppModule.name` to its directory under `src/modules/`. A module that ships no fragment contributes zero events.
+- **`WebhookEventName` cast is intentional.** The enum is generated at bundle time (`npm run contracts:bundle`) from the same channel keys, so the compiler cannot verify a disk-read string belongs to it; the `as WebhookEventName` cast is the bridge.
+- **Read-rule strictness.** `assertReadRule` rejects platform-scoped, conditioned, or undeclared rules. A tenant rule like `read:Order` would pass every customer and gate nothing, so it is disallowed.
+- **`ALL_EVENTS` (`"*"`) is a universal wildcard.** It is never flagged as unknown and expands to every catalogue event in `unreadableEventTypes`.
+- **Separation of unknown vs. unreadable.** `unknownEventTypes` is the 422 gate; `unreadableEventTypes` is the 403/permission gate. Callers should check the former first.

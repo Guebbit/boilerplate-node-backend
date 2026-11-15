@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/email-change.ts
-sha256: 28672556525b2b083c38a205d687869c80be934b2c2632177df9065d7a72d6df
-generated_at: 2026-11-08T04:16:56.427763+00:00
+sha256: 838e5f22072d9905a48273219ca81069601f5e859baad338aa8806c8bae4000d
+generated_at: 2026-11-14T18:43:05.816428+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the *request* and *cancellation* phases of an email address change. It sets `user.pendingEmail` (never `user.email` directly), sends the two mails a genuine request owes (old-address undo notice + new-address verification link), and revokes the token when a change is explicitly cancelled. Confirmation and undo live in `./verification`; the state-machine logic lives in `../domain/email-change`.
+Service layer for the `POST /account/email-change` and `DELETE /account/email-change` endpoints. Handles requesting a new email address (parking it as `pendingEmail` without touching the proven `email` field), the full guard chain (collision checks, cooldown, mailbox budget), sending the two outbound mails (undo notice to the old address, verification link to the new one), and explicitly cancelling a pending change while revoking its token.
 
 ## Key elements
 
-- **`EmailChangeOutcome`** (interface) — `{ conflict, requested }`; `requested` is `true` only when this call is what set `pendingEmail`, gating the downstream mail and audit side-effects.
-- **`applyEmailChangeRequest(user, requestedEmail)`** — Evaluates the `email` field from a `PUT/PATCH /account` body against the current and pending addresses. No-ops on absent / current / already-pending values; otherwise runs a cross-account collision check (`emailOrPendingEmailTaken`) before writing `user.pendingEmail` in place. Returns the outcome; does not persist or send mail.
-- **`cancelPendingEmailChange(userId, context)`** — `DELETE /account/email-change` handler. Loads only `pendingEmail`, clears it, and (if a change *was* pending) revokes the live `EMAIL_CHANGE` token so the old link cannot still swap in the address. Returns 401 if the user is not found.
-- **`revokeCanceledChange`** *(private)* — Conditional token removal + audit; skipped entirely on a no-op cancel.
-- **`sendEmailChangeMail`** *(private)* — Awaits `issueToken` for the 7-day undo, mails the old address (`emailChangeNoticeEmail`), then delegates to `sendVerificationEmail` for the new-address link. Awaiting (vs. fire-and-forget) prevents a race with the client's next action.
-- **`notifyEmailChangeRequested(user, context)`** — Public wrapper: sends both mails **then** records the `AUTH_EMAIL_CHANGE_REQUESTED` audit event. The audit trails the mail, not the field write.
+- **`requestEmailChange(userId, requestedEmail, context)`** — Exported handler for `POST`. Runs the guard chain (already-current → already-pending → taken-by-another → cooldown → mailbox budget → save) and, on success, sends both mails. Returns `ResponseSuccess<UserDocument>` or `ResponseReject`.
+- **`cancelPendingEmailChange(userId, context)`** — Exported handler for `DELETE`. Cancels `pendingEmail` (no-op if none), revokes the live `email-change` token if a change was actually pending, and records an audit event.
+- **`saveRequestedEmail`** *(private)* — The post-guard pipeline: cooldown check via `resendCooldownRemaining`, `mailRecipientRefusal` budget check, `setPendingEmail` write, then mail dispatch.
+- **`sendEmailChangeMail`** *(private)* — Issues the undo token, sends the notice email to the old address, then delegates to `sendVerificationEmail` for the new address. Awaited (not fire-and-forget) so the token exists before the HTTP response returns.
+- **`notifyEmailChangeRequested`** *(private)* — Wraps `sendEmailChangeMail` and records the `AUTH_EMAIL_CHANGE_REQUESTED` audit event after the mails are sent.
+- **`revokeCanceledChange`** *(private)* — Removes `EMAIL_CHANGE_TOKEN_TYPE` tokens and records `AUTH_EMAIL_CHANGE_CANCELED`; skips both if no change was pending.
+- **`alreadyHeld`** *(private)* — Shorthand 409 `ResponseReject` builder with a code + i18n key.
 
 ## Relationships
 
-- **`../domain/email-change` / `../domain/index`** — Provides `emailChangeStateOf` and `emailChangeNext`, the finite-state helpers that determine whether a cancel is meaningful.
-- **`../token-types`** — Supplies `EMAIL_CHANGE_TOKEN_TYPE`, `EMAIL_CHANGE_UNDO_TOKEN_TYPE`, and `EMAIL_CHANGE_UNDO_TTL_MS` (7 days).
-- **`./tokens`** — `issueToken` (undo token) and `removeTokens` (revoke on cancel).
-- **`./verification`** — `sendVerificationEmail` delivers the new-address confirmation link and issues its own `EMAIL_CHANGE` token.
-- **`./mail`** — `sendAccountMail` performs the actual SMTP delivery of the old-address notice.
-- **`../emails`** — `emailChangeNoticeEmail`, `greetableName`, `recipientLocale` build the notice content and locale-aware greeting.
-- **`../audit`** — `accountAuditActions` enum values for the two audit events.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit entries.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the HTTP envelope for `cancelPendingEmailChange`.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` maps unexpected DB errors to a consistent error response.
-- **`@infrastructure/persistence/normalize-email`** — `normalizeEmail` ensures case/whitespace-insensitive comparison in all three no-op branches.
-- **`./profile`** (caller) — Invokes `applyEmailChangeRequest` and `notifyEmailChangeRequested` as part of the `PUT/PATCH /account` handler; this module is re-exported through `./index`.
+- **`src/modules/account/domain/email-change.ts`** — Provides the state-machine events (`emailChangeStateOf`, `emailChangeNext`) used to decide whether a cancel was meaningful.
+- **`src/modules/account/domain/index.ts`** — Barrel re-export of the domain functions above.
+- **`src/modules/account/emails.ts`** — Supplies `emailChangeNoticeEmail`, `greetableName`, `recipientLocale` for composing the old-address notice mail.
+- **`src/modules/account/mail-budget.ts`** — `mailRecipientRefusal` gates the request before any write or mail is spent.
+- **`src/modules/account/cooldown.ts`** — `resendTooSoon` shapes the 429 response when the per-minute pacing window has not elapsed.
+- **`src/modules/account/audit.ts`** — `accountAuditActions` enum values for the two audit events (`REQUESTED`, `CANCELED`).
+- **`src/modules/account/services/caller.ts`** — `withOwnAccount` wraps the request path so only the caller's own document is loaded.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every return value.
+- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` converts unexpected DB errors into a standard 500 envelope.
+- **`src/infrastructure/i18n/index.ts`** — `t()` resolves user-facing error and mail strings per caller locale.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` persists the two audit events.
+- **`src/infrastructure/persistence/normalize-email.ts`** — `normalizeEmail` ensures case/whitespace-safe comparisons in the guard chain.
+- **`src/modules/account/services/index.ts`** — Re-exports the two public handlers for barrel consumption.
 
 ## Notes
 
-- **Mutates in place.** `applyEmailChangeRequest` writes `user.pendingEmail` on the loaded document; persistence is the *caller's* `userService.update`. This file never calls `save()` itself.
-- **Collision check is request-time only.** The DB unique indexes on `users_email` and `users_pending_email` are the swap-time guard (up to 24 h later). Both halves are required; neither alone is sufficient.
-- **Mail is awaited, not fire-and-forget.** `sendEmailChangeMail` chains both sends before resolving, deliberately unlike most other account mail, to avoid a token-issuance race with the client's next request.
-- **Audit timing.** The "requested" audit fires *after* both mails succeed; the "canceled" audit fires *after* token removal. A failed mail or DB error produces no audit event.
-- **`requested` flag gates everything downstream.** A plain profile save that doesn't change the email, or a resend of the already-pending address, returns `{ conflict: false, requested: false }` and must not trigger mail or audit.
+- **Guard order matters and is intentional.** The cooldown check (429) runs *before* the mailbox budget check so a paced request spends nothing. The budget check runs *before* the `setPendingEmail` write so a refused request leaves `pendingEmail` untouched.
+- **The two mails are awaited sequentially, not fired in parallel.** The undo token is issued first; the verification mail (and its own token) follows. Responding before either completes would race the token with the client's next action.
+- **`cancelPendingEmailChange` is a safe no-op.** Clients may call `DELETE` without first reading `GET /account`; the handler checks `hadPending` via the domain state machine and only revokes/audits when a change was actually live.
+- **Only `pendingEmail` is loaded on the cancel path** (`findByIdWithPendingEmail`) — the full user document is not needed to decide whether a cancel applies.
+- **The "taken by another account" check is request-time only.** The swap-time half (unique indexes on `users_email` and `users_pending_email`) is enforced by the database at confirm time, up to 24 h later.

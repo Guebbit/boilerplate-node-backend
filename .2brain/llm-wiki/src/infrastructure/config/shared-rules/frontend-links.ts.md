@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/config/shared-rules/frontend-links.ts
-sha256: 8dc91f9cad1d1bb51e801e0362dab1d09786b25dff2254603972892a9d97c4e4
-generated_at: 2026-11-08T03:26:10.188354+00:00
+sha256: 89247c7e6a85c177a5dfe34977715259c50e3d9dbcccf71e6c344ffaca46c9b1
+generated_at: 2026-11-14T17:57:16.594797+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Zod schema that validates `shared/rules/frontend-links.yaml`. That YAML file is the single source of truth for every frontend path the backend links to in transactional mail (verification, reset, orders, etc.), staff-screen URLs in work-notice mail, and the sitemap's static-page list. The schema exists so the YAML is type-checked at load time rather than at runtime string-concatenation time.
+Defines the Zod schema for the shared-rules file that stores frontend URL path templates. The backend uses these templates to build user-facing links (transactional mail, sitemap) and staff-screen links (work-notice mail). This module gives those values a typed, validated shape at load time.
 
 ## Key elements
 
+- **`template`** — internal helper; `z.string().min(1)` ensuring every path value is a non-empty string.
 - **`frontendLinksSchema`** (exported) — `z.strictObject` with three top-level keys:
-  - `links` — ten path templates (verify, reset, restore, emailChange, emailUndo, export, order, product, contact, privacy) all relative to the frontend's `/<locale>/` prefix.
-  - `staffPages` — fifteen path templates for internal staff screens (per-entity screens and summary/tab rows like `transfersDue`, `lowStock`, `staleRefunds`, etc.).
-  - `staticPages` — `z.array(z.string())`; public pages that take no id (empty string = home page).
-- **`FrontendLinksRules`** (exported) — `z.infer` type of the schema; the shape of a successfully parsed YAML document.
-- **`template`** (module-local) — shorthand `z.string().min(1)`, enforcing non-empty path strings.
+  - `links` — 12 path templates for user-facing routes under `/<locale>/` (verify, reset, setup, restore, emailChange, emailUndo, export, order, product, contact, privacy, terms).
+  - `staffPages` — 18 path templates for staff screens under `/<locale>/`, covering entity pages (user, webhookSubscription, task, return, order, inventory, salesPayments) and dashboard summary tabs (transfersDue, preordersLate, deliveryHoldsOpen, returnsAwaitingGoods, returnsUndecided, lowStock, unshipped, awaitingTracking, undelivered, staleRefunds).
+  - `staticPages` — `z.array(z.string())`; public pages that take no id. The empty string represents the home page.
 
 ## Relationships
 
-- **`src/infrastructure/config/shared-rules/registry.ts`** — registers `frontendLinksSchema` (alongside other shared-rule schemas) so the loader can parse and cache the YAML in one pass.
-- **`src/infrastructure/http/frontend-link.ts`** — consumes a `FrontendLinksRules` value (typically the `links` or `staffPages` slice) to resolve a concrete URL for a given locale and dynamic id when composing outbound mail or sitemap entries.
+- **`registry.ts`** — Registers `frontendLinksSchema` so the shared-rules loader can parse and validate the YAML data alongside the other rule files.
+- **`src/infrastructure/http/frontend-link.ts`** — Consumes the parsed values (typed by this schema) to interpolate locale and resource ids into the final URLs used in HTTP responses and mail bodies.
 
 ## Notes
 
-- All path templates are **relative** to the frontend's `/<locale>/` prefix; the consuming code in `frontend-link.ts` is responsible for prepending that prefix.
-- The schema is a `strictObject` at every level — unknown keys in the YAML will fail validation rather than being silently ignored.
-- The file's JSDoc explicitly forbids relative imports beyond what `src/infrastructure/config/shared-rules/load.ts` already provides; do not add new import paths here.
+- All objects use `z.strictObject`, so any extra key in the source YAML will fail validation.
+- The module doc-block notes that imports must be relative (see `load.ts`), a project-wide convention for this directory.
+- `links` and `staffPages` keys are intentionally distinct names for different audiences (end-user vs. staff); do not merge them.
+- `staticPages` is a free-form string array with no per-entry constraints beyond being a string; ordering and membership are application-specific.

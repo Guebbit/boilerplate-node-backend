@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/events.ts
-sha256: cc2313c785eedfbaa20ae45587b5bf88cbe235ab1b8b7049d713e5c7186642ab
-generated_at: 2026-11-08T05:30:19.899379+00:00
+sha256: d50811f972e14d074d1fcbc3e013cce87186e5b8f676e53b67de329df0b916a3
+generated_at: 2026-11-14T19:40:45.198409+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the domain events emitted by the delivery module and their payload shapes. Uses TypeScript module augmentation to register payloads into the kernel's shared `DomainEventMap` (same pattern as `modules/orders/events.ts`), so every event rides the transactional outbox and exists exactly when the causing act does.
+Defines the domain-event payload types for the delivery module and registers them into the kernel's shared `DomainEventMap` via TypeScript module augmentation. Every payload here corresponds to an event that rides the transactional outbox, written in the same transaction as the act that caused it. `shipment.*` events are public (projected into the webhooks catalogue); `fulfillment_order.*` events are internal.
 
 ## Key elements
 
-- **`ShipmentEventLine`** — one product line (`productId`, `quantity`) inside a shipment payload.
-- **`ShipmentEventPayload`** — shared base for `shipment.shipped` / `shipment.delivered`: `orderId`, `shipmentId`, `fulfillmentOrderId`, `lines`.
-- **`ShipmentLostPayload`** — extends the base with `reason`, optional `userId`/`message`, `owed` lines, and `expectedAt`.
-- **`ShipmentShippedPayload`** — extends the base with optional `remainingUnits` (internal only; omitted by webhooks).
-- **`FulfillmentOrderDelayed`** — payload for `fulfillment_order.delayed`: dates (`agreedAt`, `promisedAt`, `expectedAt`), `shipCountry`, and `reason` (`'moved'` | `'due'`).
-- **`FulfillmentOrderHoldNoticed`** — payload for `fulfillment_order.hold_noticed`: `notice` type, optional staff `message`.
-- **`declare module '@kernel/events'`** — augments `DomainEventMap` with eight events: `shipment.shipped`, `shipment.delivered`, `shipment.lost`, `fulfillment_order.held`, `fulfillment_order.hold_noticed`, `fulfillment_order.released`, `fulfillment_order.canceled`, `fulfillment_order.delayed`.
-- **String constants** (`SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`, `FULFILLMENT_ORDER_HELD`, `FULFILLMENT_ORDER_HOLD_NOTICED`, `FULFILLMENT_ORDER_RELEASED`, `FULFILLMENT_ORDER_CANCELED`, `FULFILLMENT_ORDER_DELAYED`) — import-safe names for each event key.
+- **`ShipmentEventLine` / `ShipmentEventPayload`** — Shared line-item shape and base payload (`orderId`, `shipmentId`, `fulfillmentOrderId`, `lines`) for both shipped and delivered events.
+- **`ShipmentLostOwedLine` / `ShipmentLostPayload`** — Payload for the lost event; extends the base with `orderNumber`, `reason` (`ShipmentLostReason`), optional `userId`/`message`, `owed` lines the shelf could not cover, and `expectedAt`.
+- **`ShipmentShippedPayload`** — Payload for the shipped event; adds optional `remainingUnits` (internal; the webhook omits it).
+- **`FulfillmentOrderDelayed`** — Payload for the delayed event; carries `agreedAt`, `promisedAt?`, `shipCountry?`, `expectedAt?`, and `reason` (`'moved' | 'due'`).
+- **`FulfillmentOrderHoldNoticed`** — Payload for the hold-noticed event; buyer-safe by construction, carrying a `notice` discriminator (`check_address` | `delayed`) and optional `message`.
+- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with eight event keys: `shipment.shipped`, `shipment.delivered`, `shipment.lost`, `fulfillment_order.held`, `fulfillment_order.hold_noticed`, `fulfillment_order.released`, `fulfillment_order.canceled`, `fulfillment_order.delayed`.
+- **String constants** (`SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`, `FULFILLMENT_ORDER_HELD`, `FULFILLMENT_ORDER_HOLD_NOTICED`, `FULFILLMENT_ORDER_RELEASED`, `FULFILLMENT_ORDER_CANCELED`, `FULFILLMENT_ORDER_DELAYED`) — Named exports matching the `DomainEventMap` keys, for use at emit/consume sites.
 
 ## Relationships
 
-- **`src/types/index.ts`** — supplies the shared types `FulfillmentHeldParamsNotice` and `ShipmentLostReason` used in payload definitions.
-- **`src/modules/delivery/module.ts`** — reads `shipment.*` entries from the augmented `DomainEventMap` to build the webhooks public catalogue via `publicEvents`.
-- **`src/modules/delivery/services/notify.ts`** — consumes `shipment.shipped` and `fulfillment_order.hold_noticed` to mail the buyer.
-- **`src/modules/delivery/services/announce.ts` / `notice.ts`** — downstream consumers of the defined payloads.
-- **`src/modules/delivery/index.ts`** — re-exports the payload interfaces and event-name constants for other modules.
-- **`src/modules/delivery/tests/integration/override-sync.test.ts`** — exercises the "no `shipment.shipped` for admin-override forced shipments" contract documented in the `shipment.shipped` comment.
+- **`src/types/index.ts`** — Imports `FulfillmentHeldParamsNotice` and `ShipmentLostReason` from `@types` for use in payload definitions.
+- **`src/modules/delivery/module.ts`** — Its `publicEvents` list projects the `shipment.*` events into the `webhooks` module's public catalogue.
+- **`src/modules/delivery/services/notify.ts`** — Consumes the public `shipment.*` events to mail the buyer.
+- **`src/modules/delivery/index.ts`** — Barrel file; re-exports from this module for consumers outside the delivery directory.
 
 ## Notes
 
-- `shipment.*` events are public (projected into webhooks); `fulfillment_order.*` events are internal.
-- The `shipment.lost` webhook exposes only the shared fields plus `reason` — never the free-text `message`.
-- `userId` is optional on several payloads; it is absent once the account has been erased (no inbox to write to).
-- `shipment.shipped` fires once per physical shipment; an order shipped in two goes fires it twice. It does **not** fire for forced shipments introduced by an admin status override.
-- `shipment.delivered` fires immediately after `shipment.shipped` for digital fulfillments (born delivered).
-- `expectedAt` in `ShipmentLostPayload` is present **exactly when** `owed` is non-empty.
-- `promisedAt` in `FulfillmentOrderDelayed` is absent once an earlier notice told the buyer there was no date yet.
-- `fulfillment_order.delayed` is purely informational: the shop tells the buyer, asks nothing, and cancels nothing on its own.
+- `userId` is optional on several payloads because the buyer's account may have been erased; downstream consumers must handle its absence (no inbox to write to).
+- `message` on `ShipmentLostPayload` and `FulfillmentOrderHoldNoticed` is free-text written by staff; the webhook projection explicitly excludes it.
+- `shipment.shipped` fires once per shipment, so a split shipment produces multiple events. It is *not* fired for forced shipments brought in by an admin status override.
+- `fulfillment_order.delayed` is fire-and-forget: the shop tells the buyer the date moved or will be missed but never asks for consent or cancels on its own.
+- `promisedAt` on `FulfillmentOrderDelayed` is absent once an earlier notice informed the buyer there was no date; `tasks` uses it together with `shipCountry` to decide on consent reminders.

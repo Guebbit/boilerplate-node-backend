@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/create-repository.ts
-sha256: 2a8133b30ca5bc916299be585f5f86935944e516c0ffac3709657c7f1961f4de
-generated_at: 2026-11-08T03:42:28.263392+00:00
+sha256: 3dcc3591a2005f032487d541df66af1dfe941e30758f0580d68d2f8530921af7
+generated_at: 2026-11-14T18:13:26.478113+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generic repository factory that every module's `repository.ts` builds on. It provides CRUD, search, and pagination against a Mongoose model plus a declared `SearchSpec`, so individual modules never hand-roll `$regex`/`$elemMatch`/`ObjectId` conversion or lean→normalized mapping. Modules spread the factory's result into their own repository object (no inheritance), allowing any module that can't honour part of the contract to narrow its own type.
+Generic repository factory that every module's `repository.ts` builds on. It encapsulates CRUD, search, pagination, and lean→wire normalization against a Mongoose model and a declared `SearchSpec`, so no module hand-rolls `$regex`/`$elemMatch`/`ObjectId` conversion or the lean-to-normalized mapping. Modules spread the factory's result into their own object (no `extends`, no protected hooks); a module that cannot honour part of the contract narrows its own type instead of inheriting a method it must break.
 
 ## Key elements
 
-- **`Lean<TDocument>`** — type for what `.lean()` actually returns (TDocument fields minus `Document` instance methods and virtuals, with `_id` restored).
-- **`Wire<TDocument>`** — type for the default wire shape: `Lean` minus `_id`, plus a string `id`. Modules with extra/derived fields compose their own `TWire` instead.
-- **`FIND_ALL_LIMIT`** (1000) — backstop cap for `findAll` when no limit is given; not a page size.
-- **`FindAllOptions`** — pagination/sort options (`sort`, `collated`, `skip`, `limit`).
-- **`SearchSpec`** — per-collection declaration of what filter keys map to which Mongo paths and how (`objectIds`, `exact`, `booleans`, `regex`, `arrayRegex`, `text`, `sortable`, `ranges`, `dateRanges`, `presence`).
-- **`toObjectId`** — exported; coerces a value to `Types.ObjectId`, throwing on malformed input (safe direction for aggregation `$match`).
-- **`buildWhere`** — compiles a filter bag into a Mongo query per the `SearchSpec`. Used internally and exposed as a bound method for building aggregation `$match` stages.
-- **`PaginatedResult<TWire>`** — `{ items, meta }` shape returned by `search`.
-- **`RepositoryOptions`** — `{ transform, searchable? }` passed to the factory.
-- **`Repository<TDocument, TWire>`** — the explicit interface for the factory's return type (written out to avoid TS7056 at export boundaries).
-- **`createRepository`** — the factory itself (truncated in view); produces the `Repository` object with `findById`, `findOne`, `findByIdRaw`, `findAll`, `search`, `create`, `update`, `delete`, etc.
+- **`Lean<TDocument>`** — type alias for what `.lean()` actually returns: the document's own fields minus `Document`'s instance machinery and the `id` virtual, with `_id` explicitly preserved.
+- **`Wire<TDocument>`** — the wire shape a no-op `transform` produces (`Lean` minus `_id`, plus a string `id`). Repositories with additional derived/omitted fields compose a narrower or wider `TWire`.
+- **`SearchSpec`** — per-collection declaration of how filter keys map to Mongo paths and operators (`objectIds`, `exact`, `booleans`, `regex`, `arrayRegex`, `text`, `sortable`, `ranges`, `dateRanges`, `presence`). Keeps `$regex`/`$elemMatch`/`ObjectId` coercion out of services.
+- **`toObjectId(value)`** — coerces a value to a BSON `ObjectId`; throws on malformed input (safe direction for aggregation `$match`).
+- **`isObjectIdString(id)`** — the codebase's single id-presence check: strict 24-hex string (case-insensitive) via Mongoose's `isObjectIdOrHexString`.
+- **`buildWhere(filters, spec)`** — internal; compiles a filter bag into a Mongo query per the declared spec. Handles `$in` for batch ids, `null`/`$ne:null` for presence, escaped `$regex`, `$elemMatch`, the `text` filter via `addTextFilter`, and one-sided numeric/date ranges.
+- **`FindAllOptions`** — sort, collation flag, skip, limit (defaults to `FIND_ALL_LIMIT = 1000`).
+- **`PaginatedResult<TWire>`** — page of wire-shaped results plus `PaginatedMeta`.
+- **`RepositoryOptions`** — `transform` (from `serialize.ts`) and optional `searchable` spec.
+- **`createRepository`** — the factory function (truncated in source) that binds the model, spec, and transform into a ready-to-spread repository object exposing `find`, `findAll`, `search`, and versioned save/delete operations (backed by `fencedSave`/`checkedDelete`).
 
 ## Relationships
 
-- **`./search.ts`** — provides pagination helpers (`normalizePagination`, `buildPaginatedMeta`), text/regex filter builders (`addTextFilter`, `addRegexFilter`, `toSearchPattern`), and sort constants (`DEFAULT_SORT`, `withTiebreaker`, `SORT_COLLATION`, `sortOf`).
-- **`./versioning.ts`** — provides `checkedDelete` and `fencedSave` used by the factory's delete/save operations.
-- **`./serialize.ts`** — provides the `SerializeTransform` type that each module's model supplies for lean→wire normalization.
-- **Module repositories** (`account`, `addresses`, `api-keys`, `audit-logs`, `cart`) — each spreads `createRepository`'s result into its own repository object, adding module-specific fields.
-- **`cart/services/{preorder,shelf,view}.ts`** and **`audit-logs/service.ts`** — downstream consumers that call the cart and audit-logs repositories.
-- **`scripts/mutation/ci/cli.ts`** — reaches repositories directly (e.g., batch reads) outside the normal service layer.
+- **`src/infrastructure/persistence/search.ts`** — imports pagination helpers (`normalizePagination`, `buildPaginatedMeta`), filter builders (`addTextFilter`, `addRegexFilter`, `toSearchPattern`), sort constants (`DEFAULT_SORT`, `SORT_COLLATION`, `withTiebreaker`, `sortOf`), and `PaginatedMeta`.
+- **`src/infrastructure/persistence/versioning.ts`** — imports `checkedDelete`, `fencedSave`, and `DeleteOutcome` for optimistic-concurrency-safe delete and save.
+- **`src/infrastructure/persistence/serialize.ts`** — imports the `SerializeTransform` type applied to `.lean()` results to produce wire shape.
+- **`src/modules/account/repository.ts`, `src/modules/addresses/repository.ts`, `src/modules/api-keys/repository.ts`, `src/modules/audit-logs/repository.ts`, `src/modules/cart/repository.ts`** — each spreads the `createRepository` result into its module-specific repository object, supplying its own model, `SearchSpec`, and transform.
+- **`src/modules/audit-logs/service.ts`, `src/modules/cart/services/preorder.ts`** — consume the repositories produced above; receive the bound `buildWhere` for aggregation `$match` construction.
+- **`src/infrastructure/http/ids.ts`** — upstream id validation at the HTTP boundary; this file's `toObjectId`/`isObjectIdString` are the persistence-layer counterparts.
+- **`src/kernel/access/query.ts`** — kernel-level query plumbing that the repository's search path feeds into.
+- **`src/infrastructure/persistence/translatable-columns.ts`, `image-writeback.ts`** — sibling persistence concerns that operate alongside this factory (i18n field resolution, image URL writeback) rather than being imported by it directly.
+- **`scenarios/support/doubles/payments/levers.ts`** — test doubles that exercise repository contracts in integration scenarios.
 
 ## Notes
 
-- The factory returns a **Promise** from `findById`/`findOne` rather than a Mongoose `Query`, deliberately preventing callers from chaining `.select()`/`.lean()` outside the repository layer.
-- `findByIdRaw` returns an **untransformed** plain object (keeps `_id`) for embedding snapshots in other documents.
-- Boolean filters (`booleans`, `presence`) are **not** coerced here — controllers must pre-decode (`'false'` string → `false`). A forgotten controller-side decode is a visible bug, not silently masked.
-- Regex and array-regex filters escape user input (`addRegexFilter`, `toSearchPattern`) to prevent ReDoS and control-character 500s.
-- `buildWhere` accepts `object` (not `Record<string, unknown>`) for the filter bag so generated DTO interfaces don't require casts at call sites; the single cast is confined inside the function.
-- `toObjectId` **throws** on malformed ids by design: in aggregation `$match` a raw string matches nothing, so throwing surfaces the bad input as a 422 rather than a silently empty result.
+- Booleans in `SearchSpec.booleans` and `SearchSpec.presence` are expected to arrive **already decoded** (controller or `readInput` coerces them). This file checks `typeof === 'boolean'` and will silently skip a string `'false'` — a forgotten upstream decode is a silent no-op, not an error.
+- `toObjectId` **throws** on malformed input. This is intentional: in aggregation pipelines a raw string matches nothing (reads as "no results"), but in `find()` Mongoose may cast it. Throwing surfaces the bad id as a 422 rather than a silent empty page.
+- `isObjectIdString` uses the strict `isObjectIdOrHexString` rule (exactly 24 hex chars), not Mongoose's broader `isValid` which also accepts 12-byte binary strings, numbers, and objects with `toString`.
+- `FIND_ALL_LIMIT` (1000) is a backstop against unbounded collection scans, **not** a page size — paging goes through `search()`.
+- `buildWhere`'s parameter is typed `object` (not `Record<string, unknown>`) because generated request DTOs are interfaces without implicit index signatures; the cast to a readable record is confined to one line inside the function.
+- The `createRepository` return type is explicitly written out rather than inferred to avoid TS7056 when the inferred shape is spread into a module repository object.

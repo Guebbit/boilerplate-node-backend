@@ -1,7 +1,7 @@
 ---
 source: src/kernel/access/query.ts
-sha256: a2a9d18e6c017b643c15350b5d9e968e40030f9422a9e83eafde476cecf2c01b
-generated_at: 2026-11-08T03:52:21.207527+00:00
+sha256: 4a3d7c7ef06b2f225308d7acf4427c1325d5317792f6aeef479b68040351bbe5
+generated_at: 2026-11-14T18:20:45.264029+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Compiles a caller's CASL rules into a MongoDB filter so that the access restriction is embedded in the read query itself. It is the kernel's single store-specific authorization-compile step (the other being `../outbox.ts`), replacing per-module hand-written filter fragments with one guarantee: a key that grants more returns more, and no caller can accidentally omit the restriction.
+Compiles a caller's CASL permission rules into a ready-to-use MongoDB filter via `@casl/mongoose`, so that access restrictions are embedded directly in the database query. It is the kernel's single guarantee that "the restriction rides in the read," replacing per-module hand-written filter fragments that can silently drift from the rules.
 
 ## Key elements
 
-- **`accessibleFilterFor(caller, subject, action?)`** — Primary entry point. Builds a CASL ability from the resolved `Caller`, runs `accessibleBy(...).ofType(subject)`, then passes the raw compile output through `toStorage` → `collapse`. Returns a Mongo filter fragment (possibly `{}`).
-- **`accessibleFilter(context, subject, action?)`** — Session-oriented wrapper. Resolves `AuthContext` to a `Caller` via `callerForSubject`, then delegates to `accessibleFilterFor`. Intended to be **spread** into a larger query, not used as a standalone filter.
-- **`hasAnonymousReadScope(scopeOf, who)`** — Compares a module's own compiled filter for `who` against its filter for `undefined` (anonymous) by serialising both. Used by cache-key logic to decide whether a caller can share the guest's cached response.
-- **`toStorage(query)`** — Recursive rewriter: drops fields in `UNSTORED_FIELDS`, applies the `coerce` map (currently `userId` → ObjectId), and recurses into `$or`/`$and` arrays.
-- **`collapse(filter)`** — Post-simplification: an `$or` containing an empty branch collapses to `{}`; a single-branch `$or` unwraps to that branch.
-- **`UNSTORED_FIELDS`** — Set (`{'tenantId'}`) of rule fields absent from this deployment's collections. Stripped so the model can remain tenant-aware without locking out single-tenant shops.
-- **`NO_OWNER` / `ownerObjectId(value)`** — Sentinel ObjectId and a string→ObjectId guard; non-24-hex IDs map to `NO_OWNER` so the rule matches nothing (fail closed) rather than throwing.
-- **`coerce`** — Field-level value coercion map (currently only `userId`).
+- **`accessibleFilter(context, subject, action?)`** — Resolves an `AuthContext` to a `Caller` (via `callerForSubject`) and delegates to `accessibleFilterFor`. Returns a filter fragment to **spread** into a query; returns `{}` (not `undefined`) for an unrestricted caller.
+- **`accessibleFilterFor(caller, subject, action?)`** — Builds a `Caller` ability, compiles it with `accessibleBy(...).ofType(subject)`, then post-processes the result through `toStorage` and `collapse`. Accepts `request.caller` directly, so API-key and session callers share the same path.
+- **`hasAnonymousReadScope(scopeOf, who)`** — Compares a caller's compiled filter to the anonymous filter by `JSON.stringify` equality. Intended for cache-key logic: if the two filters are identical the caller may safely share a guest's cached response.
+- **`UNSTORED_FIELDS`** — Set of rule fields the collection does not store (currently `tenantId`). `toStorage` silently drops them so tenant-aware model rules work against single-tenant collections without matching nothing.
+- **`toStorage(query)`** — Recursively walks a compiled CASL query, stripping unstored fields and coercing values (e.g. `userId` string → `ObjectId`).
+- **`collapse(filter)`** — Simplifies degenerate `$or` arrays: an empty branch (`{}`) collapses the whole filter to `{}`; a single branch unwraps the `$or`.
+- **`ownerObjectId(value)` / `NO_OWNER`** — Maps a caller id string to an `ObjectId`, or to a zero-`ObjectId` sentinel for non-ObjectId ids (e.g. the literal `"system"` actor), ensuring fail-closed rather than a thrown cast.
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Provides `buildAbility`, which this file calls to obtain the CASL ability instance before compiling.
-- **`src/kernel/permissions.ts`** — Source of `anonymousCaller`, `callerForSubject`, and the `PermissionAction` / `PermissionSubject` types used throughout.
-- **`src/modules/products/services/read.ts`**, **`src/modules/products/routes.ts`** — Consumers that spread `accessibleFilter` / `accessibleFilterFor` into product-collection reads.
-- **`src/modules/orders/services/scope.ts`**, **`src/modules/payments/services/scope.ts`** — Provide the `scopeOf` callback passed to `hasAnonymousReadScope` for cache-key decisions.
-- **`src/modules/locales/*`**, **`src/modules/example/services/*`** — Downstream module services that use the same compile-into-query pattern via this file's exports.
-- **`src/modules/products/tests/integration/api-key-reads.test.ts`** — Exercises the API-key path through `accessibleFilterFor` to verify key-granted permissions produce the expected row set.
+- **`src/kernel/ability.ts`** — Imports `buildAbility`, which constructs the CASL ability from a `Caller` before `accessibleBy` compiles it.
+- **`src/kernel/permissions.ts`** — Imports `anonymousCaller`, `callerForSubject`, and the `PermissionAction` / `PermissionSubject` types that parameterise every public export.
+- **`src/infrastructure/persistence/create-repository.ts`** — Imports `isObjectIdString` to validate caller ids before constructing an `ObjectId`.
+- **Module services** (`src/modules/orders/services/scope.ts`, `src/modules/payments/services/scope.ts`, `src/modules/products/services/actions.ts`, `src/modules/locales/services/capabilities.ts`, `src/modules/example/services/crud.ts`, etc.) — Consume `accessibleFilter` / `accessibleFilterFor` to obtain the row-scoped filter for their own queries, and `hasAnonymousReadScope` for cache-key decisions.
 
 ## Notes
 
-- **Fails closed by design.** A caller with no matching rule compiles to CASL's `EMPTY_RESULT_QUERY` (a filter matching nothing), never to an absent filter. An absent filter is indistinguishable from "unrestricted" to every downstream caller.
-- **`accessibleFilter` returns `{}` for unrestricted callers, not `undefined`.** Spread it (`{ ...accessibleFilter(ctx, 'Order'), status: 'paid' }`); do not assign it to a query variable and conditionally spread, since `{}` and `undefined` must not look alike.
-- **`UNSTORED_FIELDS` is not the tenancy switch.** Emptying it removes the `tenantId` condition from the compiled query, but most collections carry no organisation column and most modules never compile a scoped filter at all. True multi-tenant isolation requires the broader checklist in `docs/theory/tenancy.md` §10.
-- **`coerce` is intentionally minimal.** Adding a field here is the only way to handle a type mismatch between the rule's value and the stored representation. Forgetting an entry produces a silent zero-row match (string vs. ObjectId), which looks like "caller has no access" rather than "caller has access to everything."
-- **The file is Mongo-only.** Do not import it from code paths that target a non-Mongo store; it has no abstraction over the query shape.
+- The returned filter is a **fragment**, not a whole query. Spread it: `{ ...accessibleFilter(ctx, 'Order'), status: 'paid' }`. Passing it as the entire query would break once you add conditions.
+- An unrestricted caller yields `{}`, **not** `undefined`. Downstream code must not treat a falsy filter as "no restriction" — `{}` is the explicit "match everything" sentinel.
+- Emptying `UNSTORED_FIELDS` is **not** the tenancy switch. It only stops `tenantId` from being compiled into filters; most collections have no organisation column and most modules never compile a scoped filter at all. See `docs/theory/tenancy.md` §10 for the real list of changes a pooled deployment requires.
+- This is the kernel's one store-specific file (besides `../outbox.ts`); it assumes MongoDB and `@casl/mongoose`.

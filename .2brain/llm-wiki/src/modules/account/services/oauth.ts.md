@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/oauth.ts
-sha256: 34c3a7e80427dfde75a2fd88bf62d88e0b711640890f9ec262c1f7e0a3f8f3e9
-generated_at: 2026-11-08T04:19:31.898929+00:00
+sha256: 63a261f77a89adf072a3c798eaee076060d0b80ddcb577e04e3d18fd13f5a064
+generated_at: 2026-11-14T18:46:30.939089+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,45 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the OAuth login / signup / link flows. Sits one level above the provider-agnostic mechanics in `../oauth/` and is the OAuth counterpart to `login.ts` and `signup.ts`. It handles three sign-in outcomes (linked identity logs in, email match without a session is refused, new identity signs up) and a separate two-step "connect provider to signed-in account" flow, emitting audit records, analytics events, and notification mail along the way.
+Service layer for OAuth sign-in / sign-up and for connecting a provider to an already-signed-in account. It sits one level above the raw provider mechanics (`src/modules/account/oauth/`) and is the OAuth counterpart to `login.ts` and `signup.ts`. It enforces a strict three-outcome model for first-time sign-in (link, refuse, or create) and a two-step (`startOAuthLink` → `linkProviderToSignedInAccount`) flow for linking, with explicit error classes so the callback controller can emit precise `?error=` redirect codes.
 
 ## Key elements
 
-- **Error classes** (all exported, each maps to a specific `?error=` query param in the callback controller):
-  - `OAuthEmailUnverifiedError` – provider asserted an email that matches an existing account, but the provider did not claim it as verified.
-  - `OAuthAccountUnverifiedError` – matched account never proved its own address via password reset.
-  - `OAuthAccountUnavailableError` – matched account is banned or soft-deleted.
-  - `OAuthAccountExistsError` – email matches an existing verified account but no signed-in session is present (NIST SP 800-63C-4 §3.8.1 requirement).
-  - `OAuthIdentityTakenError` – provider identity already linked to a different account.
-  - `OAuthLinkExpiredError` – link token missing, spent, expired, or session mismatch.
-- **`startOAuthLink(userId)`** – mints a short-lived `oauth-link` token (via `issueToken`) that the callback redeems to identify which account is connecting.
-- **`linkProviderToSignedInAccount(linkToken, sessionUserId, provider, identity, context)`** – completes the connect: redeems the token, cross-checks the live session, verifies the account is authenticatable, rejects a taken identity, persists the link, records audit, and fires a notification email.
-- **`presentClaim(value)`** – trims a provider claim; returns `undefined` for missing/blank/whitespace strings.
-- **`notifySignInMethod(user, change, provider, context)`** – fire-and-forget email (via `sendAccountMail`) telling the owner a provider was linked or removed; logs a warning on failure, never throws.
-- **`discardAvatar(avatar, error)`** – best-effort `imageStore.remove` of a re-hosted avatar, then rethrows the original error (used in the failed-signup path).
-- **`signupFromOAuth(provider, identity, context)`** – (partially visible) re-hosts the avatar, creates a password-less account with `verifiedAt` set, and records terms acceptance.
+- **`OAuthEmailUnverifiedError`** — Thrown when the provider's email matches an existing account but the provider did not assert the address as verified. Prevents an attacker who registered an OAuth app under a victim's email from hijacking that account.
+- **`OAuthAccountUnverifiedError`** — Thrown when the matched existing account has never verified its own address. Blocks a "squatter" scenario where an attacker pre-registered the email with a password.
+- **`OAuthAccountUnavailableError`** — Thrown when the matched account is banned or soft-deleted (`!isAuthenticatable`). Refused before any write so a stale link can't survive an unban.
+- **`OAuthAccountExistsError`** — Thrown when the email matches an existing, verified account but no signed-in session is present. Enforces NIST SP 800-63C-4 §3.8.1 (linking requires an authenticated session).
+- **`OAuthIdentityTakenError`** — Thrown when the provider identity is already linked to a different account (unique on `users_oauth_identity`).
+- **`OAuthLinkExpiredError`** — Thrown when the link token is missing, spent, or the session user doesn't match the token's owner.
+- **`notifySignInMethod`** *(private)* — Fire-and-forget email to the account holder when a provider is connected or removed; failures are logged, never thrown.
+- **`startOAuthLink(userId)`** — Issues a short-lived `oauth-link` token (TTL via `OAUTH_LINK_TTL_MS`) for the signed-in account. The caller sets it as a cookie alongside the OAuth state/verifier.
+- **`linkProviderToSignedInAccount(linkToken, sessionUserId, provider, identity, context)`** — Completes the link. Validates token liveness, session match, account status, and identity uniqueness; writes the link atomically with the token spend; records an audit row and sends the notification email. Marked `@internal` — only the callback controller should invoke it.
+- **`presentClaim(value)`** — Normalises a raw provider claim: trims whitespace and collapses blank strings to `undefined` (guards against non-conformant providers that send `''`).
 
 ## Relationships
 
-- **`../oauth/providers/port.ts`** – imports the `OAuthIdentity` type used as the resolved-identity shape throughout.
-- **`./caller.ts`** – imports `recordAccountAudit` for structured audit entries on link/signup.
-- **`../analytics.ts`** – imports `accountAnalyticsEvents` as the event-name catalogue for `emitAnalyticsEvent`.
-- **`../audit.ts`** – imports `accountAuditActions` as the action-name catalogue for audit rows.
-- **`../consent-record.ts`** – imports `termsAcceptance` applied during `signupFromOAuth`.
-- **`../emails.ts`** – imports `greetableName`, `recipientLocale`, `signInMethodChangedEmail`, and the `SignInMethodChange` type for notification mail.
-- **`controllers/get-oauth-callback.ts`** – the HTTP controller that invokes the error classes and service functions here; each error class's docblock names the exact `?error=` param the controller maps to.
-- **`services/index.ts`** – barrel that re-exports the public symbols of this file to consumers of the account services namespace.
-- **`@infrastructure/adapters/image-store.ts`** – `imageStore.remove` for avatar cleanup on failed signup.
-- **`@infrastructure/adapters/remote-image.ts`** – `rehostRemoteImage` downloads and locally stores the avatar so the provider's URL is never served to viewers.
-- **`@infrastructure/adapters/logger.ts`** – `logger.warn` in the fire-and-forget notification path.
-- **`@infrastructure/i18n/index.ts`** – `getCurrentLocale` for locale-aware mail/analytics.
-- **`@infrastructure/observability/analytics/index.ts`** – `emitAnalyticsEvent`, `buildAnalyticsBase` for sign-in/signup/link events.
-- **`@infrastructure/observability/audit.ts`** – `recordAudit` for raw audit-row writes (used alongside `recordAccountAudit` from `./caller.ts`).
+- **`src/modules/account/oauth/providers/port.ts`** — Supplies the `OAuthIdentity` type consumed by `linkProviderToSignedInAccount`.
+- **`src/modules/account/controllers/get-oauth-callback.ts`** — The sole caller of the exported error classes and `linkProviderToSignedInAccount`; translates each error into a specific `?error=` redirect parameter.
+- **`src/modules/account/emails.ts`** — Provides `greetableName`, `recipientLocale`, and `signInMethodChangedEmail` used to build the sign-in-method notification mail.
+- **`src/modules/account/services/caller.ts`** — Provides `recordAccountAudit`, which writes the audit row on a successful link.
+- **`src/modules/account/analytics.ts`** / **`src/modules/account/audit.ts`** — Provide `accountAnalyticsEvents` and `accountAuditActions` as the vocabulary for observability calls.
+- **`src/modules/account/consent-record.ts`** — Provides `termsAcceptance` used during new-user sign-up.
+- **`src/infrastructure/adapters/image-store.ts`** / **`src/infrastructure/adapters/remote-image.ts`** — Provide `imageStore` and `rehostRemoteImage` to re-host a provider-supplied avatar URL into internal storage.
+- **`src/infrastructure/observability/analytics/index.ts`** — Provides `emitAnalyticsEvent` and `buildAnalyticsBase` for event emission.
+- **`src/infrastructure/observability/audit.ts`** — Provides `recordAudit` for the audit trail.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — Provides `isDuplicateKey` to detect the race where a twin request wins the unique-index write.
+- **`src/infrastructure/adapters/logger.ts`** — Provides `logger.warn` for non-fatal notification failures.
+- **`src/infrastructure/i18n/index.ts`** — Provides `getCurrentLocale` for locale-aware logging and event emission.
 
 ## Notes
 
-- **Two distinct "unverified" errors** are easy to confuse: `OAuthEmailUnverifiedError` is about the *provider* not claiming the email as verified; `OAuthAccountUnverifiedError` is about the *account* never completing its own password-reset verification. They guard against different attack vectors (pre-account-takeover vs. email-claim spoofing).
-- **`OAuthLinkExpiredError` is overloaded**: it covers a genuinely expired/spent token *and* a session-identity mismatch (`sessionUserId !== user.id`). The code comment explains this is deliberate to avoid a new frontend error code.
-- **Avatar re-hosting is fail-safe**: the remote image is downloaded once at signup time; if the account creation fails, `discardAvatar` removes the stored file before rethrowing. The account never stores the provider's original URL.
-- **Notification mail is fire-and-forget**: a down mail queue logs a warning but does not fail the link or signup operation.
-- **The file is truncated** in this snapshot; the full `signupFromOAuth` body (terms acceptance, analytics, audit, email) is not fully visible but is implied by the imports and the docblock.
+- **All refusals happen before the token spend.** `linkProviderToSignedInAccount` is structured so every `throw` precedes `spendThen`; a refused attempt leaves the token live, and the link + spend commit atomically.
+- **Session match is a second gate.** The link token alone is not sufficient — `sessionUserId` must equal the token's owner. A planted cookie without the correct session still fails.
+- **`@internal` on `linkProviderToSignedInAccount`.** The function trusts a provider-verified identity; it is deliberately not exposed on `accountService` so only the callback controller (which performed the token exchange) can call it.
+- **Fire-and-forget email.** `notifySignInMethod` uses `void … .catch(→ logger.warn)` — a mail-queue outage must not roll back a completed link.
+- **`presentClaim` is a defence against non-conformant providers.** OIDC Core §5.3.2 says absent claims should be omitted, but some providers send `''`; an empty string would violate the `required` username field or store a blank avatar URL.

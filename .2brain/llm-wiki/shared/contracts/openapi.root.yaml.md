@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/openapi.root.yaml
-sha256: 4ac05c217b61e1c43ba1db2b3cb06da42315bc14e9e685d4d357531cbefd0c3d
-generated_at: 2026-11-08T03:07:47.003814+00:00
+sha256: 25e54ba895055b3b1fdb0c467c5ba8e15a8f8c2d7463c337801d86a8ae51ae15
+generated_at: 2026-11-14T17:44:55.048389+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Root OpenAPI 3.1.0 document for the Boilerplate API. It carries the global metadata (`info`, `servers`), cross-cutting extensions that apply across all modules (`x-error-codes`, `x-app-level-responses`, `x-image-upload-types`, application-level headers), and the prose contract for i18n, response shape, and error format. Module fragments under `src/modules/*/openapi.yaml` are bundled into this root by `scripts/contracts/openapi-bundle.ts` to produce the final spec used for codegen (client/server stubs, DTOs, SDKs).
+The root OpenAPI 3.1.0 document for the Boilerplate API. It declares the API's identity, server list, and global conventions (language negotiation, response shape, error envelope) that every module inherits. It also holds the module-agnostic `x-error-codes` catalogue and shared vendor extensions (`x-image-upload-types`) that a bundler merges into the final published spec. Modules under `src/modules/` build on this rather than re-declaring these concerns.
 
 ## Key elements
 
-- **`info.description`** — The normative prose contract: `Accept-Language` selection rules, `Content-Language` / `Vary` behaviour, staff draft-locale exception, success response shape (`{ items, meta }`, 204, 201 + `Location`), and the RFC 9457 problem-details error envelope. The `Accept-Language` header is deliberately *not* declared per-operation; this paragraph is its contract.
-- **`x-error-codes`** — Cross-cutting error codes that belong to no single module (global 400/401/403/404/405/409/412/413/415/422/429/500/503, multer limits, idempotency, re-auth, 2FA). Collected by the bundler from every fragment's own `x-error-codes` and published as `errors[].code` **examples** (never an `enum`), so adding a code is non-breaking.
-- **`x-app-level-responses`** — Responses the application middleware answers (400, 413, 415, 429, 500, 503) with an `appliesTo` scope (`all`, `requestBody`, `requestBodyOrBodyless`). Merged into every matching operation by the bundler rather than hand-copied into each fragment.
-- **`x-image-upload-types`** — Canonical MIME types (`image/png`, `image/jpeg`, `image/webp`) for `imageUpload` multipart parts. The bundler stamps them onto each multipart body as `encoding.imageUpload.contentType`, then drops this key.
-- **`servers`** — Local (`http://localhost:3000`) and production (`https://api.example.com`) URLs.
-- **`info.license` / `info.version`** — AGPL-3.0-or-later; version `0.1.0` (SemVer §4 initial development; first stable is 1.0.0).
+- **`info`** – Title, license (AGPL-3.0-or-later), version `0.1.0` (initial development per SemVer §4), and a long `description` that serves as the normative contract for `Accept-Language` handling, success-response shape, and RFC 9457 error format.
+- **`x-error-codes`** – Top-level vendor extension listing every error code that belongs to no single module (HTTP-status defaults, multer limits, idempotency, rate-limit, re-auth, etc.). Each entry carries `scope`, `status`, and a human-readable `description`. A bundler collects this plus every module's own `x-error-codes` into one catalogue in the published document; it is deliberately *not* an `enum` on `errors[].code` so adding a code is additive.
+- **`servers`** – Local (`http://localhost:3000`) and Production (`https://api.example.com`) endpoints.
+- **`x-image-upload-types`** – Canonical MIME types accepted by every `imageUpload` multipart part. The bundler copies these onto each operation's `encoding.imageUpload.contentType` and then removes the key; `gen:api` reads them back from the encoding.
+- **`contact`** – API Team (placeholder name).
 
 ## Relationships
 
-- **`src/modules/*/openapi.yaml`** (account, addresses, analytics, antibot, api-keys, audit-logs, cart, example, inventory, …) — Each module fragment declares its own operations, paths, and module-specific `x-error-codes`. The bundler merges them into this root, collecting all `x-error-codes` into one catalogue and injecting `x-app-level-responses` and `x-image-upload-types` into the appropriate operations.
-- **`shared/contracts/spectral.yaml` / `spectral.modules.yaml`** — Spectral OAS-linter configurations that validate this root and the module fragments against the rules in `shared/rules/`.
-- **`shared/rules/*.yaml`** (audit-actions, cookies, defaults, images) — Individual Spectral rule files referenced by the linter configs; they enforce conventions (e.g. image upload shape, cookie usage, default headers) on the documents bundled from this root.
+- **`src/modules/account/openapi.yaml`, `src/modules/addresses/openapi.yaml`, `src/modules/analytics/openapi.yaml`, `src/modules/antibot/openapi.yaml`, `src/modules/api-keys/openapi.yaml`, `src/modules/audit-logs/openapi.yaml`, `src/modules/cart/openapi.yaml`, `src/modules/example/openapi.yaml`, `src/modules/inventory/openapi.yaml`** – Each is a fragment that the bundler merges under this root. Modules declare their *own* `x-error-codes`; the root provides the shared, cross-cutting ones (idempotency, rate-limiting, multer limits, re-auth).
+- **`shared/contracts/spectral.yaml` / `shared/contracts/spectral.modules.yaml`** – Spectral rule sets that lint module fragments and the merged document against the conventions documented in this file's `info.description` (RFC 9457 shape, `x-error-codes` structure, response-envelope rules).
+- **`shared/rules/images.yaml`** – Reusable OpenAPI fragment that pairs with `x-image-upload-types` here to keep upload-part typing consistent across operations.
+- **`shared/rules/defaults.yaml`, `shared/rules/cookies.yaml`, `shared/rules/audit-actions.yaml`** – Reusable OpenAPI fragments (parameters, responses, schemas) that module specs import; they inherit the global response and error conventions defined in this root.
 
 ## Notes
 
-- `errors[].code` is published as an **examples** list, not an `enum`. A new code is additive; clients must not treat the list as exhaustive (Zalando API guideline #112).
-- `x-app-level-responses` exist to avoid hand-copying the same 400/413/415/429/500/503 into every operation. A hand-copied list "goes stale silently."
-- `x-image-upload-types` is an authoring convenience only — it is *removed* from the final bundled spec after the bundler has written `encoding.imageUpload.contentType`.
-- The `Accept-Language` parameter is intentionally absent from every operation's `parameters` to keep generated function signatures clean; clients set it once in an interceptor. The `info.description` paragraph is the binding contract for that behaviour.
-- Staff draft-locale reads (`GET /products`, `POST /products/search`, `GET /products/{id}`, and the example read) answer `Cache-Control: private, no-store` and are never cached server-side.
+- The `Accept-Language` header is intentionally **not** declared per operation. The paragraph in `info.description` is its contract; generated clients set it once in an interceptor.
+- `x-error-codes` entries use `scope: app` to distinguish them from module-scoped codes. A missing `scope` (e.g. `ROLE_MANAGEMENT_REQUIRED`, `IDEMPOTENCY_*`, `REAUTH_REQUIRED`) implies a module-specific code that happens to be declared here for convenience.
+- The version is `0.1.0`, not `1.0.0`; the file explicitly notes the first stable release will be `1.0.0`.
+- The description block is normative, not just informational—several sentences state hard rules (2xx has no wrapper, lists are objects, 204 has no body) that linting and codegen rely on.

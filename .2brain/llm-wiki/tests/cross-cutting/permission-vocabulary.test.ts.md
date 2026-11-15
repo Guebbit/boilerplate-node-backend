@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/permission-vocabulary.test.ts
-sha256: ca535c039efec53be00eb2d1de92886527b30bdc5a096d272355a376c858c321
-generated_at: 2026-11-08T09:29:44.556370+00:00
+sha256: 9b5bbaf1807312adb5ffeffc14f046451b1a98fe07a0a8338cea27b8644bdca1
+generated_at: 2026-11-14T23:05:53.890882+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting integration test that pins the permission-vocabulary chain end-to-end: the single YAML source (`shared/authorization-keys.yaml`), the generated `@api/permission-vocabulary` exports, and the kernel's loaded rules, sets, and tiers must all agree. It also verifies that undeclared action/subject pairs are rejected both at compile time (type-level) and at run time.
+Cross-cutting integration test that locks the entire permission-vocabulary chain in place: the shared YAML is the single source of truth, the generated API constants must match it exactly, and the kernel's runtime rule/set/tier tables must be a faithful projection of those constants. It also confirms that undeclared permission pairs are rejected at both compile time (TypeScript) and run time.
 
 ## Key elements
 
-- **YAML parse (module scope):** Reads and parses `shared/authorization-keys.yaml` once, casting to an inline shape (`actions`, `scopes`, `stepUp`, `rules`, `sets`). This is the ground truth every assertion compares against.
-- **`it('lists exactly what the shared yaml declares')`** — Asserts that `PERMISSION_ACTIONS`, `AUTHORIZATION_SCOPES`, `STEP_UP_TIERS`, `PERMISSION_SET_NAMES`, `PERMISSION_RULE_IDS`, and `PERMISSION_SUBJECTS` (all from `@api/permission-vocabulary`) match the YAML contents exactly, including rule-ID format (`action:subject`).
-- **`it('carries every rule, set and tier the kernel loaded')`** — Cross-checks that `PERMISSION_RULES` / `PERMISSION_SETS` from `@kernel/permissions` reference only IDs present in the generated vocabulary, and that each rule's `action` and `stepUp` (if set) are declared in the YAML.
-- **`it('maps each subject to the actions of the rules declared on it')`** — Verifies `PERMISSION_PAIRS` (a Map from subject → actions) is complete and consistent with the YAML rule set.
-- **`it('refuses an undeclared pair at compile time, and still answers false at run time')`** — Uses `@ts-expect-error` to confirm the type system rejects `holds(…, 'checkout', 'Order')` and `requirePermission('read', 'Ordr')`; then asserts the runtime behaviours (returns `false` / throws with `/declare/i`).
+- **`yaml` (top-level const)** — Reads and parses `shared/authorization-keys.generated.yaml` via `readFileSync` + `yaml/parse`; typed as an object with `actions`, `scopes`, `stepUp`, `rules`, and `sets`.
+- **`describe('permission vocabulary')`** — Contains four `it` blocks:
+  1. *lists exactly what the shared yaml declares* — Asserts each generated constant (`PERMISSION_ACTIONS`, `AUTHORIZATION_SCOPES`, `STEP_UP_TIERS`, `PERMISSION_SET_NAMES`, `PERMISSION_RULE_IDS`, `PERMISSION_SUBJECTS`) equals the corresponding YAML slice.
+  2. *carries every rule, set and tier the kernel loaded* — Verifies `PERMISSION_RULES` / `PERMISSION_SETS` IDs match the vocabulary constants and that no rule references an unknown step-up tier.
+  3. *maps each subject to the actions of the rules declared on it* — Confirms `PERMISSION_PAIRS` contains every rule's action under its subject and that its keys equal `PERMISSION_SUBJECTS`.
+  4. *refuses an undeclared pair at compile time, and still answers false at run time* — Uses `@ts-expect-error` on `holds()` and `requirePermission()` with fabricated action/subject to prove type-level rejection, then asserts the runtime results (`false` / thrown error).
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — Source of `PERMISSION_RULES`, `PERMISSION_SETS`, and `anonymousCaller`; the test verifies these loaded structures stay in lockstep with the generated vocabulary.
-- **`src/kernel/ability.ts`** — Source of `holds()`; exercised with a deliberately invalid pair to confirm run-time denial.
-- **`src/kernel/middlewares/authorizations.ts`** — Source of `requirePermission`; exercised with an undeclared subject to confirm the middleware throws a declarative error.
-- **`tests/support/paths.ts`** — Provides `REPO_ROOT` so the test can locate `shared/authorization-keys.yaml` regardless of CWD.
+- **`src/kernel/ability.ts`** — Imports `holds`; the test calls it with a deliberately invalid action/subject pair to verify the runtime returns `false` rather than throwing.
+- **`src/kernel/middlewares/authorizations.ts`** — Imports `requirePermission`; the test calls it with an undeclared subject to confirm it throws a "declare" error.
+- **`src/kernel/permissions.ts`** — Imports `PERMISSION_RULES`, `PERMISSION_SETS`, and `anonymousCaller`; these are the kernel-side data structures whose IDs, actions, and step-up tiers are cross-checked against the vocabulary constants.
+- **`tests/support/paths.ts`** — Imports `REPO_ROOT` to construct the absolute path to the YAML file relative to the repository root.
 
 ## Notes
 
-- The YAML is read **directly** (not via the generated module), making this a true cross-cutting check that the code-generation step has not drifted from the source.
-- `PERMISSION_PAIRS` is a `Map<string, string[]>`; the test iterates its values with `.toContain` and its keys with spread.
-- Rule IDs are composite strings (`${action}:${subject}`); any change to that format must be reflected in both the generator and this assertion.
-- The `@ts-expect-error` lines are load-bearing: if the type system starts accepting those pairs, the test file will fail to compile, alerting you immediately.
+- The test reads the YAML file directly from disk (`node:fs` + `yaml` package) rather than importing it, so it validates the *generated* TS constants against the *source* YAML in the same run.
+- `PERMISSION_RULE_IDS` is expected to use the `"action:subject"` string format — the test constructs that shape from the YAML `rules` array.
+- The compile-time assertions rely on `@ts-expect-error` comments; if the type system ever starts accepting those pairs, the test will fail at type-check rather than at runtime.
+- `anonymousCaller` from `@kernel/permissions` is used solely to produce a valid `Ability` argument for `holds`; the subject/action arguments are the ones under test.

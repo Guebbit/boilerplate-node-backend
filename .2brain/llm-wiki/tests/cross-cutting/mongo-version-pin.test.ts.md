@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/mongo-version-pin.test.ts
-sha256: 77081030fbbb61ab2eadef75c02fbfa80eee7ddd1eb7c83c689fa8ec5e1a956c
-generated_at: 2026-11-08T09:28:50.148953+00:00
+sha256: 91b432f87cc8644bb5b0389dd6c9fe0893378b6746419a2302ab89c814ef5406
+generated_at: 2026-11-14T23:05:13.574090+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A cross-cutting consistency guard that asserts every `mongo` image tag declared in the Docker Compose files matches the version pinned in `package.json` (`config.mongodbMemoryServer.version`). It exists because Dependabot cannot see that config key, so a compose-only version bump would otherwise pass CI while leaving tests and production on untested versions. The test goes red until the pin is updated in the same PR as the compose bump.
+Cross-cutting guard that asserts every `mongo:` image tag in the Docker Compose files matches the version pinned under `config.mongodbMemoryServer.version` in `package.json`. Because Dependabot cannot see that config key, a compose-file version bump would otherwise land green while production tests run a different `mongod` than CI ever exercised. This test forces the pin to move in the same PR as the compose change.
 
 ## Key elements
 
-- **`COMPOSE_FILES`** — the three compose YAML files (`docker-compose.yml`, `docker-compose.test.yml`, `docker-compose.production.yml`) that are scanned for mongo images.
-- **`mongoTags(file: string): string[]`** — reads and parses a compose file from disk, filters services whose image matches `/mongo:`, and returns the version tag (the segment between `:` and `@sha256`).
-- **`pin`** — the expected version, read at module load time from `package.json` → `config.mongodbMemoryServer.version`.
-- **`describe('compose MongoDB version')`** — two tests: (1) sanity-check that at least one mongo image was found across all files, (2) per-file assertion that each extracted tag equals `pin`.
+- **`COMPOSE_FILES`** – constant array of the three compose files that declare a MongoDB service (`docker-compose.yml`, `docker-compose.test.yml`, `docker-compose.production.yml`).
+- **`ComposeFile`** (interface) – minimal structural type for the YAML: `services` → `Record<string, { image?: string }>`.
+- **`mongoTags(file: string): string[]`** – reads a compose file, filters services whose image matches `/mongo:` (anchored to avoid false positives), and extracts the version tag that sits between `:` and `@sha256`.
+- **`pin`** – single value read from `package.json` → `config.mongodbMemoryServer.version`; the source of truth for the test binary.
+- **`describe('compose MongoDB version')`** – two assertions: (1) at least one mongo image was discovered across all compose files, and (2) for each compose file, every mongo tag equals `pin`.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — provides `REPO_ROOT` (imported via the `@tests/paths` alias), which is used to resolve the absolute paths to the compose files and `package.json` relative to the repository root.
+- **`tests/support/paths.ts`** – provides `REPO_ROOT` so all file reads (compose files, `package.json`) are anchored to the repository root regardless of the test runner's working directory.
 
 ## Notes
 
-- The mongo-image filter regex `/(^|\/)mongo:/` is anchored to avoid matching non-mongo images that merely contain the substring "mongo" (e.g. `my-mongo-client:1.0`).
-- Version extraction uses `/:([^@]+)@/`, assuming the image reference is in the `image:version@sha256:...` form. A tagless image (no digest) would yield an empty string and fail the equality check.
-- All file reads (`readFileSync`) happen at **test time**, not build time — the test is a filesystem-level invariant check, not a type or import graph check.
-- The test is intentionally coupled to the `package.json` `config` block (a non-standard key), so renaming or moving that key will break the test silently until someone updates the parser shape.
+- The image-tag regex `/:([^@]+)@/` assumes every pinned mongo image carries a `@sha256…` digest. If an image ever drops the digest, `mongoTags` returns an empty string and the equality check will fail (intentional fail-closed).
+- The `/(?:^|\/)mongo:/` filter is deliberately anchored so a service image like `my-registry/mongo-extended:1` would *not* be picked up; only a segment that is exactly `mongo:` qualifies.
+- The test is a pure file-reading check (no `mongod` spawned); it runs in the unit/fast lane, not the integration lane.

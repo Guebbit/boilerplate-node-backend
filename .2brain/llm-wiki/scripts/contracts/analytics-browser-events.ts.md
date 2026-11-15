@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/analytics-browser-events.ts
-sha256: 86465180d1f0d7dba50c4d785cd835d6f7184babb31d2bb540b1664326110492
-generated_at: 2026-11-08T02:38:06.335868+00:00
+sha256: 7b743c68a3fc1592c58069b8779463c11bf0f9a9bb204722c4742eb5a11d9bdc
+generated_at: 2026-11-14T17:22:02.406313+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Folds module-owned browser-event schemas (from `openapi.browser-events.yaml` fragments) into the `analytics` OpenAPI document, replacing the `AnalyticsEventRequest` placeholder with a `oneOf` discriminated union keyed on the `event` property. It exists as a separate module so the OpenAPI bundler can invoke it in a single call (`withBrowserEvents`) after the base bundle is assembled.
+Discovers per-module browser-event OpenAPI fragments from disk and folds them into the `analytics` service's `AnalyticsEventRequest` schema, replacing it with a `oneOf` discriminated union on the `event` property. It exists so each module's browser-event contract lives alongside that module on disk, and the OpenAPI bundler needs only a single call (`withBrowserEvents`) to incorporate them.
 
 ## Key elements
 
-- **`FRAGMENT_FILE`** (`'openapi.browser-events.yaml'`) — the file name a module must ship to opt in.
-- **`REQUEST_SCHEMA`** (`'AnalyticsEventRequest'`) — the target schema in the `analytics` document that gets replaced.
-- **`FRAGMENT_ORDER`** — narrative ordering list (`['products']`); remaining modules follow alphabetically.
-- **`browserEventFragments()`** — discovers which modules on disk own the fragment file (via `modulesWith`) and returns their absolute paths in narrative-then-alphabetical order (via `orderSections`).
-- **`localiseReferences(node)`** — recursively rewrites `$ref` strings that point to the shared root file (`../../../shared/contracts/openapi.root.yaml#…`) into the bundle-local `#/…` form.
-- **`eventNameOf(name, schema)`** — reads the `event` property's single enum value; throws if the property is missing, `$ref`-ed, or has a different cardinality.
-- **`withBrowserEvents(document_, fragments?)`** — the public entry point. No-ops when `analytics` schemas are absent or no fragments exist. Otherwise: parses each fragment, validates event names, localises refs, then rebuilds `components.schemas` so the new event schemas sit immediately after `AnalyticsEventRequest`, which is now a `oneOf` with a `discriminator` on `event`.
+- **`FRAGMENT_FILE`** — constant; the file name a module ships (`openapi.browser-events.yaml`).
+- **`REQUEST_SCHEMA`** — constant; the target schema name in `analytics` (`AnalyticsEventRequest`).
+- **`FRAGMENT_ORDER`** — narrative ordering list (`['products']`); remaining fragments sort alphabetically.
+- **`browserEventFragments()`** — exported; discovers which modules ship the fragment (via `modulesWith`) and returns their absolute paths in the prescribed order.
+- **`localiseReferences()`** — internal; recursively rewrites `$ref` strings that point at the root OpenAPI file into bundle-local `#/...` form.
+- **`eventNameOf()`** — internal; reads the single enum value of a schema's `event` property; throws if it is not a one-value string enum.
+- **`withBrowserEvents()`** — exported; main entry point. Reads each fragment, validates event names for uniqueness, localises refs, and rebuilds `components.schemas` so the event schemas sit immediately after `AnalyticsEventRequest` (now a `oneOf` + `discriminator`). No-ops if `analytics` is absent or no fragments exist.
 
 ## Relationships
 
-- **`scripts/contracts/fragments.ts`** — provides `readOpenApiFragment`, used to parse each module's fragment YAML.
-- **`scripts/contracts/openapi-document.ts`** — provides the `OpenApiDocument` type for the document parameter.
-- **`scripts/contracts/section-order.ts`** — provides `orderSections` to sort discovered modules (narrative first, then alphabetical).
-- **`scripts/modules-on-disk.ts`** — provides `MODULES_ROOT` and `modulesWith` for on-disk fragment discovery.
-- **`scripts/contracts/openapi-bundle.ts`** — the bundler that calls `withBrowserEvents` as a post-bundle step.
-- **`tests/unit/scripts/contracts/analytics-browser-events.test.ts`** — unit tests for this module.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI mutation-wave tests that exercise this file in context.
+- **`scripts/contracts/fragments.ts`** — provides `readOpenApiFragment`, used to parse each fragment YAML into a components-only object.
+- **`scripts/contracts/openapi-document.ts`** — provides the `OpenApiDocument` type (the bundled document `withBrowserEvents` mutates).
+- **`scripts/contracts/section-order.ts`** — provides `orderSections`, used to apply narrative-then-alphabetic ordering to the fragment list.
+- **`scripts/modules-on-disk.ts`** — provides `MODULES_ROOT` and `modulesWith`, used to discover which modules ship the fragment file.
+- **`scripts/contracts/openapi-bundle.ts`** — the OpenAPI bundler that calls `withBrowserEvents` as part of its build pipeline.
+- **`tests/unit/scripts/contracts/analytics-browser-events.test.ts`** — unit tests covering discovery, validation, and schema assembly.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises this file in a broader CI mutation context.
 
 ## Notes
 
-- **Schemas are spliced in, not appended.** `withBrowserEvents` rebuilds `components.schemas` via `flatMap` so the new event schemas land immediately after `AnalyticsEventRequest` rather than at the end of the object.
-- **`localiseReferences` preserves the `#`.** The slice index is `ROOT_REF_PREFIX.length - 1`, keeping the leading `#` so the result is a valid internal reference.
-- **`eventNameOf` rejects `$ref`-ed `event` properties.** If the `event` property is itself a `$ref`, the function treats it as having no inline enum and throws. Fragments must declare the event value inline.
-- **Idempotent no-op.** If `analytics` is absent from the bundle, or no module ships the fragment, the function returns without modifying the document. The placeholder in `analytics/openapi.yaml` remains untouched.
-- **Duplicate detection is two-level.** Both schema *names* and *event values* are checked across all fragments; a collision in either throws with the offending file in the message.
-- Follows the same pattern as webhook events (`asyncapi-webhook-events.ts`): a module's contract travels with the module on disk.
+- Fragments are **components-only** (no `paths`, `info`, etc.); `readOpenApiFragment` enforces that shape.
+- Each schema in a fragment must declare `event` as a **one-value string enum**; otherwise `eventNameOf` throws. Duplicate schema names or event names across fragments also throw.
+- The `schemas` map is **rebuilt** (not mutated in place) so the new event schemas are positioned immediately after `AnalyticsEventRequest`, preserving a readable narrative order.
+- If `analytics` is missing from the bundle, `withBrowserEvents` is a silent no-op — the placeholder in `analytics/openapi.yaml` is left untouched.
+- Follows the same "module owns its contract" principle as `asyncapi-webhook-events.ts` / `asyncapi-section-fragments.ts`.

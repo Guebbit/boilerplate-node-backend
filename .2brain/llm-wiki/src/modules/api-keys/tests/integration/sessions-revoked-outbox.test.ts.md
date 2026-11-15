@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/integration/sessions-revoked-outbox.test.ts
-sha256: a62d618fafea92f2149121c10a6fbfa62b2a405c14daee9683ceb63a7186dc40
-generated_at: 2026-11-08T05:06:40.053549+00:00
+sha256: 38379fe69e21ee864d588bf0afb6f6104a8c11cf3873716cfc462af95855e3ed
+generated_at: 2026-11-14T19:23:31.373741+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,45 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test verifying that the `account.sessions_revoked` outbox event is committed atomically with the credential write and epoch bump during password-reset and logout-everywhere flows, and that a failing `api-keys` consumer is retried by the relay rather than silently dropped. All scenarios are driven over HTTP to mirror how real requests arrive.
+Integration test verifying that the `account.sessions_revoked` outbox event is committed atomically with the credential write (password reset / logout-everywhere) and that a failing `api-keys` consumer is retried by the relay rather than silently lost. All flows are driven over HTTP to mirror how real resets and logouts arrive.
 
 ## Key elements
 
-- **`compromiseAudits()`** — Filters the mocked `emitAuditEvent` calls for `system.api_keys.revoked_on_compromise`, used to assert audit-side effects.
-- **`adminWithKey()`** — Creates a verified admin user, mints one live API key via `mint()`, logs in over HTTP, and returns `{ user, bearer, secret }`.
-- **`resetWith(token)`** — POSTs to `/account/password/reset/confirm` with a replacement password, simulating the mailed reset link.
-- **`makeDue()`** — Bulk-sets every outbox row's `nextAttemptAt` to epoch 0 so `relayOutbox()` processes them immediately without backoff.
-- **`pendingRows()`** — Queries `outboxEventModel` for pending `account.sessions_revoked` rows.
-- **`describe` block (4 tests)** —
-  - *Throwing consumer → pending row → relay retry revokes keys*: mocks `apiKeyRepository.revokeMany` to reject once; asserts the row stays pending, then relay publishes it and the credential is gone.
-  - *Logout everywhere*: same outbox path via `DELETE /account/sessions`.
-  - *Rollback*: mocks `outboxEventModel.create` to reject; asserts no outbox row exists and the old password still works.
-  - *Redelivery idempotency*: resets a published row back to `pending`, re-runs relay, asserts no duplicate revocation or second audit event.
+- **`adminWithKey`** – Creates a verified admin user, mints one live API key via `mint()`, and returns the user, a login bearer token, and the key secret for later assertions.
+- **`resetWith(token)`** – POSTs to `/account/password/reset/confirm` to spend a planted reset link, exactly as the mailed page would.
+- **`makeDue()`** – Sets `nextAttemptAt` on every outbox row to epoch 0 so the next relay pass fires immediately without waiting out backoff.
+- **`pendingRows()`** – Returns all outbox rows named `account.sessions_revoked` with status `pending`.
+- **`compromiseAudits()`** – Filters `emitAuditEvent` mock calls for `system.api_keys.revoked_on_compromise` events; used to assert exactly-once revocation semantics.
+- **`apiKeysModule.onRegistered?.()`** – Installs the credential resolver at module level, replicating what a real boot does once the module is enabled.
+- **Four test cases** inside `describe('account.sessions_revoked through the outbox')`:
+  - Throwing `revokeMany` → row stays pending → relay retry revokes the key.
+  - `DELETE /account/sessions` (logout-everywhere) takes the same outbox road.
+  - Outbox `create` failure → transaction rolls back → no row, old password still valid.
+  - At-least-once redelivery → second delivery is a no-op (key already revoked, audit count unchanged).
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `tests/support/http.ts` | `api()` provides the HTTP client for all endpoint calls. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory Mongo instance. |
-| `tests/support/environment.ts` | `setEnvironment` sets `NODE_MAIL_TRANSPORT` to `'log'` per test. |
-| `tests/support/credentials.ts` | `credentialOf(secret)` looks up whether an API key is still live in the DB. |
-| `src/modules/api-keys/module.ts` | `apiKeysModule.onRegistered()` installs the credential resolver as a real boot would. |
-| `src/modules/api-keys/services/api-keys.ts` | `mint()` creates the test API key. |
-| `src/modules/api-keys/repository.ts` | `apiKeyRepository.revokeMany` is spied to simulate consumer failure. |
-| `src/kernel/outbox.ts` | `outboxEventModel`, `relayOutbox`, `settleOutboxNudges` drive the outbox lifecycle under test. |
-| `src/kernel/access/tenant.ts` | `DEPLOYMENT_TENANT_ID` populates the caller context. |
-| `src/kernel/permissions.ts` | `permissionsOfRole('admin')` builds the caller's permission set. |
-| `src/modules/users/tests/factories.ts` | `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` seed the user and passwords. |
-| `src/modules/account/tests/factories.ts` | `plantToken` creates the reset-link token in the DB. |
-| `src/infrastructure/observability/audit.ts` | `emitAuditEvent` is mocked to capture audit assertions. |
-| `src/types/index.ts` | `TenantCallerContext` type for the `mint()` caller context. |
+| `src/kernel/outbox.ts` | Imports `outboxEventModel`, `relayOutbox`, `settleOutboxNudges` to query, force-deliver, and flush outbox rows. |
+| `src/modules/api-keys/repository.ts` | Imports `apiKeyRepository` and spies on its `revokeMany` method to simulate a transient consumer failure. |
+| `src/modules/api-keys/services/api-keys.ts` | Calls `mint` to create the live credential under test. |
+| `src/modules/api-keys/module.ts` | Calls `onRegistered()` to wire the credential resolver. |
+| `src/infrastructure/observability/audit.ts` | Mocked via a jest module factory so `emitAuditEvent` becomes a jest mock for call-count assertions. |
+| `src/kernel/access/tenant.ts` | Imports `DEPLOYMENT_TENANT_ID` for the caller context. |
+| `src/kernel/permissions.ts` | Imports `permissionsOfRole('admin')` for the caller context. |
+| `src/types/auth-context.ts` (via `@types`) | Imports `TenantCallerContext` type. |
+| `src/modules/users/tests/factories.ts` | Imports `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`. |
+| `src/modules/account/tests/factories.ts` | Imports `plantToken` to seed a password-reset token. |
+| `tests/support/credentials.ts` | Imports `credentialOf` to assert whether a key secret is still live. |
+| `tests/support/http.ts` | Imports `api` for all HTTP-driven requests. |
+| `tests/support/environment.ts` | Imports `setEnvironment` to set `NODE_MAIL_TRANSPORT`. |
+| `tests/support/setup-test-db.ts` | Calls `setupTestDb()` for database isolation. |
 
 ## Notes
 
-- The audit module is **replaced, not spied on** (`jest.mock` + `jest.requireActual` on `@tests/ports`), because `recordAudit` closes over its own module-scope reference to `emitAuditEvent`; a plain `jest.spyOn` on the re-export would not intercept the internal call.
-- `makeDue()` is required before calling `relayOutbox()` in retry tests; without it the relay would honour the backoff window and skip the row.
-- The idempotency test simulates at-least-once delivery by manually flipping a `published` row back to `pending`—the relay itself does not re-deliver, so this step is test-specific.
-- All four tests call `settleOutboxNudges()` after the HTTP request to flush the in-transaction outbox write before asserting on DB state.
+- The audit module is **replaced, not spied on**: `recordAudit` in production closes over its own module's `emitAuditEvent`, so a simple `jest.spyOn` on the imported binding would not intercept it. The module factory swaps in a shared port mock.
+- Tests are **HTTP-driven by design** — they exercise the full request → service → outbox-commit path rather than calling services directly, ensuring the transactional guarantee is what's under test.
+- `settleOutboxNudges()` must be awaited **after** the HTTP response; it flushes any outbox writes that were nudged synchronously within the request but not yet relayed.
+- The redelivery test manually flips the outbox row back to `pending` to simulate at-least-once semantics; no production code path performs this, so it is an explicit test-only action.
+- `makeDue()` is a test-only helper to bypass exponential backoff; in production the relay waits on `nextAttemptAt`.

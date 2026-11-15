@@ -1,7 +1,7 @@
 ---
 source: src/modules/example/controllers/delete-example.ts
-sha256: f4f3be703190da5c0b36788f48e5fb12737b130678fef592982ebac9182fd7db
-generated_at: 2026-11-08T05:48:22.947158+00:00
+sha256: 8accc39b9d8b0942b56b29e61b56206fc0cd7926e5f127ed39e34bdc9136298c
+generated_at: 2026-11-14T19:56:36.416901+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Hand-written controller for `DELETE /examples/:id`. It exists in place of the shared delete factory because that factory emits a soft/hard delete triplet, while the example module has no soft-delete tier to flag.
+Hand-written controller for `DELETE /examples/:id`. It exists in place of the shared delete factory because that factory emits a soft/hard delete triplet, while the example module has only a single (hard) delete tier. It validates the id, enforces caller permissions, supports optimistic concurrency via `If-Match`, and delegates to the example service.
 
 ## Key elements
 
-- **`deleteExample`** (exported) — Validates the route param via `requireId`, then calls `exampleService.removeById(id, callerContext)`. On success sends **204 No Content**; on refusal (permission or not-found) delegates to `refused`; unexpected errors are funneled through `catchAs`.
+- **`deleteExample`** (exported) – Express controller handler for `DELETE /examples/:id`. Flow: validate id → check `If-Match` precondition → call the service → respond `204 No Content` on success, `404` on missing/unknown/unauthorized id, `412` on stale ETag.
+- **`requireId`** usage – extracts and validates the `:id` param; a missing, malformed, or unresolvable id all short-circuit to `404` with the `example.not-found` i18n key.
+- **`withIfMatch`** – wraps the service call so a non-matching `If-Match` header yields `412 Precondition Failed` before any write occurs.
+- **`refused`** – inspects the service result for a permission denial and emits the appropriate `404` (not `403`) to the client.
+- **`catchAs`** – catches any thrown error and maps it to the correct HTTP response using the `deleteExample` tag.
 
 ## Relationships
 
-- **`@infrastructure/http/ids`** — `requireId` extracts and validates the `:id` param, sending a 404 itself on failure.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` builds the caller identity passed to the service.
-- **`@infrastructure/http/response`** — `noContentResponse` produces the 204 body.
-- **`@infrastructure/http/controller`** — `refused` maps a service-level denial to the appropriate 4xx response; `catchAs` converts thrown errors into a JSON error response.
-- **`../services/index`** — `exampleService.removeById` performs the actual persistence deletion.
-- **`../routes`** — Registers `deleteExample` as the handler for the `DELETE /examples/:id` route.
+| Neighbor | Interaction |
+|---|---|
+| `src/infrastructure/http/ids.ts` | Provides `requireId` for id-param validation. |
+| `src/infrastructure/http/preconditions.ts` | Provides `withIfMatch` for `If-Match` ETag gating. |
+| `src/infrastructure/http/request.ts` | Provides `callerContextOf` to extract the authenticated caller for the service call. |
+| `src/infrastructure/http/response.ts` | Provides `noContentResponse` (204) for the success path. |
+| `src/infrastructure/http/controller.ts` | Provides `catchAs` (error mapping) and `refused` (permission-denial detection). |
+| `src/modules/example/services/index.ts` | Exports `exampleService`, which this controller imports to perform the actual deletion. |
+| `src/modules/example/routes.ts` | Wires `deleteExample` onto the router (imported by the routes file, not by this file). |
 
 ## Notes
 
-- **404 for all failure modes.** A malformed id, an unknown id, *and* a caller lacking delete permission all return **404** (not 403), so the response does not leak whether the resource exists to an unauthorised caller.
-- **Early-return pattern.** When `requireId` fails it has already written the error response; the controller then returns `Promise.resolve()` to short-circuit without touching the service.
-- **No soft-delete path.** The service method called is `removeById` (hard delete). If a soft-delete tier is ever added, this controller should be replaced by the shared factory.
+- **404 for permission denials.** A caller who is not allowed to delete a valid example receives the same `404` as an unknown id, preventing existence leakage.
+- **No soft-delete tier.** Unlike modules that use the shared factory, this module deletes outright; there is no `deleted` flag or restore path to be aware of.
+- **Versioned resource.** The `withIfMatch` guard means concurrent deletes are fenced by ETag; clients that omit `If-Match` are subject to the service's own concurrency handling.

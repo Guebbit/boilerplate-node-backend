@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/delete-subscription-secret.ts
-sha256: c51a8ff510987ca5620bc734f566721e84c47e2126363ed2646d168f4dde9393
-generated_at: 2026-11-08T09:00:27.388375+00:00
+sha256: 203693184f3b8dd00098f989d3812a2fbdc7407db33ffcf44a5d8a76f5fbfe0f
+generated_at: 2026-11-14T22:41:07.389151+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `DELETE /webhooks/subscriptions/:id/secrets/:secretId`. Removes a single secret (ring entry) from a webhook subscription as part of a key-rotation workflow. It delegates the actual removal to the service layer and shapes the success response into a subscription view.
+Controller handler for `DELETE /webhooks/subscriptions/:id/secrets/:secretId`. It removes a single secret from a subscription's signing ring (the "other half" of a secret rotation) and returns `204` on success. It exists to give the HTTP layer a thin, tenant-scoped entry point into the webhooks service's ring-management logic.
 
 ## Key elements
 
-- **`deleteWebhookSubscriptionSecret`** (exported) — The Express handler. Validates the `:id` param via `requireId`, builds a tenant caller context, calls `webhooksService.removeSubscriptionSecret`, then returns the updated subscription through `viewSubscription` wrapped in `successResponse`. Propagates rejection via `refused` and unexpected errors via `catchAs`.
+- **`deleteWebhookSubscriptionSecret`** (exported) — Express handler accepting `Request<{ id: string; secretId: string }>` and `Response`. Validates the `id` param, extracts tenant/caller context, delegates to the webhooks service, then maps the result to `204`, a `refused` response, or a caught error.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` (error→HTTP mapping) and `refused` (service rejection→422 pass-through).
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId` for `:id` param validation with a 404 fallback message.
-- **`src/infrastructure/http/request.ts`** — Provides `tenantCallerContextOf` to extract the caller/tenant context from the request.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` to serialise the 200 reply.
-- **`src/modules/webhooks/services/index.ts`** — Source of `webhooksService`, whose `removeSubscriptionSecret` method performs the actual ring-entry deletion.
-- **`src/modules/webhooks/services/actions.ts`** — Provides `viewSubscription`, the projection function that converts the raw subscription into the API-visible shape.
-- **`src/types/index.ts`** — Source of the `WebhookSubscription` type used in the response generic.
-- **`src/modules/webhooks/routes.ts`** — The route table that wires this controller to the `DELETE /webhooks/subscriptions/:id/secrets/:secretId` path.
+- **`src/modules/webhooks/routes.ts`** — registers this handler on the `DELETE /webhooks/subscriptions/:id/secrets/:secretId` route.
+- **`src/modules/webhooks/services/index.ts`** — provides the `webhooksService` instance that this controller calls to perform the ring mutation.
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs` (unified error formatting) and `refused` (standard 4xx mapping for rejected service results).
+- **`src/infrastructure/http/ids.ts`** — `requireId` validates and extracts the `:id` param, short-circuiting with a 404 on failure.
+- **`src/infrastructure/http/request.ts`** — `tenantCallerContextOf` builds the authz/audit context passed into the service call.
+- **`src/infrastructure/http/response.ts`** — `noContentResponse` emits the `204` reply.
 
 ## Notes
 
-- The 422 "ring would become empty" guard is enforced inside the service (`removeSubscriptionSecret`); this controller simply forwards the rejection via `refused`. No ring-emptiness logic lives here.
-- The doc comment frames this as "the other half of a rotation": the subscription keeps a *ring* of secrets, and this endpoint removes one entry. It is not the same as deleting the subscription itself.
-- The `:id` is validated with `requireId` (404 on miss), but `:secretId` is passed straight to the service without a local existence check — the 404 for an unknown `secretId` also comes from the service layer.
+- The `secretId` path param is **not** validated by `requireId`; only the subscription `id` is. An invalid `secretId` surfaces as a service-level 404 rather than a param-validation failure.
+- A `refused` result (e.g., the ring would become empty) is mapped to a 422 by the `refused` helper — the controller itself contains no status-code literals.
+- The function is async via promise chaining (`.then` / `.catch`) rather than `async/await`, consistent with the surrounding controller style.

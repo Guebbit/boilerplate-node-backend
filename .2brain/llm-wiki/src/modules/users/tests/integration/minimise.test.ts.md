@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/integration/minimise.test.ts
-sha256: 38792d222ed8f33b6cdb29d9104e22a9eba1ad33dd0d76c91dbf2b0b3db5bf64
-generated_at: 2026-11-08T08:55:01.622971+00:00
+sha256: 64340aa349d779076bfe2a095b44d522b536852d4d93212bd8861cbcece52ba7
+generated_at: 2026-11-14T22:35:16.471927+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the inactivity-minimisation feature. It exercises `userService.minimiseInactiveBefore` through **real module wiring** (address, users, and a fake failing module) against a real test database, verifying that an account quiet past the cutoff loses its address book, gets its orders' PII clock started, retains its login and orders, and is stamped so subsequent runs skip it.
+Integration test for the inactivity-minimisation feature. It verifies, through real module wiring (no service-level mocks), that an account quiet past the cutoff loses its address book, has its orders' PII clock started, retains its login and orders, and is stamped with `inactivityMinimisedAt` so a subsequent run is a no-op.
 
 ## Key elements
 
-- **`makeInactive(id, extra?)`** — Backdates a user's `createdAt` (via `overwriteImmutable`) and optionally sets extra fields like `active: false`.
-- **`inactiveCustomerWithOrder(name)`** — Fixture builder: creates a customer, gives them an address, creates a paid order, and marks the account inactive.
-- **`addressesOf` / `clockOf` / `isMinimised`** — Thin assertion helpers that read state back through the public service, order repository, and user model respectively.
-- **`daysAgo(days)` / `LONG_AGO`** — Time helpers for the cutoff threshold (30 days) and a fixed "ancient" timestamp.
-- **Six test cases** covering: happy-path minimise, banned account, idempotent rerun, active-account no-op, re-minimisation after re-activity ("boomerang"), and hook-failure leaving no stamp.
+- **`inactiveCustomerWithOrder(name)`** – Factory helper: creates a customer with one address and one paid order, then backdates the account to make it inactive.
+- **`makeInactive(id, extra?)`** – Backdates `createdAt` (via `overwriteImmutable`) to simulate inactivity; optionally sets extra fields like `active: false`.
+- **`addressesOf(userId)`** / **`clockOf(orderId)`** / **`isMinimised(userId)`** – Thin assertion helpers wrapping the address service, order repository, and a direct `userModel.exists` query.
+- **`LONG_AGO` / `daysAgo(n)`** – Date constants/helpers for the 30-day cutoff used in every test.
+- **Six `it` blocks** covering: happy-path minimisation, banned-account minimisation, idempotent rerun, active-account no-op, re-minimisation after a boomerang (reactivate → quiet again), and hook-failure (no stamp written, retry possible next run).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@kernel/registry` | `registerModules` / `registerCheckoutModules` wire modules for each test; the "flaky" test injects a fake failing module. |
-| `@kernel/events` | `resetDomainEvents()` in `afterEach` clears the event bus between tests. |
-| `@modules/users/services` | `userService.minimiseInactiveBefore` is the system under test. |
-| `@modules/users/module` | Registered as the users module in the module graph. |
-| `@modules/users/model` | `userModel.updateOne` used directly to backdate fields; `userModel.exists` checks the minimised stamp. |
-| `@modules/users/tests/factories` | `createUser`, `userRepository` for fixture creation and reload. |
-| `@modules/addresses/*` | `addressesModule` registered; `giveAddress` fixture; `addressService.list` for assertions. |
-| `@modules/orders/tests/factories` | `createOrder`, `toOrderItem`, `markOrderPaidAt`, `orderRepository` to build and inspect orders. |
-| `@modules/products/tests/factories` | `createProduct` to create a product for the order line. |
-| `@tests/checkout-modules` | `registerCheckoutModules` sets up the standard module set in `beforeEach`. |
+- **`src/modules/users/friends/account.ts`** – The system under test; the test imports the user service from here and invokes its minimisation entry point.
+- **`src/modules/users/module.ts`** – Imported as `usersModule` and registered in the hook-failure test to participate in the domain-event fan-out.
+- **`src/modules/users/model.ts`** – `userModel` used directly for backdating (`makeInactive`) and for asserting the `inactivityMinimisedAt` stamp.
+- **`src/modules/users/tests/factories.ts`** – Provides `createUser` and `userRepository` for setup and assertions.
+- **`src/modules/addresses/index.ts`** – `addressService` is imported from here; the test uses it to confirm the address book has been cleared.
+- **`src/modules/addresses/module.ts`** – Registered via `registerCheckoutModules` in `beforeEach` so the address hook is active during minimisation.
+- **`src/modules/addresses/tests/factories.ts`** – `giveAddress` populates the address book under test.
+- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `markOrderPaidAt` build the order fixture; `orderRepository` is re-exported here and used for PII-clock assertions.
+- **`src/modules/orders/repository.ts`** – The underlying order store; the test reads order state through it (via the factories re-export) to verify the PII clock and user linkage.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` supplies the item for the order.
+- **`src/kernel/registry.ts`** – `registerModules` used in the hook-failure test to inject a module whose `minimise` hook rejects.
+- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach` to prevent cross-test event leakage.
+- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` sets up the standard module set before each test.
 
 ## Notes
 
-- `createdAt` is normally immutable on `userModel`; tests bypass this with `{ timestamps: false, overwriteImmutable: true }`.
-- `setupTestDb()` runs once at module scope (not per-test), relying on the test framework's per-suite DB reset.
-- The "boomerang" test manually overwrites `inactivityMinimisedAt` to an old date to simulate re-activity, since the service only skips accounts whose stamp is *after* the cutoff.
-- The "flaky" test does **not** call `registerCheckoutModules`; it manually registers a failing module plus `usersModule` to isolate hook-failure behavior.
+- `setupTestDb()` runs once at module load (not per-test), so the Mongo instance is shared across all `it` blocks; test isolation relies on unique usernames/emails.
+- The `makeInactive` helper must use `overwriteImmutable: true` because Mongoose marks `createdAt` as immutable by default—this is intentional and flagged in the inline comment.
+- The "boomerang" test manually overwrites `inactivityMinimisedAt` to 200 days ago to simulate that the account was active *after* the first minimisation; without this, the no-op guard would prevent re-minimisation.
+- The hook-failure test registers a *custom* module (not one of the production modules) whose `minimise` rejects, verifying that the `inactivityMinimisedAt` stamp is only written after all hooks succeed.

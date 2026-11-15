@@ -1,7 +1,7 @@
 ---
 source: tests/integration/concurrency/payment-races.test.ts
-sha256: 13a68568d7dbae9958cb77886b844aff6d3a28a1d2822d93c6dba04864d9cb76
-generated_at: 2026-11-08T09:36:45.627349+00:00
+sha256: 85ecc0a08d690372a1f92bd33b784013ab51a6831230e811bf0267b36f0f5063
+generated_at: 2026-11-14T23:11:35.416416+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,48 +9,45 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates the "settle once" invariant under real HTTP contention: concurrent confirmations, webhook redeliveries, mixed webhook+confirm races, overselling attempts, and cancel-during-settle windows all produce exactly one settlement, one stock commit, and one `PAYMENT_SUCCEEDED` event. Runs against a single in-memory Mongo with no browser.
+Integration test suite that exercises payment-settlement and stock-reservation under real concurrent contention over HTTP, against a single in-memory Mongo. It verifies the `settlePayment` guarantee — "a delivery that arrives twice, or races the browser's own call, settles once" — by firing N parallel requests and asserting that exactly one `PAYMENT_SUCCEEDED` event fires, one stock commit lands, and losers receive a conflict rather than a second success.
 
 ## Key elements
 
-- **`loggedInCustomer()`** – Creates a fresh verified customer (unique email/username), assigns an address, logs in via `/account/login`, and returns the `Bearer` token.
-- **`orderAwaitingPayment(productId, quantity)`** – Drives the real checkout flow (cart → shipping → checkout → payment intent) over HTTP so the order has a genuine stock reservation for settlement to commit.
-- **`providerRefOf(paymentId)`** – Reads `providerRef` directly from the payment row (not exposed via the API).
-- **`deliver(event)`** – POSTs a JSON body to `/payments/webhook/fake` with a valid `WEBHOOK_SIGNATURE_HEADER`.
-- **`countSucceededEvents()`** – Subscribes to `PAYMENT_SUCCEEDED` via `onDomainEvent` and returns a per-order counter. Added on top of module listeners; observes without altering behaviour.
-- **`settleEvents()`** – Calls `settleOutboxNudges()` then `relayOutbox()` so the test's event observer has run before assertions.
-- **`GOOD_METHOD`** (`'pm_card_visa'`) – The method the fake provider settles as `succeeded`.
-- **Five describe blocks (P1–P5)**:
-  - **P1** – `RACE_SIZE` parallel confirmations of one intent → exactly one 200, the rest 409, one event, stock committed once.
-  - **P2** – `RACE_SIZE` parallel redeliveries of one webhook event → all 204, one event, stock committed once.
-  - **P3** – Half confirms, half distinct webhook events racing → one event, stock committed once.
-  - **P4** – More buyers than units, all checking out concurrently → exactly `units` get 201, rest get 409 with `CART_INSUFFICIENT_STOCK`, stock counters consistent.
-  - **P5** – Customer cancels while payment settles (deterministic pin; see Notes).
+- **`loggedInCustomer()`** – Creates a distinct verified customer, assigns an address, logs in, and returns the Bearer token. Uses a module-level counter so addresses don't collide.
+- **`orderAwaitingPayment(productId, quantity)`** – Drives the full HTTP checkout (cart → shipping → checkout → payment intent) so a real reservation exists for settlement to commit. Returns `{ bearer, orderId, paymentId }`.
+- **`providerRefOf(paymentId)`** – Reads `providerRef` directly from the `paymentModel` row (not exposed via any API).
+- **`deliver(event)`** – POSTs a signed webhook payload to `/payments/webhook/fake` with the correct `WEBHOOK_SIGNATURE_HEADER`.
+- **`countSucceededEvents()`** – Registers a passive `onDomainEvent(PAYMENT_SUCCEEDED, …)` listener and returns a per-orderId counter function.
+- **`settleEvents()`** – Awaits `settleOutboxNudges()` then `relayOutbox()` so all settlement transactions and their outbox deliveries complete before assertions.
+- **`GOOD_METHOD`** (`'pm_card_visa'`) – The method the fake provider maps to a `succeeded` outcome.
+- **`RACE_SIZE` / `raceN`** (from `@tests/race`) – Configurable parallelism and the race runner used by every test.
+- **P1** – N parallel confirms of one intent → exactly one 200, rest 409, one event, correct stock.
+- **P2** – N parallel redeliveries of one webhook event → all 204, one event, correct stock.
+- **P3** – Half confirms, half distinct webhook events racing → one event, correct stock.
+- **P4** – More buyers than units, all checking out simultaneously → exactly `units` succeed (201), rest get 409 with `CART_INSUFFICIENT_STOCK`, stock never negative.
+- **P5** (truncated) – Cancellation racing settlement; pinned deterministically elsewhere because the window is too narrow to hit reliably at `RACE_SIZE=20`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/race.ts` | Provides `raceN`, `RACE_SIZE`, `countStatus`, `expectNoServerErrors` for concurrent HTTP fan-out and status counting. |
-| `tests/support/checkout-as.ts` | `checkoutAs(bearer)` drives the real `POST /checkout` step inside `orderAwaitingPayment` and P4. |
-| `tests/support/http.ts` | `api()` supertest instance used for every request in the file. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory Mongo before all tests. |
-| `scenarios/support/doubles/payments/fake.ts` | `setFakeOutcome(providerRef, {status:'succeeded'})` tells the fake provider what to return for P2/P3. |
-| `src/modules/payments/providers/index.ts` | `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER` used in `deliver()`. |
-| `src/modules/payments/events.ts` | `PAYMENT_SUCCEEDED` event name for the counting listener. |
-| `src/modules/payments/model.ts` | `paymentModel.findById` to read `providerRef` and verify final payment status. |
-| `src/modules/orders/model.ts` | `orderModel` to assert final order status and count orders per product. |
-| `src/kernel/events.ts` | `onDomainEvent` to attach the passive event counter. |
-| `src/kernel/outbox.ts` | `relayOutbox` and `settleOutboxNudges` in `settleEvents()` to flush pending event deliveries. |
-| `src/modules/addresses/tests/factories.ts` | `giveAddress` to ensure the new customer has a shipping address. |
-| `src/modules/users/tests/factories.ts` | `createUser`, `PLAIN_PASSWORD` for test account setup. |
-| `src/modules/products/tests/factories.ts` | `createProduct` (with `onHand`) and `countersOf` for stock assertions. |
+- **`tests/support/http.ts`** → `api()` provides the supertest request client used by every HTTP call in this file.
+- **`tests/support/checkout-as.ts`** → `checkoutAs()` performs the real checkout PUT so a stock reservation exists before settlement tests begin.
+- **`scenarios/support/doubles/payments/fake.ts`** → `setFakeOutcome()` tells the fake provider which outcome to return for a given `providerRef` (used in P2, P3).
+- **`src/modules/payments/providers/index.ts`** → re-exports `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER`, used to construct valid webhook deliveries.
+- **`src/modules/payments/events.ts`** → exports the `PAYMENT_SUCCEEDED` event constant that `countSucceededEvents` subscribes to.
+- **`src/modules/payments/model.ts`** → `paymentModel` is queried for `providerRef` and asserted for final `status`.
+- **`src/modules/payments/index.ts`** → re-exports `displayStatusOf` (imported here, presumably used in the truncated P5 assertions).
+- **`src/modules/orders/model.ts`** → `orderModel` is used to assert final order status (`paid`) and count orders per product.
+- **`src/kernel/events.ts`** → `onDomainEvent` is the subscription API the event counter hooks into.
+- **`src/kernel/outbox.ts`** → `relayOutbox` / `settleOutboxNudges` flush pending outbox entries so event listeners fire before assertions.
+- **`src/modules/products/tests/factories.ts`** → `createProduct` seeds stock; `countersOf` reads `onHand` / `reserved` / `available` for assertions.
+- **`src/modules/users/tests/factories.ts`** → `createUser` and `PLAIN_PASSWORD` set up test customers.
+- **`src/modules/addresses/tests/factories.ts`** → `giveAddress` assigns a shipping address required by checkout.
 
 ## Notes
 
-- The file mocks `@infrastructure/adapters/pdf` so the placed-order invoice render doesn't log a failure for every checkout; the orders contract suite uses the same stub.
-- **P5 is rarely hit under real contention.** The comment records 0 hits across 3 runs at `TEST_RACE_SIZE=20` with the fix reverted. Its underlying bug is pinned deterministically in `src/modules/payments/tests/integration/service.test.ts`; P5 here is a best-effort contention probe, not the primary regression guard.
-- "Once" is verified by counting `PAYMENT_SUCCEEDED` emissions on the event bus, **not** by status codes. A second settlement attempt must leave no extra ledger row or event.
-- `settleEvents()` must be awaited before any event-count assertion; the outbox relay is asynchronous and separate from the settlement transaction.
-- Each test uses a distinct customer (incrementing `customerCounter`) to avoid address-factory collisions on repeated calls.
-- P3 deliberately uses distinct webhook event IDs (`evt_${paymentId}_${index}`) so correctness cannot be attributed to idempotency-by-event-id; only the conditional settlement writes are under test.
+- The suite mocks `@infrastructure/adapters/pdf` because the placed-order email renders an invoice; without the mock every checkout would log a failed render.
+- "Once" is verified by counting `PAYMENT_SUCCEEDED` emissions on the event bus, not by inspecting HTTP status codes — a second settlement that is a no-op still counts as "the system settled once."
+- `settleEvents()` must be awaited **before** reading `countSucceededEvents()` results; events are written inside the settlement transaction but delivered by the outbox relay, not synchronously.
+- P5's race window (between `markPaid` and the payment write) was never hit in three runs at `TEST_RACE_SIZE=20` with the fix reverted; the bug is pinned deterministically in `src/modules/payments/tests/integration/service.test.ts`.
+- `customerCounter` is module-level; each call yields a unique email/username so the default factory address doesn't cause unique-index collisions on the second customer.
+- `GOOD_METHOD` is not arbitrary: it is the method the fake provider's contract explicitly maps to a `succeeded` outcome.

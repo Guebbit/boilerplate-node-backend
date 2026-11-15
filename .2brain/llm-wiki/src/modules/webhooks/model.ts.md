@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/model.ts
-sha256: ba7a4900a9a1494d357e1b914dacd60a03f07c1900de068a6bcd07552f87c196
-generated_at: 2026-11-08T09:03:36.503241+00:00
+sha256: e19bff1708ded87b27c86ef4c0a8a716b3f917ddd5907ed99b0d30a683783064
+generated_at: 2026-11-14T22:43:24.928538+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two Mongoose collections the webhooks module owns — `webhooksubscriptions` (a tenant's standing subscription to event types) and `webhookdeliveries` (one row per event × subscription, tracking retry state) — including their schemas, indexes, TypeScript interfaces, and the wire serialization transform for subscriptions.
+Defines the two Mongoose collections the webhooks module owns — `webhooksubscriptions` (a tenant's standing subscription to a slice of the event catalogue) and `webhookdeliveries` (one row per event × subscription, tracking attempts to success, exhaustion, or a never-notified subscriber). It declares the schemas, indexes, serialization transforms, and the `model()` entrypoints that every other file in the module reads and writes against.
 
 ## Key elements
 
-- **`WebhookSubscriptionDocument` / `WebhookDeliveryDocument`** — Mongoose `Document` interfaces describing each collection's shape.
-- **`webhookSubscriptionSchema`** — Schema with `tenant`, `url`, `eventTypes`, failure-tracking fields (`consecutiveFailures`, `failingSince`, `disabledAt`, `autoDisabledAt`), and a nested `secrets` sub-schema (`_id: false`, explicit `id` string). Two indexes: `(tenant, createdAt DESC)` and `(disabledAt, eventTypes)`.
-- **`applyWebhookSubscriptionTransform`** — Serialization transform (via `applySerialization`) that strips `tenant`, `ownerUserId`, `failingSince`; collapses `secrets` into `secretIds` + `retiringSecrets`; derives `enabled` from `disabledAt`; deletes `secrets` before the row leaves the process.
-- **`webhookSubscriptionModel`** — The registered Mongoose model (collection `webhooksubscriptions`).
-- **`webhookDeliverySchema`** — Schema with `subscriptionId`, `eventId`, `eventType`, `payload`, `status` (enum from `WebhookDeliveryStatus`), `attempt`, `nextAttemptAt`, and lease fields (`leaseToken`, `leaseExpiresAt`). Six indexes covering idempotency, admin listing, status filtering, and sweep reads. A TTL index (`expireAfterSeconds`) derived from `DAY_SECONDS × retentionDays`.
-- **`webhookDeliveryModel`** — The registered Mongoose model.
-- **`WebhookSecretRingEntry`** — Interface for one entry in a subscription's secret ring (`id`, `ciphertext`, `createdAt`); ciphertext is the only persisted form.
+- **`WebhookSecretRingEntry`** – Interface for one entry in a subscription's secret ring (`id`, `ciphertext`, `createdAt`). Plaintext never persists.
+- **`WebhookSubscriptionDocument`** / **`WebhookSubscriptionModel`** – Document and model types for a subscription row. Notable fields: `eventTypes` (required, non-empty), `consecutiveFailures`, `failingSince`, `disabledAt`, `autoDisabledAt`, `ownerUserId`, `secrets`.
+- **`webhookSubscriptionSchema`** – Mongoose schema with two compound indexes: `{tenant, createdAt:-1}` (tenant list) and `{disabledAt, eventTypes}` (publish fan-out). Applies `revisionPlugin` for ETag/If-Match.
+- **`applyWebhookSubscriptionTransform`** – Serialization transform: omits `tenant`/`ownerUserId`/`failingSince`; in `after`, reads the `secrets` array, derives `secretIds` (live ring), `retiringSecrets`, and `enabled` (from absence of `disabledAt`), then deletes `secrets` from the wire shape.
+- **`webhookSubscriptionModel`** – Mongoose model (`'WebhookSubscription'`), collection `webhooksubscriptions`.
+- **`WebhookDeliveryDocument`** / **`WebhookDeliveryModel`** – Document and model types for a delivery row. Tracks `status` (`pending → in_flight → succeeded/exhausted`), `attempt`, `nextAttemptAt`, `leaseToken`, `leaseExpiresAt`, and outcome fields (`responseCode`, `durationMs`, `error`).
+- **`webhookDeliverySchema`** – Mongoose schema with indexes: unique `{subscriptionId, eventId}` (idempotent fan-out), `{tenant, createdAt:-1}`, `{subscriptionId, createdAt:-1}`, `{status, createdAt:-1}`, `{status, nextAttemptAt}` (sweep read), and a stranded-in_flight read. Carries a TTL index keyed on `getWebhookDeliveryRetentionDays()`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — Provides `applySerialization`, the generic mechanism the subscription transform is built on (defines `omit`/`after` semantics and execution order).
-- **`src/domain-primitives/time.ts`** — Supplies `DAY_SECONDS` for computing the delivery TTL index's `expireAfterSeconds`.
-- **`src/modules/webhooks/config.ts`** — Supplies `getWebhookDeliveryRetentionDays()` read once at import time for that TTL value.
-- **`src/modules/webhooks/secrets.ts`** — Supplies `liveRingEntries` and `retiringRingSecrets` used inside the subscription transform; `mintRingSecret` (same module) is what pre-mints the `id` that the schema's explicit `id` field stores.
-- **`src/modules/webhooks/repository.ts`** — Sole writer of `failingSince`; performs `disable`, `claimPending`, `claimForReplay`, and `applyOutcome` (all operating on the shapes defined here).
-- **`src/modules/webhooks/services/publish.ts`** — Fans out by querying enabled subscriptions (the `(disabledAt, eventTypes)` index) and creates delivery rows relying on the `(subscriptionId, eventId)` unique index for idempotency.
-- **`src/modules/webhooks/services/sweep.ts`** — Reads due retryable rows via the `(status, nextAttemptAt)` index and stranded leases via the `(status, leaseExpiresAt)` index.
-- **`src/modules/webhooks/services/attempt.ts`** — Reads a claimed delivery, signs the payload with a live secret, writes outcome fields (`responseCode`, `durationMs`, `error`, `status`, `nextAttemptAt`) back to the row.
-- **`src/modules/webhooks/services/subscriptions.ts`** — CRUD layer that reads/writes subscription documents and invokes `mintRingSecret` before first save.
-- **`src/modules/webhooks/services/reencrypt.ts`** — Reads `secrets` ciphertext, re-encrypts under a new key, writes back to the same sub-schema.
-- **`src/modules/webhooks/presenters.ts`** — Alternative presentation path; the transform in this file exists because admin list reads use `.lean()` + `normalize` and never reach a presenter.
-- **`src/modules/webhooks/index.ts`** — Re-exports the models and types for other modules.
-- **`scenarios/webhooks.ts`** — Integration scenario exercising the full subscribe → publish → deliver → retry flow against these two collections.
+- **`src/modules/webhooks/secrets.ts`** – Provides `liveRingEntries` / `retiringRingSecrets` used inside the subscription transform; owns encryption at rest and ring rotation.
+- **`src/modules/webhooks/config.ts`** – Supplies `getWebhookDeliveryRetentionDays()` for the delivery TTL index.
+- **`src/infrastructure/persistence/revision-plugin.ts`** – Applied to the subscription schema to drive `ETag`/`If-Match` revision tracking.
+- **`src/infrastructure/persistence/serialize.ts`** – `applySerialization` is the mechanism that wires the `omit`/`after` hooks on the subscription schema.
+- **`src/domain-primitives/time.ts`** – Provides `DAY_SECONDS` used in the TTL calculation.
+- **`src/modules/webhooks/repository.ts`** – The sole writer of `failingSince`, `disabledAt`, `autoDisabledAt`; implements `claimPending`/`claimForReplay` (lease acquisition) and `applyOutcome` (lease-guarded write).
+- **`src/modules/webhooks/services/publish.ts`** – Uses the `{disabledAt, eventTypes}` index for fan-out; the unique `{subscriptionId, eventId}` index makes redelivered events idempotent.
+- **`src/modules/webhooks/services/sweep.ts`** – Reads due `{status, nextAttemptAt}` rows and stranded `in_flight` rows whose lease expired.
+- **`src/modules/webhooks/services/subscriptions.ts`**, **`src/modules/webhooks/services/attempt.ts`**, **`src/modules/webhooks/services/enqueue.ts`**, **`src/modules/webhooks/services/reencrypt.ts`**, **`src/modules/webhooks/services/actions.ts`** – All read/write through the models defined here.
+- **`src/modules/webhooks/index.ts`** – Re-exports the module's public surface.
 
 ## Notes
 
-- **No `enabled` field exists.** Subscription enablement is the *absence* of `disabledAt`; the wire `enabled` boolean is derived in the serialization transform. This guarantees the stored state and the derived flag can never disagree.
-- **`secrets` uses `_id: false` + explicit `id`.** `mintRingSecret` in `secrets.ts` generates the id via `randomUUID()` *before* the document is saved, so the CREATE response can reference it immediately. Declaring `id` as a real schema field (not a virtual) ensures it survives `.lean()` reads.
-- **Serialization order matters.** `omit` runs before `after` (enforced by `applySerialization`). That is why `secrets` is read and deleted inside `after` rather than listed in `omit` — it must still be present to derive `secretIds`/`retiringSecrets`.
-- **`in_flight` is a lease, not a simple state.** `leaseToken`/`leaseExpiresAt` are stamped atomically with the status change in `repository.ts`. A row whose lease has expired is claimable again (crash-recovery path). No `failed` status exists — per-attempt history is the design direction.
-- **TTL index caveat.** Mongo cannot modify `expireAfterSeconds` in place; changing the retention env var and restarting requires a manual index drop/recreate (same pattern as `audit-logs` and `tasks`).
-- **`failingSince` is the only writer-gated field** — exclusively written by `repository.ts#recordOutcome`. It is absent whenever `consecutiveFailures` is 0.
+- **No stored `enabled` flag.** Enabled state is the *absence* of `disabledAt`; the wire `enabled` boolean is derived in the transform. This guarantees the two can never disagree.
+- **`secrets` uses `_id: false` + explicit `id`.** `secrets.ts#mintRingSecret` generates the UUID before the document is saved so the CREATE response can name the ring entry immediately. Declaring `id` as a real schema field (not a virtual) ensures it round-trips through `.lean()` reads.
+- **Transform ordering gotcha.** `secrets` is read and deleted inside `after`, not listed in `omit`, because `applySerialization` runs `omit` before `after` — naming it in `omit` would make the field unavailable when `after` needs to derive `secretIds`/`retiringSecrets`.
+- **`in_flight` is a leased claim, not a caller-set state.** `leaseToken` + `leaseExpiresAt` are stamped atomically with the status change. `applyOutcome` writes only while the caller's token still matches. Expired leases make the row claimable again (crash-recovery path).
+- **No `failed` status exists.** Per-attempt failures live on the attempt side (matching Stripe/GitHub/Svix convention); only `exhausted` is terminal on the delivery row.
+- **Retention is set at import time.** `getWebhookDeliveryRetentionDays()` is read once; the TTL index is created at startup and cannot change at runtime.

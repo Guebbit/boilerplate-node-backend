@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-delete-controller.ts
-sha256: b0c2681d5dabf45db3487bb2cac96498a8850811c7e00bdba52d47f7867e8f46
-generated_at: 2026-11-08T03:50:31.867637+00:00
+sha256: c2938bdaa8467a3c23d97f8790b9219a0ef5ce0854e674a4b1298d07d008e3f0
+generated_at: 2026-11-14T18:19:10.529273+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Factory that builds the shared Express handler for the `DELETE /x/:id` and `DELETE /x/:id/hard` route triplet used by every module. Each module's `delete-<entity>.ts` file supplies a small spec (entity name, service call, i18n not-found key) and receives a fully wired, named handler back, eliminating per-entity duplication of the id-extraction, `hardDelete` parsing, `If-Match` fencing, and error-envelope logic.
+Factory that builds the shared Express handler for a module's `DELETE /x/:id` and `DELETE /x/:id/hard` endpoints. Each entity module calls this factory once with a small spec (entity name, service callback, not-found key) to produce its own named delete handler, eliminating duplication across modules while keeping per-entity naming and audit identity intact.
 
 ## Key elements
 
-- **`DeleteControllerSpec`** (interface) — the three per-entity inputs: `entity` (lower-case singular name, used to build the operation string), `remove(id, hardDelete, request)` (the service call that stamps `deletedAt` or destroys the row), `notFoundKey` (i18n key for 404).
-- **`createDeleteController(spec)`** (exported factory) — returns a `namedHandler` that:
-  1. Extracts the id from the **path only** via `requireId`; a malformed id is treated as a 404.
-  2. Reads the `hardDelete` flag from path/query via `readInput` with `anyTrue` OR semantics, then validates it against `hardDeleteSchema`.
-  3. Fences the call with `withIfMatch` (conditional `If-Match` precondition).
-  4. Calls `remove()`, checks the result with `refused`, sends `204 No Content` on success, or delegates to `catchAs` on error.
+- **`DeleteControllerSpec`** (exported interface) — the three things that differ per entity:
+  - `entity`: lower-case singular name (`'order'`); feeds into the operation name.
+  - `remove(id, hardDelete, request)`: the module's service call. `hardDelete=true` destroys the row; `false` stamps `deletedAt`. Receives the raw `Request` so the module can build its `CallerContext` and the service can write its own audit row.
+  - `notFoundKey`: i18n key for the 404 envelope when the id is missing or unknown.
+- **`createDeleteController(spec)`** (exported function) — returns a `namedHandler` whose name is `delete<Entity>` (e.g. `deleteOrder`). The handler:
+  1. Extracts the id from the path via `requireId` (404 on missing/malformed).
+  2. Reads `hardDelete` from path segment or query, OR'd across sources (any `true` wins), then validates against `hardDeleteSchema` (422 on undecodable value).
+  3. Wraps the `remove` call in `withIfMatch` (If-Match precondition fence).
+  4. On refusal, sends the error envelope; otherwise responds **204 No Content**.
+  5. Catches all errors into a standard envelope via `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — source of `namedHandler`, `operationName`, `parseBody`, `refused`, `catchAs`, and the `ServiceResult` type.
-- **`@infrastructure/http/ids`** — `requireId` performs path-based id extraction and the 404 short-circuit.
-- **`@infrastructure/http/preconditions`** — `withIfMatch` wraps the `remove` call in an `If-Match` precondition check.
-- **`@infrastructure/http/request`** — `readInput` reads the `hardDelete` flag across transport surfaces with OR semantics.
-- **`@infrastructure/http/response`** — `noContentResponse` sends the `204` on success.
-- **`@infrastructure/http/schemas`** — `hardDeleteSchema` validates the merged boolean value.
-- **`src/modules/orders/controllers/delete-orders.ts`**, **`…/delete-products.ts`**, **`…/delete-users.ts`** — module-level controllers that each make a single call to `createDeleteController` with their entity-specific spec.
+- **`src/infrastructure/http/controller.ts`** — provides the handler primitives: `namedHandler`, `operationName`, `parseBody`, `refused`, `catchAs`, and the `ServiceResult` type.
+- **`src/infrastructure/http/ids.ts`** — provides `requireId` for path-based id extraction with a module-specific 404 key.
+- **`src/infrastructure/http/preconditions.ts`** — provides `withIfMatch` for ETag-based fencing of the delete.
+- **`src/infrastructure/http/request.ts`** — provides `readInput` to merge `hardDelete` from multiple transport surfaces.
+- **`src/infrastructure/http/response.ts`** — provides `noContentResponse` for the 204 success reply.
+- **`src/infrastructure/http/schemas.ts`** — provides `hardDeleteSchema` used to validate the merged boolean.
+- **`src/modules/orders/controllers/delete-orders.ts`**, **`src/modules/products/controllers/delete-products.ts`**, **`src/modules/users/controllers/delete-users.ts`** — concrete consumers; each calls `createDeleteController` with its own spec to produce the module's delete handler.
 
 ## Notes
 
-- `hardDelete` uses **OR across surfaces** (path segment *or* query param), not surface-precedence. Any `true` wins; the default is `false`. An undecodable value yields a `422`.
-- The `parseBody` result is checked with `=== undefined` (not a truthy check) because `false` is a valid, meaningful value.
-- The id is **never** read from a request body (RFC 9110 §9.3.5); a DELETE names its target in the URL.
-- `remove` receives the raw `express.Request` so the calling module can construct its own `CallerContext`; the service layer records its own audit row.
-- The computed operation name (e.g. `deleteOrder`) appears in stack traces, the request log line, and the generated `docs/modules/` tables.
+- The handler name (`deleteOrder`, `deleteProduct`, …) is set via `operationName('delete', entity)` and appears in stack traces, audit logs, and the generated `docs/modules/` tables. The spec's `entity` field and the handler name cannot drift apart.
+- `hardDelete` is OR'd across path and query sources deliberately: a `false` (the default nobody types) must never outvote a `true` someone deliberately sent on a different transport.
+- The id is path-only by design (RFC 9110 §9.3.5: DELETE names its target in the URL). There is no body on a DELETE.
+- The `remove` callback receives the raw Express `Request` so the module's wiring layer can construct `CallerContext`; the controller itself does not inspect or transform the request beyond the id and `hardDelete` flag.

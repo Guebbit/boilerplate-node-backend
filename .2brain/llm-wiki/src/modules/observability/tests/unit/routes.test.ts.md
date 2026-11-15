@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/routes.test.ts
-sha256: 70d4228bf5c5b33806e90ad590480a139a97af07a4f198e1d6d396011a65878c
-generated_at: 2026-11-08T06:44:21.105167+00:00
+sha256: 874a24288744916f3177c85ba0148fbe562d70623a98f0fd49f0f54db0d5e569
+generated_at: 2026-11-14T20:31:08.225367+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that verify the **route table** of the observability module: which endpoints are mounted, in what order, and which guard chain protects each one. It does not test handler logic — it asserts the structural contract of `router` as exported by `routes.ts`.
+Unit tests that verify the observability route table: exactly which endpoints are mounted, their declared order, and which guard chain protects each one. It pins the structural contract of `routes.ts` so that adding, reordering, or mis-guarding a route is caught immediately.
 
 ## Key elements
 
-- **`describe('observability routes — what is mounted')`**
-  - Asserts the exact set and order of route signatures: `GET /events`, `GET /metrics`, `GET /health`, `GET /metrics/overview`, `GET /audit`.
-  - Asserts `/metrics` appears before `/metrics/overview` in the table (ordering convention; guards against a future `/metrics/:name` colliding).
-
-- **`describe('observability routes — the two guard styles')`**
-  - `GET /events` — guarded by `requireAllowedOrigin` → `requirePermissionViaCookieGuard` → `getObservabilityEvents`. Explicitly asserts `isAuth` is **not** in the chain (EventSource cannot send headers).
-  - `GET /metrics` — guarded by `isMetricsScraper` → `getObservabilityMetrics` (Prometheus scrape; no login).
-  - `GET /health`, `GET /metrics/overview`, `GET /audit` — each must contain `getAuth`, `isAuth`, and `requirePermissionGuard` (ordinary admin chain).
-  - **No-endpoint-unguarded sweep** — filters all routes and asserts none lack one of the three recognised permission guards.
+- **`describe('observability routes — what is mounted')`** — asserts the five endpoints (`/events`, `/metrics`, `/health`, `/metrics/overview`, `/audit`) appear in the documented order, and that `/metrics` precedes `/metrics/overview` (the one pair where a future `:param` route would collide).
+- **`describe('observability routes — the two guard styles')`** — verifies three distinct guard chains:
+  - `GET /events`: cookie-based (`requireAllowedOrigin` → `requirePermissionViaCookieGuard` → handler); explicitly asserts `isAuth` is *absent* because `EventSource` cannot send headers.
+  - `GET /metrics`: static credential (`isMetricsScraper` → handler); no session-based auth.
+  - `GET /health`, `GET /metrics/overview`, `GET /audit`: identity + permission chain (`getAuth` → `isAuth` → `requirePermissionGuard` → handler), tested via `it.each`.
+- **"Leaves no observability endpoint unguarded"** — a sweep test that fails if any route lacks one of the three recognized permission guards.
 
 ## Relationships
 
-- **`src/modules/observability/routes.ts`** — the system under test; this file imports its `router` export and asserts on its shape.
-- **`tests/support/routes.ts`** — provides the introspection helpers `routeSignatures`, `guardsOn`, and `routeTable` used throughout the tests.
+- **`src/modules/observability/routes.ts`** — imports `router`; it is the system under test. The file validates its mount order and guard composition without invoking any handler.
+- **`tests/support/routes.ts`** — imports the `routeSignatures`, `guardsOn`, and `routeTable` helpers used to introspect the router without making HTTP requests.
 
 ## Notes
 
-- This file tests **structure only** (mount order, guard chains). Handler behaviour is covered by `get-observability-events.test.ts` and `get-observability-metrics.test.ts` (referenced in the file header comment).
-- The "no endpoint unguarded" test intentionally covers all three guard styles in a single sweep, so a new route added with any valid guard passes while one with none fails — making it a broad regression net.
-- The `/metrics` vs `/metrics/overview` ordering assertion is a defensive check; the two paths cannot collide today, but the comment in the source notes this pair is the one spot where a future dynamic route would break.
+- The JSDoc header points to `get-observability-events.test.ts` and `get-observability-metrics.test.ts` for handler *behavior*; this file tests only *structure* (mounts + guards), not responses.
+- The `/metrics` → `/metrics/overview` ordering check is load-bearing: it is the single spot where inserting a `/metrics/:name` route would silently shadow `/metrics/overview`. If that param route is ever added, this test must be updated.
+- The "unguarded" sweep enumerates all three accepted guard names; adding a fourth guard style requires updating that list here, or the new style will be treated as unguarded.

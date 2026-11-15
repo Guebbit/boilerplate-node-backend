@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/services/index.ts
-sha256: 6f95142b94612d1765ae3f8b73ffb38f25e61d0d81e96f09d9eea49b4cac0a5f
-generated_at: 2026-11-08T07:47:22.072062+00:00
+sha256: d1d96e7489f6009114bf3147501605afb9999f3f3c764549acaadcdde82476d5
+generated_at: 2026-11-14T21:27:45.846929+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that assembles every product-service function into a single `productService` object. It is the sole sanctioned entry point for controllers and sibling modules (per `docs/theory/layers.md`); no other file in the service may be imported directly by a caller outside the products module.
+Barrel/facade for the product module's service layer. It re-exports the individual flow files (`search`, `read`, `translated-write`, `remove`, `lookups`, `stock-view`) and the Zod schemas from `../model`, then assembles them into a single `productService` object. Controllers and sibling modules interact with the catalogue exclusively through this one object; they never reach the individual flow files or the model directly.
 
 ## Key elements
 
-- **`productService`** — the only meaningful export. Aggregates search, read, create/update, remove/restore, and lookup functions from the sub-modules (`search`, `read`, `translated-write`, `remove`, `lookups`) into one flat object.
-- **`toProduct(document, caller?)`** — converts a `ProductDocument` to the wire-shape `Product`. Applies `presentProduct` then `redactStock`, gating the stock counters behind `canSeeStock(caller)`. Exposed here (rather than from the presenter) so sibling modules can shape a product for a response without reaching into `../presenter`.
-- **`canSeeStock`** — re-exported from `./stock-view`. A shared predicate so a sibling's refusal message can reference the same rule.
-- **`zodProductCreateSchema` / `zodProductReplaceSchema` / `zodProductUpdateSchema`** — re-exported from `../model`. Exposed here because the update controller's validation factory needs them and is not permitted to import `./model` directly.
-- **`clearOmittedLocales`** — write-path helper from `translated-write` for dropping translation rows on locales removed in an update.
-- **Lookup helpers** (`findByIdRaw`, `findByIdRawScoped`, `isLive`, `findPublicById`, `findManyByIds`, `countPublic`, `listPublicPage`, `countListed`, `syncStockCache`, `titlesOf`, `titlesById`) — the "door" siblings read through; see `./lookups`.
+- **`productService`** (exported const) — the sole public surface. Aggregates:
+  - *Read / search:* `search`, `searchForCaller`, `facets`, `getById`, `getByIdForCaller`, `callerScope`, `presentForCaller`
+  - *Write:* `create`, `updateById`, `clearOmittedLocales`
+  - *Delete / restore:* `removeById`, `restoreById`
+  - *Lookup / cache (sibling-facing):* `findByIdRaw`, `findByIdRawScoped`, `isLive`, `findPublicById`, `findManyByIds`, `countPublic`, `listPublicPage`, `countListed`, `syncStockCache`, `titlesOf`, `titlesById`
+  - *Validation schemas:* `zodProductCreateSchema`, `zodProductReplaceSchema`, `zodProductUpdateSchema`
+- **`canSeeStock`** (named re-export from `./stock-view`) — exported at module level (not inside `productService`) so a sibling can state the same stock-visibility rule in its own refusal messages.
 
 ## Relationships
 
-- **`src/modules/cart/services/items.ts`, `merge.ts`, `shelf.ts`, `view.ts`** — consume the lookup and availability surface of `productService` (e.g. `findByIdRaw`, `isLive`, `findManyByIds`, `syncStockCache`) to resolve product state during cart operations.
-- **`src/modules/cart/module.ts`** — wires the cart module to the product service at the module-graph level.
-- **Cart integration/contract tests** (`checkout-expected-total`, `line-availability`, `product-removal-protects-orders`, `product-restored-meanwhile`, `preorder`, `merge`, `service`, etc.) — exercise product lookup, stock, and lifecycle transitions through this surface, confirming cart behaviour against product state.
+- **`src/modules/cart/module.ts`** and the cart service files (`src/modules/cart/services/items.ts`, `src/modules/cart/services/merge.ts`, `src/modules/cart/services/shelf.ts`, `src/modules/cart/services/view.ts`): primary consumers of the lookup/cache helpers (`isLive`, `findManyByIds`, `titlesOf`, `titlesById`, `syncStockCache`, `countPublic`, etc.) exposed on `productService`. The cart reads product state through this facade rather than importing flow files directly.
+- **Cart test suites** (`src/modules/cart/tests/contract/api.contract.test.ts`, `src/modules/cart/tests/integration/checkout-expected-total.test.ts`, `src/modules/cart/tests/integration/checkout-interleavings.test.ts`, `src/modules/cart/tests/integration/checkout-stock-divergence.test.ts`, `src/modules/cart/tests/integration/line-availability.test.ts`, `src/modules/cart/tests/integration/merge.test.ts`, `src/modules/cart/tests/integration/preorder.test.ts`, `src/modules/cart/tests/integration/product-removal-protects-orders.test.ts`, `src/modules/cart/tests/integration/product-restored-meanwhile.test.ts`, `src/modules/cart/tests/integration/service.test.ts`): exercise cart flows that internally call `productService` lookups, stock sync, and product-removal/restoration paths.
 
 ## Notes
 
-- The file is deliberately a *pass-through*: it adds no business logic of its own beyond `toProduct`. All real logic lives in the named sub-files.
-- The comment explicitly forbids controllers or siblings from importing a sub-file (e.g. `./read`) directly; they must go through `productService`. Violating this breaks the layering contract described in `docs/theory/layers.md`.
-- `toProduct` is the one function *defined* in this file (not re-exported). It composes presenter + stock-view and is the canonical shape-conversion point for cross-module use.
+- The barrel deliberately re-exposes `presentForCaller` (a presenter helper) and the Zod schemas on the service object so that controllers and sibling modules never import `./read` or `../model` directly. If you need one of those, go through `productService`.
+- `canSeeStock` is the one export that lives *outside* `productService`; import it by name from this module.
+- The file's docblock references `docs/theory/layers.md` for the "one file per flow" convention that the sibling files follow.

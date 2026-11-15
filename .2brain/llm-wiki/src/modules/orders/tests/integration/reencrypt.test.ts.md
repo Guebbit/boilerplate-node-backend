@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/reencrypt.test.ts
-sha256: 54c88b64741ce40708d7c00c34baf10d7dd9601bd579d9342dc0f976a3f7465a
-generated_at: 2026-11-08T07:08:16.648353+00:00
+sha256: d83b58debe35f202a6ee9c490a27ffce0703ec0debc09012d9f59e8e114c17fa
+generated_at: 2026-11-14T20:54:17.916411+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the order PII key-rotation "reencrypt" walk. It verifies that, after the `NODE_PII_ENCRYPTION_KEY` is rotated from `v1` to `v2`, all frozen PII fields on an order (shipping address, customer notes) and on the order-event timeline (staff notes) are re-encrypted to `v2` while remaining fully deserializable through the normal read path.
+Integration test for the orders module's `reencrypt` walk. Verifies that after a PII key rotation (v1 → v2), an order's frozen PII fields (shipping address, notes) and timeline staff notes are re-encrypted to the new key version, and that the order still deserializes and reads back correctly through the public API.
 
 ## Key elements
 
-- **`ROTATED_PII_KEY`** — Constant holding a two-entry key manifest (`v2:new-material,v1:test-material`) that simulates a deployment mid-rotation: the new `v2` key is active, old data still carries a `v1` stamp.
-- **Test: "moves addresses and notes to v2 and the order still serializes"** — Seeds an order with a 5-field `shippingAddress` and a `notes` string, calls `ordersModule.reencrypt(false)` under the rotated key, asserts `report.rewritten === 6`, reads the raw Mongoose collection to confirm `keyVersionOf(raw.notes) === 'v2'`, then reloads via `orderModel.findById` to confirm the address still deserializes.
-- **Test: "moves a staff note on the timeline to v2 and it still reads back"** — Adds a staff note via `orderService.addNote`, runs the same reencrypt, asserts the raw `orderEventModel` doc's `text` is stamped `v2`, then reads the timeline through `orderService.readTimeline` to confirm the plaintext round-trips.
+- **`ROTATED_PII_KEY`** — A two-segment key string (`v2:new-…,v1:test-…`) that simulates a deployment mid-rotation: the new v2 key is "in front" and the v1 test key is still valid behind it.
+- **Test: "moves addresses and notes to v2 and the order still serializes"** — Creates an order with a shipping address and a note, runs the module's reencrypt under the rotated key, asserts `report.rewritten === 6`, checks the raw ciphertext version via `keyVersionOf`, and confirms the model still deserializes the address.
+- **Test: "moves a staff note on the timeline to v2 and it still reads back"** — Seeds a staff note via the order service, reencrypts, asserts `report.rewritten === 1`, verifies the raw `orderEventModel` row carries the v2 stamp, and confirms `timelineAs` still returns the plaintext text.
 
 ## Relationships
 
-- **`src/modules/orders/module.ts`** — Calls `ordersModule.reencrypt(false)`, the production code under test.
-- **`src/modules/orders/model.ts`** — Uses `orderModel.collection` and `orderEventModel.collection` to read raw, un-decrypted documents and inspect the key-version stamp; also `orderModel.findById` for the serialized read-back assertion.
-- **`src/modules/orders/services/index.ts`** — Imports `orderService` to add a staff note (`addNote`) and read the timeline (`readTimeline`).
-- **`src/infrastructure/security/versioned-secret.ts`** — Imports `keyVersionOf` to assert the stamped version on raw encrypted strings.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` to build the order fixture.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` for the order line-item.
-- **`src/modules/users/tests/factories.ts`** — `createUser` for the order owner.
-- **`tests/support/callers.ts`** — `callerContextAs('admin', …)` and `asAdmin()` to supply auth context for service calls.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` swaps `NODE_PII_ENCRYPTION_KEY` for the duration of the reencrypt call.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initializes the in-test database.
+- **`src/modules/orders/module.ts`** — Under-test; the test invokes its `reencrypt` entry point and inspects the returned report.
+- **`src/modules/orders/model.ts`** — Supplies `orderModel` / `orderEventModel`; the test reads the underlying collection directly to inspect raw ciphertext version stamps, then reads through the model to confirm normal deserialization.
+- **`src/modules/orders/services/index.ts`** — The test uses the exported order service to seed a staff note on the timeline before reencrypting.
+- **`src/infrastructure/security/versioned-secret.ts`** — Provides `keyVersionOf` to extract the version tag from a ciphertext string.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `timelineAs` build fixture data and read the timeline.
+- **`src/modules/users/tests/factories.ts`** / **`src/modules/products/tests/factories.ts`** — `createUser`, `createProduct` supply prerequisite entities.
+- **`tests/support/environment.ts`** — `withEnvironmentOverrides` temporarily sets `NODE_PII_ENCRYPTION_KEY` to the rotated value for the duration of the reencrypt call.
+- **`tests/support/callers.ts`** — `callerContextAs('admin', …)` / `asAdmin()` build the auth context needed by the service and timeline readers.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provisions the test database before the suite runs.
 
 ## Notes
 
-- The tests deliberately read via `model.collection.findOne` (bypassing Mongoose hydration/decrypt hooks) to observe the raw key-version stamp. Asserting through the normal `findById` path would auto-decrypt and hide the version.
-- The `false` argument to `reencrypt(false)` is passed through as-is; check the module's signature for its meaning (likely a dry-run or logging flag).
-- The first test expects exactly **6** rewritten fields (5 address fields + 1 notes field); if the address schema changes, this number must be updated.
+- The test intentionally reads **below** the repository's own decrypt layer (raw collection access) so it can assert on the version stamp embedded in the ciphertext. Reading through the model afterward confirms the public path still works.
+- `reencrypt(false)` — the `false` argument is passed positionally (likely `dryRun: false`); the return value is a `report` object with a `rewritten` counter.
+- The PII key format is `vN:material,vN:material` (comma-separated, most-recent-first); the test relies on the reencrypt walk recognizing the v1 segment as "stale" and rewriting to v2.

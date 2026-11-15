@@ -1,30 +1,26 @@
 ---
 source: src/modules/webhooks/jobs.ts
-sha256: 3aa72e9221183add8369ce60c0942632f06675bdf08a131c910e3f3ca61c0478
-generated_at: 2026-11-08T09:03:05.642941+00:00
+sha256: 32885eff863a1899d8ed5ee03ea0aed5c8693176e3b42ad085f8655fd571c58e
+generated_at: 2026-11-14T22:42:51.867219+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/webhooks/jobs.ts
 
 ## Purpose
-
-Declares the scheduled jobs owned by the `webhooks` module. Currently exposes a single job (`sweepWebhookRetries`) that triggers the delivery-retry sweep on a schedule.
+Declares the scheduled jobs owned by the `webhooks` module. Currently owns a single job — the webhook delivery retry sweep — by pairing a generated job descriptor with its handler function and exporting the result as a `JobDeclaration[]` for the kernel to schedule.
 
 ## Key elements
-
-- **`webhooksJobs: readonly JobDeclaration[]`** – The module's job manifest. Each entry spreads generated metadata from `./jobs.generated` and wires the runtime.
-- **`sweepWebhookRetries` entry** – `run` calls `sweepDueWebhookDeliveries()`; `needs` declares soft dependencies on `subscriptions` and `i18n` (required for the auto-disable → notification → translated staff-mail flow).
+- **`webhooksJobs`** (export, `readonly JobDeclaration[]`) — The array of jobs this module registers. Contains one entry: `sweepWebhookRetries`, whose `run` delegates to `sweepDueWebhookDeliveries()`.
+- **`webhooksJobData`** (import from `./jobs.generated`) — Pre-generated static job metadata (id, name, schedule, etc.) spread into each declaration so scheduling config stays out of hand-written code.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** – Supplies the `JobDeclaration` type that shapes each entry in `webhooksJobs`.
-- **`src/modules/webhooks/module.ts`** – Parent module that registers/exposes `webhooksJobs` into the kernel's job table.
-- **`src/modules/webhooks/services/sweep.ts`** – Implements `sweepDueWebhookDeliveries`, the actual work performed when the job fires.
-- **`tests/integration/ops-webhook-retry-job.test.ts`** – Integration test that exercises this job end-to-end.
+- **`src/kernel/registry.ts`** — Source of the `JobDeclaration` type used to type `webhooksJobs`; the kernel consumes this array to know what to schedule.
+- **`src/modules/webhooks/services/sweep.ts`** — Provides `sweepDueWebhookDeliveries`, the actual work executed when the job fires.
+- **`src/modules/webhooks/module.ts`** — The module entry point that is expected to reference `webhooksJobs` so the kernel discovers the job.
+- **`tests/integration/ops-webhook-retry-job.test.ts`** — Integration test that exercises the retry-sweep job end-to-end.
 
 ## Notes
-
-- The `needs` field is a *runtime* dependency gate (not a build-time import). If `subscriptions` or `i18n` are not loaded, the job will not execute.
-- The auto-disable side-effect (emitting `webhook.subscription_auto_disabled` during a sweep) is an implicit coupling to the `notifications` module; it is not an import here but is documented in the inline comment to aid future readers.
-- Job metadata (schedule, name, etc.) lives in `./jobs.generated`; this file only wires metadata to the execution function and declares dependencies.
+- Job metadata lives in `jobs.generated.ts`, not here. Adding a new job means adding a new key in the generated file *and* a new spread entry in this array.
+- The `run` field is a zero-arg closure; the sweep service handles its own argument passing internally.
+- The array is typed `readonly` — consumers must not mutate it.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/oauth-google.test.ts
-sha256: d047c2c27a3ca0ddc48eba4c0b714dfd861f85cee8a91d3c80cfa602b19076cc
-generated_at: 2026-11-08T04:48:04.530546+00:00
+sha256: cc20fc565e6b9569711bf9d10b42654802721ad92671f12013fc31651cefa093
+generated_at: 2026-11-14T19:15:41.319251+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the Google OAuth provider (`googleOAuthProvider`), covering configuration detection, authorize-URL construction, and the full `exchangeCode` flow—including every security refusal the library performs before or after the token exchange. `fetch` is globally mocked so the tests exercise the library's own issuer/audience/expiry/state/PKCE checks rather than any real network I/O. Signature verification is explicitly out of scope (see the module doc-comment).
+Unit tests for the Google OAuth provider (`googleOAuthProvider`). They verify that the authorize URL is built correctly, that `exchangeCode` validates the callback query (state, issuer, duplicate params, errors) before making any network call, that the token-endpoint response is validated (issuer, audience, expiry, subject, `email_verified`), and that transport-level safeguards (redirect policy, byte cap, abort-on-timeout) are enforced. `fetch` is fully mocked; no real network or signature verification occurs.
 
 ## Key elements
 
-- **`CLIENT_ID` / `REDIRECT_URI`** – Test fixtures; the client ID doubles as the expected `aud` claim, the redirect URI is asserted verbatim in the authorize URL.
-- **`callbackWith(query?)`** – Builds the callback `URL` the controller would pass to `exchangeCode`, defaulting to a Google-shaped query (`code`, `state`, `iss`).
-- **`EXPECTED`** – The `state`/`codeVerifier` pair the provider must match.
-- **`validClaims()`** – A baseline set of Google ID-token claims for positive/negative mutations.
-- **`idToken(claims, { expiresIn })`** – Signs an RS256 JWT with a generated key pair; `expiresIn` in seconds (negative = expired).
-- **`mockGoogle(tokenBody, status?)`** – Spies on `globalThis.fetch`, returning a `Response.json` shaped like Google's token endpoint.
-- **`tokenResponse(idTokenValue?)`** – Wraps the `id_token` in the standard Google token-endpoint body.
-- **`exchange()`** – Shorthand for `googleOAuthProvider.exchangeCode(callbackWith(), EXPECTED)`.
-- **`beforeAll` / `beforeEach` / `afterEach`** – Generates the RS256 key pair, sets the two required env vars via `setEnvironment`, and restores all mocks.
-- **Test groups** – `google provider configuration`, `googleOAuthProvider.authorizeUrl`, `googleOAuthProvider.exchangeCode` (the bulk: happy path, state mismatch, wrong/missing `iss` in callback, duplicate `code`, `error` param, extra params tolerance, wrong `iss`/`aud`/expiry in the token, missing `sub`, non-2xx status, missing `id_token`, no-redirect policy, 1 MiB byte-cap, abort/timeout).
+- **`validClaims()`** — returns the default set of claims for a "good" Google ID token; each rejection test overrides one field.
+- **`idToken(claims, { expiresIn })`** — signs an RS256 JWT via `jose` using the `signing` key pair generated in `beforeAll`.
+- **`mockGoogle(tokenBody, tokenStatus)`** — replaces `globalThis.fetch` with a spy that resolves to `Response.json(tokenBody, { status })`; the spy is inspectable in assertions.
+- **`tokenResponse(idTokenValue)`** — shapes the token-endpoint body (access_token, token_type, optional id_token).
+- **`callbackWith(query)`** — builds the full callback URL from a raw query string, mimicking what Google would redirect back with.
+- **`exchange()`** — shorthand for `googleOAuthProvider.exchangeCode(callbackWith(), EXPECTED)`.
+- **`describe('google provider configuration')`** — asserts `isOAuthProviderConfigured('google')` true/false based on env vars.
+- **`describe('googleOAuthProvider.authorizeUrl')`** — asserts the consent-screen URL, its origin, and every query parameter (client_id, redirect_uri, response_type, state, scope, code_challenge, code_challenge_method).
+- **`describe('googleOAuthProvider.exchangeCode')`** — the bulk of the suite: happy-path identity extraction, request-body verification, and rejection cases for bad state, wrong/missing issuer, repeated `code`, `error` param, wrong aud, wrong iss, expired token, missing id_token, non-2xx status, missing `sub`, redirect-following, oversized response, and timeout/abort.
 
 ## Relationships
 
-- **`src/modules/account/oauth/config.ts`** – Imports `isOAuthProviderConfigured` to verify the two env vars gate provider availability.
-- **`src/modules/account/oauth/providers/google.ts`** – Imports `googleOAuthProvider`; every test calls `authorizeUrl` or `exchangeCode` on it.
-- **`tests/support/environment.ts`** – Imports `setEnvironment` to inject/override `NODE_OAUTH_GOOGLE_CLIENT_ID` and `NODE_OAUTH_GOOGLE_CLIENT_SECRET` per test.
+- **`src/modules/account/oauth/providers/google.ts`** — the system under test; provides `googleOAuthProvider` whose `authorizeUrl` and `exchangeCode` methods are exercised here.
+- **`src/modules/account/oauth/config.ts`** — provides `isOAuthProviderConfigured('google')`, tested in the configuration block.
+- **`tests/support/environment.ts`** — provides `setEnvironment`, used in `beforeEach` to inject `NODE_OAUTH_GOOGLE_CLIENT_ID` / `_SECRET` and in individual tests to unset one.
 
 ## Notes
 
-- Signature verification is deliberately **not** tested here; the module doc-comment points to the provider's own doc for why.
-- The `iss` callback-URL check is tied to **RFC 9207** (OAuth 2.1 / draft-ietf-oauth-params-iss). Google is documented to send `iss`; a missing or non-`https://accounts.google.com` value is a hard reject.
-- The byte-cap test expects the rejection message to surface in `error.cause.message`, not the top-level message.
-- The abort/timeout test uses `jest.useFakeTimers()` and a `fetch` mock that only settles on the request's own `AbortSignal`, proving the deadline is wired into the actual request rather than a separate timer.
-- `email_verified: false` is asserted as `emailVerified: false` (explicitly unverified), distinct from the claim being absent.
+- **Signature is deliberately not verified.** The module doc comment states the signature is out of scope here and points to the provider module's own doc for the reason. The `jose` key pair only guarantees the JWT is *well-formed* RS256 so that other claims can be isolated.
+- **`fetch` mock resets via `jest.restoreAllMocks()` in `afterEach`.** Tests that need a one-shot mock (byte-cap, timeout) use `mockResolvedValueOnce` or a custom `mockImplementation` instead of the shared `mockGoogle` helper.
+- **The byte-cap test** (1 MiB + 1 byte) asserts the rejection's `cause.message` matches `/longer than/`, because the library wraps the underlying error.
+- **The timeout test** uses `jest.useFakeTimers()` and a `fetch` mock that only settles when the request's `AbortSignal` fires, proving the deadline is actually wired to the request rather than just existing as a timer.
+- **`email_verified: false`** is a *pass* case (resolves with `emailVerified: false`), distinct from the missing-`sub` rejection.

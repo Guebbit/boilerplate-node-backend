@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/model.test.ts
-sha256: 3fbdcfde94c95521599b9f7c8fcecf51b2af15afce2ab06f07e93860ef185c2c
-generated_at: 2026-11-08T07:05:57.404095+00:00
+sha256: 6e2ce9a564b86b91b0b1acbecae2f44e9a55cb600e068e56bd1193e8909c7844
+generated_at: 2026-11-14T20:52:25.894603+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that verify order serialization never leaks Mongoose internals (`_id`, `__v`) on any response path — both the `toJSON` path (hydrated documents) and the `.aggregate()` path (plain-JS rows returned by `orderService.search`). Also guards two schema-level invariants: `transferInstructions` is absent when no `transferReference` was supplied, and the embedded product sub-schema's indexes are not silently copied onto `orderSchema`.
+Integration tests that verify the order serialization contract across both Mongoose `toJSON` paths and raw `.aggregate()` output: internal fields (`_id`, `__v`) must never appear in wire-shaped results, embedded product snapshots must be normalized the same way, and order-line subdocs must not carry their own `_id`. Also guards against a schema-level pitfall (index smuggling from the embedded product schema) and pins the `transferInstructions` absence rule for legacy bank-transfer orders.
 
 ## Key elements
 
-- **`describe('order serialization')`** — four tests:
-  - `toJSON` on a hydrated order: asserts `id` replaces `_id`, `__v` is stripped, embedded items have no `_id`, and the embedded product snapshot is normalized (`id` present, `_id` absent).
-  - Aggregate search (no args): casts the row via `asStub`, asserts `id` is a 24-hex string, `_id` is `undefined`, and the same invariants hold for items and their embedded product.
-  - Aggregate search (explicit `{}` arg): same assertions on the top-level row only.
-  - `orderService.getById(id, { userId })`: confirms the result is a real Mongoose document (exposes `.toJSON`), not a wire-shaped aggregate row.
-- **`describe('transferInstructions')`** — creates a `bank_transfer` order with no `transferReference`; asserts `json.transferInstructions` is `undefined` (no fabricated reference fallback).
-- **`describe('embedded product snapshot indexes')`** — reads `orderSchema.indexes()`, filters for any path containing `product`, and asserts the list is empty (prevents index smuggling from the nested product schema).
+- **`describe('order serialization')`** — three tests:
+  - *toJSON test*: calls `order.toJSON()` on a hydrated doc; asserts `id` is present, `__v` is absent (checked via `JSON.stringify`), items have no `_id`, and the embedded product is normalized.
+  - *Aggregate test*: calls `orderService.search()`; casts the first result with `asStub` and asserts the same invariants on the plain-JS shape.
+  - *Scoped `getById` test*: calls `orderService.getById(id, { userId })`; asserts the return is a real Mongoose document (has `toJSON`), not a pre-normalized wire object.
+- **`describe('transferInstructions')`** — verifies a pending `bank_transfer` order with no `transferReference` yields `transferInstructions: undefined` (no fallback to the raw id).
+- **`describe('embedded product snapshot indexes')`** — inspects `orderSchema.indexes()` directly and asserts no index path contains `product`, preventing silent index creation on the orders collection from the nested schema.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** — imports `orderSchema` to introspect its index list.
-- **`src/modules/orders/services/index.ts`** — imports `orderService`; calls `search()` and `getById()` to exercise both aggregate and query paths.
-- **`src/modules/orders/tests/factories.ts`** — imports `createOrder`, `toOrderItem` to build fixture data.
-- **`src/modules/products/tests/factories.ts`** — imports `createProduct` for the embedded snapshot.
-- **`src/modules/users/tests/factories.ts`** — imports `createUser` to satisfy the order's user relation.
-- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` before all tests to (re)initialize the in-memory DB.
-- **`tests/support/stub.ts`** — imports `asStub` to cast aggregate results to `Record<string,unknown>` for raw-shape assertions.
+- **`src/modules/orders/model.ts`** — imports `orderSchema` to read its index list for the smuggling guard.
+- **`src/modules/orders/services/index.ts`** — imports `orderService` to exercise `search()` (aggregate path) and `getById()` (hydrated path).
+- **`src/modules/orders/tests/factories.ts`** — imports `createOrder` and `toOrderItem` to seed fixture data.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` for the embedded-snapshot fixture.
+- **`src/modules/users/tests/factories.ts`** — imports `createUser` to satisfy the order's `user` reference.
+- **`tests/support/setup-test-db.ts`** — imports `setupTestDb`; called once at module top level to prepare the in-memory DB before any test runs.
+- **`tests/support/stub.ts`** — imports `asStub` to type-cast aggregate results (plain objects) so properties can be inspected in the serialization test.
 
 ## Notes
 
-- Two tests in the `order serialization` block share the identical name *"normalizes aggregate results (search) the same way."* The second differs only in that it passes an explicit `{}` filter and checks fewer fields.
-- The index-smuggling test is a **static schema guard**, not a runtime behavior test — it will pass or fail purely on how `orderSchema` and its nested sub-schemas are declared.
-- `asStub` is used solely for type-level erasure; it does not modify the object at runtime.
+- `setupTestDb()` is invoked at **module scope** (outside any `describe`/`beforeAll`), so it runs during import; Jest's single worker per file keeps this safe, but it means the DB is ready before the first `it` block is even discovered.
+- The `__v` assertion uses `JSON.stringify(json)).not.toContain('__v')` rather than a direct `toBeUndefined` check, which catches both `undefined` and `0` values.
+- The index-smuggling test is a **schema fact guard**, not a behavioral test: it fails if someone later adds an `.index()` call to `orderLineProductSchema` without also adding `excludeIndexes` at the embed site in `orderSchema`.
+- `asStub` is a zero-cost type cast (no runtime wrapper); it exists solely to satisfy TypeScript when inspecting raw aggregate output.
