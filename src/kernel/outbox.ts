@@ -137,7 +137,8 @@ export const outboxEventModel = model<OutboxEventDocument, OutboxEventModel>(
 );
 
 /**
- * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at `backoffCapMs` (`outbox.generated.ts`).
+ * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at
+ * `backoffCapMs` (`outbox.generated.ts`).
  * No jitter: the rows are claimed one aggregate at a time, so there is no herd to spread.
  *
  * @param failedAttempts - how many dispatches of this row have failed (1-based)

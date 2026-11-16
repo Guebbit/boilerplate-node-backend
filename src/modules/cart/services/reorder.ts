@@ -33,7 +33,8 @@ import { ERROR_CODES } from '@api/error-codes';
  * `callerScope` is a ROLE-based read boundary (an admin's `display:Order` legitimately reads
  * every order for search/support), which is the wrong question for a feature that fills MY cart
  * from MY history — an admin reordering must not be able to refill their basket from a stranger's
- * purchase. `ownLiveScope` carries `deletedAt: null`, so a soft-deleted order is excluded as it is for `callerScope`.
+ * purchase. `ownLiveScope` carries `deletedAt: null`, so a soft-deleted order is excluded as it is
+ * for `callerScope`.
  *
  * The lines go through the merge's own rule ({@link mergeLines}), so the two cannot disagree and
  * the answer is the same per-line report: a vanished or hidden product is `removed`, a line past

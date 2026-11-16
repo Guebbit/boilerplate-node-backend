@@ -1,10 +1,12 @@
 /**
  * @module
- * Invoicing: the frozen tax invoice and credit-note documents `orders`' receipt never was — the full design and why it is a module
+ * Invoicing: the frozen tax invoice and credit-note documents `orders`' receipt never was — the
+ * full design and why it is a module
  * of its own are the linked page's.
  *
  * Owns:        the `Invoice`/`CreditNote` collections and their own numbering series, outright.
- * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts`; the `account`/`addresses`
+ * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts`; the
+ * `account`/`addresses`
  *              split is the precedent.
  *
  * No route requests an invoice or a credit note into existence — both are frozen ONLY from this

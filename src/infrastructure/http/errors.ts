@@ -75,7 +75,8 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
      */
     if (error !== null && typeof error === 'object') {
         /**
-         * `kind` exists only on CastError — the discriminator. Checked via `Object.prototype.hasOwnProperty.call`
+         * `kind` exists only on CastError — the discriminator. Checked via
+         * `Object.prototype.hasOwnProperty.call`
          * rather than `error.hasOwnProperty()` so it still works on a null-prototype object.
          */
         if (Object.prototype.hasOwnProperty.call(error, 'kind')) return [422, 'Invalid identifier'];

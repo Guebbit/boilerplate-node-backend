@@ -76,7 +76,8 @@ const getTransporter = (): Transporter => {
         disableUrlAccess: true,
         /**
          * SMTP AUTH credentials. Empty strings when unset. A host without its credentials
-         * is refused at boot (`SMTP_COMPANIONS`, `adapters/config.ts`), so this only applies when no
+         * is refused at boot (`SMTP_COMPANIONS`, `adapters/config.ts`), so this only applies when
+         * no
          * SMTP host is selected.
          */
         auth: {

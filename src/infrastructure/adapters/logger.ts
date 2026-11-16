@@ -493,7 +493,8 @@ const prettyFormat = winston.format.combine(
  * Pick the console format from WHO IS READING as well as `NODE_ENV` — conflating the two silently
  * breaks log shipping. `isTTY` is true only for an interactive terminal, false for a pipe or a
  * container log file — exactly when something downstream has to parse the line. Pretty needs both
- * a relaxed environment and a TTY; production stays JSON regardless. Exported so the environment matrix can be asserted rather than assumed.
+ * a relaxed environment and a TTY; production stays JSON regardless. Exported so the environment
+ * matrix can be asserted rather than assumed.
  *
  * @see docs/operate/loki.md#trace-log-correlation
  */

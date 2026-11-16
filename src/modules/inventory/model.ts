@@ -166,7 +166,8 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
         /**
          * No `min: 0` here — every write to these three moves through `repository.ts#applyDelta`'s
          * `$inc`, which Mongoose never validates against `min`/`max` (it cannot see the pre-update
-         * value). The real floor is `conditionFor`'s `$gte` guard in `repository.ts`, checked in the
+         * value). The real floor is `conditionFor`'s `$gte` guard in `repository.ts`, checked in
+         * the
          * update's FILTER rather than after the fact.
          */
         onHand: {

@@ -4,7 +4,8 @@
  * `state`, the CSRF handshake — a double-submit cookie, not a server-side session: the value is
  * minted and handed to the provider in the SAME response that sets it as a cookie, and the
  * callback trusts a request only when the two agree; the PKCE `verifier`, which defeats a
- * stolen authorization CODE the way `state` defeats a forged CALLBACK (why both ship is the linked page's); and `continue`, the
+ * stolen authorization CODE the way `state` defeats a forged CALLBACK (why both ship is the linked
+ * page's); and `continue`, the
  * frontend path to send the browser back to once the round trip is done, and `locale`, the
  * language the visitor was reading — the two pieces of this handshake that are untrusted input and
  * so the cookies read back out validated, never trusted blind. Neither `state` nor `verifier` needs a new server secret, unlike a signed token would.

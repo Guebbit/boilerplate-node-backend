@@ -32,7 +32,8 @@ import type { CallerContext, RateLimitBudget } from '@types';
 import { infrastructureRateLimitData } from './rate-limits.generated';
 
 /**
- * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: sized for browsing rather than for guessing.
+ * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: sized for browsing rather
+ * than for guessing.
  */
 export const DEFAULT_RATE_LIMIT_MAX = infrastructureRateLimitData.global.defaultMax;
 

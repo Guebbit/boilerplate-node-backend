@@ -2,9 +2,9 @@
  * @module
  * Mint and verify — the one-way hashing half of a credential's lifecycle. Storage is sha256, not
  * encryption: a credential is verified, never re-signed with, so the right precedent is
- * `hashToken` (`@infrastructure/security/hash-token`), already reused by `account/two-factor/backup-codes.ts` for the
- * same "high-entropy, one-time, no stretching needed" reasoning — `randomBytes(32)` has no search
- * space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on every authenticated
+ * `hashToken` (`@infrastructure/security/hash-token`), which `account/services/tokens.ts` already
+ * uses for the same "high-entropy, one-time, no stretching needed" reasoning — `randomBytes(32)`
+ * has no search space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on every authenticated
  * request buys nothing.
  *
  * @see docs/understand/security.md#machine-to-machine-credentials
@@ -52,9 +52,10 @@ export const mintApiKey = (): MintedApiKey => {
 };
 
 /**
- * Split a presented `Authorization` value into its public prefix, or `undefined` when it is not one of
- * ours (no `sk_` prefix, or no `_` where the public prefix ends) — the credential-resolve path's first, cheap rejection, before any
- * database lookup or hashing.
+ * Split a presented `Authorization` value into its public prefix, or `undefined` when it is not
+ * one of
+ * ours (no `sk_` prefix, or no `_` where the public prefix ends) — the credential-resolve path's
+ * first, cheap rejection, before any database lookup or hashing.
  *
  * Position-based, NOT `token.split('_')`: base64url's alphabet includes `_`, so either half of a
  * real token can legally contain one, and splitting on it would misalign the prefix as often as

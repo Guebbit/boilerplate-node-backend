@@ -246,7 +246,8 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
         stopConsuming().catch(() => undefined);
 
         /**
-         * Node `timers/promises` sleep: resolves after `delayMs` milliseconds (the lame-duck delay).
+         * Node `timers/promises` sleep: resolves after `delayMs` milliseconds (the lame-duck
+         * delay).
          * `void` marks the floating promise as intentional (the handler cannot be async:
          * Node ignores a returned promise from a signal listener). The delay is a ref'd timer, so
          * the process stays alive for it.

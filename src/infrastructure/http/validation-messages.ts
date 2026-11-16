@@ -1,8 +1,10 @@
 /**
  * @module
  * One home for validation copy: Zod's own refusals, answered in the caller's language. Generated
- * schemas (`@api/schemas.zod`) carry no messages of their own, so this global error map answers every schema in the
- * request's language without touching codegen. Runs at PARSE time, not construction time, so it reads the
+ * schemas (`@api/schemas.zod`) carry no messages of their own, so this global error map answers
+ * every schema in the
+ * request's language without touching codegen. Runs at PARSE time, not construction time, so it
+ * reads the
  * request-scoped `t`; keys are per CONSTRAINT, not per field, and every sentence names the field
  * through `{{attribute}}` (Laravel's `:attribute`), resolved by {@link attributeOf}.
  *

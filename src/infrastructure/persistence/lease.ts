@@ -101,7 +101,8 @@ export interface LeaseSummary {
 /**
  * Every lease document that exists, projected to what health reporting needs.
  *
- * Only jobs that have acquired a lease or recorded an outcome (`recordJobOutcome`) at least once appear here — there is no
+ * Only jobs that have acquired a lease or recorded an outcome (`recordJobOutcome`) at least once
+ * appear here — there is no
  * separate registry of "expected" job names to compare against, so a job removed from the
  * crontab simply stops updating its row. The row stays (no TTL), so the staleness alerts keep
  * firing until the job runs again or its row is deleted by hand.

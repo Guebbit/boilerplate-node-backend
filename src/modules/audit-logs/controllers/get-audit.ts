@@ -1,7 +1,8 @@
 /**
  * @module
  * Controller for `GET /audit`. The same filtered, paged read `observability`'s
- * `getObservabilityAuditLogs` (`observability/routes.ts`) serves, reached with a tenant key instead of a platform one — see
+ * `getObservabilityAuditLogs` (`observability/routes.ts`) serves, reached with a tenant key
+ * instead of a platform one — see
  * `../service.ts` for why one collection answers both.
  *
  * @see docs/modules/audit-logs.md#the-pipeline

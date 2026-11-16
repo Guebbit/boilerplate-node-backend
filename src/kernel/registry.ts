@@ -474,7 +474,8 @@ export interface AppModule {
     config?: readonly ConfigSlice[];
 
     /**
-     * The states this module GUARANTEES a named scenario offers, keyed by scenario name. Each name resolves to one row id — pinned in `scenarios/subjects.ts` or
+     * The states this module GUARANTEES a named scenario offers, keyed by scenario name. Each name
+     * resolves to one row id — pinned in `scenarios/subjects.ts` or
      * recorded by the flow runner — and `scenarios/check.ts` holds the two lists equal in both
      * directions. Declared here rather than only inside `scenarios/` so deleting a module deletes
      * its guarantees the same way deleting its own `authorization.yaml` deletes its permission

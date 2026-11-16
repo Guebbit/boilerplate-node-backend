@@ -1,8 +1,9 @@
 /**
  * @module
  * Express router for invoicing's three download routes — mounted at `/orders`, shared with `orders`'
- * own router (see `./module.ts`; the `account`/`addresses` split is the precedent). `getAuth` returns early when a request already carries a resolved auth context, so
- * mounting it here too costs nothing beyond the first router that ran.
+ * own router (see `./module.ts`; the `account`/`addresses` split is the precedent). `getAuth` returns early
+ * when a request already carries a resolved auth context, so mounting it here too costs nothing
+ * beyond the first router that ran.
  *
  * `/:id/invoice` and `/:id/credit-notes` have two path segments (three with a credit note's own
  * id), so none ever collides with `orders`' own `/:id` (one segment) regardless of which router

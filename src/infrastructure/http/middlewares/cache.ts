@@ -427,7 +427,8 @@ const replay = (response: Response, cached: CachedResponse): void => {
  * @param response - headers are set on this response; `noStore` is read from it too
  * @param options - the route's declared cache identity — see {@link CacheOptions}
  * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
- * @param cacheable - `options.scopeKey(request)`'s answer, `false` when the response sets a cookie or is a draft preview —
+ * @param cacheable - `options.scopeKey(request)`'s answer, `false` when the response sets a cookie
+ * or is a draft preview —
  *   see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
  * @throws {Error} on either mounting mistake described above

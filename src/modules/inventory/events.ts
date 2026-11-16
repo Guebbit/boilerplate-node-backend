@@ -3,9 +3,11 @@
  * Domain events this module emits — declared by augmenting the kernel's payload map, so the
  * catalogue grows with the modules that own events and no shared file enumerates domains.
  * Stock changes are not events (see `products/events.ts`): the counter and the row explaining it
- * are one write. The four below are the ones another module must react to, each documented on its
- * own key. A hold timing out is why `orders` cancels the order, and it is an event because `orders`
- * already imports this module and must not be imported back.
+ * are one write. Of the four below, `stock_retaken` is this module's own refresh (its listener is
+ * in `module.ts`); the other three reach other modules. A hold timing out is why `orders` cancels
+ * the order, and it is an event because `orders` already imports this module and must not be
+ * imported back. `backorder_allocated` is an event for the same reason: `delivery` imports this
+ * module only for the event's name.
  *
  * @see docs/modules/inventory.md#the-pipeline
  */

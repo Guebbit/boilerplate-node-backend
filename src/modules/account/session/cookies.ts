@@ -3,7 +3,8 @@
  * Cookie service — HTTP cookie creation and destruction, decoupled from how a session is kept. Two
  * cookies, two jobs: `__Host-session` carries the credential (the refresh token in `jwt` mode, the
  * session id in `cookie` mode), `isAuth` is a non-secret UI hint so the client shell can render
- * the right chrome before its first request answers. The flag-by-flag rationale is on the linked page.
+ * the right chrome before its first request answers. The flag-by-flag rationale is on the linked
+ * page.
  *
  * @see docs/modules/account-sessions.md#the-cookie-flag-by-flag
  */

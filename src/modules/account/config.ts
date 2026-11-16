@@ -3,7 +3,8 @@
  * `account`'s own links into the paired frontend — the four token-bearing kinds a confirmation
  * email can carry (verify, reset, restore, email-change), each with its own default template and
  * `NODE_FRONTEND_LINK_*` override. `infrastructure/http/frontend-link.ts` only turns a resolved
- * template into a URL; it does not know these kinds exist, or that `account` does; infrastructure may not know a module by name.
+ * template into a URL; it does not know these kinds exist, or that `account` does; infrastructure
+ * may not know a module by name.
  *
  * @see docs/understand/layers.md#layer-stack-inside-one-module
  */

@@ -13,7 +13,8 @@ import type { ShippingMethod } from '@types';
 /**
  * A shipping method as the static rate table declares it — everything `ShippingMethod` has
  * except `currency`, which is live deployment config (`NODE_DEFAULT_CURRENCY`) that
- * `services/process.ts`'s `listMethods` stamps on per call, never baked into a table built once at import.
+ * `services/process.ts`'s `listMethods` stamps on per call, never baked into a table built once at
+ * import.
  */
 export type StaticShippingMethod = Omit<ShippingMethod, 'currency'>;
 
