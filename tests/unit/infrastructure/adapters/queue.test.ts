@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { z, type ZodType } from 'zod';
 import { EmailJobPayloadSchema, WORKER_CHANNELS } from '@types';
 import {
@@ -6,6 +7,7 @@ import {
     consumeFromQueue,
     startQueue,
     stopQueue,
+    stopConsuming,
     boundQueueRetries,
     redactedBrokerTarget,
     parkedCounts,
@@ -1153,6 +1155,116 @@ describe('stopQueue() on a live connection', () => {
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockModelClose).toHaveBeenCalled();
+    });
+});
+
+describe('stopConsuming()', () => {
+    afterEach(disableRabbitMQ);
+
+    it('cancels the consumers at once and leaves the connection open for publishing', async () => {
+        await captureConsumerCallback(jest.fn());
+        mockCancel.mockClear();
+        mockModelClose.mockClear();
+
+        await stopConsuming();
+
+        expect(mockCancel).toHaveBeenCalledWith('tag-1');
+        expect(mockModelClose).not.toHaveBeenCalled();
+    });
+
+    it('binds no consumer on a channel a reconnect opens afterwards', async () => {
+        await captureConsumerCallback(jest.fn());
+        await stopConsuming();
+        mockConsume.mockClear();
+
+        await simulateReconnect();
+
+        expect(mockConsume).not.toHaveBeenCalled();
+    });
+
+    it('binds no further consumer when the stop lands while a replay is part way', async () => {
+        await ensureConnected();
+        await consumeFromQueue({ queue: 'mid-a', handler: jest.fn(), schema: anyPayload });
+        await consumeFromQueue({ queue: 'mid-b', handler: jest.fn(), schema: anyPayload });
+        // The first binding's consume is held open; the stop arrives while it is pending.
+        const gate = new EventTarget();
+        mockConsume.mockClear();
+        mockConsume.mockImplementationOnce(() =>
+            once(gate, 'open').then(() => ({ consumerTag: 'held' }))
+        );
+        const replaying = simulateReconnect();
+        await settle();
+
+        await stopConsuming();
+        gate.dispatchEvent(new Event('open'));
+        await replaying;
+
+        expect(mockConsume).toHaveBeenCalledTimes(1);
+    });
+
+    it('binds no consumer registered after the signal', async () => {
+        await ensureConnected();
+        await stopConsuming();
+        mockConsume.mockClear();
+
+        await consumeFromQueue({ queue: 'late', handler: jest.fn(), schema: anyPayload });
+
+        expect(mockConsume).not.toHaveBeenCalled();
+    });
+
+    it('is undone by stopQueue, so a process that starts again consumes again', async () => {
+        await ensureConnected();
+        await stopConsuming();
+        await stopQueue();
+        await ensureConnected();
+        mockConsume.mockClear();
+
+        await consumeFromQueue({ queue: 'again', handler: jest.fn(), schema: anyPayload });
+
+        expect(mockConsume).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing when there is no channel to cancel on', async () => {
+        disableRabbitMQ();
+        await stopQueue();
+        mockCancel.mockClear();
+
+        await expect(stopConsuming()).resolves.toBeUndefined();
+
+        expect(mockCancel).not.toHaveBeenCalled();
+    });
+
+    it('still resolves when the broker refuses the cancel', async () => {
+        await captureConsumerCallback(jest.fn());
+        mockCancel.mockRejectedValueOnce(new Error('channel closed'));
+
+        await expect(stopConsuming()).resolves.toBeUndefined();
+    });
+});
+
+describe('stopQueue(drainTimeoutMs)', () => {
+    afterEach(() => {
+        jest.useRealTimers();
+        disableRabbitMQ();
+    });
+
+    it('stops waiting for a handler once the budget it was given is spent, and no sooner', async () => {
+        const stuck = jest.fn(() => new Promise<boolean>(() => undefined));
+        const onMessage = await captureConsumerCallback(stuck);
+        // Never settles: the handler is stuck, so the delivery's promise is left pending on purpose.
+        Promise.resolve(onMessage(delivery({ jobId: 1 }))).catch(() => undefined);
+        await settle();
+        mockModelClose.mockClear();
+        jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+
+        const stopping = stopQueue(20);
+        await jest.advanceTimersByTimeAsync(19);
+        expect(mockModelClose).not.toHaveBeenCalled();
+
+        await jest.advanceTimersByTimeAsync(1);
+        await stopping;
+
+        expect(mockModelClose).toHaveBeenCalledTimes(1);
     });
 });
 

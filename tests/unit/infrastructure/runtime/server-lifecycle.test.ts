@@ -3,9 +3,11 @@
  * that still has connections open. Real sockets on an ephemeral loopback port: the behaviour under
  * test is Node's and Express's own, which a stub would only restate.
  */
-import http, { type Server } from 'node:http';
+import http, { type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
+import { openSseStream } from '@infrastructure/http/sse';
+import { setEnvironment } from '@tests/environment';
 import { closeServer, failBoot, listenOn } from '@infrastructure/runtime/server-lifecycle';
 
 /** Bind a throwaway app on an ephemeral loopback port. */
@@ -46,6 +48,37 @@ describe('closeServer', () => {
         // Would hang until the keep-alive timeout if the idle socket were left open.
         await expect(closeServer(server)).resolves.toBeUndefined();
         agent.destroy();
+    });
+});
+
+describe('closeServer with a stream open', () => {
+    it('ends the stream with a reconnect delay instead of waiting for the cut', async () => {
+        // A budget far past the test's own timeout: only ending the stream lets close() finish.
+        setEnvironment({ NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: '600000' });
+        const app = express();
+        app.get('/stream', (_request, response) => {
+            openSseStream(response, 'user-1', () => Promise.resolve(true));
+        });
+        const server = await listenOn(app, 0, '127.0.0.1');
+        // The headers have arrived: the stream is open before the close begins.
+        const response = await new Promise<IncomingMessage>((resolve) => {
+            http.get({ port: portOf(server), host: '127.0.0.1', path: '/stream' }, resolve);
+        });
+        // Resolves with the whole body once the server has ended the stream.
+        const received = new Promise<string>((resolve) => {
+            let body = '';
+            response.setEncoding('utf8');
+            response.on('data', (chunk: string) => {
+                body += chunk;
+            });
+            response.on('end', () => {
+                resolve(body);
+            });
+        });
+
+        await closeServer(server);
+
+        await expect(received).resolves.toMatch(/^retry: \d+\n\n$/);
     });
 });
 
