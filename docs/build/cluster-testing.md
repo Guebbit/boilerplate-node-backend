@@ -80,6 +80,17 @@ it talks to a Docker socket, and this repo is podman-first (see
 `DOCKER_HOST` everywhere — a new dependency _and_ a workaround for it. Starting a container with
 the engine the repo already names is thirty lines and no dependency.
 
+## Why the script passes `--experimental-vm-modules`
+
+The mongodb driver (7.8) loads `os` with `await import('os')`. Jest's vm sandbox rejects a dynamic
+import without that flag; the driver swallows the error and sends a handshake with no `driver`
+field, and mongod refuses it (code 183). These suites start `MongoMemoryReplSet` inside the jest
+process, so its own client cannot be handed the `JEST_DRIVER_OPTIONS` workaround
+`tests/support/database.ts` uses. The script therefore runs jest through `node --experimental-vm-modules`.
+
+Source: `node_modules/mongodb/lib/runtime_adapters.js:29` (the `await import('os')`), upstream
+[the driver's runtime adapters source](https://github.com/mongodb/node-mongodb-native/blob/v7.8.0/src/runtime_adapters.ts).
+
 ## The multi-copy suite
 
 `tests/replicas/` is the same idea with the shape an orchestrator gives you: N **separate**
