@@ -27,6 +27,7 @@
         "already-resolved": "Questo task è già risolto.",
         "already-spam": "Questo task è già segnato come spam.",
         "already-open": "Questo task è già aperto.",
+        "keeps-changing": "Il task continua a cambiare. Ricaricalo e riprova.",
         "superseded": "Un task aperto più recente copre già questa situazione, quindi questo non può essere riaperto.",
         "not-open": "Questo task è chiuso. Riaprilo prima.",
         "assignee-invalid": "Questa persona non può gestire questo task.",

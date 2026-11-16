@@ -223,5 +223,23 @@ describe('the dispute rules', () => {
             expect(mayBeSettledByHand(won, refused)).toBe(false);
             expect(mayBeCanceled(won, refused)).toBe(true);
         });
+
+        it('is not voided while an inquiry is still open, since nothing is decided yet', () => {
+            const asked = { ...card, disputes: [inquiry(DisputeStatus.needs_response)] };
+            expect(mayBeCanceled(asked, refused)).toBe(false);
+        });
+
+        it('may be voided once the only inquiry is closed, so it is never stranded', () => {
+            const closed = { ...card, disputes: [inquiry(DisputeStatus.closed)] };
+            expect(mayBeCanceled(closed, refused)).toBe(true);
+        });
+
+        it('is not voided while any one of several disputes is open', () => {
+            const mixed = {
+                ...card,
+                disputes: [inquiry(DisputeStatus.closed), chargeback(DisputeStatus.under_review)]
+            };
+            expect(mayBeCanceled(mixed, refused)).toBe(false);
+        });
     });
 });

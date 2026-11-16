@@ -96,8 +96,11 @@ export const lostChargebackCovers = (
 ): boolean => lostToChargebacks(payment, currency) >= toMinorUnits(amount, currency);
 
 /**
- * Whether the payment has a dispute that is decided (any), so an open refund refused as
- * `disputed` is no longer waiting on one.
+ * Whether the payment has disputes and none is still open, an inquiry included, so a refund
+ * refused as `disputed` is no longer waiting on one.
+ *
+ * An inquiry counts: `disputed` is a final refusal, so a refund that met only an inquiry would
+ * stay stuck forever if staff had to wait for a chargeback that never comes.
  */
 export const hasDecidedDispute = (payment: DisputablePayment): boolean =>
-    (payment.disputes ?? []).length > 0 && !hasOpenChargeback(payment);
+    (payment.disputes ?? []).length > 0 && !hasOpenDispute(payment);
