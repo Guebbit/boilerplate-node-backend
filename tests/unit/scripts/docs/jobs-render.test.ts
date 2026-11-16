@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * @module
  * What a job's declaration turns into: the crontab entry and the ops table row.

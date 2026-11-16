@@ -23,7 +23,8 @@
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
 import '@infrastructure/config/dotenv';
-// Second, before anything that builds a rate limiter: lifts every budget for this process.
+// Second, before anything that reads the environment as it loads: lifts every budget and pins the
+// mail, broker and bank-transfer settings for this process.
 import { deploymentRateLimitRedisUrl } from './support/scripted-environment';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
@@ -31,7 +32,6 @@ import '@infrastructure/runtime/mongoose-boot';
 import './support/development-doubles';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
 import { emptyDatabase, isDatabaseEmpty } from './support/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
@@ -40,39 +40,6 @@ import { isRelaxedEnvironment, nodeEnvironment } from '@infrastructure/runtime/c
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { seedCredentials } from '@scenarios/accounts';
-import { DEMO_BANK_TRANSFER } from '@scenarios/rate-limits';
-
-/**
- * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
- * file invented. Against a deployment with a mail server configured that is thirty real send
- * attempts to fictional recipients, which is both noise and a reputation risk that belongs to
- * nobody. `log` renders each one (so a broken template still fails here) and opens no socket.
- *
- * Overridden rather than defaulted, same as the budgets in `./support/scripted-environment`: `.env` naming a real mail server
- * is exactly the case this protects against.
- */
-installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
-
-/**
- * The broker off for this process, so an email job runs INLINE through the `log` transport above.
- * With a broker reachable the job is published instead, and whichever consumer is listening —
- * a live backend, with its real SMTP transport — sends the seed's several dozen mails to the
- * fictional recipients, which also fills a live e2e run's mailbox after it was emptied.
- */
-installEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
-
-/**
- * Applied only where nothing is set, unlike the budgets in `./support/scripted-environment`: a deployment that names its own
- * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
- * guarantee can hold.
- */
-installEnvironment(
-    Object.fromEntries(
-        Object.entries(DEMO_BANK_TRANSFER).filter(
-            ([key]) => currentEnvironment()[key] === undefined
-        )
-    )
-);
 
 /** `--reset`: empty the database before building, rather than refusing a non-empty one. */
 const reset = process.argv.includes('--reset');

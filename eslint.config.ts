@@ -748,8 +748,9 @@ export default defineConfig(
                     contexts: [
                         'Program > FunctionDeclaration',
                         'Program > ClassDeclaration',
-                        // `const x = require(…)` is an import, not a declaration of ours.
-                        'Program > VariableDeclaration:not(:has(CallExpression[callee.name="require"]))',
+                        // `const x = require(…)` is an import, not a declaration of ours: only a
+                        // declaration whose FIRST initialiser is the call itself, or the call cast with `as`, is exempt.
+                        'Program > VariableDeclaration:not([declarations.0.init.callee.name="require"]):not([declarations.0.init.expression.callee.name="require"])',
                         'Program > TSInterfaceDeclaration',
                         'Program > TSTypeAliasDeclaration',
                         'Program > TSEnumDeclaration',
@@ -758,8 +759,17 @@ export default defineConfig(
                         'Program > ExportDefaultDeclaration',
                         'Program > ClassDeclaration > ClassBody > MethodDefinition',
                         'Program > ClassDeclaration > ClassBody > PropertyDefinition',
+                        'Program > ClassDeclaration > ClassBody > TSAbstractMethodDefinition',
+                        'Program > ClassDeclaration > ClassBody > TSAbstractPropertyDefinition',
                         'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > MethodDefinition',
-                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > PropertyDefinition'
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > PropertyDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > TSAbstractMethodDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > TSAbstractPropertyDefinition',
+                        // `export default class`: its members sit one node deeper than a named one.
+                        'Program > ExportDefaultDeclaration > ClassDeclaration > ClassBody > MethodDefinition',
+                        'Program > ExportDefaultDeclaration > ClassDeclaration > ClassBody > PropertyDefinition',
+                        'Program > ExportDefaultDeclaration > ClassDeclaration > ClassBody > TSAbstractMethodDefinition',
+                        'Program > ExportDefaultDeclaration > ClassDeclaration > ClassBody > TSAbstractPropertyDefinition'
                     ]
                 }
             ],

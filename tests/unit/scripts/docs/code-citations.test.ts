@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * `scripts/docs/code-citations.ts` — the `docs/…` links cited outside `docs/`, run through the
  * same function `check-references.ts` calls, against a scratch repo whose files git tracks.
@@ -98,9 +99,23 @@ describe('deadCodeCitations', () => {
         ]);
     });
 
-    it('does not report a dead string under a fixture path', async () => {
+    it('still reports a dead citation in a src file carrying the marker, or a marker past line one', async () => {
         const files = await track({
-            'tests/unit/scripts/docs/case.test.ts': "const page = 'docs/modules/gone.md';\n"
+            'src/a.ts': '// citation-fixture: inputs\n// docs/modules/gone.md\n',
+            'tests/b.test.ts':
+                'const first = 1;\n// citation-fixture: late\n// docs/modules/gone.md\n'
+        });
+
+        expect(deadCodeCitations(root, files)).toEqual([
+            'src/a.ts: docs/modules/gone.md',
+            'tests/b.test.ts: docs/modules/gone.md'
+        ]);
+    });
+
+    it('does not report a dead string in a file that marks itself a citation fixture', async () => {
+        const files = await track({
+            'tests/case.test.ts':
+                "// citation-fixture: inputs\nconst page = 'docs/modules/gone.md';\n"
         });
 
         expect(deadCodeCitations(root, files)).toEqual([]);
@@ -114,6 +129,7 @@ describe('anchorlessSeeTags', () => {
     beforeEach(async () => {
         root = await mkdtemp(path.join(os.tmpdir(), 'anchorless-see-'));
         await mkdir(path.join(root, 'src'), { recursive: true });
+        await mkdir(path.join(root, 'tests'), { recursive: true });
     });
 
     afterEach(() => rm(root, { recursive: true, force: true }));
@@ -131,11 +147,43 @@ describe('anchorlessSeeTags', () => {
                 'export const a = 1;'
             ].join('\n')
         );
-        await writeFile(path.join(root, 'src/b.yaml'), '# See: docs/modules/orders.md\n');
+        // The same tag text in a YAML file: only the extension filter keeps it out.
+        await writeFile(path.join(root, 'src/b.yaml'), ' * @see docs/modules/orders.md\n');
 
         expect(anchorlessSeeTags(root, ['src/a.ts', 'src/b.yaml'])).toEqual([
             'src/a.ts:3: docs/modules/orders.md',
             'src/a.ts:5: docs/modules/orders.md'
         ]);
+    });
+
+    it('also names the `./docs/…` form, the one-line block and a tag ended by punctuation', async () => {
+        await writeFile(
+            path.join(root, 'src/c.ts'),
+            [
+                '/** @see docs/modules/orders.md */',
+                '/**',
+                ' * @see ./docs/modules/carts.md',
+                ' * @see docs/modules/users.md.',
+                ' * @see docs/modules/stock.md,',
+                ' * @see docs/modules/anchored.md#here.',
+                ' */'
+            ].join('\n')
+        );
+
+        expect(anchorlessSeeTags(root, ['src/c.ts'])).toEqual([
+            'src/c.ts:1: docs/modules/orders.md',
+            'src/c.ts:3: docs/modules/carts.md',
+            'src/c.ts:4: docs/modules/users.md',
+            'src/c.ts:5: docs/modules/stock.md'
+        ]);
+    });
+
+    it('skips a file that marks itself a citation fixture', async () => {
+        await writeFile(
+            path.join(root, 'tests/d.ts'),
+            '// citation-fixture: inputs, not citations\n/** @see docs/modules/orders.md */\n'
+        );
+
+        expect(anchorlessSeeTags(root, ['tests/d.ts'])).toEqual([]);
     });
 });

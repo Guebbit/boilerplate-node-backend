@@ -13,12 +13,18 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import http from 'node:http';
-import net from 'node:net';
 import path from 'node:path';
 import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
 import { retryUntil } from '@tests/eventually';
 import { REPO_ROOT } from '@tests/paths';
+import {
+    bootableEnvironment,
+    createMarkerCounter,
+    freePort,
+    stopChild,
+    waitForListening
+} from '@tests/spawned-app';
 
 /** A running cluster: its address and how to stop it. */
 export interface Cluster {
@@ -34,23 +40,6 @@ export interface Cluster {
 }
 
 /**
- * A port nobody is listening on.
- *
- * Asked for by binding to `0` and reading back what the OS assigned, rather than picking a number
- * and hoping. A fixed port is how two concurrent runs come to fight over one socket, and the loser
- * fails with `EADDRINUSE` naming nothing that explains it.
- */
-export const freePort = (): Promise<number> =>
-    new Promise((resolve, reject) => {
-        const probe = net.createServer();
-        probe.on('error', reject);
-        probe.listen(0, () => {
-            const { port } = probe.address() as net.AddressInfo;
-            probe.close(() => resolve(port));
-        });
-    });
-
-/**
  * How many of the child's output chunks to keep for the error message when it never listens.
  *
  * Chunks, not lines — this is a stream, and a chunk boundary falls wherever the OS put it. Bounded
@@ -58,25 +47,6 @@ export const freePort = (): Promise<number> =>
  * of them is unreadable; the reason is always near the end.
  */
 const MAX_CAPTURED_CHUNKS = 40;
-
-/** Resolves once something is accepting connections on `port`, or rejects after `timeoutMs`. */
-export const waitForListening = (port: number, timeoutMs: number): Promise<void> =>
-    retryUntil(
-        () =>
-            new Promise<void>((resolve, reject) => {
-                const socket = net.connect(port, '127.0.0.1');
-                socket.on('connect', () => {
-                    socket.end(() => resolve());
-                });
-                socket.on('error', reject);
-            }),
-        timeoutMs,
-        250
-    ).catch((error: unknown) => {
-        throw new Error(
-            `The cluster never listened on ${String(port)} within ${String(timeoutMs)}ms: ${String(error)}`
-        );
-    });
 
 /**
  * `src/app.ts`'s own boot line, once per worker — the signal {@link waitForWorkers} counts.
@@ -163,65 +133,6 @@ const createServedCounter = () => {
 };
 
 /**
- * The environment a child needs to boot the way a fresh checkout does, over the caller's own.
- * Shared by the cluster primary here and by the single-process copies of `tests/replicas`.
- *
- * @param options - the port the child listens on and the database it is handed
- */
-export const bootableEnvironment = ({
-    port,
-    dbUri
-}: {
-    port: number;
-    dbUri: string;
-}): Record<string, string | undefined> => ({
-    ...process.env,
-    /**
-     * NOT `test`: `assertModuleConfig` (`kernel/module-config.ts`) skips its
-     * presence checks under `NODE_ENV=test`, and this suite wants them run for real
-     * against the secrets set below.
-     */
-    NODE_ENV: 'development',
-    NODE_PORT: String(port),
-    PORT: String(port),
-    NODE_DB_URI: dbUri,
-    NODE_TOKEN_ACCESS: '84860f6e3faa80b96e22593ea147c55d721af62475d82804a40610b892e84f80',
-    NODE_TOKEN_REFRESH: '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
-    /**
-     * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
-     * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
-     * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
-     * CI has none, so the child refuses to boot without them
-     * (`src/kernel/module-config.ts`).
-     */
-    NODE_URL: `http://127.0.0.1:${String(port)}`,
-    NODE_TOTP_ENCRYPTION_KEY: '92f71a95c55be9af2dace04afc34b7b8da824f58b7225bc8e289da7f6677581a',
-    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
-        'd31c29a41dec73b1cb2a6c16030c377e997176fee0fa4a2101a623f6093a44a7',
-    NODE_PII_ENCRYPTION_KEY: 'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
-    /**
-     * The shop's identity and VAT rates are required at boot too
-     * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
-     * values `.env-example` ships, so the child boots the way a fresh checkout does.
-     */
-    NODE_LEGAL_COUNTRY: 'IT',
-    NODE_SHOP_TIMEZONE: 'Europe/Rome',
-    NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
-    NODE_LEGAL_STREET: 'Via Roma 1',
-    NODE_LEGAL_CITY: 'Milano',
-    NODE_LEGAL_ZIP: '20100',
-    NODE_SUPPORT_EMAIL: 'support@example.com',
-    NODE_LEGAL_PHONE: '+39 02 1234567',
-    NODE_VAT_RATE_DEFAULT: '0.22',
-    NODE_VAT_RATE_REDUCED: '0.10',
-    /**
-     * The access line is `info`: a developer's `.env` set higher would hide it, and
-     * `createServedCounter` could count nothing.
-     */
-    NODE_LOG_LEVEL: 'info'
-});
-
-/**
  * Spawn the real primary (`src/cluster.ts`) as a detached child with a complete, bootable
  * environment, `env` layered over it.
  *
@@ -303,19 +214,8 @@ const startCluster = ({
              */
             const output: string[] = [];
 
-            /**
-             * `workersReady` is a running total, not derived from `output`: that array is trimmed,
-             * and would silently undercount once boot chatter pushed an early ready line out of its
-             * window.
-             *
-             * `readyTail` carries the end of each chunk forward so a marker split between two `data`
-             * events is still seen. It holds one character LESS than the marker, which is what keeps
-             * a marker that ended exactly on a chunk boundary from being counted a second time: a
-             * whole marker can never fit in the tail, and a split one always leaves at most that
-             * many characters behind.
-             */
-            let workersReady = 0;
-            let readyTail = '';
+            // A running total over a marker split-safe watch, not derived from the trimmed `output`.
+            const ready = createMarkerCounter(WORKER_READY_MARKER);
             const served = createServedCounter();
 
             const capture = (chunk: Buffer | string): void => {
@@ -326,9 +226,7 @@ const startCluster = ({
                 if (output.length > MAX_CAPTURED_CHUNKS)
                     output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
 
-                const spanning = readyTail + text;
-                workersReady += spanning.split(WORKER_READY_MARKER).length - 1;
-                readyTail = spanning.slice(1 - WORKER_READY_MARKER.length);
+                ready.feed(text);
             };
             child.stdout?.on('data', capture);
             child.stderr?.on('data', capture);
@@ -354,29 +252,14 @@ const startCluster = ({
                 }
             };
 
+            /**
+             * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`) gets
+             * `stopChild`'s grace period before the SIGKILL, which also goes to the whole group so
+             * no worker survives as an orphan holding `child.stdout`/`stderr` open (that is what
+             * left a passing run unable to make Jest exit).
+             */
             const stop = (): Promise<void> =>
-                new Promise<void>((resolve) => {
-                    if (child.exitCode !== null || child.signalCode !== null) {
-                        resolve();
-                        return;
-                    }
-                    child.once('exit', () => resolve());
-                    signalGroup('SIGTERM');
-                    /**
-                     * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`)
-                     * has up to `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (15s default) to drain its workers
-                     * on its own; this waits past that before stepping in, so the normal path is the
-                     * primary finishing on its own, not this forcing it. The SIGKILL that follows
-                     * still goes to the whole group — not just the primary — so a worker the primary
-                     * hasn't gotten to yet dies too, rather than surviving as an orphan that keeps
-                     * `child.stdout`/`stderr` (inherited down the whole chain) from ever reaching EOF,
-                     * which is what left a passing test run unable to make Jest exit.
-                     */
-                    setTimeout(() => {
-                        signalGroup('SIGKILL');
-                        resolve();
-                    }, 20_000).unref();
-                })
+                stopChild(child, signalGroup)
                     .then(() => mongo.stop())
                     /**
                      * The dbPath directory is this boot's own, unlike the shared jest-instance root
@@ -385,7 +268,7 @@ const startCluster = ({
                     .then(() => rm(dbPath, { recursive: true, force: true }));
 
             return waitForListening(port, bootTimeoutMs)
-                .then(() => waitForWorkers(workers, bootTimeoutMs, () => workersReady))
+                .then(() => waitForWorkers(workers, bootTimeoutMs, ready.count))
                 .then(
                     () => ({ port, stop, servedByPid: () => served.counts }),
                     (error: unknown) =>

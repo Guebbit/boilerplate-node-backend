@@ -229,7 +229,9 @@ to everyone who has not opened the tree. This is the only check that looks for i
 | `<!-- doc-paths:ignore -->`        | Skips the whole line, for prose that names an absent path on purpose (a rename table).             |
 
 The code-citation half only asks whether a link is dead (page tracked, anchor a heading, same
-slugger); a peer repo's page, a URL and a `../` path are left alone. It checks nothing else.
+slugger); a peer repo's page, a URL and a `../` path are left alone. A test file whose `docs/…`
+strings are inputs to a docs checker starts with `// citation-fixture:` and is skipped. It checks
+nothing else.
 
 The sweep has floors: one that silently reads zero pages would report a clean tree forever, which
 is worse than no sweep.

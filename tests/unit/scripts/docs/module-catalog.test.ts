@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 import {
     moduleSidebar,
     pageOwner,

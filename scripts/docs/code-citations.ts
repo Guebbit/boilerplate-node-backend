@@ -56,12 +56,11 @@ export const headingSlugs = (markdown: string): Set<string> => {
  */
 const CITATION = /(?<![\w/.:-])(?:\.\/)?(docs\/[\w./-]+\.md)(?:#([^\s"$'),;<>\]`{}]+))?/g;
 
-/** Test files whose `docs/…` strings are inputs to the docs checkers, not citations. */
-const FIXTURES = [
-    'tests/unit/scripts/docs/',
-    'tests/unit/scripts/modules/new-module-needs-nothing.test.ts',
-    'tests/unit/scripts/scaffold/plan.test.ts'
-];
+/**
+ * The first line a test file under `tests/` starts with when its `docs/…` strings are inputs to the docs checkers, not
+ * citations. The file says so itself, so no list of paths lives in this script.
+ */
+const FIXTURE_MARKER = '// citation-fixture:';
 
 /** Every tracked file that may cite a page: code, tests, configs, root docs, YAML, the env example. */
 const isCitingFile = (file: string): boolean =>
@@ -73,8 +72,20 @@ const isCitingFile = (file: string): boolean =>
         /\.ya?ml$/.test(file) ||
         ['.env-example', '.gitignore', '.gitattributes'].includes(file)) &&
     !file.startsWith('docs/') &&
-    !file.startsWith('.2brain/') &&
-    FIXTURES.every((prefix) => !file.startsWith(prefix));
+    !file.startsWith('.2brain/');
+
+/**
+ * The text of a file that may cite a page, or undefined when it is not one or marks itself a fixture.
+ *
+ * @param root - repository root the file name is relative to
+ * @param file - a tracked file, relative to `root`
+ */
+const citingText = (root: string, file: string): string | undefined => {
+    if (!isCitingFile(file)) return undefined;
+    const text = readFileSync(path.join(root, file), 'utf8');
+    // Only a test file may opt out: a marker in `src/` is a comment, and its citations still count.
+    return file.startsWith('tests/') && text.startsWith(FIXTURE_MARKER) ? undefined : text;
+};
 
 /**
  * Every `docs/…` citation in the tracked non-docs files of `root` that points at nothing.
@@ -94,8 +105,9 @@ export const deadCodeCitations = (root: string, files: string[]): string[] => {
     };
 
     const dead: string[] = [];
-    for (const file of files.filter((file) => isCitingFile(file))) {
-        const text = readFileSync(path.join(root, file), 'utf8');
+    for (const file of files) {
+        const text = citingText(root, file);
+        if (text === undefined) continue;
         for (const [, page, cited = ''] of text.matchAll(CITATION)) {
             // Sentence punctuation after the anchor is not part of it.
             const anchor = cited.replace(/[.:!?]+$/, '');
@@ -108,8 +120,11 @@ export const deadCodeCitations = (root: string, files: string[]): string[] => {
     return dead;
 };
 
-/** A docblock `@see` line that names a page and no `#anchor`. */
-const ANCHORLESS_SEE = /^\s*\*\s*@see\s+(docs\/\S+?\.md)(?:\s|$)/;
+/**
+ * A docblock `@see` that names a page and no `#anchor`: on its own ` * ` line or inside a one-line
+ * `/** … *\/`, with an optional `./`, and with sentence punctuation allowed after `.md`.
+ */
+const ANCHORLESS_SEE = /(?:^\s*\*|\/\*\*)\s*@see\s+(?:\.\/)?(docs\/[\w./-]+?\.md)(?![\w/#-])/;
 
 /**
  * Every docblock `@see docs/<page>.md` with no `#anchor`: the link opens the page at its top and
@@ -122,12 +137,10 @@ const ANCHORLESS_SEE = /^\s*\*\s*@see\s+(docs\/\S+?\.md)(?:\s|$)/;
  */
 export const anchorlessSeeTags = (root: string, files: string[]): string[] =>
     files
-        .filter((file) => /\.[cm]?[jt]s$/.test(file) && isCitingFile(file))
+        .filter((file) => /\.[cm]?[jt]s$/.test(file))
         .flatMap((file) =>
-            readFileSync(path.join(root, file), 'utf8')
-                .split('\n')
-                .flatMap((line, index) => {
-                    const page = ANCHORLESS_SEE.exec(line)?.[1];
-                    return page ? [`${file}:${String(index + 1)}: ${page}`] : [];
-                })
+            (citingText(root, file) ?? '').split('\n').flatMap((line, index) => {
+                const page = ANCHORLESS_SEE.exec(line)?.[1];
+                return page ? [`${file}:${String(index + 1)}: ${page}`] : [];
+            })
         );

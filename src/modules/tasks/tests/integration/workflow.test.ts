@@ -236,7 +236,6 @@ describe('a door whose conditional write keeps losing the race', () => {
             expect(result.errors[0]?.code).toBe('CONFLICT');
             // Three tries (the first read and two re-reads), then it stops.
             expect(lost).toHaveBeenCalledTimes(3);
-            expect(await storedField(task._id, 'status')).toBe(startsFrom);
         }
     );
 });

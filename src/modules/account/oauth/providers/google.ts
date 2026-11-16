@@ -38,13 +38,14 @@ const SERVER: client.ServerMetadata = {
  * address.
  *
  * @param claims - the verified claims, as the library types them
- * @throws {Error} when the subject or the email is missing
+ * @throws {TypeError} when the subject or the email is missing
+ * @throws {Error} when the response carries no id_token
  */
 const identityOf = (claims: client.IDToken | undefined): OAuthIdentity => {
     if (!claims) throw new Error('Google token exchange: no id_token in response');
     const { sub, email, email_verified: verified, name, picture } = claims;
     if (typeof sub !== 'string' || sub.length === 0)
-        throw new Error('Google ID token: missing subject');
+        throw new TypeError('Google ID token: missing subject');
     if (typeof email !== 'string') throw new TypeError('Google ID token: missing email');
     return {
         providerId: sub,

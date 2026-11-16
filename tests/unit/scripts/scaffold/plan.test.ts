@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * @module
  * What a scaffold writes: the file list, the audit switch, and the generated text that other

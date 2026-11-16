@@ -251,8 +251,8 @@ export interface WithdrawalCandidate {
  * | `nothing_left` | every unit is already back with the shop |
  *
  * A status that offers no withdrawal (canceled) has no reason: there is no button to explain.
- * An order with no lines answers `all_excluded` too: no door creates one, but the test factory
- * `makeOrder` does when given no items.
+ * An order with an empty `items` list answers `all_excluded` too, because `[].every(…)` is true;
+ * no door creates one. An order with no `items` field at all skips that check.
  * @param order - the order's status, lines, frozen deadline and return status
  * @param now - the moment being asked about
  */

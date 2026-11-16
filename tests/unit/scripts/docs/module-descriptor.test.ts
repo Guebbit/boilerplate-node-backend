@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 import { moduleDescriptorSchema } from '../../../../scripts/docs/module-descriptor';
 
 /** The smallest descriptor the schema accepts. */

@@ -54,6 +54,23 @@ export const jsonHeaders = (bearer?: string): Record<string, string> => ({
 const PASSWORD = 'Sup3r-secret-pass!x';
 
 /**
+ * Throws unless `answer` carries the expected status, naming the step and the body: a signup that
+ * answered 409 would otherwise surface later as a bearer of `undefined`.
+ *
+ * @param step - what was being done, for the message
+ * @param answer - what the call answered
+ * @param expected - the status the step must have
+ * @throws {Error} when the status differs
+ */
+const expectStatus = (step: string, answer: Answer, expected: number): Answer => {
+    if (answer.status !== expected)
+        throw new Error(
+            `${step} answered ${String(answer.status)}, expected ${String(expected)}: ${JSON.stringify(answer.body)}`
+        );
+    return answer;
+};
+
+/**
  * Signs a new account up and logs it in, both through `base`.
  *
  * @param base - base URL, normally the proxy
@@ -71,6 +88,7 @@ export const signUpAndLogIn = (base: string, name: string): Promise<Session> =>
             termsAccepted: true
         })
     })
+        .then((signup) => expectStatus('Signup', signup, 201))
         .then(() =>
             call(base, '/account/login', {
                 method: 'POST',
@@ -79,6 +97,7 @@ export const signUpAndLogIn = (base: string, name: string): Promise<Session> =>
             })
         )
         .then((login) => {
+            expectStatus('Login', login, 200);
             // Narrowing: the login contract answers `{ token }` on success.
             const { token } = login.body as { token: string };
             return {
