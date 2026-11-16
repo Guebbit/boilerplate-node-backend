@@ -1,9 +1,10 @@
 /**
  * @module
- * Tasks the system opens and closes, whoever owns the situation. A producer's event opens (or touches) one task per
- * situation; the event that ends the situation closes it as `cleared`. Both halves are idempotent:
- * a redelivered event (same `eventId`) changes nothing, two racing events open one task (the
- * unique `openKey`), and a clearing event on a task staff already closed is a no-op.
+ * Tasks the system opens and closes, whoever owns the situation. A producer's event opens (or
+ * touches) one task per situation; the event that ends the situation closes it as `cleared`. Both
+ * halves are idempotent: a redelivered event (same `eventId`) changes nothing, two racing events
+ * open one task (the unique `openKey`), and a clearing event on a task staff already closed is a
+ * no-op.
  *
  * @see docs/modules/tasks.md#system-tasks
  */
@@ -162,7 +163,7 @@ const guarded = (name: string, work: () => Promise<void>): Promise<void> =>
 const userWork = (userId: string): string =>
     fillPath(FRONTEND_LINK_RULES.staffPages.user, { id: userId });
 
-/** The event handlers `module.ts` subscribes; each is `(payload, meta)`. */
+/** The event handlers `module.ts` subscribes; each takes `(payload)`, plus `meta` if it opens one. */
 export const systemTasks = {
     /** `user.review_flagged`: an account to look at. */
     onReviewFlagged: (payload: DomainEventMap['user.review_flagged'], meta: DomainEventMeta) =>

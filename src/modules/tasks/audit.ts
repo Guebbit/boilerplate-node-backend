@@ -2,11 +2,12 @@
  * @module
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
  * why. Reads are audited too: task rows carry a stranger's email and free text, so who looked
- * is a data-protection question the public product catalogue's reads never raise. See
- * docs/modules/tasks.md.
+ * is a data-protection question the public product catalogue's reads never raise.
+ *
+ * @see docs/modules/tasks.md#personal-data
  */
 
-/** The audit action vocabulary this module owns. */
+/** Staff task actions, and the system's open and clear events. */
 export const tasksAuditActions = {
     ADMIN_TASK_VIEWED: 'admin.task.viewed',
     ADMIN_TASK_RESOLVED: 'admin.task.resolved',

@@ -3,7 +3,8 @@
  * Controller for `GET /tasks` and `POST /tasks/search` — the staff queue in its query and DTO
  * body spellings, built on the shared search-controller factory. Never Redis-cached: the answer is
  * one person's jurisdiction, not a shared shop-wide answer.
- * See docs/modules/tasks.md.
+ *
+ * @see docs/modules/tasks.md#jurisdiction
  */
 
 import type { TasksResponse } from '@types';

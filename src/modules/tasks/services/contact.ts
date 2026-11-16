@@ -53,6 +53,8 @@ const contactDueAt = (category: string | undefined, now: Date): Date =>
  * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
  *             way — filed as `spam`, not announced, still a `202`. A visible refusal would
  *             tell a spam script exactly which signal caught it.
+ *
+ * @see docs/understand/defences/automation-and-abuse.md#the-ladder
  */
 export const create = (
     payload: CreateContactTaskRequest,

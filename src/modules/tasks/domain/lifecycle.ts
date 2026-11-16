@@ -1,8 +1,9 @@
 /**
  * @module
- * A task's lifecycle. `status` is read-only on the wire: it moves only through three doors
- * (`resolve`, `mark-spam`, `reopen`) and through assignment (`new` <-> `in_progress`). Each door
- * here is a pure function from the task's facts to the write it owes, or to the refusal.
+ * A task's lifecycle (docs/modules/tasks.md#lifecycle). `status` is read-only on the wire: it moves
+ * only through three doors (`resolve`, `mark-spam`, `reopen`) and through assignment (`new` <->
+ * `in_progress`). Each door here is a pure function from the task's facts to the write it owes, or
+ * to the refusal.
  *
  *   open   = new | in_progress     closed = resolved | spam
  *
