@@ -55,16 +55,17 @@ flowchart TD
 
 ## Configuration
 
-| Env var                              | Effect                                                                                                                                                                           |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. `npm run start:cluster` sets it. Otherwise `src/cluster.ts` imports `src/serve.ts` in its own process — no fork. |
-| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                                               |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                                         |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                                                  |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                                       |
-| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                                      |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                                                                           |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout (default 15 000 ms), read by `registerSignalHandlers`; also scales the drain steps below.                                                          |
+| Env var                              | Effect                                                                                                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. `npm run start:cluster` sets it. Otherwise `src/cluster.ts` imports `src/serve.ts` in its own process — no fork.            |
+| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                                                          |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                                                    |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                                                             |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                                                  |
+| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                                                 |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                                                                                      |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side teardown budget (default 15 000 ms), read by `registerSignalHandlers`; the drain steps below take shares of it.                                                                 |
+| `NODE_SHUTDOWN_DELAY_MS`             | Lame-duck delay before the teardown (default 0). In cluster mode keep it 0, or raise `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` above delay + budget: the primary's kill timer knows nothing of it. |
 
 ## Crash backoff
 
@@ -98,12 +99,11 @@ sequenceDiagram
 Each worker's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
 process signals by `src/serve.ts`):
 
-1. `GET /readyz` is marked draining (503) the moment the signal arrives, by `registerSignalHandlers` (`src/infrastructure/runtime/server-lifecycle.ts`) before `stop` runs.
-2. Close the HTTP server: no new connections, idle keep-alive sockets dropped, in-flight requests
-   drain. Anything still open at half the deadline (an SSE stream) is cut.
+1. `GET /readyz` is marked draining (503) the moment the signal arrives, by `registerSignalHandlers` (`src/infrastructure/runtime/server-lifecycle.ts`) before `stop` runs. Every response now says `Connection: close`, queue consumers are cancelled, and the worker waits `NODE_SHUTDOWN_DELAY_MS` (see [Health checks](../operate/health-checks.md#shutting-down-behind-a-load-balancer)). A second signal is ignored.
+2. End the SSE streams (each told when to reconnect), then close the HTTP server: no new connections, idle keep-alive sockets dropped, in-flight requests drain. Anything still open at its share of the budget is cut.
 3. Stop the locale-override refresh timer, then let started PDF renders and event deliveries
    finish (`settleRenders`, `settleInFlight`).
-4. `stopQueue()` before `stopCache()`: a running job would otherwise reopen the cache connection.
+4. `stopQueue()` before `stopCache()`: a running job would otherwise reopen the cache connection. It waits for running handlers, up to their share of the budget.
 5. `stopLimitsRedis()`, then `stopDatabase()` — disconnect the stores.
 6. `shutdownAnalytics()` — flush PostHog if configured.
 7. `shutdownTracing()` — flush remaining OTel spans to Tempo.

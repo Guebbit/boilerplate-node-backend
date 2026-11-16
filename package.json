@@ -55,7 +55,7 @@
         "audit:check-clean": "tsx scripts/audit/run-check-clean.ts",
         "audit:test-candidates": "eslint --no-config-lookup -c scripts/audit/test-honesty/eslint.candidates.config.ts -f json",
         "test:prism": "tsx scripts/testing/run-prism-smoke-test.ts",
-        "test:cluster": "jest --config jest.config.cluster.js",
+        "test:cluster": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cluster.js",
         "test:broker": "jest --config jest.config.broker.js",
         "bench": "sh -c '${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e TARGET=\"http://localhost:${NODE_PORT:-3000}${1:-/products}\" -e TOKEN -e VUS -e DURATION -v ./tests/load:/scripts:Z grafana/k6:1.8.1 run /scripts/hit.js' --",
         "db:sync": "tsx scripts/db/sync-indexes.ts",
@@ -146,7 +146,7 @@
         "jscpd": "^5.4.1",
         "knip": "^6.41.0",
         "lint-staged": "^17.6.0",
-        "mermaid": "^11.14.0",
+        "mermaid": "^12.3.0",
         "minimatch": "^10.2.6",
         "mongodb-memory-server": "^11.0.1",
         "nodemon": "^3.1.14",
@@ -157,8 +157,7 @@
         "ts-jest": "^29.4.14",
         "typescript": "~6.0.0",
         "typescript-eslint": "^8.70.1",
-        "vitepress": "^1.6.4",
-        "vitepress-plugin-mermaid": "^2.0.17"
+        "vitepress": "^1.6.4"
     },
     "dependencies": {
         "@casl/ability": "^7.0.1",
@@ -211,7 +210,6 @@
     },
     "overrides": {
         "ip-address": "^10.7.4",
-        "katex": "^0.18.2",
         "jsonpath-plus": "^10.4.0",
         "@faker-js/faker": "^10.6.0",
         "lodash": "^4.18.1",
