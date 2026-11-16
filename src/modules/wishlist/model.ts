@@ -4,7 +4,7 @@
  * can't leak a list it doesn't carry, and touching one reads/writes a small document, not the
  * whole user. A line is `{ productId }` and nothing else — no quantity, deliberately: the moment
  * an amount matters it belongs in the cart (`POST /wishlist/items/{productId}/move-to-cart`), and one
- * field fewer is what makes `$addToSet` the whole idempotence story below.
+ * field fewer keeps the add one pipeline update (see `addLine`).
  *
  * @see docs/modules/wishlist.md#the-pipeline
  */
@@ -61,7 +61,7 @@ const wishlistItemSchema = new Schema(
  * Mongoose schema for persisted wishlist documents.
  *
  * `unique: true` on `userId` makes "one wishlist per user" a database fact, exactly as the
- * cart's does — every mutation stays a single `findOneAndUpdate({ userId }, …, { upsert: true })`
+ * cart's does — every add stays a single `findOneAndUpdate({ userId }, …, { upsert: true })`
  * with no read in front of it.
  */
 export const wishlistSchema = new Schema<WishlistDocument>(

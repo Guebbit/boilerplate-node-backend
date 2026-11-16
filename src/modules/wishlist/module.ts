@@ -1,8 +1,8 @@
 /**
  * @module
  * The wishlist: one document per user, holding product references and nothing else. Depends on
- * products (a saved line is meaningless without one), users (the list belongs to an account), and
- * cart (move-to-cart writes a line). A deleted product cleans up via a domain event; an erased
+ * products (a saved line is meaningless without one) and cart
+ * (move-to-cart writes a line). A deleted product cleans up via a domain event; an erased
  * account cleans up through this module's own `personalData.erase` hook below — neither an
  * import, keeping the import graph acyclic. No rules worth modelling here: deleting it costs a
  * convenience, not a capability.
@@ -27,7 +27,7 @@ export default {
         {
             section: 'wishlist',
             collect: (subject) => wishlistService.exportLines(subject.userId),
-            // Joins the caller's own hard-delete transaction — see `wishlistService.removeByUserId`.
+            /** Joins the caller's own hard-delete transaction (`removeByUserId`). */
             erase: ({ userId }, session) => wishlistService.removeByUserId(userId, session)
         }
     ],

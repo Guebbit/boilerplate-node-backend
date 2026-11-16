@@ -2,15 +2,16 @@
  * @module
  * Analytics event names this module emits — a save funnel with one exit into the purchase funnel.
  * Declared by augmenting the analytics port's name map, same pattern a module with its own audit
- * actions uses for those — see `cart/audit.ts`. Naming rule: docs/understand/analytics.md#naming.
+ * actions uses for those — see `cart/audit.ts`.
+ *
+ * @see docs/understand/analytics.md#naming
  */
 
 /** The event names this module fires, keyed by intent. */
 export const wishlistAnalyticsEvents = {
-    // Wishlist
     WISHLIST_ITEM_ADDED: 'wishlist_item_added',
     WISHLIST_ITEM_REMOVED: 'wishlist_item_removed',
-    // The wishlist's exit — the event that ties the save funnel to the purchase funnel.
+    /** The wishlist's exit — the event that ties the save funnel to the purchase funnel. */
     WISHLIST_MOVED_TO_CART: 'wishlist_moved_to_cart'
 } as const;
 
