@@ -130,6 +130,8 @@ module.exports = {
     /**
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
      * as a child process and boot their own Mongo and Redis, so none of this file's setup applies.
+     * `tests/replicas` runs under the same config, for the same reasons: it boots N separate copies
+     * of the app and a proxy in front of them.
      * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
      */
     testPathIgnorePatterns: [
@@ -137,6 +139,7 @@ module.exports = {
         '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
         '<rootDir>/tests/cluster/',
+        '<rootDir>/tests/replicas/',
         '<rootDir>/tests/broker/'
     ],
     modulePathIgnorePatterns: ['<rootDir>/tmp/', '<rootDir>/.claude/worktrees/'],
