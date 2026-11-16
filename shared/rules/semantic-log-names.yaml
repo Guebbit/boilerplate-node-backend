@@ -12,6 +12,7 @@
 semanticLogNames:
     service: service.name
     pid: process.pid
+    hostname: host.name
     traceId: trace_id
     spanId: span_id
     requestId: app.request.id
