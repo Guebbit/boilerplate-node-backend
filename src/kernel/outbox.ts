@@ -11,7 +11,7 @@
  * Failure:    retried with exponential backoff, parked as `dead` after the last attempt.
  *             A dead row never blocks its aggregate.
  * Relayers:   the writer nudges one right after commit (fast path), and `sweep:outbox` runs one
- *             every minute (the backstop). Both are safe together — a row is claimed by a lease,
+ *             on its schedule (the backstop). Both are safe together — a row is claimed by a lease,
  *             and each claim carries its own `leaseToken`: a relay whose lease lapsed mid-dispatch
  *             finds the token changed, writes nothing and counts nothing (a warning is logged).
  *
@@ -137,7 +137,7 @@ export const outboxEventModel = model<OutboxEventDocument, OutboxEventModel>(
 );
 
 /**
- * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at 1h.
+ * Wait before the next dispatch after `failedAttempts` failures: 5s, 10s, 20s ... capped at `backoffCapMs` (`outbox.generated.ts`).
  * No jitter: the rows are claimed one aggregate at a time, so there is no herd to spread.
  *
  * @param failedAttempts - how many dispatches of this row have failed (1-based)

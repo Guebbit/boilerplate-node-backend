@@ -94,8 +94,8 @@ export interface TranslationPort {
      * what a free-text search unions with an entity's own (fallback-language) match, so searching
      * in Italian finds a product whose Italian row is the only place the word appears.
      *
-     * `pattern` arrives already escaped — see {@link applyTranslations}'s caller-side sibling,
-     * `search()` — so an implementation never touches raw caller input.
+     * `pattern` arrives already regex-escaped from the caller, so an implementation never touches
+     * raw caller input.
      *
      * `draftTag` is as in {@link resolve}.
      *

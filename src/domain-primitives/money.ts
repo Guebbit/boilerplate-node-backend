@@ -8,10 +8,10 @@
  * A currency's minor unit is NOT always a hundredth: JPY/KRW have none (the yen IS its own minor
  * unit), KWD/BHD have a thousandth (the fils). The exponents are ISO 4217's, pinned below.
  * {@link toMinorUnits}/{@link toDecimalString} both take the currency they're converting FOR, so a
- * caller working in JPY never multiplies by 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
- * currencies" table for the same rule under a different name.
+ * caller working in JPY never multiplies by 100 where it should multiply by 1. Fowler's Money
+ * pattern and Stripe's "zero-decimal currencies" table state the same rule.
  *
- * See `docs/understand/tactical-ddd.md` §3.
+ * @see docs/understand/tactical-ddd.md#_3-money
  */
 
 /** Type-only brand: a `unique symbol` that exists for the compiler, never at runtime. */

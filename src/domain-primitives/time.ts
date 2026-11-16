@@ -135,6 +135,7 @@ const wallClockAsUtc = (instant: Date, timeZone: string): number => {
  * that does not exist (a zone that springs forward AT midnight) lands on the first instant after
  * the gap.
  *
+ * @param year - the calendar year
  * @param month - 1 to 12
  * @param day - the day of the month
  * @param timeZone - canonical IANA zone name

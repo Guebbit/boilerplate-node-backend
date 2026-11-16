@@ -65,7 +65,7 @@ import type { AuthContext, ResolveOptions } from '@types';
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
  * `generic.error-forbidden`, `EMAIL_NOT_VERIFIED` reads `generic.error-email-not-verified`. One
  * rule for both `requirePermission`'s own default and a rule's `deniedCode` override
- * (`kernel/permissions.ts`'s `PermissionKey`), so a new override needs nothing added to
+ * (`PermissionRule.deniedCode`, `kernel/permissions.ts`), so a new override needs nothing added to
  * `locales/*.json` beyond the matching key.
  */
 const errorLocaleKeyFor = (code: string): string =>
@@ -422,7 +422,7 @@ const refuseUnauthenticated = (
     );
 };
 
-/** The 401 body the cookie guard has always answered with. */
+/** The 401 body the cookie guard answers with. */
 const cookieUnauthorizedErrors = (): ResponseErrorItem[] => [
     { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
 ];
@@ -488,9 +488,10 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * resolved EITHER a human session (a genuine bearer one, same as {@link isAuth}) or an `sk_...`
  * credential.
  *
- * Why a second guard, where to mount it, and how both halves of that decision are kept honest:
- * see docs/understand/security.md#machine-to-machine-credentials.
+ * Why a second guard, where to mount it, and how both halves of that decision are kept honest
+ * is the linked page's.
  *
+ * @see docs/understand/security.md#machine-to-machine-credentials
  * @param request - must already carry `authContext` or `caller`, set upstream by `getAuth`
  * @param response - answered 401 when neither was resolved
  * @param next - called once either is confirmed present
@@ -625,7 +626,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
         }
 
         /**
-         * An api-key is tenant-scoped by construction (docs/understand/security.md#machine-to-machine-credentials)
+         * An api-key is tenant-scoped by construction
          * and can never satisfy a platform rule. Refused here, distinctly from a missing
          * permission, rather than left to fall through to `holds` for the same 403 — the audit
          * trail should say WHY, not just that the check failed.
@@ -722,7 +723,8 @@ export const requirePermission = <TSubject extends PermissionSubject>(
 };
 
 /**
- * Turns what a session cookie resolved to into the signed-in user, auditing nothing.
+ * Turns what a session cookie resolved to into the signed-in user. A refused credential is
+ * recorded as a miss (`noteMiss`) before it throws.
  *
  * Throws when the credential is refused (forged, expired, revoked), and leaves that distinct from
  * "resolved to nobody" on purpose: the callers below disagree about what a refusal should mean
@@ -932,12 +934,13 @@ export interface FreshAuthOptions {
  * and (when `options.methods` is given) unless every one of those methods is in their `amr`.
  * MUST run after `isAuth`.
  *
- * **401, not 403** — this repository's own rule (docs/understand/security.md), not just RFC 9470's:
+ * **401, not 403** — this repository's own rule as well as RFC 9470's (see the `@see` below):
  * the status names the client's next move, and 401 means "authenticate and try again", which is
  * the literal definition of step-up. The rejection carries both dialects: `WWW-Authenticate` for
  * anything that speaks OAuth, this app's own `errors[].code` envelope for its own clients, which
  * read `errors[].code` and never the header.
  *
+ * @see docs/understand/security.md#_401-or-403-and-why-the-guards-agree
  * @param tier - how recently `authContext.authTime` must have been set; the seconds are read
  *   per request from `NODE_REAUTH_TIME_<TIER>`, never frozen when the router loads
  * @param options - additional requirements beyond recency — see {@link FreshAuthOptions}
@@ -981,11 +984,9 @@ export const requireFreshAuth =
         }
 
         /**
-         * The module docblock's own promise — "every rejection from the identity guards is
-         * audited" — which this direct mount had not kept: `requirePermission`'s OWN step-up path
-         * (`declared.stepUp`, above) already audits `SECURITY_REAUTH_REQUIRED`, but a route mounting
-         * `requireFreshAuth`/`requireFreshAuthWhen` directly — `cart`, `payments`, `account` itself,
-         * per this file's own module doc — challenged with no trail at all.
+         * Audited like every other refusal of the identity guards, so a route mounting
+         * `requireFreshAuth`/`requireFreshAuthWhen` directly leaves the same trail as
+         * `requirePermission`'s own step-up path (`declared.stepUp`).
          */
         auditRefusal(request, {
             action: coreAuditActions.SECURITY_REAUTH_REQUIRED,

@@ -28,12 +28,12 @@ export interface AuthContext {
      *
      * A person may run a shop AND operate the installation — those are different jobs with
      * different keys, and one field could not say which. What stays true is that a REQUEST acts
-     * in exactly one scope: `callerFor` picks the one the key being checked belongs to, so a bare
+     * in exactly one scope: `callerForSubject` (`kernel/permissions.ts`) picks the one the key being checked belongs to, so a bare
      * key is never answered from the platform role and a `platform.` key is never answered from
      * the tenant one.
      *
      * A name is data a deployment may rename; a key is code. Nothing decides anything from these
-     * directly — `callerFor` turns them into keys first.
+     * directly — `callerForSubject` (`kernel/permissions.ts`) turns them into keys first.
      */
     roles: {
         /**
@@ -100,7 +100,7 @@ export interface AuthContext {
  * `scope` and `permissions` are REQUIRED, and that is the fail-closed half: a caller cannot be
  * assembled half-formed and then silently evaluated against a scope nobody chose. An anonymous
  * request is not a gap to handle but a value to build — `anonymousCaller()` — so "stranger" has
- * one spelling instead of four. `callerFor` is what turns an `AuthContext`'s two role names into
+ * one spelling instead of four. `callerForSubject` (`kernel/permissions.ts`) is what turns an `AuthContext`'s two role names into
  * exactly one of these, per key.
  *
  * Identity stays optional because a stranger genuinely has none; a rule that needs an id and is

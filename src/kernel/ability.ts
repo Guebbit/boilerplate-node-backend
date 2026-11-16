@@ -13,8 +13,10 @@
  *             than reaching a wider read through a shortcut — `admin` included, who lists every
  *             declared tenant set by name like everyone else.
  *
- * See `docs/understand/authorization.md`, and `shared/authorization-keys.generated.yaml` for the keys
- * themselves — a file the PHP twin reads byte-for-byte identically.
+ * The keys themselves are `shared/authorization-keys.generated.yaml`, a file the PHP twin reads
+ * byte-for-byte identically.
+ *
+ * @see docs/understand/authorization.md#the-model
  */
 
 import { AbilityBuilder, createMongoAbility, subject, type MongoAbility } from '@casl/ability';

@@ -42,7 +42,9 @@ import {
  * switch. It is the smallest part: most collections carry no organisation column, most modules
  * never compile a scoped filter at all, and the webhooks fan-out matches every enabled
  * subscription unconditionally. Emptying the set here would scope a minority of the reads and
- * leave the rest quietly reading everything. See docs/understand/tenancy.md §10 for the real list.
+ * leave the rest quietly reading everything.
+ *
+ * @see docs/understand/tenancy.md#_10-·-what-we-deliberately-did-not-build
  */
 const UNSTORED_FIELDS = new Set(['tenantId']);
 

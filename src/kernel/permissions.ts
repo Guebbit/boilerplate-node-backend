@@ -61,7 +61,8 @@ export const ruleId = (action: string, subject: string): string => `${action}:${
  * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.generated.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
- * See docs/reference/permission-vocabulary.md.
+ *
+ * @see docs/reference/permission-vocabulary.md#one-list-generated-twice
  */
 export type {
     ActionOn,
@@ -252,8 +253,8 @@ export const rolesDocumentSchema = z.object({
 const SHARED = path.join(__dirname, '..', '..', 'shared');
 
 /**
- * Parse one shared authorization file against `schema`, failing loudly and specifically — the
- * "parse, don't validate" boundary this file's docblock promises. A YAML syntax error surfaces
+ * Parse one shared authorization file against `schema`, failing loudly and specifically.
+ * A YAML syntax error surfaces
  * from `parse` itself; a shape error surfaces here, naming the file, the offending path and what
  * was expected, via {@link z.prettifyError}.
  * @param file - the filename under `shared/`
@@ -321,8 +322,8 @@ for (const set of PERMISSION_SETS) {
 }
 
 /**
- * Which plain actions a staff action also answers — the `implies:` block of the shared rules file.
- * `display` implies `read`, `admin` implies `update` and `delete`: the ability emits the implied
+ * Which plain actions a staff action also answers — the `implies:` block of
+ * `shared/authorization-keys.generated.yaml`. The ability emits the implied
  * rule beside the staff one, so one query serves a customer's own rows and a staff member's every
  * row, while a route guard asking for the staff action is still not opened by the own-rows rule.
  */
@@ -671,10 +672,10 @@ const declaredRulesOfScope = new Map<AuthorizationScope, readonly string[]>(
 
 /**
  * Holds every rule a scope declares — the property "unrestricted" actually tests, independent of
- * any particular `Caller` shape. `callerInScope` calls this directly (a `Caller` isn't built yet
+ * any particular `Caller` shape. `assembleCaller` calls this directly (a `Caller` isn't built yet
  * at that point — this is what its own `unrestricted` field is filled from). Role names are data a
- * deployment may rename, so this is what `requirePermission` and the domain actor ask through
- * `caller.unrestricted` rather than comparing a name.
+ * deployment may rename, so the audit trail and domain code read `caller.unrestricted` rather
+ * than comparing a name.
  */
 const holdsEveryDeclaredRule = (
     scope: AuthorizationScope,
