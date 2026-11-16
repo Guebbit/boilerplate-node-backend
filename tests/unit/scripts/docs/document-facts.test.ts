@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * `scripts/docs/document-facts.ts` — which `npm run` claims a page makes and which of them fail.
  */

@@ -156,7 +156,7 @@ const superseded = (task: TaskDocument): Promise<ResponseReject> =>
  * @param door - which door
  * @param id - the task
  * @param context - the caller
- * @param attempts - how many re-reads remain
+ * @param attempts - tries left, the first read included
  */
 const move = (
     door: Door,

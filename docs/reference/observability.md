@@ -57,7 +57,7 @@ for how the three divide up.
     "status": "ok",
     "environment": "production",
     "service": "boilerplate-node-backend",
-    "runtimeVersion": "v24.x.x",
+    "runtimeVersion": "v26.x.x",
     "uptimeSeconds": 3600,
     "dependencies": {
         "database": { "status": "ready" },

@@ -333,8 +333,10 @@ jobs:
         # and N separate copies behind a proxy (`tests/replicas`). They are not in `complete` —
         # several boots and a Redis, and a container engine — so CI is where they run on every
         # push. `complete:manual` is the local equivalent.
+        # 45, not 20: the per-case jest budgets (boot 90 s x copies, rolling restart twice that) add
+        # up to ~42 min if every case hung, so jest reports each hang by name before the job is cut.
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        timeout-minutes: 45
         permissions:
             contents: read
         services:

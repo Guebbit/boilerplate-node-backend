@@ -10,7 +10,7 @@
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # `tag@sha256:digest`: the digest is what is pulled, the tag is a label that Dependabot moves with it.
 # https://docs.docker.com/reference/dockerfile/#from
-FROM docker.io/library/node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66 AS dev
+FROM docker.io/library/node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS dev
 
 WORKDIR /app
 
@@ -54,7 +54,7 @@ EXPOSE 3000
 # build: installs everything and is the type-check gate. Not a target on its own.
 # Alpine: no test runs here, so no `mongod`, so no glibc.
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+FROM docker.io/library/node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS build
 
 WORKDIR /app
 
@@ -117,7 +117,7 @@ CMD ["nginx", "-g", "daemon off;"]
 # runtime: what ships. Production dependencies, the type-checked source, `node` as the user.
 # Last stage on purpose: it is what a build without `--target` produces.
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runtime
+FROM docker.io/library/node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS runtime
 
 # Chromium is off by default (~200 MB). Only invoice rendering needs it:
 #   docker build -f docker/Dockerfile --target runtime --build-arg INSTALL_CHROMIUM=true .

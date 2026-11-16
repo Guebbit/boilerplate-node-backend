@@ -102,6 +102,7 @@ const freshLimits = () =>
     require('@infrastructure/adapters/limits-redis') as typeof import('@infrastructure/adapters/limits-redis');
 
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
+/** The logger from the module epoch `resetModules` just started. */
 const freshLogger = () => {
     const loggerModule =
         require('@infrastructure/adapters/logger') as typeof import('@infrastructure/adapters/logger');
@@ -281,8 +282,8 @@ describe('rateLimitStore — a failed init does not disable the limiter for good
 const hitsOf = (store: Store, key: string) =>
     Promise.resolve(store.increment(key)).then((info) => info.totalHits);
 
-/** The fallback counter from the module epoch `freshStore()` just built. */
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
+/** The fallback counter from the module epoch `freshStore()` just built. */
 const freshFallbackCounter = () => {
     const metrics =
         require('@infrastructure/observability/metrics-rate-limit') as typeof import('@infrastructure/observability/metrics-rate-limit');
