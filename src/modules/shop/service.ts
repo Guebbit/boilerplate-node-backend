@@ -111,6 +111,8 @@ export const addressLine = (address: ShopAddress): string =>
  * Directive Art. 14(1) permits it, IF they were told beforehand, which is why this value also
  * drives the wording of the placed-order email and the withdrawal acknowledgement. A deployment
  * that offers free returns sets it to `shop`.
+ *
+ * @see docs/modules/returns-remedies.md#what-the-customer-gets-back
  * @returns `consumer` (default) or `shop`
  */
 export const returnPostagePayer = (): ReturnPostagePayer => shopConfig().NODE_RETURN_POSTAGE_PAYER;
