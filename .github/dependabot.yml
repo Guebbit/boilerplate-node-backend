@@ -14,11 +14,6 @@ updates:
       # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
       cooldown:
           default-days: 7
-      # mermaid 12 re-lays-out every diagram (ELK, new look); the `katex`
-      # override in package.json stands in for the one fix mermaid 11 will never get.
-      ignore:
-          - dependency-name: mermaid
-            update-types: ['version-update:semver-major']
       # One weekly PR for every minor/patch bump together. A major stays OUT of the group on purpose:
       # a breaking bump gets its own PR, reviewed on its own.
       # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/grouping-pull-requests
