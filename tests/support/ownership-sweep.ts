@@ -20,16 +20,21 @@ export type Verb = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** One request, as a customer sends it. */
 export interface Attempt {
+    /** The HTTP verb of the request under test. */
     method: Verb;
+    /** Request path with the foreign id already substituted. */
     path: string;
     /** The `Authorization` header value. */
     bearer: string;
+    /** Query string parameters, when the route takes any. */
     query?: Record<string, unknown>;
+    /** JSON body, when the route takes one. */
     body?: object;
 }
 
 /** What the contract says a foreign id answers. */
 export interface DocumentedAnswer {
+    /** The status the contract documents for a foreign id. */
     status: number;
     /** `errors[0].code`, when the answer carries one. */
     code?: string;
@@ -43,6 +48,7 @@ export interface DocumentedAnswer {
 export interface OwnedCase {
     /** The `OWNED_*` key this case covers. */
     key: string;
+    /** What the contract promises this case answers. */
     answer: DocumentedAnswer;
     /** B's request aimed at another customer's id (`true`) or at one that does not exist (`false`). */
     aim: (foreign: boolean) => Attempt;

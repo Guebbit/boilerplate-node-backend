@@ -108,9 +108,13 @@ const randomWords = (): string =>
 
 /** The slice of a Zod v4 check definition this generator reads. */
 interface ZodCheckDef {
+    /** The check's kind: `min_length`, `max_length`, `greater_than`, `less_than`, `string_format`. */
     check: string;
+    /** Lower length bound; set on `min_length` checks only. */
     minimum?: number;
+    /** Upper length bound; set on `max_length` checks only. */
     maximum?: number;
+    /** The numeric bound of a `greater_than` / `less_than` check. */
     value?: number;
     /** Present on `string_format` checks whose `format` is `regex` — i.e. OpenAPI `pattern`. */
     pattern?: RegExp;
@@ -118,17 +122,27 @@ interface ZodCheckDef {
 
 /** The slice of a Zod v4 schema definition this generator reads; the rest is ignored. */
 interface ZodDef {
+    /** Zod's discriminator: `string`, `object`, `optional`, `union`, ... — the switch key in {@link buildValue}. */
     type: string;
+    /** Field schemas by key; set on `object` only. */
     shape?: Record<string, ZodType>;
+    /** Item schema; set on `array` only. */
     element?: ZodType;
+    /** The wrapped schema; set on `optional`, `nullable` and `default`. */
     innerType?: ZodType;
+    /** Value schema of a `record`. */
     valueType?: ZodType;
+    /** The string's OpenAPI format (`email`, `url`, `uuid`, ...), picks the generator. */
     format?: string;
     /** `stringFormat('decimal', /re/)` keeps its regex here, not in `checks`. */
     pattern?: RegExp;
+    /** Length and bound checks, each wrapped the way Zod stores them. */
     checks?: { _zod: { def: ZodCheckDef } }[];
+    /** The members of an `enum`, keyed by name. */
     entries?: Record<string, unknown>;
+    /** The allowed values of a `literal`. */
     values?: unknown[];
+    /** The branches of a `union`. */
     options?: ZodType[];
 }
 
@@ -169,11 +183,10 @@ const unwrapField = (schema: ZodType): ZodType => {
 };
 
 /**
- * Shapes a valid email address can take, and that a hand-tightened validator most often gets
- * wrong: a plus-tag (RFC 5321 mailbox extension), an 8+ character TLD (`.photography`, not just
- * `.com`), and a subdomain. One is picked per call, same PRNG as everything else here.
+ * The address shapes a hand-tightened validator most often gets wrong: a plus-tag (RFC 5321
+ * mailbox extension), an 8+ character TLD (`.photography`, not just `.com`), and a subdomain.
+ * One is picked per call, from the same PRNG as everything else here.
  */
-/** The address shapes the generator rotates through: plain, plus-tagged, long TLD, subdomain. */
 const EMAIL_SHAPES: (() => string)[] = [
     () => `${randomAlpha(8)}@example.com`,
     () => `${randomAlpha(6)}+${randomAlpha(4)}@example.com`,
@@ -340,8 +353,11 @@ export const validPayload = <T = Record<string, unknown>>(schema: ZodType): T =>
 
 /** One way to break a payload: which field, what rule, and the full broken body. */
 export interface InvalidPayloadCase {
+    /** The body key that was broken. */
     field: string;
+    /** Plain-words rule that the payload breaks; goes into the test title. */
     violation: string;
+    /** The whole request body, valid except for `field`. */
     payload: Record<string, unknown>;
 }
 

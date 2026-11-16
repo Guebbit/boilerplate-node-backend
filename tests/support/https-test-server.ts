@@ -1,6 +1,6 @@
 /**
  * A real, local HTTPS listener a test starts and stops itself — what
- * `docs/modules/webhooks.md`'s integration suite needs to prove a delivery arrived signed, without
+ * the webhooks module's integration suite needs to prove a delivery arrived signed, without
  * ever pointing at the compose `webhook-tester` service.
  *
  * The certificate (`fixtures/localhost-test-{cert,key}.pem`) is a throwaway, self-signed pair for
@@ -21,6 +21,8 @@
  * — see `modules/webhooks/tests/integration/delivery.test.ts` for the full pairing, ssrf-guard
  * mock included (a real local listener is inherently on loopback, which the real guard correctly
  * always refuses — that mock is unrelated to TLS and stays separate).
+ *
+ * @see docs/modules/webhooks.md#the-delivery-path
  */
 
 import { readFileSync } from 'node:fs';
@@ -35,13 +37,17 @@ export const TEST_CA_CERT: Buffer = readFileSync(
 
 /** This file's own throwaway `localhost` pair, which a server serves unless told another. */
 const LOCALHOST_CREDENTIALS = {
+    /** Private key of the throwaway certificate. */
     key: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-key.pem')),
+    /** The self-signed certificate for `localhost`. */
     cert: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-cert.pem'))
 };
 
 /** One captured request the test server received, headers and raw body both. */
 export interface CapturedRequest {
+    /** Request headers as Node parsed them (lower-cased names). */
     headers: Record<string, string | string[] | undefined>;
+    /** The raw body, unparsed, so a test can check a signature over it. */
     body: string;
 }
 

@@ -41,7 +41,9 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
 
 /** The action and subject a `requirePermission` guard asks for. */
 export interface PermissionAsk {
+    /** What the guard checks the caller may do. */
     action: PermissionAction;
+    /** What the action is on. */
     subject: PermissionSubject;
 }
 
@@ -50,7 +52,9 @@ const ROUTE_LABEL = Symbol.for('tests.routeLabel');
 
 /** A middleware carrying the label of the factory call that produced it. */
 interface LabelledMiddleware {
+    /** The label the test double attached when the factory was called. */
     [ROUTE_LABEL]?: string;
+    /** The function name Express shows for the handler. */
     name?: string;
     /** What a `requirePermission(action, subject)` guard closed over — real code, not a test label. */
     permission?: PermissionAsk;
@@ -307,12 +311,15 @@ const handlerName = (handle: LabelledMiddleware, layerName?: string): string =>
 
 /** One layer of `router.stack`, route or `use`, as far as the walker below needs it. */
 interface Layer {
+    /** Set on a route layer; absent on a `use` layer. */
     route?: {
         path: string;
         methods: Record<string, boolean>;
         stack: { handle: LabelledMiddleware }[];
     };
+    /** The handler this layer runs. */
     handle: LabelledMiddleware;
+    /** Express's name for the layer (`router`, `bound dispatch`, ...). */
     name?: string;
 }
 

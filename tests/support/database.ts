@@ -32,13 +32,15 @@ export const JEST_DRIVER_OPTIONS = { runtimeAdapters: { os } } as const;
  * that boundary and the one into worker processes.
  *
  * This bounds the DISK cost and the process count, not memory: what keeps memory flat across files
- * is freeing each file when it ends — `tests/support/test-environment.ts`, and
- * docs/build/mutation-testing.md#the-bson-warning-sign for what it looks like when that fails.
+ * is freeing each file when it ends — `tests/support/test-environment.ts`. The warning sign
+ * of that failing is in the `@see` below.
  *
  * ── ISOLATION IS UNCHANGED ───────────────────────────────────────────────────────────────────────
  * A database name per file keeps files apart, `clearAll` still empties collections between cases,
  * and `disconnect` drops the file's database on the way out. What changed is the cost of the
  * server, not the isolation of the data.
+ *
+ * @see docs/build/mutation-testing-memory.md#the-bson-warning-sign
  */
 export const connect = async () => {
     const uri = process.env.NODE_TEST_MONGO_URI;

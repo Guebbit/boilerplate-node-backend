@@ -22,7 +22,9 @@ import { createUser } from '@modules/users/tests/factories';
 
 /** One basket line: a product's id and how many. */
 export interface BasketLine {
+    /** Id of the product bought. */
     productId: string;
+    /** Units of that product. */
     quantity: number;
 }
 

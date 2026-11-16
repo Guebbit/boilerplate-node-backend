@@ -44,17 +44,25 @@ export interface IntrospectableSchema {
      * narrowing happens once, inside each reader below, where the shape is actually known.
      */
     indexes(): unknown[][];
+    /** The schema's paths, keyed by path name. */
     paths: object;
+    /** The options the schema was created with (`timestamps`, `toJSON`, ...). */
     options: object;
 }
 
 /** Minimal shape of what `Schema.prototype.path()` hands back, for the parts asserted here. */
 interface SchemaPath {
+    /** Mongoose's type name for the path (`String`, `ObjectId`, ...). */
     instance?: string;
+    /** Whether the path is declared required. */
     isRequired?: boolean;
+    /** The options passed when the path was declared. */
     options?: { default?: unknown; ref?: string; enum?: unknown } & Record<string, unknown>;
+    /** The allowed values of an enum string path. */
     enumValues?: string[];
+    /** The sub-schema of an embedded document path. */
     schema?: IntrospectableSchema;
+    /** The default a new document gets for this path. */
     defaultValue?: unknown;
 }
 

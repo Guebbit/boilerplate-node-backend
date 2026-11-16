@@ -10,7 +10,9 @@ import { api } from '@tests/http';
 
 /** What a client's cart screen would show as the total, in the shape the checkout request names it (decimal text). */
 export interface ShownTotal {
+    /** Decimal text such as `"19.90"`, never a number. */
     amount: string;
+    /** ISO 4217 code the amount is in. */
     currency: string;
 }
 

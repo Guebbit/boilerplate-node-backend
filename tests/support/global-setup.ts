@@ -14,6 +14,7 @@ import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
  * as separate modules, so `globalThis` is the only channel — `process.env` carries strings only.
  */
 export interface TestGlobals {
+    /** The one in-memory Mongo of the run; set here, read and stopped by global teardown. */
     __testMongoServer?: EphemeralMongo;
 }
 

@@ -16,8 +16,11 @@ export const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
 /** The rows a fuzzed path can name, created fresh for each operation. */
 export interface World {
+    /** A stored product, for `{productId}`-style segments. */
     productId: string;
+    /** A stored order, for `{orderId}`-style segments. */
     orderId: string;
+    /** A stored account, for `{userId}`-style segments. */
     userId: string;
 }
 
