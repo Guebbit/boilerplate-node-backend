@@ -21,6 +21,7 @@ import { asStub } from '@tests/stub';
 
 /** The document shape of the stub model. */
 interface FixtureDocument extends Document {
+    /** The one field the stub model stores. */
     name: string;
 }
 

@@ -382,11 +382,13 @@ describe('enqueueIfImagePending', () => {
     });
 
     /**
-     * The residual race `docs/understand/image-processing.md` describes: the queue looked ready at
+     * The residual race (`@see` below): the queue looked ready at
      * upload time, but the broker died before this publish. The awaited inline fallback is what's
      * under test — the caller must not resolve before the writeback it depends on has run, and the
      * document it gets back must carry the real urls rather than the pre-digest placeholder, since
      * the database was just updated out from under it.
+     *
+     * @see docs/understand/image-processing.md#the-residual-race-and-why-it-s-awaited
      */
     it('awaits the inline fallback and copies its urls onto the returned document', async () => {
         const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };

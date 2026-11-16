@@ -533,7 +533,8 @@ describe('the history reads as a history', () => {
          * than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
          * `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
          * the counter, which is the module's stated source of truth
-         * (`docs/modules/inventory.md#why-products-still-carries-a-copy`).
+         * (see the `@see` below).
+         * @see docs/modules/inventory.md#why-products-still-carries-a-copy
          */
         const stocked = await productModel
             .find({ onHand: { $gt: 0 } })

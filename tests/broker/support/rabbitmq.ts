@@ -50,10 +50,15 @@ export interface ManagementApi {
 
 /** What `GET /api/queues/{vhost}/{name}` returns, narrowed to the fields the suite reads. */
 export interface ManagedQueue {
+    /** Queue type (`classic`, `quorum`). */
     type: string;
+    /** Whether the queue survives a broker restart. */
     durable: boolean;
+    /** Declaration arguments (dead-letter exchange, TTL, ...). */
     arguments: Record<string, unknown>;
+    /** Messages waiting for a consumer. */
     messages_ready: number;
+    /** Messages delivered but not yet acked. */
     messages_unacknowledged: number;
 }
 

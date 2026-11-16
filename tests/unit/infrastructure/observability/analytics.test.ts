@@ -115,7 +115,9 @@ const sentRequest = (): { url: string; headers: Record<string, string>; body: Js
 
 /** The JSON body the provider is sent. */
 interface JsonPayload {
+    /** The provider's event type (`event`). */
     type: string;
+    /** The event itself. */
     payload: {
         website: string;
         hostname?: string;

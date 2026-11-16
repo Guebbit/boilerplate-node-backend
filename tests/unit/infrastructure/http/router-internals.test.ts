@@ -17,6 +17,7 @@ import { asStub } from '@tests/stub';
 
 /** The slice of a router route layer these cases read. */
 interface RouteLayer {
+    /** The route a route layer carries; its presence marks the layer as a route. */
     route: {
         path: string;
         methods: Record<string, boolean>;
@@ -26,8 +27,11 @@ interface RouteLayer {
 
 /** The slice of a router middleware layer these cases read. */
 interface UseLayer {
+    /** Always absent on a middleware layer. */
     route?: undefined;
+    /** The layer's function name. */
     name?: string;
+    /** The handler the layer runs. */
     handle: unknown;
 }
 

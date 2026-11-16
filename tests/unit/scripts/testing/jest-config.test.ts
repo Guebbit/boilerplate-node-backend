@@ -8,7 +8,9 @@ import { setProcessEnvironment } from '@tests/environment';
 
 /** The slice of a jest config these cases read. */
 interface WorkerSettings {
+    /** How many jest workers run at once. */
     maxWorkers: number;
+    /** Memory a worker may hold idle before it restarts, such as `"512MB"`. */
     workerIdleMemoryLimit?: string;
 }
 

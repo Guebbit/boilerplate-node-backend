@@ -17,7 +17,9 @@ setupTestDb();
 
 /** A document with one scalar and one array — enough to drive every write form. */
 interface Probe {
+    /** The scalar the write forms change. */
     name: string;
+    /** The array the push and pull forms change. */
     tags: string[];
 }
 

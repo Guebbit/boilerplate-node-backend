@@ -7,7 +7,7 @@
  * decimals, the "cent" the comments below name); the currency's own exponent — 0 for JPY, 3 for
  * KWD — gets its own describe block, since that is this file's actual subject.
  *
- * See `docs/understand/tactical-ddd.md` §3.
+ * @see docs/understand/tactical-ddd.md#_3-money
  */
 import fc from 'fast-check';
 import {

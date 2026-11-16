@@ -25,7 +25,9 @@ import {
  * The transactional outbox against a real replica-set Mongo: the row commits or aborts with the
  * caller's own transaction, the relay delivers it at-least-once and in order per aggregate, a
  * failing consumer is retried and finally parked, and a relay that died mid-dispatch is recovered
- * without losing the event. See docs/understand/outbox.md.
+ * without losing the event.
+ *
+ * @see docs/understand/outbox.md#what-it-guarantees
  */
 
 setupTestDb();

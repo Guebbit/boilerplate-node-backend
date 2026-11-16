@@ -1,40 +1,24 @@
 /**
- * One budget means one budget — across workers, not per worker.
+ * One budget means one budget: across workers, not per worker.
  *
- * `npm run start:cluster` (`src/cluster.ts`) forks a worker per CPU, and orchestrator replicas run
- * several processes too. `express-rate-limit`'s default store is an
- * in-process `Map`, so with that store a budget of 100 per minute is really `100 × workers` per
- * minute, and which bucket a request lands in depends on which worker the OS handed the socket to.
- * On a sixteen-core box that is a sixteenfold allowance for password guessing. Moving the counters
- * to Redis is what makes the number in `.env` the number that is enforced, and the primary refuses
- * to fork 2+ workers without it.
+ * Why:        `src/cluster.ts` forks a worker per CPU, and orchestrator replicas run several
+ *             processes too. `express-rate-limit`'s default store is an in-process `Map`, so a
+ *             budget of 100 per minute is `100 × workers`. Redis counters make the number in
+ *             `.env` the number enforced; the primary refuses 2+ workers without it.
+ * Gap:        every other suite runs one process, where a per-process counter looks shared, so a
+ *             regression to the in-memory store would pass the whole repository.
+ * Case 1:     "the budget is spent once". It also passes with a broken harness (one worker serving,
+ *             one reused socket) or with Redis down (`rate-limit.ts` falls back to memory). The
+ *             control: each worker logs its `pid` per answer, and the case asserts at least two
+ *             workers answered and their counts sum to the burst.
+ * Case 2:     the refusal. 2 workers without a limits Redis never boot, so there is no second
+ *             budget to observe.
+ * Cost:       two boots, ~20 seconds, hence not in `npm run complete`.
+ * Guards:     `RedisStore.init()` loads two scripts back to back; the shared `connecting` promise
+ *             in `rate-limit-store.ts` stops both calling `connect()` on one client, which left
+ *             every request unbudgeted while the log said Redis was unreachable.
  *
- * Nothing could observe that. Every other suite here runs the app in one process, and a
- * per-process counter is indistinguishable from a shared one when there is only one process — so
- * the fix shipped unverified, and a regression to the in-memory store would pass every test in the
- * repository.
- *
- * ── Why the first case needs care ─────────────────────────────────────────────────────────────
- * "The budget is spent once" passes just as well when the harness is broken: if only one worker
- * ever serves, or the burst rides one reused socket, a per-process counter also spends exactly one
- * budget. It also passes when Redis errors, because each limit then falls back to counting in
- * memory (`rate-limit.ts`). The spread is the control: every worker logs its `pid` on each
- * answered request, and the case asserts at least two workers answered and that their counts sum
- * to the whole burst. A single-process or reused-socket run cannot produce that.
- *
- * The second case is the refusal: 2 workers with no limits Redis never boot, so there is no second
- * budget to observe.
- *
- * Two boots, ~20 seconds for the cluster. That is why this suite is not in `npm run complete`; see
- * `docs/build/cluster-testing.md`.
- *
- * ── What this found ───────────────────────────────────────────────────────────────────────────
- * On its first run, nothing was being limited at all: 30 of 30 requests answered 200 against a
- * budget of 5. `RedisStore.init()` issues two script loads back to back, both saw `isReady` false,
- * and each called `connect()` on the same client; node-redis rejected the second with `Socket
- * already opened`, and the failure path destroyed the client the first was still using. Every
- * request then passed unbudgeted while the log reported Redis unreachable. The shared `connecting`
- * promise in `rate-limit-store.ts` is the fix, and these cases are what keep it fixed.
+ * @see docs/build/cluster-testing.md#why-it-is-not-in-complete
  */
 
 import {

@@ -1,40 +1,22 @@
 /**
- * Property-based tests — `src/infrastructure/persistence/search.ts`.
+ * Property-based tests for `src/infrastructure/persistence/search.ts`: two security-relevant
+ * functions, stated as properties because both are claims about EVERY input.
  *
- * Two functions here are security-relevant rather than merely correct, and both are stated as
- * properties because both are claims about EVERY input:
- *
- *   **`escapeRegex` is a denial-of-service control.** `$regex` with unescaped user text lets an
- *   anonymous caller hand MongoDB a catastrophic-backtracking pattern that it evaluates
- *   server-side against every candidate document — seconds of CPU per document from a handful of
- *   characters. `POST /products/search` and `GET /products?text=` are public. A table of examples
- *   proves the metacharacters someone thought of are escaped; only generation over arbitrary
- *   strings supports "no input reaches the engine as a pattern".
- *
- *   The property that expresses this exactly is: for any subject `s`, `new RegExp(escapeRegex(s))`
- *   matches `s` and matches nothing else it should not — i.e. escaping is LITERAL matching. That
- *   is checked below by round-tripping through the real `RegExp` engine rather than by asserting
- *   on the escaped string's shape, because the shape is an implementation detail and the
- *   behaviour is the contract.
- *
- *   **`normalizePagination` must never produce a skip Mongo cannot use.** A negative or `NaN`
- *   skip is a driver error, i.e. a 500 on a search. The values arrive straight off a request,
- *   where a repeated query key is an array and a JSON body can hold anything.
- *
- * Seeded, and any counterexample gets written back as an example with its seed.
- *
- * ── SPLIT WITH `search-regex.test.ts` / `search-pagination.test.ts` ──────────────────────────
- * Those two files are example-based and they are NOT redundant with this one; each owns the facts
- * the other cannot state, and the division is deliberate:
- *
- *   they own — a named case per metacharacter (better diagnostics than a generated blob), the
- *              TIMING assertion that a catastrophic pattern is defused (a property cannot measure
- *              elapsed time), and the negative case that `1.5` must not match `1x5`;
- *   this owns — totality over ARBITRARY input, generated COMBINATIONS of metacharacters rather
- *              than one at a time, and the non-idempotence of `escapeRegex`.
- *
- * Before adding a case here, check there. A fact asserted twice is a fact maintained twice — and
- * it is worse than it looks in this repo, because a static mutant replays the entire suite.
+ * `escapeRegex`:        a denial-of-service control. Unescaped user text in `$regex` hands MongoDB a
+ *                       catastrophic-backtracking pattern, run per candidate document; `POST
+ *                       /products/search` and `GET /products?text=` are public. Examples prove the
+ *                       metacharacters someone thought of; generation supports "no input reaches
+ *                       the engine as a pattern". The property: `new RegExp(escapeRegex(s))` matches
+ *                       `s` literally, checked through the real engine rather than the escaped
+ *                       string's shape, which is an implementation detail.
+ * `normalizePagination`: must never produce a skip Mongo cannot use (negative or `NaN` is a driver
+ *                       error, a 500). Values come off a request, where a repeated key is an array.
+ * Seeding:              seeded; a counterexample is written back as an example with its seed.
+ * Split:                `search-regex.test.ts` and `search-pagination.test.ts` own a named case per
+ *                       metacharacter, the TIMING assertion (a property cannot measure time) and
+ *                       the `1.5` vs `1x5` case. This owns totality over ARBITRARY input, generated
+ *                       COMBINATIONS, and the non-idempotence of `escapeRegex`. Check there before
+ *                       adding a case: a static mutant replays the whole suite.
  */
 import fc from 'fast-check';
 import {

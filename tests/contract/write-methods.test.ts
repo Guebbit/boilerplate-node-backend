@@ -1,9 +1,11 @@
 /**
- * The write-method standard, over real HTTP — `docs/understand/write-methods.md`.
+ * The write-method standard, over real HTTP.
  *
  * One file for the rules that hold across modules: an empty string is never a value, a create
  * says where the new thing lives, and so on. A rule that belongs to one module's write lives in
  * that module's own tests.
+ *
+ * @see docs/understand/write-methods.md#the-three-verbs-in-one-table
  */
 
 import { randomUUID } from 'node:crypto';

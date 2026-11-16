@@ -60,10 +60,12 @@ const dropAllIndexes = async () => {
  * every assertion below.
  */
 interface RegisteredModel {
+    /** The live collection, for reading the indexes it has. */
     collection: {
         name: string;
         indexes: () => Promise<{ name?: string; key: Record<string, unknown> }[]>;
     };
+    /** The indexes the schema declares: key spec, then options. */
     schema: { indexes: () => [Record<string, unknown>, Record<string, unknown>][] };
 }
 

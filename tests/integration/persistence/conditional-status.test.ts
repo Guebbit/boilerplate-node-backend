@@ -11,8 +11,11 @@ setupTestDb();
 
 /** The smallest thing with a status and a stamp. */
 interface ProbeDocument {
+    /** The state the conditional write checks. */
     status: string;
+    /** A second field, to prove the filter narrows by it too. */
     scope: string;
+    /** Set by a write that wins, so a lost write is visible. */
     stampedAt?: Date;
 }
 

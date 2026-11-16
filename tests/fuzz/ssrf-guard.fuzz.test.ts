@@ -1,6 +1,6 @@
 /**
  * The SSRF guard (`@infrastructure/adapters/ssrf-guard`) against a table of hostile URLs — the
- * property `tests/fuzz` exists for, per `docs/modules/webhooks.md`'s SSRF section: private
+ * property `tests/fuzz` exists for, per the webhooks SSRF section: private
  * ranges, loopback, link-local (the cloud metadata endpoint), IPv6-mapped IPv4, decimal/octal/hex
  * encoded IPv4 literals, DNS names resolving to private space, and credentials in the URL.
  *
@@ -17,6 +17,8 @@
  * 6to4 and Teredo literals are in the table too: both embed an IPv4 address that
  * `embeddedIPv4()` never unwraps, so a 6to4 literal encoding the cloud metadata endpoint reads as
  * an ordinary global address to every other check — see `ssrf-guard.ts`'s module docblock.
+ *
+ * @see docs/understand/defences/ssrf.md#ranges-refused-and-why
  */
 
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';

@@ -48,6 +48,7 @@ setupTestDb();
 
 /** What one versioned resource needs to be driven the same way as the others. */
 interface Resource {
+    /** The resource's name in the test title. */
     name: string;
     /** The collection that holds the row, to read its stored counter. */
     collection: string;

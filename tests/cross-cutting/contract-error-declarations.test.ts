@@ -1,41 +1,23 @@
 /**
  * Every status the id rule can answer is a status the contract describes.
  *
- * A malformed id in a URL path is the same 404 an unknown id gets (`requireId`), so 404 is a property
- * of the PARAMETER rather than of the endpoint, and the contract has to say so on every operation
- * that takes an id in its path, not only on the ones whose service happens to answer a miss.
- *
- * ── Why this is worth a test rather than a fix ────────────────────────────────────────────────
- * The contract is a SHARED file: `openapi.yaml` is bundled from these fragments and must stay
- * byte-identical with the paired frontend and with the PHP twin, and the frontend's client is
- * generated from it. An undeclared status is not a cosmetic gap — it is a response the generated
- * client has no type for and the twin's response-schema suite will refuse. And the way it arrives
- * is always the same: a new endpoint takes an id and copies the responses from whichever neighbour
- * happened to be missing them.
- *
- * ── Read from the fragments, not the bundle ───────────────────────────────────────────────────
- * The bundle is generated. A failure there names a line nobody edits, and the fix is in a fragment
- * the message would not mention.
- *
- * ── Scope: the 404 on a path id, and the codes a guard makes ──────────────────────────────────
- * The 422 an id in a body or a query answers is held by `tests/integration/malformed-ids.test.ts`,
- * which finds those sites from the schema itself. The sweep over 500 reports three operations —
- * `GET /account`, `GET /observability/events`, `GET /observability/metrics` — and they are NOT
- * asserted here: whether each is an omission or a deliberate shape is a question about those
- * endpoints, and answering it means editing a file that must move in three repositories at once.
- *
- * ── The error codes ───────────────────────────────────────────────────────────────────────────
- * An operation's `x-error-codes` lists what it can send.
- * Three things hold that list true:
- *   - every catalogue code that is not `scope: app` is listed on at least one operation;
- *   - every guard-made code is listed on every route that mounts the guard — read off the route
- *     table, the permission rules and the kernel's own questions, never off a second list (the
- *     bundler writes the permission-made ones from the operation's security scopes, so this also
- *     proves the bundler and the guard agree);
- *   - the permission names an operation's security scopes carry are the ones its route's guards ask,
- *     both ways;
- *   - the runtime check in `tests/support/response-contract.ts` fails any HTTP test whose answer
- *     carries a code its operation does not list (service codes only a test can see).
+ * Why:       a malformed id in a URL path is the same 404 an unknown id gets (`requireId`), so 404
+ *            belongs to the PARAMETER, not the endpoint: every operation with an id in its path
+ *            must say so. The contract is shared byte for byte with the paired frontend and the PHP
+ *            twin; an undeclared status is a response their generated types lack.
+ * Source:    the fragments, not the generated bundle: a failure there names a line nobody edits.
+ * Scope:     the 404 on a path id, and the codes a guard makes. The 422 on a body or query id is
+ *            `tests/integration/malformed-ids.test.ts`. `GET /account`, `GET /observability/events`
+ *            and `GET /observability/metrics` are NOT asserted: whether each is an omission or a
+ *            deliberate shape is for those endpoints to answer, in a file shared by three repos.
+ * Codes:     an operation's `x-error-codes` lists what it can send. Four checks hold it true:
+ *            - every catalogue code not `scope: app` is on at least one operation;
+ *            - every guard-made code is on every route mounting the guard, read off the route
+ *              table, the permission rules and the kernel's own questions (never a second list);
+ *            - the permission names in an operation's security scopes match what its guards ask,
+ *              both ways;
+ *            - `tests/support/response-contract.ts` fails any HTTP test whose answer carries a
+ *              code its operation does not list (service codes only a test can see).
  *
  * @see docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position
  * @see docs/reference/errors.md#the-errors-extension

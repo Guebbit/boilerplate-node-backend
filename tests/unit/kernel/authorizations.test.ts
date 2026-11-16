@@ -833,7 +833,7 @@ describe('isAuthOrCredential', () => {
 
     /**
      * The regression this guard exists to close: `requirePermissionViaCookie` sets `caller`
-     * exactly as the credential branch does, so `caller`'s bare presence used to admit a
+     * exactly as the credential branch does, so `caller`'s bare presence would admit a
      * cookie-only request here as if it were a credential. A route mounting this guard never
      * built to accept a refresh cookie must still refuse one.
      */

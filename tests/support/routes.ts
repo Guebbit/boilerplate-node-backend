@@ -1,38 +1,25 @@
 /**
  * Reading a module's route table back out of its Express router.
  *
- * ── WHAT THIS IS FOR ────────────────────────────────────────────────────────────────────────────
- * A `routes.ts` is configuration written as code, and it fails the way configuration fails:
- * silently, and in the direction of MORE access. Dropping `requirePermission` from a delete route, writing
- * `/:id` where `/id` was meant, invalidating the `product` cache tag where every reader writes
- * `products` — none of these throw, none change a type, and each one is a live defect the moment
- * it merges. The contract suite exercises a handful of these paths end to end, but it cannot say
- * "and NOTHING else is mounted", which is the half that matters for an authorization chain.
- *
- * So this reads the router back: every method/path actually mounted, in order, with the middleware
- * chain each one carries. A test then states the whole table, and any edit that changes it has to
- * change the test in the same commit — deliberately, where a reviewer sees it.
- *
- * ── WHY THE MIDDLEWARE FACTORIES ARE MOCKED ─────────────────────────────────────────────────────
- * Express keeps the mounted FUNCTION, not the call that produced it. `isAuth` and `requirePermission` are
- * declared functions, so they arrive with their names intact and need nothing. `setCache(3600,
- * {...})`, `invalidateCache([...])` and `routeFlag('hardDelete')` are factories: what reaches the
- * stack is an anonymous closure, and the arguments — the cache tags, the TTL — are captured inside
- * it where no assertion can see them. Those arguments are most of what a route file actually says.
- *
- * {@link cacheMock} and friends replace each factory with one that records its arguments onto the
- * middleware it returns, as {@link ROUTE_LABEL}. `routeTable` reads that back. The replacements are
- * *labelling* wrappers rather than stubs wherever the real chain has names worth keeping —
- * `storageMock` calls through to the real `upload.image()`, so `validateUploadedImages` and
- * `quarantineUploadedImages` still show up behind the label.
- *
- * A test file must declare these itself: `jest.mock` is hoisted per module registry and cannot be
- * applied from a helper. The one-liner form is
+ * Why:       a `routes.ts` is configuration written as code, and it fails silently, toward MORE
+ *            access: a dropped `requirePermission`, `/:id` for `/id`, the `product` cache tag
+ *            where readers use `products`. None throws or changes a type. The contract suite
+ *            cannot say "and NOTHING else is mounted", the half that matters for authorization.
+ * What:      every method and path actually mounted, in order, with its middleware chain. A test
+ *            states the whole table, so an edit that changes it changes the test in the same
+ *            commit, where a reviewer sees it.
+ * Mocks:     Express keeps the mounted FUNCTION, not the call. `isAuth` and `requirePermission`
+ *            are declared functions and keep their names. `setCache(...)`, `invalidateCache(...)`
+ *            and `routeFlag(...)` are factories: an anonymous closure reaches the stack and its
+ *            arguments (cache tags, TTL) are hidden. {@link cacheMock} and friends record them
+ *            onto the middleware as {@link ROUTE_LABEL}, which `routeTable` reads back. They
+ *            wrap rather than stub where the real chain has names worth keeping: `storageMock`
+ *            calls the real `upload.image()`.
+ * Wiring:    each test file declares the mocks itself, since `jest.mock` is hoisted per registry:
  *
  *     jest.mock('@infrastructure/http/middlewares/cache', () => require('@tests/routes').cacheMock());
  *
- * `require` inside the factory rather than the imported binding, because `jest.mock` factories may
- * not close over module scope.
+ *            `require` in the factory, because `jest.mock` factories may not close over scope.
  */
 import type { Router } from 'express';
 import { asStub } from '@tests/stub';
