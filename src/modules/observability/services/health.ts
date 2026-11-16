@@ -90,7 +90,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
                 cpuCount: os.cpus().length,
                 loadAvg: os.loadavg()
             },
-            // Every lease-guarded job that has ever attempted to run — see `job-health.ts`.
+            // Every job in the crontab, with when it last ran — see `job-health.ts`.
             jobs,
             // Every worker queue's current dead-letter depth — see `parked-jobs.ts`.
             queues,

@@ -15,9 +15,9 @@ import { observabilityService } from '../services';
 /**
  * GET /observability/events
  *
- * Re-checks the permission every 30 seconds for as long as the stream stays open — the one place
- * in this codebase where a revoked caller does not lose access on their very next request, because
- * there is no next request until this recheck ends the stream. See `stillHoldsRuleViaCookie` and
+ * Re-checks the permission every 30 seconds for as long as the stream stays open — a revoked caller
+ * does not lose access on their very next request, because there is no next request until this
+ * recheck ends the stream. See `stillHoldsRuleViaCookie` and
  * `streamObservabilityMetrics`.
  */
 export const getObservabilityEvents = (request: Request, response: Response) => {
