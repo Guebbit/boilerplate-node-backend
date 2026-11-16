@@ -71,7 +71,7 @@ describe('userService.create', () => {
 
     it('leaves no row when the role write fails, with no compensating delete to depend on', async () => {
         failMembershipWrites();
-        // The delete that used to undo a half-made account is the very thing that could fail too.
+        // A compensating delete of a half-made account is the very thing that could fail too.
         jest.spyOn(userRepository, 'deleteOne').mockRejectedValue(new Error('delete failed'));
 
         await expect(

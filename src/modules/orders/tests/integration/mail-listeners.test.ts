@@ -1,9 +1,11 @@
 /**
  * @module
  * The buyer's mails are sent from this module's listeners on `order.created` and
- * `order.canceled` (`docs/understand/outbox.md#customer-mail`): the event alone is enough to send,
+ * `order.canceled`: the event alone is enough to send,
  * the cause on the cancel picks the mail, a mail that fails never fails the act, and every cancel
  * door names its cause on the row it writes.
+ *
+ * @see docs/understand/outbox.md#customer-mail
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

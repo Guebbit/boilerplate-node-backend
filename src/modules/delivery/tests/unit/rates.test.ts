@@ -133,8 +133,10 @@ describe('SHIPPING_METHODS table shape', () => {
 
     it('gives every method a real boolean tracked flag', () => {
         /**
-         * The door reads this to flag `awaitingTracking`; it never requires a code
-         * (docs/modules/delivery.md). A missing flag would surface there as `undefined`.
+         * The door reads this to flag `awaitingTracking`; it never requires a code.
+         * A missing flag would surface there as `undefined`.
+         *
+         * @see docs/modules/delivery.md#shipping
          */
         for (const method of SHIPPING_METHODS) expect(typeof method.tracked).toBe('boolean');
     });

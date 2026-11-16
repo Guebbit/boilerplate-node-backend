@@ -1301,10 +1301,12 @@ describe('listLevels', () => {
 
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
         /**
-         * docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
+         * The threshold and its two readers: this
          * reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
          * an inactive product too. `products_low_stock_total` (`lowStockCount`) counts PUBLIC
          * products only. "The two numbers will not match, and should not."
+         *
+         * @see docs/modules/inventory-reservations.md#the-threshold-and-its-two-readers
          */
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
         await createProduct({ active: true, onHand: 2, reserved: 0 });

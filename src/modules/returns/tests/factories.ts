@@ -9,7 +9,9 @@ import { DAY_MS } from '@domain-primitives/time';
 
 /** The few fields a count by status and age reads. */
 export interface BareReturn {
+    /** The return's state. */
     status: 'requested' | 'approved';
+    /** The reason given for it. */
     reason: string;
     /** How long ago it was opened. */
     daysAgo: number;

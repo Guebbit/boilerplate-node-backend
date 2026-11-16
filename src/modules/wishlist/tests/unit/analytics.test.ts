@@ -3,8 +3,9 @@
  * The analytics vocabulary this module emits (`src/modules/wishlist/analytics.ts`), pinned
  * string by string: the constant's NAME is refactored freely, but the STRING is what Umami keys
  * its series on — rename it silently and a dashboard's series just stops
- * (`docs/understand/analytics.md#renaming-is-not-free`). No mocks, no database; a static map needs
+ * (see the `@see`). No mocks, no database; a static map needs
  * neither.
+ * @see docs/understand/analytics.md#naming
  */
 
 import type { AnalyticsEventMap } from '@infrastructure/observability/analytics';

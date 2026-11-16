@@ -14,9 +14,13 @@ import { mayChangeAccount, ownOrderFlag } from '../../domain';
 
 /** One membership row, as the repository returns it. */
 interface Row {
+    /** The member's account id. */
     userId: string;
+    /** The tenant the row belongs to; `null` for a platform row. */
     tenantId: string | null;
+    /** The role the account holds there. */
     role: string;
+    /** Whether the role is tenant-level or platform-level. */
     scope: 'tenant' | 'platform';
 }
 

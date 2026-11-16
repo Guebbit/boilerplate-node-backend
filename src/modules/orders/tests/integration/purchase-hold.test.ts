@@ -2,7 +2,9 @@
  * @module
  * The shop's pause on a buyer's checkout after repeated cancellations, taken from the
  * `order.canceled` fact: only the buyer's own cancels count, the hold lands once, staff are told
- * once, and a staff lift restarts the count (`docs/modules/orders.md#the-purchase-hold`).
+ * once, and a staff lift restarts the count.
+ *
+ * @see docs/modules/orders.md#the-purchase-hold
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

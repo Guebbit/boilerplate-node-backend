@@ -58,6 +58,7 @@ const MODES = ['jwt', 'cookie'] as const;
 
 /** What a login hands back, and the headers that carry the session on the next request. */
 interface SignedIn {
+    /** The login answer. */
     response: Awaited<ReturnType<typeof logIn>>;
     /** The credential(s) a client presents, in the shape the mode gives them. */
     headers: Record<string, string>;

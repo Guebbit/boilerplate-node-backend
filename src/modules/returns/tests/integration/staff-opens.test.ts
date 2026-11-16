@@ -75,6 +75,7 @@ let customers = 0;
 interface Wanted {
     /** Days ago the order was made; the buyer cannot have asked for a return before it. */
     madeDaysAgo?: number;
+    /** Makes the mug a made-to-order item, which the withdrawal right excludes. */
     excluded?: boolean;
     /** `processing` by default; a payment needs the order still pending. */
     status?: OrderStatus;

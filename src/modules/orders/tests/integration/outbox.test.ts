@@ -3,7 +3,8 @@
  * The order events ride the transactional outbox: the row commits with the write it announces or
  * not at all. Each door that moves an order is proved twice — the event row appears with a write
  * that landed, and an event that cannot be written takes the write down with it. Real Mongo.
- * See docs/understand/outbox.md.
+ *
+ * @see docs/understand/outbox.md#what-it-guarantees
  */
 
 import { withTransaction } from '@infrastructure/runtime/database';

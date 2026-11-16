@@ -4,13 +4,15 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 /**
- * Anti-automation Rung 1 (see `docs/understand/security.md#identity-and-block-keyed-budgets-—-signup-password-reset-the-contact-form`):
+ * Anti-automation Rung 1:
  * `contactLimiters` adds an identity (submitted email) dimension on top of `submissionLimiter`'s
  * per-address budget — the address-only case already lives in
  * `submission-rate-limit.test.ts`. Built against a trivial handler — the property under test
  * belongs to the limiter, not to the contact controller. `account`'s own identity budgets
  * (`signupLimiters`, `resetRequestLimiters`) have the same shape and their own test —
  * `src/modules/account/tests/integration/identity-rate-limit.test.ts`.
+ *
+ * @see docs/understand/security.md#identity-and-block-keyed-budgets-—-signup-password-reset-the-contact-form
  */
 
 /** {@link withReloadedRateLimits} bound to this file's one module. */

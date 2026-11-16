@@ -43,7 +43,9 @@ beforeEach(() => {
 
 /** A signed-in account and the bearer its next request carries. */
 interface Session {
+    /** The stored account. */
     user: Awaited<ReturnType<typeof createUser>>;
+    /** Its access token as an `Authorization` header value. */
     bearer: `Bearer ${string}`;
 }
 

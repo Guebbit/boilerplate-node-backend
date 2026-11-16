@@ -22,7 +22,9 @@ const CREATED_ONLY_FIELDS = new Set(['secret', 'newSecret']);
 
 /** The slice of a JSON schema the drift check reads: its properties and its required list. */
 interface ObjectSchema {
+    /** The declared fields, by name. */
     properties: Record<string, unknown>;
+    /** Field names that must be present. */
     required?: string[];
 }
 

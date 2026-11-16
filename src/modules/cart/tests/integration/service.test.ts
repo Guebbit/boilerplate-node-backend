@@ -1565,8 +1565,8 @@ describe('orderConfirm — paymentMethod', () => {
         }));
 
     /**
-     * The cap used to bind `bank_transfer` alone, so a card order (15 minutes of held stock, or a
-     * week once `processing`) was free to repeat without end.
+     * The cap binds every payment method, not `bank_transfer` alone: a card order (15 minutes of held
+     * stock, or a week once `processing`) must not be free to repeat without end.
      */
     it('holds a card checkout to the same cap', async () => {
         const user = await createUser();

@@ -1,39 +1,23 @@
 /**
- * Concurrency: the account endpoints.
+ * Concurrency on the account endpoints: N requests genuinely in flight through the mounted app,
+ * asserting INVARIANTS ("one user exists"), never orderings ("the first won").
  *
- * These drive the mounted app through supertest, N requests genuinely in flight at once, and
- * assert INVARIANTS rather than orderings — "one user exists", never "the first request won".
- * Which participant wins is the database's business and varies run to run; that it is exactly one
- * is the property.
+ * R1:        a check-then-insert on a NON-UNIQUE index races: two signups for one address both
+ *            read "absent" and both insert. `unique: true` on `users_email` plus the E11000 → 409
+ *            branch in `databaseErrorInterpreter` closes it, in that order (the index alone turns
+ *            the duplicate into a 500).
+ * R4:        a login writes its own session row, so N concurrent logins leave N rows, none lost to
+ *            a clobbering write, and one revocation under contention leaves none behind.
+ * R5:        not a race to close but a decision to PROVE: refresh rotation must not read "two
+ *            tabs refreshed in the same instant" as theft. `supersede` (`account/repository.ts`)
+ *            lets exactly one exchange of a token WIN atomically; any other within
+ *            `NODE_TOKEN_ROTATION_GRACE_MS` is reissued its own sibling token, not rejected.
+ * Contended: measured at N=10 over 20 consecutive runs: signup saw a 409 in 20/20, and R4's
+ *            read-modify-write shape lost a token in 20/20 where `$push`/`$pull` lost none.
+ *            Recorded because a race test that never races measures nothing.
  *
- * R1, R4 and R5 each guard one specific race:
- *
- *   R1 — a check-then-insert against a NON-UNIQUE index races: `findOne({ email })`, then
- *        `create()` if nothing came back, with the collection free to change in between, lets two
- *        concurrent signups for one address both read "absent" and both insert. `unique: true` on
- *        `users_email` plus the E11000 → 409 branch in `databaseErrorInterpreter` closes it — in
- *        that order, because the index alone would turn the duplicate account into a 500.
- *
- *   R4 — a login writes its own session row, so N concurrent logins leave N rows: none lost to a
- *        clobbering write, as they were while sessions were entries in an array on the user
- *        document, and one revocation under contention leaves none behind.
- *
- * R5 is not about closing a race — it PROVES a design decision made explicitly:
- * refresh-token rotation must not turn "two tabs woke up and refreshed within the same instant"
- * into "this looks like theft". `supersede` (`account/repository.ts`) lets exactly one
- * concurrent exchange of one token WIN atomically; every other exchange within
- * `NODE_TOKEN_ROTATION_GRACE_MS` of that win is reissued its own sibling token rather than
- * rejected. This is the suite where that guarantee has to be proven under real concurrency, not
- * just asserted in a docblock.
- *
- * Observed hit rates, N=10, 20 consecutive runs (recorded because a race test that never actually
- * races is a green test measuring nothing):
- *   - signup: 20/20 runs see at least one 409 — the race is contended every time.
- *   - login: the read-modify-write pattern R4 guards against loses at least one token in 20/20
- *     runs; the `$push`/`$pull` write against mongod loses none in 20/20.
- *
- * `tests/support/race.ts` explains why `Promise.allSettled` and not `Promise.all`, why
- * `--runInBand` is irrelevant to the concurrency inside a test, and why 429 is asserted against.
+ * `tests/support/race.ts` says why `Promise.allSettled`, why `--runInBand` does not matter here,
+ * and why 429 is asserted against.
  */
 import { api } from '@tests/http';
 import { testCallerContext } from '@tests/callers';

@@ -91,7 +91,9 @@ const cartSnapshot = (userId: string) =>
 
 /** One shopper write, by name, each of which must invalidate an in-flight checkout. */
 interface CartWrite {
+    /** The write's title in the test name. */
     name: string;
+    /** Performs the write; `otherId` is a second product to swap in. */
     run: (ctx: { userId: string; productId: string; otherId: string }) => Promise<unknown>;
 }
 

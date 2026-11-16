@@ -15,13 +15,21 @@ import { TIMELINE_AUDIENCE } from '../../domain';
 
 /** The few schema fields these checks look at. */
 interface Schema {
+    /** The only values the field accepts. */
     enum?: string[];
+    /** A pointer into `components.schemas`. */
     $ref?: string;
+    /** Every branch matches. */
     allOf?: Schema[];
+    /** Exactly one branch matches. */
     oneOf?: Schema[];
+    /** The declared fields, by name. */
     properties?: Record<string, Schema>;
+    /** `false` refuses unknown keys. */
     additionalProperties?: boolean;
+    /** `false` refuses keys no branch declared. */
     unevaluatedProperties?: boolean;
+    /** The field that picks the variant, and which value maps to which schema. */
     discriminator?: { propertyName: string; mapping: Record<string, string> };
 }
 

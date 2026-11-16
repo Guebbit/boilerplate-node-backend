@@ -928,7 +928,7 @@ describe('POST /account/reauth', () => {
      * Unlike `POST /account/password`, `accountService.reauth` writes nothing and revokes no
      * session — it only compares the password. A failed re-mint here means the whole point of the
      * endpoint (a fresh session, to clear a step-up challenge) did not happen, so it must answer
-     * 500, not the false 200-with-no-token the code used to degrade to.
+     * 500, not a false 200-with-no-token.
      */
     it('answers 500 with no jwt cookie when the re-mint fails, rather than a false 200', async () => {
         const { bearer } = await loginWithCookie();

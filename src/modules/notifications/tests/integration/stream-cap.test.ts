@@ -48,7 +48,9 @@ const sessionCookie = async (username: string) => {
 
 /** What a test reads off an open attempt: the status line and headers, nothing of the body. */
 interface Opened {
+    /** The HTTP status of the open attempt. */
     status: number;
+    /** Its response headers. */
     headers: IncomingMessage['headers'];
 }
 

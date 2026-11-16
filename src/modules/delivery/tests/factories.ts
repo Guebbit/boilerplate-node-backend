@@ -27,6 +27,7 @@ export interface ShipEverythingOptions {
     trackingCode?: string;
     /** Ship from `paid` without `start`, as an override holder. */
     forced?: boolean;
+    /** The override reason a `forced` shipment must carry. */
     reason?: string;
 }
 
@@ -136,7 +137,9 @@ export const carryOrderTo = async (orderId: string, to: 'shipped' | 'delivered')
 
 /** One preorder line to place: how many units, promised for which date. */
 export interface WantedPreorder {
+    /** Units to preorder. */
     quantity: number;
+    /** The date promised for them. */
     releaseDate: Date;
 }
 
@@ -187,6 +190,7 @@ export const paidPreorderOrder = async (
 
 /** One backordered line to place: how many units, how many of them the shelf holds, and the promise. */
 export interface WantedBackorder {
+    /** Units to backorder. */
     quantity: number;
     /** Units on the shelf; the rest are owed. */
     shelf: number;

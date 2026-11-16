@@ -63,7 +63,9 @@ export interface PlantedSession {
     ttlMs?: number;
     /** When this sign-in began; now when absent. */
     startedAt?: Date;
+    /** When a newer session replaced this one; set to plant an already-rotated row. */
     supersededAt?: Date;
+    /** When the session was last used; set to plant an idle one. */
     lastUsedAt?: Date;
 }
 
