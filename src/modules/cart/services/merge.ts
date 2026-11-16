@@ -171,8 +171,9 @@ const announceRemoved = (userId: string, results: MergeLineResult[]): Promise<un
  * ends at the sum, capped at the line maximum — and only a product the catalogue does not show is
  * refused. Stock lowers nothing: a short line keeps its quantity and comes back with its
  * `availability`, read from the stock ledger and the catalogue. Lowering a short line would let a caller read
- * exact stock by merging 999 (docs/understand/defences/authorization.md, "Reading the shelf"). Checkout stays the one real stock gate.
+ * exact stock by merging 999 Checkout stays the one real stock gate.
  *
+ * @see docs/modules/cart.md#stock-checked-in-three-places
  * @param userId - the signed-in caller
  * @param lines - the guest cart's lines
  * @param context - the caller, for analytics

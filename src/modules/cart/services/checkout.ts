@@ -478,7 +478,7 @@ const placeLinesOf = (joined: readonly JoinedCartLine[]): PlaceOrderLine[] => {
         item: { productId: line.productId, quantity: line.quantity },
         /**
          * Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
-         * not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+         * not a hydrated `populate()`, so no `.toObject()` cast is needed.
          */
         product: line.product,
         ...(backorders.has(line.productId)
@@ -757,7 +757,7 @@ export const orderConfirm = (
         .then((result) => {
             /**
              * `order_created` fires here too, not just from the admin route's `create()` —
-             * see docs/understand/observability-layer.md. The audit records the caller's real role,
+             * the audit trail's own page covers it. The audit records the caller's real role,
              * whatever it is — no forced override: a purchase made by an admin is still an admin
              * action, not a synthetic "user" role.
              */

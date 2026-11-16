@@ -37,7 +37,7 @@ export const cartGet = (userId: string): Promise<CartLine[]> =>
     cartRepository.findByUserId(userId).then((cart) => readCartLines(cart));
 
 /**
- * Get user cart with computed summary (item count, total quantity, total price).
+ * The wire view `cartGetForBadge` and `cartGetForView` share: each line with its summary.
  *
  * Split by caller intent, not by data: a person opening their basket and a badge polling a count
  * run the identical read, but only one of them is a `cart_viewed` moment.

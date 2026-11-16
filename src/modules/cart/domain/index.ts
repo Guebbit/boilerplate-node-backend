@@ -1,7 +1,8 @@
 /**
  * @module
  * Cart — domain layer. Pure rules, lint-guaranteed framework-free.
- * See `docs/understand/domain-layer.md`.
+ *
+ * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
 export {

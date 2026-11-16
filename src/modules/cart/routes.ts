@@ -8,8 +8,10 @@
  * `checkout:Cart` on top of `isAuth` (`requireFreshAuth`,
  * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. That
  * is the only key this module declares — see `shared/authorization-keys.generated.yaml`.
- * A line is written through the parent's `/items` collection (docs/understand/write-methods.md#a-line-is-written-through-its-parent):
+ * A line is written through the parent's `/items` collection (see the linked page):
  * 200 + the whole cart, no `Location`, no read of a line.
+ *
+ * @see docs/understand/write-methods.md#a-line-is-written-through-its-parent
  */
 
 import { Router } from 'express';
@@ -70,7 +72,7 @@ router.post(
  * POST /cart/merge — fold a guest cart in; one result per line comes back, and a line that could
  * not be added at all becomes a notification. `idempotencyKey` for the same reason as checkout's:
  * a retry after a lost response must replay the answer, never add the guest's quantities twice.
- * `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
+ * `mergeLimiter` first: one call carries many lines, each a read and a write (see `./rate-limits`).
  */
 router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 

@@ -2,7 +2,7 @@
  * @module
  * The cart projection — how a stored cart becomes something a caller can read.
  *
- * Internal to `services/`; the other three files share these helpers and none of them owns it.
+ * Internal to `services/`: `checkout.ts` and `items.ts` share these helpers; neither owns them.
  *
  * A cart is its own document keyed by `userId` (`../model`), so every operation is one addressed
  * write or read. Absence and emptiness are the same state: no cart document answers as an empty
@@ -33,8 +33,10 @@ import { shopCurrency } from '@modules/shop';
  * A cart line joined with the product it references.
  * `productId` and `product` are separate fields on purpose: {@link readCartLines} joins by a
  * separate `productService.findManyByIds` lookup rather than a Mongoose `populate()` — cart
- * reaches products through its service, not its collection (`docs/understand/strategic-ddd.md` §5) —
+ * reaches products through its service, not its collection —
  * so the id it looked the product up by is kept alongside the result rather than overwritten.
+ *
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  */
 export interface CartLine extends CartItem {
     /** The joined product, or `null` for an id that resolves to nothing. */

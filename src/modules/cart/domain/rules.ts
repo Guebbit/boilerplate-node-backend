@@ -1,7 +1,8 @@
 /**
  * @module
  * Cart rules. Pure: data in, verdict out — no status codes, no i18n; `services/` maps verdicts.
- * See `docs/understand/domain-layer.md`.
+ *
+ * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
 import type { LineAvailability } from '@types';

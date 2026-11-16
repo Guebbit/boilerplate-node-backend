@@ -5,7 +5,9 @@
  * Three callers share it, so they cannot disagree: checkout's pre-flight (refuses), the merge
  * (flags the result) and the cart view (flags every line). `available` comes in from the service
  * layer, which reads the stock ledger through `inventoryService.availableFor`; this layer reaches
- * no sibling module. See `docs/modules/cart.md#stock-checked-in-three-places`.
+ * no sibling module.
+ *
+ * @see docs/modules/cart.md#stock-checked-in-three-places
  */
 
 /**
