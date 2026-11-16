@@ -119,7 +119,9 @@ x-data-hardening: &data-hardening
 #                   docs/operate/first-deploy.md#monitoring-and-alerts.
 #   the logs        Alloy tails the container log files under `CONTAINER_LOGS_PATH` (Docker's
 #                   `/var/lib/docker/containers` by default; Podman needs its own path and
-#                   `CONTAINER_LOG_DRIVER=k8s-file`). It reads both engines' formats.
+#                   `CONTAINER_LOG_DRIVER=k8s-file`). It reads both engines' formats. Inside
+#                   the client's trust domain: it can read every container on this host.
+#                   docs/operate/first-deploy-monitoring.md#what-the-log-shipper-can-read
 #   the audit copy  `ALLOY_AUDIT_FORWARD_CONFIG` names an Alloy file that forwards the audit
 #                   lines off the host. Unset, /dev/null is mounted and nothing leaves.
 #
@@ -940,7 +942,9 @@ services:
 
     # Alloy: tails the container log files and ships them to Loki. The dev stack loads the same
     # config file. Runs as root because the engine's log files are root-owned; the capability set is
-    # empty, so it can read them (as their owner) and do nothing else.
+    # empty, so it can read them (as their owner) and do nothing else. Inside the client's trust
+    # domain: it can read every container on this host. See
+    # docs/operate/first-deploy-monitoring.md#what-the-log-shipper-can-read
     alloy:
         logging: *logging
         image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
