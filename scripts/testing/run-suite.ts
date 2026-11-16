@@ -1,31 +1,23 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Runs one test layer as a series of SEQUENTIAL jest processes — `npm run test:integration` and
- * friends. A wrapper rather than a bare `jest`, for one job a CLI flag cannot do: bound how much
- * memory the layer may hold at once on a machine that does not have much.
+ * Runs one test layer as SEQUENTIAL jest processes (`npm run test:integration` and friends). A
+ * wrapper rather than a bare `jest`, for one job no CLI flag does: bound how much memory the
+ * layer holds at once on a machine without much.
  *
- * ── WHY SHARDS AND NOT JUST A BIGGER HEAP ────────────────────────────────────────────────────────
- * Jest gives every test file a fresh module registry but the PROCESS keeps what that registry
- * allocated — ~70 MB per file, measured. Multiplied across the integration layer's own file
- * count, that is several GB of retention in one process, and the run dies on Node's heap
- * ceiling long before the last file.
- * `--max-old-space-size` only moves the ceiling; it does not stop the climb. A process that exits
- * every N files does, and `--shard` is jest's own way to say which N.
- *
- * ── WHY IN BAND INSIDE A SHARD ───────────────────────────────────────────────────────────────────
- * The layers marked `serialized` below run `--runInBand` inside each shard, and so does any layer
- * narrowed to one worker (`JEST_WORKERS=1`). Only an in-band layer is sharded.
- * `--workerIdleMemoryLimit` set below a worker's steady-state baseline restarts it after every
- * single file — measured, and slower than the retention problem it exists to solve.
- *
- * ── WHY --unsharded EXISTS TOO ────────────────────────────────────────────────────────────────────
- * Coverage, the JSON report and the randomized-order run each want every pattern this file knows
- * about in ONE jest process — they already picked their own flags and heap, sharding would only
- * cost them a repeated `mongod` boot. `--unsharded` skips the shard math below and runs the named
- * suites' patterns as one process, so {@link SUITES} stays the one place a suite's patterns are
- * written down instead of copied into `package.json`. It still bounds the workers, unless the
- * caller passed `--runInBand` or `--maxWorkers` itself.
+ * Shards:       jest gives every file a fresh module registry but the PROCESS keeps what it
+ *               allocated (~70 MB per file, measured), so a large layer dies on Node's heap
+ *               ceiling. `--max-old-space-size` only moves the ceiling; a process that exits every
+ *               N files stops the climb, and `--shard` is jest's way to say which N.
+ * In band:      layers marked `serialized` below, and any layer narrowed to one worker
+ *               (`JEST_WORKERS=1`), run `--runInBand` inside each shard; only those are sharded.
+ *               `--workerIdleMemoryLimit` under a worker's baseline restarts it every file, which
+ *               is slower than the problem it solves.
+ * `--unsharded`: coverage, the JSON report and the randomized-order run each want every pattern in
+ *               ONE process and set their own flags, so sharding would cost only repeated `mongod`
+ *               boots. It runs the named suites' patterns as one process, keeps {@link SUITES} the
+ *               one home for patterns, and still bounds workers unless the caller passed
+ *               `--runInBand` or `--maxWorkers`.
  *
  * @see docs/build/weak-machines.md#start-here-—-the-two-mechanisms
  */

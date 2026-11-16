@@ -20,20 +20,27 @@ import { parse as parseYaml } from 'yaml';
  * answers with, by HTTP status.
  */
 interface OperationExtensions {
+    /** The operation's cache policy. */
     'x-cache'?: string;
+    /** The owning module, stamped by the bundler. */
     'x-module'?: string;
+    /** Error codes the operation answers with, by HTTP status. */
     'x-error-codes'?: Record<string, string[]>;
 }
 
 /** One entry of the root's `x-app-level-responses` map — see the comment beside it there. */
 export interface AppLevelResponse {
+    /** The name of the shared response to attach. */
     response: string;
+    /** Which operations get it. */
     appliesTo: 'all' | 'requestBody' | 'requestBodyOrBodyless';
 }
 
 /** One error code's declaration, as a fragment's `x-error-codes` map holds it. */
 export interface ErrorCodeEntry {
+    /** The HTTP status the code is answered with. */
     status: number;
+    /** What the code means, in the contract's words. */
     description: string;
     /**
      * `app` marks a code any operation may send (a status-derived code, a validation or rate-limit
@@ -47,10 +54,15 @@ export interface ErrorCodeEntry {
  * ones typed `unknown` are checked by the step that reads them.
  */
 interface RootExtensions {
+    /** Responses every matching operation gets, by status. */
     'x-app-level-responses'?: Record<string, AppLevelResponse>;
+    /** Headers every response gets; checked by the step that reads them. */
     'x-app-level-headers'?: unknown;
+    /** The image types an upload accepts; checked by the step that reads them. */
     'x-image-upload-types'?: unknown;
+    /** The error-code catalogue, by code. */
     'x-error-codes'?: Record<string, ErrorCodeEntry>;
+    /** How the docs group their tags. */
     'x-tagGroups'?: { name: string; tags: string[] }[];
 }
 
@@ -68,8 +80,11 @@ export type Operation = OpenAPIV3_1.OperationObject<OperationExtensions>;
 
 /** One operation, with the route and the method it sits under. */
 export interface OperationEntry {
+    /** The path template the operation sits under. */
     route: string;
+    /** The verb it answers. */
     method: OpenAPIV3.HttpMethods;
+    /** The operation object itself. */
     operation: Operation;
 }
 

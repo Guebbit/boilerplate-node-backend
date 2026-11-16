@@ -8,7 +8,9 @@
  * `import type`: counts. The type IS the schema, and the coupling survives erasure.
  * Options:      suffixes and the path check are per layer. Defaults are the strict reading.
  *
- * Why two checks, why types count: docs/understand/layers.md#persistence-behind-the-repository
+ * Why two checks and why types count are on the page below.
+ *
+ * @see docs/understand/layers.md#persistence-behind-the-repository
  */
 
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
@@ -16,7 +18,9 @@ import type { TSESTree } from '@typescript-eslint/utils';
 
 /** This rule's one config block: which name suffixes count, and whether the path check runs. */
 export interface RuleOptions {
+    /** Name suffixes (`Model`, `Repository`) that count as persistence. */
     bindings?: string[];
+    /** Whether the import path is checked too. */
     paths?: boolean;
 }
 

@@ -28,12 +28,15 @@ import { REPO_ROOT } from '../modules-on-disk';
 
 /** One error code's declaration, as `x-error-codes` holds it. Only `status`/`description` are read; both already carry the WHY in the contract, so neither is repeated in a comment here. */
 interface ErrorCodeEntry {
+    /** The HTTP status the code is answered with. */
     status: number;
+    /** What the code means, in the contract's words. */
     description: string;
 }
 
 /** The slice of the bundled OpenAPI document this generator reads. */
 interface OpenApiDocument {
+    /** The error-code catalogue, by code. */
     'x-error-codes'?: Record<string, ErrorCodeEntry>;
 }
 

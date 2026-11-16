@@ -26,7 +26,9 @@ import type { FormatText } from './format-text';
 
 /** One generated file: where it goes, relative to the repo root, and what it should hold. */
 export interface GeneratedFile {
+    /** Path relative to the repo root. */
     file: string;
+    /** What the file should hold. */
     content: string;
 }
 

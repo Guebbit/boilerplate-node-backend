@@ -37,6 +37,7 @@ export const USAGE = [
 
 /** A refusal: the reason the arguments cannot be turned into options. */
 export interface ParseRefusal {
+    /** The reason, ready to print. */
     error: string;
 }
 

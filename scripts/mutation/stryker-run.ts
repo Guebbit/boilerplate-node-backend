@@ -17,10 +17,11 @@ import { availableMemoryMb, environmentKnob } from '../testing/machine-budget';
 import { REPO_ROOT } from '../modules-on-disk';
 
 /**
- * Measured peak RSS of one Stryker/jest worker during a mutation run, rounded up —
- * docs/build/mutation-testing.md#the-worker-pool-multiplication. The ceiling for this run is RAM,
+ * Measured peak RSS of one Stryker/jest worker during a mutation run, rounded up. The ceiling for this run is RAM,
  * not cores, which is why the default below is computed from it instead of copying `jest`'s
  * CPU-only heuristic.
+ *
+ * @see docs/build/mutation-testing.md#the-worker-pool-multiplication
  */
 const STRYKER_WORKER_PEAK_MB = 2900;
 
@@ -58,10 +59,11 @@ const OOM_WINDOW_MS = 10 * 60 * 1000;
  * `STRYKER_CONCURRENCY` always wins. Unset, the safe number is computed from this machine rather
  * than left to `stryker.json`'s committed `concurrency: 4` — a number sized for a
  * contributor's laptop, not necessarily this one.
- * See docs/build/mutation-testing.md#the-worker-pool-multiplication.
  *
  * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free
  *   memory (`MemAvailable`, not total) divided by one worker's peak RSS
+ *
+ * @see docs/build/mutation-testing.md#the-worker-pool-multiplication
  */
 const resolveConcurrency = (): number => {
     const configured = environmentKnob('STRYKER_CONCURRENCY');
@@ -77,7 +79,9 @@ const resolveConcurrency = (): number => {
 
 /** How a Stryker run ended: its exit code, and whether this wrapper is what stopped it. */
 export interface StrykerOutcome {
+    /** Stryker's exit code. */
     code: number;
+    /** Whether this wrapper stopped the run because memory ran out. */
     abortedForOom: boolean;
 }
 
@@ -103,16 +107,19 @@ export const runStryker = ({
 
     /**
      * `--expose-gc` lets the test environment collect after each file, which a single-process dry
-     * run needs to finish — see docs/build/mutation-testing.md#collect-after-each-file.
+     * run needs to finish.
      *
      * `--max-old-space-size` raises V8's default, a flat ~4.2 GB here rather than a share of the
      * machine — a worker wanting more dies in the first minute. It cannot bound memory held outside
-     * the heap, such as `bson`'s buffers. See docs/build/mutation-testing.md#worker-heap-cap.
+     * the heap, such as `bson`'s buffers.
      *
      * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_URL`/
      * `NODE_REDIS_URL` would otherwise reach every spawned jest before `tests/support/setup-environment.ts` can
      * override them, and every rate-limit suite fails open against a Redis that is not reachable
      * from here — see `environmentKnob`'s own reasoning in `machine-budget.ts`.
+     *
+     * @see docs/build/mutation-testing.md#collect-after-each-file
+     * @see docs/build/mutation-testing.md#worker-heap-cap
      */
     const childEnvironment = {
         ...process.env,

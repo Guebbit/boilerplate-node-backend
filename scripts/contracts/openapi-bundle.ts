@@ -228,6 +228,7 @@ const VERSIONED_ANSWER_METHODS = new Set(['post']);
 
 /** What {@link withVersionedResources} reads off a path item, beside its operations. */
 interface VersionedPathItem {
+    /** Verbs of this path that carry a `version` in their resource. */
     'x-versioned'?: string[];
 }
 

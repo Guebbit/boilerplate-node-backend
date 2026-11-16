@@ -31,7 +31,9 @@ export type RepoRole = 'backend' | 'frontend';
  * that, which is why it went unguarded.
  */
 export interface SharedFile {
+    /** Path of the file here. */
     backend: string;
+    /** Path of its twin in the paired frontend. */
     frontend: string;
 }
 
@@ -51,7 +53,9 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * Not members:      files both repos merely keep identical for convenience, and anything either
  *                   repo can regenerate from a file already listed.
  *
- * The reasoning and the excluded files: docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
+ * The reasoning and the excluded files are on the page below.
+ *
+ * @see docs/build/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself. */
@@ -128,6 +132,7 @@ export interface SpecComparison {
     ours?: string;
     /** sha256 of the sibling's copy, or undefined when the file is absent there. */
     theirs?: string;
+    /** Whether the two are identical, differ or one is missing. */
     status: SpecComparisonStatus;
 }
 

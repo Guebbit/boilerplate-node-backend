@@ -70,7 +70,9 @@ const OPENAPI_SCHEMA_REF = /^(?:\.\/|\.\.\/([\w-]+)\/)openapi\.yaml#\/components
 
 /** One REST schema a fragment references: its name, and the module folder it lives in when not the fragment's own. */
 interface RestReference {
+    /** The REST schema's name. */
     name: string;
+    /** The module folder it lives in; absent when it is the fragment's own. */
     sibling: string | undefined;
 }
 

@@ -5,7 +5,9 @@
  * `regenerate --no-sync` so the generated types exist for the first compile.
  *
  * What it will not decide, and prints instead: personal data, rate limits, which
- * roles hold the new permission keys. See docs/build/module-scaffolder.md.
+ * roles hold the new permission keys.
+ *
+ * @see docs/build/module-scaffolder.md#what-it-does-not-decide
  */
 
 import { spawnSync } from 'node:child_process';

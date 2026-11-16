@@ -23,11 +23,13 @@ import { REPO_ROOT } from '../modules-on-disk';
 
 /** The slice of an OpenAPI media type this generator reads. */
 interface MediaType {
+    /** The multipart encoding of the `imageUpload` part. */
     encoding?: { imageUpload?: { contentType?: string } };
 }
 
 /** The slice of the bundled document this generator reads. */
 interface OpenApiDocument {
+    /** Path to verb to operation, reduced to the upload encodings. */
     paths: Record<
         string,
         Record<string, { requestBody?: { content?: Record<string, MediaType> } }>

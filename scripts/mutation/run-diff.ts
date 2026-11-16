@@ -9,12 +9,13 @@
  * Graded on its own files, then laid over the report already on disk (`overlayReport`), so a
  * pulled sweep stays whole with this branch's files refreshed.
  *
- * Why whole files, why it cannot fail you for old debt:
- * docs/build/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
+ * Why whole files, and why it cannot fail you for old debt, is on the page below.
  *
  * Usage:
  *   npm run mutation                 # against origin/main
  *   npm run mutation -- --base=HEAD~3
+ *
+ * @see docs/build/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -114,7 +115,9 @@ const keepReportWhole = (): void => {
 /**
  * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
- * them — docs/build/mutation-testing.md#worker-heap-cap.
+ * them.
+ *
+ * @see docs/build/mutation-testing.md#worker-heap-cap
  */
 runStryker({
     label: `diff (${files.length} files)`,

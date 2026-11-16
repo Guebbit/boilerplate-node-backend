@@ -10,7 +10,9 @@ import { enabledModules } from '../../src/modules';
 
 /** One variable `npm run setup` may fill, and the exact placeholder it replaces. */
 export interface FillableKey {
+    /** The environment variable's name. */
     key: string;
+    /** The exact text in `.env` that marks it as unset. */
     placeholder: string;
 }
 

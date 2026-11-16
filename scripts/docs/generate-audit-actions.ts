@@ -57,6 +57,7 @@ interface DeclaredAction {
 
 /** A {@link DeclaredAction} plus what its call sites were found to audit. */
 interface AuditActionRow extends DeclaredAction {
+    /** What the call sites audit the action against (a model name). */
     targetType: string;
 }
 

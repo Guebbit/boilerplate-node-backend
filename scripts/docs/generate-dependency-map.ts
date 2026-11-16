@@ -14,7 +14,9 @@
  * `./dependency-groups.ts`. A package that group doesn't claim, and that exactly one module
  * imports, needs no hand entry at all — ownership is what's derived, so it's listed under that
  * module automatically. Anything left over — no group, no single owner — lands in "Ungrouped":
- * visible, not a build failure, per `docs/understand/modules.md`'s "less policing" stance.
+ * visible, not a build failure, per the "less policing" stance.
+ *
+ * @see docs/understand/modules.md#libraries-a-module-owns
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -74,7 +76,9 @@ const ALIAS_PREFIXES = [
 
 /** `package.json`'s two dependency maps — just the names; versions play no part here. */
 interface PackageManifest {
+    /** Production dependencies, by name. */
     dependencies?: Record<string, string>;
+    /** Development dependencies, by name. */
     devDependencies?: Record<string, string>;
 }
 
@@ -194,9 +198,13 @@ const soleModuleOwner = (owners: Set<string> | undefined): string | undefined =>
 
 /** One row of the generated table: a hand-kept group, or a package with no group and one owner. */
 interface Row {
+    /** The group (or the owning module) the row belongs to. */
     group: string;
+    /** The packages in it, formatted for the table cell. */
     packages: string;
+    /** What they are for. */
     purpose: string;
+    /** The page to read next. */
     readMore: string;
 }
 

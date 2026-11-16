@@ -49,9 +49,13 @@ const END = '<!-- role-matrix:end -->';
 
 /** One row of the table: a stored staff role (or none) and the audience the request is in. */
 interface Persona {
+    /** The row's label in the table. */
     name: string;
+    /** Whether the persona acts at platform or tenant level. */
     scope: AuthorizationScope;
+    /** The stored staff role it holds; `null` for none. */
     role: string | null;
+    /** The audience the request arrives in. */
     audience: AudienceName;
 }
 

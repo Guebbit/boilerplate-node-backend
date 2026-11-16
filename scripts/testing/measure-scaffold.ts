@@ -9,7 +9,9 @@
  *
  * The unit tests under `tests/unit/scripts/scaffold/` cover the pure half. This covers what only a
  * whole checkout can: the generated code compiles and lints, its own tests pass, no cross-cutting
- * rule objects, and the docs build. See docs/build/module-scaffolder.md.
+ * rule objects, and the docs build.
+ *
+ * @see docs/build/module-scaffolder.md#how-it-is-checked
  */
 
 import os from 'node:os';
@@ -31,8 +33,11 @@ const FOLDERS = [PROBE, QUIET].map((name) => `src/modules/${name}`);
 
 /** One command run against the scratch tree. */
 interface Check {
+    /** What the step is called in the output. */
     label: string;
+    /** The program to run. */
     command: string;
+    /** Its arguments. */
     args: readonly string[];
     /** True when a NON-zero exit is the passing answer (the idempotent refusal). */
     expectFailure?: boolean;

@@ -9,13 +9,18 @@
  * the real scope itself, so a new module is in a shard the next time this runs, with no edit here.
  *
  * The GitHub sweep plans its own, smaller shards: `scripts/mutation/ci/waves.ts`.
- * See docs/build/mutation-testing.md#the-three-commands for the shape this feeds.
+ * The shape this feeds is on the page below.
+ *
+ * @see docs/build/mutation-testing.md#the-three-commands
  */
 
 /** One shard of the mutate scope: a name, and its `--mutate` file list. */
 export interface Shard {
+    /** The shard's label. */
     name: string;
+    /** Its `--mutate` argument, a comma-separated file list. */
     mutate: string;
+    /** Source lines in it, the weight used to balance shards. */
     lines: number;
 }
 

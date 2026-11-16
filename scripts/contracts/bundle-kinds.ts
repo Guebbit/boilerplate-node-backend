@@ -55,6 +55,7 @@ interface BundleIdentity {
 export interface CompiledBundle extends BundleIdentity {
     /** The compiled document text. */
     content: () => string;
+    /** Marks a bundle that is built from the module fragments. */
     compiled: true;
 }
 
@@ -69,6 +70,7 @@ export interface CompiledBundle extends BundleIdentity {
 export interface GeneratedBundle extends BundleIdentity {
     /** Async because the collections load every module's `probes.ts` by scan. */
     content: () => Promise<string>;
+    /** Marks a bundle that is derived from another bundle. */
     generated: true;
 }
 

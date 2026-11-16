@@ -17,8 +17,11 @@ import { format, resolveConfig } from 'prettier';
 
 /** One generated block: the markers bounding it, and the content to put between them. */
 export interface MarkerBlock {
+    /** Marker line that opens the block. */
     start: string;
+    /** Marker line that closes it. */
     end: string;
+    /** The generated content between the markers. */
     body: string;
 }
 

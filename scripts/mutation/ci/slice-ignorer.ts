@@ -15,18 +15,23 @@
 
 /** An inclusive, 1-based line range of one file. */
 export interface LineSlice {
+    /** First line, inclusive. */
     from: number;
+    /** Last line, inclusive. */
     to: number;
 }
 
 /** As much of Babel's `SourceLocation` as this reads. Lines are 1-based, like {@link LineSlice}. */
 interface NodeLocation {
+    /** Where the node begins. */
     start: { line: number };
+    /** Where the node ends. */
     end: { line: number };
 }
 
 /** As much of the Babel `NodePath` Stryker hands an ignorer as this reads. */
 export interface IgnorerPath {
+    /** The syntax node, with the location Babel recorded for it. */
     node: { loc?: NodeLocation | null };
 }
 

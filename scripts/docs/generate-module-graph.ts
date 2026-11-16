@@ -57,16 +57,23 @@ const LIST_END = '<!-- module-list:end -->';
 
 /** One module announcing a domain event that another module subscribes to. */
 interface EventEdge {
+    /** The module that announces the event. */
     owner: string;
+    /** The module that listens for it. */
     subscriber: string;
+    /** The event's name. */
     event: string;
 }
 
 /** A generated block and the page it belongs in, resolved before anything is written. */
 interface Target {
+    /** The docs page the block lives in. */
     file: string;
+    /** Marker line that opens the block. */
     start: string;
+    /** Marker line that closes it. */
     end: string;
+    /** What goes between the markers. */
     body: string;
 }
 
@@ -312,8 +319,10 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
 
 /**
  * Whether a module has its own page under `docs/modules/`. The one `group: example` module has
- * none: it exists to be copied, and `docs/understand/modules.md#the-module-template` is where it is
- * explained, so a neighbourhood block has nowhere to go.
+ * none: it exists to be copied, and the page below is where it is explained, so a neighbourhood
+ * block has nowhere to go.
+ *
+ * @see docs/understand/modules.md#the-module-template
  */
 const hasModulePage = (name: string): boolean => DESCRIPTORS[name].group !== 'example';
 

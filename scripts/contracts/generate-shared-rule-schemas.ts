@@ -38,7 +38,9 @@ const SHARED_DIRECTORY = path.join(REPO_ROOT, 'shared');
 interface GeneratedSource {
     /** Repo-relative path of the YAML. */
     source: string;
+    /** The Zod schema the rules file is checked against. */
     schema: z.ZodType;
+    /** What to write for it and where. */
     spec: GenerateSpec;
 }
 

@@ -54,34 +54,49 @@ interface AsyncApiChannel {
 
 /** The slice of an AsyncAPI message this generator reads: only its payload schema. */
 interface AsyncApiMessage {
+    /** The schema of the message body. */
     payload?: JsonSchema;
 }
 
 /** One of `document.servers` — only the field this generator reads off it. */
 interface AsyncApiServer {
+    /** The transport the server speaks (`amqp`, `http`, ...). */
     protocol?: string;
 }
 
 /** The JSON Schema keywords the contract's payloads use; anything else is ignored. */
 interface JsonSchema {
+    /** A pointer into `components`, resolved before use. */
     $ref?: string;
+    /** The JSON type of the value. */
     type?: string;
+    /** The only values it may take. */
     enum?: unknown[];
+    /** Exactly one branch matches. */
     oneOf?: JsonSchema[];
     /** The property whose value picks the `oneOf` member — AsyncAPI spells it as a bare name, see `zodExpression`. */
     discriminator?: string;
+    /** At least one branch matches. */
     anyOf?: JsonSchema[];
+    /** Every branch matches. */
     allOf?: JsonSchema[];
+    /** Property names that must be present. */
     required?: string[];
+    /** An object's fields, by name. */
     properties?: Record<string, JsonSchema>;
+    /** The schema of each array element. */
     items?: JsonSchema;
+    /** `false` refuses unknown keys; a schema types them. */
     additionalProperties?: boolean | JsonSchema;
 }
 
 /** The slice of the bundled AsyncAPI document this generator reads. */
 interface AsyncApiDocument {
+    /** Every channel, by name. */
     channels?: Record<string, AsyncApiChannel>;
+    /** The servers the document declares, by name. */
     servers?: Record<string, AsyncApiServer>;
+    /** The reusable messages and schemas the `$ref`s point into. */
     components?: {
         messages?: Record<string, AsyncApiMessage>;
         /** Read for the Zod emitter — Modelina builds the TS interfaces from the spec text itself. */

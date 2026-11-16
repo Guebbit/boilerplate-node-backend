@@ -47,6 +47,7 @@ export interface FunctionFacts {
     file: string;
     /** 1-based line of the name. */
     line: number;
+    /** The function's declared name. */
     name: string;
     /** Lines the body spans, braces included. */
     bodyLines: number;
@@ -94,7 +95,9 @@ export interface ShallowReport {
  * How one function symbol is used across the program.
  */
 interface Usage {
+    /** How many places in the scope refer to it. */
     references: number;
+    /** The distinct files those references sit in. */
     files: Set<string>;
     /** Argument count per direct call; `Infinity` for a call that spreads its arguments. */
     callArguments: number[];
@@ -104,9 +107,13 @@ interface Usage {
  * A named function: a declaration with a body, or a variable holding an arrow or function expression.
  */
 interface NamedFunction {
+    /** The node that declares it, for reporting a line. */
     declaration: ts.FunctionDeclaration | ts.VariableDeclaration;
+    /** The identifier node, for reading its text and position. */
     name: ts.Identifier;
+    /** What the function runs; the audit reads its size and shape. */
     body: ts.ConciseBody;
+    /** Its parameters, counted to spot a pass-through. */
     parameters: ts.NodeArray<ts.ParameterDeclaration>;
 }
 

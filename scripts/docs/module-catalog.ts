@@ -28,9 +28,13 @@ export interface CatalogPage {
 
 /** One module, as the docs list it. */
 export interface CatalogEntry {
+    /** The module's folder name. */
     name: string;
+    /** Its tier: foundation, shop or example. */
     group: ModuleDescriptor['group'];
+    /** Its DDD subdomain class. */
     subdomain: ModuleDescriptor['subdomain'];
+    /** One line on what it does. */
     summary: string;
     /** Deeper pages, named `<module>-<topic>.md`, in file order. */
     pages: CatalogPage[];
@@ -157,15 +161,21 @@ export const renderModuleList = (entries: readonly CatalogEntry[]): string =>
 
 /** One item of a VitePress sidebar group. */
 export interface SidebarItem {
+    /** The label shown in the sidebar. */
     text: string;
+    /** The page the item opens. */
     link: string;
+    /** Child items, when the entry is a sub-group. */
     items?: SidebarItem[];
 }
 
 /** One VitePress sidebar section. */
 export interface SidebarSection {
+    /** The section's heading in the sidebar. */
     text: string;
+    /** Whether the section starts closed. */
     collapsed?: boolean;
+    /** The section's entries. */
     items: SidebarItem[];
 }
 

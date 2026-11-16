@@ -3,10 +3,12 @@
  * Every file path the docs CLAIM exists, checked against the files that do — `npm run
  * check`. `docs:build` refuses a dead LINK; this refuses a dead FACT.
  *
- * What is swept and why each narrowing matters: docs/build/documentation-style.md#what-check-docs-references-sweeps
+ * What is swept and why each narrowing matters is on the page below.
  *
  * The floors below are the point. A sweep that silently reads zero pages reports a clean tree
  * forever, which is worse than no sweep — see `TierWallsTest`'s canary for the same guard.
+ *
+ * @see docs/build/documentation-style.md#what-check-docs-references-sweeps
  */
 
 import { execFileSync } from 'node:child_process';
@@ -45,7 +47,9 @@ const IGNORE_LINE = '<!-- doc-paths:ignore -->';
 
 /** One unresolved claim, and the page that makes it. */
 interface Finding {
+    /** The docs page that makes the claim. */
     page: string;
+    /** The path (and anchor) it names that does not resolve. */
     token: string;
 }
 
@@ -77,7 +81,9 @@ const toPath = (span: string): { path: string; anchor?: string } | undefined => 
 
 /** What one page's inline code spans resolve to: the paths it claims, filtered to the real ones. */
 interface Scan {
+    /** Every path claim on the page that resolves to a real file. */
     tokens: string[];
+    /** The claims that do not resolve. */
     findings: string[];
 }
 
@@ -116,7 +122,9 @@ const scanPage = (
 
 /** One code span's path claim, and any `#anchor` locator riding along with it. */
 interface Claim {
+    /** The claimed repo path. */
     path: string;
+    /** The `#heading` locator riding along with it. */
     anchor?: string;
 }
 
