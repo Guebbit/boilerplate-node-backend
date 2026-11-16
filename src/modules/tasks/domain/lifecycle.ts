@@ -1,6 +1,6 @@
 /**
  * @module
- * A task's lifecycle (docs/modules/tasks.md#lifecycle). `status` is read-only on the wire: it moves
+ * A task's lifecycle. `status` is read-only on the wire: it moves
  * only through three doors (`resolve`, `mark-spam`, `reopen`) and through assignment (`new` <->
  * `in_progress`). Each door here is a pure function from the task's facts to the write it owes, or
  * to the refusal.
@@ -10,6 +10,8 @@
  * Closing stamps `closedAt` (the retention clock), `resolution` and unsets `openKey` (the dedup
  * key). Reopening undoes all three. `dueAt` is NOT touched by any door: the clock belongs to the
  * situation (an FTC deadline does not restart because staff reopened), not to the reopen.
+ *
+ * @see docs/modules/tasks.md#lifecycle
  */
 
 import { TaskStatus } from '@types';

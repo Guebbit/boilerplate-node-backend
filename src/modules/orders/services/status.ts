@@ -127,22 +127,23 @@ const settleRetaken = (
     });
 
 /**
- * Report that a payment settled. `payments`' `settlePayment` is the one caller — see that
- * module's docblock for why there is only one place money is reconciled.
+ * Report that a payment settled.
  *
- * Its own conditional write (`repository.ts`'s `markPaid`), not {@link markSystemMove}: `paid` is
- * the one destination that stamps an extra fact (`paidAt`) in the same write, which
- * `markSystemMove`'s shared `$set` has no slot for. `invoicing` subscribes to the
- * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice (`docs/modules/invoicing.md#issuing-a-document`).
+ * Caller:     `payments`' `settlePayment`, the one place money is reconciled (see that module's
+ *             docblock for why).
+ * Write:      its own conditional write (`repository.ts`'s `markPaid`), not {@link markSystemMove}:
+ *             `paid` is the one destination that stamps an extra fact (`paidAt`) in the same
+ *             write, which `markSystemMove`'s shared `$set` has no slot for.
+ * Invoice:    `invoicing` subscribes to the `ORDER_STATUS_CHANGED` event emitted below and issues
+ *             the order's invoice.
+ * Stock:      paid means stock committed, as canceled means stock released: the hold's
+ *             `held → committed` claim lands in the same transaction as the status move.
+ * Late money: money can land after the hold was released (the window closed, the cancel not yet
+ *             run). The units are then taken again before the `paid` write: enough, and the order
+ *             is paid as usual; short, it is not written `paid` and this answers `null`, so the
+ *             payment is refunded and the late cancel ends the order.
  *
- * Paid means stock committed: the order's own rule, as canceled means stock released. The hold's
- * `held → committed` claim therefore lands in the same transaction as the status move.
- *
- * Money can land after the hold was released (the window closed, the cancel not yet run). The
- * units are then taken again before the `paid` write: enough, and the order is paid as usual;
- * short, it is not written `paid` and this answers `null`, so the payment is refunded and the
- * late cancel ends the order.
- *
+ * @see docs/modules/invoicing.md#issuing-a-document
  * @see docs/modules/inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again
  * @internal Friend-only to `payments` (`friends/payments.ts`): it moves an order to paid unchecked.
  * @param orderId - the order the payment was for

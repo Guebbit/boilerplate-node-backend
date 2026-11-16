@@ -33,7 +33,7 @@ export const getOrderTimeline = (
     const id = requireId(request, response, { notFound: 'orders.not-found' });
     if (!id) return;
 
-    // Query params only: a GET has no body (docs/understand/request-input.md#the-table).
+    // Query params only: a GET has no body.
     const query = parseBody(timelineQuerySchema, readInput(request, { surface: 'list' }), response);
     if (!query) return;
 

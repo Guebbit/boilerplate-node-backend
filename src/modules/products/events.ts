@@ -44,8 +44,10 @@ declare module '@kernel/events' {
          *
          * Why it exists: buyers who already paid were promised the old date. `delivery` listens
          * and decides, per waiting fulfillment order, whether the buyer needs a notice and
-         * whether silence now means cancel (docs/modules/products.md#preorder). Both dates are ISO
+         * whether silence now means cancel. Both dates are ISO
          * 8601; `from` is absent for a first date, `to` for a cleared one.
+         *
+         * @see docs/modules/products.md#preorder
          */
         'product.release_date_changed': { productId: string; from?: string; to?: string };
 

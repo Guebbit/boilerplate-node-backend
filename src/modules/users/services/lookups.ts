@@ -46,7 +46,10 @@ export const findForLogin = (email: string) =>
 export const findByOAuthIdentity = (provider: string, providerId: string) =>
     userRepository.findForSignInByOAuthIdentity(provider, providerId, new Date());
 
-/** Read for `GET /account` only: `pendingEmail` is `select: false`; this loads it. */
+/**
+ * Read where the pending change matters (`GET /account`, the email-change and sign-in views):
+ * `pendingEmail` is `select: false`, and this loads it.
+ */
 export const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);
 
 /** Request-time collision check; the unique indexes do the swap-time check. */

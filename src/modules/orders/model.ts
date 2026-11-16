@@ -14,7 +14,7 @@
  *           derives them from `items` at the single serialization point every response passes
  *           through, letting the contract mark them required.
  *
- * @see docs/modules/orders.md#the-invoice
+ * @see docs/modules/orders.md#the-story
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -149,8 +149,10 @@ export interface OrderDocument
     /**
      * `{year}-{sequence}`, assigned once by `allocateOrderNumber` at order-creation time — never
      * recomputed, unlike the VAT figures. Not a tax invoice number: this order is a receipt, not
-     * an invoice (docs/modules/orders.md#the-invoice). Every write path sets it; a number minted later
-     * could not honestly claim the order's actual place in the sequence.
+     * an invoice. Every write path sets it; a number minted later could not honestly claim the
+     * order's actual place in the sequence.
+     *
+     * @see docs/modules/orders.md#the-invoice
      */
     orderNumber: string;
     /**

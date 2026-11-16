@@ -242,12 +242,12 @@ export interface PaymentProvider {
      * lease (`IN_FLIGHT_LEASE_MS`): a call past it makes a retry read a false "outcome unknown".
      *
      * Beyond the provider's key window (Stripe v1: 24 h from first use) a reused key makes a NEW
-     * refund, so the adapter must stay idempotent itself
-     * (docs/modules/payments-provider-port.md#a-key-the-provider-forgot).
+     * refund, so the adapter must stay idempotent itself.
      *
      * A refund the provider accepted but has not settled answers `status: 'pending'`; it is
      * finished later with {@link retrieveRefund}, never sent again.
      *
+     * @see docs/modules/payments-provider-port.md#a-key-the-provider-forgot
      * @param providerRef - the provider's reference of the payment to refund
      * @param charge - the amount and currency to give back
      * @param idempotency - `idempotencyKey`: the provider's dedupe key. `refundId`: stamp it on

@@ -160,11 +160,12 @@ const countOf = (row: { params: object } | null): number =>
     row !== null && 'count' in row.params ? Number(row.params.count) : 0;
 
 /**
- * Write one recipient's summary row for today's count (docs/modules/notifications.md#summary-rows).
+ * Write one recipient's summary row for today's count.
  * A row that appears or whose count rose is unread again and pushed to the person's open tabs (as a
  * delete then a create, so a tab holds one copy, not two). A count that fell is quietly updated:
  * good news does not need a ping.
  *
+ * @see docs/modules/notifications.md#summary-rows
  * @param summary - the summary, keyed by its code; the inbox decides how long it lives
  * @param now - the clock the lifetime is measured from
  * @returns what happened to the row, so the digest mails only what appeared or grew

@@ -38,13 +38,13 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: the soft-deleted product, anonymously',
-        why: `The shop scenario seeds exactly one soft-deleted product so the scoping branches have a fixture behind them. An anonymous caller must get 404 here and an admin must get the record — send this one twice, with and without the admin token, and compare.`,
+        why: `The dataset carries exactly one soft-deleted product so the scoping branches have a fixture behind them. An anonymous caller must get 404 here and an admin must get the record — send this one twice, with and without the admin token, and compare.`,
         method: 'GET',
         path: '/products/{{seedSoftDeletedProductId}}'
     },
     {
         name: 'Probe: the inactive product, anonymously',
-        why: `The other half of the pair: inactive is not deleted. \`active: false\` and a set \`deletedAt\` are different states with different visibility rules, and the shop scenario seeds one of each so the difference is observable rather than argued about.`,
+        why: `The other half of the pair: inactive is not deleted. \`active: false\` and a set \`deletedAt\` are different states with different visibility rules, and the dataset holds one of each so the difference is observable rather than argued about.`,
         method: 'GET',
         path: '/products/{{seedInactiveProductId}}'
     },

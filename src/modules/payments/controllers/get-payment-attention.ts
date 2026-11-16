@@ -1,7 +1,7 @@
 /**
  * @module
- * GET /payments/attention — what still needs a person: stale, refused and reversed refunds,
- * refunds owed by hand, and open disputes.
+ * GET /payments/attention — what still needs a person: stale, refused, reversed and
+ * over-refunded refunds, refunds owed by hand, and open disputes.
  */
 
 import type { Request, Response } from 'express';

@@ -18,7 +18,7 @@ import type { OrderDocument } from '../model';
 import { getById } from './read';
 
 /**
- * The one buyer-mail policy every customer mail follows (`docs/understand/outbox.md#customer-mail`).
+ * The one buyer-mail policy every customer mail follows.
  * Looks the buyer up, then hands `build` the resolved locale and display name; `build` does the
  * actual send, a bare `enqueueEmail` call.
  *
@@ -28,6 +28,8 @@ import { getById } from './read';
  * reject back into a caller — cancellation and shipment are both mid state-transition when they
  * call this, and a mail hiccup must not undo either.
  * An anonymised order is never mailed: its email is the placeholder, so `build` does not run.
+ *
+ * @see docs/understand/outbox.md#customer-mail
  * @param order - the order the mail is about; `order.userId` is the account to look up, absent
  *   once a detach has erased it — `order.email` is the recipient unless the order was anonymised
  * @param build - given the resolved locale and display name, builds and sends the mail

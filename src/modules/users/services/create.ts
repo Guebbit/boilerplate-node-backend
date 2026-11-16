@@ -36,8 +36,10 @@ import { roleRefusalReject } from './role-refusal';
  * - No `role` means a plain customer: the account holds no staff role and is a `customer` because
  *   `verifiedAt` is set, which nothing has to grant.
  * - The account and its role grant (when there is one) are ONE transaction, the grant checked (and
- *   a refusal audited) before any write (docs/modules/users.md#creating-with-a-role).
+ *   a refusal audited) before any write.
  * - Returns a result envelope, same protocol `update` follows.
+ *
+ * @see docs/modules/users.md#creating-with-a-role
  */
 export const create = (
     data: WithServerImage<CreateUserRequest>,

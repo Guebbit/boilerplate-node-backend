@@ -1,10 +1,12 @@
 /**
  * @module
- * Who may see and work which task (docs/modules/tasks.md#jurisdiction). A visitor's message is the
+ * Who may see and work which task. A visitor's message is the
  * inbox's: anyone who gets past the route's `Task` rule works it. A system task belongs to a
  * jurisdiction: only a caller holding the task's route set (an administrator holds them all) sees
  * or works it. The route guards ask the rules; this file narrows WHICH rows, so a route and a query
  * cannot disagree.
+ *
+ * @see docs/modules/tasks.md#jurisdiction
  */
 
 import type { Caller } from '@types';

@@ -8,9 +8,11 @@
  * Minted when the transfer payment opens, from the order's id: deterministic, so a redelivered
  * `order.created` can never mint a second, different reference for the one order.
  *
- * Hand-rolled: `ibantools` has no ISO 11649 support (`docs/modules/payments.md#libraries`).
+ * Hand-rolled: `ibantools` has no ISO 11649 support.
  *
  * No persistence import on purpose, like every other `domain/` file in this repo.
+ *
+ * @see docs/modules/payments.md#libraries
  */
 
 /**

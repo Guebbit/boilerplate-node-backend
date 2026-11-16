@@ -281,10 +281,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
 
     /**
      * Whether `email` already backs another account — either its proven `email`, or another
-     * account's `pendingEmail` in flight. The REQUEST-TIME half of the collision rule
-     * (`docs/modules/account.md#proving-an-address`); `users_pending_email` and `users_email` (both
-     * unique) are the swap-time half, since this read and the eventual swap are up to 24 hours
-     * apart and only the indexes are still there for both.
+     * account's `pendingEmail` in flight. The REQUEST-TIME half of the collision rule;
+     * `users_pending_email` and `users_email` (both unique) are the swap-time half, since this read
+     * and the eventual swap are up to 24 hours apart and only the indexes are still there for both.
+     *
+     * @see docs/modules/account.md#proving-an-address
      * @param email - the address being requested
      * @param excludingId - the caller's own id, so re-requesting the address already pending for
      *   THEM doesn't read as a collision
