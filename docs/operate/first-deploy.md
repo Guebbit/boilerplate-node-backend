@@ -194,7 +194,7 @@ docker/deploy.sh acme
 ```
 
 One command: it builds the `app` image (`setup` and `cron` run that image rather than building their
-own), starts the stack, waits until `setup` exited 0 and `app` and `cron` are healthy, and records
+own) and, with the `backup` profile on, the backup image, starts the stack, waits until `setup` exited 0 and `app` and `cron` (and `backup`, when on) are healthy, and records
 the release in `clients/acme/deploys.log`. A release that does not come up healthy is replaced by
 the previous one on the spot; `docker/deploy.sh acme --rollback` does the same on demand. See
 [Deploy and rollback](deploy-and-rollback.md).

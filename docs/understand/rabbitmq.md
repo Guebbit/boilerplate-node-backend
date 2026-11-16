@@ -108,7 +108,7 @@ See [Retries and parking](#retries-and-parking) for what happens after the "nack
 When neither the URL nor the port is set, all queue operations silently no-op — the rest of the app works normally.
 
 At boot the log names the broker in use, with the credentials left out
-(`queue: connecting to amqp://rabbitmq:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
+(`queue: connecting to amqp://queue:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
 host and port; the boot log names the broker and its source.
 
 ## Docker Compose

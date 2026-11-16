@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Validates the configs that production runs (Loki, Alloy) with the image of the compose file that
-# mounts them, so a version bump of an image and a config the new version refuses cannot land
+# Validates the configs that production runs (Loki, Alloy) with the image the base compose file
+# pins, so a version bump of an image and a config the new version refuses cannot land
 # separately. Dev-only configs are not checked: a bad one fails at once on `compose up`.
 #
 #   bash docker/observability/validate-configs.sh
@@ -27,17 +27,15 @@ check() {
     docker run --rm -v "$PWD/docker/observability:/obs:ro" "$@" >/dev/null
 }
 
-dev=compose.override.yaml
-prod=compose.production.yaml
+# Both stacks run the monitoring images pinned once, in the base file.
+base=compose.yaml
 
-# Loki runs in both stacks with the one config, so both versions have to accept it.
-for compose in "$dev" "$prod"; do
-    loki="$(image_in "$compose" 'grafana/loki')"
-    check "loki ($compose)" "$loki" "$loki" -config.file=/obs/loki.config.yaml -verify-config
-done
+# Loki runs in both stacks with the one config; the one pinned image has to accept it.
+loki="$(image_in "$base" 'grafana/loki')"
+check "loki" "$loki" "$loki" -config.file=/obs/loki.config.yaml -verify-config
 
 # Production loads a directory: the logs config plus the optional audit forwarder (empty by default).
-alloy_prod="$(image_in "$prod" 'grafana/alloy')"
+alloy_prod="$(image_in "$base" 'grafana/alloy')"
 check "alloy production" "$alloy_prod" -v "$PWD/docker/observability/alloy.logs.config.alloy:/conf/logs.alloy:ro" \
     "$alloy_prod" validate /conf
 

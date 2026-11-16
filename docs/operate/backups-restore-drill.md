@@ -19,9 +19,13 @@ Prove a backup restores, on the real deployment, against the real repository.
 One command, on the real deployment, against the real repository:
 
 ```bash
+BACKUP_IMAGE=boilerplate-backup:<git sha> \
 docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f compose.yaml -f compose.production.yaml \
     --profile restore-drill run --rm restore-drill
 ```
+
+`BACKUP_IMAGE` is the tag `docker/deploy.sh` built for the running stack: it prints it
+(`deploy: backup image boilerplate-backup:<sha>`), and `docker images boilerplate-backup` lists it.
 
 It starts a **throwaway** Mongo (`restore-drill-db`: a plain instance on a tmpfs, no auth, no published
 port, gone afterwards) and never touches the live database. Then, in order:

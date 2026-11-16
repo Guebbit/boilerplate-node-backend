@@ -366,7 +366,7 @@ services:
     tempo:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/tempo:2.6.1
+        image: docker.io/grafana/tempo:2.6.1@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
@@ -379,7 +379,7 @@ services:
     otel-collector:
         logging: *container-logging
         profiles: ['observability']
-        image: otel/opentelemetry-collector-contrib:0.162.0
+        image: docker.io/otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
         volumes:
@@ -394,7 +394,6 @@ services:
     prometheus:
         logging: *container-logging
         profiles: ['observability']
-        image: docker.io/prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
         restart: unless-stopped
         command:
             - '--config.file=/etc/prometheus/prometheus.yml'
@@ -415,7 +414,6 @@ services:
     alertmanager:
         logging: *container-logging
         profiles: ['observability']
-        image: docker.io/prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
         restart: unless-stopped
         # Renders the routing template from the environment below, then starts Alertmanager on it.
         # Why: Alertmanager reads no env vars itself. docs/operate/prometheus.md#alert-routing
@@ -455,7 +453,7 @@ services:
     gatus:
         logging: *container-logging
         profiles: ['observability']
-        image: twinproduction/gatus:v5.37.0
+        image: docker.io/twinproduction/gatus:v5.37.0@sha256:094eb186e55235db367e90e9d56140e5897b7044c41de23cde4cc18e6da1242e
         restart: unless-stopped
         volumes:
             - ./docker/observability/gatus.dev.config.yaml:/config/config.yaml:ro,Z
@@ -466,7 +464,6 @@ services:
     loki:
         logging: *container-logging
         profiles: ['observability']
-        image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
@@ -479,7 +476,7 @@ services:
     grafana:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/grafana:11.4.0
+        image: docker.io/grafana/grafana:11.4.0@sha256:d8ea37798ccc41061a62ab080f2676dda6bf7815558499f901bdb0f533a456fb
         restart: unless-stopped
         environment:
             GF_AUTH_ANONYMOUS_ENABLED: 'true'
@@ -504,7 +501,6 @@ services:
     alloy:
         logging: *container-logging
         profiles: ['observability']
-        image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
         restart: unless-stopped
         # Root, because the engine's log files are root-owned (rootless podman maps it to your user).
         user: root
@@ -535,7 +531,7 @@ services:
     umami:
         logging: *container-logging
         profiles: ['analytics']
-        image: ghcr.io/umami-software/umami:postgresql-v2.14.0
+        image: ghcr.io/umami-software/umami:postgresql-v2.14.0@sha256:54ccf9903edf09791889504360e776b52c358ebddf5a5e8662257b2555608f27
         restart: unless-stopped
         environment:
             DATABASE_TYPE: 'postgresql'
@@ -554,7 +550,7 @@ services:
     umami-db:
         logging: *container-logging
         profiles: ['analytics']
-        image: postgres:16-alpine
+        image: docker.io/library/postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
         restart: unless-stopped
         environment:
             POSTGRES_DB: '${UMAMI_DB_NAME:-umami}'
@@ -573,7 +569,7 @@ services:
     umami-init:
         logging: *container-logging
         profiles: ['analytics']
-        image: postgres:16-alpine
+        image: docker.io/library/postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
         restart: 'no'
         entrypoint: ['/bin/sh', '/umami-init.sh']
         environment:
@@ -625,7 +621,7 @@ services:
     webhook-tester:
         logging: *container-logging
         profiles: ['integrations']
-        image: ghcr.io/tarampampam/webhook-tester:2.3.0
+        image: ghcr.io/tarampampam/webhook-tester:2.3.0@sha256:85818267b450d3d386cad6510c561e09b974183ed2832c373bc83b125fc1b221
         restart: unless-stopped
         # The image entrypoint is `/bin/app start`, so no command override is needed. Every flag
         # has an env equivalent, and these are read by the CONTAINER — none of them reach the app.
@@ -664,7 +660,7 @@ services:
     webhook-tester-tls:
         logging: *container-logging
         profiles: ['integrations']
-        image: caddy:2.11.7-alpine
+        image: docker.io/library/caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
         restart: unless-stopped
         depends_on:
             - webhook-tester
@@ -689,7 +685,7 @@ services:
     mailpit:
         logging: *container-logging
         profiles: ['integrations']
-        image: axllent/mailpit:v1.31.5
+        image: docker.io/axllent/mailpit:v1.31.5@sha256:94f6b70c1436defae6799d9ac7ff0eeff9540465b842026d5cdb018f1c0234ea
         restart: unless-stopped
         environment:
             # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.

@@ -112,8 +112,7 @@ Three files make the stack, and the order matters:
 | `compose.production.yaml` | Production. Everything else a deployment needs                                       |
 
 Always run production as `-f compose.yaml -f compose.production.yaml`. An explicit `-f` turns the auto-load
-of the override off, so the development stack cannot arrive by accident. `docker/deploy.sh` always passes both
-(`DEPLOY_COMPOSE_FILES` is the space-separated list).
+of the override off, so the development stack cannot arrive by accident. `docker/deploy.sh` always passes both.
 A key lives in exactly one of the three files, so no overlay overrides a value and no `!reset` is needed.
 
 ### One deployment per client
