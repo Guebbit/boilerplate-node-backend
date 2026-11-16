@@ -97,6 +97,8 @@ export const tracingConfig = defineConfig({
     shape: {
         OTEL_EXPORTER_OTLP_ENDPOINT: text(),
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: text(),
+        // The exporter's auth headers, for a deployment that mounts them as a secret file (`_FILE`).
+        NODE_OTEL_EXPORTER_OTLP_HEADERS: text({ sensitive: true }),
         NODE_TRUSTED_INGRESS: flag({ default: false })
     }
 });

@@ -5,43 +5,35 @@ audience: [developer]
 
 # Pending Major Upgrades
 
-Two majors and one replacement are deliberately not taken yet: `dotenv` 18, `typescript` 7 and
-`prom-client` → `@prometheus-io/client`.
-Each row below says what breaks, what it costs, and when to move. Measured 2026-09-30 by installing
-the candidate over a clean checkout, type-checking, and running the affected suites — nothing was
-merged.
+What is deliberately not on its latest release, and why. Measured 2026-11-16 by installing the
+candidate over the lockfile, type-checking and running the affected suites. Everything else is
+current; a package missing here is not pending.
 
 ```mermaid
 flowchart LR
-    DE["dotenv 17 → 18"] -->|"nothing gained"| DEW["skip; or drop it for process.loadEnvFile"]
     TS["typescript 6 → 7"] -->|"tsc works, the JS API is gone"| TSW["blocked by typescript-eslint and ts-jest"]
-
+    MM["minimatch 10 → 11"] -->|"Stryker pins ~10.2"| MMW["wait for Stryker"]
+    BB["@babel/plugin-transform-modules-commonjs 7 → 8"] -->|"babel-jest 30 needs @babel/core 7"| BBW["wait for a babel-jest on Babel 8"]
+    SR["spectral-rulesets 1.22 → 1.23"] -->|"rejects our ruleset"| SRW["investigate with the ruleset"]
     PC["prom-client → @prometheus-io/client"] -->|"pre-1.0, still churning"| PCW["wait for its 1.0"]
 
     classDef skip fill:#fef9c3,stroke:#ca8a04,color:#111827;
     classDef block fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class DEW,PCW skip;
+    class MMW,BBW,SRW,PCW skip;
     class TSW block;
 ```
 
-| Package       | Now      | Latest                           | Verdict                               | Effort |
-| ------------- | -------- | -------------------------------- | ------------------------------------- | ------ |
-| `dotenv`      | `17.3.1` | `18.0.4`                         | **Skip**, or replace with Node itself | S      |
-| `typescript`  | `6.0.3`  | `7.0.2`                          | **Wait** for 7.1 and the tools above  | M–L    |
-| `prom-client` | `15.1.3` | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                  | S      |
+| Package                                    | Now       | Latest                           | Verdict                                             | Effort |
+| ------------------------------------------ | --------- | -------------------------------- | --------------------------------------------------- | ------ |
+| `typescript`                               | `6.0.3`   | `7.0.2`                          | **Wait** for 7.1 and the tools below                | M–L    |
+| `minimatch`                                | `10.2.6`  | `11.0.5`                         | **Wait** for Stryker, which pins `~10.2`            | S      |
+| `@babel/plugin-transform-modules-commonjs` | `7.29.7`  | `8.0.1`                          | **Wait**: `babel-jest` 30 needs `@babel/core` 7     | S      |
+| `@stoplight/spectral-rulesets`             | `1.22.7`  | `1.23.1`                         | **Hold** the exact pin: 1.23 fails our ruleset load | S      |
+| `@types/node`                              | `24.19.x` | `26.x`                           | Moves with the Node 26 runtime change               | S      |
+| `prom-client`                              | `15.1.3`  | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                                | S      |
 
-## dotenv 18
-
-| Question          | Answer                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Breaking change   | Preloading (`node -r dotenv/config`) removed, `.env.vault` removed, the "injected env" line moves from stdout to stderr and the tips are gone.                                                                                                                                                                                                          |
-| Added             | A `dotenv run -- cmd` CLI, and an opt-in `fast: true` parser.                                                                                                                                                                                                                                                                                           |
-| Touches this repo | Nothing. `import 'dotenv/config'` is still an export (one site, `src/infrastructure/config/dotenv.ts`, which every entry point imports); `parse` is imported by one test file (`tests/unit/scripts/setup/first-run.test.ts`); the demo runner (`scenarios/run-server.ts`) already uses `node:util`'s `parseEnv`. No vault, no preload flag, no CLI use. |
-| What it buys      | Nothing this repo uses. That is why 18 was left alone.                                                                                                                                                                                                                                                                                                  |
-| Better option     | Node 24 has `process.loadEnvFile()`, which also leaves an already-set variable alone — dotenv's own default. It would remove a dependency (CLAUDE.md: the runtime over a library).                                                                                                                                                                      |
-| Risk of that      | Parser differences on multi-line values, `export ` prefixes and inline comments. `.env-example` would need a read-through, and the two `parse` imports (`scenarios/run-server.ts`, one unit test) would move to `util.parseEnv`.                                                                                                                        |
-| Recommendation    | Do not take 18 for its own sake. If the dependency is wanted gone, that is a separate S-sized change with a test over `.env-example`.                                                                                                                                                                                                                   |
-| Effort            | S either way.                                                                                                                                                                                                                                                                                                                                           |
+The OpenTelemetry `@opentelemetry/api` is `^1.10` with SDK 3 (`@opentelemetry/sdk-node` 0.301,
+`resources` and `sdk-trace` 3.1): the SDK-2 line peered `api <1.10`, the SDK-3 line needs it.
 
 ## TypeScript 7
 

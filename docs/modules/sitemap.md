@@ -100,7 +100,7 @@ A product page's path is `products`' `NODE_FRONTEND_LINK_PRODUCT` (`productPageP
 
 ## Libraries
 
-- **[`sitemap`](https://github.com/ekalinin/sitemap.js)** (npm, `^9`) writes the XML: `SitemapStream`
+- **[`sitemap`](https://github.com/ekalinin/sitemap.js)** (npm, `^10`) writes the XML: `SitemapStream`
   for a file, `SitemapIndexStream` for the index, `xhtml:link` alternates included. Chosen over a
   hand-rolled writer because escaping, namespaces and the schema's element order are what go wrong
   by hand. It streams, so a 50,000-entry file never sits in memory as one string. Maintained

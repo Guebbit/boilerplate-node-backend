@@ -223,8 +223,8 @@ docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.product
 - `ps`: every service `healthy`, or `exited (0)` for the one-shot `setup` and `mongo-rs-init`.
 - `env | grep`: **only `_FILE` paths** (`NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access`), plus
   public values such as the OAuth client IDs. A secret value here was put straight into the client's
-  `.env`: move it into its file. The exception is `OTEL_EXPORTER_OTLP_HEADERS`, if you set it
-  ([OpenTelemetry](opentelemetry.md#configuration)). A test checks the compose file, but only this sees the `.env`.
+  `.env`: move it into its file. `OTEL_EXPORTER_OTLP_HEADERS` is the same trap if you set it: use
+  `NODE_OTEL_EXPORTER_OTLP_HEADERS_FILE` ([OpenTelemetry](opentelemetry.md#configuration)). A test checks the compose file, but only this sees the `.env`.
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
 network. That is deliberate, see [Putting a reverse proxy in front](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front).

@@ -9,10 +9,14 @@
  *  - recordErrorOnActiveSpan: marks the span as error and records exception
  */
 
-import { trace } from '@opentelemetry/api';
+import { context, trace } from '@opentelemetry/api';
 import { setEnvironment } from '@tests/environment';
-import { node } from '@opentelemetry/sdk-node';
-import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
+import {
+    InMemorySpanExporter,
+    SimpleSpanProcessor,
+    StackContextManager,
+    TracerProvider
+} from '@opentelemetry/sdk-trace';
 import { getTracer, withSpan, recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { getActiveSpanContext } from '@infrastructure/observability/span-context';
 
@@ -26,17 +30,20 @@ import { getActiveSpanContext } from '@infrastructure/observability/span-context
 /** Installs an in-memory tracer provider for the case. */
 const setupTestProvider = () => {
     const exporter = new InMemorySpanExporter();
-    const provider = new node.NodeTracerProvider({
+    const provider = new TracerProvider({
         spanProcessors: [new SimpleSpanProcessor({ exporter })]
     });
-    provider.register(); // registers as the global tracer provider
+    // SDK 3 has no `register()`: the provider and a context manager are installed by hand.
+    trace.setGlobalTracerProvider(provider);
+    context.setGlobalContextManager(new StackContextManager().enable());
     return { exporter, provider };
 };
 
 /** Shuts the tracer provider down. */
-const teardownTestProvider = async (provider: node.NodeTracerProvider) => {
+const teardownTestProvider = async (provider: TracerProvider) => {
     await provider.shutdown();
     trace.disable();
+    context.disable();
 };
 
 /**
@@ -47,7 +54,7 @@ const teardownTestProvider = async (provider: node.NodeTracerProvider) => {
 
 describe('withSpan — success', () => {
     let exporter: InMemorySpanExporter;
-    let provider: node.NodeTracerProvider;
+    let provider: TracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());
@@ -85,7 +92,7 @@ const throwing = (): Promise<never> => {
 
 describe('withSpan — error', () => {
     let exporter: InMemorySpanExporter;
-    let provider: node.NodeTracerProvider;
+    let provider: TracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());
@@ -177,7 +184,7 @@ describe('withSpan — error', () => {
  */
 
 describe('getActiveSpanContext', () => {
-    let provider: node.NodeTracerProvider;
+    let provider: TracerProvider;
 
     beforeEach(() => {
         ({ provider } = setupTestProvider());
@@ -211,7 +218,7 @@ describe('getActiveSpanContext', () => {
 
 describe('recordErrorOnActiveSpan', () => {
     let exporter: InMemorySpanExporter;
-    let provider: node.NodeTracerProvider;
+    let provider: TracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());

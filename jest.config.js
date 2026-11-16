@@ -182,13 +182,13 @@ module.exports = {
     },
     /**
      * Default is "ignore everything under node_modules", carved open for `@scure`/`@noble` and for
-     * the ESM-only OAuth/JWT stack (`jose`, `openid-client` and its `oauth4webapi`) and
+     * the ESM-only OAuth/JWT stack (`jose`, `openid-client` and its `oauth4webapi`), `sitemap` and
      * `@mdit-vue` (the docs checker's heading slugger, which a unit test imports).
      * Not anchored to "right after node_modules": `@noble/hashes` sometimes lands nested in its own
      * unhoisted copy, so the check is "does either scope appear anywhere past this point".
      */
     transformIgnorePatterns: [
-        'node_modules/(?!.*(?:@(?:scure|noble|mdit-vue)|(?:jose|oauth4webapi|openid-client)/))'
+        'node_modules/(?!.*(?:@(?:scure|noble|mdit-vue)|(?:jose|oauth4webapi|openid-client|sitemap)/))'
     ],
     moduleNameMapper: {
         '^@api/(.*)$': '<rootDir>/api/$1',
@@ -206,6 +206,13 @@ module.exports = {
          * The one third-party module replaced wholesale: `puppeteer-core` v25 is ESM-only and
          * cannot be parsed here. See the stub for why nothing wanted the real package anyway.
          */
-        '^puppeteer-core$': '<rootDir>/tests/support/puppeteer-core.stub.ts'
+        '^puppeteer-core$': '<rootDir>/tests/support/puppeteer-core.stub.ts',
+
+        /**
+         * `sitemap` 10's `lib/xmllint.js` reads `import.meta`, which the CJS transform leaves
+         * behind. The package itself is transformed (see `transformIgnorePatterns`); only this
+         * file, which nothing calls, is replaced.
+         */
+        '^\\./lib/xmllint\\.js$': '<rootDir>/tests/support/sitemap-xmllint.stub.ts'
     }
 };

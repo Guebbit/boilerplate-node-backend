@@ -12,9 +12,14 @@
 /**
  * `NodeSDK` = the all-in-one OTel entry point for Node: it wires resource, span processors,
  * instrumentations and context propagation together, so we do not configure a TracerProvider by hand.
- * `core` is `@opentelemetry/core` re-exported, so the propagators below need no dependency of their own.
  */
-import { NodeSDK, core } from '@opentelemetry/sdk-node';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+/** The W3C propagators the two propagators below are built from. */
+import {
+    CompositePropagator,
+    W3CBaggagePropagator,
+    W3CTraceContextPropagator
+} from '@opentelemetry/core';
 /**
  * `resourceFromAttributes` builds the immutable "who is emitting this telemetry" descriptor
  * (service name/version/host) that gets attached to every exported span.
@@ -175,7 +180,7 @@ export const redisCommandOnly = (commandName: string): string => commandName;
  * https://opentelemetry.io/docs/specs/otel/trace/api/#specifying-parent-span
  */
 export const publicEndpointPropagator = (): TextMapPropagator => {
-    const traceContext = new core.W3CTraceContextPropagator();
+    const traceContext = new W3CTraceContextPropagator();
     return {
         inject: (context, carrier, setter) => {
             traceContext.inject(context, carrier, setter);
@@ -191,8 +196,8 @@ export const publicEndpointPropagator = (): TextMapPropagator => {
  * caller's trace continues here.
  */
 const trustedIngressPropagator = (): TextMapPropagator =>
-    new core.CompositePropagator({
-        propagators: [new core.W3CTraceContextPropagator(), new core.W3CBaggagePropagator()]
+    new CompositePropagator({
+        propagators: [new W3CTraceContextPropagator(), new W3CBaggagePropagator()]
     });
 
 /**
@@ -211,11 +216,7 @@ export const linkInboundTrace = (span: Span, request: ClientRequest | IncomingMe
      * what the header says — never mixed into the active context.
      */
     const remote = trace.getSpanContext(
-        new core.W3CTraceContextPropagator().extract(
-            ROOT_CONTEXT,
-            request.headers,
-            defaultTextMapGetter
-        )
+        new W3CTraceContextPropagator().extract(ROOT_CONTEXT, request.headers, defaultTextMapGetter)
     );
     if (remote && trace.isSpanContextValid(remote)) span.addLink({ context: remote });
 };
@@ -298,11 +299,41 @@ let sdk: NodeSDK | undefined;
 let started = false;
 
 /**
+ * The exporter's request headers, from the `key=value,key=value` form the OTLP spec uses for
+ * `OTEL_EXPORTER_OTLP_HEADERS`: split on `,`, each pair on its first `=`, values percent-decoded.
+ * A pair without a key or an `=` is dropped.
+ * https://opentelemetry.io/docs/specs/otel/protocol/exporter/#specifying-headers-via-environment-variables
+ *
+ * @param raw - the configured text, e.g. `Authorization=Bearer%20token,X-App=default`
+ * @returns the headers, empty when none parse
+ */
+export const parseOtlpHeaders = (raw: string): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    for (const pair of raw.split(',')) {
+        const split = pair.indexOf('=');
+        const name = pair.slice(0, split).trim();
+        if (split < 1 || name === '') continue;
+        const value = pair.slice(split + 1).trim();
+        headers[name] = value.replaceAll(/(?:%[\da-f]{2})+/gi, (encoded) => {
+            // eslint-disable-next-line no-restricted-syntax -- decodeURIComponent has no non-throwing form; a malformed escape is sent as written, not refused
+            try {
+                return decodeURIComponent(encoded);
+            } catch {
+                return encoded;
+            }
+        });
+    }
+    return headers;
+};
+
+/**
  * Build the OTLP processor when an endpoint is configured.
  *
- * The exporter reads everything else from the standard variables itself — the endpoint (with
- * `/v1/traces` appended), `OTEL_EXPORTER_OTLP_HEADERS` (split and percent-decoded per the spec,
- * so a padded base64 value survives) and their `_TRACES_` overrides.
+ * The exporter reads the endpoint (with `/v1/traces` appended), `OTEL_EXPORTER_OTLP_HEADERS` (split
+ * and percent-decoded per the spec, so a padded base64 value survives) and their `_TRACES_`
+ * overrides from the standard variables itself. The headers can also arrive as a secret file,
+ * `NODE_OTEL_EXPORTER_OTLP_HEADERS_FILE`, which the config store resolves; they then go to the
+ * exporter as an option, so the token never sits in the process environment.
  * https://opentelemetry.io/docs/specs/otel/protocol/exporter/
  *
  * Without an endpoint, a processor that drops every span. Still a processor, not none: with an
@@ -323,7 +354,12 @@ export const buildProcessors = (): SpanProcessor[] => {
      * `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
      * ... }`), unlike the deprecated `sdk-trace-base` two-argument form this replaced.
      */
-    const exporter = new OTLPTraceExporter();
+    const configuredHeaders = tracingConfig().NODE_OTEL_EXPORTER_OTLP_HEADERS;
+    const exporter = new OTLPTraceExporter(
+        configuredHeaders === undefined
+            ? undefined
+            : { headers: parseOtlpHeaders(configuredHeaders) }
+    );
     // Outside development and test the exporter keeps an error's type and drops its text.
     return [
         new BatchSpanProcessor({

@@ -25,15 +25,16 @@ All of this is wired in `src/infrastructure/runtime/otel-sdk.ts`. `startTracing(
 
 ## Configuration
 
-| Env var                       | Effect                                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported. |
-| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers; values may be percent-encoded.    |
-| `OTEL_EXPORTER_OTLP_TRACES_*` | The traces-only overrides of the two above, per the OTel spec; the exporter reads them.   |
-| `OTEL_TRACES_SAMPLER`         | Sampling, per the OTel spec (default `parentbased_always_on`: every trace is kept).       |
-| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).              |
+| Env var                                        | Effect                                                                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`                  | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported.                             |
+| `OTEL_EXPORTER_OTLP_HEADERS`                   | Optional `key=value,key=value` for auth/tenant headers; values may be percent-encoded.                                |
+| `NODE_OTEL_EXPORTER_OTLP_HEADERS` (or `_FILE`) | The same `key=value,key=value` text, as a secret: `NODE_OTEL_EXPORTER_OTLP_HEADERS_FILE=<path>` reads it from a file. |
+| `OTEL_EXPORTER_OTLP_TRACES_*`                  | The traces-only overrides of the two above, per the OTel spec; the exporter reads them.                               |
+| `OTEL_TRACES_SAMPLER`                          | Sampling, per the OTel spec (default `parentbased_always_on`: every trace is kept).                                   |
+| `NODE_SERVICE_NAME`                            | The `service.name` resource attribute used by Tempo/Grafana (default `api`).                                          |
 
-`OTEL_EXPORTER_OTLP_HEADERS` is the one secret that has no secret-file form: the exporter reads it from the environment itself, so a token set there shows in `docker inspect`. Keep it empty unless the backend needs it, and then set it in the client's `.env`.
+`OTEL_EXPORTER_OTLP_HEADERS` is read by the exporter from the environment itself, so a token set there shows in `docker inspect`. When the collector needs a token, use `NODE_OTEL_EXPORTER_OTLP_HEADERS_FILE` instead ([secrets as files](configuration.md#secrets-as-files)): the app reads the file and hands the headers to the exporter as an option, so the process environment never holds them. Keep both empty if the collector is reached over the compose network.
 
 Local docker-compose leaves `OTEL_EXPORTER_OTLP_ENDPOINT` empty (no export), because the `observability` profile is opt-in. Set it to `http://otel-collector:4318` in `.env` when you start that profile.
 

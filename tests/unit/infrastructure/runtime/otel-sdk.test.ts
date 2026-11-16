@@ -6,7 +6,7 @@
  *
  * `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter, ... }`)
  * — a real, silent-until-flush break from the deprecated `sdk-trace-base` two-argument form
- * that `@opentelemetry/sdk-node`'s `node` namespace re-exports: passing the exporter positionally leaves
+ * (which `@opentelemetry/sdk-node` used to re-export): passing the exporter positionally leaves
  * `options.exporter` `undefined`, so a span queues fine and the failure only surfaces later,
  * inside `_flushAll()`, when it tries `undefined.export(...)`. `ts-check` catches the shape going
  * forward; this pins that a span really does reach a real exporter's `export()` at runtime too.
@@ -25,8 +25,7 @@ import {
     trace,
     type Span
 } from '@opentelemetry/api';
-import { node } from '@opentelemetry/sdk-node';
-import type { ReadableSpan } from '@opentelemetry/sdk-trace';
+import { TracerProvider, type ReadableSpan } from '@opentelemetry/sdk-trace';
 import { ExportResultCode } from '@opentelemetry/core';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
@@ -40,6 +39,7 @@ import {
     linkInboundTrace,
     publicEndpointPropagator,
     onIncomingRequest,
+    parseOtlpHeaders,
     redactUrlSecrets,
     redisCommandOnly
 } from '@infrastructure/runtime/otel-sdk';
@@ -129,6 +129,26 @@ const exportedStatus = async (nodeEnvironment: string) => {
     return exportedSpans[0]?.status;
 };
 
+describe('otel-sdk — parseOtlpHeaders', () => {
+    it('splits pairs on commas and each pair on its first equals sign', () => {
+        expect(parseOtlpHeaders('Authorization=Bearer abc==,X-App=default')).toEqual({
+            Authorization: 'Bearer abc==',
+            'X-App': 'default'
+        });
+    });
+
+    it('percent-decodes a value, and leaves a malformed escape as written', () => {
+        expect(parseOtlpHeaders('Authorization=Bearer%20abc,X-Bad=100%')).toEqual({
+            Authorization: 'Bearer abc',
+            'X-Bad': '100%'
+        });
+    });
+
+    it('drops a pair with no key or no equals sign', () => {
+        expect(parseOtlpHeaders('=orphan,novalue,Good=1')).toEqual({ Good: '1' });
+    });
+});
+
 describe('otel-sdk — buildProcessors, error text', () => {
     it('exports the error type, not its message, in production', async () => {
         expect(await exportedStatus('production')).toEqual({
@@ -192,7 +212,7 @@ describe('otel-sdk — publicEndpointPropagator', () => {
     });
 
     it('still injects traceparent on an outgoing call', () => {
-        const provider = new node.NodeTracerProvider();
+        const provider = new TracerProvider();
         const span = provider.getTracer('test').startSpan('outgoing');
         const carrier: Record<string, string> = {};
 
@@ -207,7 +227,7 @@ describe('otel-sdk — publicEndpointPropagator', () => {
 
     it('still yields a sampled root span when the caller sent an unsampled traceparent', () => {
         // The attack the propagator closes: a `-00` flag must not switch our tracing off.
-        const provider = new node.NodeTracerProvider();
+        const provider = new TracerProvider();
         const extracted = propagator.extract(
             context.active(),
             { traceparent: traceparent('00') },

@@ -6,8 +6,11 @@
  */
 
 import { SpanStatusCode, type Span } from '@opentelemetry/api';
-import { node } from '@opentelemetry/sdk-node';
-import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
+import {
+    InMemorySpanExporter,
+    SimpleSpanProcessor,
+    TracerProvider
+} from '@opentelemetry/sdk-trace';
 import { scrubbingExporter } from '@infrastructure/runtime/span-scrub';
 
 /** A driver error message that embeds personal data, which spans must not carry. */
@@ -16,7 +19,7 @@ const LEAK = 'E11000 duplicate key error dup key: { email: "ada@example.com" }';
 /** Runs `record` on a fresh span and returns what the inner exporter received for it. */
 const exported = (record: (span: Span) => void) => {
     const inner = new InMemorySpanExporter();
-    const provider = new node.NodeTracerProvider({
+    const provider = new TracerProvider({
         spanProcessors: [new SimpleSpanProcessor({ exporter: scrubbingExporter(inner) })]
     });
     const span = provider.getTracer('test').startSpan('db.query');
