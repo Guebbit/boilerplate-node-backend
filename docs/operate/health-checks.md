@@ -66,33 +66,24 @@ never a container check.
 
 ### Who reads Docker's HEALTHCHECK
 
-| Platform                  | What "unhealthy" does                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Plain Docker              | status only; restart policies act on exit, not health. `service_healthy` reads it                    |
-| Docker Swarm              | kills and replaces the task                                                                          |
-| Traefik (Docker provider) | drops the container from routing. The overlay uses the file provider instead, which does not read it |
-| ECS / Fargate             | replaces the task, if the check is in the task definition                                            |
-| Podman                    | only for images built with `--format docker`; the default OCI format drops it                        |
-| Kubernetes                | ignores it. Use `livenessProbe` and `readinessProbe`                                                 |
+| Platform                  | What "unhealthy" does                                                             |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| Plain Docker              | status only; restart policies act on exit, not health. `service_healthy` reads it |
+| Docker Swarm              | kills and replaces the task                                                       |
+| Traefik (Docker provider) | drops the container from routing                                                  |
+| ECS / Fargate             | replaces the task, if the check is in the task definition                         |
+| Podman                    | only for images built with `--format docker`; the default OCI format drops it     |
+| Kubernetes                | ignores it. Use `livenessProbe` and `readinessProbe`                              |
 
 ## Readiness at the load balancer
 
-Traefik does **not** read `/readyz` by default. There is one `app` replica on one host, so an
-unready instance has nowhere else to send traffic. Traefik's own 503 also carries no CORS headers,
-so the SPA would see a network error, not a readable one.
+A proxy does **not** read `/readyz` unless you configure it to. There is one `app` replica on one
+host, so an unready instance has nowhere else to send traffic, and a proxy's own 503 carries no CORS
+headers, so the SPA would see a network error, not a readable one.
 
-With two or more `app` replicas, uncomment `healthCheck` in the client's route file
-(`traefik/dynamic/<name>.yml`, from `traefik/client.example.yml`):
-
-```yaml
-http:
-    services:
-        acme:
-            loadBalancer:
-                healthCheck:
-                    path: /readyz
-                    interval: 10s
-```
+With an orchestrator in front of several replicas, point its readiness probe at `/readyz` (a
+Kubernetes `readinessProbe`, an ALB target-group health check). Those probes stop sending traffic to
+an unready replica; a plain proxy health check is the same idea, one path to configure.
 
 `/readyz` answers 503 from the moment a shutdown signal arrives, but `server.close()` runs in the
 same tick, so no probe sees it yet. A lame-duck delay between the two belongs with this change.

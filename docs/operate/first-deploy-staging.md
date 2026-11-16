@@ -58,7 +58,7 @@ flowchart TD
     - a reboot brings everything back: [Surviving a reboot](./first-deploy.md#surviving-a-reboot);
     - from another machine, only 80 and 443 answer and TLS is clean:
       `nmap -Pn -p- staging.<domain>`, `testssl.sh staging.<domain>`,
-      and `curl -sI https://staging.<domain>/livez` to see the headers after Traefik.
+      and `curl -sI https://staging.<domain>/livez` to see the headers after the proxy.
 7. **Rebuild from scratch now and then.** A stack only ever upgraded in place hides what works only
    because of leftovers.
 

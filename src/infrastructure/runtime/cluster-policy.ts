@@ -26,7 +26,7 @@ export const workerTarget = (requested: number, availableCpus: number): number =
  *
  * Without the `limits` Redis every worker keeps its own in-memory counters, so each
  * `NODE_RATE_LIMIT_*` budget silently becomes `budget × workers`: a security control off by the
- * worker count. Called by the primary only, before it forks. `--scale app=N` replicas and PM2
+ * worker count. Called by the primary only, before it forks. Orchestrator replicas and PM2
  * cannot be seen from here, so they stay the operator's to set up.
  *
  * @see docs/understand/clustering.md#cluster-mode-limits

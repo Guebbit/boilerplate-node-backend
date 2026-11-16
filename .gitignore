@@ -7,11 +7,6 @@ clients
 # client's restic password. Never committed.
 backup-server/
 
-# Each client's Traefik route (compose.proxy.yaml). Names a client's domain, so it stays out of
-# the repository; `traefik/client.example.yml` is the template.
-traefik/dynamic/*
-!traefik/dynamic/.gitkeep
-
 .idea
 dist
 *.log

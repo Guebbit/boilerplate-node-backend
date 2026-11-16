@@ -36,10 +36,8 @@ standard exists, and an equivalent is always noted.
 Already written up — do not duplicate it here:
 
 - [Putting a reverse proxy in front](first-deploy.md#putting-a-reverse-proxy-in-front)
-  — why `compose.production.yaml` binds the API to loopback, and the nginx / Caddy / Traefik
+  — why `compose.production.yaml` binds the API to loopback, and the nginx / Caddy
   options.
-- [Many clients behind one proxy](./two-client-stacks.md#many-clients-behind-one-proxy) — the
-  Traefik overlay for several stacks on one host.
 
 The app already sends `Strict-Transport-Security` via `helmet()`. **HSTS preload** is the one piece
 neither the app nor the proxy can do: submit the apex domain at
