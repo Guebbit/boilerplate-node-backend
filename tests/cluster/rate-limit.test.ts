@@ -139,7 +139,9 @@ describe('the rate limiter across a real cluster', () => {
         return expectRefusal({ workers: WORKERS, env: { NODE_RATE_LIMIT_REDIS_URL: '' } }).then(
             ({ exitCode, output }) => {
                 expect(exitCode).toBe(1);
-                expect(output).toMatch(/Refusing to start 2 cluster workers/);
+                expect(output).toMatch(
+                    new RegExp(`Refusing to start ${String(WORKERS)} cluster workers`)
+                );
             }
         );
     });

@@ -129,11 +129,14 @@ export const createMarkerCounter = (marker: string) => {
     };
 };
 
-/** The app's own shutdown deadline is 15 s; past this, stop being polite. */
-const STOP_GRACE_MS = 20_000;
+/**
+ * The cluster primary kills its workers at delay + 15 s + 5 s (20 s by default); past 30 s, stop
+ * being polite.
+ */
+const STOP_GRACE_MS = 30_000;
 
 /**
- * Stops a spawned child: sends SIGTERM, waits for it to exit, and SIGKILLs after 20 s.
+ * Stops a spawned child: sends SIGTERM, waits for it to exit, and SIGKILLs after 30 s.
  *
  * `signal` is how the caller reaches the child: its own pid, or its whole process group.
  *

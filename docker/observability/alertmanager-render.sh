@@ -7,7 +7,8 @@
 #          ALERT_HEARTBEAT_TOKEN, and the app's NODE_SMTP_HOST / _PORT / _USER / _PASS.
 #          Each of NODE_SMTP_PASS, ALERT_WEBHOOK_URL and ALERT_HEARTBEAT_TOKEN also has a `_FILE`
 #          form naming a file with the value, which wins over the plain variable (an empty file is
-#          unset; a named file that is missing or unreadable stops the render): production hands them over as files, dev as variables.
+#          unset; a named file that is missing or unreadable stops the render): production hands
+#          them over as files, dev as variables.
 #          ALERT_SMTP_REQUIRE_TLS (default true) is the one extra: a plain-SMTP sink such as mailpit
 #          needs false.
 # Secrets: URLs, tokens and the SMTP password go to 0600 files in <secrets-dir>, never into the

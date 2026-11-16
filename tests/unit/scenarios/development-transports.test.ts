@@ -9,7 +9,7 @@
 
 it('names exactly the transports the development doubles register', async () => {
     jest.resetModules();
-    const registerMailTransport = jest.fn();
+    const registerMailTransport = jest.fn<undefined, [string, unknown]>();
     jest.doMock('@infrastructure/adapters/mail-transports', () => ({
         ...jest.requireActual('@infrastructure/adapters/mail-transports'),
         __esModule: true,
@@ -22,6 +22,6 @@ it('names exactly the transports the development doubles register', async () => 
 
     registerDoubles();
 
-    const registered = registerMailTransport.mock.calls.map(([name]) => name as string);
+    const registered = registerMailTransport.mock.calls.map(([name]) => name);
     expect(DEVELOPMENT_TRANSPORTS.toSorted()).toEqual(registered.toSorted());
 });
