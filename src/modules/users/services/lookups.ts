@@ -7,8 +7,8 @@ import type { ClientSession } from 'mongoose';
 import { userRepository } from '../repository';
 
 /**
- * `account` end of the one domain-primitives relationship in this repo (`docs/understand/strategic-ddd.md`
- * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Read-only
+ * `account` end of the one domain-primitives relationship in this repo: the User document it
+ * authenticates, resets, links to OAuth, and 2FA-protects. Read-only
  * lookups below are still thin pass-throughs to `userRepository`, named for the question they
  * answer. WRITES are not: a raw `save`/`build`/`create`/`findOneWithCredentials(where)` published
  * on the barrel is a write (or an arbitrary-filter read) handle any future sibling could import
@@ -46,10 +46,10 @@ export const findForLogin = (email: string) =>
 export const findByOAuthIdentity = (provider: string, providerId: string) =>
     userRepository.findForSignInByOAuthIdentity(provider, providerId, new Date());
 
-/** The hydrated document with the pending-email-change field loaded. */
+/** Read for `GET /account` only: `pendingEmail` is `select: false`; this loads it. */
 export const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);
 
-/** Whether `email` (or its pending-change counterpart) is already taken by another account. */
+/** Request-time collision check; the unique indexes do the swap-time check. */
 export const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
     userRepository.emailOrPendingEmailTaken(email, excludingId);
 

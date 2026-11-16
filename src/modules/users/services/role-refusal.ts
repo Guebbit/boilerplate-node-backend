@@ -1,7 +1,8 @@
 /**
  * @module
  * A refused role grant as the HTTP answer: who may not hand out roles is told 403, a name nobody
- * can be given is a 422 on the `role` field. Shared by the admin create and update.
+ * can be given is a 422 on the `role` field. Shared by the admin create and the role door
+ * (`services/role.ts`).
  */
 
 import { t } from '@infrastructure/i18n';

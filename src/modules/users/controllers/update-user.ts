@@ -28,7 +28,7 @@ export const { replace: replaceUser, update: updateUser } = createUpdateControll
     patchSchema: UpdateUserByIdBody.extend({
         locale: wellFormedLocale(UpdateUserByIdBody.shape.locale)
     }),
-    // A client cannot send the current avatar back, so a PUT that omits it keeps it.
+    /** A client cannot send the current avatar back, so a PUT that omits it keeps it. */
     keptWhenOmitted: ['imageUrl'],
     update: (id, changes, request) =>
         writeWithUploadedImage(request, changes.imageUrl, (image) =>

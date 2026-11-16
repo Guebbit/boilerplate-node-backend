@@ -133,6 +133,6 @@ export const accountUserService = {
     minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,
-    // The barrel never publishes a presenter function; the friend reaches the helper through here.
+    /** Not published on the barrel; the friend reaches the presenter through here. */
     toAccount: presentAccount
 };

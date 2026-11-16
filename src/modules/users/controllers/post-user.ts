@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users` — staff create. The update half lives in `update-user.ts`.
  *
- * @see docs/modules/users.md#the-pipeline
+ * @see docs/modules/users.md#creating-with-a-role
  */
 
 import type { Request, Response } from 'express';
@@ -36,10 +36,11 @@ export const createUser = (
 ) => {
     /**
      * The contract's own strict schema, and from here on ONLY its output: an undeclared key is a
-     * 422, never a column. `create` writes whatever it is handed, so a raw body here let an
-     * operator set `verifiedAt`, `analyticsConsent` or an unencrypted `phone` straight onto the
-     * document. `readInput` decodes the booleans a multipart body carries as strings — see
-     * docs/understand/request-input.md.
+     * 422, never a column. `create` writes whatever it is handed, so only the parsed output
+     * may reach it: no operator can set `verifiedAt`, `analyticsConsent` or an unencrypted `phone`.
+     * `readInput` decodes the booleans a multipart body carries as strings.
+     *
+     * @see docs/understand/request-input.md#the-rules-behind-the-table
      */
     const body = parseBody(
         CreateUserBody.extend({ locale: wellFormedLocale(CreateUserBody.shape.locale) }),

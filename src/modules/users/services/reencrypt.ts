@@ -59,7 +59,7 @@ export const reencryptTwoFactorSecrets = (secrets: TwoFactorSecretRing, dryRun =
     userRepository.reencrypt(
         {
             filter: { 'twoFactorMethods.secret': { $exists: true } },
-            // Hidden by default (`select: false`), like every credential on the document.
+            /** Hidden by default (`select: false`), like every credential on the document. */
             select: '+twoFactorMethods',
             ring: secrets.ring,
             fieldsOf: (user: UserDocument): EncryptedField[] =>

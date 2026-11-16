@@ -37,7 +37,7 @@ export interface PurchaseHoldNotice {
  */
 const untilText = (locale: string, date: Date): string =>
     new Intl.DateTimeFormat(locale, {
-        // Spelled out field by field: `dateStyle`/`timeStyle` refuse a `timeZoneName`.
+        /** Spelled out field by field: `dateStyle`/`timeStyle` refuse a `timeZoneName`. */
         year: 'numeric',
         month: 'long',
         day: 'numeric',

@@ -10,7 +10,8 @@
  * Why not `save()`: it `$set`s the whole `twoFactorMethods` array as it was loaded. A request that
  * loaded it before another claimed a TOTP step wrote the stale step back (RFC 6238 §5.2 replay),
  * and any two requests touching different methods failed each other with a version error.
- * See docs/modules/account-two-factor.md#concurrent-writes.
+ *
+ * @see docs/modules/account-two-factor.md#concurrent-writes
  */
 
 import type { Types } from 'mongoose';

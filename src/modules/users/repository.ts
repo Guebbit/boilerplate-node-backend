@@ -1,7 +1,8 @@
 /**
  * @module
  * The user collection's persistence layer: standard CRUD from the repository factory, plus the
- * credential and token operations `account` needs from the other side of the domain-primitives edge.
+ * credential and token operations `account` needs from the other side of the domain-primitives
+ * edge.
  *
  * @see docs/modules/users.md#the-pipeline
  */
@@ -42,9 +43,9 @@ import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * `password`, the 2FA secret fields, `reauthCode`, `oauthAccounts` and `pendingEmail` are
- * `select: false` on the schema, so plain finders never load them. These two helpers are the ONLY
- * sanctioned way to get them back, keeping re-selection in one place instead of scattered
- * `.select('+password')` calls.
+ * `select: false` on the schema, so plain finders never load them. `findByIdWithCredentials`,
+ * `findOneWithCredentials` and the sign-in finders are the ONLY sanctioned way to get them back,
+ * keeping re-selection in one place instead of scattered `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
     '+password +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail +previousEmail';
@@ -280,8 +281,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
 
     /**
      * Whether `email` already backs another account — either its proven `email`, or another
-     * account's `pendingEmail` in flight. The REQUEST-TIME half of the collision rule in
-     * docs/modules/account.md#proving-an-address; `users_pending_email` and `users_email` (both
+     * account's `pendingEmail` in flight. The REQUEST-TIME half of the collision rule
+     * (`docs/modules/account.md#proving-an-address`); `users_pending_email` and `users_email` (both
      * unique) are the swap-time half, since this read and the eventual swap are up to 24 hours
      * apart and only the indexes are still there for both.
      * @param email - the address being requested
@@ -327,11 +328,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
 
     /**
      * Fetch a user by id, but only if the account may still authenticate — `active` is not
-     * `false` and `deletedAt` is unset. The narrower sibling of `findById`: `resolve()` in
-     * `account/module.ts` is the only caller, since every OTHER `findById` call in the codebase
-     * deliberately needs the unscoped read (a deactivated account in the admin panel, a payer who
-     * no longer exists, historical work attached to a gone user). Named for the question it
-     * answers, like `findByIdWithCredentials`.
+     * `false` and `deletedAt` is unset. The narrower sibling of `findById`: `account`'s session,
+     * auth and delete paths call it (`friends/account.ts`), since every OTHER `findById` call in
+     * the codebase deliberately needs the unscoped read (a deactivated account in the admin panel,
+     * a payer who no longer exists, historical work attached to a gone user). Named for the
+     * question it answers, like `findByIdWithCredentials`.
      */
     findAuthenticatableById: (id: string) =>
         /**
@@ -438,13 +439,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     /**
      * Reserve one wrong-code attempt BEFORE the code is compared, in a single atomic write.
      *
-     * Reserve-then-check, not check-then-`$inc`: with a read in between, N parallel guesses all read
-     * "under the cap" and all get compared. Here the filter refuses a locked account outright (no
-     * matching document: the caller must not compare anything), and the pipeline `$set`s count and
-     * lock together, so the 10th reservation is the last one any window can hand out.
-     * An expired lock restarts the count from zero in the same write.
-     * A right code gives its reservation back through `resetMfaAttempts`.
-     * `timestamps: false` — a guess is not an edit.
+     * Reserve-then-check, not check-then-`$inc`: with a read in between, N parallel guesses all
+     * read "under the cap" and all get compared. Here the filter refuses a locked account outright
+     * (no matching document: the caller must not compare anything), and the pipeline `$set`s count
+     * and lock together, so the last reservation a window can hand out is the one that locks. An
+     * expired lock restarts the count from zero in the same write. A right code gives its
+     * reservation back through `resetMfaAttempts`. `timestamps: false` — a guess is not an edit.
      *
      * @param id - the account
      * @param maxFailures - reservations a window may hand out before it locks
@@ -760,8 +760,9 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .then(() => undefined),
 
     /**
-     * Stamp that the reaper has warned this account, so it is not warned twice. `timestamps: false`:
-     * the stamp is off the wire and is the reaper's bookkeeping, not an edit of the profile.
+     * Stamp that the reaper has warned this account, so it is not warned twice. `timestamps:
+     * false`: the stamp is off the wire and is the reaper's bookkeeping, not an edit of the
+     * profile.
      *
      * @param id - the account
      * @param at - the moment to stamp
@@ -881,8 +882,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .then(({ modifiedCount }) => modifiedCount),
 
     /**
-     * Every live account quiet since before `cutoff` that has not been minimised for this stretch of
-     * inactivity: never minimised, or active again since the last time. Disabled accounts are
+     * Every live account quiet since before `cutoff` that has not been minimised for this stretch
+     * of inactivity: never minimised, or active again since the last time. Disabled accounts are
      * included — minimising drops data and deletes nothing, so a ban is no reason to keep it.
      *
      * @param cutoff - last activity must be older than this
@@ -969,7 +970,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     /**
      * Undo an owner-scheduled deletion, conditionally: only a row still inside its grace is
      * restored. The mirror of {@link claimScheduledErasure} (`purgeAt > now` here, `<= now` there),
-     * so the two can never both match one row. `timestamps: false`: restoring is not a profile edit.
+     * so the two can never both match one row. `timestamps: false`: restoring is not a profile
+     * edit.
      *
      * @param session - the caller's transaction, when the restore must commit with other writes
      * @returns whether THIS call restored the account
