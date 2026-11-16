@@ -1,23 +1,19 @@
 /**
  * One connection needs one `connect()`.
  *
- * This is the fast guard on the bug `tests/cluster/rate-limit.test.ts` found: with a `connect()`
- * per command, two commands issued before the handshake finishes both try to open the same socket.
- * `isReady` stays false for the whole handshake, so both see it as false; node-redis rejects the
- * second with `Socket already opened`, and that failure path discards the client the FIRST one is
- * still using, which then fails with `The client is closed`.
- *
- * The interleaving is not rare — it is guaranteed. `RedisStore.init()` loads two Lua scripts back
- * to back, so the pair raced on the very first request of every worker, every request afterwards
- * passed unbudgeted, and the log reported Redis as unreachable while Redis was answering fine. A
- * rate limiter that is off is a security control that is off.
- *
- * ── Why this exists as well as the cluster suite ──────────────────────────────────────────────
- * The cluster suite proves the whole property — one budget spent across real forked workers — and
- * costs 25 seconds and a container, so it runs in `complete:manual` and in CI rather than in
- * `npm test`. That left the fix itself unguarded in the gate a contributor actually runs. This
- * file closes exactly that: no cluster, no Redis, no container, and it fails on the same
- * regression.
+ * Bug:      the fast guard on what `tests/cluster/rate-limit.test.ts` found. With a `connect()` per
+ *           command, two commands issued before the handshake ends both open the same socket:
+ *           `isReady` is false throughout, node-redis rejects the second with `Socket already
+ *           opened`, and that failure path discards the client the FIRST is still using (`The
+ *           client is closed`).
+ * Certain:  not a rare interleaving. `RedisStore.init()` loads two Lua scripts back to back, so the
+ *           pair raced on every worker's first request; every request after passed unbudgeted
+ *           while the log said Redis was unreachable. A rate limiter that is off is a security
+ *           control that is off.
+ * Why both: the cluster suite proves the whole property (one budget across real forked workers) but
+ *           needs a container and two boots, so it runs in `complete:manual` and CI, not `npm test`.
+ *           This file guards the fix in the gate a contributor runs: no cluster, Redis or
+ *           container, and it fails on the same regression.
  */
 
 import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';

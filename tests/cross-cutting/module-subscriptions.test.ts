@@ -2,24 +2,18 @@
  * Every module's `subscribe()` hook, held to the two things that make the event bus a graph rather
  * than a pile of listeners.
  *
- * `subscribe` is the one part of a manifest that is pure behaviour: `routes`, `locales` and `seeds`
- * are values a test can read, but a subscription only exists as the side effect of calling a
- * function at boot. Nothing else in the suite calls these hooks — `app.ts` does, once —
- * so an emptied `subscribe` body is invisible: the module still registers, still serves its
- * routes, still passes every other cross-cutting check, and simply stops reacting to the rest of
- * the system. Deleting a product would stop emptying it out of carts and wishlists; a reservation
- * timing out would stop cancelling its order.
- *
- * The two invariants:
- *
- *   1. **A declared hook does something.** If a manifest carries `subscribe`, calling it must
- *      register at least one handler. An empty body is a hook that has been silently disconnected.
- *   2. **A module registers each event once.** Two handlers for one event in one module both run
- *      on every emit and neither knows about the other — either a copy-paste, or two things that
- *      should be one handler.
- *
- * `@kernel/events` is REPLACED rather than driven, so this reads what each hook registers without
- * the handlers running and without leaking subscriptions into other suites.
+ * Why:      `subscribe` is the one manifest part that is pure behaviour: `routes`, `locales` and
+ *           `seeds` are values a test can read, but a subscription exists only as the side effect
+ *           of calling a function at boot (`app.ts` does, once). An emptied body is invisible: the
+ *           module still registers, serves its routes and passes every other check, and just
+ *           stops reacting. Deleting a product would stop emptying it out of carts and wishlists;
+ *           a reservation timing out would stop cancelling its order.
+ * Rule 1:   a declared hook does something: calling it registers at least one handler. An empty
+ *           body is a silently disconnected hook.
+ * Rule 2:   a module registers each event once. Two handlers for one event both run on every emit
+ *           and neither knows the other: a copy-paste, or two things that should be one.
+ * Method:   `@kernel/events` is REPLACED, so this reads what each hook registers without running
+ *           the handlers or leaking subscriptions into other suites.
  */
 
 jest.mock('@kernel/events', () => ({

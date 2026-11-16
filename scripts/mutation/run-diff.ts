@@ -35,6 +35,8 @@ const base = flagValue('base') ?? 'origin/main';
 
 /** Every file the diff touched, changed or added or renamed into — unfiltered. */
 const changedFiles = (baseCommit: string): string[] =>
+    // `git diff` over the merge base (`A...HEAD`): names only; `ACMR` keeps added, copied, modified and
+    // renamed files and drops deletions.
     execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${baseCommit}...HEAD`], {
         cwd: REPO_ROOT,
         encoding: 'utf8'
@@ -73,6 +75,7 @@ for (const file of files) console.log(`  ${file}`);
  * @returns the ratchet's exit code
  */
 const grade = (): number => {
+    // Runs the baseline check in this repo, output shown. A null status (killed by a signal) is 2.
     const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts'], {
         cwd: REPO_ROOT,
         stdio: 'inherit'

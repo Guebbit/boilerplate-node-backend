@@ -1,27 +1,19 @@
 /**
  * Does every controller read only the request sources its own contract declares?
  *
- * `readInput(request, { sources: [...] })` is a claim about a route: "a value for this endpoint
- * may arrive from params, and/or query, and/or body". `openapi.yaml` makes the same claim, per
- * operation, as `in: path` / `in: query` / `requestBody`. Nothing has ever compared the two, and
- * the request-input page lists five contract bugs found by reading them against each
- * other **by hand** — which is not a thing anyone will remember to do twice.
- *
- * This is that comparison, automated. Whether the mounted routes and the spec list the same
- * operations is a separate question, asked of the live routers in `route-spec-parity.test.ts`.
- *
- * **Direction of the assertion.** Declared sources must be a SUBSET of what the spec allows. A
- * controller reading a source the contract does not declare is undocumented input — the class of
- * bug behind "the path-form deletes read a body they did not declare". The converse (the spec
- * declaring a source no controller reads) is not asserted here: `readInput` merges every key it
- * finds, so a route can legitimately accept a declared body it never names a field of.
- *
- * **How the mapping is recovered.** Statically, from the source: `src/modules.ts` and each
- * `src/modules/<name>/module.ts` give the enabled modules and their base paths, `src/app/routes.ts`
- * gives the prefix for the system router, the router files give each mounted path and the
- * controller it calls, and the controller module gives its `readInput` declarations. No server is
- * booted — the point is to compare two written claims, and a runtime probe would only reveal what
- * one request happened to carry.
+ * Claim:     `readInput(request, { sources: [...] })` says a value may arrive from params, query
+ *            and/or body; `openapi.yaml` says the same per operation as `in: path`, `in: query`
+ *            or `requestBody`. The request-input page lists five contract bugs found by comparing
+ *            them **by hand**, which nobody remembers to do twice. This automates it. Whether the
+ *            routes and the spec list the same operations is `route-spec-parity.test.ts`.
+ * Direction: declared sources must be a SUBSET of what the spec allows. A controller reading an
+ *            undeclared source is undocumented input (the "path-form deletes read a body" bug).
+ *            The converse is not asserted: `readInput` merges every key it finds, so a route may
+ *            accept a declared body it names no field of.
+ * Mapping:   recovered statically. `src/modules.ts` and each `module.ts` give modules and base
+ *            paths, `src/app/routes.ts` the system router's prefix, router files each mounted path
+ *            and controller, the controller its `readInput` declarations. No server is booted: the
+ *            point is to compare two written claims, and a probe shows only what one request carried.
  *
  * @see docs/understand/request-input.md#known-discrepancies
  */

@@ -27,6 +27,8 @@ import { staleGeneratedFiles } from './stale-generated-files';
  */
 const regenerateIn = (tree: string): void => {
     symlinkSync(path.join(REPO_ROOT, 'node_modules'), path.join(tree, 'node_modules'), 'dir');
+    // Regenerates inside `tree` (a scratch copy), without syncing the frontend. `stdio: 'pipe'` keeps its
+    // output for the failure message; a non-zero exit throws.
     execFileSync('npx', ['tsx', 'scripts/regenerate-artifacts.ts', '--no-sync'], {
         cwd: tree,
         env: gitEnvironment(),

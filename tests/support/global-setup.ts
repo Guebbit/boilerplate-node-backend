@@ -21,27 +21,21 @@ export interface TestGlobals {
 /**
  * Where this jest instance's in-memory Mongo data directories live.
  *
- * `mongodb-memory-server` defaults to `mkdtemp(os.tmpdir()/mongo-mem-)`, and each server costs
- * ~201 MB of `dbpath` that only `MongoMemoryServer.stop()` removes. A killed worker never reaches
- * `stop()` — which is Stryker's normal operating mode, since it SIGKILLs a worker per timed-out
- * mutant — so the strandings accumulate in the system temp directory. On a tmpfs `/tmp` that is
- * 201 MB of RAM apiece, and once it fills, everything on the machine that writes to `/tmp` starts
- * failing with ENOSPC.
- *
- * The fix is ownership, not general detection. Each jest instance gets its own directory under
- * the repo, named for its pid, and deletes exactly that directory when it finishes
- * ({@link globalTeardown}). Nothing has to work out WHOSE directory a stray one is, because no
- * instance can see another's. What ownership leaves is the narrower question {@link isAlive}
- * answers with a plain `process.kill(pid, 0)`: is the pid a directory is already named for still
- * running. Parsing `mongod.lock` or applying age thresholds — the harder machinery a shared,
- * unowned tmp directory would need — never comes up.
- *
- * A SIGKILLed instance still leaves its directory behind. It lands in the repo's gitignored
- * `tmp/test/`, where every mutation entry point (`scripts/mutation/stryker-run.ts`) clears the lot
- * before it starts and `rm -rf tmp/test` is the whole recovery procedure — rather than in a shared
- * `/tmp` where it competes with the rest of the machine. Scoped to `tmp/test/` rather than all of
- * `tmp/`, so that sweep never touches `tmp/reports/` — Stryker's own incremental cache lives there,
- * and this run needs to read it, not delete it, at the moment this sweep runs.
+ * Problem:   `mongodb-memory-server` defaults to `mkdtemp(os.tmpdir()/mongo-mem-)`, ~201 MB of
+ *            `dbpath` per server that only `MongoMemoryServer.stop()` removes. A killed worker
+ *            never reaches `stop()` (Stryker SIGKILLs one per timed-out mutant), so strandings
+ *            pile up in the system temp. On a tmpfs `/tmp` that is 201 MB of RAM apiece, until
+ *            everything writing to `/tmp` fails with ENOSPC.
+ * Fix:       ownership, not detection. Each instance gets its own directory under the repo, named
+ *            for its pid, and deletes exactly that one ({@link globalTeardown}). No instance sees
+ *            another's, so nobody works out WHOSE stray directory it is. What remains is "is the
+ *            pid a directory is named for still running", which {@link isAlive} answers with
+ *            `process.kill(pid, 0)`; no `mongod.lock` parsing, no age thresholds.
+ * Leftover:  a SIGKILLed instance leaves its directory in the gitignored `tmp/test/`. Every
+ *            mutation entry point (`scripts/mutation/stryker-run.ts`) clears it first, and
+ *            `rm -rf tmp/test` is the whole recovery.
+ * Scope:     `tmp/test/`, not all of `tmp/`, so the sweep never touches `tmp/reports/`, where
+ *            Stryker's incremental cache lives and must be READ at that moment.
  */
 export const TEST_TMP_ROOT =
     process.env.NODE_TEST_TMP_BASE?.trim() || path.join(__dirname, '..', '..', 'tmp', 'test');
@@ -112,20 +106,15 @@ const claimInstanceRoot = async (root: string): Promise<string> => {
 /**
  * Runs once per jest instance, before any worker starts.
  *
- * ── IT STARTS THE ONE DATABASE SERVER ────────────────────────────────────────────────────────────
- * Every suite that needs Mongo takes its own DATABASE on this single server, rather than starting a
- * server of its own — see `database.ts` for why that distinction is worth a shared global. A server
- * costs a real `mongod` process and ~200 MB of dbpath; a database on an existing server costs
- * nothing measurable.
- *
- * Both the uri and the data root travel on `process.env`, because this runs in the main process
- * while the connections are made in workers, and the environment is what crosses that boundary. The
- * server handle cannot travel that way, so it goes on `globalThis` for {@link globalTeardown},
- * which jest runs in this same process.
- *
- * ── IT CLAIMS THE FILE SANDBOX ───────────────────────────────────────────────────────────────────
- * The root every test file's writes are redirected under, published the same way — see
- * `file-sandbox.ts`.
+ * Database: starts the ONE server. Every suite that needs Mongo takes its own DATABASE on it
+ *           instead of starting a server (`database.ts` says why that is worth a shared global): a
+ *           server is a real `mongod` and ~200 MB of dbpath, a database on an existing one costs
+ *           nothing measurable.
+ * Channel:  the uri and data root travel on `process.env`, since this runs in the main process and
+ *           connections are made in workers. The server handle cannot, so it goes on `globalThis`
+ *           for {@link globalTeardown}, which jest runs in this same process.
+ * Sandbox:  claims the root every test file's writes are redirected under, published the same way
+ *           (`file-sandbox.ts`).
  */
 const globalSetup = async () => {
     /**

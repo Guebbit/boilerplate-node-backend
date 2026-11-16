@@ -90,6 +90,8 @@ export const startContainer = (spec: ContainerSpec): Promise<RunningContainer> =
                     `${key}=${value}`
                 ]);
 
+                // `execFile`: starts the container detached (`-d`) and removed on stop (`--rm`), publishing the ports
+                // and env above; the callback gets the error, if any.
                 execFile(
                     containerEngine,
                     ['run', '-d', '--rm', '--name', name, ...publish, ...env, spec.image],

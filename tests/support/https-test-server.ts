@@ -1,15 +1,13 @@
 /**
- * A real, local HTTPS listener a test starts and stops itself — what
- * the webhooks module's integration suite needs to prove a delivery arrived signed, without
- * ever pointing at the compose `webhook-tester` service.
+ * A real, local HTTPS listener a test starts and stops itself: what the webhooks module's
+ * integration suite needs to prove a delivery arrived signed, without ever pointing at the compose
+ * `webhook-tester` service.
  *
- * The certificate (`fixtures/localhost-test-{cert,key}.pem`) is a throwaway, self-signed pair for
- * `CN=localhost` / `127.0.0.1`, committed so no suite depends on `openssl` being on the machine
- * that runs it. It is not trusted by any real client — `NODE_TLS_REJECT_UNAUTHORIZED=0` does NOT
- * fix this: Node reads it at process bootstrap, before a test file's own top-level code runs, so
- * setting it from inside a suite has no effect (verified against this exact fixture). The fix that
- * actually works is per-request: a caller mocks `node:https` to inject `{ ca: [TEST_CA_CERT] }`
- * into every real request, e.g.
+ * Certificate: `fixtures/localhost-test-{cert,key}.pem`, a throwaway self-signed pair for
+ *   `CN=localhost` / `127.0.0.1`, committed so no suite depends on `openssl`. No real client trusts it.
+ * Not enough: `NODE_TLS_REJECT_UNAUTHORIZED=0`. Node reads it at bootstrap, before a test file's
+ *   top-level code, so setting it inside a suite does nothing (verified against this fixture).
+ * What works: per request. A caller mocks `node:https` to inject `{ ca: [TEST_CA_CERT] }`:
  *
  * ```ts
  * jest.mock('node:https', () => {
@@ -18,9 +16,9 @@
  * });
  * ```
  *
- * — see `modules/webhooks/tests/integration/delivery.test.ts` for the full pairing, ssrf-guard
- * mock included (a real local listener is inherently on loopback, which the real guard correctly
- * always refuses — that mock is unrelated to TLS and stays separate).
+ * Pairing: `modules/webhooks/tests/integration/delivery.test.ts` shows it, ssrf-guard mock included
+ *   (a real local listener is on loopback, which the real guard always refuses; that mock is
+ *   unrelated to TLS and stays separate).
  *
  * @see docs/modules/webhooks.md#the-delivery-path
  */

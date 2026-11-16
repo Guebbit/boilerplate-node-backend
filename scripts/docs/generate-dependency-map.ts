@@ -1,20 +1,17 @@
 #!/usr/bin/env tsx
 /**
- * The two tables in `docs/reference/package-dependencies.md`: every `package.json` dependency, grouped
- * by what it's for, and — for anything `./dependency-groups.ts` doesn't claim — which single module
- * imports it. Same shape as `generate-role-matrix.ts`: markers in the page, prose around them
- * untouched, `--check` in `complete`.
+ * The two tables in `docs/reference/package-dependencies.md`: every `package.json` dependency,
+ * grouped by what it is for, and (for any `./dependency-groups.ts` does not claim) the single
+ * module that imports it. Same shape as `generate-role-matrix.ts`: markers in the page, prose
+ * around them untouched, `--check` in `complete`.
  *
- * WHAT IS DERIVED, always: the package list itself, and who imports each one — scanned from
- * `src/`, `scenarios/`, `scripts/` and the root tool configs, `tests/` excluded throughout.
- * A hand-kept copy of either one is a published number with no guard behind it; the previous,
- * hand-written page missed 32 of 99 packages and still listed 3 that were gone.
- *
- * WHAT IS HAND-KEPT: the group a package belongs to and its one-line purpose, in
- * `./dependency-groups.ts`. A package that group doesn't claim, and that exactly one module
- * imports, needs no hand entry at all — ownership is what's derived, so it's listed under that
- * module automatically. Anything left over — no group, no single owner — lands in "Ungrouped":
- * visible, not a build failure, per the "less policing" stance.
+ * Derived:   always the package list and who imports each one, scanned from `src/`, `scenarios/`,
+ *            `scripts/` and the root tool configs, `tests/` excluded throughout. A hand-kept copy
+ *            of either is a published number with no guard behind it.
+ * Hand-kept: the group a package belongs to and its one-line purpose, in `./dependency-groups.ts`.
+ *            A package no group claims and exactly one module imports needs no entry: ownership is
+ *            derived and it is listed under that module. What is left (no group, no single owner)
+ *            lands in "Ungrouped": visible, not a build failure, per the "less policing" stance.
  *
  * @see docs/understand/modules.md#libraries-a-module-owns
  */

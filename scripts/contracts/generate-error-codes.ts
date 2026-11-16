@@ -1,21 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Generates the error-code catalogue from `openapi.yaml`'s `x-error-codes` — a
- * TypeScript constants object plus the union type derived from it.
+ * Generates the error-code catalogue from `openapi.yaml`'s `x-error-codes`: a TypeScript constants
+ * object plus the union type derived from it.
  *
- * SHARED SCRIPT — byte-identical in both repos of the pair, and both write an `error-codes.ts`
- * beside their other generated contract types. The input is the SAME file in both: `x-error-codes`
- * is collected once, in the backend's bundler, from every module's own fragment, and travels to
- * the frontend as part of the shared `openapi.yaml`.
+ * SHARED SCRIPT: byte-identical in both repos of the pair, each writing an `error-codes.ts` beside
+ * its other generated contract types. The input is the SAME file: `x-error-codes` is collected once
+ * in the backend's bundler from every module's fragment and reaches the frontend in the shared
+ * `openapi.yaml`.
  *
- * Deliberately a constants object, never a Zod `z.enum(...)`: `errors[].code` stays `type: string`
- * with no `enum` in the contract (Zalando API guideline #112), so a new code is additive,
- * not a breaking response change. This catalogue exists so a call site can write
- * `ERROR_CODES.CART_EMPTY` instead of retyping the string — the compiler catches a typo or a
- * removed code, but nothing here REJECTS a code the contract doesn't (yet) know about.
- *
- * `--check` writes nothing and exits 1 on a mismatch — the same contract every generator in this
- * family keeps.
+ * Constants: never a Zod `z.enum(...)`. `errors[].code` stays `type: string` with no `enum` in the
+ *            contract (Zalando guideline #112), so a new code is additive, not a breaking response
+ *            change. A call site writes `ERROR_CODES.CART_EMPTY` instead of retyping the string:
+ *            the compiler catches a typo or a removed code, but nothing here REJECTS a code the
+ *            contract does not (yet) know.
+ * `--check`: writes nothing and exits 1 on a mismatch, as every generator in this family does.
  *
  * Usage: tsx scripts/contracts/generate-error-codes.ts --out <path> [--check]
  */

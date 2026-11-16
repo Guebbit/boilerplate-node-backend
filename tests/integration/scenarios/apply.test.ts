@@ -1,19 +1,16 @@
 /**
- * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database refusal,
- * `--reset`, and the rate limits being lifted before any limiter is built (a driving seed under a
- * small `.env` budget).
+ * `scenarios/apply.ts`'s own gates: the refusal outside development/test, the non-empty-database
+ * refusal, `--reset`, and the rate limits lifted before any limiter is built (a driving seed under
+ * a small `.env` budget).
  *
- * Spawned ASYNCHRONOUSLY, and that is load-bearing: `spawnSync` blocks jest's event loop for the
- * whole run, and jest is what drains the shared `mongod`'s stdout. A seed boots the app and builds
- * every model's indexes, which fills that pipe in seconds; `mongod` then blocks mid-log-line
- * holding its logging latch, its listener stops accepting, and the child waits on answers that
- * never come.
- *
- * Spawned as a real process rather than imported: `tests/unit/scenarios/scenario-images.test.ts`
- * already warns that importing this file SEEDS ON IMPORT, against whatever `process.argv` and
- * `process.env` happen to be at that moment — exactly what this suite needs to control per case,
- * and cannot from inside a shared jest worker. A subprocess is also what `npm run scenario:apply`
- * itself is, so this exercises the real CLI entry point rather than a stand-in for it.
+ * Async:    spawned ASYNCHRONOUSLY, which is load-bearing. `spawnSync` blocks jest's event loop, and
+ *           jest drains the shared `mongod`'s stdout. A seed boots the app and builds every model's
+ *           indexes, filling that pipe in seconds; `mongod` then blocks mid-log-line holding its
+ *           logging latch, stops accepting, and the child waits on answers that never come.
+ * Process:  a real process, not an import. `tests/unit/scenarios/scenario-images.test.ts` warns that
+ *           importing this file SEEDS ON IMPORT against whatever `process.argv` and `process.env`
+ *           are then, which this suite must control per case and cannot inside a shared jest
+ *           worker. It is also what `npm run scenario:apply` is, so the real CLI entry point runs.
  *
  * @see docs/reference/tests.md#the-suites
  */

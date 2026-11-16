@@ -15,23 +15,20 @@
  */
 
 /**
- * 100x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
+ * 100x the live default (`DEFAULT_RATE_LIMIT_MAX` in `src/infrastructure/http/middlewares/rate-limit.ts`).
  *
- * A suite issues far more requests than a person does, and every one of them shares a single
- * source address, so the per-IP limiter sees one very busy client. Without this the later tests
- * fail with 429s that have nothing to do with what they assert.
- *
- * Raised rather than disabled, so a runaway loop still terminates — and written as a literal
- * rather than imported from `rate-limit.ts`, because importing that module here would evaluate
- * `buildRateLimiter()` before this line had a chance to set the variable it reads.
- *
- * The number tracks the FUZZ suite, which is what actually sets the floor: it fires
- * `TEST_FUZZ_RUNS` requests at every non-multipart operation in the contract three times over (as
- * an admin, a customer and anonymously), from one address, and more than one window's worth lands
- * inside a single minute. The nightly raises `TEST_FUZZ_RUNS`, so this sits well above what the
- * gate's default needs. A 429 is a status no endpoint declares, so the contract assertion fails and
- * points here rather than at anything real — if a future module tips it again, raise it again; a
- * rate limit is not what the fuzz suite is testing.
+ * Why:      a suite issues far more requests than a person, all from one source address, so the
+ *           per-IP limiter sees one very busy client and later tests fail with 429s unrelated to
+ *           what they assert.
+ * Raised:   not disabled, so a runaway loop still terminates. A literal, not imported from
+ *           `rate-limit.ts`: importing it here would evaluate `buildRateLimiter()` before this line
+ *           sets the variable it reads.
+ * Sized by: the FUZZ suite, which sets the floor. It fires `TEST_FUZZ_RUNS` requests at every
+ *           non-multipart operation three times (admin, customer, anonymous) from one address, so
+ *           more than a window's worth lands in a minute. The nightly raises `TEST_FUZZ_RUNS`;
+ *           this sits well above what the gate's default needs.
+ * Symptom:  a 429 is a status no endpoint declares, so the contract assertion fails and points
+ *           here, not at anything real. If a new module tips it, raise it again.
  */
 process.env.NODE_RATE_LIMIT_MAX ??= '100000';
 

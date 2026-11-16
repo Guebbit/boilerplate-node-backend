@@ -1,30 +1,19 @@
 /**
  * Nothing credential-shaped survives serialization, on any model.
  *
- * A password hash or a stored session digest is as good as the account it belongs to, and the only
- * thing standing between one and a response body is a string in an `omit` list — `users/model.ts`
- * passes `omit: ['password', …]` and `account/model.ts` passes `omit: ['tokenHash']`, and that is
- * the entire defence.
- * Adding a field to a schema is a one-line edit; adding it to the `omit` list beside it is a
- * second line nothing asks for. The two are related only by whoever remembers.
- *
- * ── What does NOT protect these fields ────────────────────────────────────────────────────────
- * `select: false`, which the password carries, is a query default: it keeps a field out of reads
- * that do not ask for it, and does nothing whatever to a document that HAS the value — the login
- * path selects `+password` on purpose, and anything that then serialized that document would
- * publish it. The transform is the layer that holds, which is why this file drives the transform
- * rather than a query.
- *
- * ── Why a live document rather than a source sweep ────────────────────────────────────────────
- * The twin's version reads its API resources as text and looks for credential-shaped property
- * names. That works where each resource lists its fields; here the wire shape is produced by a
- * transform at runtime, so the equivalent question — "can this field reach a client" — is only
- * answerable by asking one. Building the document and calling `toJSON` also covers the way the
- * field could come back: a renamed `omit` entry, a transform replaced, a subdocument added under
- * a parent nobody re-checked.
- *
- * No database is involved. A Mongoose document can be constructed and serialized without a
- * connection; only saving it would need one.
+ * Risk:      a password hash or stored session digest is as good as its account, and the only
+ *            thing between one and a response body is a string in an `omit` list
+ *            (`users/model.ts` passes `omit: ['password', …]`, `account/model.ts`
+ *            `omit: ['tokenHash']`). A new schema field is one line; the `omit` entry beside it is
+ *            a second line nothing asks for.
+ * Not enough: `select: false` is a query default. It keeps a field out of reads that do not ask,
+ *            and does nothing to a document that HAS the value (login selects `+password` on
+ *            purpose). The transform holds, so this drives the transform, not a query.
+ * Live doc:  the twin reads resources as text for credential-shaped names. Here the wire shape
+ *            comes from a runtime transform, so "can this field reach a client" is answered by
+ *            asking one. Building the document and calling `toJSON` also covers a renamed `omit`
+ *            entry, a replaced transform, and a subdocument under a parent nobody re-checked.
+ * Database:  none. A Mongoose document is constructed and serialized without a connection.
  */
 
 import { existsSync, readdirSync } from 'node:fs';

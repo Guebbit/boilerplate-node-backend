@@ -1,29 +1,18 @@
 /**
- * Every language declares the same keys — across the shared file and every module at once.
+ * Every language declares the same keys, across the shared file and every module at once.
  *
- * Asserted against the MERGED dictionaries, so a module that ships `en.json` and forgets `it.json`
- * fails here, and so does a shared key translated on one side only. Nothing else notices: each
- * dictionary is valid JSON on its own, and a missing key surfaces as the raw key printed to a user
- * in the wrong language.
- *
- * Per-module copy is asserted by each module's own `validation-messages` spec. This file
- * deliberately names no domain — it is the one property that must hold however many modules exist.
- *
- * ── This is about TIER 1, and must stay that way ─────────────────────────────────────────────
- * The dictionaries here are the deployed files — the API's own copy, loaded at boot. Do not extend
- * this over the database rows `src/modules/locales` serves: static parity is a build-time property
- * of this repository, dynamic completeness is `entryCount` in `GET /locales`, and conflating them
- * would make a half-translated language fail the test suite of a repo that does not own the
- * translation.
- *
- * ── Why the languages are read rather than named ─────────────────────────────────────────────
- * Naming `en` and `it` explicitly would leave any THIRD language — sitting in `shared/locales/` and
- * in every module's own locale directory — with its completeness checked by nothing: a key could
- * go missing there and the suite would stay green.
- *
- * Iterating `listSupportedLocales()` means a language added tomorrow is covered by existing, a
- * language REMOVED tomorrow stops being asserted about without a test to edit, and the answer
- * stays right when `NODE_SUPPORTED_LOCALES` narrows the set for a deployment.
+ * Asserts:  against the MERGED dictionaries, so a module that ships `en.json` and forgets
+ *           `it.json` fails, and so does a shared key translated on one side only. Each file is
+ *           valid JSON alone; a missing key reaches a user as the raw key, in the wrong language.
+ * Names:    no domain. Per-module copy is each module's own `validation-messages` spec.
+ * Tier 1:   these are the deployed files, loaded at boot. Do NOT extend this to the database rows
+ *           `src/modules/locales` serves: static parity is a build-time property of this repo;
+ *           dynamic completeness is `entryCount` in `GET /locales`. Conflating them would fail the
+ *           suite of a repo that does not own the translation.
+ * Read:     `listSupportedLocales()`, not `en` and `it` by name. A third language would otherwise
+ *           have its completeness checked by nothing. A language added tomorrow is covered, one
+ *           removed stops being asserted without a test edit, and `NODE_SUPPORTED_LOCALES`
+ *           narrowing the set keeps the answer right.
  */
 
 import { listSupportedLocales, readLocaleDictionary } from '@infrastructure/i18n';

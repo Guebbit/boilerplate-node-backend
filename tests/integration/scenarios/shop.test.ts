@@ -1,26 +1,24 @@
 /**
- * The `shop` scenario, BUILT for real: seeded, then driven through the application's own
- * checkout, payment, shipping, refund and admin endpoints, then backdated — the same
- * `buildScenario` a `npm run demo` boot and `scenario:apply` both call.
+ * The `shop` scenario, BUILT for real: seeded, driven through the application's own checkout,
+ * payment, shipping, refund and admin endpoints, then backdated. The same `buildScenario` that
+ * `npm run demo` and `scenario:apply` call.
  *
- * Four claims about it that nothing else makes, per `CLAUDE.md`'s rule that a behaviour check
- * belongs in `npm test` rather than a build step:
- *
- *   1. every module's `scenario.shop` guarantee resolves to a subject, and no subject is left
- *      over — `scenarios/check.ts`, in both directions
+ * Four claims nothing else makes (`CLAUDE.md`: a behaviour check belongs in `npm test`, not a
+ * build step):
+ *   1. every module's `scenario.shop` guarantee resolves to a subject and none is left over
+ *      (`scenarios/check.ts`, both directions)
  *   2. each subject id names a row that really exists
- *   3. each row really has the property its name claims, WHERE THE CONSUMER LOOKS: out of stock
- *      means `available === 0`, not merely `onHand === 0`
- *   4. a produced row, read back the way `GET`/`POST` would serve it, is valid input to the
- *      contract's own response schema for that entity
+ *   3. each row has the property its name claims, WHERE THE CONSUMER LOOKS: out of stock means
+ *      `available === 0`, not merely `onHand === 0`
+ *   4. a produced row, read back as `GET`/`POST` would serve it, is valid input to the contract's
+ *      response schema for that entity
  *
- * Not every collection has a schema to check against. `scenarios/locales.ts` publishes a STORED
- * shape, by its own docblock — no endpoint serves a raw locale entry, the locale tier-merge builds
- * the response instead. Parsing a stored row against an unrelated response schema would be a false
- * guardrail, not a true one. Address books are the one STORED shape checked anyway: once its PII
- * fields are decrypted the same way `addresses/repository.ts`'s own readers do (`decryptAddressItem`
- * — `applySerialization` alone never touches ciphertext), an entry serializes as the contract's
- * `Address` — so it is that guarantee under test, not the entry point's absence.
+ * No schema:  not every collection has one. `scenarios/locales.ts` publishes a STORED shape (no
+ *             endpoint serves a raw locale entry; the tier-merge builds the response), and parsing
+ *             it against an unrelated response schema would be a false guardrail.
+ * Addresses:  the one STORED shape checked anyway: once its PII fields are decrypted as
+ *             `addresses/repository.ts` does (`decryptAddressItem`; `applySerialization` alone
+ *             never touches ciphertext), an entry serializes as the contract's `Address`.
  */
 
 import { connect, disconnect } from '@tests/database';

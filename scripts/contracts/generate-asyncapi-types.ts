@@ -2,24 +2,19 @@
 /**
  * Generates the TypeScript realtime contract types from `asyncapi.yaml`.
  *
- * SHARED SCRIPT — started byte-identical in both repos of the pair, and both write
- * `src/types/asyncapi.generated.ts`. NOT byte-identical any more: the frontend's copy also emits an
- * inlined-JSON-Schema map for its own runtime SSE-frame validation, which this backend copy has no
- * use for and emits queue-payload Zod validators instead. What both copies still share is the input
- * format and the channel/message-naming machinery — keep a fix to either half in step across both
- * copies by hand until this generator gets its own shared package.
- * What differs at the INPUT is unchanged: the backend generates from the whole contract, the
- * frontend from the public subset, so only the backend's output carries the queue payloads.
- *
- * A schema the bundler copied in from the REST contract (it carries `x-openapi-schema: <Name>`) is
- * imported from the REST models instead of declared again; only that marker decides.
- *
- * From whichever document it is given it emits the payload interfaces, the message aliases, the
- * per-namespace channel constants and unions, and the SSE event name/payload maps. An export a
- * repo happens not to use is harmless — tree-shaken there, type-only here.
- *
- * `--check` writes nothing and exits 1 on a mismatch: the gate that stops a repo shipping types
- * for a contract it no longer has.
+ * SHARED SCRIPT, in two copies that differ. Both repos write `src/types/asyncapi.generated.ts`.
+ * The frontend's also emits an inlined-JSON-Schema map for its runtime SSE-frame validation; this
+ * one emits queue-payload Zod validators instead. They share the input format and the
+ * channel/message-naming machinery: keep a fix to either half in step by hand across both.
+ * Input:   the backend generates from the whole contract, the frontend from the public subset, so
+ *          only the backend's output carries the queue payloads.
+ * Schemas: one the bundler copied in from the REST contract (`x-openapi-schema: <Name>`) is
+ *          imported from the REST models, not declared again; only that marker decides.
+ * Emits:   the payload interfaces, message aliases, per-namespace channel constants and unions, and
+ *          the SSE event name/payload maps. An export a repo does not use is harmless: tree-shaken
+ *          there, type-only here.
+ * `--check`: writes nothing and exits 1 on a mismatch, so a repo cannot ship types for a contract
+ *          it no longer has.
  *
  * Usage: tsx scripts/contracts/generate-asyncapi-types.ts --out <path> [--check]
  *

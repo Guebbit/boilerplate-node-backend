@@ -3,18 +3,17 @@
  * The catalogue's slice of the demo dataset. `scenarios/apply.ts` seeds these rows into a live
  * database; `tests/integration/scenarios/shop.test.ts` seeds them into a throwaway one and checks
  * what the API answers for each against the generated response schema. A field a record omits
- * falls to `@modules/products/model`'s `default:` — see `@modules/products/factories`.
+ * falls to `@modules/products/model`'s `default:` (see `@modules/products/factories`).
  *
- * One named row per `SEED_PRODUCT_IDS` entry carries the branch coverage the storefront and
- * repositories actually exercise (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies further rows
- * combinatorially, so the catalogue reads like a real pet-supply retailer rather than a list of
- * edge cases. Every image comes from `./products-images.generated.json` (`npm run scenario:images`) —
- * none is hand-placed. The filler rows share a fixed pool of 20 images by cycling through it
- * (`FILLER_IMAGE_ROLE_KEYS`), so a larger grid never means a new download.
- *
- * Every row's `title`/`description` are written twice: once here, flat, as the product document's
- * own derived index column (what `text`/`title=` search and the stock board's sort read), and once
- * as a `translations` row per locale — see {@link seedProductsCollection}.
+ * Named rows: one per `SEED_PRODUCT_IDS` entry, carrying the branch coverage the storefront and
+ *             repositories exercise (soft-deleted, out of stock, inactive, minimal).
+ * Filler:     `./products-filler` adds rows combinatorially, so the catalogue reads like a real
+ *             pet-supply retailer, not a list of edge cases. Filler rows cycle a fixed pool of
+ *             images (`FILLER_IMAGE_ROLE_KEYS`), so a larger grid never means a new download.
+ * Images:     all from `./products-images.generated.json` (`npm run scenario:images`); none hand-placed.
+ * Copy:       every `title`/`description` is written twice: flat on the product document, as its
+ *             derived index column (what `text`/`title=` search and the stock board's sort read),
+ *             and as a `translations` row per locale ({@link seedProductsCollection}).
  */
 
 import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './products-filler';
@@ -494,22 +493,18 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
 /**
  * Seed this collection. Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  *
- * Each row writes twice: {@link insertIfAbsent} for the product document (its `title`/
- * `description` are the derived index column, in the fallback locale), then
- * {@link writeSeedTranslations} for its `translations` rows — only when the product was actually
- * `'created'`, so a re-run against an already-seeded database does not redo the translation write
- * for a row `insertIfAbsent` itself skipped.
- *
- * Goes through `planTranslations`/`writeTranslations` rather than `productService.create`:
- * that service validates its body against `zodProductCreateSchema` (generated from `POST
- * /products`), which has no `id` field and always mints a fresh one — this dataset needs the
- * factory's PINNED id, both for idempotent re-seeding and because `./wishlist` and the flow runner
- * address specific rows by their known id. `planTranslations`/`writeTranslations` are the same two
- * primitives that service composes; calling them directly is the closest a seeder with its own id
- * can get to "the new write surface".
- *
- * Depends on `./locales` having already seeded the fallback and `it` locale rows — `scenarios/apply.ts`
- * seeds `locales` before every other module for exactly this reason.
+ * Writes:   twice per row: {@link insertIfAbsent} for the product document (`title`/`description`
+ *           are the derived index column, in the fallback locale), then
+ *           {@link writeSeedTranslations} for its `translations` rows, only when the product was
+ *           `'created'`, so a re-run does not redo a write `insertIfAbsent` skipped.
+ * Not `productService.create`: that service validates against `zodProductCreateSchema` (generated
+ *           from `POST /products`), which has no `id` and always mints a fresh one. This dataset
+ *           needs the factory's PINNED id, for idempotent re-seeding and because `./wishlist` and
+ *           the flow runner address rows by known id. `planTranslations`/`writeTranslations` are
+ *           the two primitives that service composes: the closest a seeder with its own id gets
+ *           to "the new write surface".
+ * Needs:    `./locales` already seeded with the fallback and `it` rows; `scenarios/apply.ts` seeds
+ *           `locales` before every other module for this reason.
  */
 const seedProductsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(productFixtures.map((product) => insertIfAbsent(productRepository, product))).then(

@@ -1,28 +1,20 @@
 /**
  * Do the two spellings of one search accept the same thing?
  *
- * Four resources offer their filters twice — `GET /products?text=x` and
- * `POST /products/search {text}` reach one controller, run one query and now share one cache
- * entry. `x-alias-of` says they are the same operation; the last describe below checks they
- * ANSWER alike. The first checks they ASK alike, and they had already drifted: `GET /tasks` declared `status` as a bare
- * `type: string` while `POST /tasks/search` declared it as a four-value enum, so the same
- * filter was documented as open on one route and closed on the other.
- *
- * That drift is structural rather than careless. A query parameter and a body property are
- * different places in the document — one under `parameters`, one under a request schema — so a
- * constraint added to either is added to one of them. The cost of the second spelling is paying
- * that attention forever; this test is what collects the payment.
- *
- * ── What is compared, and what is not ─────────────────────────────────────────────────────────
- * The VALIDATION shape: type, enum, bounds, length, format. Not `description` — prose written for
- * a human differs legitimately between "the page to return" and "the page to return", and holding
- * two spellings to one sentence would be a style test. Not `default` either: a query string and a
- * JSON body do not have to agree about absence, and `normalizePagination` owns the defaults for
- * both regardless.
- *
- * A filter present in one spelling and missing from the other IS a failure. That is the shape of
- * the original `GET /products` bug — a filter the client could
- * send and the API ignored.
+ * Why:      four resources offer their filters twice (`GET /products?text=x` and `POST
+ *           /products/search {text}`): one controller, one query, one cache entry. `x-alias-of`
+ *           says they are the same operation; the last describe checks they ANSWER alike, the first
+ *           that they ASK alike. They had drifted: `GET /tasks` declared `status` as a bare string
+ *           while `POST /tasks/search` declared a four-value enum.
+ * Cause:    structural, not careless. A query parameter and a body property live in different
+ *           places in the document, so a constraint is added to one of them. The cost of a second
+ *           spelling is paying that attention forever; this test collects it.
+ * Compared: the VALIDATION shape: type, enum, bounds, length, format. Not `description` (prose
+ *           differs legitimately; holding two spellings to one sentence is a style test). Not
+ *           `default`: a query string and a JSON body need not agree about absence, and
+ *           `normalizePagination` owns the defaults.
+ * Failure:  a filter in one spelling and missing from the other, like the original `GET /products`
+ *           bug: a filter the client could send and the API ignored.
  */
 
 import { readFileSync } from 'node:fs';

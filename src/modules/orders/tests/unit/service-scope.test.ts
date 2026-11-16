@@ -1,20 +1,18 @@
 /**
  * @module
- * Order read scoping — `orderService.callerScope`, the authorization boundary for order reads.
+ * Order read scoping: `orderService.callerScope`, the authorization boundary for order reads.
  *
- * Compiled from the caller's RULES rather than assembled here: a role that reads everything gets
- * `{}`, anyone else gets a filter on their own `userId` excluding soft-deleted rows, and a caller
- * with no identity gets a filter that matches nothing.
+ * Compiled from the caller's RULES, not assembled here: a role that reads everything gets `{}`,
+ * anyone else a filter on their own `userId` excluding soft-deleted rows, and a caller with no
+ * identity a filter that matches nothing.
  *
- * TWO SHAPES ARE WORTH ASSERTING rather than assuming. Unrestricted is `{}`, not `undefined` —
- * both spread into a query as no restriction, and `{}` is what "these are the conditions, and
- * there are none" honestly looks like. And a caller with no identity compiles to CASL's
- * `EMPTY_RESULT_QUERY` rather than raising: the request answers an empty list, not a 500, and the
- * fail-closed property — a gap can never widen the read — is reached by a filter that matches
- * nothing.
- *
- * The filter's `userId` must be a real BSON `ObjectId`, not a string — `$match` inside an
- * aggregation skips schema casting, so a string id reads as "no orders" rather than as an error.
+ * Two shapes asserted, not assumed:
+ *   - unrestricted is `{}`, not `undefined`. Both spread into a query as no restriction, and `{}`
+ *     honestly says "these are the conditions, and there are none".
+ *   - no identity compiles to CASL's `EMPTY_RESULT_QUERY`, not a raise: the request answers an
+ *     empty list, not a 500, and the fail-closed property (a gap never widens the read) holds.
+ * Id type:  the filter's `userId` must be a real BSON `ObjectId`. `$match` inside an aggregation
+ *           skips schema casting, so a string id reads as "no orders" rather than an error.
  */
 
 import { Types } from 'mongoose';

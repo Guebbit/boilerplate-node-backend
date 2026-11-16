@@ -8,10 +8,10 @@
  * first, so the client collections downstream read a current `openapi.yaml` rather than the
  * previous one.
  *
- * NO BUNDLE IS CONCATENATED BY THIS FILE. Each one owns its own build and they no longer share a
- * mechanism — `openapi.yaml` goes through `redocly bundle`, the AsyncAPI pair through the YAML AST.
- * What is left here is only what all of them have in common: an identity, a way to produce the
- * text, and a way to read the committed copy so the two can be compared.
+ * This file builds no bundle. Each owns its build and none shares a mechanism: `openapi.yaml` goes
+ * through `redocly bundle`, the AsyncAPI pair through the YAML AST. Only what all have in common
+ * lives here: an identity, a way to produce the text, and a way to read the committed copy so the
+ * two can be compared.
  *
  * `tests/cross-cutting/contract-bundles.test.ts` asserts that comparison on every run.
  *

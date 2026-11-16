@@ -1,20 +1,15 @@
 /**
  * A RabbitMQ the broker suite can publish to, and a management handle to poke it with.
  *
- * ── Why the management image ──────────────────────────────────────────────────────────────────
- * Two cases need the HTTP API: reading back the arguments a queue was actually declared with, and
- * dropping a connection from the broker's side. Production runs `rabbitmq:4-alpine`, which has
- * neither plugin; the broker itself is the same.
- *
- * ── The env override comes first ──────────────────────────────────────────────────────────────
- * `NODE_TEST_RABBITMQ_URL` wins when set, which is how CI runs this: a service container is
- * already listening. `NODE_TEST_RABBITMQ_MANAGEMENT_URL` is its HTTP API; unset, it is derived as
- * the same host on 15672 with the AMQP URL's credentials.
- *
- * ── A vhost per run ───────────────────────────────────────────────────────────────────────────
- * Every run declares its topology inside its own virtual host and deletes it afterwards. The
- * adapter's queue and exchange names are fixed (`worker.email.send`, `dead-letter`), so a shared
- * broker that remembered a previous run would answer `PRECONDITION_FAILED` to the next.
+ * Image:    the management image. Two cases need the HTTP API: reading back the arguments a queue
+ *           was declared with, and dropping a connection from the broker's side. Production runs
+ *           `rabbitmq:4-alpine`, which has neither plugin; the broker itself is the same.
+ * Env:      `NODE_TEST_RABBITMQ_URL` wins when set, which is how CI runs it (a service container is
+ *           listening). `NODE_TEST_RABBITMQ_MANAGEMENT_URL` is its HTTP API; unset, it is the
+ *           same host on 15672 with the AMQP URL's credentials.
+ * Vhost:    one per run, deleted afterwards. The adapter's queue and exchange names are fixed
+ *           (`worker.email.send`, `dead-letter`), so a shared broker that remembered a previous
+ *           run would answer `PRECONDITION_FAILED` to the next.
  */
 
 import { randomUUID } from 'node:crypto';

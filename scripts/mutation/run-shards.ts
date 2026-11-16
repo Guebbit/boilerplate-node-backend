@@ -1,23 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * The whole mutate scope on one machine, a shard at a time — `npm run mutation:full`.
+ * The whole mutate scope on one machine, a shard at a time: `npm run mutation:full`.
  *
- * ── WHY IT EXISTS ────────────────────────────────────────────────────────────────────────────
- * The full scope is always sharded — there is no "everything in one go" command. Stryker writes
- * no report at all when it is killed mid-run, so a single unsharded pass over hours of mutants
- * would bank nothing if interrupted. This splits the scope into bin-packed shards and runs them
- * one after another, with each finished shard's report kept on disk. Stop after two shards and two
- * are banked; come back tomorrow and it starts at the third.
- *
- * ── WHAT IT DOES NOT CHANGE ──────────────────────────────────────────────────────────────────
- * Nothing about the measurement. Same config, same ruler, same per-file ratchet. A shard narrows
- * `mutate` — which mutants are tested — and narrows nothing about the suite, so a score here is
- * the score a full run would record for that file.
- *
- * ── RECORDING ────────────────────────────────────────────────────────────────────────────────
- * The baseline is written only once every shard has a report, and only through `--merge`, which
- * never lowers a score and never drops a file it did not measure. A half-covered scope is left on
- * disk unrecorded rather than written down as if it were the whole thing.
+ * Why:       the full scope is always sharded. Stryker writes no report when killed mid-run, so one
+ *            unsharded pass over hours of mutants banks nothing if interrupted. This bin-packs the
+ *            scope into shards and runs them in turn, keeping each report on disk: stop after two
+ *            and two are banked; tomorrow it starts at the third.
+ * Unchanged: the measurement. Same config, ruler and per-file ratchet. A shard narrows `mutate`
+ *            (which mutants run), not the suite, so its score is what a full run records.
+ * Recording: the baseline is written only once every shard has a report, and only through
+ *            `--merge`, which never lowers a score or drops a file it did not measure. A
+ *            half-covered scope stays unrecorded rather than written down as the whole.
  *
  * Usage:
  *   npm run mutation:full                  run whatever is still outstanding
@@ -165,6 +158,7 @@ const runShard = async (name: string, mutate: string, index: number): Promise<bo
  * @returns the check's exit code — non-zero means a file scored below what the baseline records
  */
 const mergeAll = (): number => {
+    // Folds every recorded shard report into the baseline through `--merge`; a null status is treated as a failure.
     const check = spawnSync(
         'npx',
         [

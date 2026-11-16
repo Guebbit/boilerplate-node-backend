@@ -1,21 +1,18 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Generate the demo catalogue's images — `npm run scenario:images`.
+ * Generate the demo catalogue's images: `npm run scenario:images`.
  *
- * Downloads a real photo per catalogue role from Lorem Picsum, then runs it through the SAME
- * digest/thumbnail pipeline a real upload goes through (`@infrastructure/adapters/image`), so
- * `public/images/seed/` holds bytes that have been stripped/capped/recompressed exactly like
- * production output — never a hand-placed file, and never a hot-linked URL.
- *
- * One-off and network-using, deliberately NOT part of `npm run regenerate`: its output is binary
- * and worth a human glance before being committed. Re-running it is reproducible — each role's
- * Picsum `seed` path segment pins which photo comes back — but it OVERWRITES both generated
- * manifests and deletes any `public/images/seed/*.jpg` this run's role list no longer names, so a
- * retired role's old file doesn't linger unreferenced.
- *
- * `scenarios/products.ts` and `scenarios/products-filler.ts`, and `scenarios/users.ts`, read the
- * resulting `*-images.generated.json` files — nothing there is hand-edited.
+ * Does:      downloads a real photo per catalogue role from Lorem Picsum and runs it through the
+ *            SAME digest/thumbnail pipeline a real upload uses (`@infrastructure/adapters/image`),
+ *            so `public/images/seed/` holds bytes stripped, capped and recompressed like
+ *            production output: never hand-placed, never hot-linked.
+ * Not run by `regenerate`: one-off and network-using, and its output is binary and worth a human
+ *            glance before commit. Reproducible: each role's Picsum `seed` path segment pins its
+ *            photo. It OVERWRITES both generated manifests and deletes any
+ *            `public/images/seed/*.jpg` the role list no longer names.
+ * Read by:   `scenarios/products.ts`, `products-filler.ts` and `users.ts`, from the resulting
+ *            `*-images.generated.json` files; nothing there is hand-edited.
  *
  * @see docs/understand/image-processing.md#where-the-code-lives
  */
@@ -69,6 +66,8 @@ const USER_ROLES = ['root', 'customer'];
  * downloaded and thrown away — invisible at the catalogue-card size these are ever shown at.
  */
 const fetchSourcePhoto = async (picsumSeed: string): Promise<Buffer> => {
+    // Plain `fetch` (Node's global): GET a seeded 800x600 photo. The `seed` path segment pins which
+    // photo comes back. https://picsum.photos/
     const response = await fetch(
         `https://picsum.photos/seed/${encodeURIComponent(picsumSeed)}/800/600`
     );

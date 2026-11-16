@@ -1111,7 +1111,7 @@ describe('parkedCounts()', () => {
  * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
  * merely still starting would stop the app booting at all.
  *
- * @see docs/understand/rabbitmq.md#how-it-s-used
+ * @see docs/understand/rabbitmq.md#recovery
  */
 describe('startQueue() never waits for the broker', () => {
     afterEach(disableRabbitMQ);

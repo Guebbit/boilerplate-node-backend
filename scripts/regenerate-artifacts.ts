@@ -1,25 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Rebuild every generated artifact — `npm run regenerate`. Most of what it writes is gitignored
- * (`api/`, every `*.generated.ts`, the three bundles); the shared-rules schemas, the authorization
- * keys, the crontab and the docs tables the doc steps rewrite
- * are the committed exceptions. `--check` verifies instead of
- * writing — the first half of `npm run check`.
+ * Rebuild every generated artifact: `npm run regenerate`.
  *
- * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
- * `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`.
- * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and then
- * refuses a commit whose committed generated files are stale (`npm run check:generated`). It
- * never stages; `npm run check` only ever VERIFIES.
- *
- * A script rather than a chain of `&&` because the order is not obvious and needs somewhere to
- * live:
- *
- *   openapi.yaml ──► api/
- *
- * `api/` has to exist before anything importing a module's code can run — the app's own models
- * import `@api/schemas.zod`. The client collections read `scenarios/subjects.ts` instead of a
- * generated dataset, are not committed, and so are not a step here either.
+ * Writes:    mostly gitignored (`api/`, every `*.generated.ts`, the three bundles). The committed
+ *            exceptions are the shared-rules schemas, the authorization keys, the crontab and the
+ *            docs tables the doc steps rewrite.
+ * `--check`: verifies instead of writing; the first half of `npm run check`.
+ * When:      after changing anything a generator reads (a module's `openapi.yaml` or
+ *            `asyncapi.yaml`, `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`). Usually
+ *            automatic: `.husky/pre-commit` runs it with `--no-sync`, then refuses a commit whose
+ *            committed generated files are stale (`npm run check:generated`). It never stages.
+ * Order:     a script, not a `&&` chain, because the order is not obvious. {@link STEPS} is the
+ *            chain and each step's `because` says what it must follow. The constraint behind most
+ *            of it: the app's own models import `@api/schemas.zod`, so `api/` must exist before
+ *            anything that imports a module's code runs. The client collections read
+ *            `scenarios/subjects.ts`, are not committed, and are not a step.
  *
  * @see docs/build/regenerating.md#the-one-command
  */

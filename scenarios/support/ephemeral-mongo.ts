@@ -1,28 +1,19 @@
 /**
  * @module
- * Where a suite (or the demo profile) gets a Mongo to talk to — the branching only.
+ * Where a suite (or the demo profile) gets a Mongo to talk to: the branching only. Mirrors
+ * `tests/cluster/support/redis.ts`'s `startRedis()` (env var first, local fallback second).
  *
- * Mirrors `tests/cluster/support/redis.ts`'s `startRedis()` on purpose, so the two read as one
- * pattern — env var first, local fallback second — but the fallback shapes differ:
- *
- * **Redis has no in-process option, Mongo does.** Redis's fallback shells out to a container
- * engine; Mongo's fallback is `mongodb-memory-server`, an in-process binary with no engine
- * dependency. There is deliberately no third, container-per-run branch for Mongo — its only
- * unique use case ("an engine is available but downloading a binary is not wanted") is not a
- * capability either existing path lacks, and it is the one branch that would make a container
- * engine mandatory just to run a test.
- *
- * Actually starting one is NOT this module's job, on purpose — kept as a separate concern from the
- * resolver even though both now live under `scenarios/support/`, which may import
- * `mongodb-memory-server` freely: `not-to-dev-dep` (`.dependency-cruiser.cjs`) only bars `src/`,
- * and this folder is omitted from a production image regardless. `./ephemeral-mongod.ts` is the
- * one shared implementation — every real caller (`scenarios/run-server.ts`,
- * `tests/support/global-setup.ts`, `tests/cluster/support/cluster.ts`) passes
- * `startInProcessMongod` itself. `startInProcess` is REQUIRED, not defaulted here, so this module
- * never statically imports `./ephemeral-mongod`: `unit-layer-stays-database-free`
- * (`.dependency-cruiser.cjs`) is reachability-based, and a default parameter would make the unit
- * test's import graph reach `mongodb-memory-server` even though it always overrides it with a
- * fake.
+ * Fallback:  Redis has no in-process option, so it shells out to a container engine; Mongo uses
+ *            `mongodb-memory-server`, an in-process binary. There is no container-per-run branch:
+ *            its one use ("an engine is available but downloading a binary is not wanted") is a
+ *            capability neither path lacks, and it would make an engine mandatory to run a test.
+ * Starting:  not this module's job. `./ephemeral-mongod.ts` is the one implementation, and every
+ *            caller (`scenarios/run-server.ts`, `tests/support/global-setup.ts`,
+ *            `tests/cluster/support/cluster.ts`) passes `startInProcessMongod` itself.
+ * Required:  `startInProcess` has no default, so this file never statically imports
+ *            `./ephemeral-mongod`: `unit-layer-stays-database-free` (`.dependency-cruiser.cjs`) is
+ *            reachability-based, and a default would pull `mongodb-memory-server` into the unit
+ *            test's graph although it always passes a fake. `not-to-dev-dep` bars only `src/`.
  */
 
 import { existsSync } from 'node:fs';

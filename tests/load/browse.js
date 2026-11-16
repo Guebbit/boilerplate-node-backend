@@ -1,27 +1,17 @@
 /**
- * The read path under load — the storefront as an anonymous visitor sees it.
+ * The read path under load: the storefront as an anonymous visitor sees it.
  *
- * WHAT THIS IS FOR, and how it differs from `npm run bench`. `hit.js` hammers one URL at a flat
- * concurrency and reports numbers; this RAMPS, walks more than one endpoint, and — the part that
- * matters — asserts. `thresholds` below turn "how fast is it" into a verdict the shell can act on,
- * which is the whole reason to have both scripts rather than one.
- *
- * ── The thresholds are placeholders and you must replace them ────────────────────────────────
- * They are set at values this API comfortably meets, on purpose: a threshold invented before
- * anything was measured is a wish, and a suite that fails on day one gets deleted on day two.
- * Seed real ones like this:
- *
- *   npm run start                     # or the compose stack
- *   npm run bench                     # read the p95 it reports
- *   # then set p(95) here to roughly 1.4x that number
- *
- * The multiplier is the point. The job of a threshold is to catch a REGRESSION, not to express an
- * ambition — leave headroom or it fires on an unlucky afternoon and teaches everyone to ignore it.
- *
- * ── Not a merge gate ─────────────────────────────────────────────────────────────────────────
- * Load results depend on the machine. On a shared CI runner alongside four other jobs they are
- * noise, and a noisy gate is a disabled gate. Run this by hand against a stack you control, or
- * nightly against a fixed environment.
+ * Versus `npm run bench`: `hit.js` hammers one URL at a flat concurrency and reports numbers.
+ *   This RAMPS, walks several endpoints, and asserts: `thresholds` turn "how fast is it" into a
+ *   verdict the shell can act on, which is why both scripts exist.
+ * Thresholds: placeholders you must replace. They sit where this API comfortably passes, because
+ *   one invented before anything was measured is a wish, and a suite failing on day one is deleted
+ *   on day two. Seed real ones: `npm run start` (or the compose stack), `npm run bench`, read the
+ *   p95, set `p(95)` to roughly 1.4x it. A threshold catches a REGRESSION, not an ambition; without
+ *   headroom it fires on an unlucky afternoon and teaches everyone to ignore it.
+ * Not a gate: load depends on the machine. On a shared CI runner beside four other jobs it is
+ *   noise, and a noisy gate is a disabled gate. Run it by hand against a stack you control, or
+ *   nightly against a fixed environment.
  *
  * Usage:
  *   BASE_URL=http://localhost:3000 npm run bench:k6

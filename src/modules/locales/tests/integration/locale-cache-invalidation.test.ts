@@ -1,28 +1,21 @@
 /**
  * An admin edit must reach the next anonymous reader.
  *
- * The public dictionary is cached for an hour, so every write route in `src/modules/locales` wraps
- * in `invalidateCache(['locales'])`. That is two declarations a segment apart — the tag the READ
- * stores its response under, and the tag the WRITE clears — and nothing type-checks them against
- * each other. Get one wrong and the feature looks perfect in development, where the TTL is clamped
- * to thirty seconds and every manual check is a fresh miss, and silently serves an hour-old
- * translation in production.
- *
- * So this drives the real app end to end and asserts the CACHED RESPONSE actually disappears,
- * rather than asserting that `invalidateCacheTags` was called with a string.
- *
- * ## Why the cache adapter is a double rather than a live Redis
- *
- * `getCacheValue` resolves `undefined` on any failure, so on a machine with no Redis every request
- * is a miss and a test written against the real adapter would pass while proving nothing — the
- * worst possible outcome for a test about caching. The double below implements the same two-family
- * semantics the Redis adapter does (a key per response, a set per tag) in a Map, which is exactly
- * the part being asserted: that the key the write clears is the key the read wrote.
- *
- * Only the adapter is doubled, and deliberately only the adapter: the TTL clamp and the stored
- * envelope live in `http/middlewares/cache.ts` and run for real here. The clamp is what decides
- * whether anything is cached at all outside production, and stubbing it would let this suite pass
- * against a configuration where the middleware caches nothing.
+ * Risk:    the public dictionary is cached for an hour, so every write route in
+ *          `src/modules/locales` wraps in `invalidateCache(['locales'])`. The tag the READ stores
+ *          under and the tag the WRITE clears are two declarations nothing type-checks against each
+ *          other. A mismatch looks perfect in development (TTL clamped to thirty seconds, every
+ *          manual check a fresh miss) and serves an hour-old translation in production.
+ * Asserts: the real app end to end; the CACHED RESPONSE disappears, not that
+ *          `invalidateCacheTags` got a string.
+ * Double:  the cache adapter, not a live Redis. `getCacheValue` resolves `undefined` on any
+ *          failure, so with no Redis every request misses and a test on the real adapter passes
+ *          proving nothing. The double keeps the Redis adapter's two-family semantics (a key per
+ *          response, a set per tag) in a Map: the part under test is that the key the write clears
+ *          is the key the read wrote.
+ * Real:    everything else, deliberately. The TTL clamp and stored envelope in
+ *          `http/middlewares/cache.ts` run for real: the clamp decides whether anything is cached
+ *          outside production, and stubbing it would pass against a middleware that caches nothing.
  */
 
 jest.mock('@infrastructure/adapters/cache', () => {

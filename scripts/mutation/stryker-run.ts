@@ -150,6 +150,8 @@ export const runStryker = ({
                 let oomRestarts = 0;
                 let abortedForOom = false;
 
+                // Streams Stryker's output through, in `REPO_ROOT`, with the capped-heap `childEnvironment`.
+                // `--concurrency` is added only when the caller passed none.
                 const stryker = spawn(
                     'npx',
                     [

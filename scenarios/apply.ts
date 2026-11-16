@@ -187,20 +187,20 @@ async function seed() {
 }
 
 /**
- * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
- * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process.
- * `stop()` closes everything `boot()` opened, the locale-refresh interval included. Nothing to
- * do when a gate returned before the app was ever imported.
+ * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through would
+ * skip it and leave the Mongo and Redis sockets open, hanging the process. `stop()` closes
+ * everything `boot()` opened, the locale-refresh interval included. Nothing to do when a gate
+ * returned before the app was imported.
  *
- * `process.exit()`, not the bare promise `runScript` usually resolves into: importing `../src/app`
- * pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`), which registers a
- * `module.register()` loader hook backed by its own worker thread. That hook is process-lifetime
- * by design — nothing this file or `stop()` calls can unregister it — so without a forced exit
- * the event loop never drains and the process hangs forever after logging completion. Safe here
- * specifically: by this point `stop()` has already awaited `shutdownAnalytics()` and
- * `shutdownTracing()`, the two steps with async transport writes in flight, so nothing is
- * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
- * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
+ * Exit:    `process.exit()`, not the bare promise `runScript` usually resolves into. Importing
+ *          `../src/app` pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`),
+ *          which registers a `module.register()` loader hook on its own worker thread. That hook
+ *          lives for the process by design and nothing here can unregister it, so without a forced
+ *          exit the event loop never drains and the process hangs after logging completion.
+ * Safe:    `stop()` has already awaited `shutdownAnalytics()` and `shutdownTracing()`, the two
+ *          steps with async transport writes in flight, so nothing is truncated.
+ * Others:  every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports
+ *          `src/app.ts`, never hits the hook, and so `run-script.ts` stays on `process.exitCode`.
  */
 /**
  * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts

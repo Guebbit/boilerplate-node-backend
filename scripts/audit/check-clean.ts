@@ -35,6 +35,8 @@ const VIEWS: Record<keyof RepoSnapshot, string[]> = {
  * @returns the output lines
  */
 const git = (repo: string, arguments_: string[]): string[] =>
+    // `git` with a 256 MiB output cap (a big status listing), UTF-8 text out, and
+    // `GIT_OPTIONAL_LOCKS=0` so a read-only audit never takes the index lock.
     execFileSync('git', arguments_, {
         cwd: repo,
         encoding: 'utf8',

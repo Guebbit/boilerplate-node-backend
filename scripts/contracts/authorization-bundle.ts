@@ -1,22 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * `shared/authorization-keys.generated.yaml`, assembled from one fragment per module plus a root residual
- * file for the app-level rules — `npm run regenerate`.
+ * `shared/authorization-keys.generated.yaml`, assembled from one fragment per module plus a root
+ * residual file for the app-level rules: `npm run regenerate`.
  *
- * Each rule and set is defined in its own module's `authorization.yaml`, so a module's rules
- * never outlive its own deletion — a fact about this bundle (it reads only fragments that exist),
- * checked below, rather than two hand-kept lists reconciled by a test.
- *
- * Spliced as TEXT, not merged through the YAML AST the way `asyncapi-bundles.ts` merges channel
- * maps: every entry here is a flat, self-contained list item with no cross-fragment reference to
- * resolve, so a structural merge would buy nothing and risks the stringifier re-wrapping a
- * description or re-quoting a scalar. A straight splice keeps every authored byte, which matters
- * more here than for AsyncAPI — `shared/authorization-keys.generated.yaml` is read by the PHP twin too.
- *
- * `--check` asserts the committed file is not stale, the same contract every bundle in
- * `scripts/contracts/bundle-registry.ts` makes — kept separate from that registry because `shared`
- * there means "the paired FRONTEND holds a copy", which is not this file's story at all: it is
- * shared with the PHP twin, a repository this one has no access to and no pairing test for.
+ * Fragments: each rule and set lives in its module's `authorization.yaml`, so a module's rules
+ *            never outlive its deletion. That is a fact about this bundle (it reads only fragments
+ *            that exist), checked below, not two hand-kept lists reconciled by a test.
+ * Spliced:   as TEXT, not through the YAML AST as `asyncapi-bundles.ts` does for channel maps.
+ *            Every entry is a flat, self-contained list item with no cross-fragment reference, so
+ *            a structural merge buys nothing and risks the stringifier re-wrapping a description or
+ *            re-quoting a scalar. A splice keeps every authored byte, which matters here because
+ *            the PHP twin reads the file too.
+ * `--check`: asserts the committed file is not stale, as every bundle in
+ *            `scripts/contracts/bundle-registry.ts` does. Kept out of that registry because
+ *            `shared` there means "the paired FRONTEND holds a copy"; this file is shared with the
+ *            PHP twin, a repository this one has no access to and no pairing test for.
  *
  * @see docs/build/contract-fragmentation.md#the-seven-bundles
  * @see docs/understand/authorization.md#where-it-lives
