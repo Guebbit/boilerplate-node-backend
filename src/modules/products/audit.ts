@@ -5,7 +5,7 @@
  * unauthenticated, so there is no actor to record and nothing a compliance query would ask about.
  */
 
-/** The audit action vocabulary this module owns. */
+/** Writes only: create, update, delete and restore of a product. */
 export const productsAuditActions = {
     ADMIN_PRODUCT_CREATED: 'admin.product.created',
     ADMIN_PRODUCT_UPDATED: 'admin.product.updated',

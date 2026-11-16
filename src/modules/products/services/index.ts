@@ -1,8 +1,7 @@
 /**
  * @module
  * Product service — all business logic for the catalogue entity, and the one place a controller
- * may call into. One file per flow, not one big file; see
- * `docs/understand/layers.md`.
+ * may call into. One file per flow, not one big file.
  *
  * `search.ts`/`read.ts` read the catalogue, `crud.ts` writes a product, `translated-write.ts`
  * writes it together with its translations, `remove.ts` deletes and restores, `lookups.ts` is the
@@ -66,8 +65,8 @@ export const productService = {
     titlesById,
     /**
      * Same reason as `presentForCaller` just above: the update controller's factory needs these to
-     * validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach `./model`
-     * directly.
+     * validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach
+     * `./model` directly.
      */
     zodProductCreateSchema,
     zodProductReplaceSchema,

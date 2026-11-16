@@ -21,9 +21,9 @@ import { padDecimal } from '@domain-primitives/money';
 /**
  * The block of a product's response that is derived, never stored: `available` (the shelf, or for
  * a preorder what is left of its allowance), the `inStock` /
- * `lowStock` flags, `preorder`, `backorder`, `buyable`, the live `currency` and `actions` (all `false`:
- * no caller yet, `services/actions.ts` stamps the real ones). One place, because the document's own
- * serialisation and a presented document must agree on every one of them.
+ * `lowStock` flags, `preorder`, `backorder`, `buyable`, the live `currency` and `actions` (all
+ * `false`: no caller yet, `services/actions.ts` stamps the real ones). One place, because the
+ * document's own serialisation and a presented document must agree on every one of them.
  *
  * @param facts - the stock counters, the preorder allowance and what decides a preorder
  * @returns the derived fields of a `Product`
@@ -55,9 +55,10 @@ export const derivedStockFields = (facts: BuyableFacts) => {
 
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
- * and the `inStock`/`lowStock`/`preorder` flags derived from the two stock counters (never stored), `currency` read live from
- * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. The row's version is not part of the
- * contract, so it rides beside the result (`carryVersion`) for the `ETag`.
+ * and the `inStock`/`lowStock`/`preorder` flags derived from the two stock counters (never stored),
+ * `currency` read live from `NODE_DEFAULT_CURRENCY`, `createdAt`/`updatedAt`/`deletedAt` as ISO
+ * strings and the promise dates as the shop's day. The row's version is not part of the contract,
+ * so it rides beside the result (`carryVersion`) for the `ETag`.
  */
 export const presentProduct = (document: ProductDocument): Product => {
     return carryVersion(document, {

@@ -32,7 +32,7 @@ import {
  */
 const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     active: true,
-    // `null` matches a missing field too, and is how the permission rules spell it (one spelling).
+    /** `null` matches a missing field too, and is how the permission rules spell it. */
     deletedAt: null
 };
 
@@ -89,7 +89,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
             objectIds: { id: '_id' },
             text: ['title', 'description'],
             arrayRegex: { category: 'categories', tag: 'tags' },
-            // `title` searches the same column the public catalogue already exposes.
+            /** `title` searches the column the public catalogue exposes. */
             regex: { title: 'title' },
             /**
              * Admin-effective: a stranger's visibility scope pins `active: true`, so the two
@@ -98,7 +98,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
             booleans: { active: 'active', purchasable: 'purchasable' },
             presence: { deleted: 'deletedAt' },
             ranges: { price: { min: 'priceMin', max: 'priceMax' } },
-            // `title` is the fallback-locale column, the one the public catalogue exposes.
+            /** `title` is the fallback-locale column the public catalogue exposes. */
             sortable: { createdAt: 'createdAt', price: 'price', title: 'title' }
         }
     }),
@@ -109,10 +109,10 @@ export const productRepository: Repository<ProductDocument, Product> & {
     /**
      * Fetch one product, optionally narrowed to a caller's authorization scope.
      *
-     * The id lookup and the scope are applied by the same query — checking visibility after the read
-     * is how a scoped find turns into an information leak. No scope means no restriction, the admin
-     * branch (see `accessibleFilter`). `async` because `toObjectId` throws on a malformed id —
-     * see `create-repository.ts`; `orders.findByIdScoped` is the same idea.
+     * The id lookup and the scope are applied by the same query — checking visibility after the
+     * read is how a scoped find turns into an information leak. No scope means no restriction, the
+     * admin branch (see `accessibleFilter`). `async` because `toObjectId` throws on a malformed id
+     * — see `create-repository.ts`; `orders.findByIdScoped` is the same idea.
      *
      * @param scope - the caller's filter fragment, or `undefined` to read unrestricted
      * @returns the product if it matches the scope, otherwise `null`
@@ -222,6 +222,8 @@ export const productRepository: Repository<ProductDocument, Product> & {
             .lean<Lean<ProductDocument> | null>()
             .exec(),
 
+    translatable: translatableColumnsOf(productModel),
+
     /**
      * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in
      * `kernel/registry.ts`. Conditional on `pendingImageKey` still matching `key`, so a stale or
@@ -230,7 +232,5 @@ export const productRepository: Repository<ProductDocument, Product> & {
      *
      * `timestamps: false` — the digest finishing is not an edit an admin made.
      */
-    translatable: translatableColumnsOf(productModel),
-
     writebackImage: imageWritebackFor(productModel)
 };
