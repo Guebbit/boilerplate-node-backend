@@ -6,7 +6,7 @@
  *
  * Registering stays at the call site (`registers`, `collect`): this file never touches a registry.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_4-·-how-it-loads
  */
 
 import type { CounterConfiguration, GaugeConfiguration, HistogramConfiguration } from 'prom-client';

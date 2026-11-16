@@ -19,7 +19,9 @@ import {
 jest.mock('@infrastructure/adapters/cache', () => ({ cacheState: jest.fn() }));
 jest.mock('@infrastructure/adapters/queue', () => ({ queueState: jest.fn() }));
 
+/** The cache adapter state probe, mocked so a case picks the state. */
 const mockedCacheState = cacheState as jest.MockedFunction<typeof cacheState>;
+/** The queue adapter state probe, mocked so a case picks the state. */
 const mockedQueueState = queueState as jest.MockedFunction<typeof queueState>;
 
 /** Drive `connection.readyState` without opening a database. */
@@ -44,8 +46,10 @@ describe('dependencyHealth', () => {
         [1, 'ready'],
         [2, 'connecting'],
         [0, 'unavailable'],
-        /* Mongoose's `disconnecting`. Not `connecting`: it is on its way OUT and will not start
-         * serving again, so reporting it as nearly-ready would show a shutdown as a startup. */
+        /**
+         * Mongoose's `disconnecting`. Not `connecting`: it is on its way OUT and will not start
+         * serving again, so reporting it as nearly-ready would show a shutdown as a startup.
+         */
         [3, 'unavailable']
     ])('maps mongoose readyState %i to %s', (state, expected) => {
         withReadyState(state);
@@ -54,8 +58,10 @@ describe('dependencyHealth', () => {
     });
 
     it('reports an unknown readyState as unavailable rather than crashing', () => {
-        /* A future mongoose could add a state. Answering "unavailable" is the safe direction: it
-         * degrades a healthy service, where the opposite would report a dead one as serving. */
+        /**
+         * A future mongoose could add a state. Answering "unavailable" is the safe direction: it
+         * degrades a healthy service, where the opposite would report a dead one as serving.
+         */
         withReadyState(99);
 
         expect(dependencyHealth().database).toBe('unavailable');
@@ -89,25 +95,31 @@ describe('overallStatus', () => {
     });
 
     it('is ok when an optional dependency is disabled', () => {
-        /* The single most important case here. A deployment without Redis or without RabbitMQ is
+        /**
+         * The single most important case here. A deployment without Redis or without RabbitMQ is
          * supported, not broken — reporting it as degraded would leave the field permanently red on
-         * exactly the deployments that chose it, and a permanently red field is one nobody reads. */
+         * exactly the deployments that chose it, and a permanently red field is one nobody reads.
+         */
         expect(overallStatus(health({ cache: 'disabled', queue: 'disabled' }))).toBe('ok');
     });
 
     it.each([['unavailable'], ['connecting']] as const)(
         'is degraded when the cache is %s',
         (state) => {
-            /* The risk this whole invariant guards: a `status` that reads only the database would
-             * report `ok` for Mongo up + Redis down, while every cache lookup misses. */
+            /**
+             * The risk this whole invariant guards: a `status` that reads only the database would
+             * report `ok` for Mongo up + Redis down, while every cache lookup misses.
+             */
             expect(overallStatus(health({ cache: state }))).toBe('degraded');
         }
     );
 
     it('is degraded while the database is still connecting', () => {
-        /* `connecting` is honest about not serving yet. It is a separate WORD from `unavailable` so
+        /**
+         * `connecting` is honest about not serving yet. It is a separate WORD from `unavailable` so
          * a deploy inside its start-up grace period is legible, but it is not a separate STATUS —
-         * an instance that cannot answer yet must not claim it can. */
+         * an instance that cannot answer yet must not claim it can.
+         */
         expect(overallStatus(health({ database: 'connecting' }))).toBe('degraded');
     });
 

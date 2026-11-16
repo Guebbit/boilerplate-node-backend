@@ -35,8 +35,10 @@ const config: KnipConfig = {
         'docs/.vitepress/config.mts',
         'docs/.vitepress/theme/index.ts'
     ],
-    // A type that only lives inside its own file's exported shape is not unused.
-    // https://knip.dev/reference/configuration#ignoreexportsusedinfile
+    /**
+     * A type that only lives inside its own file's exported shape is not unused.
+     * https://knip.dev/reference/configuration#ignoreexportsusedinfile
+     */
     ignoreExportsUsedInFile: { interface: true, type: true },
     // Dependencies used in a way an import walk cannot see.
     ignoreDependencies: [
@@ -44,8 +46,10 @@ const config: KnipConfig = {
         '@redocly/cli',
         // `k6/*` are built into the k6 runtime the load scripts run in, not npm packages.
         'k6',
-        // The mutation run's transform, named in `jest.config.mutation.js`, which knip does not
-        // read as a jest config; `@swc/core` is its peer.
+        /**
+         * The mutation run's transform, named in `jest.config.mutation.js`, which knip does not
+         * read as a jest config; `@swc/core` is its peer.
+         */
         '@swc/jest',
         '@swc/core',
         // Loaded by name from `stryker.json` (`testRunner: "jest"`).
@@ -60,4 +64,5 @@ const config: KnipConfig = {
     ]
 };
 
+/** The knip configuration. */
 export default config;

@@ -47,9 +47,10 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/*
+/**
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
  * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
@@ -69,11 +70,13 @@ setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
 
+/** A cancellable order owned by the given user. */
 const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     const product = await createProduct();
     return createOrder(user, [toOrderItem(product, 1)]);
 };
 
+/** The given user as a customer caller. */
 const asUser = (user: { id: string }) => asCustomer(user.id);
 
 describe('cancelOnRequestById', () => {
@@ -250,9 +253,11 @@ describe('cancelOnRequestById — who gets their money back', () => {
     });
 
     it('lets a moderator cancel without returning the money too', async () => {
-        // The bug this pins: `update:Order` is held by name, not through the scope
-        // wildcard a moderator never holds — asking for the wildcard alone forced a refund
-        // this operator had a reason not to make.
+        /**
+         * The bug this pins: `update:Order` is held by name, not through the scope
+         * wildcard a moderator never holds — asking for the wildcard alone forced a refund
+         * this operator had a reason not to make.
+         */
         const user = await createUser();
         const order = await seedOrder(user);
 
@@ -266,8 +271,10 @@ describe('cancelOnRequestById — who gets their money back', () => {
     });
 
     it('announces the cancellation either way', async () => {
-        // The event states a FACT. Suppressing it for a no-refund cancel would make the record of
-        // what happened depend on what was compensated.
+        /**
+         * The event states a FACT. Suppressing it for a no-refund cancel would make the record of
+         * what happened depend on what was compensated.
+         */
         const user = await createUser();
         const order = await seedOrder(user);
 
@@ -358,16 +365,20 @@ describe('cancelOnRequestById — audit and analytics', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: no CallerContext — `afterCancel` builds
-        // its own system-actor context regardless of the `authContext` passed here.
+        /**
+         * Mirrors module.ts's RESERVATION_EXPIRED handler: no CallerContext — `afterCancel` builds
+         * its own system-actor context regardless of the `authContext` passed here.
+         */
         await orderService.cancelOnRequestById(String(order._id), asAdmin());
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CANCELED,
                 outcome: 'success',
-                // The system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
-                // alias for a human admin's, and the audit trail says so.
+                /**
+                 * The system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
+                 * alias for a human admin's, and the audit trail says so.
+                 */
                 actorRole: 'system',
                 actorUserId: 'system'
             })
@@ -401,8 +412,10 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         resetDomainEvents();
     });
 
-    // A bank transfer nobody sent is answered by `payments`, which owns the transfer's deadline: the
-    // order's own cancel stays quiet, and says the hold ran out on the event it announces.
+    /**
+     * A bank transfer nobody sent is answered by `payments`, which owns the transfer's deadline: the
+     * order's own cancel stays quiet, and says the hold ran out on the event it announces.
+     */
     it('sends no expiry email of its own when a bank_transfer order times out', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
@@ -411,8 +424,10 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext,
-        // and the flag only that handler sets.
+        /**
+         * Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext,
+         * and the flag only that handler sets.
+         */
         await orderService.expireReservationById(String(order._id));
 
         await settleOutboxNudges();
@@ -425,7 +440,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         });
     });
 
-    /*
+    /**
      * A hold's expiry mails the buyer: the hold is long enough to abandon a checkout tab and
      * wonder later where the order went, so silence is not an option.
      */
@@ -472,9 +487,11 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
-        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
-        // flag only that handler sets. Before the fix, this `await` threw straight out of
-        // `afterCancel` — the cancel itself never committed.
+        /**
+         * Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
+         * flag only that handler sets. Before the fix, this `await` threw straight out of
+         * `afterCancel` — the cancel itself never committed.
+         */
         const result = await orderService.expireReservationById(String(order._id));
 
         expect(result.success).toBe(true);
@@ -760,8 +777,10 @@ describe('withActions', () => {
     });
 
     it("gives the warehouse `process` on a paid order, without `update:Order`'s admin column", async () => {
-        // Holds `start:Shipment` but not `update:Order` — `actorOf` alone would read
-        // this caller as a plain customer, which must not decide `process`.
+        /**
+         * Holds `start:Shipment` but not `update:Order` — `actorOf` alone would read
+         * this caller as a plain customer, which must not decide `process`.
+         */
         const user = await createUser();
         const order = await seedOrder(user);
         const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
@@ -773,9 +792,11 @@ describe('withActions', () => {
     });
 
     it("never offers `process` once already `processing` — an echo write isn't a fresh offer", async () => {
-        // The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
-        // check answers true for a write onto the SAME status (legal for everything but `paid`),
-        // which would keep `process` true forever once first reached.
+        /**
+         * The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
+         * check answers true for a write onto the SAME status (legal for everything but `paid`),
+         * which would keep `process` true forever once first reached.
+         */
         const user = await createUser();
         const order = await seedOrder(user);
         const processing = await orderRepository.updateStatusIfIn(
@@ -825,8 +846,10 @@ describe('withActions', () => {
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {
-        // `admin` holds `override:Order`, which `overridableTargetsFrom` answers from the
-        // index-based rule alone — a `paid` order can be overridden straight to any later status.
+        /**
+         * `admin` holds `override:Order`, which `overridableTargetsFrom` answers from the
+         * index-based rule alone — a `paid` order can be overridden straight to any later status.
+         */
         const user = await createUser();
         const order = await seedOrder(user);
         const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');

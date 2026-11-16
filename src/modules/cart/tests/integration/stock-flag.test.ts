@@ -116,8 +116,10 @@ describe('GET /cart’s line availability', () => {
         const user = await createUser();
         const product = await createProduct();
         await cartService.addItemById(user.id, String(product._id), 1);
-        // No listeners: the real removal pulls the line out of every cart, which would leave
-        // nothing to mark. This is the window before that cleanup ran.
+        /**
+         * No listeners: the real removal pulls the line out of every cart, which would leave
+         * nothing to mark. This is the window before that cleanup ran.
+         */
         resetDomainEvents();
 
         await productService.removeById(String(product._id), false);

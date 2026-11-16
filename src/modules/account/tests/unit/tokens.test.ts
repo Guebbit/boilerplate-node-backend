@@ -42,8 +42,10 @@ withoutEnvironmentInThisFile(TOKEN_ENV_KEYS);
 
 describe('getExpiryTime', () => {
     it('reads a distinct env var per tier', () => {
-        // Distinct values on purpose: if two tiers were wired to the same variable, or two
-        // entries of the map were swapped, identical values would hide it.
+        /**
+         * Distinct values on purpose: if two tiers were wired to the same variable, or two
+         * entries of the map were swapped, identical values would hide it.
+         */
         setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
         setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
         setEnvironment({ NODE_SESSION_TIME_LONG: '2592000' });
@@ -55,8 +57,10 @@ describe('getExpiryTime', () => {
 
     it('uses the short tier when no tier is given (a browser-session login)', () => {
         setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
-        // The access-token variable must be ignored entirely: a session cookie still needs a
-        // real server-side limit, and 10 minutes is not it.
+        /**
+         * The access-token variable must be ignored entirely: a session cookie still needs a
+         * real server-side limit, and 10 minutes is not it.
+         */
         setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 
         expect(getExpiryTime()).toBe(3600);
@@ -68,8 +72,10 @@ describe('getExpiryTime', () => {
     });
 
     it('falls back for an empty variable rather than returning NaN', () => {
-        // `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
-        // jose rejects. An unusable value resolves to the tier default, same as an absent one.
+        /**
+         * `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
+         * jose rejects. An unusable value resolves to the tier default, same as an absent one.
+         */
         setEnvironment({ NODE_SESSION_TIME_SHORT: '' });
 
         expect(getExpiryTime()).toBe(86_400);
@@ -99,8 +105,10 @@ describe('getExpiryTimeMilliseconds', () => {
     });
 
     it('stays a real number (not NaN) when the variable is unset', () => {
-        // A NaN maxAge on a cookie is silently dropped by Express, producing a session cookie
-        // instead of the intended persistent one — a bug with no error attached to it.
+        /**
+         * A NaN maxAge on a cookie is silently dropped by Express, producing a session cookie
+         * instead of the intended persistent one — a bug with no error attached to it.
+         */
         expect(getExpiryTimeMilliseconds()).toBe(86_400_000);
     });
 });
@@ -136,8 +144,10 @@ describe('the access-token TTL', () => {
     });
 
     it('falls back to ten minutes when unset', () => {
-        // Not 0: a zero TTL signs tokens that are already expired, and an operator who never set
-        // the variable gets a working login rather than a session that ends on arrival.
+        /**
+         * Not 0: a zero TTL signs tokens that are already expired, and an operator who never set
+         * the variable gets a working login rather than a session that ends on arrival.
+         */
         expect(getAccessExpiryTime()).toBe(600);
     });
 
@@ -148,8 +158,10 @@ describe('the access-token TTL', () => {
     });
 
     it('does not read any refresh tier variable', () => {
-        // Guards the access/refresh split: an access token inheriting a 7-day refresh TTL is
-        // exactly the mistake the browser-session fallback invites.
+        /**
+         * Guards the access/refresh split: an access token inheriting a 7-day refresh TTL is
+         * exactly the mistake the browser-session fallback invites.
+         */
         setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
         setEnvironment({ NODE_SESSION_TIME_LONG: '2592000' });
 
@@ -193,9 +205,11 @@ describe('the token windows check', () => {
     });
 
     it('refuses a reuse window equal to the grace window', () => {
-        // Equal, not just smaller: `reuse > grace` is the boot check's own condition, and a token
-        // superseded exactly `grace` ago is already past both cutoffs at once -- there is no
-        // instant in which a replay reads as reuse rather than an ordinary expired token.
+        /**
+         * Equal, not just smaller: `reuse > grace` is the boot check's own condition, and a token
+         * superseded exactly `grace` ago is already past both cutoffs at once -- there is no
+         * instant in which a replay reads as reuse rather than an ordinary expired token.
+         */
         expect(windowProblems('10000', '10000')).toEqual([
             'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (10000ms), or refresh-token reuse can never be detected'
         ]);

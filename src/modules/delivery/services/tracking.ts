@@ -28,7 +28,6 @@ import { mailTrackingChanged } from './notify';
 /**
  * The audit metadata of a tracking edit: the shipment, and — only when the code really changed — the
  * code before and after, so the trail answers "what was it before".
- * @param shipmentId - the shipment
  * @param before - the code it carried, if any
  * @param after - the code it carries now
  */
@@ -67,7 +66,6 @@ const afterEdited = (
 /**
  * Set or correct a shipment's tracking code.
  *
- * @param shipmentId - the shipment
  * @param trackingCode - the new code; absent changes nothing (a merge patch with no field)
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry

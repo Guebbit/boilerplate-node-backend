@@ -3,7 +3,7 @@
  * Tasks — public barrel; the only surface a sibling may import (see
  * `docs/understand/strategic-ddd.md` §5 for the rule).
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#its-neighbourhood
  */
 
 export * from './services';

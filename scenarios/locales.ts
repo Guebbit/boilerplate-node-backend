@@ -15,9 +15,11 @@ import type { Caller } from './flows/client';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
 const SEED_LOCALE_TAGS = {
-    /** The deployment's fallback locale — the product catalogue's source language. Every
+    /**
+     * The deployment's fallback locale — the product catalogue's source language. Every
      * product's fallback-locale `translations` row needs this to exist and be active, or
-     * `planTranslations` has nothing to validate that row's own locale against (`./products`). */
+     * `planTranslations` has nothing to validate that row's own locale against (`./products`).
+     */
     source: getFallbackLocale(),
     /** A language that exists ONLY as rows — no deployed file — downloadable from the API. */
     downloadable: 'es',
@@ -31,8 +33,10 @@ const SEED_LOCALE_TAGS = {
 
 /** The seeded languages themselves — see `SEED_LOCALE_TAGS` for what each one demonstrates. */
 export const localeFixtures = [
-    /* No `revision` and no entries: this one's dictionary is the deployed `en.json` file rather
-     * than a set of dynamic rows, so it sits at the model's default revision. */
+    /**
+     * No `revision` and no entries: this one's dictionary is the deployed `en.json` file rather
+     * than a set of dynamic rows, so it sits at the model's default revision.
+     */
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0005',
         tag: SEED_LOCALE_TAGS.source,
@@ -46,7 +50,7 @@ export const localeFixtures = [
         nativeName: 'Español',
         revision: 1
     }),
-    /*
+    /**
      * Inactive, and that is the whole fixture. It has entries so that "inactive hides a dictionary
      * that exists" is what gets tested, rather than "an empty language has nothing to show".
      */
@@ -58,7 +62,7 @@ export const localeFixtures = [
         active: false,
         revision: 1
     }),
-    /*
+    /**
      * The only seeded language the API also has a deployed file for, which is the whole reason it
      * is here: it is the one row `mergeCapabilities` has anything to merge WITH.
      */
@@ -69,7 +73,7 @@ export const localeFixtures = [
         nativeName: 'Italiano',
         revision: 1
     }),
-    /*
+    /**
      * Registered, empty and inactive — the state between the `POST` that creates a
      * language and its first translated key. Covers the zero-entries case: `entryCount`
      * of 0, `revision` at its default, a cascade delete that removes no rows.
@@ -160,7 +164,7 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
         'Mis pedidos'
     ],
 
-    /*
+    /**
      * The API's own half, for the same language — STORED, VALID, AND NOT APPLIED. Spanish has no
      * deployed dictionary, so `applyLocaleOverrides` skips and logs these: the fixture for a
      * backend translated ahead of its file. Also proves apps are separate keyspaces: the same
@@ -181,7 +185,7 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
         'Algo ha fallado por nuestra parte. Inténtalo de nuevo.'
     ],
 
-    /*
+    /**
      * The overlay that DOES apply — same keys as the pair above, but Italian has a deployed
      * `shared/locales/it.json`, so these override real strings rather than introducing new ones.
      */

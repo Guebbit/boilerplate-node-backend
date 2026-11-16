@@ -54,7 +54,8 @@ export class WebhookRejected extends Error {
     }
 }
 
-/** The signing ring, read fresh so a rotation needs no restart. The first entry signs.
+/**
+ * The signing ring, read fresh so a rotation needs no restart. The first entry signs.
  *
  * @throws {Error} when absent — verifying against an empty secret would authenticate every
  *   caller, which is worse than authenticating none.
@@ -102,8 +103,10 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     });
 
     const timestamp = Number(pairs.find(([key]) => key === 't')?.[1]);
-    // EVERY `v1`, not the last: a provider rotating its secret signs with the old and the new one
-    // and sends both, and either may be the one this ring still holds.
+    /**
+     * EVERY `v1`, not the last: a provider rotating its secret signs with the old and the new one
+     * and sends both, and either may be the one this ring still holds.
+     */
     const provided = pairs
         .filter(([key]) => key === 'v1')
         .map(([, value]) => value)
@@ -114,11 +117,13 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > TOLERANCE_SECONDS)
         throw new WebhookRejected('Signature timestamp outside tolerance', true);
 
-    // Lower-cased before the compare: a provider may send uppercase hex, and `expected` never is
-    // (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
-    // uppercase delivery instead of matching it byte-for-byte. Every pairing is compared, none
-    // short-circuited: which entry of the ring matched is not something to leak through timing.
-    // One digest per secret, outside the per-value loop: hashing the body is the costly part.
+    /**
+     * Lower-cased before the compare: a provider may send uppercase hex, and `expected` never is
+     * (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
+     * uppercase delivery instead of matching it byte-for-byte. Every pairing is compared, none
+     * short-circuited: which entry of the ring matched is not something to leak through timing.
+     * One digest per secret, outside the per-value loop: hashing the body is the costly part.
+     */
     const matches = secrets().flatMap((secret) => {
         const expected = digest(timestamp, rawBody, secret);
         return provided.map((value) => constantTimeEqual(expected, value.toLowerCase()));

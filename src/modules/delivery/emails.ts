@@ -80,7 +80,6 @@ export interface FulfillmentDelayedEmailInput {
  * on the shop's wall clock, and UTC would print the evening before it).
  * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
  * @param locale - the buyer's language
- * @param date - the date
  */
 const longDate = (locale: string, date: Date): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: shopTimezone() }).format(date);
@@ -160,8 +159,10 @@ export const shipmentDeliveredEmail = (
             greeting: t('delivery.email-delivered.greeting', { name }),
             body: t('delivery.email-delivered.body'),
             lines: lineTexts(t, input.lines),
-            // `Intl.DateTimeFormat`, UTC: the deadline is a UTC calendar day, so a local rendering
-            // could print the day before. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+            /**
+             * `Intl.DateTimeFormat`, UTC: the deadline is a UTC calendar day, so a local rendering
+             * could print the day before. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+             */
             withdraw: input.withdrawUntil
                 ? t('delivery.email-delivered.withdraw-until', {
                       date: new Intl.DateTimeFormat(locale, {
@@ -248,8 +249,10 @@ export const holdNoticeEmail = (
             pageMetaTitle: t('delivery.email-hold-notice.meta-title'),
             greeting: t('delivery.email-hold-notice.greeting', { name }),
             body: t(`delivery.email-hold-notice.${input.notice}.body`),
-            // Always a string: the job crosses the queue as JSON, which drops an `undefined` key, and
-            // the template reads `message` unconditionally (a missing key is a ReferenceError).
+            /**
+             * Always a string: the job crosses the queue as JSON, which drops an `undefined` key, and
+             * the template reads `message` unconditionally (a missing key is a ReferenceError).
+             */
             message: input.message ?? '',
             linkLabel: t('delivery.email-hold-notice.link-label'),
             linkUrl: input.orderUrl,

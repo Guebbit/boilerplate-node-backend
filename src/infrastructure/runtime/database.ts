@@ -3,12 +3,14 @@
  * MongoDB connection lifecycle. The demo profile's snapshot machinery (empty, capture, restore) is
  * `scenarios/support/database-snapshot.ts` — a different concern, needed by only two callers.
  *
- * @see docs/understand/mongodb-mongoose.md
+ * @see docs/understand/mongodb-mongoose.md#a-time-limit-on-every-query
  */
 
-// Mongoose is the ODM over the MongoDB driver. Importing the default export gives the
-// *singleton* — `mongoose.connect()` mutates global state, so any file that
-// `import`s `mongoose` finds the same live connection.
+/**
+ * Mongoose is the ODM over the MongoDB driver. Importing the default export gives the
+ * *singleton* — `mongoose.connect()` mutates global state, so any file that
+ * `import`s `mongoose` finds the same live connection.
+ */
 import { setTimeout as sleep } from 'node:timers/promises';
 import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
@@ -125,11 +127,15 @@ export const configureMongoose = (
 export const start = (maxTimeMs?: number) => {
     configureMongoose(maxTimeMs);
 
-    // Recursive rather than a `for` loop so each retry chains onto the previous promise
-    // without `async`/`await` — this codebase stays on explicit promise chains throughout.
+    /**
+     * Recursive rather than a `for` loop so each retry chains onto the previous promise
+     * without `async`/`await` — this codebase stays on explicit promise chains throughout.
+     */
     const attemptConnect = (attempt: number): Promise<void> =>
-        // `mongoose.connect()` resolves once the driver has completed the handshake. It also
-        // sets `mongoose.connection`, so everything else in the app is wired up as a side effect.
+        /**
+         * `mongoose.connect()` resolves once the driver has completed the handshake. It also
+         * sets `mongoose.connection`, so everything else in the app is wired up as a side effect.
+         */
         mongoose.connect(getDatabaseUri(), COMMAND_MONITORING).then(
             // Callers only need "connected", not the Mongoose handle: start timing commands and drop it.
             () => observeDatabaseCommands(mongoose.connection),
@@ -143,8 +149,10 @@ export const start = (maxTimeMs?: number) => {
                     throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`, {
                         cause: error
                     });
-                // Exponential backoff (2^attempt), clamped at 30s so late attempts stay responsive
-                // once the database finally comes up.
+                /**
+                 * Exponential backoff (2^attempt), clamped at 30s so late attempts stay responsive
+                 * once the database finally comes up.
+                 */
                 const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
                 // Stryker disable all
                 logger.warn({
@@ -152,9 +160,11 @@ export const start = (maxTimeMs?: number) => {
                     error
                 });
                 // Stryker restore all
-                // Node's promise timer yields to the event loop: a busy-wait here would freeze it and, in a
-                // container, block the health-check endpoint from ever answering.
-                // https://nodejs.org/api/timers.html#timerspromisessettimeoutdelay-value-options
+                /**
+                 * Node's promise timer yields to the event loop: a busy-wait here would freeze it and, in a
+                 * container, block the health-check endpoint from ever answering.
+                 * https://nodejs.org/api/timers.html#timerspromisessettimeoutdelay-value-options
+                 */
                 return sleep(delayMs).then(() => attemptConnect(attempt + 1));
             }
         );

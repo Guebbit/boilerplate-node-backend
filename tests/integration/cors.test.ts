@@ -12,7 +12,7 @@
  * Drives the real app through the shared harness, so the assertions cover the real middleware
  * order rather than a privately-assembled stack.
  *
- * @see docs/understand/security.md
+ * @see docs/understand/security.md#security-properties-provided
  */
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';

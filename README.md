@@ -79,6 +79,10 @@ flowchart LR
     class OTEL obs;
 ```
 
+It is a **Silo** deployment: one deployment per client, and **one client per machine is the supported
+shape**. See [tenancy](docs/understand/tenancy.md); the manual alternative (several stacks on one host,
+each on its own loopback port, your own proxy) is in [Two Client Stacks](docs/operate/two-client-stacks.md).
+
 Four ideas carry the whole repository:
 
 1. **A module is a value, not a convention.** Every domain declares what it needs — routes,

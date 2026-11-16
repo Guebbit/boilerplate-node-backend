@@ -3,7 +3,7 @@
  * Checkout — the one cart operation that writes to another module's collection, and the only one
  * where a race can cost a customer money.
  *
- * @see docs/modules/cart-checkout.md
+ * @see docs/modules/cart-checkout.md#the-sequence
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
@@ -63,8 +63,10 @@ import { shipToCountries, shopCurrency } from '@modules/shop';
  */
 const toOrderAddress = (address: AddressItem): OrderAddress => {
     const copy: Partial<OrderAddress> = {};
-    // Walks the shared field list, so a field added there is copied here; an absent one (the
-    // phone) stays absent rather than becoming `undefined`.
+    /**
+     * Walks the shared field list, so a field added there is copied here; an absent one (the
+     * phone) stays absent rather than becoming `undefined`.
+     */
     for (const field of POSTAL_ADDRESS_FIELDS) {
         const value = address[field];
         if (value !== undefined) copy[field] = value;
@@ -107,8 +109,10 @@ type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseRej
  */
 const resolvePaymentMethod = async (
     userId: string,
-    // Default, not `?? 'card'`: `paymentMethod` is this function's last parameter, so a caller
-    // passing `undefined` (the checkout route's own "none chosen" spelling) gets 'card' for free.
+    /**
+     * Default, not `?? 'card'`: `paymentMethod` is this function's last parameter, so a caller
+     * passing `undefined` (the checkout route's own "none chosen" spelling) gets 'card' for free.
+     */
     paymentMethod = 'card'
 ): Promise<PreflightOutcome<{ requestedMethod: string; methodInfo: PaymentMethodInfo }>> => {
     const methodInfo = paymentService
@@ -196,8 +200,10 @@ const resolveShipping = async (
     if (shippingMethodId !== undefined && !shippingMethod)
         return { ok: false, reject: shippingMethodNotFound() };
 
-    // A physical basket with no method is refused later as `CART_SHIPPING_METHOD_REQUIRED`;
-    // until then there is simply no address to resolve.
+    /**
+     * A physical basket with no method is refused later as `CART_SHIPPING_METHOD_REQUIRED`;
+     * until then there is simply no address to resolve.
+     */
     if (!shippingMethod && basketShips) return { ok: true, shippingMethod, address: undefined };
 
     if (!shippingMethod?.requiresAddress) {
@@ -226,9 +232,11 @@ const resolveShipping = async (
             ])
         };
 
-    // No default address on file leaves `address` `undefined` here;
-    // `evaluateShippingRequirement` further down is what refuses THAT case
-    // (`CART_ADDRESS_REQUIRED`).
+    /**
+     * No default address on file leaves `address` `undefined` here;
+     * `evaluateShippingRequirement` further down is what refuses THAT case
+     * (`CART_ADDRESS_REQUIRED`).
+     */
     if (address && !shipToCountries().includes(address.country))
         return {
             ok: false,
@@ -309,10 +317,12 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
             {
                 code: ERROR_CODES.CART_INSUFFICIENT_STOCK,
                 message: t('cart.insufficient-stock'),
-                // Every short line, so the customer fixes the basket in one pass instead of one
-                // refusal per line. Copied field by field: the reserve's own shortfall also carries
-                // the exact count left, which a shopper is not told. `availability` is what lets the
-                // client word a sold-out line differently from an off-sale one.
+                /**
+                 * Every short line, so the customer fixes the basket in one pass instead of one
+                 * refusal per line. Copied field by field: the reserve's own shortfall also carries
+                 * the exact count left, which a shopper is not told. `availability` is what lets the
+                 * client word a sold-out line differently from an off-sale one.
+                 */
                 details: {
                     lines: refusal.shortfalls.map(
                         ({ productId, title, requested, availability }) => ({
@@ -329,8 +339,10 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
         {
             code: ERROR_CODES.CART_PRODUCT_UNAVAILABLE,
             message: t('cart.product-unavailable'),
-            // Absent for the placeOrder-side refusal: only the pre-flight verdict has per-line
-            // detail to report.
+            /**
+             * Absent for the placeOrder-side refusal: only the pre-flight verdict has per-line
+             * detail to report.
+             */
             ...(refusal.lines ? { details: { lines: refusal.lines } } : {})
         }
     ]);
@@ -464,8 +476,10 @@ const placeLinesOf = (joined: readonly JoinedCartLine[]): PlaceOrderLine[] => {
     const backorders = backorderIdsOf(joined);
     return joined.map((line) => ({
         item: { productId: line.productId, quantity: line.quantity },
-        // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
-        // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+        /**
+         * Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
+         * not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+         */
         product: line.product,
         ...(backorders.has(line.productId)
             ? { backorder: { restockDate: line.product.restockDate } }
@@ -525,9 +539,11 @@ const placeOrderInputOf = ({
             ? {
                   method: {
                       id: shippingMethod.id,
-                      // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
-                      // is still deciding what to freeze onto the new order. Every line counts
-                      // toward the free-shipping line, as the cart's own quote counts it.
+                      /**
+                       * The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
+                       * is still deciding what to freeze onto the new order. Every line counts
+                       * toward the free-shipping line, as the cart's own quote counts it.
+                       */
                       priceFor: (frozenLines) =>
                           shippingPriceFor(shippingMethod, frozenLines, shopCurrency())
                   }
@@ -535,8 +551,10 @@ const placeOrderInputOf = ({
             : {}),
         holdMinutes
     },
-    // Emptied only if the cart still holds the lines this checkout read; `false` aborts the
-    // order's transaction, so the cart's contents end up on exactly one of two racing orders.
+    /**
+     * Emptied only if the cart still holds the lines this checkout read; `false` aborts the
+     * order's transaction, so the cart's contents end up on exactly one of two racing orders.
+     */
     commitWith: (session) =>
         cartRepository
             .clearLinesIfUnchanged(userId, version, session)
@@ -555,8 +573,10 @@ const refusalForPlaceOrder = (
         return generateReject(409, [
             { code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }
         ]);
-    // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` already proved the
-    // basket good — but map them defensively rather than assume the invariant.
+    /**
+     * `no-lines`/`product-missing` should not occur here — `evaluateCheckout` already proved the
+     * basket good — but map them defensively rather than assume the invariant.
+     */
     if (outcome.reason !== 'insufficient-stock') return buildStockRefusal({ type: 'unavailable' });
     // The reserve lost a race, so only stock can be the reason: sold out, or fewer left.
     return buildStockRefusal({
@@ -591,29 +611,37 @@ const runCheckout = async (
     const user = await userService.getById(userId);
     if (!user) return generateReject(404, []);
 
-    // The whole language chain for this checkout — both the snapshot each line freezes and,
-    // further down, the confirmation email — decided once so the two cannot disagree.
+    /**
+     * The whole language chain for this checkout — both the snapshot each line freezes and,
+     * further down, the confirmation email — decided once so the two cannot disagree.
+     */
     const buyerLocale = user.locale ?? getDefaultLocale();
 
-    // Both pre-flight steps run before anything is written — an unoffered payment method, an
-    // unpaid-order cap, an unmatched shipping method or an address that isn't the
-    // caller's all refuse the checkout while nothing has moved yet.
+    /**
+     * Both pre-flight steps run before anything is written — an unoffered payment method, an
+     * unpaid-order cap, an unmatched shipping method or an address that isn't the
+     * caller's all refuse the checkout while nothing has moved yet.
+     */
     const paymentResolution = await resolvePaymentMethod(userId, paymentMethod);
     if (!paymentResolution.ok) return paymentResolution.reject;
     const { requestedMethod, methodInfo } = paymentResolution;
 
     const cart = await cartRepository.findByUserId(userId);
-    // The version the lines below are read at, and the condition the cart is emptied
-    // under. Captured before the join, so anything that touches the cart while the
-    // products are being resolved invalidates this checkout rather than being missed.
+    /**
+     * The version the lines below are read at, and the condition the cart is emptied
+     * under. Captured before the join, so anything that touches the cart while the
+     * products are being resolved invalidates this checkout rather than being missed.
+     */
     const version = cart?.__v ?? 0;
 
     const lines = await readCartLines(cart);
     const joined = lines.filter((line) => isJoined(line));
 
-    // The cart's own choice (`PUT /cart/shipping-method`), read here rather than from the
-    // request — see this module's `openapi.yaml` `CheckoutRequest` description. A stored choice the
-    // basket no longer fits counts as none, exactly as the cart's own view reads it.
+    /**
+     * The cart's own choice (`PUT /cart/shipping-method`), read here rather than from the
+     * request — see this module's `openapi.yaml` `CheckoutRequest` description. A stored choice the
+     * basket no longer fits counts as none, exactly as the cart's own view reads it.
+     */
     const chosenMethodId = effectiveShippingChoice(
         cart?.shippingMethodId,
         shippingOptionsFor(joined).options
@@ -627,7 +655,7 @@ const runCheckout = async (
     if (!shippingResolution.ok) return shippingResolution.reject;
     const { shippingMethod, address } = shippingResolution;
 
-    /*
+    /**
      * The rule is in `../domain`; what a refusal looks like on the wire is here.
      *
      * `available` is computed here, not by the rule itself: the domain layer may not import
@@ -664,18 +692,22 @@ const runCheckout = async (
     const requirementRefusal = refuseShippingRequirement(joined, shippingMethod, address);
     if (requirementRefusal) return requirementRefusal;
 
-    // After the shipping requirement, so a physical basket short of a method or an address is
-    // told that first; only then does the invoice's own address get resolved.
+    /**
+     * After the shipping requirement, so a physical basket short of a method or an address is
+     * told that first; only then does the invoice's own address get resolved.
+     */
     const billingResolution = await resolveBilling(userId, billingAddressId, address);
     if (!billingResolution.ok) return billingResolution.reject;
     const { billingAddress } = billingResolution;
 
-    // The price check, last of the refusals: every fixable problem above is the buyer's to fix
-    // first, and nothing is held until the total they were shown is the total they would pay.
+    /**
+     * The price check, last of the refusals: every fixable problem above is the buyer's to fix
+     * first, and nothing is held until the total they were shown is the total they would pay.
+     */
     const totalRefusal = refuseChangedTotal(joined, shippingMethod, expectedTotal);
     if (totalRefusal) return totalRefusal;
 
-    /*
+    /**
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
      * `reserveForOrder` wants; `card` passes `undefined` through and gets its own default
      * (`NODE_RESERVATION_TTL_MINUTES`). `placeOrder` freezes `payBy` from the hold it actually
@@ -683,7 +715,7 @@ const runCheckout = async (
      */
     const holdMinutes = methodInfo.holdHours === undefined ? undefined : methodInfo.holdHours * 60;
 
-    /*
+    /**
      * The write itself — freezing the lines, allocating the invoice number, minting a
      * `bank_transfer` reference and holding the stock — is `placeOrder`'s job; this function keeps
      * only what is genuinely checkout's own: the pre-flight above, and the cart clear, which
@@ -723,7 +755,7 @@ export const orderConfirm = (
     runCheckout(userId, choices)
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
-            /*
+            /**
              * `order_created` fires here too, not just from the admin route's `create()` —
              * see docs/understand/observability-layer.md. The audit records the caller's real role,
              * whatever it is — no forced override: a purchase made by an admin is still an admin

@@ -6,7 +6,7 @@
  * run means the document is complete enough to mock. Outside the pre-commit gate because it binds
  * a real port, and it owns the process it starts so a failed curl cannot leave one running.
  *
- * @see docs/build/contract-testing.md
+ * @see docs/build/contract-testing.md#commands
  */
 
 import { spawn } from 'node:child_process';
@@ -36,8 +36,10 @@ const BOOT_TIMEOUT_MS = 30_000;
 const prism = spawn(
     'prism',
     ['mock', 'openapi.yaml', '--errors', '--port', String(PORT)],
-    // `pipe` rather than `inherit`: the output is only interesting when something fails, and the
-    // readiness check below needs somewhere to fail loudly into.
+    /**
+     * `pipe` rather than `inherit`: the output is only interesting when something fails, and the
+     * readiness check below needs somewhere to fail loudly into.
+     */
     { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] }
 );
 
@@ -101,6 +103,7 @@ const waitForBoot = async (): Promise<Response> => {
 };
 
 // Wrapped rather than top-level: this package is CommonJS, where esbuild rejects a top-level await.
+/** Boots the mock server, probes it and shuts it down. */
 const main = async (): Promise<void> => {
     const response = await waitForBoot();
 

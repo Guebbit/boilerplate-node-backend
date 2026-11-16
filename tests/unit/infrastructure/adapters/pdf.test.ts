@@ -15,15 +15,23 @@
  */
 const pdfBuffer = new Uint8Array([37, 80, 68, 70]);
 
+/** Stands in for the browser's `pdf`; the cases assert how it was called. */
 const pdf = jest.fn((_options?: unknown) => Promise.resolve(pdfBuffer));
+/** Stands in for the browser's `setContent`; the cases assert how it was called. */
 const setContent = jest.fn((_html?: string, _options?: unknown) => Promise.resolve());
+/** Stands in for the browser's `close`; the cases assert how it was called. */
 const close = jest.fn(() => Promise.resolve());
+/** Stands in for the browser's `setJavaScriptEnabled`; the cases assert how it was called. */
 const setJavaScriptEnabled = jest.fn((_enabled?: boolean) => Promise.resolve());
+/** Stands in for the browser's `setRequestInterception`; the cases assert how it was called. */
 const setRequestInterception = jest.fn((_enabled?: boolean) => Promise.resolve());
+/** Stands in for the browser's `on`; the cases assert how it was called. */
 const on = jest.fn((_event?: string, _handler?: unknown) => undefined);
+/** Stands in for the browser's `newPage`; the cases assert how it was called. */
 const newPage = jest.fn(() =>
     Promise.resolve({ setContent, pdf, setJavaScriptEnabled, setRequestInterception, on })
 );
+/** Stands in for the browser's `launch`; the cases assert how it was called. */
 const launch = jest.fn((_options?: unknown) => Promise.resolve({ newPage, close }));
 
 jest.mock('puppeteer-core', () => ({
@@ -147,9 +155,11 @@ describe('renderHtmlToPdf', () => {
         it('waits for the load event, so referenced assets are loaded before printing', async () => {
             await renderHtmlToPdf('<img src="https://cdn.example.com/logo.png" />');
 
-            // `load` fires once images, stylesheets and subframes are done. Asserted rather than
-            // left to the default, which is the same value — the point is that it is CHOSEN, and
-            // that a future puppeteer changing its default cannot silently print blanks.
+            /**
+             * `load` fires once images, stylesheets and subframes are done. Asserted rather than
+             * left to the default, which is the same value — the point is that it is CHOSEN, and
+             * that a future puppeteer changing its default cannot silently print blanks.
+             */
             expect(setContent.mock.calls.at(-1)?.[1]).toEqual({ waitUntil: 'load' });
         });
 
@@ -210,8 +220,10 @@ describe('renderHtmlToPdf', () => {
             pdf.mockRejectedValueOnce(new Error('print failed'));
             close.mockRejectedValueOnce(new Error('close failed'));
 
-            // `finally` rejecting replaces the original reason: a browser that will not close is
-            // the more serious of the two, and the render error is already lost to the caller
+            /**
+             * `finally` rejecting replaces the original reason: a browser that will not close is
+             * the more serious of the two, and the render error is already lost to the caller
+             */
             await expect(renderHtmlToPdf('<p>hello</p>')).rejects.toThrow('close failed');
         });
     });
@@ -230,7 +242,7 @@ const heldPrint = () => {
     return { printed, release: () => resolvePrint?.(pdfBuffer) };
 };
 
-/*
+/**
  * The shutdown half: an exiting process must not orphan a render it started. The render below is
  * held open by a print that has not answered yet — the state a seeding script is in when it calls
  * `process.exit` right after a fire-and-forget invoice.
@@ -275,7 +287,7 @@ describe('settleRenders', () => {
     });
 });
 
-/*
+/**
  * The two bounds on a render: how many may wait, and how long one may take. Without them a burst
  * of invoice downloads is an unbounded queue, and one hung Chromium holds a slot, and every render
  * behind it, forever.
@@ -303,8 +315,10 @@ const releaseLaunches = (): void => {
 const nextTick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 describe('the render bounds', () => {
-    // A case that fails while launches are held would leave its slots taken for every case after
-    // it; releasing here keeps one failure from becoming eight.
+    /**
+     * A case that fails while launches are held would leave its slots taken for every case after
+     * it; releasing here keeps one failure from becoming eight.
+     */
     afterEach(async () => {
         releaseLaunches();
         await nextTick();

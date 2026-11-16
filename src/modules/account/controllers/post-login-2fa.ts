@@ -42,8 +42,10 @@ export const postLoginTwoFactor = (
         return;
     }
     const { code, remember, transport } = parsed;
-    // Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
-    // see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
+    /**
+     * Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
+     * see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
+     */
     const challenge = parsed.challenge ?? readMfaChallengeCookie(request);
     if (!challenge) {
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
@@ -64,8 +66,10 @@ export const postLoginTwoFactor = (
             const { user, amr } = result.data;
             const userId = user._id.toString();
 
-            // Deletion grace: the second factor passed, so the claim check goes back instead of a
-            // session. The challenge is spent either way; the client restores or walks away.
+            /**
+             * Deletion grace: the second factor passed, so the claim check goes back instead of a
+             * session. The challenge is spent either way; the client restores or walks away.
+             */
             if (isRestorable(user)) {
                 return buildDeletionPending(user, withProofs(amr, AMR.otp)).then((pending) => {
                     authTwoFactorChallengeTotal.inc({ status: 'success' });

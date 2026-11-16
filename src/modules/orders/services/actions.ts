@@ -193,12 +193,14 @@ const orderActionsOf = (
             ...withdrawalActions(order, authContext),
             recordPayment: canRecordPayment(order.status, authContext),
             ...deleteActions(order, authContext),
-            // `paidAt` is stamped in the SAME write that moves an order to `paid`
-            // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
-            // "an invoice was issued" — `invoicing` freezes one from the very same
-            // transition, in its own event listener. `GET /orders/{id}/invoice` (owned by
-            // `invoicing`) still checks for real and 404s on the rare gap this flag cannot
-            // see — the same "gaps are acceptable" policy `orderNumber` already lives under.
+            /**
+             * `paidAt` is stamped in the SAME write that moves an order to `paid`
+             * (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
+             * "an invoice was issued" — `invoicing` freezes one from the very same
+             * transition, in its own event listener. `GET /orders/{id}/invoice` (owned by
+             * `invoicing`) still checks for real and 404s on the rare gap this flag cannot
+             * see — the same "gaps are acceptable" policy `orderNumber` already lives under.
+             */
             invoice: Boolean(order.paidAt)
         },
         actor,
@@ -214,8 +216,10 @@ const orderActionsOf = (
  */
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> =>
     resolveCurrentImages([presentOrder(order)]).then(([resolved]) =>
-        // Carries the edit counter onto the wire shape, so a write that answers with it (a restore)
-        // can stamp the real `ETag`.
+        /**
+         * Carries the edit counter onto the wire shape, so a write that answers with it (a restore)
+         * can stamp the real `ETag`.
+         */
         carryVersion(order, {
             ...resolved,
             actions: orderActionsOf(order, authContext)
@@ -239,8 +243,10 @@ export const withListActions = (
         : orderRepository.findByIds(page.items.map((item) => item.id)).then((documents) => {
               const byId = new Map(documents.map((document) => [String(document._id), document]));
               return {
-                  // A row whose document vanished between the two reads is gone: it is dropped,
-                  // since an `Order` always carries its `actions`.
+                  /**
+                   * A row whose document vanished between the two reads is gone: it is dropped,
+                   * since an `Order` always carries its `actions`.
+                   */
                   items: page.items.flatMap((item) => {
                       const document = byId.get(item.id);
                       return document

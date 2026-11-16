@@ -42,7 +42,10 @@ beforeEach(() => {
     mockOutbox.length = 0;
 });
 
-/** The digits of the newest mail of one template. */
+/**
+ * The digits of the newest mail of one template.
+ * @throws {Error} when no mail of that template was queued
+ */
 const mailedCode = (template: string): string => {
     const mail = mockOutbox.findLast((queued) => queued.template === template);
     if (!mail) throw new Error(`No ${template} mail was queued`);

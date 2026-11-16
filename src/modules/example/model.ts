@@ -3,7 +3,7 @@
  * In any module: the Mongoose schema, one collection, and the wire-shape transform the repository
  * and presenter share. Here: an example is a note with an owner, a status and an optional cover.
  *
- * @see docs/understand/layers.md
+ * @see docs/understand/layers.md#example-from-this-repo
  */
 
 import { model, Schema, type Document, type Model, type Types } from 'mongoose';
@@ -46,8 +46,10 @@ export type ExampleModel = Model<ExampleDocument>;
 export const exampleSchema = new Schema<ExampleDocument, ExampleModel>(
     {
         userId: { type: Schema.Types.ObjectId, required: true },
-        // The fallback-language title. Other languages live in `locales`' translation rows, and a
-        // fallback-language write is copied back here (`repository.writeTranslatedFields`).
+        /**
+         * The fallback-language title. Other languages live in `locales`' translation rows, and a
+         * fallback-language write is copied back here (`repository.writeTranslatedFields`).
+         */
         title: { type: String, required: true },
         body: { type: String, required: true },
         status: {

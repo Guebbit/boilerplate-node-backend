@@ -2,12 +2,14 @@
  * @module
  * HTML → PDF rendering (invoices, reports).
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#pdf-pipeline
  */
 
-// `puppeteer-core`, not `puppeteer`: the -core package skips the ~150 MB Chromium download at
-// install time and expects an externally provided browser binary. That is the right choice for
-// container images, where the base image installs chromium via the package manager.
+/**
+ * `puppeteer-core`, not `puppeteer`: the -core package skips the ~150 MB Chromium download at
+ * install time and expects an externally provided browser binary. That is the right choice for
+ * container images, where the base image installs chromium via the package manager.
+ */
 import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
 import type { Browser, HTTPRequest, PDFOptions } from 'puppeteer-core';
@@ -25,16 +27,22 @@ const DEFAULT_PDF_OPTIONS: PDFOptions = { format: 'A4' };
  * able to point the path elsewhere after this module has been imported.
  */
 const launchOptions = () => ({
-    // Path to the Chromium binary. Must be set (or match the fallback) because puppeteer-core
-    // ships no browser of its own; the fallback is the Alpine/Debian package location.
+    /**
+     * Path to the Chromium binary. Must be set (or match the fallback) because puppeteer-core
+     * ships no browser of its own; the fallback is the Alpine/Debian package location.
+     */
     executablePath: pdfConfig().PUPPETEER_EXECUTABLE_PATH,
-    // Launching alone may not take the whole budget: a Chromium that never starts is a render that
-    // never finishes. https://pptr.dev/api/puppeteer.launchoptions
+    /**
+     * Launching alone may not take the whole budget: a Chromium that never starts is a render that
+     * never finishes. https://pptr.dev/api/puppeteer.launchoptions
+     */
     timeout: RENDER_TIMEOUT_MS,
     args: [
-        // Chromium's sandbox needs kernel privileges most containers do not grant, so it fails
-        // to launch without this. Safe *only* because the HTML rendered here is our own
-        // templates — passing untrusted HTML through an unsandboxed browser is a real risk.
+        /**
+         * Chromium's sandbox needs kernel privileges most containers do not grant, so it fails
+         * to launch without this. Safe *only* because the HTML rendered here is our own
+         * templates — passing untrusted HTML through an unsandboxed browser is a real risk.
+         */
         '--no-sandbox',
         // Disables the setuid sandbox helper for the same reason.
         '--disable-setuid-sandbox'
@@ -66,6 +74,7 @@ export const RENDER_TIMEOUT_MS = 20_000;
 
 /** A render took longer than {@link RENDER_TIMEOUT_MS}; its browser was closed. */
 export class RenderTimeoutError extends Error {
+    /** Takes no argument: the message is fixed, naming the limit that was hit. */
     constructor() {
         super(`PDF render exceeded ${String(RENDER_TIMEOUT_MS)} ms`);
         this.name = 'RenderTimeoutError';
@@ -133,8 +142,10 @@ export const renderHtmlToPdf = (
 ): Promise<Uint8Array> => {
     const render = withRenderSlot(() => renderOnce(html, pdfOptions));
     inFlight.add(render);
-    // Both branches: a rejected render is still finished. `then(f, f)` rather than `finally`,
-    // which would hand back a second promise rejecting with nobody listening.
+    /**
+     * Both branches: a rejected render is still finished. `then(f, f)` rather than `finally`,
+     * which would hand back a second promise rejecting with nobody listening.
+     */
     const forget = () => inFlight.delete(render);
     render.then(forget, forget);
     return render;
@@ -191,9 +202,11 @@ const withDeadline = (browser: Browser, work: Promise<Uint8Array>): Promise<Uint
 
     return (
         Promise.race([work, deadline])
-            // `finally` is essential: without it a render error would leak the Chromium process,
-            // and repeated failures would exhaust the container's memory. Skipped once the deadline
-            // closed it, so a browser is never closed twice.
+            /**
+             * `finally` is essential: without it a render error would leak the Chromium process,
+             * and repeated failures would exhaust the container's memory. Skipped once the deadline
+             * closed it, so a browser is never closed twice.
+             */
             .finally(() => {
                 clearTimeout(timer);
                 return timedOut ? undefined : browser.close();
@@ -231,21 +244,27 @@ const printIn = (browser: Browser, html: string, pdfOptions: PDFOptions): Promis
             .newPage()
             .then((page) =>
                 page
-                    // The templates run no script, and the browser runs unsandboxed (see
-                    // `launchOptions`): turning JavaScript off takes away what a template
-                    // injection could do with that. https://pptr.dev/api/puppeteer.page.setjavascriptenabled
+                    /**
+                     * The templates run no script, and the browser runs unsandboxed (see
+                     * `launchOptions`): turning JavaScript off takes away what a template
+                     * injection could do with that. https://pptr.dev/api/puppeteer.page.setjavascriptenabled
+                     */
                     .setJavaScriptEnabled(false)
-                    // Every request now waits for `refuseNonDataRequest` to answer it.
-                    // https://pptr.dev/api/puppeteer.page.setrequestinterception
+                    /**
+                     * Every request now waits for `refuseNonDataRequest` to answer it.
+                     * https://pptr.dev/api/puppeteer.page.setrequestinterception
+                     */
                     .then(() => page.setRequestInterception(true))
                     .then(() => {
                         page.on('request', refuseNonDataRequest);
                     })
-                    // `setContent` writes the HTML directly instead of navigating to a URL —
-                    // no local web server needed.
+                    /**
+                     * `setContent` writes the HTML directly instead of navigating to a URL —
+                     * no local web server needed.
+                     */
                     .then(() =>
                         page.setContent(html, {
-                            /*
+                            /**
                              * Wait for the `load` event, which fires once images, stylesheets and
                              * subframes have finished — so referenced assets are painted, not blank.
                              * The only stronger option, `networkidle0`, is not available here:
@@ -257,8 +276,10 @@ const printIn = (browser: Browser, html: string, pdfOptions: PDFOptions): Promis
                             waitUntil: 'load'
                         })
                     )
-                    // Prints to a PDF byte array (not a file) so the caller decides whether to
-                    // stream it, attach it to an email, or persist it.
+                    /**
+                     * Prints to a PDF byte array (not a file) so the caller decides whether to
+                     * stream it, attach it to an email, or persist it.
+                     */
                     .then(() => page.pdf(pdfOptions))
             )
     );

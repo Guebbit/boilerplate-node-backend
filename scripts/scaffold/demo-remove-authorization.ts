@@ -30,7 +30,6 @@ export interface RemovedAuthorization {
 
 /**
  * Read what the modules about to be removed declare, while their folders still exist.
- * @param repoRoot - repo root
  * @param names - the modules about to be removed
  */
 export const readRemovedAuthorization = (

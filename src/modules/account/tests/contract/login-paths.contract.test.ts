@@ -31,9 +31,11 @@ import { accountAuditActions } from '../../audit';
 import { authLoginTotal } from '../../metrics';
 import { getSessionMode } from '../../session/config';
 
-/* Replaced, not spied on — a CommonJS namespace import exposes each export as a
+/**
+ * Replaced, not spied on — a CommonJS namespace import exposes each export as a
  * non-configurable getter, which `jest.spyOn` cannot redefine under every transform this repo
- * runs tests under. See `tests/support/ports.ts`. */
+ * runs tests under. See `tests/support/ports.ts`.
+ */
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
@@ -50,6 +52,7 @@ afterEach(() => {
 
 /** The fixed identity the `fake` OAuth provider always answers with. */
 const FAKE_OAUTH_EMAIL = 'oauth.demo@example.com';
+/** Subject id the fake OAuth provider reports for the person signing in. */
 const FAKE_OAUTH_PROVIDER_ID = 'fake-oauth-subject';
 
 /** A start response's CSRF/PKCE cookies, as one `Cookie` header for the callback. */
@@ -175,14 +178,18 @@ const continuationPath: LoginPath = {
             .send({ email: user.email, password: PLAIN_PASSWORD });
         const jwtCookie = setCookie(login, '__Host-session')!;
 
-        // Deactivated/deleted AFTER the session was minted — the account holder's next refresh
-        // must not continue it, same guard `startSession` applies at the initial mint.
+        /**
+         * Deactivated/deleted AFTER the session was minted — the account holder's next refresh
+         * must not continue it, same guard `startSession` applies at the initial mint.
+         */
         const loaded = await userRepository.findByIdWithCredentials(user.id);
         Object.assign(loaded!, badState(kind));
         await loaded!.save();
 
-        // Cleared AFTER the setup login above (a genuine success, its own AUTH_LOGIN) and BEFORE
-        // the refusal under test.
+        /**
+         * Cleared AFTER the setup login above (a genuine success, its own AUTH_LOGIN) and BEFORE
+         * the refusal under test.
+         */
         auditSpy.mockClear();
         return getSessionMode() === 'cookie'
             ? api().get('/account').set('Cookie', jwtCookie)
@@ -204,10 +211,12 @@ describe.each([passwordPath, oauthPath, continuationPath])(
                 const response = await attemptRefused(kind, auditSpy);
 
                 assertRefused(response);
-                // A refused password attempt still audits an AUTH_LOGIN *failure* — same as a
-                // wrong password, on purpose (an unknown/blocked account must cost an attacker no
-                // less than a live one, see `services/login.ts#login`). What every path
-                // shares is that NONE of them may audit a SUCCESS here.
+                /**
+                 * A refused password attempt still audits an AUTH_LOGIN *failure* — same as a
+                 * wrong password, on purpose (an unknown/blocked account must cost an attacker no
+                 * less than a live one, see `services/login.ts#login`). What every path
+                 * shares is that NONE of them may audit a SUCCESS here.
+                 */
                 const successfulLogins = auditSpy.mock.calls.filter(
                     ([event]) =>
                         event.action === accountAuditActions.AUTH_LOGIN &&
@@ -282,8 +291,10 @@ const ARMED_ATTEMPTS: [name: string, attempt: () => Promise<Response>][] = [
             return fakeLogin();
         }
     ]
-    // No "link by email" row: a sign-in whose email matches links nothing (`account_exists`), so an
-    // armed account is never reached that way. `integration/oauth-link.test.ts` pins that.
+    /**
+     * No "link by email" row: a sign-in whose email matches links nothing (`account_exists`), so an
+     * armed account is never reached that way. `integration/oauth-link.test.ts` pins that.
+     */
 ];
 
 describe.each(ARMED_ATTEMPTS)('%s on an account with a second factor armed', (_name, attempt) => {

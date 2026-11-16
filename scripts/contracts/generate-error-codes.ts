@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the error-code catalogue from `openapi.yaml`'s `x-error-codes` — a
  * TypeScript constants object plus the union type derived from it.
  *
@@ -55,7 +55,7 @@ const errorCodes = document['x-error-codes'] ?? {};
 /** The code names, sorted so the generated file does not churn between runs. */
 const codes = Object.keys(errorCodes).toSorted();
 
-/*
+/**
  * Renders one property, with the code's own `status`/`description` as its JSDoc — so a call site
  * can hover `ERROR_CODES.CART_EMPTY` and read what it means without leaving the editor.
  *
@@ -63,8 +63,10 @@ const codes = Object.keys(errorCodes).toSorted();
  * @returns One `key: value` line, its two-line doc comment above it.
  */
 const renderRow = (code: string): string => {
-    // `Object.hasOwn`, not a nullish check: `codes` is `Object.keys(errorCodes)`, so every one is
-    // declared — see `resolveMessagePayloadType` in `generate-asyncapi-types.ts` for the same guard.
+    /**
+     * `Object.hasOwn`, not a nullish check: `codes` is `Object.keys(errorCodes)`, so every one is
+     * declared — see `resolveMessagePayloadType` in `generate-asyncapi-types.ts` for the same guard.
+     */
     const entry = Object.hasOwn(errorCodes, code) ? errorCodes[code] : undefined;
     const status = entry?.status ?? 0;
     const description = entry?.description ?? '';

@@ -39,8 +39,10 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         if (!user) return undefined;
 
         return accessService.rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
-            // The minter's staff role counts only with an authenticator app armed, as for their own
-            // session (`callerInScope`): a key never holds more than the person does.
+            /**
+             * The minter's staff role counts only with an authenticator app armed, as for their own
+             * session (`callerInScope`): a key never holds more than the person does.
+             */
             const permissions = keysInScope(
                 user.authenticatorEnabledAt ? roles.tenant : null,
                 'tenant'
@@ -76,14 +78,18 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
         if (!verifyApiKey(token, apiKey.hash)) return { miss: 'invalid_signature' as const };
 
         return currentCallerOf(apiKey).then((currentCaller) => {
-            // A banned, soft-deleted or erased minter ends their keys like a revoke would, and
-            // before anything is stamped: an unban or a restore brings them back untouched.
+            /**
+             * A banned, soft-deleted or erased minter ends their keys like a revoke would, and
+             * before anything is stamped: an unban or a restore brings them back untouched.
+             */
             if (!currentCaller) return { miss: 'revoked' as const };
 
-            // Fire-and-forget — see `repository.ts#touchLastUsed`'s own doc comment for why this
-            // path never awaits it. A rejection has nobody else to catch it, so it is logged here
-            // rather than left to surface as an unhandled rejection with nothing to tie it back to
-            // this key.
+            /**
+             * Fire-and-forget — see `repository.ts#touchLastUsed`'s own doc comment for why this
+             * path never awaits it. A rejection has nobody else to catch it, so it is logged here
+             * rather than left to surface as an unhandled rejection with nothing to tie it back to
+             * this key.
+             */
             void apiKeyRepository.touchLastUsed(String(apiKey._id)).catch((error: unknown) => {
                 logger.warn({
                     message: 'Could not stamp the last-used time on an api key.',
@@ -92,8 +98,10 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
                 });
             });
 
-            // The minter counts as active while their key is in use (the inactivity reaper reads
-            // it). Same fire-and-forget: a lost stamp costs a stale reading, nothing more.
+            /**
+             * The minter counts as active while their key is in use (the inactivity reaper reads
+             * it). Same fire-and-forget: a lost stamp costs a stale reading, nothing more.
+             */
             void userService.touchApiKeyUse(apiKey.createdByUserId).catch((error: unknown) => {
                 logger.warn({
                     message: 'Could not stamp the minter of an api key as active.',
@@ -102,15 +110,19 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
                 });
             });
 
-            // The literal rules: a minter who is now only a customer holds `read:Order`, not the
-            // `display:Order` the credential was minted with, and must not pass for it.
+            /**
+             * The literal rules: a minter who is now only a customer holds `read:Order`, not the
+             * `display:Order` the credential was minted with, and must not pass for it.
+             */
             const minterKeys = heldRules(currentCaller);
             const held = apiKey.permissions.filter((key) => isRuleId(key) && minterKeys.has(key));
 
-            // Never fewer than a stranger holds: a read scope compiled from `request.caller` (the
-            // catalogue's, since `callerScope` takes it) would otherwise hide the public storefront
-            // from a key that was minted for something else. `keysInScope(null, ...)` is that
-            // baseline, the same one a signed-in session is unioned with.
+            /**
+             * Never fewer than a stranger holds: a read scope compiled from `request.caller` (the
+             * catalogue's, since `callerScope` takes it) would otherwise hide the public storefront
+             * from a key that was minted for something else. `keysInScope(null, ...)` is that
+             * baseline, the same one a signed-in session is unioned with.
+             */
             const permissions = [...new Set([...held, ...keysInScope(null, 'tenant')])];
 
             const resolved: ResolvedCredential = {

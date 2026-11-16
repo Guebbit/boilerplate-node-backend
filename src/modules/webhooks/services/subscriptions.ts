@@ -63,15 +63,19 @@ const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
     resolveSafeOutboundTarget(url, AbortSignal.timeout(URL_CHECK_TIMEOUT_MS))
         .then((): undefined => undefined)
         .catch((error: unknown) => {
-            // The caller learns only that the URL was refused: a reason or a resolved address
-            // would map the internal network for whoever is probing it. The operator reads both here.
+            /**
+             * The caller learns only that the URL was refused: a reason or a resolved address
+             * would map the internal network for whoever is probing it. The operator reads both here.
+             */
             logger.warn({
                 message: 'A webhook URL was refused.',
                 reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable',
                 detail: error instanceof Error ? error.message : String(error)
             });
-            // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
-            // verified the target, so nothing is subscribed to it.
+            /**
+             * A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
+             * verified the target, so nothing is subscribed to it.
+             */
             return generateReject(422, [fieldError('url', t('webhooks.url-refused'))]);
         });
 
@@ -130,8 +134,10 @@ export const list = (
     filters: SubscriptionListFilters
 ): Promise<PaginatedResult<WebhookSubscription>> => {
     const standing = standingOn(context.caller);
-    // No explicit sort argument: the `sort` filter goes through the repository's `sortable`
-    // whitelist, and an absent one falls back to the shared newest-first default.
+    /**
+     * No explicit sort argument: the `sort` filter goes through the repository's `sortable`
+     * whitelist, and an absent one falls back to the shared newest-first default.
+     */
     return webhookSubscriptionRepository
         .search(
             {
@@ -255,9 +261,11 @@ export const create = (
         if (refusal) return refusal;
 
         const { entry, plaintext } = mintRingSecret();
-        // A pointer, not a copy: who configured the integration, never their email.
-        // `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
-        // route in practice) leaves it unset.
+        /**
+         * A pointer, not a copy: who configured the integration, never their email.
+         * `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
+         * route in practice) leaves it unset.
+         */
         return webhookSubscriptionRepository
             .create({
                 tenant,
@@ -302,9 +310,11 @@ export const update = (
             const unknownEvents = refuseUnknownEvents(body.eventTypes);
             if (unknownEvents) return unknownEvents;
 
-            // Whenever the receiver or the filter can change, the caller must read the stored
-            // filter AND the new one: narrowing and redirecting in one call must not take over
-            // a stream the caller may not read.
+            /**
+             * Whenever the receiver or the filter can change, the caller must read the stored
+             * filter AND the new one: narrowing and redirecting in one call must not take over
+             * a stream the caller may not read.
+             */
             if (body.url !== undefined || body.eventTypes !== undefined) {
                 const unreadable = refuseUnreadableEvents(
                     [...subscription.eventTypes, ...(body.eventTypes ?? [])],
@@ -313,8 +323,10 @@ export const update = (
                 if (unreadable) return unreadable;
             }
 
-            // Only a URL that CHANGES is worth a lookup: an edit to the description must not
-            // start failing because the host's DNS is down today.
+            /**
+             * Only a URL that CHANGES is worth a lookup: an edit to the description must not
+             * start failing because the host's DNS is down today.
+             */
             if (body.url !== undefined && body.url !== subscription.url) {
                 const refusal = await refuseUnsafeUrl(body.url);
                 if (refusal) return refusal;
@@ -373,8 +385,10 @@ export const enable = (
             subscription.disabledAt = undefined;
             subscription.autoDisabledAt = undefined;
             subscription.consecutiveFailures = 0;
-            // A fresh streak: the age floor protects subscribers from OUR outages, so the old
-            // streak's start date must not carry over (`domain/backoff.ts`).
+            /**
+             * A fresh streak: the age floor protects subscribers from OUR outages, so the old
+             * streak's start date must not carry over (`domain/backoff.ts`).
+             */
             subscription.failingSince = undefined;
 
             return webhookSubscriptionRepository.save(subscription).then((saved) => {
@@ -444,8 +458,10 @@ export const createSecret = (
             if (unreadable) return unreadable;
 
             const minted = mintRingSecret();
-            // Prune what has expired, and keep only the newest survivor beside the new secret:
-            // the ring never holds more than two, however often it is rotated.
+            /**
+             * Prune what has expired, and keep only the newest survivor beside the new secret:
+             * the ring never holds more than two, however often it is rotated.
+             */
             subscription.secrets = [
                 ...liveRingEntries(subscription.secrets).slice(-1),
                 minted.entry
@@ -480,13 +496,17 @@ export const removeSecret = (
             if (!subscription) return generateReject(404, [t('generic.error-item-gone')]);
 
             const remaining = removeRingSecret(subscription.secrets, secretId);
-            // An id the ring doesn't carry filters out nothing — same length back. Nothing was
-            // removed, so this is a 404, not a silent success.
+            /**
+             * An id the ring doesn't carry filters out nothing — same length back. Nothing was
+             * removed, so this is a 404, not a silent success.
+             */
             if (remaining.length === subscription.secrets.length)
                 return generateReject(404, [t('generic.error-item-gone')]);
-            // Never let this empty the ring — a subscription with no secret can never sign a
-            // delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
-            // the one that answers 422 instead of a save-time throw.
+            /**
+             * Never let this empty the ring — a subscription with no secret can never sign a
+             * delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
+             * the one that answers 422 instead of a save-time throw.
+             */
             if (remaining.length === 0)
                 return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
             subscription.secrets = liveRingEntries(remaining);

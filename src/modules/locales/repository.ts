@@ -71,7 +71,7 @@ const localeBase = createRepository<LocaleDocument, Language>(localeModel, {
 const entryBase = createRepository<LocaleEntryDocument, LocaleEntry>(localeEntryModel, {
     transform: applyLocaleEntryTransform,
     searchable: {
-        /*
+        /**
          * One filter, and it searches both columns. A translator looking for "Catálogo" and a
          * developer looking for `products.list` are the same search box, and splitting them into
          * `key=` and `value=` would only make the caller guess which one they are doing.
@@ -183,8 +183,10 @@ const bumpRevision = (tag: string, session?: ClientSession): Promise<number> =>
         .findOneAndUpdate(
             { tag },
             { $inc: { revision: 1 } },
-            // `timestamps: false`: a dictionary write is not an edit of the language, so it must
-            // not move the edit counter an open name-edit form's `If-Match` compares with.
+            /**
+             * `timestamps: false`: a dictionary write is not an edit of the language, so it must
+             * not move the edit counter an open name-edit form's `If-Match` compares with.
+             */
             { returnDocument: 'after', timestamps: false, session }
         )
         .exec()
@@ -272,8 +274,10 @@ const saveEntryValue = (
 
     return withTransaction((session) =>
         localeEntryModel
-            // Mongoose: `returnDocument: 'after'` answers the updated row; `runValidators` keeps
-            // the schema's rules on a query update, which `save()` ran by default.
+            /**
+             * Mongoose: `returnDocument: 'after'` answers the updated row; `runValidators` keeps
+             * the schema's rules on a query update, which `save()` ran by default.
+             */
             .findOneAndUpdate(
                 { _id: entry._id },
                 { $set: { value } },
@@ -319,8 +323,10 @@ const importEntries = (
     { replace }: { replace: boolean }
 ): Promise<{ counts: ImportCounts; revision: number }> =>
     withTransaction(async (session) => {
-        // The driver re-runs this callback on a transient conflict; each run must compare the
-        // caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+        /**
+         * The driver re-runs this callback on a transient conflict; each run must compare the
+         * caller's `If-Match` again, or the retry would write unchecked over the conflicting edit.
+         */
         rearmPrecondition();
         await fenceRevision(locale, session);
 
@@ -336,12 +342,16 @@ const importEntries = (
             ...(replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : []),
             ...nulled.filter((key) => existing.has(key))
         ];
-        // Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
-        // an unchanged row, and "updated" would count keys re-sent with the value they already had.
+        /**
+         * Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
+         * an unchanged row, and "updated" would count keys re-sent with the value they already had.
+         */
         const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
 
-        // `bulkWrite` is a write, outside Mongoose's global `maxTimeMS` on purpose: its size is the
-        // caller's own bounded body, and cutting a transaction's write short is worse than waiting.
+        /**
+         * `bulkWrite` is a write, outside Mongoose's global `maxTimeMS` on purpose: its size is the
+         * caller's own bounded body, and cutting a transaction's write short is worse than waiting.
+         */
         if (changedEntries.length > 0)
             await localeEntryModel.bulkWrite(
                 changedEntries.map(([key, value]) => ({
@@ -447,8 +457,10 @@ const findEntityLocale = (
  */
 const servedTags = (draftTag?: string): Promise<string[]> =>
     localeModel
-        // A draft preview adds ONE tag to the allow-list, and only while its row exists: a
-        // deleted draft has no row, so nothing is served for it.
+        /**
+         * A draft preview adds ONE tag to the allow-list, and only while its row exists: a
+         * deleted draft has no row, so nothing is served for it.
+         */
         .distinct(
             'tag',
             draftTag ? { $or: [{ active: true }, { tag: draftTag }] } : { active: true }
@@ -598,8 +610,10 @@ const upsertEntityLocale = (
     sourceDigest: string | undefined,
     session?: ClientSession
 ): Promise<TranslationDocument> => {
-    // `fields.<name>` paths: the field is a `Mixed` map, so a dotted `$set` touches one key only.
-    // A `null` in `fields` clears that key, which `setAndUnset` reads as `undefined`.
+    /**
+     * `fields.<name>` paths: the field is a `Mixed` map, so a dotted `$set` touches one key only.
+     * A `null` in `fields` clears that key, which `setAndUnset` reads as `undefined`.
+     */
     const { $set, $unset } = setAndUnset(
         Object.fromEntries(
             Object.entries(fields).map(([name, value]) => [`fields.${name}`, value ?? undefined])
@@ -668,7 +682,7 @@ const removeEntityTranslations = (
         .exec()
         .then(({ deletedCount }) => deletedCount);
 
-/*
+/**
  * Both contracts are written out rather than inferred. Mongoose's `Query` generics are large
  * enough that TypeScript refuses to serialize the inferred shape at an export boundary (TS7056)
  * once a base repository is spread into an object — the same reason `Repository` itself is a

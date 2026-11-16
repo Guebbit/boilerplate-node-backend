@@ -2,7 +2,7 @@
  * @module
  * Controller for `GET /users/:id` — a single user by path id, admin only.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { recordStaffRead } from '@kernel/staff-read';

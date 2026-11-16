@@ -30,8 +30,10 @@ export const exportSignInMethods = (userId: string): Promise<ExportSignInMethods
                       providerId,
                       connectedAt: connectedAt.toISOString()
                   })),
-                  // A factor whose setup was abandoned halfway has no `enrolledAt`: it never
-                  // guarded a login, so it is not a way in.
+                  /**
+                   * A factor whose setup was abandoned halfway has no `enrolledAt`: it never
+                   * guarded a login, so it is not a way in.
+                   */
                   twoFactor: user.twoFactorMethods.flatMap(({ method, enrolledAt }) =>
                       enrolledAt ? [{ method, enrolledAt: enrolledAt.toISOString() }] : []
                   )

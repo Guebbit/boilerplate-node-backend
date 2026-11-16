@@ -5,7 +5,7 @@
  * every sibling asks them rather than reading the config itself. The config slice and the
  * manifest are wiring, which a barrel never publishes.
  *
- * @see docs/modules/shop.md
+ * @see docs/modules/shop.md#its-neighbourhood
  */
 
 export * from './service';

@@ -6,7 +6,7 @@
  * list beside it. `deriveBaseLanguage` stays internal: nothing outside this module resolves a
  * language tag.
  *
- * @see docs/modules/locales.md
+ * @see docs/modules/locales.md#its-neighbourhood
  */
 
 export * from './services';

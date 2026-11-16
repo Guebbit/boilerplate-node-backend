@@ -10,13 +10,16 @@
 import { StockMovementReason } from '@types';
 import { counterDeltaFor } from '../../domain';
 
+/** Every stock movement reason, so a new reason is covered without editing the cases. */
 const EVERY_REASON = Object.values(StockMovementReason);
 
 describe('counterDeltaFor', () => {
     it('covers every reason the contract declares', () => {
-        // Not a formality: `counterDeltaFor` switches exhaustively, so a reason added to the
-        // contract and not to the table is a compile error — but only if something calls it with
-        // that reason, which is what this does.
+        /**
+         * Not a formality: `counterDeltaFor` switches exhaustively, so a reason added to the
+         * contract and not to the table is a compile error — but only if something calls it with
+         * that reason, which is what this does.
+         */
         for (const reason of EVERY_REASON)
             expect(counterDeltaFor(reason, 1)).toEqual({
                 onHandDelta: expect.any(Number),
@@ -25,8 +28,10 @@ describe('counterDeltaFor', () => {
             });
     });
 
-    // `openapi.yaml`'s literal signed table — the shape check above passes on any
-    // numbers, so this pins the actual value each reason produces.
+    /**
+     * `openapi.yaml`'s literal signed table — the shape check above passes on any
+     * numbers, so this pins the actual value each reason produces.
+     */
     it.each([
         [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3, backorderedDelta: 0 }],
         [StockMovementReason.ship, { onHandDelta: -3, reservedDelta: -3, backorderedDelta: 0 }],
@@ -47,8 +52,10 @@ describe('counterDeltaFor', () => {
             (reason) => counterDeltaFor(reason, 5).onHandDelta !== 0
         );
 
-        // `ship` is here: paying moves nothing, the units leave at dispatch.
-        // Nothing a CUSTOMER does before the parcel leaves appears in this list.
+        /**
+         * `ship` is here: paying moves nothing, the units leave at dispatch.
+         * Nothing a CUSTOMER does before the parcel leaves appears in this list.
+         */
         expect(changesOnHand.toSorted()).toEqual(
             [
                 StockMovementReason.ship,
@@ -62,8 +69,10 @@ describe('counterDeltaFor', () => {
     it('ships without changing availability', () => {
         const { onHandDelta, reservedDelta } = counterDeltaFor(StockMovementReason.ship, 7);
 
-        // Both columns fall together, so `onHand - reserved` is untouched: the units stopped
-        // being sellable when they were reserved, and this is only the moment they leave.
+        /**
+         * Both columns fall together, so `onHand - reserved` is untouched: the units stopped
+         * being sellable when they were reserved, and this is only the moment they leave.
+         */
         expect(onHandDelta).toBe(reservedDelta);
         expect(onHandDelta).toBe(-7);
         expect(onHandDelta - reservedDelta).toBe(0);
@@ -90,8 +99,10 @@ describe('counterDeltaFor', () => {
     });
 
     it('carries an adjustment’s sign rather than its magnitude', () => {
-        // The one reason whose quantity is already signed. Shrinkage is the common case, and a
-        // `Math.abs` sneaking in here would silently turn every write-off into a windfall.
+        /**
+         * The one reason whose quantity is already signed. Shrinkage is the common case, and a
+         * `Math.abs` sneaking in here would silently turn every write-off into a windfall.
+         */
         expect(counterDeltaFor(StockMovementReason.adjust, -3)).toEqual({
             onHandDelta: -3,
             reservedDelta: 0,

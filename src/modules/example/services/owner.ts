@@ -5,7 +5,7 @@
  * Here: the owner's display name, which the contract carries on every example and the collection
  * does not store, and the two ways a row is presented (for a caller, for anyone).
  *
- * @see docs/understand/strategic-ddd.md
+ * @see docs/understand/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings
  */
 
 import type { CallerContext, Example } from '@types';
@@ -21,7 +21,6 @@ const NO_KEYS = { update: false, delete: false };
 
 /**
  * The owner's display name.
- * @param userId - the owner
  * @returns the username, or a translated placeholder when the account no longer exists
  */
 export const ownerNameOf = (userId: string): Promise<string> =>
@@ -44,7 +43,6 @@ export const ownerNamesOf = (userIds: string[]): Promise<Map<string, string>> =>
  * A document as the contract's `Example` for a signed-in caller: the owner's name filled in, and
  * what this caller may do to it.
  * @param document - the stored example
- * @param context - the caller
  */
 export const presentForCaller = (
     document: ExampleDocument,

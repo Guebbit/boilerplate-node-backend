@@ -24,14 +24,18 @@ const serialize = (onHand: unknown, reserved: unknown) => {
 
 describe('productSchema — what a product must carry', () => {
     it('requires a title and a price, and nothing else', () => {
-        // Everything else has a default or is genuinely optional. A required `description` or
-        // `imageUrl` would make the minimal create in the contract impossible.
+        /**
+         * Everything else has a default or is genuinely optional. A required `description` or
+         * `imageUrl` would make the minimal create in the contract impossible.
+         */
         expect(requiredPaths(productSchema)).toEqual(['price', 'title']);
     });
 
     it('refuses negative stock counters', () => {
-        // Negative stock is not a state the shop has: it would let `available` be computed from
-        // impossible inputs and would make the ledger's replay disagree with the counter.
+        /**
+         * Negative stock is not a state the shop has: it would let `available` be computed from
+         * impossible inputs and would make the ledger's replay disagree with the counter.
+         */
         for (const path of ['onHand', 'reserved'])
             expect(pathOptions(productSchema, path).min).toBe(0);
     });
@@ -43,15 +47,19 @@ describe('productSchema — what a product must carry', () => {
     });
 
     it('assumes a product is physical unless told otherwise', () => {
-        // Matches `openapi.yaml`'s default: an undeclared default here is one `cart` would have
-        // to guess at when deciding whether a checkout needs a shipping method.
+        /**
+         * Matches `openapi.yaml`'s default: an undeclared default here is one `cart` would have
+         * to guess at when deciding whether a checkout needs a shipping method.
+         */
         expect(defaultOf(productSchema, 'requiresShipping')).toBe(true);
     });
 
     it('defaults the list fields to empty rather than absent, and the description to none', () => {
-        // `categories` and `tags` feed the facet endpoint, which counts array members: `undefined`
-        // there is a different code path in every consumer, and one of them will forget it.
-        // A description is the other way round: none is no field, never `''` on the wire.
+        /**
+         * `categories` and `tags` feed the facet endpoint, which counts array members: `undefined`
+         * there is a different code path in every consumer, and one of them will forget it.
+         * A description is the other way round: none is no field, never `''` on the wire.
+         */
         expect(defaultOf(productSchema, 'description')).toBeUndefined();
         expect(defaultOf(productSchema, 'categories')).toEqual([]);
         expect(defaultOf(productSchema, 'tags')).toEqual([]);
@@ -74,9 +82,11 @@ describe('productSchema — what a product must carry', () => {
 
 describe('productSchema — indexes', () => {
     it('declares exactly the three documented indexes, named', () => {
-        // `products_createdAt` is newest-first for the listing; `products_active_deletedAt` is the
-        // public visibility scope — the pair of conditions every anonymous read applies;
-        // `products_sku` is the uniqueness guarantee on an optional field.
+        /**
+         * `products_createdAt` is newest-first for the listing; `products_active_deletedAt` is the
+         * public visibility scope — the pair of conditions every anonymous read applies;
+         * `products_sku` is the uniqueness guarantee on an optional field.
+         */
         expect(indexSpecs(productSchema)).toEqual([
             'products_active_deletedAt: active+1, deletedAt+1',
             'products_createdAt: createdAt-1',
@@ -85,9 +95,11 @@ describe('productSchema — indexes', () => {
     });
 
     it('lets a sku repeat only by being absent — unique when set', () => {
-        // Sparse: most products never carry a `sku` at all, and an unfiltered unique index would
-        // index every absent value as an equal `null`, colliding on the second such product —
-        // same reasoning as `orders`' `orders_transferReference`.
+        /**
+         * Sparse: most products never carry a `sku` at all, and an unfiltered unique index would
+         * index every absent value as an equal `null`, colliding on the second such product —
+         * same reasoning as `orders`' `orders_transferReference`.
+         */
         expect(indexOptionSpecs(productSchema)).toContain('products_sku: sparse=true, unique=true');
     });
 });
@@ -98,23 +110,29 @@ describe('applyProductTransform — the derived availability', () => {
     });
 
     it('never reports a negative availability', () => {
-        // Over-reservation is possible under a race the counters recover from; a negative number
-        // on the wire would be rendered by a storefront as a negative stock badge.
+        /**
+         * Over-reservation is possible under a race the counters recover from; a negative number
+         * on the wire would be rendered by a storefront as a negative stock badge.
+         */
         expect(serialize(3, 10)).toBe(0);
     });
 
     it('treats a missing counter as zero rather than propagating NaN', () => {
-        // The defence the schema defaults make unnecessary in normal operation, and which still
-        // has to hold for documents written before those defaults existed. `undefined - 0` is
-        // `NaN`, which serializes as `null` and reads as "out of stock" everywhere.
+        /**
+         * The defence the schema defaults make unnecessary in normal operation, and which still
+         * has to hold for documents written before those defaults existed. `undefined - 0` is
+         * `NaN`, which serializes as `null` and reads as "out of stock" everywhere.
+         */
         expect(serialize(undefined, 2)).toBe(0);
         expect(serialize(5, undefined)).toBe(5);
         expect(serialize(undefined, undefined)).toBe(0);
     });
 
     it('ignores counters of the wrong type instead of coercing them', () => {
-        // A string `onHand` would make `-` coerce and sometimes succeed, producing a plausible
-        // wrong number. Treating a non-number as zero fails visibly instead.
+        /**
+         * A string `onHand` would make `-` coerce and sometimes succeed, producing a plausible
+         * wrong number. Treating a non-number as zero fails visibly instead.
+         */
         expect(serialize('12', 2)).toBe(0);
     });
 });

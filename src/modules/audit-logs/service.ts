@@ -4,7 +4,7 @@
  * read path behind `GET /observability/audit` (the platform operator's view) and `GET /audit`
  * (a tenant staff member's, gated on `read:AuditLog`).
  *
- * @see docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md#the-pipeline
  */
 
 import { auditLogRepository, AUDIT_SORT } from './repository';

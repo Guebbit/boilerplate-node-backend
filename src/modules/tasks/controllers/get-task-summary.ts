@@ -2,7 +2,7 @@
  * @module
  * Controller for `GET /tasks/summary` — the staff badge's counts.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import type { Request, Response } from 'express';

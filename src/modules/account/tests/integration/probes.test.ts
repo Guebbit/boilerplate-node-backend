@@ -18,13 +18,20 @@ import { probes } from '@modules/account/probes';
 
 setupTestDb();
 
-/** The status a probe's own name claims — `'Probe: 409 on a signup that already exists'` → 409. */
+/**
+ * The status a probe's own name claims — `'Probe: 409 on a signup that already exists'` → 409.
+ * @throws {Error} when the probe name states no status
+ */
 const claimedStatus = (name: string): number => {
     const match = /\b(\d{3})\b/.exec(name);
     if (!match) throw new Error(`probe name "${name}" states no status to check it against`);
     return Number(match[1]);
 };
 
+/**
+ * Finds a registered probe by name; a missing one fails loudly so a rename is noticed.
+ * @throws {Error} when no probe has that name
+ */
 const probeByName = (name: string) => {
     const probe = probes.find((candidate) => candidate.name === name);
     if (!probe) throw new Error(`no probe named "${name}" — has account/probes.ts been renamed?`);

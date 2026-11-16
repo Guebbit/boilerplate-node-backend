@@ -96,8 +96,10 @@ describe('the proof time', () => {
 
         const token = await startSession(user.id, ['pwd'], undefined, provedAt);
 
-        // jose: the payload, unverified — the test only reads back what the app itself signed.
-        // https://github.com/panva/jose/blob/main/docs/util/decode_jwt/functions/decodeJwt.md
+        /**
+         * jose: the payload, unverified — the test only reads back what the app itself signed.
+         * https://github.com/panva/jose/blob/main/docs/util/decode_jwt/functions/decodeJwt.md
+         */
         expect(decodeJwt(token).auth_time).toBe(Math.floor(provedAt / 1000));
     });
 });

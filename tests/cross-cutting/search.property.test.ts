@@ -45,6 +45,7 @@ import {
     normalizePagination
 } from '@infrastructure/persistence/search';
 
+/** Property-test settings: a fixed seed so a failure replays, and stop at the first one. */
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
 
 /**
@@ -58,8 +59,10 @@ const requestValue = () =>
 
 describe('escapeRegex', () => {
     it('never produces a pattern the engine refuses to compile', () => {
-        // A lone `(` in a search box is a syntax error the driver raises as a 500. This is the
-        // property that says "no user string can do that", for any string.
+        /**
+         * A lone `(` in a search box is a syntax error the driver raises as a 500. This is the
+         * property that says "no user string can do that", for any string.
+         */
         fc.assert(
             fc.property(fc.string(), (value) => {
                 expect(() => new RegExp(escapeRegex(value))).not.toThrow();
@@ -79,18 +82,22 @@ describe('escapeRegex', () => {
     });
 
     it('strips every metacharacter of its power', () => {
-        // The heart of it: a pattern built from user text must behave as a literal. `.` must not
-        // match an arbitrary character, `^`/`$` must not anchor, `+`/`*` must not quantify.
-        //
-        // Generated over strings drawn from the metacharacter alphabet itself, which is where an
-        // incomplete escape list shows up — the previous version of this rule was a fixed table
-        // and could only ever prove the characters already in it.
+        /**
+         * The heart of it: a pattern built from user text must behave as a literal. `.` must not
+         * match an arbitrary character, `^`/`$` must not anchor, `+`/`*` must not quantify.
+         *
+         * Generated over strings drawn from the metacharacter alphabet itself, which is where an
+         * incomplete escape list shows up — the previous version of this rule was a fixed table
+         * and could only ever prove the characters already in it.
+         */
         const metacharacters = String.raw`$()*+.?[\]^{|}`;
         fc.assert(
             fc.property(
-                // Built from an array rather than a character-alphabet helper, whose name has
-                // moved between fast-check majors; this spelling does not care which one is
-                // installed.
+                /**
+                 * Built from an array rather than a character-alphabet helper, whose name has
+                 * moved between fast-check majors; this spelling does not care which one is
+                 * installed.
+                 */
                 fc
                     // eslint-disable-next-line @typescript-eslint/no-misused-spread -- ASCII regex metacharacters only; no surrogate pairs to mishandle
                     .array(fc.constantFrom(...metacharacters), { minLength: 1, maxLength: 12 })
@@ -120,8 +127,10 @@ describe('escapeRegex', () => {
     });
 
     it('is not idempotent, and that is why it is applied exactly once', () => {
-        // Escaping twice doubles the backslashes and stops matching. Stated as a property so
-        // nobody "hardens" a call site by wrapping it again.
+        /**
+         * Escaping twice doubles the backslashes and stops matching. Stated as a property so
+         * nobody "hardens" a call site by wrapping it again.
+         */
         expect(escapeRegex(escapeRegex('a.b'))).not.toBe(escapeRegex('a.b'));
         expect(new RegExp(escapeRegex(escapeRegex('a.b'))).test('a.b')).toBe(false);
     });
@@ -144,8 +153,10 @@ describe('addTextFilter / addRegexFilter', () => {
     });
 
     it('adds nothing at all for input that is empty or only whitespace', () => {
-        // An empty search box must not become a filter — `$regex: ''` matches every document and
-        // costs a full scan to say so.
+        /**
+         * An empty search box must not become a filter — `$regex: ''` matches every document and
+         * costs a full scan to say so.
+         */
         fc.assert(
             fc.property(
                 fc
@@ -183,8 +194,10 @@ describe('addTextFilter / addRegexFilter', () => {
 
 describe('normalizePagination', () => {
     it('never yields a skip Mongo cannot use, for any input', () => {
-        // The structural guard. A negative or NaN skip is a driver error, i.e. a 500 on a search,
-        // and these values come straight off a request.
+        /**
+         * The structural guard. A negative or NaN skip is a driver error, i.e. a 500 on a search,
+         * and these values come straight off a request.
+         */
         fc.assert(
             fc.property(requestValue(), requestValue(), (page, pageSize) => {
                 const {
@@ -214,8 +227,10 @@ describe('normalizePagination', () => {
                 (page, pageSize) => {
                     const result = normalizePagination({ page, pageSize });
 
-                    // The identity the paging depends on. `search` issues count and page as two
-                    // queries; a skip that disagreed with the reported page would drop rows.
+                    /**
+                     * The identity the paging depends on. `search` issues count and page as two
+                     * queries; a skip that disagreed with the reported page would drop rows.
+                     */
                     expect(result.skip).toBe((result.page - 1) * result.pageSize);
                 }
             ),

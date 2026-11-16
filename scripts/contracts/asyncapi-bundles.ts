@@ -154,6 +154,7 @@ const read = (file: string): Document =>
  * would otherwise resolve to whichever was merged last — and the loser's channel would silently
  * vanish from a contract the paired frontend generates its client from. Named
  * `audit-actions.test.ts`-style, with both owners in the message.
+ * @throws {Error} when two sections declare the same key
  */
 const mergeInto = (
     target: Document,
@@ -204,7 +205,7 @@ const compile = (scope: AsyncScope): string => {
 
     const document_ = read(ASYNC_ROOT_DOCUMENT);
 
-    /*
+    /**
      * The root file's own header explains where channels and servers come from — advice for whoever
      * edits it, and noise in a generated artefact that opens with `DO NOT EDIT`. Dropped here rather
      * than left unwritten in the source, because the explanation is worth more at the place it
@@ -231,11 +232,13 @@ const compile = (scope: AsyncScope): string => {
         mergeDocument(document_, section, source);
     }
 
-    /* `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
+    /**
+     * `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
      * re-flowing prose on an unrelated edit is exactly the noise the bundle check in `npm run check` would
      * then report as staleness. `singleQuote` is for the schemas copied in from the REST contract
      * (`asyncapi-section-fragments.ts`), which carry no authored quoting: without it they come out
-     * double-quoted, and the committed bundle must stay Prettier-clean. */
+     * double-quoted, and the committed bundle must stay Prettier-clean.
+     */
     const output =
         marker(sections) + document_.toString({ indent: 4, lineWidth: 0, singleQuote: true });
     compiled.set(scope, output);

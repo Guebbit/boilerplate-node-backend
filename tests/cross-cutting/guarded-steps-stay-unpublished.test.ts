@@ -130,6 +130,7 @@ const guardOver = (program: ts.Program) => {
      * Every `@internal` declaration a barrel publishes, as `module: name` lines.
      * @param barrel - a module's `index.ts`
      * @param module - the module's name, for the line
+     * @throws {Error} when the barrel exports no symbol for the module
      */
     const leaksOf = (barrel: string, module: string): string[] => {
         const source = program.getSourceFile(barrel);

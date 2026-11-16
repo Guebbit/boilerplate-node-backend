@@ -48,8 +48,10 @@ export const productService = {
     clearOmittedLocales,
     removeById,
     restoreById,
-    // The barrel never publishes a presenter function, so a sibling that has to shape a product
-    // for a response reaches the helper through the service.
+    /**
+     * The barrel never publishes a presenter function, so a sibling that has to shape a product
+     * for a response reaches the helper through the service.
+     */
     presentForCaller,
     findByIdRaw,
     findByIdRawScoped,
@@ -62,9 +64,11 @@ export const productService = {
     syncStockCache,
     titlesOf,
     titlesById,
-    // Same reason as `presentForCaller` just above: the update controller's factory needs these to
-    // validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach `./model`
-    // directly.
+    /**
+     * Same reason as `presentForCaller` just above: the update controller's factory needs these to
+     * validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach `./model`
+     * directly.
+     */
     zodProductCreateSchema,
     zodProductReplaceSchema,
     zodProductUpdateSchema

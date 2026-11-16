@@ -16,6 +16,7 @@ import {
 } from '../../apps';
 import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
+/** The three variables that name the locale apps; each case sets and clears them. */
 const KEYS = [
     'NODE_LOCALE_APP_BACKEND',
     'NODE_LOCALE_APP_FRONTEND',

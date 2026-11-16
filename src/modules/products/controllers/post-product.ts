@@ -68,14 +68,18 @@ export const createProduct = (
     // `parseBody` has already answered 422: the close hook deletes the upload.
     if (!body) return;
 
-    // The helper reads the upload's server-decided image fields, so they never ride in the body
-    // the schema validated, and claims the upload when the write succeeds.
+    /**
+     * The helper reads the upload's server-decided image fields, so they never ride in the body
+     * the schema validated, and claims the upload when the write succeeds.
+     */
     return writeWithUploadedImage(request, undefined, (image) =>
         productService.create(body, callerContextOf(request), image)
     )
         .then((result) => {
-            // A refusal is left unclaimed: the upload middleware's close hook deletes the upload
-            // once the 4xx/5xx has gone out.
+            /**
+             * A refusal is left unclaimed: the upload middleware's close hook deletes the upload
+             * once the 4xx/5xx has gone out.
+             */
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);
                 return;

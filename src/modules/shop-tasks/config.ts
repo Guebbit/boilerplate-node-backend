@@ -2,7 +2,7 @@
  * @module
  * The shop's staff digest knobs: how long a thing waits before the daily digest counts it.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';

@@ -117,8 +117,10 @@ const userOf = (name: PersonaName) => {
         ...(state.verified ? { verifiedAt: new Date() } : {}),
         ...(state.active ? {} : { active: false }),
         ...(state.pendingEmail === null ? {} : { pendingEmail: state.pendingEmail }),
-        // The consent gate is opt-in and needs its date: with no `analyticsConsentAt` the account
-        // counts as never asked, and the gate reads the header.
+        /**
+         * The consent gate is opt-in and needs its date: with no `analyticsConsentAt` the account
+         * counts as never asked, and the gate reads the header.
+         */
         ...(state.analyticsConsent
             ? { analyticsConsent: true, analyticsConsentAt: new Date() }
             : {}),
@@ -177,8 +179,10 @@ const CUSTOMER_NAMES: [key: keyof typeof SEED_CUSTOMER_IDS, username: string][] 
  */
 export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
     CUSTOMER_NAMES.map(([key, username]) => [key, `${username}@example.com`])
-    // `Object.fromEntries` widens to `Record<string, string>` — it has no way to know
-    // `CUSTOMER_NAMES` covers every key of `SEED_CUSTOMER_IDS` exactly once, which it does.
+    /**
+     * `Object.fromEntries` widens to `Record<string, string>` — it has no way to know
+     * `CUSTOMER_NAMES` covers every key of `SEED_CUSTOMER_IDS` exactly once, which it does.
+     */
 ) as Record<keyof typeof SEED_CUSTOMER_IDS, string>;
 
 /**
@@ -197,8 +201,10 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         verifiedAt: new Date(),
         termsAcceptedAt: new Date().toISOString(),
         termsVersion: termsVersion(),
-        // Alternating: a real customer base is a mix of opted-in and not, and `root`/`customer`
-        // alone left the "granted" path exercised by exactly one account.
+        /**
+         * Alternating: a real customer base is a mix of opted-in and not, and `root`/`customer`
+         * alone left the "granted" path exercised by exactly one account.
+         */
         analyticsConsent: index % 2 === 0,
         analyticsConsentAt: new Date(),
         ...(index % 2 === 0 ? userImages.root : userImages.customer)

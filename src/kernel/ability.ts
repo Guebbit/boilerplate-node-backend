@@ -58,8 +58,10 @@ const resolveConditions = (
             continue;
         }
 
-        // The placeholder's name is data in a rule; an unknown key reads `undefined`, which the
-        // next line treats as unresolved.
+        /**
+         * The placeholder's name is data in a rule; an unknown key reads `undefined`, which the
+         * next line treats as unresolved.
+         */
         const source = caller[value.slice(PLACEHOLDER.length) as keyof Caller];
 
         if (source === undefined || source === null || source === '') {
@@ -118,14 +120,16 @@ export const buildAbility = (caller: Caller): Ability => {
             continue;
         }
 
-        // A staff action also answers the plain ones it implies (`display` answers `read`), so
-        // one `accessibleBy` filter is compiled from the own-rows rule and the staff rule together.
+        /**
+         * A staff action also answers the plain ones it implies (`display` answers `read`), so
+         * one `accessibleBy` filter is compiled from the own-rows rule and the staff rule together.
+         */
         for (const action of [rule.action, ...(IMPLIED_ACTIONS[rule.action] ?? [])]) {
             can(action, rule.subject, { ...conditions, ...tenancy });
         }
     }
 
-    /*
+    /**
      * No `can('manage', …)` rule is ever emitted, so asking the ability for one always answers no.
      * `manage` is never a declared rule's own action, so as a CASL ACTION it means "any action at
      * all", which is precisely the unbounded grant this model does not have. An audit row is the
@@ -221,16 +225,20 @@ export const permitsOnRows = <TAction extends string>(
     actions: readonly TAction[]
 ): ((row: Record<string, unknown>) => Record<TAction, boolean>) => {
     const ability = buildAbility(caller);
-    // CASL `subject(type, object)` tags a plain object with its subject type, so conditions can be
-    // matched against it. The tenant comes from the caller, as in `buildAbility`'s own rules.
-    // https://casl.js.org/v6/en/guide/subject-type-detection
+    /**
+     * CASL `subject(type, object)` tags a plain object with its subject type, so conditions can be
+     * matched against it. The tenant comes from the caller, as in `buildAbility`'s own rules.
+     * https://casl.js.org/v6/en/guide/subject-type-detection
+     */
     return (row) =>
         Object.fromEntries(
             actions.map((action) => [
                 action,
                 ability.can(action, subject(subjectName, { ...row, tenantId: caller.tenantId }))
             ])
-            // `Object.fromEntries` answers a plain string-keyed record; one entry is built per
-            // `actions` member.
+            /**
+             * `Object.fromEntries` answers a plain string-keyed record; one entry is built per
+             * `actions` member.
+             */
         ) as Record<TAction, boolean>;
 };

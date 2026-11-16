@@ -21,8 +21,10 @@ import { decodablePng, publicDirectory } from '@tests/images';
  * stranger with a mailbox generator would otherwise write to disk at no cost.
  */
 
-// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
-// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+/**
+ * `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+ * runs, so it is already set when this line reads it.
+ */
 const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 
 /**
@@ -125,8 +127,10 @@ describe('upload content validation', () => {
      * service needing no exploit: every byte is written before any handler runs.
      */
     it('refuses a file over the configured size limit', async () => {
-        // Asked of the adapter rather than restated: the cap is read lazily there, so a test
-        // repeating the default would be guessing at a value it cannot see.
+        /**
+         * Asked of the adapter rather than restated: the cap is read lazily there, so a test
+         * repeating the default would be guessing at a value it cannot see.
+         */
         const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(maxUploadBytes() + 1024)]);
 
         const response = await uploadAvatarWith(oversized, 'huge.png', 'image/png');
@@ -150,11 +154,15 @@ describe('serving the upload directory', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('image/png');
-        // Helmet defaults every response to `same-origin`, which would have the browser fetch the
-        // bytes and then refuse to render them for the frontend on another port.
+        /**
+         * Helmet defaults every response to `same-origin`, which would have the browser fetch the
+         * bytes and then refuse to render them for the frontend on another port.
+         */
         expect(response.headers['cross-origin-resource-policy']).toBe('cross-origin');
-        // Set globally by helmet; restated here because it is what stops a browser second-guessing
-        // the type we just committed to.
+        /**
+         * Set globally by helmet; restated here because it is what stops a browser second-guessing
+         * the type we just committed to.
+         */
         expect(response.headers['x-content-type-options']).toBe('nosniff');
     });
 

@@ -18,8 +18,10 @@ export const orderRouter = Router();
 // GET /orders/:id/payments — the order's payment, if one was started; the service scopes it.
 orderRouter.get('/:id/payments', getAuth, isAuth, getOrderPayments);
 
-// POST /orders/:id/payments — the admin recording money by hand. Same `stepUp` arrangement as the
-// refund: `create:Payment` carries it in `shared/authorization-keys.generated.yaml`.
+/**
+ * POST /orders/:id/payments — the admin recording money by hand. Same `stepUp` arrangement as the
+ * refund: `create:Payment` carries it in `shared/authorization-keys.generated.yaml`.
+ */
 orderRouter.post(
     '/:id/payments',
     getAuth,

@@ -4,7 +4,7 @@
  * hands it to the service. Here: `PUT /examples/:id/cover`.
  * Delete it if: the module has no upload (with `services/cover.ts`, the route and the contract path).
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#architecture
  */
 
 import type { Request, Response } from 'express';
@@ -34,8 +34,10 @@ export const putExampleCover = namedHandler(
             return Promise.resolve();
         }
 
-        // Unclaimed unless the write succeeds: the upload middleware's close hook deletes an
-        // upload whose request ended 4xx/5xx, so no branch here has to.
+        /**
+         * Unclaimed unless the write succeeds: the upload middleware's close hook deletes an
+         * upload whose request ended 4xx/5xx, so no branch here has to.
+         */
         return exampleService
             .setCover(id, { imageUrl, thumbnailUrl, pendingImageKey }, callerContextOf(request))
             .then((result) => {

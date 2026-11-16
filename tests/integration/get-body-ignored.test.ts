@@ -7,7 +7,7 @@
  * read before the query, and would have refused (422): a request that ignores it answers 200,
  * exactly as the bare request does.
  *
- * @see docs/understand/request-input.md
+ * @see docs/understand/request-input.md#the-rules-behind-the-table
  */
 
 import { api, authenticateAs } from '@tests/http';

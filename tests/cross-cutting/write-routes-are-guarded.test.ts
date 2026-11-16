@@ -327,8 +327,10 @@ describe('every write route is guarded by default', () => {
             )
         );
 
-        // An exception for a module that is not deployed at all (removed, e.g. by `demo:remove`) has
-        // nothing to be stale against; one for a module that IS deployed must still match a route.
+        /**
+         * An exception for a module that is not deployed at all (removed, e.g. by `demo:remove`) has
+         * nothing to be stale against; one for a module that IS deployed must still match a route.
+         */
         const forDeployedModules = Object.keys(WRITE_EXCEPTIONS).filter((key) =>
             Object.hasOwn(ROUTED_MODULES, key.split(' ', 1)[0])
         );
@@ -350,8 +352,10 @@ describe('every write route is guarded by default', () => {
             const permissionIndex = guards.indexOf('requirePermissionGuard');
             const isDefault = exception === undefined;
 
-            // The default: authenticated, then holding the route's key, in that order. An
-            // exception holds no key, and is authenticated only when it says so.
+            /**
+             * The default: authenticated, then holding the route's key, in that order. An
+             * exception holds no key, and is authenticated only when it says so.
+             */
             expect(permissionIndex !== -1).toBe(isDefault);
             expect(identityIndex !== -1).toBe(isDefault || exception.requiresAuth);
             expect(identityIndex < permissionIndex).toBe(isDefault);

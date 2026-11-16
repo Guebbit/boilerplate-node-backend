@@ -68,11 +68,13 @@ export const refreshAccessToken = (
                 action: reuseDetected
                     ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
                     : accountAuditActions.AUTH_TOKEN_REFRESHED,
-                // The reuse case DOES know whose account this was — carry the id, unlike the
-                // ordinary failures below, which never got far enough to find out. `actorRole`
-                // is left to its default (`anonymous`): this request never carried a verified
-                // access token, so admin status isn't cheaply known, and getting it wrong would
-                // misreport a fact the id alone already establishes precisely.
+                /**
+                 * The reuse case DOES know whose account this was — carry the id, unlike the
+                 * ordinary failures below, which never got far enough to find out. `actorRole`
+                 * is left to its default (`anonymous`): this request never carried a verified
+                 * access token, so admin status isn't cheaply known, and getting it wrong would
+                 * misreport a fact the id alone already establishes precisely.
+                 */
                 actorUserId: reuseDetected ? error.userId : 'anonymous',
                 outcome: 'failure',
                 ...(reuseDetected

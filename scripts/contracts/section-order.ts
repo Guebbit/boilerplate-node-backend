@@ -6,7 +6,7 @@
  * registry: a module that is not deployed (deleted, e.g. by `demo:remove`) drops out, and a
  * module the list has never heard of is appended alphabetically. Nothing to keep in step by hand.
  *
- * @see docs/build/module-lifecycle.md
+ * @see docs/build/module-lifecycle.md#_3-·-the-fragments
  */
 
 /**

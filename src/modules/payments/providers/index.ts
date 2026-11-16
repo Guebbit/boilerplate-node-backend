@@ -169,7 +169,7 @@ export interface ProviderWebhookEvent {
  *   2. `refund`: send the idempotency key, stamp `refundId` on the provider's refund and echo it.
  *   3. Past the provider's key window: adopt the refund carrying `refundId` instead of creating one.
  *
- * @see docs/understand/defences/business-logic.md
+ * @see docs/understand/defences/business-logic.md#the-payment-provider
  * @see docs/modules/payments-provider-port.md#money-duties
  */
 export interface PaymentProvider {

@@ -84,7 +84,6 @@ const claimClosed = (
  *
  * @internal The step beneath `receiveReturn` and the refund listener, which own the "money went
  * back" fact: it checks the state, never that the refund settled, so it is not published.
- * @param id - the return
  * @param actor - the staff member whose receipt led to this close, for the order's timeline;
  *   absent when the payment sweep closes it later
  * @returns the closed return, or `null` when it was not `received` — already closed, or never
@@ -122,7 +121,6 @@ const notClosable = (id: string): Promise<ResponseReject> =>
  * NOT announced: its mail tells the customer their money went back, which is not what happened.
  * The note stays in the audit row; the timeline row carries ids and numbers only.
  *
- * @param id - the return
  * @param note - why, optional
  * @param context - the staff member, audited
  * @returns the closed return, or a refusal when it was not `received`

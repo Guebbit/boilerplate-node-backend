@@ -50,7 +50,7 @@ export const requestIdMiddleware: RequestHandler = (request, response, next) => 
  * @param app - the express application to configure
  */
 export const installRequestContext = (app: Express): void => {
-    /*
+    /**
      * Winston access log + OpenTelemetry trace injection
      */
     app.use(requestLogger);

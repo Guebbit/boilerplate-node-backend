@@ -81,7 +81,6 @@ const deleteByUserId = (userId: string, session?: ClientSession): Promise<void> 
  * Every credential this user minted that is still live — not revoked. An expired one is left out:
  * it is already dead, and listing it in a "these were revoked" notice would be untrue.
  *
- * @param userId - the minter
  */
 const findActiveByMinter = (userId: string): Promise<ApiKeyDocument[]> =>
     apiKeyModel

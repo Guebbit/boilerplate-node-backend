@@ -176,8 +176,10 @@ describe('the override refresh interval', () => {
         expect(getOverrideRefreshMs()).toBe(60_000);
     });
 
-    // A zero or negative period would be a busy loop, and a typo'd one is not a reason to hammer
-    // Mongo — each is refused outright rather than taken literally or quietly replaced.
+    /**
+     * A zero or negative period would be a busy loop, and a typo'd one is not a reason to hammer
+     * Mongo — each is refused outright rather than taken literally or quietly replaced.
+     */
     it.each([
         ['0', '0'],
         ['-1', '-1'],
@@ -199,8 +201,10 @@ describe('the override refresh interval', () => {
         expect(provider).toHaveBeenCalledTimes(3);
     });
 
-    // Called from the boot sequence, which a test may run more than once in-process. A second
-    // timer would double every worker's read rate against Mongo for the life of the process.
+    /**
+     * Called from the boot sequence, which a test may run more than once in-process. A second
+     * timer would double every worker's read rate against Mongo for the life of the process.
+     */
     it('runs one timer however many times it is started', () => {
         setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
         const provider = jest.fn(() => Promise.resolve(overlayOf()));
@@ -230,8 +234,10 @@ describe('the override refresh interval', () => {
         expect(provider).toHaveBeenCalledTimes(1);
     });
 
-    // Stopping what was never started is what the shutdown path does on a worker that never
-    // registered a provider.
+    /**
+     * Stopping what was never started is what the shutdown path does on a worker that never
+     * registered a provider.
+     */
     it('is safe to stop when it was never started', () => {
         expect(() => {
             stopLocaleOverrideRefresh();
@@ -242,8 +248,10 @@ describe('the override refresh interval', () => {
 describe('isLocaleOverrideAvailable', () => {
     afterEach(() => registerLocaleOverrideProvider(undefined));
 
-    // `app.ts` asks this before starting the refresh timer at all — a timer polling a provider
-    // that will never exist is a leak of intent.
+    /**
+     * `app.ts` asks this before starting the refresh timer at all — a timer polling a provider
+     * that will never exist is a leak of intent.
+     */
     it('is false with no provider registered, true once one is', () => {
         expect(isLocaleOverrideAvailable()).toBe(false);
 

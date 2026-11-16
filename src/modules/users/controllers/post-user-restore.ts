@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users/:id/restore` — undo an admin soft delete.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { createRestoreController } from '@infrastructure/surfaces/create-restore-controller';

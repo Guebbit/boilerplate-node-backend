@@ -48,7 +48,6 @@ const git = (repo: string, arguments_: string[]): string[] =>
  * Records every git view of a repo.
  *
  * @param repo - the repo directory
- * @returns the snapshot
  */
 export const snapshotRepo = (repo: string): RepoSnapshot => ({
     head: git(repo, VIEWS.head),
@@ -105,7 +104,6 @@ const repoRoot = (repo: string): string => git(repo, ['rev-parse', '--show-tople
 /**
  * Where a repo's snapshot is kept: inside the run folder, named by the repo directory.
  *
- * @param runFolder - the run folder
  * @param root - the repo root
  * @returns the snapshot file path
  */

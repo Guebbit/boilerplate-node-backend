@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { withMermaid } from 'vitepress-plugin-mermaid';
 import { moduleSidebar, readCatalog } from '../../scripts/docs/module-catalog';
 
+/** The docs site configuration: the sidebar, the nav and the Mermaid wrapper. */
 export default withMermaid(
     defineConfig({
         title: 'Boilerplate Node Backend',
@@ -510,8 +511,10 @@ export default withMermaid(
                         ]
                     }
                 ],
-                // Generated from each module's `module.yaml` and the pages beside the index —
-                // see ../../scripts/docs/module-catalog.ts. Nothing to edit when a module is added.
+                /**
+                 * Generated from each module's `module.yaml` and the pages beside the index —
+                 * see ../../scripts/docs/module-catalog.ts. Nothing to edit when a module is added.
+                 */
                 '/modules/': moduleSidebar(
                     readCatalog(
                         fileURLToPath(new URL('../../src/modules', import.meta.url)),

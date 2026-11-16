@@ -19,7 +19,6 @@ import type { AccountedReturn, ProductQuantity } from '../domain';
  * What the order's other returns and cancels have settled, and what this cancel's lines are worth,
  * as the refund the cancel owes.
  *
- * @param order - the order
  * @param earlier - every return on the order, as the transaction reads them
  * @param lines - what this cancel takes
  */

@@ -2,7 +2,7 @@
  * @module
  * The stock alerts' one knob: how many products one account may wait for at once.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';

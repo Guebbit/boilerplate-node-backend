@@ -3,7 +3,7 @@
  * The one door onto the tenant and membership collections. `./services/` carries every
  * invariant; this file only shapes the query.
  *
- * @see docs/understand/authorization.md
+ * @see docs/understand/authorization.md#the-model
  */
 
 import { Types, type ClientSession } from 'mongoose';
@@ -30,8 +30,10 @@ export const tenantRepository = {
                 },
                 { returnDocument: 'after', upsert: true }
             )
-            // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
-            // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
+            /**
+             * `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
+             * created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
+             */
             .exec()
 };
 
@@ -67,8 +69,10 @@ export const membershipRepository = {
                 { $set: { role } },
                 { returnDocument: 'after', upsert: true, session }
             )
-            // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
-            // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
+            /**
+             * `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
+             * created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
+             */
             .exec(),
 
     /**

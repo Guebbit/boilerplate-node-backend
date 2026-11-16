@@ -194,8 +194,10 @@ describe('githubOAuthProvider.exchangeCode', () => {
     });
 
     it('rejects when the profile call answers with a non-2xx status', async () => {
-        // `/user` and `/user/emails` fire together (`Promise.all`), so both need a queued
-        // response even though only the first's failure is what this case is testing.
+        /**
+         * `/user` and `/user/emails` fire together (`Promise.all`), so both need a queued
+         * response even though only the first's failure is what this case is testing.
+         */
         jest.spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse({}, false))
@@ -204,7 +206,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
         await expect(exchange()).rejects.toThrow();
     });
 
-    /*
+    /**
      * `githubApiGet<GithubUser>`'s `T` is a compile-time annotation only — nothing checked
      * that `/user` actually carried an `id`. `String(undefined)` reads as the literal providerId
      * `"undefined"`, which every account missing `id` the same way would collide onto.
@@ -218,7 +220,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
         await expect(exchange()).rejects.toThrow(/id/);
     });
 
-    /*
+    /**
      * None of the three fetch calls carried a timeout — a hung github.com held the whole
      * OAuth callback open indefinitely. `fetch` is stubbed to only ever settle when the request's
      * OWN `AbortSignal` fires, the way a real aborted fetch behaves, so this proves the signal

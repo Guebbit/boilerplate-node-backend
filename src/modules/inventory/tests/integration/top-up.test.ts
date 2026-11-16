@@ -24,6 +24,7 @@ setupTestDb();
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
+/** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'e');
 
 /** A product with `shelf` units on hand, closed to backorder (the cap is `0`, the default). */

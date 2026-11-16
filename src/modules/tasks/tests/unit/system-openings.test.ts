@@ -14,6 +14,7 @@ import {
     type SystemOpening
 } from '../../domain';
 
+/** The instant openings are judged at. */
 const NOW = new Date('2030-05-01T10:00:00Z');
 
 describe('the openings', () => {

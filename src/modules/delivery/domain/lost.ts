@@ -40,7 +40,6 @@ export interface Restoration {
 /**
  * Sum of one product over some fulfillment orders' lines, by a per-line measure.
  * @param orders - the fulfillment orders
- * @param productId - the product
  * @param measure - what to add up per line
  */
 const sumOf = (

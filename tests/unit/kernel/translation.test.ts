@@ -316,8 +316,10 @@ describe('applyTranslations', () => {
         expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['it-CH', 'it', 'en'], undefined);
     });
 
-    // The draft tag rides only on a staff preview's context; `runWithLocale` (workers, order
-    // snapshots) builds a fresh one that can never carry it.
+    /**
+     * The draft tag rides only on a staff preview's context; `runWithLocale` (workers, order
+     * snapshots) builds a fresh one that can never carry it.
+     */
     describe('a draft preview', () => {
         afterEach(() => {
             resetServedLanguages();

@@ -32,9 +32,11 @@ const FAKE_IDENTITY = {
 export const fakeOAuthProvider: OAuthProvider = {
     name: 'fake',
 
-    // Lands the browser on the real callback route immediately, carrying the fixed code — with
-    // the challenge appended, base64url so it needs no extra encoding — and the real `state`;
-    // there is no consent screen to render, but both round trips (CSRF and PKCE) stay genuine.
+    /**
+     * Lands the browser on the real callback route immediately, carrying the fixed code — with
+     * the challenge appended, base64url so it needs no extra encoding — and the real `state`;
+     * there is no consent screen to render, but both round trips (CSRF and PKCE) stay genuine.
+     */
     authorizeUrl: (state, redirectUri, codeChallenge) =>
         `${redirectUri}?code=${FAKE_OAUTH_CODE}.${codeChallenge}&state=${encodeURIComponent(state)}`,
 
@@ -43,8 +45,10 @@ export const fakeOAuthProvider: OAuthProvider = {
         if (fixedPart !== FAKE_OAUTH_CODE || !challenge)
             return Promise.reject(new Error('fake provider: unrecognised code'));
 
-        // The same check a real provider makes at redemption — see the module doc for why this
-        // provider has to make it itself instead of trusting the caller.
+        /**
+         * The same check a real provider makes at redemption — see the module doc for why this
+         * provider has to make it itself instead of trusting the caller.
+         */
         if (codeChallengeOf(codeVerifier) !== challenge)
             return Promise.reject(new Error('fake provider: PKCE verifier does not match'));
 

@@ -1,4 +1,4 @@
-/*
+/**
  * The clean-checkout bootstrap guard — `npm run check`.
  *
  * `postinstall` runs `contracts:bundle` BEFORE `gen:api` and `gen:asyncapi`. On a clean checkout

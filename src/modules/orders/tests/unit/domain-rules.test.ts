@@ -85,10 +85,12 @@ describe('isDigitalOnlyOrder', () => {
     });
 });
 
-// Not here: the soft delete and the read scope. Both are one-line expressions with one
-// caller each, so they live in the service (`../../services/crud`, `../../services/scope`) rather
-// than the domain layer — `service-crud.test.ts` covers the soft delete and `service-scope.test.ts` the
-// scope, including the fail-closed cases.
+/**
+ * Not here: the soft delete and the read scope. Both are one-line expressions with one
+ * caller each, so they live in the service (`../../services/crud`, `../../services/scope`) rather
+ * than the domain layer — `service-crud.test.ts` covers the soft delete and `service-scope.test.ts` the
+ * scope, including the fail-closed cases.
+ */
 
 describe('buyerIdOf and isBuyer', () => {
     it('spells the buyer the way a caller carries their own id, and is empty for an erased one', () => {

@@ -233,7 +233,7 @@ const namedProducts = [
         tags: ['dog-food', 'premium'],
         ...productImages.dogFoodStandard
     }),
-    /*
+    /**
      * The soft-deleted one — exercises the `deletedAt` branch that `isVisibleToCaller` and the
      * repositories' soft-delete filters both check. Exactly one record carries it, independent of
      * the inactive one, so the dataset can tell the two states apart.
@@ -248,7 +248,7 @@ const namedProducts = [
         deletedAt: '2024-02-26T23:34:44.832Z',
         ...productImages.heaterSoftDeleted
     }),
-    /*
+    /**
      * The out-of-stock one. Every row here seeds at `onHand: 0`; this is the row that never gets
      * an opening receipt (see {@link OPENING_STOCK}), so it is still at zero once the flows have
      * run — the storefront's out-of-stock badge and checkout's refusal both need it. It's `onHand`
@@ -273,8 +273,10 @@ const namedProducts = [
         tags: ['dog-bed', 'premium'],
         ...productImages.dogBedPremium
     }),
-    /* The inactive one — soft-deleted's independent twin. `publicScope()` requires active AND not
-     * deleted, so from outside these two behave identically while remaining distinct states. */
+    /**
+     * The inactive one — soft-deleted's independent twin. `publicScope()` requires active AND not
+     * deleted, so from outside these two behave identically while remaining distinct states.
+     */
     makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.bundleInactive,
         title: NAMED_PRODUCT_COPY.bundleInactive.en.title,
@@ -285,7 +287,7 @@ const namedProducts = [
         active: false,
         ...productImages.bundleInactive
     }),
-    /*
+    /**
      * The off-sale one — listed and public, `purchasable: false`: the cart takes it like a sold-out
      * product and checkout refuses it. Hidden's visible twin, and stocked, so the refusal cannot be
      * mistaken for a stock-out.
@@ -299,7 +301,7 @@ const namedProducts = [
         tags: ['dog-bed', 'heated'],
         purchasable: false
     }),
-    /*
+    /**
      * The minimal one — only `title` and `price`, so every optional field but the stock counter
      * falls to the model's defaults, and has no image field. The others are richly populated and
      * can't catch a card or filter chip that wrongly assumes a description, category or image is
@@ -310,7 +312,7 @@ const namedProducts = [
         title: NAMED_PRODUCT_COPY.barebones.en.title,
         price: '9.00'
     }),
-    /*
+    /**
      * The digital one — `requiresShipping: false`, the flag `cart`/`orders`/`delivery`'s
      * digital-only branches all key off. No `imageUrl` in the fixed pool needs spending on it;
      * `barebones` above is the precedent for a named row with no image.
@@ -324,7 +326,7 @@ const namedProducts = [
         tags: ['digital', 'training'],
         requiresShipping: false
     }),
-    /*
+    /**
      * The last-unit one — opens with a single unit on the shelf (see {@link OPENING_STOCK}) and
      * belongs to no seeded order, so one checkout holds it and a second shopper is refused.
      */
@@ -337,7 +339,7 @@ const namedProducts = [
         tags: ['bowl', 'limited'],
         weight: 400
     }),
-    /*
+    /**
      * The made-to-order one — `noWithdrawal` (EU Art. 16(c), personalised goods), physical and
      * under standard's free-shipping line, so a cart of it still pays for delivery.
      */
@@ -351,7 +353,7 @@ const namedProducts = [
         weight: 900,
         noWithdrawal: true
     }),
-    /*
+    /**
      * The heavy one — 12 kg, past express's 5 kg ceiling (`SHIPPING_METHODS`) and inside standard's
      * 30 kg, so a cart holding it makes the express refusal reachable. Priced under standard's
      * free-shipping line, so a cart of one still pays for delivery.

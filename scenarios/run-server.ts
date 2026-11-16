@@ -19,15 +19,17 @@
  * see `startEphemeralMongo`. Several instances then share that one database, which several
  * in-memory instances never did; do not combine the two without meaning to.
  *
- * @see docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md#the-control-surface
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
-// First of ours: it loads `.env` and registers the doubles, and `shellValue` below reads what it
-// left in `process.env`. `demo` forces `NODE_ENV` itself, after imports, so the `NODE_ENV` loader
-// in `src/app/development-doubles.ts` cannot serve it.
+/**
+ * First of ours: it loads `.env` and registers the doubles, and `shellValue` below reads what it
+ * left in `process.env`. `demo` forces `NODE_ENV` itself, after imports, so the `NODE_ENV` loader
+ * in `src/app/development-doubles.ts` cannot serve it.
+ */
 import './support/development-doubles';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
@@ -71,30 +73,42 @@ const shellValue = (key: string): string | undefined => {
  */
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
-    // Loopback only: this profile's tokens are signed with a public, hard-coded secret, and its
-    // control surface wipes the database on request — every interface would hand both to anyone
-    // on the LAN. `NODE_HOST=0.0.0.0 npm run demo` overrides it, the same way as `NODE_PORT`
-    // above, for the rare case of reaching it from another device.
+    /**
+     * Loopback only: this profile's tokens are signed with a public, hard-coded secret, and its
+     * control surface wipes the database on request — every interface would hand both to anyone
+     * on the LAN. `NODE_HOST=0.0.0.0 npm run demo` overrides it, the same way as `NODE_PORT`
+     * above, for the rare case of reaching it from another device.
+     */
     NODE_HOST: '127.0.0.1',
-    // Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
-    // Public, throwaway, 32-byte hex: the boot check refuses anything shorter or not hex/base64.
+    /**
+     * Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
+     * Public, throwaway, 32-byte hex: the boot check refuses anything shorter or not hex/base64.
+     */
     NODE_TOKEN_ACCESS: '644fdac9f3bfa73cb8631497e4db1ebded912c7145e4a3ac63d79a46009c7dc1',
     NODE_TOKEN_REFRESH: 'be6d19cc08ee1fd32e2edb158e250e51b70dd1cc1ba3e5e4c7e3350e33f8299f',
-    // Same for the at-rest encryption keys: the seed writes address-book PII, and a key ring with
-    // no key cannot encrypt it — a checkout with no `.env` (every CI runner) died seeding.
+    /**
+     * Same for the at-rest encryption keys: the seed writes address-book PII, and a key ring with
+     * no key cannot encrypt it — a checkout with no `.env` (every CI runner) died seeding.
+     */
     NODE_PII_ENCRYPTION_KEY: '0de7cfab8ea0f3676609c67a34b42cee6355e7e72c8a51e30d66633e60529dc9',
     NODE_TOTP_ENCRYPTION_KEY: '371235f9725b90a6a87b6b9877e29313e804682717b699e1264bd816973f5769',
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
         'f0affe382aa45708b641b8274977884f2b6e0041de1f7c639cdfcd8ab77a1444',
-    // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook/fake`)
-    // itself; the frontend's `paymentWebhookSecret` carries the same value.
+    /**
+     * Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook/fake`)
+     * itself; the frontend's `paymentWebhookSecret` carries the same value.
+     */
     NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
-    // The mailbox a contact request is notified to falls back to the sender; with none, the
-    // operator's mail is never queued and the e2e that reads it can only fail.
+    /**
+     * The mailbox a contact request is notified to falls back to the sender; with none, the
+     * operator's mail is never queued and the e2e that reads it can only fail.
+     */
     NODE_SMTP_SENDER: 'Demo Shop <noreply@example.com>',
-    // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` gates this
-    // profile too, so it satisfies the gate the ordinary way, with the same values `.env-example`
-    // ships for a plain developer checkout.
+    /**
+     * `orders`' and `products`' own boot-time requirements — `assertModuleConfig` gates this
+     * profile too, so it satisfies the gate the ordinary way, with the same values `.env-example`
+     * ships for a plain developer checkout.
+     */
     NODE_LEGAL_COUNTRY: 'IT',
     NODE_SHOP_TIMEZONE: 'Europe/Rome',
     NODE_LEGAL_NAME: 'Guebbit Demo Shop Srl',
@@ -105,11 +119,13 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_LEGAL_PHONE: '+39 02 1234567',
     NODE_VAT_RATE_DEFAULT: '0.22',
     NODE_VAT_RATE_REDUCED: '0.10',
-    // `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to
-    // avoid clashing with another lane's live e2e) is respected instead of silently overridden.
-    // Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
-    // (8085). Without the second, a browser on the preview is refused by CORS while every
-    // Node-side call passes.
+    /**
+     * `.env`'s own value when it sets one — a lane pointed at non-default frontend ports (to
+     * avoid clashing with another lane's live e2e) is respected instead of silently overridden.
+     * Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
+     * (8085). Without the second, a browser on the preview is refused by CORS while every
+     * Node-side call passes.
+     */
     NODE_CORS_ORIGIN: DOTENV.NODE_CORS_ORIGIN ?? 'http://localhost:8080,http://localhost:8085',
     ...DEMO_BANK_TRANSFER
 };
@@ -167,26 +183,32 @@ const waitUntilListening = (port: string): Promise<void> => {
 /** Boot sequence: an ephemeral Mongo first, then the app on top of it. */
 startEphemeralMongo({ startInProcess: startInProcessMongod })
     .then((mongo) => {
-        // The consumers of this profile end it with a signal — the paired frontend's shard runner
-        // and `start-server-and-test` both send SIGTERM. Without this, the process dies and an
-        // in-memory instance's data directory stays behind under the temp dir (~200 MB per boot);
-        // `stop()` is the only thing that removes it. A no-op on the external-Mongo path.
+        /**
+         * The consumers of this profile end it with a signal — the paired frontend's shard runner
+         * and `start-server-and-test` both send SIGTERM. Without this, the process dies and an
+         * in-memory instance's data directory stays behind under the temp dir (~200 MB per boot);
+         * `stop()` is the only thing that removes it. A no-op on the external-Mongo path.
+         */
         for (const signal of ['SIGTERM', 'SIGINT'] as const)
             process.once(signal, () => {
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- the catch below resolves, and the then only exits the process
                 void mongo
                     .stop()
                     .catch((error: unknown) => {
-                        // Still exits either way — a stuck data directory left behind (~200 MB) is
-                        // a cleanup annoyance, not a reason to hang the shutdown a signal asked for.
+                        /**
+                         * Still exits either way — a stuck data directory left behind (~200 MB) is
+                         * a cleanup annoyance, not a reason to hang the shutdown a signal asked for.
+                         */
                         console.error('[demo] failed to stop the ephemeral mongod:', error);
                     })
                     .then(() => process.exit(0));
             });
 
-        // The shell's own value wins, read off the real `process.env` on purpose (a `.env` is not
-        // loaded yet, so this is the shell and nothing else). Written to the config store, which
-        // reads `process.env` once and would never see a later write.
+        /**
+         * The shell's own value wins, read off the real `process.env` on purpose (a `.env` is not
+         * loaded yet, so this is the shell and nothing else). Written to the config store, which
+         * reads `process.env` once and would never see a later write.
+         */
         installEnvironment({
             ...Object.fromEntries(
                 Object.entries(REQUIRED_DEFAULTS).map(([key, value]) => [
@@ -195,8 +217,10 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
                 ])
             ),
             ...Object.fromEntries(FORCED_ABSENT.map((key) => [key, ''])),
-            // The e2e suite is not a person browsing, and neither is the seeder behind it — see
-            // `./rate-limits`; only a value the shell itself set survives.
+            /**
+             * The e2e suite is not a person browsing, and neither is the seeder behind it — see
+             * `./rate-limits`; only a value the shell itself set survives.
+             */
             ...Object.fromEntries(
                 Object.entries(SCRIPTED_RATE_LIMITS).map(([key, value]) => [
                     key,
@@ -206,30 +230,38 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
             NODE_MAIL_TRANSPORT: FORCED_MAIL_TRANSPORT
         });
 
-        // Always the `demo` database, regardless of source: a stable name is what lets the
-        // external-Mongo path (`NODE_TEST_MONGO_URI`) persist across restarts instead of scattering
-        // across a freshly named database every boot.
+        /**
+         * Always the `demo` database, regardless of source: a stable name is what lets the
+         * external-Mongo path (`NODE_TEST_MONGO_URI`) persist across restarts instead of scattering
+         * across a freshly named database every boot.
+         */
         const databaseUri = new URL(mongo.uri);
         databaseUri.pathname = '/demo';
         installEnvironment({ NODE_DB_URI: databaseUri.href });
-        // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
-        // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
-        // point is several instances on several ports (see this file's own module doc) — the
-        // OAuth redirect_uri and emailed password-reset/verify links (`emails.ts`) both build off
-        // `NODE_URL`, so a stale value here means those links point at the wrong instance instead
-        // of this one, on every port but the default.
+        /**
+         * Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
+         * `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
+         * point is several instances on several ports (see this file's own module doc) — the
+         * OAuth redirect_uri and emailed password-reset/verify links (`emails.ts`) both build off
+         * `NODE_URL`, so a stale value here means those links point at the wrong instance instead
+         * of this one, on every port but the default.
+         */
         installEnvironment({
             NODE_URL: `http://localhost:${currentEnvironment().NODE_PORT ?? '3000'}/`
         });
 
-        // The movable clock behind `/__test/clock`. Installed before the app is imported, so every
-        // module sees the fake `Date` from its first read; a time journey moves it, and the next
-        // restore puts it back. See `scenarios/support/demo-clock.ts`.
+        /**
+         * The movable clock behind `/__test/clock`. Installed before the app is imported, so every
+         * module sees the fake `Date` from its first read; a time journey moves it, and the next
+         * restore puts it back. See `scenarios/support/demo-clock.ts`.
+         */
         registerDemoClock(installDemoClock());
 
-        // Import AFTER the environment is shaped: both load every module, and a model reads some
-        // of it at import. `createApp()` builds the app with the demo extension; its own `start()`
-        // seeds `shop` (the extension's `afterBoot`) before it starts listening.
+        /**
+         * Import AFTER the environment is shaped: both load every module, and a model reads some
+         * of it at import. `createApp()` builds the app with the demo extension; its own `start()`
+         * seeds `shop` (the extension's `afterBoot`) before it starts listening.
+         */
         const port = currentEnvironment().NODE_PORT ?? '3000';
         return Promise.all([
             import('../src/app'),

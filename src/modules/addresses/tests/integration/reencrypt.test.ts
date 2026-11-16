@@ -18,6 +18,7 @@ setupTestDb();
 /** A deployment mid-rotation: a new `v2` key in front, the worker's bare (`v1`) test key behind. */
 const ROTATED_PII_KEY = 'v2:new-pii-key-material,v1:test-pii-encryption-key';
 
+/** A full address, so the re-encryption pass has every encrypted field to rewrite. */
 const ADDRESS = {
     fullName: 'Ada Lovelace',
     street: '12 Analytical Engine Rd',

@@ -26,6 +26,7 @@ afterAll(() => {
 
 /** The manager reads orders but no accounts; the admin reads both. */
 const asManager = { caller: callerAs('manager'), analyticsConsent: false };
+/** An admin caller, without analytics consent. */
 const asAdmin = { caller: callerAs('admin'), analyticsConsent: false };
 
 /** An admin-made subscription on `eventTypes`, as the stored row. */

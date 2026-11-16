@@ -178,7 +178,7 @@ describe('productRepository', () => {
     });
 });
 
-/*
+/**
  * The absent-row arms. Every aggregate above answers over a seeded catalogue; these pin what the
  * same pipelines answer over NOTHING — the `.at(0)` arm the calling code guards, asserted rather
  * than assumed, because an empty $group or $facet returns no row at all rather than a zeroed one.

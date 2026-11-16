@@ -68,8 +68,10 @@ const eventsOf = (moduleName: string): CatalogEvent[] => {
     // `yaml.parse`: https://eemeli.org/yaml/#parse — a plain object back, no custom tags here.
     const document = parse(readFileSync(file, 'utf8')) as AsyncApiChannelsDocument;
     return Object.entries(document.channels ?? {}).map(([name, channel]) => ({
-        // The contract's `WebhookEventName` enum is filled from these same channel keys at bundle
-        // time, so the compiler cannot see that a key read from disk is one of them.
+        /**
+         * The contract's `WebhookEventName` enum is filled from these same channel keys at bundle
+         * time, so the compiler cannot see that a key read from disk is one of them.
+         */
         name: name as WebhookEventName,
         description: channel.description,
         readRule: assertReadRule(name, channel['x-read-rule'])

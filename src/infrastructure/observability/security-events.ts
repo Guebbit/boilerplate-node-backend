@@ -4,7 +4,7 @@
  * not alertable: the audit entry is the evidence, the counter is what a rate rule can watch.
  * Emitted together so the two can never disagree about how many there were.
  *
- * @see docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md#what-observability-metrics-exposes
  */
 
 import { Counter } from 'prom-client';

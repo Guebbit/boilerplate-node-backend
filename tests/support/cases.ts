@@ -5,7 +5,7 @@
  * A cases file is input -> expected output for logic that must stay code but must answer the same
  * in both backends. The PHP twin runs the same file against its own implementation.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_6-·-adding-a-case
  */
 
 import { readFileSync } from 'node:fs';

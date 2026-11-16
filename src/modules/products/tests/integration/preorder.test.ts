@@ -158,8 +158,10 @@ describe('PATCH /products/:id releaseDate', () => {
 });
 
 describe('a release day is stored as the shop midnight', () => {
-    // Rome springs forward on 2026-03-29 and falls back on 2026-10-25 (both at 01:00 UTC): the
-    // day of the change is 23 and 25 hours long, so its midnight is the edge a naive offset misses.
+    /**
+     * Rome springs forward on 2026-03-29 and falls back on 2026-10-25 (both at 01:00 UTC): the
+     * day of the change is 23 and 25 hours long, so its midnight is the edge a naive offset misses.
+     */
     it.each([
         ['the spring-forward day', '2026-03-29', '2026-03-28T23:00:00.000Z'],
         ['the fall-back day', '2026-10-25', '2026-10-24T22:00:00.000Z']

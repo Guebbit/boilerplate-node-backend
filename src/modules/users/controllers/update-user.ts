@@ -3,7 +3,7 @@
  * Controllers for `PUT /users/:id` (replace) and `PATCH /users/:id` (merge), built on the shared
  * `createUpdateController` factory.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { callerContextOf } from '@infrastructure/http/request';

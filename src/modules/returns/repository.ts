@@ -117,7 +117,6 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
 
     /**
      * Every return on one order, oldest first.
-     * @param orderId - the order
      * @param session - the caller's transaction, when the read belongs to one
      */
     findByOrderId: (orderId, session) =>

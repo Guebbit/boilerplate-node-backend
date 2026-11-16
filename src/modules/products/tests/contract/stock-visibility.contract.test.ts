@@ -115,8 +115,10 @@ describe('GET /products — the list follows the same rule', () => {
         ).toEqual([12, 3].toSorted());
     });
 
-    // The guest's response is shared through the cache: warming it with a stock reader's answer
-    // first must never put the counters in front of the next guest.
+    /**
+     * The guest's response is shared through the cache: warming it with a stock reader's answer
+     * first must never put the counters in front of the next guest.
+     */
     it('keeps a stock reader’s answer out of the guest’s cached one', async () => {
         await createProduct({ onHand: 12 });
         const { bearer } = await authenticateAsRole('admin');

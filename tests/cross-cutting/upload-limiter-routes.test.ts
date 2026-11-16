@@ -41,8 +41,10 @@ const uploadRoutes = (): [string, string[]][] =>
     );
 
 describe('upload routes are rate-limited before the upload is read', () => {
-    // A vacuous pass would read as green: if the walker stopped seeing uploads, the sweep below
-    // would check nothing.
+    /**
+     * A vacuous pass would read as green: if the walker stopped seeing uploads, the sweep below
+     * would check nothing.
+     */
     it('finds upload routes to check', () => {
         expect(uploadRoutes().length).toBeGreaterThan(0);
     });

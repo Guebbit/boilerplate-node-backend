@@ -4,7 +4,7 @@
  * if Redis is unreachable the app keeps serving without a cache rather than erroring. What gets
  * cached (today, HTTP responses) and how it's framed is the caller's business, not this module's.
  *
- * @see docs/understand/redis-cache.md
+ * @see docs/understand/redis-cache.md#important-behavior
  */
 
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
@@ -38,25 +38,33 @@ const isCacheEnabled = () =>
 const cacheConnection = manageConnection<RedisClient>({
     unavailableMessage: 'Redis cache unavailable, continuing without server-side cache.',
     isEnabled: isCacheEnabled,
-    // `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished, so
-    // commands can be issued immediately. A client that dropped since the last call answers
-    // `false` here and is replaced rather than handed back dead.
+    /**
+     * `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished, so
+     * commands can be issued immediately. A client that dropped since the last call answers
+     * `false` here and is replaced rather than handed back dead.
+     */
     isReady: (client) => client.isReady,
     connect: () => {
         const redisUrl = configuredRedisUrl();
-        // Enablement already implies a URL; this is the type narrowing, and resolving `undefined`
-        // is the "cannot be built" signal rather than a failure worth warning about.
+        /**
+         * Enablement already implies a URL; this is the type narrowing, and resolving `undefined`
+         * is the "cannot be built" signal rather than a failure worth warning about.
+         */
         if (!redisUrl) return Promise.resolve(undefined);
 
         // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
         const client: RedisClient = createRedisClient(redisUrl);
 
-        // node-redis is an EventEmitter and an unhandled 'error' event would crash the process,
-        // so this listener is mandatory, not just for logging.
+        /**
+         * node-redis is an EventEmitter and an unhandled 'error' event would crash the process,
+         * so this listener is mandatory, not just for logging.
+         */
         client.on('error', cacheConnection.reportUnavailable);
 
-        // A client is built per ATTEMPT rather than kept across failed ones: the handle belongs to
-        // the lifecycle, and one that never finished connecting has nothing worth reusing.
+        /**
+         * A client is built per ATTEMPT rather than kept across failed ones: the handle belongs to
+         * the lifecycle, and one that never finished connecting has nothing worth reusing.
+         */
         return client.connect().then(() => client);
     },
     close: closeRedisClient
@@ -105,8 +113,10 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
         .then((redisClient) => {
             if (!redisClient) return undefined;
 
-            // Redis GET on a string key. Returns `null` when the key is absent or has expired,
-            // which is the same answer to the caller as "not cached".
+            /**
+             * Redis GET on a string key. Returns `null` when the key is absent or has expired,
+             * which is the same answer to the caller as "not cached".
+             */
             return redisClient.get(prefix(`key:${key}`)).then((raw) => raw ?? undefined);
         })
         .catch((error: unknown) => {
@@ -140,8 +150,10 @@ export const setCacheValue = (
     if (ttlSeconds <= 0) return Promise.resolve();
 
     const cacheKey = prefix(`key:${key}`);
-    // `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
-    // create junk tag keys and redundant index round-trips.
+    /**
+     * `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
+     * create junk tag keys and redundant index round-trips.
+     */
     const cacheTags = [...new Set(tags.filter(Boolean))];
 
     return cacheConnection
@@ -153,14 +165,18 @@ export const setCacheValue = (
             return (
                 redisClient
                     .set(cacheKey, value, {
-                        // `EX` = expire after N seconds. Redis deletes the key itself, so the cache
-                        // is self-trimming and needs no cleanup job.
+                        /**
+                         * `EX` = expire after N seconds. Redis deletes the key itself, so the cache
+                         * is self-trimming and needs no cleanup job.
+                         */
                         EX: ttlSeconds
                     })
                     .then(() =>
-                        // Index this key by tags too — each tag's sorted set gets it as a
-                        // member, which is what makes group invalidation possible (Redis cannot
-                        // delete by pattern efficiently).
+                        /**
+                         * Index this key by tags too — each tag's sorted set gets it as a
+                         * member, which is what makes group invalidation possible (Redis cannot
+                         * delete by pattern efficiently).
+                         */
                         Promise.all(
                             cacheTags.map((tag) =>
                                 indexUnderTag(
@@ -274,8 +290,10 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
     return cacheConnection
         .get()
         .then((redisClient) => {
-            // Same split as `clearCache`: caching switched off is trivially clear, caching on with
-            // no client is a connect that failed — the lifecycle reports both as void.
+            /**
+             * Same split as `clearCache`: caching switched off is trivially clear, caching on with
+             * no client is a connect that failed — the lifecycle reports both as void.
+             */
             if (!redisClient) return { deleted: 0, reachable: !isCacheEnabled() };
 
             // For each tag: read its members, delete those keys, then delete the tag set itself.
@@ -284,16 +302,22 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
                     const tagKey = prefix(`tag:${tag}`);
                     return (
                         redisClient
-                            // `zRange 0 -1` = ZRANGE, every key registered under this tag. Members
-                            // already past their score are dead entries; deleting them is harmless.
+                            /**
+                             * `zRange 0 -1` = ZRANGE, every key registered under this tag. Members
+                             * already past their score are dead entries; deleting them is harmless.
+                             */
                             .zRange(tagKey, 0, -1)
-                            // `del` accepts an array (variadic DEL) — one round-trip for the whole
-                            // group instead of one per key. Guarded because DEL with zero
-                            // arguments is a protocol error.
+                            /**
+                             * `del` accepts an array (variadic DEL) — one round-trip for the whole
+                             * group instead of one per key. Guarded because DEL with zero
+                             * arguments is a protocol error.
+                             */
                             .then((keys) => (keys.length > 0 ? redisClient.del(keys) : 0))
-                            // Drop the now-meaningless index set as well, so it does not grow
-                            // unbounded across invalidation cycles. Its own deletion is not a
-                            // cached entry and is not counted.
+                            /**
+                             * Drop the now-meaningless index set as well, so it does not grow
+                             * unbounded across invalidation cycles. Its own deletion is not a
+                             * cached entry and is not counted.
+                             */
                             .then((deleted) => redisClient.del(tagKey).then(() => deleted))
                     );
                 })
@@ -327,7 +351,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
 export const invalidateCacheTagsLogged = (tags: string[]): Promise<void> =>
     invalidateCacheTags(tags).then(({ reachable }) => {
         if (reachable) return;
-        /*
+        /**
          * The write (or digest) landed but its cached predecessor did not, so the endpoint serves
          * a stale response until the TTL expires. The response may already be sent, so logging
          * plus a counter — reachable from an alert, not just grep — is the only move left.
@@ -404,7 +428,7 @@ export const clearCache = (): Promise<ClearCacheResult> =>
         .get()
         .then((redisClient) => {
             if (!redisClient) {
-                /*
+                /**
                  * Two situations land here and the lifecycle can't tell them apart: caching is
                  * off, or it's on and the connect failed. `isCacheEnabled()` is what separates
                  * "nothing to clear" from "could not clear".
@@ -418,15 +442,19 @@ export const clearCache = (): Promise<ClearCacheResult> =>
             }));
         })
         .catch((error: unknown) => {
-            // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
-            // Whatever `deleted` had reached is discarded: the cache is in an unknown state,
-            // which is the same verdict as never having connected.
+            /**
+             * Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
+             * Whatever `deleted` had reached is discarded: the cache is in an unknown state,
+             * which is the same verdict as never having connected.
+             */
             // Stryker disable all
             logger.warn({
                 message: 'Redis cache clear failed.',
-                // Passed raw: `JSON.stringify(new Error())` yields `{}`. This only survives with a
-                // message and stack because `redactFormat` (`adapters/logger.ts`) unpacks it
-                // before winston's `json()` format ever sees it.
+                /**
+                 * Passed raw: `JSON.stringify(new Error())` yields `{}`. This only survives with a
+                 * message and stack because `redactFormat` (`adapters/logger.ts`) unpacks it
+                 * before winston's `json()` format ever sees it.
+                 */
                 error
             });
             // Stryker restore all

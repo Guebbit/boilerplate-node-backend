@@ -8,7 +8,7 @@
  * may actually buy from those counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
- * @see docs/understand/domain-layer.md
+ * @see docs/understand/domain-layer.md#the-shape-verdict-not-rejection
  */
 
 import { StockMovementReason } from '@types';
@@ -69,8 +69,10 @@ export const counterDeltaFor = (
                 : { onHandDelta: 0, reservedDelta: -quantity, backorderedDelta: 0 };
         }
 
-        // A preorder: the units do not exist yet, so only the allowance moves.
-        // `owed` moves the same counters; the ledger records which story it was.
+        /**
+         * A preorder: the units do not exist yet, so only the allowance moves.
+         * `owed` moves the same counters; the ledger records which story it was.
+         */
         case StockMovementReason.backorder:
         case StockMovementReason.owed: {
             return { onHandDelta: 0, reservedDelta: 0, backorderedDelta: quantity };
@@ -86,13 +88,15 @@ export const counterDeltaFor = (
             return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }
 
-        // Returned goods are received back on the shelf. `reserved` is untouched: `ship` already
-        // took it down, and nothing reserved these units again in the meantime.
+        /**
+         * Returned goods are received back on the shelf. `reserved` is untouched: `ship` already
+         * took it down, and nothing reserved these units again in the meantime.
+         */
         case StockMovementReason.restock: {
             return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }
 
-        /*
+        /**
          * The one case where `quantity` is already signed — `-3` is three units of shrinkage. No
          * `Math.abs`: taking the sign from the number is what lets one transition serve both
          * directions instead of a second `write-off` reason saying the same thing.

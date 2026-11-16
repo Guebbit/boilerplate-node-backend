@@ -21,8 +21,10 @@ import { enabledModuleDirectories } from '../modules';
  * and an empty overlay is a working state, so it is awaited only for ordering.
  */
 export const bootRendering = (): Promise<void> =>
-    // Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
-    // below every module and cannot go looking for them, so the paths are handed in.
+    /**
+     * Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
+     * below every module and cannot go looking for them, so the paths are handed in.
+     */
     bootI18n(enabledModuleDirectories('locales'))
         .then(() => {
             registerTemplateDirectories(enabledModuleDirectories('templates'));

@@ -12,8 +12,10 @@ describe('the example analytics vocabulary', () => {
         expect(exampleAnalyticsEvents).toEqual({ EXAMPLE_PUBLISHED: 'example_published' });
     });
 
-    // The `declare module` augmentation is what puts these into the app-wide union; checked at
-    // type-check time, since dropping it still compiles on its own.
+    /**
+     * The `declare module` augmentation is what puts these into the app-wide union; checked at
+     * type-check time, since dropping it still compiles on its own.
+     */
     it('registers its events in the app-wide union', () => {
         const event: AnalyticsEventMap['example'] = exampleAnalyticsEvents.EXAMPLE_PUBLISHED;
 

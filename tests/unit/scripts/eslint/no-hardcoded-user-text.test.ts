@@ -5,6 +5,7 @@
 import { RuleTester } from 'eslint';
 import { noHardcodedUserText } from '../../../../scripts/eslint/no-hardcoded-user-text';
 
+/** Runs the rule against its valid and invalid snippets. */
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }
 });

@@ -21,6 +21,7 @@
 import fc from 'fast-check';
 import { applySerialization, type SerializeTransform } from '@infrastructure/persistence/serialize';
 
+/** Property-test settings: a fixed seed so a failure replays, and stop at the first one. */
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
 
 /** A stand-in for the one method the wiring touches — see `SerializableSchema` in the source. */
@@ -48,6 +49,7 @@ const documentKey = () => fc.string().filter((key) => key !== '__proto__');
 const documentLike = () =>
     fc.dictionary(documentKey(), fc.jsonValue(), { maxKeys: 8 }).map((body) => ({ ...body }));
 
+/** An arbitrary document that also carries the reserved field names. */
 const withReservedFields = () =>
     fc
         .tuple(documentLike(), fc.string({ minLength: 1 }), fc.integer())
@@ -59,8 +61,10 @@ const withReservedFields = () =>
 
 describe('applySerialization — universal guarantees', () => {
     it('never leaves _id on the output, whatever the document held', () => {
-        // A stray `_id` is a contract violation against 95 `additionalProperties: false` schemas,
-        // not a cosmetic detail.
+        /**
+         * A stray `_id` is a contract violation against 95 `additionalProperties: false` schemas,
+         * not a cosmetic detail.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 const serialized = buildTransform()({ ...document_ });
@@ -72,8 +76,10 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('never leaves __v on the output', () => {
-        // The `toJSON` path gets this from `versionKey: false`; the lean/aggregate path gets it
-        // only from the explicit delete in the transform. This covers the second.
+        /**
+         * The `toJSON` path gets this from `versionKey: false`; the lean/aggregate path gets it
+         * only from the explicit delete in the transform. This covers the second.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 expect(Object.hasOwn(buildTransform()({ ...document_ }), '__v')).toBe(false);
@@ -83,8 +89,10 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('renames _id to a string id, for any id representation', () => {
-        // `.lean()` yields a real ObjectId, `.aggregate()` can yield anything. `toString()` is
-        // what makes both land on the wire as a string.
+        /**
+         * `.lean()` yields a real ObjectId, `.aggregate()` can yield anything. `toString()` is
+         * what makes both land on the wire as a string.
+         */
         fc.assert(
             fc.property(documentLike(), fc.string({ minLength: 1 }), (body, id) => {
                 const serialized = buildTransform()({ ...body, _id: id });
@@ -97,8 +105,10 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('drops the id entirely under dropId, rather than renaming it', () => {
-        // For collections with no addressable endpoint: exposing an id there would invite one to
-        // be built. Both spellings of "gone" are asserted, since `id` appearing would be the bug.
+        /**
+         * For collections with no addressable endpoint: exposing an id there would invite one to
+         * be built. Both spellings of "gone" are asserted, since `id` appearing would be the bug.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 const serialized = buildTransform({ dropId: true })({ ...document_ });
@@ -126,9 +136,11 @@ describe('applySerialization — universal guarantees', () => {
                     const secrets = Object.fromEntries(omit.map((key) => [key, 'secret']));
                     const serialized = buildTransform({ omit })({ ...body, ...secrets });
 
-                    // `Object.hasOwn`, not `toHaveProperty`: the latter walks the prototype
-                    // chain, so it reports `toString` as present on every object ever made. What
-                    // matters for a wire payload is the OWN keys, which is what gets serialized.
+                    /**
+                     * `Object.hasOwn`, not `toHaveProperty`: the latter walks the prototype
+                     * chain, so it reports `toString` as present on every object ever made. What
+                     * matters for a wire payload is the OWN keys, which is what gets serialized.
+                     */
                     for (const key of omit) expect(Object.hasOwn(serialized, key)).toBe(false);
                 }
             ),
@@ -153,9 +165,11 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('returns the same object it was handed, mutated in place', () => {
-        // The lean path relies on this: `normalize` in @infrastructure/persistence/create-repository maps over rows and
-        // keeps the returned value, while the toJSON path discards it and keeps the mutation.
-        // Both work only because they are the same object.
+        /**
+         * The lean path relies on this: `normalize` in @infrastructure/persistence/create-repository maps over rows and
+         * keeps the returned value, while the toJSON path discards it and keeps the mutation.
+         * Both work only because they are the same object.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 const input = { ...document_ };
@@ -167,8 +181,10 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('is idempotent', () => {
-        // Applied twice — which happens when a lean row is normalized and then serialized again
-        // — the result must not change.
+        /**
+         * Applied twice — which happens when a lean row is normalized and then serialized again
+         * — the result must not change.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 const transform = buildTransform({ omit: ['password'] });
@@ -191,8 +207,10 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('runs the after hook once, after the shared steps', () => {
-        // Ordering matters: `after` is where models do nested normalization, and it must see the
-        // document already stripped rather than racing the shared steps.
+        /**
+         * Ordering matters: `after` is where models do nested normalization, and it must see the
+         * document already stripped rather than racing the shared steps.
+         */
         fc.assert(
             fc.property(withReservedFields(), (document_) => {
                 let sawId: unknown;

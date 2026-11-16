@@ -139,15 +139,19 @@ describe('account routes — what is mounted', () => {
     });
 
     it('reads the caller and forbids storing the answer, for the whole router', () => {
-        // Order matters as much as presence: `noStore` after `getAuth` is fine, but both must be
-        // above every route, which `guardsOn` checks per endpoint below.
+        /**
+         * Order matters as much as presence: `noStore` after `getAuth` is fine, but both must be
+         * above every route, which `guardsOn` checks per endpoint below.
+         */
         expect(routerMiddleware(router)).toEqual(['getAuth', 'noStore']);
     });
 
     it.each(routeSignatures(router))('%s is marked no-store', (signature) => {
-        // The one that regressed before: a profile is the caller's identity and must never be
-        // stored by a shared cache or a browser. Asserted per route so a route mounted above the
-        // `use` — which would be silently storable — fails here.
+        /**
+         * The one that regressed before: a profile is the caller's identity and must never be
+         * stored by a shared cache or a browser. Asserted per route so a route mounted above the
+         * `use` — which would be silently storable — fails here.
+         */
         expect(guardsOn(router, signature)).toContain('noStore');
     });
 });
@@ -158,8 +162,10 @@ describe('account routes — authorization', () => {
     });
 
     it.each(TOKEN_BEARING)('%s stays public, because the token is the credential', (signature) => {
-        // Deliberate. A caller completing a password reset has no access token by definition; a
-        // caller logging out is destroying the one they have. `isAuth` here breaks the flow.
+        /**
+         * Deliberate. A caller completing a password reset has no access token by definition; a
+         * caller logging out is destroying the one they have. `isAuth` here breaks the flow.
+         */
         expect(guardsOn(router, signature)).not.toContain('isAuth');
     });
 
@@ -171,8 +177,10 @@ describe('account routes — authorization', () => {
     );
 
     it('keys no route at all: what you may do to your own record follows from being signed in', () => {
-        // An operational lever across every account, such as a reaper, is a nightly job
-        // (`reap:inactive-accounts`), never a route here.
+        /**
+         * An operational lever across every account, such as a reaper, is a nightly job
+         * (`reap:inactive-accounts`), never a route here.
+         */
         const keyed = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
@@ -191,9 +199,11 @@ describe('account routes — credential rate limiting', () => {
             entry.startsWith('credentials-')
         );
 
-        // The per-account budget (the named account's, or the signed-in account's), a forged
-        // device cookie, address AND address-block: each is keyed differently and defends an
-        // attack the others miss. Any one missing reads as protected and is not.
+        /**
+         * The per-account budget (the named account's, or the signed-in account's), a forged
+         * device cookie, address AND address-block: each is keyed differently and defends an
+         * attack the others miss. Any one missing reads as protected and is not.
+         */
         expect(limiters).toEqual([
             SESSION_KEYED.has(signature) ? 'credentials-signed-in' : 'credentials-identity',
             'credentials-device',
@@ -203,8 +213,10 @@ describe('account routes — credential rate limiting', () => {
     });
 
     it('authenticates before rate-limiting, so the per-account budget is keyed on the signed-in account', () => {
-        // On these routes the body names no account, so the budget reads the signed-in account's. Reversed,
-        // it would fall back to the address block.
+        /**
+         * On these routes the body names no account, so the budget reads the signed-in account's. Reversed,
+         * it would fall back to the address block.
+         */
         for (const signature of SESSION_KEYED) {
             const chain = chainOf(router, signature);
 
@@ -213,8 +225,10 @@ describe('account routes — credential rate limiting', () => {
     });
 
     it('leaves the non-credential routes unbudgeted', () => {
-        // The global brake covers these. A per-route credential budget on, say, the address book
-        // would spend a login allowance on ordinary browsing.
+        /**
+         * The global brake covers these. A per-route credential budget on, say, the address book
+         * would spend a login allowance on ordinary browsing.
+         */
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 !RATE_LIMITED.includes(signature) &&
@@ -245,8 +259,10 @@ describe('account routes — signup and reset rate limiting', () => {
 });
 
 describe('account routes — the per-mailbox mail budget', () => {
-    // The mail goes to whatever address the BODY names, so the budget on that mailbox is what
-    // bounds the victim; it runs after the caller's own budgets and before the challenge gate.
+    /**
+     * The mail goes to whatever address the BODY names, so the budget on that mailbox is what
+     * bounds the victim; it runs after the caller's own budgets and before the challenge gate.
+     */
     it.each([
         ['POST /signup', 'signup-block'],
         ['POST /password/reset', 'reset-block']
@@ -283,8 +299,10 @@ describe('account routes — human-challenge gate (rung 3)', () => {
         const chain = chainOf(router, signature);
 
         expect(chain).toContain('humanChallengeGate');
-        // A spent budget should not reach the gate at all — see rate-limits.ts's own reasoning
-        // for mounting a budget before the cost it exists to avoid.
+        /**
+         * A spent budget should not reach the gate at all — see rate-limits.ts's own reasoning
+         * for mounting a budget before the cost it exists to avoid.
+         */
         expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(chain.indexOf(lastLabel));
     });
 
@@ -320,9 +338,11 @@ describe('account routes — uploads', () => {
     });
 
     it('caches nothing anywhere', () => {
-        // The counterpart to `noStore`: not one route in this module may be stored, so not one
-        // may mount `setCache`. This is the assertion that would have caught the regression the
-        // header describes, at the router rather than at the header.
+        /**
+         * The counterpart to `noStore`: not one route in this module may be stored, so not one
+         * may mount `setCache`. This is the assertion that would have caught the regression the
+         * header describes, at the router rather than at the header.
+         */
         const cached = routeSignatures(router).filter((signature) =>
             chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
         );

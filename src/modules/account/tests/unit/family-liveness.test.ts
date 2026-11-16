@@ -40,6 +40,7 @@ const SHOPPER: { id: string; roles: { tenant: string | null; platform: null } } 
     id: 'u1',
     roles: { tenant: null, platform: null }
 };
+/** A tenant-scope staff caller; the cases give it a session family to revoke. */
 const STAFF = { id: 'u1', roles: { tenant: 'editor', platform: null } };
 
 /** How long ago, in seconds, a family last saw a request. */

@@ -90,8 +90,10 @@ describe('returns routes — rate limiting and idempotency', () => {
 });
 
 describe('returns routes — guard order on POST /returns', () => {
-    // The ledger records any JSON answer: a step-up challenge placed after it would be replayed as
-    // the answer to the same key once the staff member has re-authenticated.
+    /**
+     * The ledger records any JSON answer: a step-up challenge placed after it would be replayed as
+     * the answer to the same key once the staff member has re-authenticated.
+     */
     it('spends the budget, then asks the step-up, then opens the idempotency ledger', () => {
         const chain = chainOf(router, 'POST /');
         const budget = chain.indexOf('returns-write');

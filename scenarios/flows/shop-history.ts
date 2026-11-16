@@ -11,7 +11,7 @@
  *
  * Runs ONCE per process — `scenarios/support/demo.ts` keeps the result in memory and replays it on every
  * restore.
- * @see docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md#the-clock
  */
 
 import { seedCredentials } from '@scenarios/accounts';
@@ -200,14 +200,18 @@ const plannedDemand = (): Map<string, number> => {
     for (const { lines } of FILLER_ORDERS)
         for (const [index, quantity] of lines) add({ productId: fillerProductId(index), quantity });
     for (const lines of CUSTOMER_ORDERS) for (const line of lines) add(line);
-    // The named rows below, in the order they appear: nine dog-food orders and the one big bed
-    // order (one cart line, so at most `cartLineMax()` units). Overstated rather than counted line
-    // by line — a shelf with spare units on it is a shop, and a shelf one unit short is a checkout
-    // that fails three hundred requests into a boot.
+    /**
+     * The named rows below, in the order they appear: nine dog-food orders and the one big bed
+     * order (one cart line, so at most `cartLineMax()` units). Overstated rather than counted line
+     * by line — a shelf with spare units on it is a shop, and a shelf one unit short is a checkout
+     * that fails three hundred requests into a boot.
+     */
     add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 50 });
     add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 15 });
-    // The three `current`-image demo rows below, each bought alone once and again inside
-    // `order.mixedImageStates` — two units apiece.
+    /**
+     * The three `current`-image demo rows below, each bought alone once and again inside
+     * `order.mixedImageStates` — two units apiece.
+     */
     for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });
     // The two products `order.remainderCanceled` buys one of each of.
     for (const index of [124, 125]) add({ productId: fillerProductId(index), quantity: 2 });
@@ -265,14 +269,18 @@ const signInCustomerBase = (baseUrl: string): Promise<Map<string, Caller>> =>
  */
 const driveCatalogEdits = async (owner: Caller): Promise<void> => {
     await owner.call('PATCH', `/products/${SEED_PRODUCT_IDS.dogFoodStandard}`, {
-        // A price change is the edit an operator makes most, and the one an audit reader most
-        // wants to see a trail for.
+        /**
+         * A price change is the edit an operator makes most, and the one an audit reader most
+         * wants to see a trail for.
+         */
         price: '71.00'
     });
 
-    // Each module that owns a piece of the story contributes its own edit (`shop-modules.ts`'s
-    // `driveHistoryEdit`), so deleting a module removes its step along with everything else it
-    // owns, instead of leaving a call here for the flow to 404 on.
+    /**
+     * Each module that owns a piece of the story contributes its own edit (`shop-modules.ts`'s
+     * `driveHistoryEdit`), so deleting a module removes its step along with everything else it
+     * owns, instead of leaving a call here for the flow to 404 on.
+     */
     for (const edit of historyEdits()) await edit(owner);
 };
 
@@ -363,7 +371,7 @@ export const driveShopHistory = async (
 
     const subjects: Record<string, string> = {};
 
-    /*
+    /**
      * Every order that will be moved into the past, in the sequence it was placed — which is what
      * lets the ages below run oldest to newest, so the shop's history reads as a shop's does: a
      * steady trickle rather than everything on one afternoon. The two orders still holding stock
@@ -375,9 +383,11 @@ export const driveShopHistory = async (
         return orderId;
     };
 
-    // ── The customer base's volume, and the `customer` account's own long history ──────────────
-    // Every order shipped in this block is delivered together, below — everything shipped AFTER
-    // that point stays in transit, which is what makes `order.shipped` below mean something.
+    /**
+     * ── The customer base's volume, and the `customer` account's own long history ──────────────
+     * Every order shipped in this block is delivered together, below — everything shipped AFTER
+     * that point stays in transit, which is what makes `order.shipped` below mean something.
+     */
     const shippedBeforeDelivery: string[] = [];
     const base = await signInCustomerBase(baseUrl);
     for (const { customer: who, lines } of FILLER_ORDERS) {
@@ -408,7 +418,7 @@ export const driveShopHistory = async (
     // Every parcel shipped above arrives. Everything shipped after this line stays in transit.
     for (const orderId of shippedBeforeDelivery) await deliverOrder(owner, orderId);
 
-    /*
+    /**
      * Delivered TODAY, never backdated: the withdrawal window (and a return's) runs from the
      * delivery, so these are the rows where it is still open — `order.delivered` above is weeks
      * past it. Standard shipping, so the refund has a delivery charge to give back or keep.
@@ -425,7 +435,7 @@ export const driveShopHistory = async (
     };
     subjects['order.deliveredRecent'] = await deliveredToday();
 
-    /*
+    /**
      * Two lines, delivered today: one single-product order cannot show "part of a line", "the other
      * line" and "the last unit" together. Dog food twice plus one filler unit.
      */
@@ -441,7 +451,7 @@ export const driveShopHistory = async (
         return orderId;
     })();
 
-    /*
+    /**
      * Delivered at the very start of the shop's history, so its withdrawal window closed long ago
      * whatever period a deployment offers: `order.delivered` is only as old as its place in the
      * sequence, which a longer period can put back inside the window. Not in `dated()`: its age is
@@ -468,8 +478,10 @@ export const driveShopHistory = async (
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
     subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
 
-    // Paid and waiting for the warehouse, by EXPRESS: a tracked method, so shipping it needs a
-    // tracking code — the one thing the pickup `order.paid` above can never ask for.
+    /**
+     * Paid and waiting for the warehouse, by EXPRESS: a tracked method, so shipping it needs a
+     * tracking code — the one thing the pickup `order.paid` above can never ask for.
+     */
     subjects['order.paidExpress'] = dated(
         await checkoutAndPay(customer, DOG_FOOD(1), { shippingMethodId: 'express' })
     );
@@ -490,7 +502,7 @@ export const driveShopHistory = async (
     subjects['order.canceled'] = dated(await checkout(customer, DOG_FOOD(2)));
     await cancelOrder(customer, subjects['order.canceled']);
 
-    /*
+    /**
      * Paid, then canceled by the operator: `payments` hears `ORDER_CANCELED` and returns it.
      * The subject is the ORDER's id, not the payment's, because `GET /orders/{id}/payments`
      * is the only way to read a payment back — a payment id would name a row nothing can fetch.
@@ -498,7 +510,7 @@ export const driveShopHistory = async (
     subjects['payment.refunded'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
     await cancelOrder(owner, subjects['payment.refunded']);
 
-    /*
+    /**
      * The soft-deleted order sits on the NON-admin account on purpose: the case it exercises is
      * "the owner cannot see their own soft-deleted order", which ownership-only scoping would
      * wrongly allow and an admin-owned row could never catch.
@@ -508,12 +520,14 @@ export const driveShopHistory = async (
     await cancelOrder(owner, subjects['order.softDeleted']);
     await softDeleteOrder(owner, subjects['order.softDeleted']);
 
-    // Money that arrived at the counter — recorded by hand, settled through the same path a card
-    // payment takes.
+    /**
+     * Money that arrived at the counter — recorded by hand, settled through the same path a card
+     * payment takes.
+     */
     subjects['order.paidOffline'] = dated(await checkout(customer, DOG_FOOD(1)));
     await recordOfflinePayment(owner, subjects['order.paidOffline'], 'cash');
 
-    /*
+    /**
      * The customer's shipped order, placed last of the dated rows so the courier tick above has
      * already been and gone — this is the one parcel in transit. `standard` shipping against a
      * basket well over the free-above threshold, so what it froze is 0 rather than the rate card.
@@ -527,7 +541,7 @@ export const driveShopHistory = async (
     await startProcessing(owner, subjects['order.shipped']);
     await shipOrder(owner, subjects['order.shipped']);
 
-    /*
+    /**
      * The three states splitting an order into shipments adds. Paid by card, so each has a payment
      * behind it; none is delivered, so each is still the shop's to work.
      *
@@ -558,7 +572,7 @@ export const driveShopHistory = async (
     await shipPart(owner, subjects['order.remainderCanceled'], fillerProductId(124), 1);
     await cancelRemainder(customer, subjects['order.remainderCanceled']);
 
-    /*
+    /**
      * An order line resolves its picture LIVE against the catalogue product it still names,
      * never a frozen one — so the branch that matters here is what happened to the CATALOGUE ROW
      * after these were bought, not the order. Three products, three fates, plus one order that
@@ -586,7 +600,7 @@ export const driveShopHistory = async (
     await replaceProductImage(owner, fillerProductId(122));
     await hardDeleteProduct(owner, fillerProductId(123));
 
-    /*
+    /**
      * One delivered order per withdrawal-window state, aged from the period rather than a literal.
      * Shipped by standard, so a withdrawal journey's refund has a delivery charge to give back.
      * Backdating moves `withdrawUntil` by the same days as the delivery, so each keeps its state
@@ -609,12 +623,14 @@ export const driveShopHistory = async (
     // One day past the announced last day is the silent grace day (still open), so closed is two.
     await deliveredForWindow('order.withdrawal-closed', period + 2);
 
-    /*
+    /**
      * The two rows that stay dated TODAY, because both are still holding stock against a
      * deadline: backdating either would leave a hold that expired before the shop opened.
      */
-    // A shopper other than the `customer` account: the unpaid order that is NOT the signed-in
-    // customer's, which an operator may work and a customer must never reach.
+    /**
+     * A shopper other than the `customer` account: the unpaid order that is NOT the signed-in
+     * customer's, which an operator may work and a customer must never reach.
+     */
     subjects['order.otherPending'] = await checkout(shopperFor(base, 'harper'), DOG_FOOD(2));
     subjects['order.awaitingTransfer'] = await checkout(customer, DOG_FOOD(1), {
         paymentMethod: 'bank_transfer'
@@ -628,7 +644,7 @@ export const driveShopHistory = async (
 
     await driveCatalogEdits(owner);
 
-    /*
+    /**
      * Everyone signs out, then the owner bans `marcus` and signs out himself. The ORDER is the
      * point: a ban lands on an account that is no longer holding a session, and the owner is the
      * last one able to act.

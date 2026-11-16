@@ -30,6 +30,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn().mockResolvedValue(undefined)
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /* Only the filesystem-touching `remove` is stubbed; `applyImageWriteback` is a pure mutation. */
@@ -37,6 +38,7 @@ jest.mock('@infrastructure/adapters/image-store', () => ({
     ...jest.requireActual('@infrastructure/adapters/image-store'),
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
+/** The mocked image store, so a case can assert what was removed. */
 const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
     '@infrastructure/adapters/image-store'
 );

@@ -67,7 +67,6 @@ export const lowStockThreshold = (): number => stockConfig().NODE_LOW_STOCK_THRE
  * The path of a product's page on the paired frontend, under the language segment: the
  * `NODE_FRONTEND_LINK_PRODUCT` template with the id filled in and URL-encoded. The sitemap and the
  * back-in-stock mail both point at it, so one setting moves both.
- * @param id - the product's id
  * @returns the path, e.g. `products/65f0`
  */
 export const productPagePath = (id: string): string =>

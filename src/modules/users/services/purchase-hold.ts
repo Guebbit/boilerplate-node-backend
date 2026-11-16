@@ -120,8 +120,10 @@ const notifyBuyer = (
     hold: PurchaseHoldRecord,
     basis?: PurchaseHoldBasis
 ): void => {
-    // Built inside the chain, so even a copy that throws is logged here and never reaches the
-    // caller: by now the hold is stored.
+    /**
+     * Built inside the chain, so even a copy that throws is logged here and never reaches the
+     * caller: by now the hold is stored.
+     */
     void Promise.resolve()
         .then(() => {
             // A stored locale wins; an account that never had one is written to in the deployment's.
@@ -306,8 +308,10 @@ export const takeAutomaticPurchaseHold = (
             targetId: id,
             metadata: { until: until.toISOString() }
         });
-        // Only the winner of a race reaches here, so the buyer is mailed once. A failed read of
-        // the account costs the mail, never the hold.
+        /**
+         * Only the winner of a race reaches here, so the buyer is mailed once. A failed read of
+         * the account costs the mail, never the hold.
+         */
         return userRepository
             .findById(id)
             .then((user) => {

@@ -34,7 +34,6 @@ import { presentFulfillmentOrder } from '../presenter';
  * reviving a dead `paid` event. An order that has none yet answers `[]`: absence is the answer,
  * never a 404.
  *
- * @param orderId - the order
  * @param authContext - the caller; sees only their own, staff see anyone's
  */
 export const listFulfillmentOrdersForOrder = (
@@ -65,7 +64,6 @@ export const listFulfillmentOrdersForOrder = (
  * The shipments cut for one of the caller's orders, each with its own `actions`. Reads only: a
  * shipment cannot exist before its fulfillment order, so there is nothing to make first.
  *
- * @param orderId - the order
  * @param authContext - the caller; sees only their own, staff see anyone's
  */
 export const listShipmentsForOrder = (
@@ -98,7 +96,6 @@ export const listShipmentsForOrder = (
  * The order a fulfillment order belongs to, with no caller's scope — for a notice that must name
  * the order whatever the reader may see.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @returns the order's id, or `undefined` for a missing fulfillment order
  */
 export const orderIdOfFulfillmentOrder = (
@@ -113,7 +110,6 @@ export const orderIdOfFulfillmentOrder = (
  * `PATCH /delivery/shipments/:id` writes. Scoped like the order it belongs to: a buyer reads their
  * own, `display:Order` reads any; someone else's is the same 404 as a missing one.
  *
- * @param shipmentId - the shipment
  * @param authContext - the caller, for the scope and the record's own `actions`
  * @returns the shipment, or the 404 a missing or unseen one earns
  */
@@ -139,7 +135,6 @@ export const getShipment = (
  * One fulfillment order by its own id — the item read of what its four actions answer, scoped
  * like the order behind it (a buyer's own, or any with `display:Order`).
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @param authContext - the caller, for the scope and the record's own `actions`
  * @returns the fulfillment order, or the 404 a missing or unseen one earns
  */
@@ -163,7 +158,6 @@ export const getFulfillmentOrder = (
  * What has shipped from an order, per product — the sum over its fulfillment orders. `returns`
  * gates a return on this: only goods that left can come back.
  *
- * @param orderId - the order
  */
 export const shippedQuantities = (orderId: string): Promise<ProductQuantity[]> =>
     fulfillmentOrderRepository.findByOrderId(orderId).then((all) => {
@@ -190,7 +184,6 @@ export interface RemainderOption {
  * live (the order keeps something to ship); the last live group is the whole order, and that is
  * canceled as an order instead.
  *
- * @param orderId - the order
  * @param shipped - whether anything has shipped from the order (`order.fulfillment.shipped`)
  */
 export const remainderOptions = (orderId: string, shipped: boolean): Promise<RemainderOption[]> =>

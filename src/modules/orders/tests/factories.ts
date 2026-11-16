@@ -184,7 +184,6 @@ export const markOrderPaidAt = (orderId: string, paidAt: Date): Promise<OrderDoc
 /**
  * Set an order's frozen guarantee deadline directly, the way {@link setWithdrawUntil} does for the
  * withdrawal one.
- * @param orderId - the order
  * @param conformityUntil - the deadline to freeze; `undefined` clears it
  */
 export const setConformityUntil = (
@@ -202,7 +201,6 @@ export const setConformityUntil = (
 /**
  * Set an order's frozen withdrawal deadline directly — the state `markDelivered` leaves it in,
  * for a test that needs the window open or closed without running a delivery.
- * @param orderId - the order
  * @param withdrawUntil - the deadline to freeze; `undefined` clears it (the window has not started)
  */
 export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefined): Promise<void> =>
@@ -221,7 +219,6 @@ export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefine
  * schema, so every test that reads a timeline also proves what the writers stored is what the
  * contract says.
  *
- * @param orderId - the order
  * @param authContext - the reader
  */
 export const timelineAs = (
@@ -236,7 +233,6 @@ export const timelineAs = (
  * An order's timeline as an administrator reads it: every row, actor and staff text included,
  * oldest first (see {@link timelineAs}).
  *
- * @param orderId - the order
  * @param typePrefix - keeps only the types starting with it (`refund`, `return_`); every row when omitted
  */
 export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimelineEntry[]> =>
@@ -247,7 +243,6 @@ export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimel
 /**
  * The last `status_overridden` row of an order's timeline, as an administrator reads it.
  *
- * @param orderId - the order
  */
 export const lastOverrideOf = (orderId: string): Promise<OrderTimelineEntry | undefined> =>
     timelineOf(orderId).then((rows) => rows.findLast(({ type }) => type === 'status_overridden'));

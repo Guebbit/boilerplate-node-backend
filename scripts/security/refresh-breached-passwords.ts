@@ -14,7 +14,7 @@
  * Re-run it whenever `PasswordNew`'s pattern changes — nothing else notices that the list has
  * silently under-blocked in the meantime.
  *
- * @see docs/understand/defences/authentication.md
+ * @see docs/understand/defences/authentication.md#guessing-the-credential
  */
 import '@infrastructure/config/dotenv';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -94,7 +94,9 @@ const main = async (): Promise<void> => {
     });
 };
 
-// `undefined`: run by hand, no scheduler (see this file's own docblock) — not a
-// `docker/crontab` job, so it takes no part in the job-health/metric tracking.
+/**
+ * `undefined`: run by hand, no scheduler (see this file's own docblock) — not a
+ * `docker/crontab` job, so it takes no part in the job-health/metric tracking.
+ */
 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, main, () => Promise.resolve());

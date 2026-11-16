@@ -11,7 +11,7 @@
  * `module.yaml` (`rateLimits:`, `jobs:`) are discovered, not listed.
  * `--check` reports a stale file instead of rewriting it.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_3-·-layout
  */
 
 import { readFileSync } from 'node:fs';

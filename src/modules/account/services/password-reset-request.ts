@@ -46,9 +46,11 @@ const resetRecentlySent = (user: UserDocument): Promise<boolean> =>
  * @returns the plaintext token, for the emailed link only
  */
 const issueResetToken = (user: UserDocument): Promise<string> =>
-    // How long a reset link works: how long a stolen mailbox stays useful. Tunable because the safe
-    // direction is SHORTER, and that trade against a user who reads mail on a delay is a
-    // deployment's call, not this file's.
+    /**
+     * How long a reset link works: how long a stolen mailbox stays useful. Tunable because the safe
+     * direction is SHORTER, and that trade against a user who reads mail on a delay is a
+     * deployment's call, not this file's.
+     */
     issueToken(user.id, PASSWORD_RESET_TOKEN_TYPE, accountConfig().NODE_PASSWORD_RESET_TTL_MS);
 
 /**
@@ -66,7 +68,7 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
         if (recent) return false;
 
         return issueResetToken(user).then((token) => {
-            /*
+            /**
              * The account's own language, so the email matches the rest of what this user
              * receives from us rather than the browser that happened to submit the form. The
              * copy is finished before the job is published, so the worker needs no locale.
@@ -111,13 +113,17 @@ export const requestPasswordReset = (
               .then((user) => (user ? mailResetLink(user, context) : false))
         : Promise.resolve(false);
 
-    // Fail closed: a rejected lookup still answers `false` and still records the attempt, so
-    // neither the response nor the trail can be used to tell "no such account" from "something
-    // broke" apart.
+    /**
+     * Fail closed: a rejected lookup still answers `false` and still records the attempt, so
+     * neither the response nor the trail can be used to tell "no such account" from "something
+     * broke" apart.
+     */
     return attempt
         .catch((error: unknown) => {
-            // Swallowed from the CLIENT's side on purpose, never from the operator's: this runs
-            // detached from the response, so a log line is the only place a broken reset path shows.
+            /**
+             * Swallowed from the CLIENT's side on purpose, never from the operator's: this runs
+             * detached from the response, so a log line is the only place a broken reset path shows.
+             */
             logger.error({ message: 'A password reset request failed.', error });
             return false;
         })

@@ -39,8 +39,10 @@ beforeEach(async () => {
 });
 
 afterAll(() => {
-    // Back to the suite's own ceiling (`tests/support/setup-environment.ts`) for any later file in
-    // this worker.
+    /**
+     * Back to the suite's own ceiling (`tests/support/setup-environment.ts`) for any later file in
+     * this worker.
+     */
     configureMongoose();
 });
 
@@ -61,8 +63,10 @@ describe('maxTimeMS', () => {
         );
     });
 
-    // The wiring the model-only cases above never reach: the real driver error, through the one
-    // function that decides the answer.
+    /**
+     * The wiring the model-only cases above never reach: the real driver error, through the one
+     * function that decides the answer.
+     */
     it('answers a killed query 503, through the real error interpreter', async () => {
         configureMongoose(150);
 

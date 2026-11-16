@@ -15,15 +15,19 @@ import {
     registerSsrfExemptOrigin
 } from '@infrastructure/adapters/ssrf-exemptions';
 
-// `resolve4`/`resolve6` are mocked so DNS resolution inside `deliverWebhook`'s own SSRF check is
-// deterministic — this suite must never depend on what a real DNS server answers.
+/**
+ * `resolve4`/`resolve6` are mocked so DNS resolution inside `deliverWebhook`'s own SSRF check is
+ * deterministic — this suite must never depend on what a real DNS server answers.
+ */
 jest.mock('node:dns/promises', () => ({
     resolve4: jest.fn(),
     resolve6: jest.fn()
 }));
 
-// The redirect-chain case below drives `deliverWebhook` end to end EXCEPT the actual socket —
-// `node:https` itself is mocked so a simulated 3xx never needs a real server to answer it.
+/**
+ * The redirect-chain case below drives `deliverWebhook` end to end EXCEPT the actual socket —
+ * `node:https` itself is mocked so a simulated 3xx never needs a real server to answer it.
+ */
 jest.mock('node:https', () => ({ request: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- mocked module, requiring the mock's own jest.fn()s to configure per-test resolved addresses
@@ -72,14 +76,18 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
     it('does not chase a 3xx Location header to a second request', async () => {
         mockDns(['93.184.215.9']);
 
-        // `httpsRequest` resolves to `jest.fn()` under the `jest.mock('node:https', …)` above —
-        // typed as the real export so the mock still shows up under `node:https`'s own signature.
+        /**
+         * `httpsRequest` resolves to `jest.fn()` under the `jest.mock('node:https', …)` above —
+         * typed as the real export so the mock still shows up under `node:https`'s own signature.
+         */
         const mockedRequest = httpsRequest as jest.Mock;
         mockedRequest.mockImplementation(
             (_options: unknown, callback: (response: unknown) => void) => {
-                // `EventEmitter`, not `EventTarget`: this stands in for a real `node:http`
-                // `IncomingMessage`/`ClientRequest`, and Node's own HTTP stack is EventEmitter-based —
-                // an `EventTarget` double would not match what `webhook-delivery.ts` actually calls.
+                /**
+                 * `EventEmitter`, not `EventTarget`: this stands in for a real `node:http`
+                 * `IncomingMessage`/`ClientRequest`, and Node's own HTTP stack is EventEmitter-based —
+                 * an `EventTarget` double would not match what `webhook-delivery.ts` actually calls.
+                 */
                 // eslint-disable-next-line unicorn/prefer-event-target -- mocking Node's own EventEmitter-based HTTP API, not writing new code
                 const response = new EventEmitter() as EventEmitter & {
                     statusCode: number;

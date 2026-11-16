@@ -32,8 +32,10 @@ export const headingSlugs = (markdown: string): Set<string> => {
         if (!heading) continue;
 
         const explicit = /\{#([^}\s]+)\}\s*$/.exec(heading)?.[1];
-        // The title VitePress slugs is the heading's text: link targets, code ticks and
-        // emphasis marks are not part of it.
+        /**
+         * The title VitePress slugs is the heading's text: link targets, code ticks and
+         * emphasis marks are not part of it.
+         */
         const text = heading
             .replace(/\{#[^}\s]+\}\s*$/, '')
             .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -105,3 +107,27 @@ export const deadCodeCitations = (root: string, files: string[]): string[] => {
 
     return dead;
 };
+
+/** A docblock `@see` line that names a page and no `#anchor`. */
+const ANCHORLESS_SEE = /^\s*\*\s*@see\s+(docs\/\S+?\.md)(?:\s|$)/;
+
+/**
+ * Every docblock `@see docs/<page>.md` with no `#anchor`: the link opens the page at its top and
+ * says nothing about which section answers the declaration. JS and TS only, since YAML and
+ * `.env-example` keep the prose `# See:` form.
+ *
+ * @param root - repository root the file names are relative to
+ * @param files - every file git tracks, relative to `root`
+ * @returns one `file:line: page` entry per anchorless tag, in file order
+ */
+export const anchorlessSeeTags = (root: string, files: string[]): string[] =>
+    files
+        .filter((file) => /\.[cm]?[jt]s$/.test(file) && isCitingFile(file))
+        .flatMap((file) =>
+            readFileSync(path.join(root, file), 'utf8')
+                .split('\n')
+                .flatMap((line, index) => {
+                    const page = ANCHORLESS_SEE.exec(line)?.[1];
+                    return page ? [`${file}:${String(index + 1)}: ${page}`] : [];
+                })
+        );

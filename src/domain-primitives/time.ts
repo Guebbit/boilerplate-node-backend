@@ -64,9 +64,11 @@ export const oneCalendarMonthLaterUtc = (instant: Date): Date => {
  * @returns the day, sortable as text
  */
 export const dayInZone = (instant: Date, timeZone: string): string => {
-    // Intl: `2-digit` month and day keep the key sortable; `gregory` and `latn` pin the calendar
-    // and digits; the parts come back in the host locale's order, so each is read by its type.
-    // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+    /**
+     * Intl: `2-digit` month and day keep the key sortable; `gregory` and `latn` pin the calendar
+     * and digits; the parts come back in the host locale's order, so each is read by its type.
+     * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+     */
     const parts = new Intl.DateTimeFormat('en', {
         timeZone,
         year: 'numeric',
@@ -133,7 +135,6 @@ const wallClockAsUtc = (instant: Date, timeZone: string): number => {
  * that does not exist (a zone that springs forward AT midnight) lands on the first instant after
  * the gap.
  *
- * @param year - the year
  * @param month - 1 to 12
  * @param day - the day of the month
  * @param timeZone - canonical IANA zone name
@@ -150,9 +151,11 @@ export const zonedStartOfDay = (
         wallClockAsUtc(new Date(instant), timeZone) - Math.floor(instant / 1000) * 1000;
     const guess = wall - offsetAt(wall);
     const corrected = wall - offsetAt(guess);
-    // A midnight skipped by a spring-forward has no right answer in either candidate's own
-    // offset: one of them lands on the previous day. The earliest one that reads as the requested
-    // day is the first instant after the gap.
+    /**
+     * A midnight skipped by a spring-forward has no right answer in either candidate's own
+     * offset: one of them lands on the previous day. The earliest one that reads as the requested
+     * day is the first instant after the gap.
+     */
     const requested = dayInZone(new Date(wall), 'UTC');
     return new Date(
         [guess, corrected]

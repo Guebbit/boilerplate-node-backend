@@ -44,8 +44,10 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
     // `express.json`'s `verify` hook keeps the buffer for this route alone (see `app/security.ts`).
     const { rawBody, headers } = request;
     if (!rawBody) {
-        // Only a body that WAS sent and still left no buffer means the ordering changed (every
-        // signature would now fail to verify); an empty request is a plain 400, no alarm.
+        /**
+         * Only a body that WAS sent and still left no buffer means the ordering changed (every
+         * signature would now fail to verify); an empty request is a plain 400, no alarm.
+         */
         // Stryker disable all
         if (!sentNoBody(headers))
             logger.error({
@@ -68,14 +70,18 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 return;
             }
             if (error instanceof WebhookRejected) {
-                // `error.message` IS the reason — 'Malformed signature header', 'Signature
-                // timestamp outside tolerance', 'Signature does not match', 'Body is not valid
-                // JSON', or 'Event carries no id'. A fixed headline here would be right for one of
-                // those and a guess for the other four.
+                /**
+                 * `error.message` IS the reason — 'Malformed signature header', 'Signature
+                 * timestamp outside tolerance', 'Signature does not match', 'Body is not valid
+                 * JSON', or 'Event carries no id'. A fixed headline here would be right for one of
+                 * those and a guess for the other four.
+                 */
                 // Stryker disable next-line all
                 logger.warn({ message: `Payment webhook rejected: ${error.message}` });
-                // Only a signature that fails to verify is an attack; a provider's own malformed
-                // event is a fault on their side and stays a log line.
+                /**
+                 * Only a signature that fails to verify is an attack; a provider's own malformed
+                 * event is a fault on their side and stays a log line.
+                 */
                 if (error.signatureFailure)
                     recordSecurityEvent(
                         callerContextOf(request),
@@ -85,8 +91,10 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);
                 return;
             }
-            // Anything else is ours, and a 500 is the right answer: the provider retries, and a
-            // transient database failure is exactly what a retry fixes.
+            /**
+             * Anything else is ours, and a 500 is the right answer: the provider retries, and a
+             * transient database failure is exactly what a retry fixes.
+             */
             catchAs(response, 'postPaymentWebhook')(error);
         });
 };

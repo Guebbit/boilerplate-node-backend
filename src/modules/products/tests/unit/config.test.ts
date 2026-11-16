@@ -38,7 +38,7 @@ describe('the VAT rate boot gate', () => {
         );
     });
 
-    /*
+    /**
      * `.5` and `1e-1` both coerce to an in-range number under a bare `Number(raw)` — 0.5 and 0.1
      * respectively — which is exactly the bug this gate must not repeat: `vatRateDefault` reads
      * through the `decimal` field's stricter grammar and would silently fall back to 0.22

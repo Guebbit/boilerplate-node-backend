@@ -215,7 +215,6 @@ export const ageTokenSend = (
  * rule without waiting for it.
  *
  * @param userId - the account
- * @param type - the kind
  */
 export const removeTokensOfKind = (userId: string, type: VerificationTokenType): Promise<void> =>
     verificationTokenRepository.removeOfTypes(userId, [type]);
@@ -265,8 +264,10 @@ export const mintSession = (
         headers: {},
         get: () => undefined
     });
-    // `bearer` transport: `cookie` mode returns the id in the result; `jwt` mode ignores it,
-    // returns its access token and puts the refresh token on the cookie stub above.
+    /**
+     * `bearer` transport: `cookie` mode returns the id in the result; `jwt` mode ignores it,
+     * returns its access token and puts the refresh token on the cookie stub above.
+     */
     return activeStrategy()
         .issue(request, response, userId, {
             transport: 'bearer',

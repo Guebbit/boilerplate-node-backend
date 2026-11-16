@@ -4,7 +4,7 @@
  * in records the sender's account; an anonymous one only the address typed. The export and the
  * erasure take both (see `./domain/ownership`). Announces `task.opened` / `task.assigned`; `notifications` does the telling. Opens and closes system tasks from other modules' events (`./services/system`).
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -30,15 +30,19 @@ export default {
     personalData: [
         {
             section: 'tasks',
-            // Always an array: the section is required in the contract. The set is the one
-            // `erase` removes (`./domain/ownership`).
+            /**
+             * Always an array: the section is required in the contract. The set is the one
+             * `erase` removes (`./domain/ownership`).
+             */
             collect: (subject) => taskService.findOwnTasksForExport(subject),
             // Inside the hard-delete transaction only, never at the reversible lock.
             erase: (subject, session) => taskService.eraseOwnTasks(subject, session)
         },
         {
-            // The tasks the system opened about the person, staff ids withheld. Erased by the
-            // first section's hook, which owns the whole collection.
+            /**
+             * The tasks the system opened about the person, staff ids withheld. Erased by the
+             * first section's hook, which owns the whole collection.
+             */
             section: 'systemTasks',
             collect: (subject) => taskService.findSystemTasksForExport(subject)
         }

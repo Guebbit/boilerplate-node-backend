@@ -5,7 +5,7 @@
  *
  * Why here: an instrumentation's own options cannot stop it, and a Collector processor only
  * protects deployments that run ours. This is the last place before a span leaves the process.
- * @see docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md#who-may-name-a-trace
  */
 
 import type { Attributes } from '@opentelemetry/api';
@@ -48,8 +48,10 @@ const scrubSpan = (span: ReadableSpan): ReadableSpan => {
         get: (target, property) => {
             if (property === 'events') return events;
             if (property === 'status') return status;
-            // `Reflect.get` answers `any`; widened to `unknown` so the proxy passes it on
-            // unexamined.
+            /**
+             * `Reflect.get` answers `any`; widened to `unknown` so the proxy passes it on
+             * unexamined.
+             */
             return Reflect.get(target, property) as unknown;
         }
     });

@@ -23,16 +23,20 @@ export const router = Router();
 // Resolve the session for every route below; each route then says whether it needs one (`isAuth`).
 router.use(getAuth);
 
-// Credentials and identity-adjacent data: never cacheable — same reasoning as account's own
-// router.use(noStore).
+/**
+ * Credentials and identity-adjacent data: never cacheable — same reasoning as account's own
+ * router.use(noStore).
+ */
 router.use(noStore);
 
 // GET /account/addresses — the caller's address book (requires auth)
 router.get('/addresses', isAuth, getAddresses);
 
-// POST /account/addresses — add an entry (requires auth). `idempotencyKey` after the auth check:
-// a retry after a lost answer replays the entry instead of writing a duplicate and burning a slot
-// of the book's cap.
+/**
+ * POST /account/addresses — add an entry (requires auth). `idempotencyKey` after the auth check:
+ * a retry after a lost answer replays the entry instead of writing a duplicate and burning a slot
+ * of the book's cap.
+ */
 router.post('/addresses', isAuth, idempotencyKey, postAddress);
 
 // GET /account/addresses/:addressId — one entry of the caller's own book (requires auth)
@@ -44,8 +48,10 @@ router.put('/addresses/:addressId', isAuth, replaceAddress);
 // PATCH /account/addresses/:addressId — merge the fields sent (requires auth)
 router.patch('/addresses/:addressId', isAuth, updateAddress);
 
-// PUT /account/addresses/:addressId/default — make it the book's default (requires auth). The
-// pointer is the book's, not one address's, so it is an action of its own rather than a field.
+/**
+ * PUT /account/addresses/:addressId/default — make it the book's default (requires auth). The
+ * pointer is the book's, not one address's, so it is an action of its own rather than a field.
+ */
 router.put('/addresses/:addressId/default', isAuth, putAddressDefault);
 
 // DELETE /account/addresses/:addressId — remove an entry (requires auth)

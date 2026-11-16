@@ -22,6 +22,7 @@ import amqplib from 'amqplib';
 import { retryUntil } from '@tests/eventually';
 import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
 
+/** Container image the throwaway broker runs; overridable for an air-gapped host. */
 const IMAGE = process.env.NODE_TEST_RABBITMQ_IMAGE ?? 'docker.io/library/rabbitmq:4-management';
 
 /** Credentials of the image's built-in user; both the container and CI use it. */

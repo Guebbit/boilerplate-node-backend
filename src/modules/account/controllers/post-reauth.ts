@@ -43,7 +43,7 @@ export const postReauth = (
                 return;
             }
 
-            /*
+            /**
              * Unlike `postPasswordChange`'s own re-mint step, nothing durable has happened yet —
              * `accountService.reauth` only compared the password, it wrote nothing and revoked no
              * session. A failed re-mint here means the WHOLE point of this endpoint (a fresh

@@ -9,7 +9,7 @@
  * through this module's own `personalData.erase` hook below — neither an import, keeping the
  * import graph acyclic.
  *
- * @see docs/modules/cart.md
+ * @see docs/modules/cart.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -30,9 +30,11 @@ export default {
     personalData: [
         {
             section: 'cart',
-            // Stripped to the stored line, not the joined product: the product's own name/price
-            // is catalogue data, not the caller's, and the shared `CartItem` contract this maps
-            // onto is `additionalProperties: false`.
+            /**
+             * Stripped to the stored line, not the joined product: the product's own name/price
+             * is catalogue data, not the caller's, and the shared `CartItem` contract this maps
+             * onto is `additionalProperties: false`.
+             */
             collect: (subject) =>
                 cartService
                     .get(subject.userId)
@@ -44,8 +46,10 @@ export default {
         }
     ],
     subscribe: () => {
-        // Skipped for a product that is live again: a retried delivery can arrive after a
-        // restore, and pulling the line would tell a shopper "removed" about a product on sale.
+        /**
+         * Skipped for a product that is live again: a retried delivery can arrive after a
+         * restore, and pulling the line would tell a shopper "removed" about a product on sale.
+         */
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
             productService
                 .isLive(productId)

@@ -58,7 +58,7 @@ describe('GET /locales', () => {
         expect(response.body.fallback).toBe(getFallbackLocale());
     });
 
-    /*
+    /**
      * The distinction the whole manifest exists to express. A client seeing `pt` must be able to
      * tell that it may DOWNLOAD a Portuguese dictionary and may NOT expect Portuguese error
      * messages — those are different questions, and a flat list of tags answers neither.
@@ -140,9 +140,11 @@ describe('GET /locales/:locale/dictionary', () => {
         expect(response.body.locale).toBe('it');
         // The shared half — `generic.*` in particular, which the paired frontend reads by name.
         expect(response.body.messages).toMatchObject(itTranslation);
-        // The module half: a client rendering API copy needs domain messages on the wire too, not
-        // just i18next's in-memory resources. Asserted as "extra namespaces" rather than by name,
-        // since this test doesn't know which modules exist.
+        /**
+         * The module half: a client rendering API copy needs domain messages on the wire too, not
+         * just i18next's in-memory resources. Asserted as "extra namespaces" rather than by name,
+         * since this test doesn't know which modules exist.
+         */
         const shared = new Set(Object.keys(itTranslation));
         const contributed = Object.keys(response.body.messages as Record<string, unknown>).filter(
             (namespace) => !shared.has(namespace)
@@ -158,7 +160,7 @@ describe('GET /locales/:locale/dictionary', () => {
         expect(response.type).toBe('application/problem+json');
     });
 
-    /*
+    /**
      * Registering a language in the database must NOT make this endpoint answer for it. This is
      * the tier boundary stated as a test: the API's own copy comes from deployed files, and the
      * day it starts coming from a store is the day it stops being available in the outage it
@@ -410,7 +412,7 @@ describe('POST /locales', () => {
         expect(response.body.tag).toBe('pt-BR');
     });
 
-    /*
+    /**
      * Found by the fuzz suite: a single space satisfies `minLength: 1`, then trims to empty at a
      * column declared `required`, and Mongoose's ValidationError answered 500 for a stray space.
      * JSON Schema can't express "non-empty after trim", so the check lives in the controller.
@@ -470,8 +472,10 @@ describe('PUT /locales/:locale', () => {
         expect(response.status).toBe(422);
     });
 
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's three fields has
-    // a legal "cleared" state, so all three are required.
+    /**
+     * A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's three fields has
+     * a legal "cleared" state, so all three are required.
+     */
     it('refuses a PUT body missing a required field', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
@@ -496,8 +500,10 @@ describe('PUT /locales/:locale', () => {
     });
 
     it('422s on a whitespace-only name, the same as the create route', async () => {
-        // Asserted on both routes because they parse separately: fixing one and not the other is
-        // the shape this defect had in the first place.
+        /**
+         * Asserted on both routes because they parse separately: fixing one and not the other is
+         * the shape this defect had in the first place.
+         */
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
@@ -766,8 +772,10 @@ describe('GET /locales/:locale/entries', () => {
         expect(response.body.items).toHaveLength(0);
     });
 
-    // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
-    // while every other search endpoint answers 422 for the very same request.
+    /**
+     * Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
+     * while every other search endpoint answers 422 for the very same request.
+     */
     it.each(['pageSize=500', 'page=0'])(
         'rejects out-of-range pagination like every other search endpoint (%s)',
         async (queryString) => {
@@ -845,7 +853,7 @@ describe('POST /locales/:locale/apps/:app/entries', () => {
         expect(response.status).toBe(409);
     });
 
-    /*
+    /**
      * The collision, refused at write time. Left to the read, this pair produces a dictionary
      * silently missing one of the two strings — and which one depends on insertion order.
      */
@@ -1225,9 +1233,11 @@ describe('a locale only the API has', () => {
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        // The expected copy is read from the MERGED dictionary rather than imported from the
-        // module that ships it: this spec is about locale negotiation, and it should not be the
-        // thing that breaks when a domain it merely borrows an endpoint from is deleted.
+        /**
+         * The expected copy is read from the MERGED dictionary rather than imported from the
+         * module that ships it: this spec is about locale negotiation, and it should not be the
+         * thing that breaks when a domain it merely borrows an endpoint from is deleted.
+         */
         const italian = translator('it');
 
         expect(response.body.errors.map(({ message }: { message: string }) => message)).toContain(
@@ -1237,7 +1247,7 @@ describe('a locale only the API has', () => {
         );
     });
 
-    /*
+    /**
      * And the other half of the one-pick rule: a language that exists only in the database is
      * answered in once it is switched on. `Content-Language` names the audience the answer is
      * written for; the API's own messages have no Portuguese wording, so each falls back to the

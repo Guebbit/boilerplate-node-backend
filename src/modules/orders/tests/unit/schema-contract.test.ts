@@ -23,24 +23,30 @@ import {
 
 describe('orderSchema — what an order must carry', () => {
     it('requires the contact address, the frozen currency and the order number, and nothing else', () => {
-        // A set, not a list of individual checks: this fails if a `required` is REMOVED (rows
-        // start persisting with no address) and equally if one is ADDED (writes a client was
-        // allowed to make start being rejected). Both are breaking, in opposite directions.
-        // `userId` is deliberately absent — account erasure unsets it, so the schema cannot
-        // claim it is always there.
+        /**
+         * A set, not a list of individual checks: this fails if a `required` is REMOVED (rows
+         * start persisting with no address) and equally if one is ADDED (writes a client was
+         * allowed to make start being rejected). Both are breaking, in opposite directions.
+         * `userId` is deliberately absent — account erasure unsets it, so the schema cannot
+         * claim it is always there.
+         */
         expect(requiredPaths(orderSchema)).toEqual(['currency', 'email', 'orderNumber']);
     });
 
     it('stores the owner as an ObjectId, not a string', () => {
-        // `$match` inside an aggregation applies no schema casting, so a string here matches zero
-        // documents and reads as "you have no orders" rather than as an error. Same reasoning as
-        // `orderService.callerScope`, at the other end.
+        /**
+         * `$match` inside an aggregation applies no schema casting, so a string here matches zero
+         * documents and reads as "you have no orders" rather than as an error. Same reasoning as
+         * `orderService.callerScope`, at the other end.
+         */
         expect(typeOf(orderSchema, 'userId')).toBe('ObjectId');
     });
 
     it('leaves notes, shipping method and the soft-delete marker optional', () => {
-        // Each absence means something: no note, no delivery chosen, not deleted. A `required`
-        // added to any of them makes ordinary orders unsaveable.
+        /**
+         * Each absence means something: no note, no delivery chosen, not deleted. A `required`
+         * added to any of them makes ordinary orders unsaveable.
+         */
         for (const path of ['notes', 'shippingMethod', 'deletedAt'])
             expect(requiredPaths(orderSchema)).not.toContain(path);
     });
@@ -61,17 +67,21 @@ describe('orderSchema — status', () => {
     });
 
     it('starts an order as pending', () => {
-        // The default is the whole of "a new order has not been paid for". Without it a status is
-        // `undefined` and every lifecycle check compares against nothing.
+        /**
+         * The default is the whole of "a new order has not been paid for". Without it a status is
+         * `undefined` and every lifecycle check compares against nothing.
+         */
         expect(defaultOf(orderSchema, 'status')).toBe(OrderStatus.pending);
     });
 });
 
 describe('orderSchema — money', () => {
     it('leaves shipping cost absent rather than defaulting it, matching `shippingMethod`', () => {
-        // Both absent together when no method was chosen — `openapi.yaml`'s stated contract.
-        // `orderTotal`'s `asMoney` already turns an absent value into 0 for the total, so this
-        // schema does not need to invent one to keep the total correct.
+        /**
+         * Both absent together when no method was chosen — `openapi.yaml`'s stated contract.
+         * `orderTotal`'s `asMoney` already turns an absent value into 0 for the total, so this
+         * schema does not need to invent one to keep the total correct.
+         */
         expect(defaultOf(orderSchema, 'shippingCost')).toBeUndefined();
     });
 
@@ -84,9 +94,11 @@ describe('orderSchema — money', () => {
 
 describe('orderSchema — the embedded snapshots', () => {
     it('gives order items no _id of their own', () => {
-        // `_id: true` would add an ObjectId to every line of every order — changing what is
-        // stored and what is serialized — and the shared `OrderItem` contract is
-        // `additionalProperties: false`, so the extra field is a contract violation too.
+        /**
+         * `_id: true` would add an ObjectId to every line of every order — changing what is
+         * stored and what is serialized — and the shared `OrderItem` contract is
+         * `additionalProperties: false`, so the extra field is a contract violation too.
+         */
         expect(optionsOf(subSchema(orderSchema, 'items'))._id).toBe(false);
     });
 
@@ -95,10 +107,12 @@ describe('orderSchema — the embedded snapshots', () => {
     });
 
     it('keeps the catalogue index definitions out of the order collection', () => {
-        // Mongoose copies an embedded schema's indexes onto whatever embeds it. The line item's
-        // product is `orderLineProductSchema`, not the catalogue's own `productSchema` —
-        // declares no index of its own, so there is nothing for a write here to inherit and
-        // maintain against `items.product.*`.
+        /**
+         * Mongoose copies an embedded schema's indexes onto whatever embeds it. The line item's
+         * product is `orderLineProductSchema`, not the catalogue's own `productSchema` —
+         * declares no index of its own, so there is nothing for a write here to inherit and
+         * maintain against `items.product.*`.
+         */
         expect(indexSpecs(subSchema(subSchema(orderSchema, 'items'), 'product'))).toEqual([]);
         // And the proof it worked: no order index mentions the embedded product.
         expect(indexSpecs(orderSchema).filter((spec) => spec.includes('items.'))).toEqual([]);
@@ -128,9 +142,11 @@ describe('orderSchema — the embedded snapshots', () => {
 
 describe('orderSchema — indexes', () => {
     it('declares exactly the nine documented indexes, named and directed', () => {
-        // Names are given rather than derived, since Mongo identifies an index by name — a rename
-        // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
-        // from the index rather than an in-memory sort; getting it wrong is a latency incident.
+        /**
+         * Names are given rather than derived, since Mongo identifies an index by name — a rename
+         * leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
+         * from the index rather than an in-memory sort; getting it wrong is a latency incident.
+         */
         expect(indexSpecs(orderSchema)).toEqual([
             'orders_createdAt: createdAt+1',
             'orders_email: email+1',
@@ -145,10 +161,12 @@ describe('orderSchema — indexes', () => {
     });
 
     it('declares one unique index, the receipt number, and the two sparse ones sparse', () => {
-        // Unique on `orderNumber` only: a receipt number names one order. A unique index on any
-        // other key would reject a customer's second order, so every other one stays plain.
-        // Both sparse indexes are sparse on purpose: most orders never carry either field, and a
-        // dense index would hold every row's absence forever.
+        /**
+         * Unique on `orderNumber` only: a receipt number names one order. A unique index on any
+         * other key would reject a customer's second order, so every other one stays plain.
+         * Both sparse indexes are sparse on purpose: most orders never carry either field, and a
+         * dense index would hold every row's absence forever.
+         */
         expect(indexOptionSpecs(orderSchema)).toEqual([
             'orders_createdAt: (none)',
             'orders_email: (none)',
@@ -165,8 +183,10 @@ describe('orderSchema — indexes', () => {
 
 describe('orderSchema — options', () => {
     it('keeps createdAt and updatedAt', () => {
-        // Every "recent first" ordering in the app, and the compound index above, depend on
-        // `createdAt` actually being written.
+        /**
+         * Every "recent first" ordering in the app, and the compound index above, depend on
+         * `createdAt` actually being written.
+         */
         expect(optionsOf(orderSchema).timestamps).toBe(true);
     });
 });

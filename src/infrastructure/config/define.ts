@@ -8,7 +8,7 @@
  * layer's unit; the boot gate (`assertConfigIn`) validates every slice at once and lists every
  * mistake, not the first one.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#the-standard
  */
 
 import type { Field, Presence } from './fields';
@@ -140,7 +140,6 @@ const decodedBytes = (member: string): number => {
  * Whether a presence rule is broken: a comma-separated value is checked member by member, so a
  * placeholder or a truncated key anywhere in a ring still refuses.
  *
- * @param rule - the presence rule
  * @param raw - the raw value
  */
 const presenceBroken = (rule: Presence, raw: string | undefined): boolean => {
@@ -169,7 +168,6 @@ const describeShape = (shape: Shape): FieldInfo[] =>
  * Parses every field of a shape.
  *
  * @param shape - the fields
- * @param environment - the environment
  * @returns the typed values, or every shape issue
  */
 const parseShape = <TShape extends Shape>(
@@ -183,8 +181,10 @@ const parseShape = <TShape extends Shape>(
         if (parsed.ok) values[name] = parsed.value;
         else issues.push(parsed.issue);
     }
-    // `as`: each entry was parsed by its own field, which is what `Parsed<TShape>` says; the compiler
-    // cannot follow a loop over `Object.entries` back to the mapped type.
+    /**
+     * `as`: each entry was parsed by its own field, which is what `Parsed<TShape>` says; the compiler
+     * cannot follow a loop over `Object.entries` back to the mapped type.
+     */
     return issues.length > 0
         ? { ok: false, issues }
         : { ok: true, value: Object.freeze(values) as Parsed<TShape> };
@@ -207,7 +207,6 @@ export interface ConfigDefinition<TShape extends Shape> {
  * Presence problems for one shape outside `NODE_ENV=test`.
  *
  * @param info - the fields
- * @param environment - the environment
  */
 const presenceProblems = (
     info: readonly FieldInfo[],
@@ -254,8 +253,10 @@ export const defineConfig = <TShape extends Shape>(
         }
     };
 
-    // The parsed values and the store version they were parsed at. A refusal is never kept, so a
-    // bad value throws on every read until it is fixed.
+    /**
+     * The parsed values and the store version they were parsed at. A refusal is never kept, so a
+     * bad value throws on every read until it is fixed.
+     */
     let memo: { version: number; value: Parsed<TShape> } | undefined;
     const read = (): Parsed<TShape> => {
         const version = environmentVersion();
@@ -270,8 +271,10 @@ export const defineConfig = <TShape extends Shape>(
         return parsed.value;
     };
 
-    // A cross-slice check reads this slice through here, never through raw variables, so one
-    // variable has one parser.
+    /**
+     * A cross-slice check reads this slice through here, never through raw variables, so one
+     * variable has one parser.
+     */
     const readIn = (environment: Environment): Parsed<TShape> | undefined => {
         const parsed = parseShape(definition.shape, environment);
         return parsed.ok ? parsed.value : undefined;
@@ -284,15 +287,16 @@ export const defineConfig = <TShape extends Shape>(
  * Every problem across every slice, grouped the way the boot error is worded.
  *
  * @param slices - the slices to judge
- * @param environment - the environment
  */
 const configProblems = (
     slices: readonly ConfigSlice[],
     environment: Environment
 ): { [K in keyof SliceProblems]: string[] } => {
     const all = slices.map((slice) => slice.inspect(environment));
-    // A variable two slices both declare (an adapter's read, a module's presence rule) is one
-    // mistake, however many slices see it.
+    /**
+     * A variable two slices both declare (an adapter's read, a module's presence rule) is one
+     * mistake, however many slices see it.
+     */
     const merged = (pick: (problems: SliceProblems) => string[]): string[] => [
         ...new Set(all.flatMap((problems) => pick(problems)))
     ];
@@ -308,7 +312,6 @@ const configProblems = (
  * deployment names all its mistakes instead of one per restart.
  *
  * @param slices - the slices to judge
- * @param environment - the environment
  * @throws {ConfigError} when anything is wrong
  */
 export const assertConfigIn = (slices: readonly ConfigSlice[], environment: Environment): void => {
@@ -347,8 +350,10 @@ const probe = (resolve: () => unknown): string[] => {
         resolve();
         return [];
     } catch (error) {
-        // A resolver here always throws a real Error — the fallback is for one that does not, so
-        // this can never come back empty.
+        /**
+         * A resolver here always throws a real Error — the fallback is for one that does not, so
+         * this can never come back empty.
+         */
         return [error instanceof Error && error.message ? error.message : 'Unknown selector'];
     }
 };

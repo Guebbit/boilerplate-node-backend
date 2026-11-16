@@ -37,6 +37,7 @@ import { flagValue } from '../cli';
 /**
  * The `--since` time, or a thrown usage error. An unreadable date must stop the run: guessing one
  * would replay the wrong window of erasures.
+ * @throws {Error} when `--since` is missing or unreadable
  */
 const requiredSince = (): Date => {
     const value = flagValue('since');
@@ -92,7 +93,9 @@ const main = (): Promise<void> => {
     });
 };
 
-// Entry point: no job name, because this is run by hand after a restore, never on a schedule.
-// See `scripts/run-script.ts`.
+/**
+ * Entry point: no job name, because this is run by hand after a restore, never on a schedule.
+ * See `scripts/run-script.ts`.
+ */
 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, main, () => Promise.all([stopDatabase(), stopQueue()]));

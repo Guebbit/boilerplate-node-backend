@@ -113,8 +113,10 @@ const firstId = (path: string, bearer: string): Promise<string> =>
 const seedShop = async () => {
     const victim = await authenticateAs('user');
     const attacker = await authenticateAsRole('customer');
-    // A third customer who only checks out: a checkout that succeeds leaves an unpaid order, and
-    // an account may hold few (`NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`), which B's own do use up.
+    /**
+     * A third customer who only checks out: a checkout that succeeds leaves an unpaid order, and
+     * an account may hold few (`NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`), which B's own do use up.
+     */
     const shopperUser = await createUser(
         { email: 'shopper@example.com', username: 'shopper', verifiedAt: new Date() },
         'customer'
@@ -182,8 +184,8 @@ const watching = (world: ShopWorld) => () => {
  *
  * @param key - the `OWNED_PATH` key; its first word is the verb
  * @param victim - A's value for each `:param`
- * @param body - a minimal valid body for a write; a 422 would mean the lookup was never reached
  * @param attacker - B
+ * @param body - a minimal valid body for a write; a 422 would mean the lookup was never reached
  */
 const pathCase = (
     key: string,
@@ -433,8 +435,10 @@ const shopFilterCases = async (world: ShopWorld): Promise<OwnedCase[]> => {
             controlPassed: found
         };
     };
-    // An `id` filter narrows. A `userId` filter is ignored for a caller without `display:Order`
-    // (`honourUserIdFilter`), so the page is the caller's own, and must hold none of A's.
+    /**
+     * An `id` filter narrows. A `userId` filter is ignored for a caller without `display:Order`
+     * (`honourUserIdFilter`), so the page is the caller's own, and must hold none of A's.
+     */
     const narrows = { status: 200, emptyPage: true };
     const ignored = { status: 200, without: world.orderId };
     return [

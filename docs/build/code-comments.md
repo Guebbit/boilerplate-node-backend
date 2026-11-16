@@ -11,12 +11,12 @@ editor reads the same rules a developer does.
 
 ## The form, at a glance
 
-| Rule                     | What it says                                                                                                                                                                                                           | Enforced by                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Which comments are JSDoc | Every function's comment, whatever its size, and every comment longer than one line. A one-line `//` inside a body stays a `//`. Declarations (top-level, class members, object members, options bags) get a docblock. | `jsdoc/require-jsdoc` (`publicOnly`, `warn`) for exports; the rest is the comments audit |
-| Tags                     | As needed: write a tag when it says what the type cannot (a unit, a range, what `undefined` means, a side effect, what it throws). `@param id the id` is noise.                                                        | `jsdoc/check-param-names`, `jsdoc/check-tag-names`                                       |
-| Link to a page           | `@see docs/<page>.md#<anchor>`, one tag per target, after the prose and before the other block tags. Never the prose `See:` in a JS/TS comment (`.env-example` and YAML keep `# See:`).                                | `check-references` sweeps the target and its anchor                                      |
-| A page owns the topic    | Link it, do not retell it.                                                                                                                                                                                             | The comments audit (a report-only skill)                                                 |
+| Rule                     | What it says                                                                                                                                                                                                           | Enforced by                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Which comments are JSDoc | Every function's comment, whatever its size, and every comment longer than one line. A one-line `//` inside a body stays a `//`. Declarations (top-level, class members, object members, options bags) get a docblock. | `jsdoc/require-jsdoc` on every top-level declaration; the rest is the comments audit |
+| Tags                     | As needed: write a tag when it says what the type cannot (a unit, a range, what `undefined` means, a side effect, what it throws). `@param id the id` is noise.                                                        | `jsdoc/check-param-names`, `check-tag-names`, `require-throws`, `informative-docs`   |
+| Link to a page           | `@see docs/<page>.md#<anchor>`, one tag per target, after the prose and before the other block tags. Never the prose `See:` in a JS/TS comment (`.env-example` and YAML keep `# See:`).                                | `check-references` sweeps the target and its anchor, and refuses a `@see` with none  |
+| A page owns the topic    | Link it, do not retell it.                                                                                                                                                                                             | The comments audit (a report-only skill)                                             |
 
 ## Prose budget and shape
 
@@ -77,7 +77,9 @@ The rest:
   `SECURITY.md` and `INSTALL.md`. Nothing enforces this beyond `.gitignore`: `local/comment-links` checks `.ts`
   references only.
 
-MUST: every exported function, interface, type and enum carries a docblock — `jsdoc/require-jsdoc`.
+MUST: every top-level declaration (a function, class, variable, interface, type, enum, and a class's
+members) carries a docblock — `jsdoc/require-jsdoc`, in every linted file, tests and scripts
+included. `jsdoc/informative-docs` refuses a description that only repeats the name it describes.
 An interface says its purpose and what each field means; a function adds `@param`/`@returns`/
 `@throws` **as needed**. "As needed" is yours to judge, but a tag you do write is checked:
 `jsdoc/check-param-names` refuses a name that is not in the signature, and the `*-description`

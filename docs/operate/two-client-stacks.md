@@ -32,11 +32,11 @@ flowchart TB
 ```
 
 Every container, network and volume is namespaced by `COMPOSE_PROJECT_NAME` — the two stacks share
-nothing, not even a Docker network, unless the [Traefik overlay](#many-clients-behind-one-proxy)
-below is layered on to share the proxy.
+nothing, not even a Docker network. Each stack publishes its own loopback port, so each needs its
+own proxy route, which you run yourself.
 
 ::: warning Read this alongside the compose files
-`compose.production.yaml` and `compose.proxy.yaml` explain each decision inline. This
+`compose.production.yaml` explains each decision inline. This
 page is the walkthrough and the two demonstrations; the compose files are the source of truth.
 :::
 
@@ -129,86 +129,11 @@ Every one of `brava`'s containers and named volumes is gone; `acme` never notice
 GDPR-erasure story for a client relationship ending, demonstrated rather than asserted — silo means
 "delete a client's data" is one `down -v`, not a query someone has to get right.
 
-## Many clients behind one proxy
-
-The base compose file stays proxy-agnostic — publish `127.0.0.1:${NODE_PORT}` and put any
-TLS-terminating proxy in front, same as a single-stack deployment. `compose.proxy.yaml` is
-the recipe for the case that specifically needs SHARED infrastructure: several client stacks on one
-box, fronted by one proxy that serves each stack from its own small route file.
-
-**Traefik v3**, not Caddy, with its **file provider**: adding client #11 is "start its stack, drop
-one route file in" — Traefik watches the directory and reloads, nothing else to edit or restart. It
-is also k3s's own default ingress controller, so if a fleet of Compose stacks ever outgrows Compose,
-the proxy is one part of the stack that carries over unchanged.
-
-**No Docker socket.** Traefik's Docker provider would need `/var/run/docker.sock` in the one
-container facing the internet. `:ro` protects the socket file, not the Docker API behind it: owning
-Traefik would mean starting a privileged container that mounts `/`, and even a filtered read-only
-socket exposes every client's environment through `GET /containers/{id}/json`. The file provider
-needs neither. It reads `traefik/dynamic/` (routes only, never `clients/`, which holds every
-client's secrets).
-
-```mermaid
-flowchart LR
-    Net["internet"] -->|"80: redirect only"| T["traefik"]
-    Net -->|"443"| T
-    Dir["traefik/dynamic/<br/>one route file per client"] -->|"watched, hot reload"| T
-    T -->|"acme-app:PORT"| A1["acme: app"]
-    T -->|"brava-app:PORT"| A2["brava: app"]
-```
-
-```bash
-docker network create proxy   # once, per host
-export COMPOSE_PROJECT_NAME=acme
-cp traefik/client.example.yml traefik/dynamic/acme.yml   # then set its host and port
-docker compose --env-file "clients/acme/.env" \
-    -f compose.yaml -f compose.production.yaml -f compose.proxy.yaml up -d
-```
-
-- **The alias.** The overlay gives `app` the network alias `<COMPOSE_PROJECT_NAME>-app` on `proxy`,
-  and a route's service URL names it. A bare `app` resolves on the shared network to _every_
-  client's `app` and round-robins across them.
-- **Port 80 only redirects** to 443; Traefik exempts the ACME HTTP challenge, so issuance still
-  works.
-- **Trust proxy.** The overlay sets `NODE_TRUST_PROXY_HOPS` to `1` unless the client file sets it
-  (`.env-example` leaves it commented): Traefik drops an untrusted `X-Forwarded-For` and writes the real peer, so
-  `request.ip` is the caller. With `0` every client is the proxy, and one attacker's failed logins
-  exhaust the per-address budget for everyone.
-- **Proxy timeouts vs app timeouts (read).** Traefik's `readTimeout` is `135s`, at least the app's
-  `NODE_HTTP_REQUEST_TIMEOUT_MS` + `NODE_HTTP_HEADERS_TIMEOUT_MS`, so a slow upload ends on the
-  app's side, not on Traefik's 60 s default. See `applyServerTimeouts` in `src/app/security.ts`.
-- **Proxy timeouts vs app timeouts (idle).** Traefik's `idleConnTimeout` is `4s`, below the app's
-  `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`: the proxy closes idle connections first, so it never reuses a
-  socket Node closed (a 502).
-
-**Verified against a real Traefik, not a real certificate:** a route file in the watched directory
-produced the router `acme@file` with the file's exact `Host(...)` rule and `certResolver`; a second
-file added a second router and deleting it removed it, with no restart; plain HTTP answered a
-redirect to `https`, and the ACME challenge path stayed reachable on port 80. Real ACME issuance
-needs a public DNS record and ports 80/443 reachable from Let's Encrypt, neither of which a
-sandboxed build environment can offer.
-
-Two podman-compose 1.6 quirks worth knowing if you run this on podman rather than Docker (a real
-Docker host hits neither):
-
-- `ports: !reset []` (drops the loopback publish, since Traefik takes over routing) parses and
-  works correctly.
-- Referencing the base file's implicit default network by name (`networks: [default, proxy]`)
-  needs that network declared explicitly at the top level of the overlay
-  (`networks: { default: {} }`) — podman-compose otherwise reports `missing networks: default`.
-  Both forms are legal Compose Specification; the second is only needed to work around this one
-  tool.
-
-**Certificate expiry.** Traefik renews certificates on its own, and Let's Encrypt no longer emails
-before one lapses (since 2025-06-04). The overlay turns on Traefik's Prometheus metrics, and each
-client's Prometheus (the `monitoring` profile) joins the `proxy` network to scrape them, so
-`TlsCertExpiringSoon` fires when a renewal silently failed. See [Prometheus](./prometheus.md).
-
 ## When Compose stops being the answer
 
-**Not yet.** At twenty clients on one box, Kubernetes adds a control plane, an ingress controller,
+**Not yet.** At twenty clients, Kubernetes adds a control plane, an ingress controller,
 cert-manager, a secrets pipeline and a CNI — five more things to patch — to solve a problem Compose
-already solves. Two or three hosts running Compose behind one proxy each is a solved problem.
+already solves. Several hosts running Compose, one client per machine, each behind its own proxy, is a solved problem.
 
 Any **one** of these flips the answer:
 
@@ -248,7 +173,7 @@ This is why silo maps onto Kubernetes cleanly: the model does not change, only t
 | "don't let a client hog the box"       | **ResourceQuota** + **LimitRange** per namespace                                              |
 | separate stacks can't reach each other | **NetworkPolicy**                                                                             |
 | secrets in an untracked `.env`         | **Sealed Secrets** or **External Secrets Operator** — per-client secrets that can live in git |
-| Traefik's ACME resolver                | **cert-manager**                                                                              |
+| your proxy's ACME client               | **cert-manager**                                                                              |
 | the app's `GET /livez` healthcheck     | a **liveness probe** — already there; `GET /readyz` is the **readiness probe**                |
 | the one-shot `setup` service           | a **Job**, or a pre-upgrade Helm hook                                                         |
 | the `mongo-data` volume                | **StatefulSet** + **PersistentVolumeClaim**                                                   |

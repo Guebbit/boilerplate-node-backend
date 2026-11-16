@@ -56,8 +56,10 @@ const listEntries = (
     schema: typeof listLocaleEntriesQuerySchema,
     app?: string
 ) => {
-    // Query params only — a GET has no body to carry a search payload.
-    // See docs/understand/request-input.md.
+    /**
+     * Query params only — a GET has no body to carry a search payload.
+     * See docs/understand/request-input.md.
+     */
     const parsed = parseBody(schema, readInput(request, { surface: 'list' }), response);
     if (!parsed) return Promise.resolve();
 
@@ -65,10 +67,12 @@ const listEntries = (
         .searchEntries(request.params.locale, app === undefined ? parsed : { ...parsed, app })
         .then((result) => {
             if (refused(response, result)) return;
-            // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
-            // wire shape this response needs — no cast.
-            // The language's `revision` is the tag's version, so the tag of either list is what an
-            // import's `If-Match` compares (see `services/entries.ts#searchEntries`).
+            /**
+             * `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
+             * wire shape this response needs — no cast.
+             * The language's `revision` is the tag's version, so the tag of either list is what an
+             * import's `If-Match` compares (see `services/entries.ts#searchEntries`).
+             */
             setEtag(response, result.data);
             return successResponse<LocaleEntriesResponse>(response, result.data);
         })

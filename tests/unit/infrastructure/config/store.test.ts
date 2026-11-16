@@ -19,9 +19,11 @@ import { setProcessEnvironment } from '@tests/environment';
 const NAME = 'NODE_STORE_TEST_VARIABLE';
 
 describe('the environment store', () => {
-    // The store's own slot, dropped whole: a mark set by one case must not become the next case's
-    // starting point, and a mark has no other way out. The worker's harness mark goes with it, which
-    // is harmless here — nothing in this file depends on it.
+    /**
+     * The store's own slot, dropped whole: a mark set by one case must not become the next case's
+     * starting point, and a mark has no other way out. The worker's harness mark goes with it, which
+     * is harmless here — nothing in this file depends on it.
+     */
     afterEach(() => {
         Reflect.deleteProperty(globalThis, Symbol.for('boilerplate-node-backend.config.store'));
     });

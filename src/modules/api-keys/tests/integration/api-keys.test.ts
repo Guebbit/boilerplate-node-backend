@@ -34,7 +34,7 @@ import { seedMembership } from '@modules/access/tests/factories';
  */
 const mockOutbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
 
-/*
+/**
  * The mailer is REPLACED, not spied on: `jest.spyOn` cannot redefine a namespace import's getter
  * under the mutation run's swc transform — see `tests/support/ports.ts`. A case that never reads
  * the outbox is unaffected by what lands in it.
@@ -53,8 +53,10 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 
 setupTestDb();
 
-// `onRegistered`'s `registerCredentialResolver` call is what makes `resolveCredential` answer
-// anything at all — running it here is what a real boot does once this module is enabled.
+/**
+ * `onRegistered`'s `registerCredentialResolver` call is what makes `resolveCredential` answer
+ * anything at all — running it here is what a real boot does once this module is enabled.
+ */
 apiKeysModule.onRegistered?.();
 
 /** A valid expiry for a mint: a week out, well inside the one-year ceiling. */
@@ -123,8 +125,10 @@ describe('mint — the subset boundary', () => {
 
     it('refuses a permission no credential route asks for, even when the caller holds it', async () => {
         const user = await createRealUser('mint-session-only');
-        // `read:Stats` is `credential: false`: the stats routes are session-only, so a key holding it
-        // would grant nothing while looking like it grants something.
+        /**
+         * `read:Stats` is `credential: false`: the stats routes are session-only, so a key holding it
+         * would grant nothing while looking like it grants something.
+         */
         const context = contextFor(String(user._id), keysInScope('admin', 'tenant', 'customer'));
 
         const result = await mint(
@@ -170,8 +174,10 @@ describe('mint — the subset boundary', () => {
 });
 
 describe('an own-rows rule is not a staff rule', () => {
-    // A holder of `display:Order` also passes a plain `read` check on `Order`, so the credential's
-    // floor reads the literal rules the minter holds.
+    /**
+     * A holder of `display:Order` also passes a plain `read` check on `Order`, so the credential's
+     * floor reads the literal rules the minter holds.
+     */
     it('refuses to mint display:Order for a minter who holds only read:Order', async () => {
         const user = await createRealUser('self-minter');
         const context = contextFor(String(user._id), keysInScope(null, 'tenant', 'customer'));
@@ -225,13 +231,17 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant', callerContextAs('admin'));
 
         const afterDemotion = await credentialOf(minted.data.secret);
-        // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
-        // now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
+        /**
+         * Still a real, resolvable credential (not revoked, not expired) — just holding nothing
+         * now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
+         */
         expect(afterDemotion?.caller.permissions).not.toContain('read:WebhookSubscription');
     });
 
-    // A ban is the one way to switch a key off without touching it: the key is refused like a
-    // revoked one, and an unban brings it back, since nothing on the document changed.
+    /**
+     * A ban is the one way to switch a key off without touching it: the key is refused like a
+     * revoked one, and an unban brings it back, since nothing on the document changed.
+     */
     it('refuses a key whose minter was deactivated, and the key itself is untouched', async () => {
         const user = await createRealUser('banned-minter');
         const userId = String(user._id);
@@ -408,10 +418,12 @@ describe('why a credential was refused', () => {
 });
 
 describe('a hard-deleted user takes their credentials with them', () => {
-    // `subscribe()` (this listener) and `onRegistered` (the credential resolver) are both
-    // manifest hooks that only run through `registerModules` — the top-level `import
-    // '@modules/api-keys/module'` above installs neither by itself, same reasoning as
-    // `wishlist/tests/integration/service.test.ts`.
+    /**
+     * `subscribe()` (this listener) and `onRegistered` (the credential resolver) are both
+     * manifest hooks that only run through `registerModules` — the top-level `import
+     * '@modules/api-keys/module'` above installs neither by itself, same reasoning as
+     * `wishlist/tests/integration/service.test.ts`.
+     */
     beforeEach(() => {
         resetDomainEvents();
         registerModules(enabledModules);
@@ -483,7 +495,7 @@ describe('touchLastUsed', () => {
         expect(reloaded?.lastUsedAt).toBeInstanceOf(Date);
     });
 
-    /*
+    /**
      * `module.ts`'s `fromBearerToken` fires this fire-and-forget (`void
      * apiKeyRepository.touchLastUsed(...)`, by design — see the repository's own doc comment) with
      * no `.catch`. A rejection there had nobody left to see it; logged instead, so a failed stamp
@@ -492,9 +504,11 @@ describe('touchLastUsed', () => {
     it('logs a warning and still resolves the credential when the stamp write fails', async () => {
         const user = await createRealUser('touch-fails');
         const userId = String(user._id);
-        // Resolve re-floors against what the minter holds NOW (`currentCallerOf`), not the mint
-        // context's own claimed permissions — needs a real membership row, same as the
-        // demoted-minter case above.
+        /**
+         * Resolve re-floors against what the minter holds NOW (`currentCallerOf`), not the mint
+         * context's own claimed permissions — needs a real membership row, same as the
+         * demoted-minter case above.
+         */
         await makeArmedAdmin(userId);
         const context = contextFor(userId, ['read:WebhookSubscription']);
         const minted = await mint(

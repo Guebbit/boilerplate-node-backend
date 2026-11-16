@@ -75,8 +75,10 @@ describe('order routes — authorization', () => {
         'DELETE /:id',
         'DELETE /:id/hard'
     ])('%s requires a logged-in caller', (signature) => {
-        // Router-level, so this asserts the `router.use` really covers every route — including
-        // any added later, which is the whole reason it is mounted there rather than per route.
+        /**
+         * Router-level, so this asserts the `router.use` really covers every route — including
+         * any added later, which is the whole reason it is mounted there rather than per route.
+         */
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
@@ -88,15 +90,19 @@ describe('order routes — authorization', () => {
     );
 
     it('gates the override door behind its own permission, not the ordinary write one', () => {
-        // A distinct key (`override:Order`), so `update:Order` alone never reaches this
-        // door — see `shared/authorization-keys.generated.yaml`'s `stepUp: critical` on it.
+        /**
+         * A distinct key (`override:Order`), so `update:Order` alone never reaches this
+         * door — see `shared/authorization-keys.generated.yaml`'s `stepUp: critical` on it.
+         */
         expect(guardsOn(router, 'POST /:id/override-status')).toContain('requirePermissionGuard');
     });
 
     it('leaves POST /:id/cancel open to the owner, not just admins', () => {
-        // Not an oversight: the customer cancel. Its authorization is the caller scope inside
-        // `orderService.cancelOnRequestById`, covered by `service-scope.test.ts` and `cancel.test.ts`.
-        // Adding `requirePermission` here would silently remove the feature.
+        /**
+         * Not an oversight: the customer cancel. Its authorization is the caller scope inside
+         * `orderService.cancelOnRequestById`, covered by `service-scope.test.ts` and `cancel.test.ts`.
+         * Adding `requirePermission` here would silently remove the feature.
+         */
         expect(guardsOn(router, 'POST /:id/cancel')).not.toContain('requirePermissionGuard');
     });
 
@@ -136,9 +142,11 @@ describe('order routes — staff notes', () => {
 });
 
 describe('order routes — caching', () => {
-    // An order's answer depends on who is asking (non-admins see only their own), so none of the
-    // reads may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets the
-    // BROWSER keep its own copy of a GET, revalidated every time.
+    /**
+     * An order's answer depends on who is asking (non-admins see only their own), so none of the
+     * reads may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets the
+     * BROWSER keep its own copy of a GET, revalidated every time.
+     */
     it.each(['GET /', 'GET /:id'])('%s is never Redis-cached, only privateNoCache', (signature) => {
         const chain = chainOf(router, signature);
 
@@ -154,8 +162,10 @@ describe('order routes — caching', () => {
     });
 
     it('invalidates products wherever stock moves', () => {
-        // Creating an order and cancelling one both change availability, so both must clear the
-        // catalogue.
+        /**
+         * Creating an order and cancelling one both change availability, so both must clear the
+         * catalogue.
+         */
         expect(chainOf(router, 'POST /')).toContain('invalidateCache([products])');
         expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([products])');
     });

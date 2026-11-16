@@ -81,16 +81,20 @@ export const sendVerificationEmail = (
 ): Promise<void> => {
     const target = VERIFICATION_TARGETS[type];
     const address = target.addressOf(user);
-    // Defensive: an `email-change` send with no `pendingEmail` set is a caller bug (nothing was
-    // ever requested), not a state worth mailing about.
+    /**
+     * Defensive: an `email-change` send with no `pendingEmail` set is a caller bug (nothing was
+     * ever requested), not a state worth mailing about.
+     */
     if (!address) return Promise.resolve();
 
-    // Issuing replaces the kind's one live link atomically, so "the newest email is the one that works".
-    // How long a verification link works, shared by both token kinds. Tunable because the safe
-    // direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
-    // call, not this file's.
+    /**
+     * Issuing replaces the kind's one live link atomically, so "the newest email is the one that works".
+     * How long a verification link works, shared by both token kinds. Tunable because the safe
+     * direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
+     * call, not this file's.
+     */
     return issueToken(user.id, type, accountConfig().NODE_EMAIL_VERIFY_TTL_MS).then((token) => {
-        /*
+        /**
          * The recipient's OWN language, exactly as the reset and delete emails choose
          * theirs: the copy is finished before the job is published, so the worker needs no
          * locale at all.

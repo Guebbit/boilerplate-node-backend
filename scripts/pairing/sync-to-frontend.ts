@@ -27,7 +27,7 @@ const dryRun = hasFlag('dry');
 /** `--forced`: copy every shared file, even one that already hashes identical over there. */
 const forcedRun = hasFlag('forced');
 
-/*
+/**
  * Always on, except under `--dry`, which promises to write nothing — over there least of all.
  * See the regeneration step below for why this is not a flag and not conditional on a copy.
  */
@@ -56,7 +56,7 @@ if (!existsSync(frontendRoot))
             `  Expected the frontend beside this repo (${DEFAULT_FRONTEND_PATH}), or FRONTEND_PATH set in .env.`
     );
 
-/*
+/**
  * A linked worktree never writes into the frontend's MAIN checkout.
  *
  * Frontend main takes a contract only from backend main, right after the merge it mirrors.
@@ -90,7 +90,7 @@ const STALENESS_GATES = [
 // Run each gate before a byte moves; the first failure stops the sync.
 for (const gate of STALENESS_GATES) {
     try {
-        /*
+        /**
          * Runs the gate as a child process; it throws on a non-zero exit.
          * stdio [stdin, stdout, stderr]: only stderr is kept, since it carries the gate's reason.
          * https://nodejs.org/api/child_process.html#child_processexecfilesyncfile-args-options
@@ -177,7 +177,7 @@ console.info(
         : `[sync] ${dryRun ? 'Would copy' : 'Copied'} ${moved.length} file(s) to ${frontendRoot}:\n${list(moved)}`
 );
 
-/*
+/**
  * Both repos generate typed clients FROM the files just copied, and those outputs live only in
  * their own repo — so the frontend is not in sync until it has regenerated. Left undone, it ships a
  * client for the previous contract, which type-checks over there and announces nothing.
@@ -197,7 +197,7 @@ console.info(
 if (regenerate) {
     console.info(`\n[sync] Regenerating in ${frontendRoot} — npm run regenerate`);
     try {
-        /*
+        /**
          * Inherited stdio, deliberately: this is another repo's build talking, and summarising it
          * would hide the one thing a reader needs — which of ITS steps failed. `cwd` is the only
          * thing that makes this the frontend's npm rather than this repo's.
@@ -219,7 +219,7 @@ if (regenerate) {
             `  A real run always does it, whether or not anything was copied.`
     );
 
-/*
+/**
  * A copied file that still hashes differently means something rewrote it mid-run.
  *
  * Placed AFTER the regeneration step on purpose, so it covers that too: the frontend's `regenerate`

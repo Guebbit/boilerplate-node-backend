@@ -29,6 +29,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -75,8 +76,10 @@ describe('two admins racing the same ship door', () => {
         expect(countStatus(results, 201) + countStatus(results, 409)).toBe(RACE_SIZE);
         expect(countStatus(results, 201)).toBe(1);
 
-        // The claim under test: exactly one shipped-parcel email, never one per racer. The mail
-        // rides `shipment.shipped`, so wait for the relay and then for any straggler.
+        /**
+         * The claim under test: exactly one shipped-parcel email, never one per racer. The mail
+         * rides `shipment.shipped`, so wait for the relay and then for any straggler.
+         */
         await eventually(() =>
             settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0)
         );
@@ -165,9 +168,11 @@ describe('a first shipment from a paid order that moved away meanwhile', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
-        // The ship act read the order as `paid`; the conditional `paid → processing` write then
-        // finds it elsewhere (another request cancelled it). A race cannot be made to land here on
-        // demand, so the orders door answers what it answers once it has lost.
+        /**
+         * The ship act read the order as `paid`; the conditional `paid → processing` write then
+         * finds it elsewhere (another request cancelled it). A race cannot be made to land here on
+         * demand, so the orders door answers what it answers once it has lost.
+         */
         jest.spyOn(orderService, 'markProcessing').mockResolvedValueOnce(null);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
         // `paid` has no fulfillment order until one is made; the first shipment is the act under test.

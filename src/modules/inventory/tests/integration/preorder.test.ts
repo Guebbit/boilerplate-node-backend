@@ -35,6 +35,7 @@ setupTestDb();
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
+/** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'c');
 
 /** The level's three counters that matter here. */
@@ -333,8 +334,10 @@ describe('a receipt serving the queue', () => {
     });
 });
 
-// A preorder claim is an allowance, not units: shipping one before any receipt allocated a unit
-// would take real stock from other buyers and leave `onHand` and `reserved` out of step.
+/**
+ * A preorder claim is an allowance, not units: shipping one before any receipt allocated a unit
+ * would take real stock from other buyers and leave `onHand` and `reserved` out of step.
+ */
 describe('shipping a preorder claim nothing was allocated to', () => {
     it('is refused, and moves no counter and leaves the hold as it was', async () => {
         const productId = await preorderProduct(10);

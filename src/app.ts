@@ -12,13 +12,17 @@
  * (`main.ts`, `cluster.ts`'s worker branch) actually wants a listening server.
  */
 
-// First: the tracing setup below already reads config, and the config store reads the environment
-// once — `.env` has to be loaded before that read.
+/**
+ * First: the tracing setup below already reads config, and the config store reads the environment
+ * once — `.env` has to be loaded before that read.
+ */
 import './infrastructure/config/dotenv';
 
-// OTel must initialize before express/http/mongoose are imported. That only holds when
-// `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
-// imports below are hoisted above this call.
+/**
+ * OTel must initialize before express/http/mongoose are imported. That only holds when
+ * `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
+ * imports below are hoisted above this call.
+ */
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 
 /** Start the OpenTelemetry SDK; see the note above for when this call is early enough. */
@@ -148,12 +152,14 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
             .then(() => registerWorkers())
             // Files, templates, then the admin's edits — the same step every scheduled job runs.
             .then(() => bootRendering())
-            // No provider (`locales` uninstalled) means every refresh would be a no-op forever —
-            // a timer with nothing to poll is a leak of intent, not just of a file descriptor.
+            /**
+             * No provider (`locales` uninstalled) means every refresh would be a no-op forever —
+             * a timer with nothing to poll is a leak of intent, not just of a file descriptor.
+             */
             .then(() => {
                 if (isLocaleOverrideAvailable()) startLocaleOverrideRefresh();
             })
-            /*
+            /**
              * After i18n, because the map resolves its copy through `t`. Registering it earlier
              * would install a translator with no dictionary behind it.
              */
@@ -165,7 +171,7 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
 
         return (
             boot()
-                /*
+                /**
                  * The extension's own step — for the demo, only ever the initial build:
                  * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
                  * paired frontend's readiness probe (`GET /`, which only resolves once listening)
@@ -175,14 +181,16 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
                 .then(() => options.extension?.afterBoot?.())
                 .then(() => {
                     const { NODE_PORT: port, NODE_HOST: host } = serverConfig();
-                    // Unset by default, which binds every interface — the shape every profile but
-                    // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
-                    // tokens are signed with a public, hard-coded secret, so binding every interface
-                    // would let anyone on the LAN mint one.
+                    /**
+                     * Unset by default, which binds every interface — the shape every profile but
+                     * the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
+                     * tokens are signed with a public, hard-coded secret, so binding every interface
+                     * would let anyone on the LAN mint one.
+                     */
                     // Stryker disable next-line all
                     logger.info('------------- SERVER START -------------');
                     return listenOn(app, port, host).then((server) => {
-                        /*
+                        /**
                          * Before the first request can arrive, because they bound how long one may
                          * take to send. See `app/security.ts`.
                          */
@@ -201,8 +209,10 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     const stop = (): Promise<void> => {
         if (shutdownPromise) return shutdownPromise;
 
-        // Relay passes already started finish first: a lost one is only published a minute later
-        // by the sweep, but one cut mid-write logs errors at every deploy.
+        /**
+         * Relay passes already started finish first: a lost one is only published a minute later
+         * by the sweep, but one cut mid-write logs errors at every deploy.
+         */
         shutdownPromise = shutdownInfra(activeServer, (timeoutMs) =>
             settleWithin(new Set([settleOutboxNudges()]), timeoutMs)
         ).finally(() => {
@@ -215,13 +225,15 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
 
     registerModules(enabledModules, APP_CONFIG_SLICES);
 
-    // `locales` being absent is a supported deployment shape, not a
-    // misconfiguration — this is the one line that says so, once, rather than a reader inferring it
-    // from an admin screen that quietly has nothing to show.
+    /**
+     * `locales` being absent is a supported deployment shape, not a
+     * misconfiguration — this is the one line that says so, once, rather than a reader inferring it
+     * from an admin screen that quietly has nothing to show.
+     */
     if (!isTranslationAvailable())
         logger.info('translation provider: none — content is monolingual');
 
-    /*
+    /**
      * The middleware stack, in the order a request travels it.
      *
      * Express applies middleware in registration order, so this sequence IS the behaviour, not a
@@ -246,14 +258,18 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     app.use(requestIdMiddleware);
     installSecurity(app);
     installStatic(app);
-    // Before parsing: the global limiter's 429 and a parser's 400 / 413 / 415 answer in the
-    // caller's language, with `Content-Language`.
+    /**
+     * Before parsing: the global limiter's 429 and a parser's 400 / 413 / 415 answer in the
+     * caller's language, with `Content-Language`.
+     */
     app.use(attachLocale);
     installRequestParsing(app);
     installRequestContext(app);
     installTelemetry(app);
-    // The extension's routes (the demo's /__test/*), when a process passed one. Before
-    // installRoutes, whose 404 catch-all would swallow anything mounted after it.
+    /**
+     * The extension's routes (the demo's /__test/*), when a process passed one. Before
+     * installRoutes, whose 404 catch-all would swallow anything mounted after it.
+     */
     options.extension?.install?.(app);
     installRoutes(app);
     installErrorHandling(app);

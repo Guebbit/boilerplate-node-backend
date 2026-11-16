@@ -4,7 +4,7 @@
  * `assign:Role`. Every rule here is a REFUSAL rather than a note in a docblock — the check
  * that is not executed is the check that is not true.
  *
- * @see docs/understand/authorization.md
+ * @see docs/understand/authorization.md#the-model
  * @see `shared/rules/authorization-roles.yaml`
  */
 
@@ -79,8 +79,10 @@ const checkGrant = (
 ): GrantVerdict => {
     const lowered = roleName.toLowerCase();
 
-    // The permission is judged FIRST: whoever may not hand out roles is told so, and learns
-    // nothing about which role names exist.
+    /**
+     * The permission is judged FIRST: whoever may not hand out roles is told so, and learns
+     * nothing about which role names exist.
+     */
     if (!granter.includes(ASSIGN_RULE)) {
         return {
             refusal: {

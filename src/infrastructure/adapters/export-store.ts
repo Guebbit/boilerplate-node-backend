@@ -13,7 +13,7 @@
  * purpose and in writing: at-rest protection is the host's, like the Mongo data files
  * (`docs/understand/defences/crypto-and-secrets.md`).
  *
- * @see docs/modules/account.md
+ * @see docs/modules/account.md#data-export
  */
 
 import path from 'node:path';
@@ -59,9 +59,11 @@ const produceInto = (
     produce: (append: AppendExport) => Promise<void>
 ): Promise<void> =>
     open(temporary, 'w').then((handle) =>
-        // `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
-        // disk paces the producer without a drain handler of our own.
-        // https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
+        /**
+         * `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
+         * disk paces the producer without a drain handler of our own.
+         * https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
+         */
         produce((text) => handle.write(text).then(() => undefined)).finally(() => handle.close())
     );
 

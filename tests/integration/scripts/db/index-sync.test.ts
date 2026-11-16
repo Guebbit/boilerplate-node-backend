@@ -19,7 +19,7 @@
  * That is a schema-authoring mistake rather than a migration one, and it still shows up here as an
  * index nobody meant to declare.
  *
- * @see docs/reference/data.md
+ * @see docs/reference/data.md#schema-db-sync
  */
 
 import fs from 'node:fs';
@@ -36,7 +36,10 @@ import {
 import { retireIndexes } from '@infrastructure/persistence/retired-indexes';
 import { enabledModules } from '../../../../src/modules';
 
-/** The native handle, for the states only the driver can construct. */
+/**
+ * The native handle, for the states only the driver can construct.
+ * @throws {Error} when the test connection is not open
+ */
 const nativeDb = () => {
     const { db } = mongoose.connection;
     if (!db) throw new Error('no database handle — the test connection is not open');
@@ -92,7 +95,7 @@ afterAll(disconnect);
 
 describe('db:sync', () => {
     it('registered a model from every enabled module that ships one', () => {
-        /*
+        /**
          * The canary for the registry walk, and the reason every assertion below means something.
          * `scripts/db/index-sync.ts` registers models by importing `enabledModules` and relying on each
          * `module.ts` to reach its own `model.ts`. A module that stopped doing so would drop out
@@ -129,7 +132,7 @@ describe('db:sync', () => {
     });
 
     it('leaves each collection holding EXACTLY what its schema declares', async () => {
-        /*
+        /**
          * The strongest statement available on a fresh database: every declared index exists and
          * no other does. (On a database that already holds an undeclared index the sync keeps it
          * unless pruning; see the cases below.)
@@ -156,9 +159,11 @@ describe('db:sync', () => {
     });
 
     it('keeps an index no schema declares, and says so', async () => {
-        // Drift, constructed: an index created by hand, or left by a newer release this one is
-        // rolling back from. Add-only means the sync must not take it away. A TTL index is kept
-        // the same way as a plain one.
+        /**
+         * Drift, constructed: an index created by hand, or left by a newer release this one is
+         * rolling back from. Add-only means the sync must not take it away. A TTL index is kept
+         * the same way as a plain one.
+         */
         await dropAllIndexes();
         await applyIndexSync();
         await nativeDb()
@@ -199,7 +204,7 @@ describe('db:sync', () => {
     });
 
     it('replaces a declared index whose options changed', async () => {
-        /*
+        /**
          * The TTL-window flow: Mongo refuses to change `expireAfterSeconds` in place, so the sync
          * drops the old index and builds the declared one. Constructed with `sparse`, which
          * `diffIndexes` treats as an options difference just the same.
@@ -279,8 +284,10 @@ describe('db:sync', () => {
     });
 
     it('is a no-op the second time', async () => {
-        // It runs on every boot (`db:bootstrap`), so a second pass with work left to do would mean
-        // the first one did not converge.
+        /**
+         * It runs on every boot (`db:bootstrap`), so a second pass with work left to do would mean
+         * the first one did not converge.
+         */
         await dropAllIndexes();
         await applyIndexSync();
 
@@ -299,7 +306,7 @@ describe('db:sync', () => {
     });
 
     it('scans only the unique indexes the plan would actually build', async () => {
-        /*
+        /**
          * The pre-flight is a grouping aggregation over a WHOLE collection, and `db:bootstrap` runs
          * it on every container boot. Scanning an index that already exists is a full pass over
          * production data to re-prove what that index is itself enforcing — so the scan is scoped
@@ -331,8 +338,10 @@ describe('db:sync', () => {
             expect.stringContaining('both@example.com')
         ]);
 
-        // Unscoped, the same database reports the cart collision too — so the scoping above is
-        // what suppressed it, not an absence of anything to find.
+        /**
+         * Unscoped, the same database reports the cart collision too — so the scoping above is
+         * what suppressed it, not an absence of anything to find.
+         */
         await expect(findBlockingDuplicates()).resolves.toEqual(
             expect.arrayContaining([expect.stringContaining('dupe-user')])
         );
@@ -342,7 +351,7 @@ describe('db:sync', () => {
     });
 
     it('refuses to build a unique index the existing rows already violate', async () => {
-        /*
+        /**
          * The failure that actually costs an evening. `createIndex` reports the FIRST colliding
          * value and nothing about the rest, so a naive run turns a data problem into a guessing
          * game — and which of two documents survives a merge is a product decision this script
@@ -368,8 +377,10 @@ describe('db:sync', () => {
         // `db:bootstrap` on a never-booted database: listing a missing collection's indexes throws.
         await nativeDb().dropDatabase();
 
-        // With nothing stored the plan is exactly "create what the schemas declare": no replacement,
-        // no retired name, no undeclared index to drop or keep.
+        /**
+         * With nothing stored the plan is exactly "create what the schemas declare": no replacement,
+         * no retired name, no undeclared index to drop or keep.
+         */
         const plan = await planIndexSync({ prune: true });
         for (const model of models().filter((candidate) => declaredKeys(candidate).size > 0)) {
             const diff = plan.find(({ collection }) => collection === model.collection.name);

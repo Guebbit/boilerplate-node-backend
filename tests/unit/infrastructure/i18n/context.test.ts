@@ -37,9 +37,11 @@ describe('the ambient t', () => {
     it('survives awaits, so a thunk deep in a promise chain still sees the scope', async () => {
         const resolved = await runWithLocale('it', async () => {
             await Promise.resolve();
-            // A real task hop, not a wall-clock wait: `setImmediate` crosses the same async
-            // boundary a timer would — which is what the store has to survive — without asking
-            // the test to guess how long a loaded machine needs.
+            /**
+             * A real task hop, not a wall-clock wait: `setImmediate` crosses the same async
+             * boundary a timer would — which is what the store has to survive — without asking
+             * the test to guess how long a loaded machine needs.
+             */
             await new Promise((resolve) => setImmediate(resolve));
             return t('users.not-found');
         });
@@ -50,8 +52,10 @@ describe('the ambient t', () => {
     it('keeps two overlapping scopes apart', async () => {
         const [italian, english] = await Promise.all([
             runWithLocale('it', async () => {
-                // Two task hops against one, so the scopes genuinely interleave — see the note
-                // on the previous test for why these are not timers.
+                /**
+                 * Two task hops against one, so the scopes genuinely interleave — see the note
+                 * on the previous test for why these are not timers.
+                 */
                 await new Promise((resolve) => setImmediate(resolve));
                 await new Promise((resolve) => setImmediate(resolve));
                 return t('users.not-found');

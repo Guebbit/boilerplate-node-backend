@@ -42,6 +42,7 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
+/** One day in milliseconds. */
 const DAY = 86_400_000;
 
 /** A date `days` from now. */

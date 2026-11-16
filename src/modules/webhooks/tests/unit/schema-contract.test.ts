@@ -24,10 +24,12 @@ const DELIVERY_RETENTION_SECONDS =
 
 describe('webhookSubscriptionSchema', () => {
     it('requires the fan-out fields, and nothing else', () => {
-        // `description` is optional (nothing to say), `disabledAt`/`autoDisabledAt` are optional
-        // (never disabled yet), and `secrets` defaults to `[]` rather than being required — a subscription that
-        // has not minted a secret yet is a contradiction `create()` never produces, not a shape
-        // this schema needs to forbid on its own.
+        /**
+         * `description` is optional (nothing to say), `disabledAt`/`autoDisabledAt` are optional
+         * (never disabled yet), and `secrets` defaults to `[]` rather than being required — a subscription that
+         * has not minted a secret yet is a contradiction `create()` never produces, not a shape
+         * this schema needs to forbid on its own.
+         */
         expect(requiredPaths(webhookSubscriptionSchema)).toEqual([
             'consecutiveFailures',
             'eventTypes',
@@ -42,14 +44,18 @@ describe('webhookSubscriptionSchema', () => {
     });
 
     it('defaults the secret ring to empty, not undefined', () => {
-        // `../../secrets.ts`'s `activeRingSecrets` reads this as an array unconditionally; an `undefined`
-        // default would make every fresh document a runtime crash away from a delivery attempt.
+        /**
+         * `../../secrets.ts`'s `activeRingSecrets` reads this as an array unconditionally; an `undefined`
+         * default would make every fresh document a runtime crash away from a delivery attempt.
+         */
         expect(defaultOf(webhookSubscriptionSchema, 'secrets')).toEqual([]);
     });
 
     it("gives the ring's entries no _id of their own", () => {
-        // `_id: false`: `../../secrets.ts` mints each entry's own `id` before the document is ever
-        // saved — an auto-assigned Mongoose `_id` alongside it would be a second, unused identity.
+        /**
+         * `_id: false`: `../../secrets.ts` mints each entry's own `id` before the document is ever
+         * saved — an auto-assigned Mongoose `_id` alongside it would be a second, unused identity.
+         */
         expect(optionsOf(subSchema(webhookSubscriptionSchema, 'secrets'))._id).toBe(false);
     });
 
@@ -66,8 +72,10 @@ describe('webhookSubscriptionSchema', () => {
     });
 
     it('declares neither index unique or sparse', () => {
-        // A unique index on either would reject a second subscription — the cap in
-        // `services/subscriptions.ts` is the ONLY thing allowed to limit how many a tenant holds.
+        /**
+         * A unique index on either would reject a second subscription — the cap in
+         * `services/subscriptions.ts` is the ONLY thing allowed to limit how many a tenant holds.
+         */
         expect(indexOptionSpecs(webhookSubscriptionSchema)).toEqual([
             'disabledAt_1_eventTypes_1: (none)',
             'tenant_1_createdAt_-1: (none)'
@@ -93,10 +101,12 @@ describe('webhookDeliverySchema', () => {
     });
 
     it('leaves the outcome and lease fields absent until an attempt actually lands', () => {
-        // `responseCode`/`durationMs`/`error`/`nextAttemptAt` all mean something specific by their
-        // absence (never attempted, no retry scheduled) — a `default` on any would misreport a row
-        // that has not been through `attemptDelivery` yet. `leaseToken`/`leaseExpiresAt` the same:
-        // absent means never claimed, not "claimed by nobody in particular".
+        /**
+         * `responseCode`/`durationMs`/`error`/`nextAttemptAt` all mean something specific by their
+         * absence (never attempted, no retry scheduled) — a `default` on any would misreport a row
+         * that has not been through `attemptDelivery` yet. `leaseToken`/`leaseExpiresAt` the same:
+         * absent means never claimed, not "claimed by nobody in particular".
+         */
         for (const path of [
             'responseCode',
             'durationMs',
@@ -114,8 +124,10 @@ describe('webhookDeliverySchema', () => {
     });
 
     it('restricts status to the documented delivery lifecycle', () => {
-        // Mirrors `WebhookDeliveryStatus` in `model.ts` — no `failed`; a failed attempt with
-        // retries left goes back to `pending`, only `exhausted` is terminal.
+        /**
+         * Mirrors `WebhookDeliveryStatus` in `model.ts` — no `failed`; a failed attempt with
+         * retries left goes back to `pending`, only `exhausted` is terminal.
+         */
         expect(enumOf(webhookDeliverySchema, 'status')).toEqual([
             'pending',
             'in_flight',
@@ -137,9 +149,11 @@ describe('webhookDeliverySchema', () => {
     });
 
     it('expires a delivery row at the configured retention window, and only that index', () => {
-        // Asserted against the configured window rather than a literal, same reasoning as
-        // `tasks`'s own schema-contract test — so changing
-        // `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` moves the policy and the test together.
+        /**
+         * Asserted against the configured window rather than a literal, same reasoning as
+         * `tasks`'s own schema-contract test — so changing
+         * `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` moves the policy and the test together.
+         */
         expect(indexOptionSpecs(webhookDeliverySchema)).toEqual([
             `createdAt_1: expireAfterSeconds=${DELIVERY_RETENTION_SECONDS}`,
             'status_1_createdAt_-1: (none)',
@@ -152,8 +166,10 @@ describe('webhookDeliverySchema', () => {
     });
 
     it('expires ascending by createdAt, which is the direction a TTL index needs', () => {
-        // The same field appears descending in two compound indexes above; getting these confused
-        // produces an index that silently never deletes anything.
+        /**
+         * The same field appears descending in two compound indexes above; getting these confused
+         * produces an index that silently never deletes anything.
+         */
         expect(indexSpecs(webhookDeliverySchema)).toContain('createdAt_1: createdAt+1');
     });
 

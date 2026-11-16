@@ -5,7 +5,7 @@
  * dedup (`taskService.openSystemTask` / `clearSystemTasks`); this file only says which event is
  * which situation, and which staff screen does the work.
  *
- * @see docs/modules/shop-tasks.md
+ * @see docs/modules/shop-tasks.md#the-shop-s-to-dos
  */
 
 import { RefundFailureReason, TaskKind } from '@types';
@@ -35,7 +35,6 @@ const PAYMENTS_ATTENTION_WORK = `${FRONTEND_LINK_RULES.staffPages.salesPayments}
 /**
  * The staff screen of an order.
  *
- * @param orderId - the order
  */
 const orderWork = (orderId: string): string =>
     fillPath(FRONTEND_LINK_RULES.links.order, { id: orderId });

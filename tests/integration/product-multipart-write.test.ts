@@ -23,8 +23,10 @@ import { decodablePng, publicDirectory } from '@tests/images';
  * persisted `price: '101'` would answer the same and mean something quite different.
  */
 
-// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
-// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+/**
+ * `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+ * runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+ */
 const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 
 /**
@@ -38,8 +40,10 @@ beforeAll(async () => {
     PNG_BYTES = await decodablePng();
 });
 
-// Files only — the digest pipeline's `thumbs/` derivative directory lives alongside the uploads,
-// and a thumbnail is not what these assertions are about.
+/**
+ * Files only — the digest pipeline's `thumbs/` derivative directory lives alongside the uploads,
+ * and a thumbnail is not what these assertions are about.
+ */
 const uploadedFiles = () =>
     existsSync(UPLOAD_DIRECTORY)
         ? readdirSync(UPLOAD_DIRECTORY).filter((name) =>
@@ -56,13 +60,17 @@ const FALLBACK = 'en';
 
 describe('writing a product through a multipart body', () => {
     beforeEach(async () => {
-        // Every case below writes the fallback locale — see the same note in
-        // `locales/tests/integration/translations.test.ts`.
+        /**
+         * Every case below writes the fallback locale — see the same note in
+         * `locales/tests/integration/translations.test.ts`.
+         */
         await givenLocale(FALLBACK);
     });
 
-    /* A test that stores a file for real removes it — the original, its thumbnail and anything still
-     * quarantined — so each case starts from an empty upload directory. */
+    /**
+     * A test that stores a file for real removes it — the original, its thumbnail and anything still
+     * quarantined — so each case starts from an empty upload directory.
+     */
     afterEach(emptyFileSandbox);
 
     it('creates a product, decoding the string-transported price', async () => {
@@ -87,8 +95,10 @@ describe('writing a product through a multipart body', () => {
             });
 
         expect(response.status).toBe(201);
-        // A number, not the string it arrived as: a 200 storing `'101.5'` would be the same bug
-        // with a friendlier status.
+        /**
+         * A number, not the string it arrived as: a 200 storing `'101.5'` would be the same bug
+         * with a friendlier status.
+         */
         expect(response.body.price).toBe('101.50');
         expect(response.body.imageUrl).toMatch(/^\/images\/.+\.png$/);
     });
@@ -123,8 +133,10 @@ describe('writing a product through a multipart body', () => {
             .set('Authorization', bearer)
             .field('translations', JSON.stringify({ en: { title: 'Inactive on arrival' } }))
             .field('price', '5')
-            // The string 'false' is truthy — the decoder is the only thing standing between this
-            // and a product published against its author's wishes.
+            /**
+             * The string 'false' is truthy — the decoder is the only thing standing between this
+             * and a product published against its author's wishes.
+             */
             .field('active', 'false')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -143,8 +155,10 @@ describe('writing a product through a multipart body', () => {
             .set('Authorization', bearer)
             .field('translations', JSON.stringify({ en: { title: 'Digital good on arrival' } }))
             .field('price', '5')
-            // The string 'false' is truthy — same trap as `active` above, so the create
-            // controller's `booleans` decode list has to carry this field too.
+            /**
+             * The string 'false' is truthy — same trap as `active` above, so the create
+             * controller's `booleans` decode list has to carry this field too.
+             */
             .field('requiresShipping', 'false')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -206,8 +220,10 @@ describe('writing a product through a multipart body', () => {
                 contentType: 'image/png'
             });
 
-        // The decoder leaves an unparseable value as the string it was, precisely so this stays a
-        // 422 about the caller's input rather than becoming a `NaN` the validator has to explain.
+        /**
+         * The decoder leaves an unparseable value as the string it was, precisely so this stays a
+         * 422 about the caller's input rather than becoming a `NaN` the validator has to explain.
+         */
         expect(response.status).toBe(422);
         // Nothing stored: a rejected write must not leave its upload behind.
         expect(uploadedFiles()).toEqual([]);

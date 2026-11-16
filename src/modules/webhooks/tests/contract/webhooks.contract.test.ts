@@ -666,7 +666,7 @@ describe('GET /webhooks/deliveries/:id', () => {
 });
 
 describe('POST /webhooks/deliveries/:id/replay', () => {
-    /*
+    /**
      * A real replay: it makes one outbound attempt, to a `.test` host that never resolves — so the
      * attempt fails, as a dead endpoint's would, and the answer is the delivery as it now stands.
      * What is checked is that answer's shape, not the endpoint's health.

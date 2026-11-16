@@ -16,6 +16,7 @@ import {
     writeExport
 } from '@infrastructure/adapters/export-store';
 
+/** Temp directory the files land in; removed after each case. */
 let root: string;
 
 beforeEach(async () => {

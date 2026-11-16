@@ -11,7 +11,9 @@
 import { Types } from 'mongoose';
 import { makeCart } from '@modules/cart/factories';
 
+/** Owner id the factory is asked to build for. */
 const USER = '65dc8a99604c307b702b5ccc';
+/** Product id the factory-built line points at. */
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 
 describe('makeCart', () => {
@@ -23,8 +25,10 @@ describe('makeCart', () => {
     });
 
     it('omits items entirely when none are given, so the schema default applies', () => {
-        // `items: []` here would work, but stating it makes the fixture rather than the schema
-        // the authority on what an empty cart is — and the two would then have to be kept in step.
+        /**
+         * `items: []` here would work, but stating it makes the fixture rather than the schema
+         * the authority on what an empty cart is — and the two would then have to be kept in step.
+         */
         expect(Object.hasOwn(makeCart({ userId: USER }), 'items')).toBe(false);
     });
 
@@ -40,8 +44,10 @@ describe('makeCart', () => {
     });
 
     it('keeps an explicitly empty item list distinct from an absent one', () => {
-        // `[]` means "this cart was emptied"; absent means "unspecified". A fixture that
-        // collapsed them could not seed a cart that exists and holds nothing.
+        /**
+         * `[]` means "this cart was emptied"; absent means "unspecified". A fixture that
+         * collapsed them could not seed a cart that exists and holds nothing.
+         */
         const cart = makeCart({ userId: USER, items: [] });
 
         expect(cart.items).toEqual([]);

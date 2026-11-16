@@ -7,7 +7,7 @@
  * can't honour part of the contract narrows its own type instead of inheriting a method it must
  * break.
  *
- * @see docs/understand/mongodb-mongoose.md
+ * @see docs/understand/mongodb-mongoose.md#what-each-piece-does
  */
 
 import { isObjectIdOrHexString, Types } from 'mongoose';
@@ -151,7 +151,7 @@ const toDate = (value: unknown): Date | undefined => {
  * to build an aggregation `$match` from the same rules.
  */
 const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> => {
-    /*
+    /**
      * `object` and not `Record<string, unknown>` for the filter bag: the generated request DTOs
      * are interfaces, which TypeScript denies an implicit index signature, so the stricter type
      * would force every caller to cast. The one cast that makes keys readable is confined here.
@@ -159,10 +159,12 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     const bag = filters as Record<string, unknown>;
     const where: Record<string, unknown> = {};
 
-    // A batch read: `$in` for an array, equality for a scalar. `toObjectId` still throws per
-    // element on a malformed id — a bad id in a batch is a 422 about that request, not a silently
-    // empty page. An empty array is "no filter" here too; the contract's `minItems: 1` is the
-    // real guard, this is belt and braces for `scripts/ops/` scripts that reach the repository directly.
+    /**
+     * A batch read: `$in` for an array, equality for a scalar. `toObjectId` still throws per
+     * element on a malformed id — a bad id in a batch is a 422 about that request, not a silently
+     * empty page. An empty array is "no filter" here too; the contract's `minItems: 1` is the
+     * real guard, this is belt and braces for `scripts/ops/` scripts that reach the repository directly.
+     */
     for (const [key, path] of Object.entries(spec.objectIds ?? {})) {
         const value = bag[key];
         if (Array.isArray(value)) {
@@ -180,8 +182,10 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     for (const [key, path] of Object.entries(spec.booleans ?? {}))
         if (typeof bag[key] === 'boolean') where[path] = bag[key];
 
-    // `null` matches a missing field and an explicit null alike, so either spelling of "unset" in
-    // a stored document reads the same.
+    /**
+     * `null` matches a missing field and an explicit null alike, so either spelling of "unset" in
+     * a stored document reads the same.
+     */
     for (const [key, path] of Object.entries(spec.presence ?? {}))
         if (typeof bag[key] === 'boolean') where[path] = bag[key] ? { $ne: null } : null;
 
@@ -189,9 +193,11 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     for (const [key, path] of Object.entries(spec.regex ?? {}))
         addRegexFilter(where, path, bag[key] as string | undefined);
 
-    // `toSearchPattern` rather than `escapeRegex`: this is caller text on its way into a pattern,
-    // so it needs the control-character strip too — a NUL here is a 500 from `POST /products/search`.
-    // `undefined` means nothing searchable survived, and an absent filter is the honest answer.
+    /**
+     * `toSearchPattern` rather than `escapeRegex`: this is caller text on its way into a pattern,
+     * so it needs the control-character strip too — a NUL here is a 500 from `POST /products/search`.
+     * `undefined` means nothing searchable survived, and an absent filter is the honest answer.
+     */
     for (const [key, path] of Object.entries(spec.arrayRegex ?? {})) {
         const pattern = toSearchPattern(bag[key]);
         if (pattern !== undefined) where[path] = { $elemMatch: { $regex: pattern, $options: 'i' } };
@@ -375,8 +381,10 @@ export function createRepository<TDocument extends Document, TWire>(
         const transformed: unknown[] = items.map((item) =>
             transform(item as Record<string, unknown>)
         );
-        // `transform` is the repository's own mapping from a stored row to `TWire`, so each item is
-        // one.
+        /**
+         * `transform` is the repository's own mapping from a stored row to `TWire`, so each item is
+         * one.
+         */
         return transformed as TWire[];
     };
 
@@ -397,9 +405,11 @@ export function createRepository<TDocument extends Document, TWire>(
      */
     const findAll = (
         where: QueryFilter<TDocument> = {},
-        // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
-        // makes which documents a page contains undefined. A caller's own sort is closed with
-        // `_id` below, so no caller has to remember to.
+        /**
+         * `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
+         * makes which documents a page contains undefined. A caller's own sort is closed with
+         * `_id` below, so no caller has to remember to.
+         */
         {
             sort = DEFAULT_SORT,
             collated = false,
@@ -408,8 +418,10 @@ export function createRepository<TDocument extends Document, TWire>(
         }: FindAllOptions = {}
     ): Promise<Lean<TDocument>[]> => {
         const query = mongooseModel.find({ ...where }).lean<Lean<TDocument>[]>();
-        // Query#collation: string comparison rules for the sort; the default binary order stays
-        // for every read that did not ask for one.
+        /**
+         * Query#collation: string comparison rules for the sort; the default binary order stays
+         * for every read that did not ask for one.
+         */
         if (collated) query.collation(SORT_COLLATION);
         return query.sort(withTiebreaker(sort)).skip(skip).limit(limit).exec();
     };
@@ -442,8 +454,10 @@ export function createRepository<TDocument extends Document, TWire>(
      * request's `If-Match` when one names this row (`./versioning`), a plain `save()` otherwise.
      */
     const save = (document: TDocument, session?: ClientSession): Promise<TDocument> =>
-        // Mongoose: `save({ session })` joins the write to that transaction.
-        // https://mongoosejs.com/docs/transactions.html
+        /**
+         * Mongoose: `save({ session })` joins the write to that transaction.
+         * https://mongoosejs.com/docs/transactions.html
+         */
         fencedSave(document, () => document.save(session ? { session } : undefined));
 
     /**
@@ -479,13 +493,17 @@ export function createRepository<TDocument extends Document, TWire>(
         sort?: Record<string, 1 | -1>
     ): Promise<PaginatedResult<TWire>> => {
         const pagination = normalizePagination(filters);
-        // Explicit argument, else the caller's `sort` filter through the whitelist, else the total
-        // default: `count` and `findAll` are separate queries, so a tie can put one document on
-        // two pages — see `DEFAULT_SORT`.
+        /**
+         * Explicit argument, else the caller's `sort` filter through the whitelist, else the total
+         * default: `count` and `findAll` are separate queries, so a tie can put one document on
+         * two pages — see `DEFAULT_SORT`.
+         */
         const chosen = sort ?? sortOf(filters, searchable.sortable);
-        // `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
-        // no client-supplied filter may widen — so both must hold, under `$and`. A spread would
-        // let one side's key replace the other's: two `$or`s, and one is silently dropped.
+        /**
+         * `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
+         * no client-supplied filter may widen — so both must hold, under `$and`. A spread would
+         * let one side's key replace the other's: two `$or`s, and one is silently dropped.
+         */
         const where = withScope(buildWhere(filters, searchable), scope) as QueryFilter<TDocument>;
 
         return count(where).then((totalItems) =>

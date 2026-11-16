@@ -25,15 +25,19 @@ import {
 
 describe('stockMovementSchema — the ledger', () => {
     it('requires the product and the reason, and nothing else', () => {
-        // A movement without a reason is an unattributable change to stock; without a product it
-        // is not a movement at all. Everything else is optional because most transitions move one
-        // column and originate from no human.
+        /**
+         * A movement without a reason is an unattributable change to stock; without a product it
+         * is not a movement at all. Everything else is optional because most transitions move one
+         * column and originate from no human.
+         */
         expect(requiredPaths(stockMovementSchema)).toEqual(['productId', 'reason']);
     });
 
     it('reads its reasons off the generated contract enum', () => {
-        // The reasons once had three independent declarations. Asserting against the generated
-        // enum rather than a retyped list is what keeps this from becoming a fourth.
+        /**
+         * The reasons once had three independent declarations. Asserting against the generated
+         * enum rather than a retyped list is what keeps this from becoming a fourth.
+         */
         expect(enumOf(stockMovementSchema, 'reason')).toEqual(Object.values(StockMovementReason));
     });
 
@@ -43,8 +47,10 @@ describe('stockMovementSchema — the ledger', () => {
     });
 
     it('defaults every delta to zero, so a row is always summable', () => {
-        // The replayability rule: summing each column over a product's rows must reproduce its
-        // counter. An absent delta breaks that sum — `undefined` is not zero to `$sum`.
+        /**
+         * The replayability rule: summing each column over a product's rows must reproduce its
+         * counter. An absent delta breaks that sum — `undefined` is not zero to `$sum`.
+         */
         expect(defaultOf(stockMovementSchema, 'onHandDelta')).toBe(0);
         expect(defaultOf(stockMovementSchema, 'reservedDelta')).toBe(0);
     });
@@ -54,8 +60,10 @@ describe('stockMovementSchema — the ledger', () => {
     });
 
     it('declares exactly the two documented indexes, newest-first in both', () => {
-        // Both are `createdAt: -1`: the ledger is only ever read latest-first, and a `+1` here
-        // would answer the same questions by sorting the whole match in memory.
+        /**
+         * Both are `createdAt: -1`: the ledger is only ever read latest-first, and a `+1` here
+         * would answer the same questions by sorting the whole match in memory.
+         */
         expect(indexSpecs(stockMovementSchema)).toEqual([
             'stockmovements_createdAt: createdAt-1',
             'stockmovements_productId_createdAt: productId+1, createdAt-1'
@@ -65,14 +73,18 @@ describe('stockMovementSchema — the ledger', () => {
 
 describe('reservationSchema — the hold', () => {
     it('makes one hold per order a database fact', () => {
-        // The exactly-once primitive. Not hygiene: a retried checkout is detected by the insert
-        // failing, with no read-then-write race to lose.
+        /**
+         * The exactly-once primitive. Not hygiene: a retried checkout is detected by the insert
+         * failing, with no read-then-write race to lose.
+         */
         expect(indexOptionSpecs(reservationSchema)).toContain('orderId_1: unique=true');
     });
 
     it('requires everything a hold needs to be honoured or given back', () => {
-        // `items` included: a hold that cannot say what it claimed cannot be released, and the
-        // units are lost until someone reconciles by hand.
+        /**
+         * `items` included: a hold that cannot say what it claimed cannot be released, and the
+         * units are lost until someone reconciles by hand.
+         */
         expect(requiredPaths(reservationSchema)).toEqual([
             'expiresAt',
             'items',
@@ -82,8 +94,10 @@ describe('reservationSchema — the hold', () => {
     });
 
     it('restricts status to the four states and starts every hold held', () => {
-        // `shipped` and `released` are terminal; `committed` can still move to `released`.
-        // A fifth value would be a state no operation handles.
+        /**
+         * `shipped` and `released` are terminal; `committed` can still move to `released`.
+         * A fifth value would be a state no operation handles.
+         */
         expect(enumOf(reservationSchema, 'status')).toEqual([
             'held',
             'committed',
@@ -96,17 +110,21 @@ describe('reservationSchema — the hold', () => {
     it('carries its own copy of what was claimed, requiring a positive quantity', () => {
         const item = subSchema(reservationSchema, 'items');
 
-        // `min: 1`: a zero-quantity line claims nothing and would be given back as nothing,
-        // leaving the counter it was supposed to move untouched.
+        /**
+         * `min: 1`: a zero-quantity line claims nothing and would be given back as nothing,
+         * leaving the counter it was supposed to move untouched.
+         */
         expect(requiredPaths(item)).toEqual(['productId', 'quantity']);
         expect(pathOptions(item, 'quantity').min).toBe(1);
         expect(optionsOf(item)._id).toBe(false);
     });
 
     it('indexes the sweep query and the preorder queue, and nothing more', () => {
-        // The sweep asks for holds still held, oldest deadline first — `status` then `expiresAt`,
-        // both ascending. The allocation asks for paid holds of one product, oldest payment first.
-        // The unique `orderId` index is the exactly-once gate above.
+        /**
+         * The sweep asks for holds still held, oldest deadline first — `status` then `expiresAt`,
+         * both ascending. The allocation asks for paid holds of one product, oldest payment first.
+         * The unique `orderId` index is the exactly-once gate above.
+         */
         expect(indexSpecs(reservationSchema)).toEqual([
             'orderId_1: orderId+1',
             'reservations_status_expiresAt: status+1, expiresAt+1',
@@ -115,9 +133,11 @@ describe('reservationSchema — the hold', () => {
     });
 
     it('does not expire holds with a TTL index', () => {
-        // Deliberate, and the comment in the model says so: a TTL index DELETES the document,
-        // but the units have to be given back and the story has to survive. Expiry is a sweep.
-        // A TTL index added here would silently drop reservations and leak stock.
+        /**
+         * Deliberate, and the comment in the model says so: a TTL index DELETES the document,
+         * but the units have to be given back and the story has to survive. Expiry is a sweep.
+         * A TTL index added here would silently drop reservations and leak stock.
+         */
         for (const options of Object.values(indexBehaviour(reservationSchema)))
             expect(options).not.toHaveProperty('expireAfterSeconds');
     });

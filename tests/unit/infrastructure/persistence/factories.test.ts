@@ -16,14 +16,17 @@
 import { Types } from 'mongoose';
 import { toDate, toObjectId, identityOf } from '@infrastructure/persistence/factories';
 
+/** A fixed valid ObjectId string. */
 const HEX = '65dc8a99604c307b702b5ccc';
 
 describe('toObjectId', () => {
     it('turns a hex string into a real ObjectId with the same value', () => {
         const id = toObjectId(HEX);
 
-        // Both halves: a plain string would satisfy a loose comparison and still match zero
-        // documents inside a pipeline.
+        /**
+         * Both halves: a plain string would satisfy a loose comparison and still match zero
+         * documents inside a pipeline.
+         */
         expect(id).toBeInstanceOf(Types.ObjectId);
         expect(String(id)).toBe(HEX);
     });
@@ -38,8 +41,10 @@ describe('toObjectId', () => {
     });
 
     it('throws on a malformed id rather than minting a random one', () => {
-        // The dangerous alternative: silently substituting a new id would seed a record nothing
-        // else can reference, and the broken reference would surface far from here.
+        /**
+         * The dangerous alternative: silently substituting a new id would seed a record nothing
+         * else can reference, and the broken reference would surface far from here.
+         */
         expect(() => toObjectId('not-an-object-id')).toThrow();
     });
 });
@@ -59,8 +64,10 @@ describe('toDate', () => {
     });
 
     it('leaves undefined undefined, so stripUndefined can drop it', () => {
-        // `new Date(undefined)` is an Invalid Date, which persists as `null` and reads as a
-        // record with an explicitly unknown timestamp. The early return is what prevents that.
+        /**
+         * `new Date(undefined)` is an Invalid Date, which persists as `null` and reads as a
+         * record with an explicitly unknown timestamp. The early return is what prevents that.
+         */
         expect(toDate(undefined)).toBeUndefined();
     });
 });
@@ -71,8 +78,10 @@ describe('identityOf', () => {
     });
 
     it('derives createdAt from the id"s own embedded timestamp', () => {
-        // The property that makes a seeded catalogue sort meaningfully: ids chosen months apart
-        // produce records created months apart, without the seed files stating a date at all.
+        /**
+         * The property that makes a seeded catalogue sort meaningfully: ids chosen months apart
+         * produce records created months apart, without the seed files stating a date at all.
+         */
         const { _id, createdAt } = identityOf({ id: HEX });
 
         expect(createdAt.getTime()).toBe(_id.getTimestamp().getTime());
@@ -85,8 +94,10 @@ describe('identityOf', () => {
     });
 
     it('defaults updatedAt to createdAt, so an untouched record reads as untouched', () => {
-        // Not `new Date()`: a record seeded and never edited must not claim it was modified at
-        // seed time, or every "recently changed" view lists the entire dataset.
+        /**
+         * Not `new Date()`: a record seeded and never edited must not claim it was modified at
+         * seed time, or every "recently changed" view lists the entire dataset.
+         */
         const { createdAt, updatedAt } = identityOf({ id: HEX });
 
         expect(updatedAt.getTime()).toBe(createdAt.getTime());

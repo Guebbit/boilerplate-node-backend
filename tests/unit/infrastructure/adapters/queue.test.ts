@@ -26,6 +26,7 @@ const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' };
 
 /** A parking queue also expires its messages after 7 days. */
 const DEAD_LETTER_ARGUMENTS = { ...QUORUM_QUEUE_TYPE, 'x-message-ttl': 604_800_000 };
+/** The queue arguments that give at-least-once delivery with dead-lettering. */
 const AT_LEAST_ONCE_DEAD_LETTERING = {
     'x-dead-letter-strategy': 'at-least-once',
     'x-overflow': 'reject-publish'
@@ -33,7 +34,9 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
 
 // ─── Mock amqplib ─────────────────────────────────────────────────────────────
 
+/** Stands in for the channel's `Ack`; the cases assert how it was called. */
 const mockAck = jest.fn();
+/** Stands in for the channel's `Nack`; the cases assert how it was called. */
 const mockNack = jest.fn();
 /**
  * A confirm channel's `sendToQueue` gains a callback the broker invokes once it has accepted (or
@@ -55,15 +58,23 @@ const mockSendToQueue = jest
             return true;
         }
     );
+/** Stands in for the channel's `AssertQueue`; the cases assert how it was called. */
 const mockAssertQueue = jest
     .fn()
     .mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
+/** Stands in for the channel's `Prefetch`; the cases assert how it was called. */
 const mockPrefetch = jest.fn().mockImplementation(() => Promise.resolve());
+/** Stands in for the channel's `Consume`; the cases assert how it was called. */
 const mockConsume = jest.fn().mockResolvedValue({ consumerTag: 'tag-1' });
+/** Stands in for the channel's `AssertExchange`; the cases assert how it was called. */
 const mockAssertExchange = jest.fn().mockResolvedValue({ exchange: DEAD_LETTER_EXCHANGE });
+/** Stands in for the channel's `BindQueue`; the cases assert how it was called. */
 const mockBindQueue = jest.fn().mockResolvedValue({});
+/** Stands in for the channel's `ChannelOn`; the cases assert how it was called. */
 const mockChannelOn = jest.fn();
+/** Stands in for the channel's `Cancel`; the cases assert how it was called. */
 const mockCancel = jest.fn().mockResolvedValue({});
+/** Builds a channel whose every method is mocked. */
 const channelMock = () => ({
     cancel: mockCancel,
     assertQueue: mockAssertQueue,
@@ -76,10 +87,13 @@ const channelMock = () => ({
     nack: mockNack,
     on: mockChannelOn
 });
-// `queue.ts` now opens a CONFIRM channel (`model.createConfirmChannel()`), not a plain one — see
-// its own docblock on `currentChannel`. The mock channel shape is identical either way (a
-// `ConfirmChannel` only ADDS the callback/`waitForConfirms` surface `sendToQueue` above covers).
+/**
+ * `queue.ts` now opens a CONFIRM channel (`model.createConfirmChannel()`), not a plain one — see
+ * its own docblock on `currentChannel`. The mock channel shape is identical either way (a
+ * `ConfirmChannel` only ADDS the callback/`waitForConfirms` surface `sendToQueue` above covers).
+ */
 const mockCreateConfirmChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
+/** Stands in for the channel's `ModelClose`; the cases assert how it was called. */
 const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 
 /**
@@ -90,7 +104,9 @@ const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 const mockPlainAssertQueue = jest
     .fn()
     .mockResolvedValue({ queue: 'test.dead', messageCount: 0, consumerCount: 0 });
+/** Stands in for the channel's `PlainChannelClose`; the cases assert how it was called. */
 const mockPlainChannelClose = jest.fn().mockResolvedValue(undefined);
+/** Stands in for the channel's `CreateChannel`; the cases assert how it was called. */
 const mockCreateChannel = jest.fn().mockImplementation(() =>
     Promise.resolve({
         assertQueue: mockPlainAssertQueue,
@@ -100,6 +116,7 @@ const mockCreateChannel = jest.fn().mockImplementation(() =>
 
 /** Handlers `queue.ts` registered on the recovering connection's own events (`connect`/`disconnect`). */
 let modelListeners: Record<string, ((...args: never[]) => void)[]> = {};
+/** Stands in for the channel's `ModelOn`; the cases assert how it was called. */
 const mockModelOn = jest.fn((event: string, handler: (...args: never[]) => void): void => {
     (modelListeners[event] ??= []).push(handler);
 });
@@ -107,6 +124,7 @@ const mockModelOn = jest.fn((event: string, handler: (...args: never[]) => void)
 const emitModelEvent = (event: string, ...args: never[]) => {
     for (const handler of modelListeners[event] ?? []) handler(...args);
 };
+/** A connection model that reports being recovered. */
 const recoveringModelMock = {
     createConfirmChannel: mockCreateConfirmChannel,
     createChannel: mockCreateChannel,
@@ -157,10 +175,12 @@ const simulateReconnect = async () => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Turns the broker on for the case. */
 const enableRabbitMQ = () => {
     setEnvironment({ NODE_RABBITMQ_URL: '******localhost:5672' });
 };
 
+/** Turns the broker off for the case. */
 const disableRabbitMQ = () => {
     setEnvironment({ NODE_RABBITMQ_URL: undefined });
     setEnvironment({ NODE_RABBITMQ_HOST: undefined });
@@ -244,8 +264,10 @@ describe('publishToQueue()', () => {
         expect(mockSendToQueue).toHaveBeenCalledWith(
             'emails',
             expect.any(Buffer),
-            // 4, not 0: a quorum queue has no `x-max-priority` opt-in and treats an unmarked
-            // message as priority 4 — 'normal' has to sit at 4 too, or it would rank BELOW one.
+            /**
+             * 4, not 0: a quorum queue has no `x-max-priority` opt-in and treats an unmarked
+             * message as priority 4 — 'normal' has to sit at 4 too, or it would rank BELOW one.
+             */
             { persistent: true, priority: 4 },
             expect.any(Function)
         );
@@ -298,8 +320,10 @@ describe('publishToQueue()', () => {
     it('resolves false when the broker never confirms within the publish timeout', async () => {
         jest.useFakeTimers();
         await ensureConnected();
-        // The callback is simply never invoked — a broker that accepted the TCP write but never
-        // answered, the exact case a fixed boolean read could not tell from success.
+        /**
+         * The callback is simply never invoked — a broker that accepted the TCP write but never
+         * answered, the exact case a fixed boolean read could not tell from success.
+         */
         mockSendToQueue.mockImplementationOnce(() => true);
 
         const result = publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
@@ -484,16 +508,20 @@ describe('consumeFromQueue()', () => {
     it('records the registration but binds nothing yet while still connecting', async () => {
         enableRabbitMQ();
         await stopQueue();
-        // Stands in for a broker that has not answered yet — deterministic, unlike racing
-        // `consumeFromQueue`'s own resolution against how many microtask ticks the mocked
-        // connect+setup chain happens to need.
+        /**
+         * Stands in for a broker that has not answered yet — deterministic, unlike racing
+         * `consumeFromQueue`'s own resolution against how many microtask ticks the mocked
+         * connect+setup chain happens to need.
+         */
         mockConnect.mockImplementationOnce(() => new Promise(() => undefined));
         mockConsume.mockClear();
         const handler = jest.fn().mockResolvedValue(true);
 
-        // `getChannel()` kicks off the connection but never waits on it (rule 2), so a caller
-        // that reaches `consumeFromQueue` before it settles gets a resolved promise with nothing
-        // bound — the pending connect above is what guarantees that stays true through the assertion.
+        /**
+         * `getChannel()` kicks off the connection but never waits on it (rule 2), so a caller
+         * that reaches `consumeFromQueue` before it settles gets a resolved promise with nothing
+         * bound — the pending connect above is what guarantees that stays true through the assertion.
+         */
         await consumeFromQueue({ queue: 'still-connecting', handler, schema: anyPayload });
 
         expect(mockConsume).not.toHaveBeenCalled();
@@ -597,13 +625,17 @@ const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = any
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
     mockCreateConfirmChannel.mockImplementation(() => Promise.resolve(channelMock()));
 
-    // `consumeFromQueue` only RECORDS a binding while still connecting (rule 2) — every case
-    // below needs the real `ch.consume()` call to capture its delivery callback, so the
-    // connection is established first, regardless of what an earlier test left it as.
+    /**
+     * `consumeFromQueue` only RECORDS a binding while still connecting (rule 2) — every case
+     * below needs the real `ch.consume()` call to capture its delivery callback, so the
+     * connection is established first, regardless of what an earlier test left it as.
+     */
     await ensureConnected();
-    // A prior test's own registrations replay onto this fresh channel too (`consumerBindings` is
-    // module-level and this file never resets it) — cleared so `.mock.calls[0]` below is this
-    // call's own registration, not one of theirs.
+    /**
+     * A prior test's own registrations replay onto this fresh channel too (`consumerBindings` is
+     * module-level and this file never resets it) — cleared so `.mock.calls[0]` below is this
+     * call's own registration, not one of theirs.
+     */
     mockConsume.mockClear();
 
     await consumeFromQueue({ queue: 'jobs', handler, schema });
@@ -622,13 +654,16 @@ const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = any
 /** Let a delivery's handler chain settle — however many ticks it takes. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+/** A delivered message with the given body and headers. */
 const delivery = (body: unknown, headers: Record<string, unknown> = {}) => ({
     content: Buffer.from(JSON.stringify(body)),
     properties: { headers }
 });
 
-/** This queue's current `queue_jobs_dead_lettered_total` — the counter is a shared, un-reset
- *  registry, so a test asserting on it reads the delta around its own action, not an absolute. */
+/**
+ * This queue's current `queue_jobs_dead_lettered_total` — the counter is a shared, un-reset
+ *  registry, so a test asserting on it reads the delta around its own action, not an absolute.
+ */
 const deadLetteredCountFor = async (queue: string): Promise<number> => {
     const metric = await queueJobsDeadLetteredTotal.get();
     return metric.values.find((entry) => entry.labels.queue === queue)?.value ?? 0;
@@ -688,8 +723,10 @@ describe('consumeFromQueue acknowledgement policy', () => {
     });
 
     it('parks without retrying when the handler refuses the message', async () => {
-        // A business rejection: the job was understood and declined. Retrying it would ask the
-        // same question again and get the same answer, forever.
+        /**
+         * A business rejection: the job was understood and declined. Retrying it would ask the
+         * same question again and get the same answer, forever.
+         */
         const handler = jest.fn().mockResolvedValue(false);
         const onMessage = await captureConsumerCallback(handler);
 
@@ -705,8 +742,10 @@ describe('consumeFromQueue acknowledgement policy', () => {
     });
 
     it('republishes to the retry queue, then acks, when the handler throws and attempts remain', async () => {
-        // The retry is our own confirmed republish, not a dead-letter: the first throw stamps
-        // `x-retry-attempt: 1` and keeps everything else about the message.
+        /**
+         * The retry is our own confirmed republish, not a dead-letter: the first throw stamps
+         * `x-retry-attempt: 1` and keeps everything else about the message.
+         */
         const handler = jest.fn().mockRejectedValue(new Error('SMTP timeout'));
         const onMessage = await captureConsumerCallback(handler);
         const incoming = {
@@ -820,8 +859,10 @@ describe('consumeFromQueue acknowledgement policy', () => {
     });
 
     it('parks once a thrown error has exhausted every attempt, rather than retrying forever', async () => {
-        // The header already carries 4 failed attempts (the default NODE_QUEUE_MAX_ATTEMPTS is
-        // 5) — this delivery is the 5th, so a further failure has nowhere left to retry to.
+        /**
+         * The header already carries 4 failed attempts (the default NODE_QUEUE_MAX_ATTEMPTS is
+         * 5) — this delivery is the 5th, so a further failure has nowhere left to retry to.
+         */
         const handler = jest.fn().mockRejectedValue(new Error('still down'));
         const onMessage = await captureConsumerCallback(handler);
         const before = await deadLetteredCountFor('jobs');
@@ -832,14 +873,18 @@ describe('consumeFromQueue acknowledgement policy', () => {
         expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
         expect(mockSendToQueue).not.toHaveBeenCalled();
         expect(mockAck).not.toHaveBeenCalled();
-        // The broker moves it to `<queue>.dead`; this counter is the only thing that surfaces a
-        // parked job to an operator (see prometheus.alert-rules.yaml's QueueJobsParked).
+        /**
+         * The broker moves it to `<queue>.dead`; this counter is the only thing that surfaces a
+         * parked job to an operator (see prometheus.alert-rules.yaml's QueueJobsParked).
+         */
         expect(await deadLetteredCountFor('jobs')).toBe(before + 1);
     });
 
     it('parks a message that will never parse, rather than cycling it through retries', async () => {
-        // The poison-message case. These bytes are not JSON and never will be, so retrying hands
-        // the same delivery straight back and the failure repeats identically every time.
+        /**
+         * The poison-message case. These bytes are not JSON and never will be, so retrying hands
+         * the same delivery straight back and the failure repeats identically every time.
+         */
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler);
 
@@ -852,8 +897,10 @@ describe('consumeFromQueue acknowledgement policy', () => {
     });
 
     it('ignores a broker-side cancellation, which delivers null', async () => {
-        // Sent when the queue is deleted or the channel is closing. There is no delivery to ack,
-        // and acking `null` is an error rather than a no-op.
+        /**
+         * Sent when the queue is deleted or the channel is closing. There is no delivery to ack,
+         * and acking `null` is an error rather than a no-op.
+         */
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler);
 
@@ -895,8 +942,10 @@ describe('consumeFromQueue contract validation', () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
 
-        // No `templateName`: the worker would have refused this too, but only after the payload
-        // had already reached code that trusts it.
+        /**
+         * No `templateName`: the worker would have refused this too, but only after the payload
+         * had already reached code that trusts it.
+         */
         await onMessage(delivery({ request: { to: 'a@example.com' }, data: {} }));
         await settle();
 
@@ -910,11 +959,13 @@ describe('consumeFromQueue contract validation', () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
 
-        // A queue payload schema reads TOLERANTLY: `additionalProperties: false` in the contract
-        // no longer becomes `.strict()` in the generated schema, because a producer adding a field
-        // is a normal, non-breaking rolling-deploy change — parking every message the moment one
-        // ships a new field would turn that into an outage for every consumer still on the old
-        // contract.
+        /**
+         * A queue payload schema reads TOLERANTLY: `additionalProperties: false` in the contract
+         * no longer becomes `.strict()` in the generated schema, because a producer adding a field
+         * is a normal, non-breaking rolling-deploy change — parking every message the moment one
+         * ships a new field would turn that into an outage for every consumer still on the old
+         * contract.
+         */
         await onMessage(
             delivery({
                 request: { to: 'a@example.com', bcc: 'attacker@example.com' },
@@ -959,9 +1010,11 @@ describe('a reconnect gets its consumers back', () => {
         await consumeFromQueue({ queue: 'reconnect-jobs', handler, schema: anyPayload });
         expect(mockConsume).toHaveBeenCalledWith('reconnect-jobs', expect.any(Function));
 
-        // The broker drops and the library reconnects on its own — `setup` runs again on a fresh
-        // model (`mockCreateConfirmChannel` standing in for the fresh channel it opens), THEN `connect`
-        // fires, same order `node_modules/amqplib/lib/recovery.js`'s `_connect()` uses.
+        /**
+         * The broker drops and the library reconnects on its own — `setup` runs again on a fresh
+         * model (`mockCreateConfirmChannel` standing in for the fresh channel it opens), THEN `connect`
+         * fires, same order `node_modules/amqplib/lib/recovery.js`'s `_connect()` uses.
+         */
         mockConsume.mockClear();
         mockCreateConfirmChannel.mockClear();
         await simulateReconnect();
@@ -1001,9 +1054,11 @@ describe('parkedCounts()', () => {
 
     it('checks every worker queue on its own dedicated, non-confirm channel', async () => {
         await ensureConnected();
-        // `ensureConnected` itself opens the shared confirm channel as part of ordinary setup —
-        // captured here so the assertion below is about what `parkedCounts` itself opens, not
-        // about the connection's own boot.
+        /**
+         * `ensureConnected` itself opens the shared confirm channel as part of ordinary setup —
+         * captured here so the assertion below is about what `parkedCounts` itself opens, not
+         * about the connection's own boot.
+         */
         const confirmChannelCallsBeforeCheck = mockCreateConfirmChannel.mock.calls.length;
         mockPlainAssertQueue.mockResolvedValue({
             queue: 'test.dead',
@@ -1059,9 +1114,11 @@ describe('startQueue() never waits for the broker', () => {
     it('resolves even while the connection is still pending', async () => {
         enableRabbitMQ();
         await stopQueue();
-        // Stands in for a broker that never answers: this one connect attempt never settles, so
-        // if `startQueue` ever awaited it — even transitively — this test would time out rather
-        // than resolve.
+        /**
+         * Stands in for a broker that never answers: this one connect attempt never settles, so
+         * if `startQueue` ever awaited it — even transitively — this test would time out rather
+         * than resolve.
+         */
         mockConnect.mockImplementationOnce(() => new Promise(() => undefined));
 
         await expect(startQueue()).resolves.toBeUndefined();

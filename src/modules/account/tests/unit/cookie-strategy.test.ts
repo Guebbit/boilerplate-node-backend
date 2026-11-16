@@ -103,7 +103,10 @@ const users = asStub<{ findAuthenticatableById: jest.Mock; touchLastActive: jest
 /** The proof resolver double. */
 const proof = asStub<jest.Mock>(resolveProof);
 
-/** The row the last `insert` stored. */
+/**
+ * The row the last `insert` stored.
+ * @throws {Error} when no session row was inserted
+ */
 const insertedRow = (): NewSessionRow => {
     // `insert` is a bare `jest.Mock`: the stored row's type is what the strategy was told to insert.
     const call = sessions.insert.mock.calls.at(-1) as [NewSessionRow] | undefined;

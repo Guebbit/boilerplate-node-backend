@@ -5,7 +5,7 @@
  * event, and the answer is the same 204 either way, so a response never tells a page whether it
  * was measured.
  *
- * @see docs/modules/analytics.md
+ * @see docs/modules/analytics.md#the-story
  */
 
 import type { Request, Response } from 'express';

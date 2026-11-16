@@ -9,7 +9,7 @@
  * Lives on:    `globalThis`, so a `jest.resetModules()` re-import still sees the same state.
  *
  * Everything else asks a slice (`defineConfig`), and a slice asks {@link currentEnvironment}.
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#read-once-override-on-top
  */
 
 import { resolveSecretFiles } from './secret-files';
@@ -79,8 +79,10 @@ export const currentEnvironment = (): Environment => {
         if (value === undefined) merged.delete(name);
         else merged.set(name, value);
     }
-    // Secret files are read here, after the overrides, so an override can name one and every slice
-    // sees only the resolved value. Never written back to `process.env`.
+    /**
+     * Secret files are read here, after the overrides, so an override can name one and every slice
+     * sees only the resolved value. Never written back to `process.env`.
+     */
     store.merged = Object.freeze(resolveSecretFiles(Object.fromEntries(merged)));
     store.mergedVersion = store.version;
     return store.merged;

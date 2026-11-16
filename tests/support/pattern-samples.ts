@@ -5,8 +5,8 @@
  * registered once rather than once per generator — and a generator that finds no entry fails
  * loudly instead of emitting a value the contract forbids.
  *
- * @see docs/build/contract-request-data.md
- * @see docs/build/fuzz-testing.md
+ * @see docs/build/contract-request-data.md#endpoint-specific-glue
+ * @see docs/build/fuzz-testing.md#spec-valid-but-hostile
  */
 
 /**
@@ -21,21 +21,29 @@ const PATTERN_SAMPLES: Record<string, string> = {
     '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$': 'it',
     // CountryCode — ISO 3166-1 alpha-2.
     '^[A-Z]{2}$': 'IT',
-    // CurrencyCode — ISO 4217 alphabetic; the shop's own currency, so a payload also passes the
-    // refund and checkout rules that compare it with the payment's.
+    /**
+     * CurrencyCode — ISO 4217 alphabetic; the shop's own currency, so a payload also passes the
+     * refund and checkout rules that compare it with the payment's.
+     */
     '^[A-Z]{3}$': 'EUR',
-    // Id — the shared resource identifier. An ObjectId-shaped sample, so a payload built from the
-    // contract also names an id this backend would accept, not only one the contract does.
+    /**
+     * Id — the shared resource identifier. An ObjectId-shaped sample, so a payload built from the
+     * contract also names an id this backend would accept, not only one the contract does.
+     */
     '^[0-9A-Za-z_-]+$': '65dc8a99604c307b702b5ccc',
-    // Identifier-shaped strings (a tenant id, a two-letter tag, a token-ish key). The `\w` form is
-    // how the generated zod schema spells `[A-Za-z0-9_]`.
+    /**
+     * Identifier-shaped strings (a tenant id, a two-letter tag, a token-ish key). The `\w` form is
+     * how the generated zod schema spells `[A-Za-z0-9_]`.
+     */
     '^[a-z0-9][a-z0-9-]*$': 'abc',
     '^[a-z]{2}$': 'it',
     '^[A-Za-z0-9_-]+$': 'abc',
     // `paymentMethodRef`: a provider handle must contain a letter, so a card number is refused.
     '^[\\d_-]*[A-Za-z][\\w-]*$': 'pm_card_visa',
-    // DecimalAmount and NonNegativeDecimalAmount — money as text. One sample serves both: a plain
-    // amount any currency's places accept.
+    /**
+     * DecimalAmount and NonNegativeDecimalAmount — money as text. One sample serves both: a plain
+     * amount any currency's places accept.
+     */
     '^-?\\d+(\\.\\d+)?$': '1.00',
     '^\\d+(\\.\\d+)?$': '1.00',
     // An https-only URL.

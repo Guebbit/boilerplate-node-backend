@@ -75,8 +75,10 @@ const identityOf = (user: GithubUser, emails: GithubEmail[]): OAuthIdentity => {
     if (typeof user.id !== 'number')
         throw new Error('GitHub token exchange: profile response carries no id');
 
-    // The primary is the one address that identifies the account; a non-primary verified
-    // address is not the same claim — see the port's `emailVerified` doc.
+    /**
+     * The primary is the one address that identifies the account; a non-primary verified
+     * address is not the same claim — see the port's `emailVerified` doc.
+     */
     const primary = emails.find((entry) => entry.primary);
     if (!primary) throw new Error('GitHub token exchange: no primary email visible');
 
@@ -98,9 +100,11 @@ const identityOf = (user: GithubUser, emails: GithubEmail[]): OAuthIdentity => {
 export const githubOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 
-    // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
-    // PKCE (RFC 7636), supported by GitHub since July 2025.
-    // https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/
+    /**
+     * https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+     * PKCE (RFC 7636), supported by GitHub since July 2025.
+     * https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/
+     */
     authorizeUrl: (state, redirectUri, codeChallenge) =>
         authorizationUrlFor(configurationFor(PROVIDER_NAME, SERVER), {
             redirectUri,

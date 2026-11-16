@@ -6,9 +6,11 @@
  * import-time read to run again.
  */
 
-// A real top-level import, not just for the type: without one, TS treats this file as a global
-// script rather than a module, and its `loadSchema`/`ttlSeconds` collide with `audit-logs`'
-// identically-named globals.
+/**
+ * A real top-level import, not just for the type: without one, TS treats this file as a global
+ * script rather than a module, and its `loadSchema`/`ttlSeconds` collide with `audit-logs`'
+ * identically-named globals.
+ */
 import type { Schema } from 'mongoose';
 import { setEnvironment } from '@tests/environment';
 

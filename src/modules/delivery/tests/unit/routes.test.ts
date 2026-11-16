@@ -42,17 +42,21 @@ describe('delivery routes', () => {
     });
 
     it('keeps the shipping methods public', () => {
-        // What shipping costs is pre-purchase information: a shopper deciding whether to buy has
-        // no account yet, and hiding the price behind a login loses the sale rather than
-        // protecting anything.
+        /**
+         * What shipping costs is pre-purchase information: a shopper deciding whether to buy has
+         * no account yet, and hiding the price behind a login loses the sale rather than
+         * protecting anything.
+         */
         expect(guardsOn(router, 'GET /methods')).not.toContain('isAuth');
     });
 
     it.each(['GET /:id/fulfillment-orders', 'GET /:id/shipments'])(
         'requires a session and the order key to read %s',
         (signature) => {
-            // The fulfillment is tied to one caller's order. The ownership check itself lives in the
-            // service; this is the gate that guarantees there is a caller to check.
+            /**
+             * The fulfillment is tied to one caller's order. The ownership check itself lives in the
+             * service; this is the gate that guarantees there is a caller to check.
+             */
             const guards = guardsOn(orderRouter, signature);
 
             expect(guards).toContain('isAuth');
@@ -70,8 +74,10 @@ describe('delivery routes', () => {
     });
 
     it.each(WRITES)('restricts %s to an operator', (signature) => {
-        // A customer could otherwise move their own order forward, or anyone else's — this is
-        // staff's own write, not the order owner's.
+        /**
+         * A customer could otherwise move their own order forward, or anyone else's — this is
+         * staff's own write, not the order owner's.
+         */
         expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
     });
 

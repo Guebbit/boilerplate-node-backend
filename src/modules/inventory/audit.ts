@@ -8,7 +8,7 @@
  * module's own invariant failing, so it is the one transition outcome audited here rather than by
  * its caller.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#the-pipeline
  */
 
 /** The audit action vocabulary this module owns. */

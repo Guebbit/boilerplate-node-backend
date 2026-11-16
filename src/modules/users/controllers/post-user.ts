@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /users` — staff create. The update half lives in `update-user.ts`.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';
@@ -26,13 +26,15 @@ export const createUser = (
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
-        // Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
-        // multer does not fill it in on a non-multipart body either.
+        /**
+         * Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
+         * multer does not fill it in on a non-multipart body either.
+         */
         | undefined
     >,
     response: Response
 ) => {
-    /*
+    /**
      * The contract's own strict schema, and from here on ONLY its output: an undeclared key is a
      * 422, never a column. `create` writes whatever it is handed, so a raw body here let an
      * operator set `verifiedAt`, `analyticsConsent` or an unencrypted `phone` straight onto the
@@ -48,8 +50,10 @@ export const createUser = (
     if (!body) return;
     const { role, active } = body;
 
-    // The upload's image fields are server-decided, so they join only after the body was validated
-    // (as `null`-only for `imageUrl`); the helper claims the upload when the write succeeds.
+    /**
+     * The upload's image fields are server-decided, so they join only after the body was validated
+     * (as `null`-only for `imageUrl`); the helper claims the upload when the write succeeds.
+     */
     return writeWithUploadedImage(request, undefined, (image) =>
         userService.create({ ...body, role, active, ...image }, callerContextOf(request))
     )
@@ -58,9 +62,11 @@ export const createUser = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            // `toUserContract` picks only the `User` contract's own fields, so the hashed
-            // password and tokens on the document never reach `res.json`. The role is read
-            // fresh from the membership just written — never off the document, which holds none.
+            /**
+             * `toUserContract` picks only the `User` contract's own fields, so the hashed
+             * password and tokens on the document never reach `res.json`. The role is read
+             * fresh from the membership just written — never off the document, which holds none.
+             */
             return userService
                 .toUserContract(result.data, callerContextOf(request).caller)
                 .then((contract) => {

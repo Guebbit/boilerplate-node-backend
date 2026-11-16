@@ -10,7 +10,9 @@ import { Types } from 'mongoose';
 import { makeOrder } from '@modules/orders/factories';
 import type { OrderSnapshotInput } from '@modules/orders/factories';
 
+/** A fixed valid ObjectId string, so an expectation can name it. */
 const HEX = '65dc8a99604c307b702b5ccc';
+/** A fixed valid ObjectId string for the product. */
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 
 /** The minimum a snapshot override must state, per `OrderSnapshotInput`. */
@@ -22,22 +24,28 @@ describe('makeOrder — identity and defaults', () => {
 
         expect(order._id).toBeInstanceOf(Types.ObjectId);
         expect(order.userId).toBeInstanceOf(Types.ObjectId);
-        // The schema requires an email; the fixture has to carry one or every bare `makeOrder()`
-        // is an invalid document.
+        /**
+         * The schema requires an email; the fixture has to carry one or every bare `makeOrder()`
+         * is an invalid document.
+         */
         expect(order.email).toBe('test@example.com');
     });
 
     it('mints an owner when none is given, rather than leaving the field absent', () => {
-        // `userId` is required and is the scoping key for every non-admin read. An absent one
-        // would make the fixture unsaveable; a shared constant would make two "different" users'
-        // orders visible to each other.
+        /**
+         * `userId` is required and is the scoping key for every non-admin read. An absent one
+         * would make the fixture unsaveable; a shared constant would make two "different" users'
+         * orders visible to each other.
+         */
         expect(makeOrder().userId).toBeInstanceOf(Types.ObjectId);
         expect(String(makeOrder().userId)).not.toBe(String(makeOrder().userId));
     });
 
     it('takes the owner it is given, as a real ObjectId', () => {
-        // A string here matches nothing inside the aggregation `$match` that `callerScope`
-        // builds, so the seeded order would read as "not yours" to its own owner.
+        /**
+         * A string here matches nothing inside the aggregation `$match` that `callerScope`
+         * builds, so the seeded order would read as "not yours" to its own owner.
+         */
         const order = makeOrder({ userId: HEX });
 
         expect(order.userId).toBeInstanceOf(Types.ObjectId);
@@ -45,8 +53,10 @@ describe('makeOrder — identity and defaults', () => {
     });
 
     it('starts with no items rather than an absent list', () => {
-        // `items` is an array path the totals read; `undefined` there is a different code path in
-        // every consumer of an order.
+        /**
+         * `items` is an array path the totals read; `undefined` there is a different code path in
+         * every consumer of an order.
+         */
         expect(makeOrder().items).toEqual([]);
     });
 
@@ -64,8 +74,10 @@ describe('makeOrder — identity and defaults', () => {
     });
 
     it('keeps a zero shipping cost rather than dropping it as unspecified', () => {
-        // Falsy and meaningful: an order that chose no delivery owes nothing, and that is a
-        // different fixture from one that never stated a cost.
+        /**
+         * Falsy and meaningful: an order that chose no delivery owes nothing, and that is a
+         * different fixture from one that never stated a cost.
+         */
         expect(makeOrder({ shippingCost: '0.00' }).shippingCost).toBe('0.00');
     });
 
@@ -79,8 +91,10 @@ describe('makeOrder — the embedded product snapshot', () => {
         const order = makeOrder({ items: [{ product: DOG_FOOD, quantity: 2 }] });
         const snapshot = order.items![0].product;
 
-        // `_id`, not `id`: `applyProductTransform` renames `_id` on the way out, so a snapshot
-        // carrying `id` serializes as a product with no id and the invoice cannot link to it.
+        /**
+         * `_id`, not `id`: `applyProductTransform` renames `_id` on the way out, so a snapshot
+         * carrying `id` serializes as a product with no id and the invoice cannot link to it.
+         */
         expect(snapshot._id).toBeInstanceOf(Types.ObjectId);
         expect(String(snapshot._id)).toBe(PRODUCT);
         expect(Object.hasOwn(snapshot, 'id')).toBe(false);
@@ -110,18 +124,22 @@ describe('makeOrder — the embedded product snapshot', () => {
     });
 
     it('has no override at all for onHand/reserved — OrderSnapshotInput does not declare them', () => {
-        // The type-level half: a snapshot override literally cannot name a live-stock
-        // counter. The write-time half — that a counter riding along on the LIVE product
-        // document still gets dropped — is `orders/tests/integration/schema-contract.test.ts`'s
-        // to prove.
+        /**
+         * The type-level half: a snapshot override literally cannot name a live-stock
+         * counter. The write-time half — that a counter riding along on the LIVE product
+         * document still gets dropped — is `orders/tests/integration/schema-contract.test.ts`'s
+         * to prove.
+         */
         // @ts-expect-error -- OrderSnapshotInput omits onHand/reserved; this is what proves it
         const rejected: OrderSnapshotInput = { ...DOG_FOOD, onHand: 5 };
         expect(Object.hasOwn(rejected, 'onHand')).toBe(true);
     });
 
     it('freezes the catalogue fields it IS given', () => {
-        // The whole reason a snapshot exists: an order keeps what was bought. A field stated on
-        // the override has to survive into the stored copy.
+        /**
+         * The whole reason a snapshot exists: an order keeps what was bought. A field stated on
+         * the override has to survive into the stored copy.
+         */
         const snapshot = makeOrder({
             items: [
                 {

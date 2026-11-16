@@ -142,27 +142,39 @@ export const shutdownInfra = (
     server?: Server,
     settleInFlight?: (timeoutMs: number) => Promise<void>
 ) =>
-    // `Promise.resolve(server)` starts the chain uniformly whether or not a server was passed
-    // (workers and CLI entry points call this without one).
+    /**
+     * `Promise.resolve(server)` starts the chain uniformly whether or not a server was passed
+     * (workers and CLI entry points call this without one).
+     */
     Promise.resolve(server)
         .then((s) => {
-            // `listening` is false when the server never bound or is already closed;
-            // calling `close()` then would reject for no useful reason.
+            /**
+             * `listening` is false when the server never bound or is already closed;
+             * calling `close()` then would reject for no useful reason.
+             */
             if (!s?.listening) return;
             return closeServer(s);
         })
         .then(() => stopLocaleOverrideRefresh())
-        // Renders already started finish (or time out) before the process can exit: an exit
-        // mid-render orphans the Chromium it launched, and its temporary profile with it.
+        /**
+         * Renders already started finish (or time out) before the process can exit: an exit
+         * mid-render orphans the Chromium it launched, and its temporary profile with it.
+         */
         .then(() => settleRenders(getShutdownTimeoutMs() * RENDER_SHARE))
-        // Done-marks written after an answer went out finish before the database closes: cut, one
-        // strands its key in flight, which a do-not-retry client sees as a false "outcome unknown".
+        /**
+         * Done-marks written after an answer went out finish before the database closes: cut, one
+         * strands its key in flight, which a do-not-retry client sees as a false "outcome unknown".
+         */
         .then(() => settleIdempotencyMarks(getShutdownTimeoutMs() * IDEMPOTENCY_SHARE))
-        // Work the caller started (event deliveries) finishes before the queue and database go:
-        // cut mid-write, it would log errors against a closed client on every deploy.
+        /**
+         * Work the caller started (event deliveries) finishes before the queue and database go:
+         * cut mid-write, it would log errors against a closed client on every deploy.
+         */
         .then(() => settleInFlight?.(getShutdownTimeoutMs() * IN_FLIGHT_SHARE))
-        // The queue before the cache: a job still running would otherwise reopen the cache
-        // connection that was just closed under it.
+        /**
+         * The queue before the cache: a job still running would otherwise reopen the cache
+         * connection that was just closed under it.
+         */
         .then(() => stopQueue())
         .then(() => stopCache())
         .then(() => stopLimitsRedis())
@@ -176,40 +188,52 @@ export const shutdownInfra = (
  * @param stopFunction - the teardown to run (normally a closure over `shutdownInfra`)
  */
 export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
-    // Jest runs many suites in one process and sends signals of its own; installing
-    // `process.exit()` handlers there would kill the test runner mid-run.
+    /**
+     * Jest runs many suites in one process and sends signals of its own; installing
+     * `process.exit()` handlers there would kill the test runner mid-run.
+     */
     if (isTestEnvironment()) return;
 
     const onProcessSignal = (signal: NodeJS.Signals) => {
         // Stryker disable next-line all
         logger.info(`Received ${signal}, starting graceful shutdown.`);
 
-        // Before anything else: `GET /readyz` answers 503 from the moment a shutdown signal
-        // arrives. `server.close()` follows in the same tick, so no probe sees that 503 yet — a
-        // lame-duck delay between the two is what would let a load balancer react.
+        /**
+         * Before anything else: `GET /readyz` answers 503 from the moment a shutdown signal
+         * arrives. `server.close()` follows in the same tick, so no probe sees that 503 yet — a
+         * lame-duck delay between the two is what would let a load balancer react.
+         */
         markServerDraining();
 
-        // Deadline: if teardown hangs (a socket that never drains, a broker that never
-        // answers) exit anyway with a failure code, so the orchestrator restarts us
-        // instead of leaving a zombie container that answers no traffic.
+        /**
+         * Deadline: if teardown hangs (a socket that never drains, a broker that never
+         * answers) exit anyway with a failure code, so the orchestrator restarts us
+         * instead of leaving a zombie container that answers no traffic.
+         */
         const forcedExitTimer = setTimeout(() => {
             // Stryker disable next-line all
             logger.error('Graceful shutdown timeout reached. Forcing process exit.');
             process.exit(1);
         }, getShutdownTimeoutMs());
-        // `unref()` removes the timer from the event loop's reference count, so if teardown
-        // finishes early this pending timeout does not by itself keep the process alive.
+        /**
+         * `unref()` removes the timer from the event loop's reference count, so if teardown
+         * finishes early this pending timeout does not by itself keep the process alive.
+         */
         forcedExitTimer.unref();
 
-        // `void` marks the floating promise as intentional (the handler cannot be async:
-        // Node ignores a returned promise from a signal listener).
+        /**
+         * `void` marks the floating promise as intentional (the handler cannot be async:
+         * Node ignores a returned promise from a signal listener).
+         */
         void Promise.resolve()
             .then(() => stopFunction())
             .then(() => {
                 // Stryker disable next-line all
                 logger.info('Graceful shutdown completed.');
-                // Explicit exit(0): lingering handles (OTel timers, driver sockets) could
-                // otherwise keep the event loop alive well past the actual shutdown.
+                /**
+                 * Explicit exit(0): lingering handles (OTel timers, driver sockets) could
+                 * otherwise keep the event loop alive well past the actual shutdown.
+                 */
                 process.exit(0);
             })
             .catch((error: unknown) => {

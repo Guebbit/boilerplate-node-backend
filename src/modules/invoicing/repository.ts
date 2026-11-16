@@ -101,8 +101,10 @@ const insertInvoice = (
     fields: FrozenTaxDocument & WithId,
     session: ClientSession
 ): Promise<InvoiceDocument> =>
-    // Mongoose `create` with an array is the only form that takes `{ session }`; it resolves an array.
-    // https://mongoosejs.com/docs/api/model.html#Model.create()
+    /**
+     * Mongoose `create` with an array is the only form that takes `{ session }`; it resolves an array.
+     * https://mongoosejs.com/docs/api/model.html#Model.create()
+     */
     invoiceModel.create([fields], { session }).then(([invoice]) => invoice);
 
 /**
@@ -119,7 +121,6 @@ const findCreditNotesByOrderId = (orderId: string): Promise<CreditNoteDocument[]
  * One credit note, addressed within its order — an id that belongs to another order is `null`, the
  * same as an id that does not exist.
  * @param orderId - the order the credit note must belong to
- * @param creditNoteId - the credit note
  */
 const findCreditNoteById = (
     orderId: string,
@@ -233,8 +234,10 @@ export const invoicingRepository = {
     findCreditNoteById,
     findCreditNoteByRefundId,
     insertCreditNote,
-    // Required session: the number and the insert must commit or abort together, or the gap-free
-    // series loses a number (VAT Directive Art. 226(2)).
+    /**
+     * Required session: the number and the insert must commit or abort together, or the gap-free
+     * series loses a number (VAT Directive Art. 226(2)).
+     */
     incrementInvoiceNumberCounter: (year: number, session: ClientSession): Promise<number> =>
         incrementYearlyCounter(invoiceNumberCounterModel, year, session),
     incrementCreditNoteNumberCounter: (year: number, session: ClientSession): Promise<number> =>

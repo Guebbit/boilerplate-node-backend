@@ -20,16 +20,20 @@ import { parse } from 'yaml';
 /** Fields `WebhookSubscriptionCreated` legitimately adds on top of `WebhookSubscription`. */
 const CREATED_ONLY_FIELDS = new Set(['secret', 'newSecret']);
 
+/** The slice of a JSON schema the drift check reads: its properties and its required list. */
 interface ObjectSchema {
     properties: Record<string, unknown>;
     required?: string[];
 }
 
+/** The module contract, parsed from its own openapi.yaml. */
 const spec = parse(readFileSync(path.resolve(__dirname, '../../openapi.yaml'), 'utf8')) as {
     components: { schemas: Record<string, ObjectSchema> };
 };
 
+/** The schema a subscription is read with. */
 const subscription = spec.components.schemas.WebhookSubscription;
+/** The schema returned once, on creation, which also carries the secret. */
 const created = spec.components.schemas.WebhookSubscriptionCreated;
 
 describe('WebhookSubscriptionCreated mirrors WebhookSubscription', () => {

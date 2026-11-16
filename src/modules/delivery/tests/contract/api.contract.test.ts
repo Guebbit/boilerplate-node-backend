@@ -77,8 +77,10 @@ describe('GET /delivery/methods', () => {
     });
 
     it('lists every method regardless of a query string trying to filter it', async () => {
-        // `?weight=` was dropped: the list is a catalogue now, unfiltered. A query param a
-        // caller still sends must not silently change the response shape.
+        /**
+         * `?weight=` was dropped: the list is a catalogue now, unfiltered. A query param a
+         * caller still sends must not silently change the response shape.
+         */
         const response = await api().get('/delivery/methods').query({ weight: 10_000 });
 
         expect(response.status).toBe(200);
@@ -87,8 +89,10 @@ describe('GET /delivery/methods', () => {
         expect(ids).toContain('express');
     });
 
-    // Every method carries the shop's own currency — the frontend reads it here rather
-    // than guessing a fixed default.
+    /**
+     * Every method carries the shop's own currency — the frontend reads it here rather
+     * than guessing a fixed default.
+     */
     it('stamps every method with the shop currency', async () => {
         const response = await api().get('/delivery/methods');
 

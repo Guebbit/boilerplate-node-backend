@@ -5,7 +5,7 @@
  * a redelivered event (same `eventId`) changes nothing, two racing events open one task (the
  * unique `openKey`), and a clearing event on a task staff already closed is a no-op.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#system-tasks
  */
 
 import { TaskKind } from '@types';
@@ -39,9 +39,11 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
     const now = new Date();
     const touch = () => taskRepository.touchOpen(openKey, meta.eventId, now).then(() => undefined);
 
-    // The task and its `task.opened` row commit together: a crash or a failing listener cannot
-    // lose the notice, the relay redelivers it. The duplicate-key catch wraps the WHOLE
-    // transaction, so a lost race rolls back its row too and falls through to a touch.
+    /**
+     * The task and its `task.opened` row commit together: a crash or a failing listener cannot
+     * lose the notice, the relay redelivers it. The duplicate-key catch wraps the WHOLE
+     * transaction, so a lost race rolls back its row too and falls through to a touch.
+     */
     const open = () =>
         announceInTransaction(
             (session) =>

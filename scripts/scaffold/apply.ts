@@ -94,8 +94,10 @@ export const applyScaffold = async (
     const problems = refusalsFor(root, plan);
     if (problems.length > 0) throw new Error(problems.join('\n'));
 
-    // Every edit is computed before any write: a file that changed shape must leave the tree
-    // untouched, not half-scaffolded.
+    /**
+     * Every edit is computed before any write: a file that changed shape must leave the tree
+     * untouched, not half-scaffolded.
+     */
     const edits = await Promise.all(
         centralEdits(plan.names).map(async (edit) => {
             const file = path.join(root, edit.path);

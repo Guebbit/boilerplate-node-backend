@@ -48,8 +48,10 @@ const bodyFields = (): Set<string> => {
     for (const [exportName, schema] of Object.entries(schemas)) {
         if (!exportName.endsWith('Body')) continue;
         collectNames(
-            // Zod → JSON Schema: `io: 'input'` is the request shape; `unrepresentable: 'any'`
-            // lets dates and transforms through instead of throwing.
+            /**
+             * Zod → JSON Schema: `io: 'input'` is the request shape; `unrepresentable: 'any'`
+             * lets dates and transforms through instead of throwing.
+             */
             z.toJSONSchema(schema as z.ZodType, {
                 unrepresentable: 'any',
                 io: 'input'
@@ -60,6 +62,7 @@ const bodyFields = (): Set<string> => {
     return names;
 };
 
+/** Every field the body or the shared query declares, sorted. */
 const expected = [...new Set([...bodyFields(), ...SHARED_QUERY_FIELDS])].toSorted();
 
 describe('validation attribute labels', () => {

@@ -63,7 +63,9 @@ export const frontendLink = (
     locale: string,
     parameters: Record<string, string> = {}
 ): string =>
-    // The origin is the paired frontend's own, with the same fallback as `account/oauth/config.ts`'s
-    // `oauthFrontendCallbackBase`: read lazily so a test can set it after import, falling back to
-    // the frontend's own local dev port rather than the backend's.
+    /**
+     * The origin is the paired frontend's own, with the same fallback as `account/oauth/config.ts`'s
+     * `oauthFrontendCallbackBase`: read lazily so a test can set it after import, falling back to
+     * the frontend's own local dev port rather than the backend's.
+     */
     `${siteConfig().NODE_FRONTEND_URL}/${supportedLocale(locale)}/${fillPath(template, parameters)}`;

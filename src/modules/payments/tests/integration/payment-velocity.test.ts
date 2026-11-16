@@ -65,8 +65,10 @@ describe('payment-velocity: the confirm-attempt budget', () => {
         const app = express();
         app.use(asAccount('account-1'));
         app.post('/confirm', paymentConfirmAttemptLimiter, (_request, response) => {
-            // Counts EVERY outcome, unlike the credential budgets — a card can be swapped and
-            // retried on the same intent, so success must spend the budget too.
+            /**
+             * Counts EVERY outcome, unlike the credential budgets — a card can be swapped and
+             * retried on the same intent, so success must spend the budget too.
+             */
             response.status(200).json({ success: true });
         });
 
@@ -194,8 +196,10 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
 
         const response = await supertest(app).post('/confirm').send({});
 
-        // The confirm handler still answers its own 409 — no challenge demanding a token nobody
-        // was asked to send yet, on an account with no prior decline.
+        /**
+         * The confirm handler still answers its own 409 — no challenge demanding a token nobody
+         * was asked to send yet, on an account with no prior decline.
+         */
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_DECLINED');
     });

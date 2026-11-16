@@ -45,6 +45,7 @@ type Step =
     | { kind: 'release' }
     | { kind: 'expire' };
 
+/** One random ledger operation: the property test applies a sequence of them. */
 const step = (): fc.Arbitrary<Step> =>
     fc.oneof(
         fc.record({
@@ -77,8 +78,10 @@ const play = async (productId: string, steps: readonly Step[]): Promise<void> =>
     let openOrderId: string | null = null;
     let openIsPaid = false;
 
-    // A syntactically valid, unique ObjectId per hold, derived rather than random so a failing
-    // run replays identically.
+    /**
+     * A syntactically valid, unique ObjectId per hold, derived rather than random so a failing
+     * run replays identically.
+     */
     const nextOrderId = () => (++holdCounter).toString(16).padStart(24, 'a');
 
     for (const current of steps)
@@ -165,9 +168,11 @@ describe('the ledger reproduces the counters', () => {
                 const stored = await productService.findByIdRaw(productId);
                 const ledger = await replay(productId);
 
-                // The opening count is the ledger's starting balance: rows explain CHANGES since
-                // the product was created, exactly as an account statement explains changes since
-                // its opening balance rather than inventing the whole history of the money.
+                /**
+                 * The opening count is the ledger's starting balance: rows explain CHANGES since
+                 * the product was created, exactly as an account statement explains changes since
+                 * its opening balance rather than inventing the whole history of the money.
+                 */
                 expect(stored?.onHand).toBe(OPENING_ON_HAND + ledger.onHandDelta);
                 expect(stored?.reserved).toBe(0 + ledger.reservedDelta);
             }),
@@ -186,8 +191,10 @@ describe('the ledger reproduces the counters', () => {
                 const stored = await productService.findByIdRaw(productId);
                 expect(stored?.onHand).toBeGreaterThanOrEqual(0);
                 expect(stored?.reserved).toBeGreaterThanOrEqual(0);
-                // The invariant every guard in the repository exists to protect: you cannot have
-                // promised more units than you hold.
+                /**
+                 * The invariant every guard in the repository exists to protect: you cannot have
+                 * promised more units than you hold.
+                 */
                 expect(stored?.reserved ?? 0).toBeLessThanOrEqual(stored?.onHand ?? 0);
             }),
             RUN
@@ -195,8 +202,10 @@ describe('the ledger reproduces the counters', () => {
     });
 
     it('writes no row for a transition that was refused', async () => {
-        // The other half of "a counter never moves without a row": a row never appears without a
-        // counter moving. Reserving more than exists is the cheapest refusal to provoke.
+        /**
+         * The other half of "a counter never moves without a row": a row never appears without a
+         * counter moving. Reserving more than exists is the cheapest refusal to provoke.
+         */
         const product = await createProduct({ onHand: 2, reserved: 0 });
         const productId = String(product._id);
 

@@ -10,7 +10,7 @@
  *   already imports this module) gives a new product its stock without this module importing back.
  *   This module never moves either counter itself. See that module's docblock.
  *
- * @see docs/modules/products.md
+ * @see docs/modules/products.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -26,12 +26,14 @@ import './events';
 export default {
     name: 'products',
     mounts: [{ basePath: '/products', routes: router }],
-    // The catalogue resolves a product's tax class into a rate, so the rates are this module's
-    // config — `orders` only freezes the number `resolveTaxRate` hands it.
+    /**
+     * The catalogue resolves a product's tax class into a rate, so the rates are this module's
+     * config — `orders` only freezes the number `resolveTaxRate` hands it.
+     */
     config: [productsConfig.slice],
     locales: path.join(__dirname, 'locales'),
     imageTargets: { products: { writeback: productRepository.writebackImage } },
-    /*
+    /**
      * `title`/`description` are a translated product's DERIVED index column, not its own data —
      * kept only so Mongo has something to sort and index on. `products` is both the collection a
      * translation write updates and the cache tag it must clear.
@@ -78,7 +80,9 @@ export default {
     },
     // Reported by the browser through `analytics`' relay; the request shapes are in `openapi.browser-events.yaml`.
     browserEvents: productsBrowserEvents,
-    // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen
-    // snapshot, and that copy is `orders`' section to export, not this module's.
+    /**
+     * The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen
+     * snapshot, and that copy is `orders`' section to export, not this module's.
+     */
     personalData: 'none'
 } satisfies AppModule;

@@ -9,6 +9,7 @@
 import { Types } from 'mongoose';
 import { insertIfAbsent } from '@scenarios/seed';
 
+/** A one-row fixture with a fixed id. */
 const FIXTURE = { _id: new Types.ObjectId('65de646a44f861fd83c13f13'), name: 'row' };
 
 it('creates when no document carries the pinned id', async () => {

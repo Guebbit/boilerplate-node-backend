@@ -46,14 +46,16 @@ describe('rate limit defaults', () => {
     });
 
     it('sizes the api-key budget above the upload budget, below the browsing one', () => {
-        // A partner integration's steady state is well above one browsing session but must never
-        // out-run the address-keyed global brake layered on top of it.
+        /**
+         * A partner integration's steady state is well above one browsing session but must never
+         * out-run the address-keyed global brake layered on top of it.
+         */
         expect(DEFAULT_API_KEY_RATE_LIMIT_MAX).toBeGreaterThan(DEFAULT_UPLOAD_RATE_LIMIT_MAX);
         expect(DEFAULT_API_KEY_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX * 2);
     });
 });
 
-/*
+/**
  * The behavioural property — a SUCCESSFUL request spending the budget — sends a real request
  * through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
  * integration concern: see `src/modules/tasks/tests/integration/submission-rate-limit.test.ts`.
@@ -95,12 +97,15 @@ describe("the global budget's skip", () => {
 /** The block a caller at `ip` is bucketed in. */
 const blockOf = (ip: string | undefined) => addressBlockOf(asStub<Request>({ ip }));
 
+/** The bucket key the limiter derives for a request. */
 const uploaderKey = (request: Partial<Request>) =>
     budgetNamed('Image uploads').keyGenerator?.(asStub<Request>(request));
 
 describe('addressBlockOf', () => {
-    // Node listens dual-stack, so on a direct deploy every IPv4 caller is `::ffff:a.b.c.d`. It used
-    // to fall past the /24 mask and get a bucket of its own per address.
+    /**
+     * Node listens dual-stack, so on a direct deploy every IPv4 caller is `::ffff:a.b.c.d`. It used
+     * to fall past the /24 mask and get a bucket of its own per address.
+     */
     it('puts an IPv4-mapped caller in its IPv4 /24, the same block as the plain address', () => {
         expect(blockOf('::ffff:203.0.113.5')).toBe('203.0.113.0/24');
         expect(blockOf('::ffff:203.0.113.77')).toBe(blockOf('203.0.113.5'));
@@ -121,8 +126,10 @@ describe('addressBlockOf', () => {
         expect(blockOf('2001:db8:2:2::1')).not.toBe(blockOf('2001:db8:1:2::1'));
     });
 
-    // The "address" budgets take the library's own default key; the block must stay the wider of
-    // the two, so this pins the /56 that default masks IPv6 to.
+    /**
+     * The "address" budgets take the library's own default key; the block must stay the wider of
+     * the two, so this pins the /56 that default masks IPv6 to.
+     */
     it('stays coarser than the library default key, which masks IPv6 to a /56', () => {
         expect(ipKeyGenerator('2001:db8:1:2::1')).toBe('2001:db8:1::/56');
         expect(blockOf('2001:db8:1:2::1')).toBe('2001:db8:1::/48');
@@ -285,7 +292,10 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
     });
 });
 
-/** The infrastructure budget with this `name`. */
+/**
+ * The infrastructure budget with this `name`.
+ * @throws {Error} when no budget has that name
+ */
 const budgetNamed = (name: string) => {
     const found = INFRASTRUCTURE_RATE_LIMITS.find((budget) => budget.name === name);
     if (!found) throw new Error(`no budget named ${name}`);

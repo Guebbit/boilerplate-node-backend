@@ -7,7 +7,7 @@
  * in the provider registry, which imports this file. The registry's own resolver refuses an
  * unknown name, and the app tier probes it at boot (`app/config.ts`).
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import path from 'node:path';
@@ -35,15 +35,19 @@ export const mailConfig = defineConfig({
         NODE_SMTP_USER: text(),
         NODE_SMTP_PASS: text({ sensitive: true }),
         NODE_SMTP_SENDER: text(),
-        // The ONE customer-facing address: the contact form's mail goes here, `Reply-To` on every
-        // customer mail points at it, and the site shows it. Lives here because the mailer reads it
-        // and infrastructure may not import a module.
+        /**
+         * The ONE customer-facing address: the contact form's mail goes here, `Reply-To` on every
+         * customer mail points at it, and the site shows it. Lives here because the mailer reads it
+         * and infrastructure may not import a module.
+         */
         NODE_SUPPORT_EMAIL: email({ required: { minLength: 1 } }),
         NODE_E2E_RUN: flag({ default: false })
     },
     check: (config) => [
-        // Selecting an SMTP host without its credentials builds a transport that only fails when
-        // the first user asks for a reset link.
+        /**
+         * Selecting an SMTP host without its credentials builds a transport that only fails when
+         * the first user asks for a reset link.
+         */
         ...(config.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !config[key]) : []),
         ...(config.NODE_E2E_RUN &&
         config.NODE_MAIL_TRANSPORT === 'smtp' &&
@@ -174,8 +178,10 @@ export const antibotConfig = defineConfig({
         NODE_ANTIBOT_TURNSTILE_SECRET: text({ sensitive: true })
     },
     check: (config) => {
-        // Selecting a provider is a choice; selecting one without its secret is not. It would
-        // throw on the first guarded request — a signup outage that reads as a bug.
+        /**
+         * Selecting a provider is a choice; selecting one without its secret is not. It would
+         * throw on the first guarded request — a signup outage that reads as a bug.
+         */
         if (config.NODE_ANTIBOT_PROVIDER === 'altcha')
             return (config.NODE_ANTIBOT_ALTCHA_SECRET ?? '').length < ALTCHA_SECRET_MIN_LENGTH
                 ? ['NODE_ANTIBOT_ALTCHA_SECRET']

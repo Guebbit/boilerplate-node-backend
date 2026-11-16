@@ -3,7 +3,7 @@
  * A back-in-stock request: one row per user and product, used once. Its life is the buyer's
  * consent for a single mail, so it carries nothing but who asked, about what, and when.
  *
- * @see docs/modules/stock-alerts.md
+ * @see docs/modules/stock-alerts.md#the-story
  */
 
 import { model, Schema, Types } from 'mongoose';

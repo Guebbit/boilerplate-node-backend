@@ -4,7 +4,7 @@
  * factory, which also owns the id check, `If-Match` and the `ETag`. What differs per module is the
  * two schemas and the service call. Here: `PUT` and `PATCH /examples/:id`.
  *
- * @see docs/understand/write-methods.md
+ * @see docs/understand/write-methods.md#put-—-replace
  */
 
 import { ReplaceExampleByIdBody, UpdateExampleByIdBody } from '@api/schemas.zod';

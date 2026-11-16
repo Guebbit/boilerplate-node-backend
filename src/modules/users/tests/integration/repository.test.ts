@@ -9,9 +9,11 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
-// The model directly: not exported from the barrel, since no sibling MODULE needs it there. A
-// spec reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly
-// that.
+/**
+ * The model directly: not exported from the barrel, since no sibling MODULE needs it there. A
+ * spec reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly
+ * that.
+ */
 import { userModel as Users } from '@modules/users/model';
 
 setupTestDb();

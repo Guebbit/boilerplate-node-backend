@@ -35,8 +35,9 @@ Run once per repo. The paired frontend keeps its own copy of this skill.
 
 ## What it leaves to the linter
 
-`jsdoc/require-jsdoc`, `jsdoc/check-param-names`, `jsdoc/check-tag-names` and `npm run check`
-(dead `@see` targets and anchors) already run. Do not report what they report; report what they
+`jsdoc/require-jsdoc`, `jsdoc/informative-docs`, `jsdoc/check-param-names`,
+`jsdoc/check-tag-names`, `jsdoc/require-throws` and `npm run check` (dead `@see` targets and
+anchors, and a `@see` with no anchor) already run. Do not report what they report; report what they
 cannot see.
 
 ## How to run

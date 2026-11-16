@@ -23,8 +23,10 @@ import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { recordErrorOnActiveSpan } from '@infrastructure/observability/tracer';
 import { queryTimeoutsTotal } from '@infrastructure/observability/metrics-database';
 import { generateReject, rejectResponse } from './response';
-// Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
-// incidental module-load path, which runs before `@api/error-codes` exists.
+/**
+ * Type-only — see `response.ts`'s own import for why: this file sits on `contracts:bundle`'s
+ * incidental module-load path, which runs before `@api/error-codes` exists.
+ */
 import type { ErrorCode } from '@api/error-codes';
 import type { Response } from 'express';
 
@@ -38,6 +40,7 @@ import type { Response } from 'express';
  * subclasses it, and the mapping below never spells out which module that was.
  */
 export class ConflictError extends Error {
+    /** What logs and `error.name` print; a subclass does not set it by itself. */
     override name = 'ConflictError';
 }
 
@@ -66,45 +69,63 @@ export const isInfrastructureError = (error: unknown): boolean =>
  * @returns a `[httpCode, message]` tuple for the response layer
  */
 export function databaseErrorInterpreter(error: unknown): [number, string] {
-    // Every branch below reads a property off `error` — nothing to interpret on a rejection that
-    // was never an object (`null`, a string, a thrown number) — those fall to the generic 500.
+    /**
+     * Every branch below reads a property off `error` — nothing to interpret on a rejection that
+     * was never an object (`null`, a string, a thrown number) — those fall to the generic 500.
+     */
     if (error !== null && typeof error === 'object') {
-        // `kind` exists only on CastError — the discriminator. Checked via `Object.prototype.call`
-        // rather than `error.hasOwnProperty()` so it still works on a null-prototype object.
+        /**
+         * `kind` exists only on CastError — the discriminator. Checked via `Object.prototype.call`
+         * rather than `error.hasOwnProperty()` so it still works on a null-prototype object.
+         */
         if (Object.prototype.hasOwnProperty.call(error, 'kind')) return [422, 'Invalid identifier'];
-        // A unique index refused the write: something with that value already exists. This is what
-        // makes `unique: true` on `users.email` safe to declare — without it, closing the signup race
-        // would merely convert a duplicate account into a 500.
+        /**
+         * A unique index refused the write: something with that value already exists. This is what
+         * makes `unique: true` on `users.email` safe to declare — without it, closing the signup race
+         * would merely convert a duplicate account into a 500.
+         */
         if (isDuplicateKey(error)) return [409, 'Already exists'];
-        // BSONError: the driver refused to build an ObjectId at all, distinct from CastError above.
-        // Detected by `name`, not `instanceof`: `bson` is a transitive dependency of two packages,
-        // and `instanceof` against the wrong copy silently returns false.
+        /**
+         * BSONError: the driver refused to build an ObjectId at all, distinct from CastError above.
+         * Detected by `name`, not `instanceof`: `bson` is a transitive dependency of two packages,
+         * and `instanceof` against the wrong copy silently returns false.
+         */
         if ((error as { name?: string }).name === 'BSONError') return [422, 'Invalid identifier'];
-        // A schema validator refused the write — the MODEL enforcing something the contract does not.
-        // Closing it at the contract is the better fix; this is the floor under that, across all
-        // twelve models. Detected by `name`, same reason as BSONError above.
+        /**
+         * A schema validator refused the write — the MODEL enforcing something the contract does not.
+         * Closing it at the contract is the better fix; this is the floor under that, across all
+         * twelve models. Detected by `name`, same reason as BSONError above.
+         */
         if ((error as { name?: string }).name === 'ValidationError')
             return [422, 'Invalid request'];
-        // Any module's {@link ConflictError} subclass — `access`'s `AccessInvariantError` is the
-        // one that exists today, for an undeclared role or a privilege escalation. `instanceof`,
-        // not a `name` string: this class is defined once, here, so there is no second copy of it
-        // anywhere for `instanceof` to disagree with (the caveat that rules it out for `BSONError`
-        // above does not apply). The STATUS this deserves is a request-shape/state-conflict
-        // question exactly like the other four branches above, not the server's fault, so it
-        // belongs here and not as a one-off `.catch()` at each of `users`' three write paths.
+        /**
+         * Any module's {@link ConflictError} subclass — `access`'s `AccessInvariantError` is the
+         * one that exists today, for an undeclared role or a privilege escalation. `instanceof`,
+         * not a `name` string: this class is defined once, here, so there is no second copy of it
+         * anywhere for `instanceof` to disagree with (the caveat that rules it out for `BSONError`
+         * above does not apply). The STATUS this deserves is a request-shape/state-conflict
+         * question exactly like the other four branches above, not the server's fault, so it
+         * belongs here and not as a one-off `.catch()` at each of `users`' three write paths.
+         */
         if (error instanceof ConflictError) return [409, error.message || 'Unknown error'];
         // The caller's `If-Match` no longer describes the row: 412, and the row is untouched.
         if (error instanceof PreconditionFailedError) return [412, 'Precondition failed'];
-        // A query ran past the server's time limit: 503 like an outage, but its own detail, so the
-        // log line and the response code (`QUERY_TIMEOUT`) say which of the two it was.
+        /**
+         * A query ran past the server's time limit: 503 like an outage, but its own detail, so the
+         * log line and the response code (`QUERY_TIMEOUT`) say which of the two it was.
+         */
         if (isQueryTimeout(error)) return [503, 'Query timed out'];
-        // Mongo/Redis unreachable, or a full queue — the server is temporarily broken, not the
-        // request. Checked before the generic fallback below, which would answer 500 (a bug).
+        /**
+         * Mongo/Redis unreachable, or a full queue — the server is temporarily broken, not the
+         * request. Checked before the generic fallback below, which would answer 500 (a bug).
+         */
         if (isInfrastructureError(error)) return [503, 'Service unavailable'];
-        // An unknown server-side failure, but still Error-SHAPED — own or inherited `.message`,
-        // never gated on `instanceof`: a driver/test fixture built via `Object.assign` onto a
-        // non-Error prototype is exactly as readable here as a real `Error`. The `||` guards
-        // against an empty string, same as a message-less `Error` always has.
+        /**
+         * An unknown server-side failure, but still Error-SHAPED — own or inherited `.message`,
+         * never gated on `instanceof`: a driver/test fixture built via `Object.assign` onto a
+         * non-Error prototype is exactly as readable here as a real `Error`. The `||` guards
+         * against an empty string, same as a message-less `Error` always has.
+         */
         const { message } = error as { message?: unknown };
         return [500, (typeof message === 'string' && message) || 'Unknown error'];
     }
@@ -157,10 +178,12 @@ const logDatabaseFailure = (
     // A 5xx is the server's own failure: mark the trace red too, which is how its error rate counts.
     if (status >= 500) recordErrorOnActiveSpan(error);
     if (isQueryTimeout(error)) queryTimeoutsTotal.inc();
-    // The interpreter's 500 detail IS the error's message, which can quote data: the headline
-    // for a 500 names the error class instead. `error` under its own key, not folded into the
-    // message string, is what lets the logger's own serializer attach a stack trace and scrub
-    // the message — see `adapters/logger.ts`'s `serializeError`. `trace_id` is stamped by the logger.
+    /**
+     * The interpreter's 500 detail IS the error's message, which can quote data: the headline
+     * for a 500 names the error class instead. `error` under its own key, not folded into the
+     * message string, is what lets the logger's own serializer attach a stack trace and scrub
+     * the message — see `adapters/logger.ts`'s `serializeError`. `trace_id` is stamped by the logger.
+     */
     const errorName = error instanceof Error ? error.name : 'Unknown error';
     const headline = status === 500 ? errorName : detail;
     // Stryker disable next-line all

@@ -93,9 +93,11 @@ export const noPersistenceImports = ESLintUtils.RuleCreator.withoutDocs<Options,
             ImportDeclaration(node) {
                 const source = node.source.value;
 
-                // The path verdict is about the whole declaration, so it is reported once and
-                // the name check is skipped — `import { userModel } from './model'` is one
-                // mistake, not two, and two reports on one line is how a rule gets disabled.
+                /**
+                 * The path verdict is about the whole declaration, so it is reported once and
+                 * the name check is skipped — `import { userModel } from './model'` is one
+                 * mistake, not two, and two reports on one line is how a rule gets disabled.
+                 */
                 if (checkPaths && PERSISTENCE_PATH.test(source)) {
                     context.report({ node: node.source, messageId: 'path', data: { source } });
                     return;

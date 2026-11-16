@@ -28,7 +28,7 @@ import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 
 setupTestDb();
 
-/*
+/**
  * The modules are registered so their subscriptions exist — specifically `orders` listening for
  * `RESERVATION_EXPIRED`, which is the only cross-module edge in this file that travels as an
  * event rather than a call. Without it the sweep would release units and leave the orders
@@ -80,8 +80,10 @@ describe('checkout holds units without selling them', () => {
         expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'CART_INSUFFICIENT_STOCK',
-            // Which line, and how much was asked for — the number left is not told to a shopper.
-            // Without the line the customer is editing the cart by trial and error.
+            /**
+             * Which line, and how much was asked for — the number left is not told to a shopper.
+             * Without the line the customer is editing the cart by trial and error.
+             */
             details: {
                 lines: [
                     {
@@ -131,8 +133,10 @@ describe('checkout holds units without selling them', () => {
         await cartRepository.setShippingMethod(latecomer.id, 'pickup');
         const result = await cartService.orderConfirm(latecomer.id, testCallerContext, undefined);
 
-        // Four units are physically present and none of them is for sale. This is the state the
-        // single-`stock` model had no way to represent.
+        /**
+         * Four units are physically present and none of them is for sale. This is the state the
+         * single-`stock` model had no way to represent.
+         */
         expect(result.success).toBe(false);
         expect(await countersOf(product._id)).toEqual({
             onHand: 4,
@@ -156,8 +160,10 @@ describe('checkout holds units without selling them', () => {
 
         expect(result.success).toBe(false);
         const details = result.success ? undefined : result.errors[0].details;
-        // Both short lines, with titles, and the healthy one absent — a customer trimming one
-        // line only to be refused on the next is being made to binary-search their own basket.
+        /**
+         * Both short lines, with titles, and the healthy one absent — a customer trimming one
+         * line only to be refused on the next is being made to binary-search their own basket.
+         */
         expect(details?.lines).toEqual([
             {
                 productId: String(shortA._id),
@@ -215,7 +221,7 @@ describe('checkout holds units without selling them', () => {
             available: 0
         });
 
-        /*
+        /**
          * The loser is refused by the RESERVE, not by the pre-flight — both pre-flights saw the
          * unit as available, which is the whole point of the conditional write. So this is the
          * path that reports a shortfall read back at the moment it refused — and, like the
@@ -239,7 +245,7 @@ describe('checkout holds units without selling them', () => {
 });
 
 describe('a checkout that cannot keep its order', () => {
-    /*
+    /**
      * `clearMocks` empties the call log between tests but leaves implementations in place, so
      * the forced failures below have to be undone by hand.
      */
@@ -247,7 +253,7 @@ describe('a checkout that cannot keep its order', () => {
         jest.restoreAllMocks();
     });
 
-    /*
+    /**
      * The hold is taken BEFORE the order is written, so a refused reserve has no order to roll
      * back at all — `orderRepository.create`/`deleteOne` and the order-number counter are never
      * reached.
@@ -431,7 +437,7 @@ describe('cancel releases the hold', () => {
             const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
             const orderId = String(checkout.success && checkout.data?._id);
 
-            /*
+            /**
              * Both paths cancel the SAME order — the sweep's own system cancel
              * (`expireReservationById`) fires from inside `runReservationSweep` via the `RESERVATION_EXPIRED`
              * subscription. Whichever wins `updateStatusIfIn` cancels the order; the loser
@@ -476,7 +482,7 @@ describe('the expiry sweep', () => {
                 reserved: 0,
                 available: 10
             });
-            /*
+            /**
              * The other half, and the reason the sweep announces rather than only releasing: an
              * order left `pending` with its stock gone would tell the customer they had bought
              * something they had not. This assertion is what proves the `RESERVATION_EXPIRED`

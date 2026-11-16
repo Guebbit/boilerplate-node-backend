@@ -5,7 +5,7 @@
  * can answer "what has actor X done" from the API. camelCase fields like every other model,
  * returned verbatim as `AuditEntryItem` in `openapi.yaml`; only the log line renames them.
  *
- * @see docs/modules/audit-logs.md
+ * @see docs/modules/audit-logs.md#the-pipeline
  */
 
 import { model, Schema } from 'mongoose';
@@ -57,8 +57,10 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
             type: String,
             required: true
         },
-        // The api-key's public prefix when a credential acted, so a stored row can say "done with a
-        // key" as well as the log line. Optional: a person acting directly has none.
+        /**
+         * The api-key's public prefix when a credential acted, so a stored row can say "done with a
+         * key" as well as the log line. Optional: a person acting directly has none.
+         */
         actorCredentialId: {
             type: String
         },
@@ -67,8 +69,10 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
             enum: [...AUDIT_ACTOR_ROLES],
             required: true
         },
-        // Open where `actorRole` is closed — no enum, so a renamed or newly added preset role
-        // never needs a migration here. See `actorRoleName` on `AuditEvent`.
+        /**
+         * Open where `actorRole` is closed — no enum, so a renamed or newly added preset role
+         * never needs a migration here. See `actorRoleName` on `AuditEvent`.
+         */
         actorRoleName: {
             type: String
         },
@@ -105,13 +109,17 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         targetId: {
             type: String
         },
-        // Whose data the row is about, when not the actor's: the key of the person's own
-        // "who consulted my data" export. Optional: most actions are not about another person.
+        /**
+         * Whose data the row is about, when not the actor's: the key of the person's own
+         * "who consulted my data" export. Optional: most actions are not about another person.
+         */
         subjectId: {
             type: String
         },
-        // Free-form by design: `metadata` carries action-specific extras, and the audit vocabulary
-        // is open enough that typing it would mean a schema change per new call site.
+        /**
+         * Free-form by design: `metadata` carries action-specific extras, and the audit vocabulary
+         * is open enough that typing it would mean a schema change per new call site.
+         */
         metadata: {
             type: Schema.Types.Mixed
         },
@@ -126,19 +134,23 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         }
     },
     {
-        // No `timestamps: true`: the entry carries its own `timestamp`, stamped at the moment the
-        // action happened rather than the moment the write landed. A second, near-identical
-        // `createdAt` would only invite queries to pick the wrong one.
+        /**
+         * No `timestamps: true`: the entry carries its own `timestamp`, stamped at the moment the
+         * action happened rather than the moment the write landed. A second, near-identical
+         * `createdAt` would only invite queries to pick the wrong one.
+         */
         timestamps: false,
-        // Fail an offline write immediately instead of queueing it: nothing waits on
-        // `auditLogService.record`, so Mongoose's default ten-second buffer only turns an
-        // unreachable database into a pending timer per audited request. See
-        // `docs/modules/audit-logs.md`'s "Offline writes" section for the full reasoning.
+        /**
+         * Fail an offline write immediately instead of queueing it: nothing waits on
+         * `auditLogService.record`, so Mongoose's default ten-second buffer only turns an
+         * unreachable database into a pending timer per audited request. See
+         * `docs/modules/audit-logs.md`'s "Offline writes" section for the full reasoning.
+         */
         bufferCommands: false
     }
 );
 
-/*
+/**
  * Indexes matching the four filtered ways the endpoints are queried. All four are compound with
  * `timestamp: -1` because every query sorts newest-first — a plain `{ actorUserId: 1 }` index
  * would find the matching entries and then sort them in memory, which is the shape that falls
@@ -148,9 +160,11 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
  * a single-field index is walked in either direction, so a second one differing only in sort
  * order would be maintained on every write and answer nothing the first cannot.
  */
-// Mongoose `index(fields, options)`: 1 ascending, -1 descending.
-// https://mongoosejs.com/docs/guide.html#indexes
-// "What this actor did" — `GET /audit`'s `actor` filter.
+/**
+ * Mongoose `index(fields, options)`: 1 ascending, -1 descending.
+ * https://mongoosejs.com/docs/guide.html#indexes
+ * "What this actor did" — `GET /audit`'s `actor` filter.
+ */
 auditLogSchema.index({ actorUserId: 1, timestamp: -1 });
 
 // "Every time this action ran" — `GET /audit`'s `action` filter.
@@ -162,7 +176,7 @@ auditLogSchema.index({ targetId: 1, timestamp: -1 });
 // "Who looked at this person's data" — `GET /audit`'s `subject` filter and the account export.
 auditLogSchema.index({ subjectId: 1, timestamp: -1 });
 
-/*
+/**
  * TTL index — Mongo deletes entries older than the retention window on its own.
  *
  * Without it this collection is the one thing here that only ever grows, and audit entries are

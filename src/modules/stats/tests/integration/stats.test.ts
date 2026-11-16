@@ -90,6 +90,7 @@ const paidOrder = async (options: {
  * @param from - first day
  * @param to - last day
  * @param interval - bucket size
+ * @throws {Error} when the period is refused
  */
 const periodOf = (from: string, to: string, interval: 'day' | 'week' | 'month' = 'day'): Period => {
     const resolved = resolvePeriod({ from, to, interval });

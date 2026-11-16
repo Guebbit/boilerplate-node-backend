@@ -6,7 +6,10 @@
 
 import type { RateLimitBudget } from '@types';
 
-/** One declared budget, by its `namespace` — throws loudly rather than reading `undefined`. */
+/**
+ * One declared budget, by its `namespace` — throws loudly rather than reading `undefined`.
+ * @throws {Error} when no budget has that namespace
+ */
 export const budgetIn = (
     budgets: readonly RateLimitBudget[],
     namespace: string

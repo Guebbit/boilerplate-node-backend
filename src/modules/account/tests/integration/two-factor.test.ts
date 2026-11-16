@@ -46,8 +46,10 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 
 setupTestDb();
 
-// A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
-// `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
+/**
+ * A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
+ * `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
+ */
 beforeEach(() => {
     setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 });
@@ -56,7 +58,10 @@ beforeEach(() => {
     mockOutbox.length = 0;
 });
 
-/** The digits from the most recent two-factor mail — what the recipient would type. */
+/**
+ * The digits from the most recent two-factor mail — what the recipient would type.
+ * @throws {Error} when no two-factor mail was queued
+ */
 const mailedCode = (): string => {
     const mail = mockOutbox.findLast(({ template }) => template === 'account.two-factor-code');
     if (!mail) throw new Error('No two-factor code was mailed');
@@ -637,8 +642,10 @@ describe('enrolling the email factor', () => {
         const { backupCodes: second } = await enrollEmail(bearer, first[0]);
 
         expect(first).toHaveLength(10);
-        // They recover the ACCOUNT, not the method — a second factor re-issuing them would
-        // silently invalidate the list the user already wrote down.
+        /**
+         * They recover the ACCOUNT, not the method — a second factor re-issuing them would
+         * silently invalidate the list the user already wrote down.
+         */
         expect(second).toEqual([]);
     });
 });
@@ -802,8 +809,10 @@ describe('logging in with a device factor', () => {
     });
 
     it('spends the challenge on success — presenting it again fails even with a fresh code', async () => {
-        // The property the JWT design never had: a challenge is a single-use, revocable token now
-        // (a row in the account's token store), not a self-verifying signature good for its whole TTL.
+        /**
+         * The property the JWT design never had: a challenge is a single-use, revocable token now
+         * (a row in the account's token store), not a self-verifying signature good for its whole TTL.
+         */
         const { user, bearer } = await authenticateVerified();
         const { secret } = await enrollTotp(bearer);
         const login = await startLogin(user.email);
@@ -814,8 +823,10 @@ describe('logging in with a device factor', () => {
             .send({ challenge, code: await codeFor(secret, 1) });
         expect(first.status).toBe(200);
 
-        // A different, otherwise-valid code — this fails on the CHALLENGE being gone, not on
-        // TOTP's own replay guard, which the earlier "replay protection" test already covers.
+        /**
+         * A different, otherwise-valid code — this fails on the CHALLENGE being gone, not on
+         * TOTP's own replay guard, which the earlier "replay protection" test already covers.
+         */
         const second = await api()
             .post('/account/login/2fa')
             .send({ challenge, code: await codeFor(secret, 1) });
@@ -838,7 +849,7 @@ describe('logging in with a device factor', () => {
     });
 
     it('refuses a challenge past its expiry, the same as a forged one', async () => {
-        /*
+        /**
          * Planted already expired, like the stale-reset-token case in `self-service.test.ts`'s
          * `findLiveToken` suite: `issueToken` cannot produce a past `expiresAt` itself, and this is
          * the state a genuinely stale challenge reaches while the database's TTL monitor has yet
@@ -863,8 +874,10 @@ describe('logging in with the email factor', () => {
 
         const login = await startLogin(user.email);
 
-        // No `enrolledAt`: whoever is answering this challenge has proved a password and nothing
-        // else, and when the factor was armed is not theirs to know.
+        /**
+         * No `enrolledAt`: whoever is answering this challenge has proved a password and nothing
+         * else, and when the factor was armed is not theirs to know.
+         */
         expect(login.body.methods).toEqual([
             { method: 'email', delivers: true, target: 'a***a@example.com', resendAfter: 30 }
         ]);
@@ -956,7 +969,7 @@ describe('logging in with the email factor', () => {
         );
         const code = mailedCode();
 
-        /*
+        /**
          * Driven at the SERVICE, not over HTTP, and a fresh challenge per guess — both deliberate.
          *
          * A fresh challenge because that is the attack: `mfaChallengeLimiter` caps attempts against
@@ -993,8 +1006,10 @@ describe('logging in with the email factor', () => {
         await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
         const code = mailedCode();
 
-        // Over HTTP because the confirm route carries no limiter of its own — the ceiling is the
-        // only thing bounding guesses here, which is exactly what this asserts.
+        /**
+         * Over HTTP because the confirm route carries no limiter of its own — the ceiling is the
+         * only thing bounding guesses here, which is exactly what this asserts.
+         */
         for (let attempt = 0; attempt < DELIVERED_CODE_MAX_ATTEMPTS; attempt++)
             await api()
                 .post('/account/2fa/methods/email/confirm')
@@ -1062,8 +1077,10 @@ describe('several factors at once', () => {
 
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
         expect(status.body.enabled).toBe(false);
-        // Left behind, they would arm the NEXT enrollment with a list the user wrote down for a
-        // factor that no longer exists.
+        /**
+         * Left behind, they would arm the NEXT enrollment with a list the user wrote down for a
+         * factor that no longer exists.
+         */
         expect(status.body.backupCodesRemaining).toBe(0);
 
         const login = await startLogin(user.email);
@@ -1076,8 +1093,10 @@ describe('several factors at once', () => {
         await enrollEmail(bearer, backupCodes[0]);
         mockOutbox.length = 0;
 
-        // Proving the email factor to remove the authenticator: any armed factor proves the
-        // account, which is what the removal is really guarding.
+        /**
+         * Proving the email factor to remove the authenticator: any armed factor proves the
+         * account, which is what the removal is really guarding.
+         */
         const sent = await api()
             .post('/account/2fa/methods/email/send')
             .set('Authorization', bearer)
@@ -1210,8 +1229,10 @@ describe('regenerating backup codes', () => {
 });
 
 describe('no staff path strips a second factor', () => {
-    // A credential is its owner's alone: the route that once cleared a second factor for an
-    // admin is gone, the factor stays armed, and a lost one is a technician's hand edit.
+    /**
+     * A credential is its owner's alone: the route that once cleared a second factor for an
+     * admin is gone, the factor stays armed, and a lost one is a technician's hand edit.
+     */
     it('answers 404 to an admin, leaves the factor armed, and login still challenges', async () => {
         const { user, bearer } = await authenticateVerified();
         await enrollTotp(bearer);

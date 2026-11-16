@@ -72,8 +72,10 @@ const pairedSchemas = (): Map<string, [SchemaShape, SchemaShape]> => {
 
 describe('Replace/Update schema parity', () => {
     it('finds exactly the known Replace/Update pairs — a canary against an empty sweep', () => {
-        // The exact set, not a minimum: a pair whose naming drifts drops out of the sweep silently,
-        // and `>= N` would still pass. A resource moving onto the factory adds its entity here.
+        /**
+         * The exact set, not a minimum: a pair whose naming drifts drops out of the sweep silently,
+         * and `>= N` would still pass. A resource moving onto the factory adds its entity here.
+         */
         const known: Record<string, string> = {
             Account: 'account',
             Address: 'addresses',

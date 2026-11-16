@@ -78,8 +78,10 @@ const idempotencyRecordSchema = new Schema<IdempotencyRecordDocument, Idempotenc
         status: {
             type: Number
         },
-        // The stored response body, replayed verbatim on a later hit — shape varies per route,
-        // which is exactly what `Mixed` is for.
+        /**
+         * The stored response body, replayed verbatim on a later hit — shape varies per route,
+         * which is exactly what `Mixed` is for.
+         */
         body: {
             type: Schema.Types.Mixed
         },
@@ -99,7 +101,7 @@ const idempotencyRecordSchema = new Schema<IdempotencyRecordDocument, Idempotenc
     }
 );
 
-/*
+/**
  * The lock. One caller's insert either succeeds (nobody else holds this key yet) or collides on
  * E11000 (somebody already does) — `idempotency.ts` reads the collision itself as the signal to
  * fall into the in-flight/replay/mismatch branch, never as a database error to surface.
@@ -109,7 +111,7 @@ idempotencyRecordSchema.index(
     { unique: true, name: 'idempotency_key_caller_unique' }
 );
 
-/*
+/**
  * TTL index — Mongo deletes attempts older than the retention window on its own. Same caveat as
  * every other TTL index in this repo (see `tasks/model.ts` and `persistence/lease.ts`):
  * raising or lowering `NODE_IDEMPOTENCY_RETENTION_HOURS` and restarting FAILS THE BOOT, because

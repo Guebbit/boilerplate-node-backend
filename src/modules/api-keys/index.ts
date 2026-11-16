@@ -5,7 +5,7 @@
  * verifying a credential is this module's own resource, and nothing else has business doing
  * either. `module.ts` wires the `CredentialResolver` itself at import time.
  *
- * @see docs/modules/api-keys.md
+ * @see docs/modules/api-keys.md#its-neighbourhood
  */
 
 export * from './services';

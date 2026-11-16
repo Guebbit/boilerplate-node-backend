@@ -31,8 +31,6 @@ const MAX_IMPORT_ATTEMPTS = 3;
  * The record a provider refund is, when it is ours: the stored refund id, or our record id the
  * provider echoed from its metadata.
  *
- * @param payment - the payment
- * @param providerRefund - the provider's refund
  */
 const ourRecord = (
     payment: PaymentDocument,
@@ -48,7 +46,6 @@ const ourRecord = (
 /**
  * The settled record an outside refund becomes.
  *
- * @param providerRefund - the provider's refund
  */
 const importedRecord = (providerRefund: ProviderRefund): RefundRecord => ({
     _id: new Types.ObjectId(),
@@ -157,8 +154,6 @@ const importRefund = (
  * Whether an outside refund can be imported: it succeeded, and it is in the payment's own currency
  * (another currency is logged and skipped, never converted).
  *
- * @param payment - the payment
- * @param providerRefund - the provider's refund
  */
 const isImportable = (payment: PaymentDocument, providerRefund: ProviderRefund): boolean => {
     if (providerRefund.status !== 'succeeded') return false;
@@ -198,7 +193,6 @@ export const syncProviderRefunds = (payment: PaymentDocument): Promise<void> => 
  * One provider refund: ours or an outside one.
  *
  * @param payment - the payment as the previous step left it
- * @param providerRefund - the provider's refund
  * @returns the payment after this step
  */
 const syncOne = (

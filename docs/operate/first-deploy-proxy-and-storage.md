@@ -19,12 +19,12 @@ What differs from dev, how to put TLS in front, where uploads live, and the firs
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
 | API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
 | Full observability stack included                           | Only with the `monitoring` profile — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts)                     |
-| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with `--scale app=N`                                              |
+| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with orchestrator replicas                                        |
 | Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
 | Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
 | Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up                    |
 
-Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
+Clustering is off on purpose: scale with an orchestrator's replicas instead, so
 one thing decides how many processes are live, not two layers of process management fighting a
 rolling deploy.
 
@@ -32,12 +32,13 @@ rolling deploy.
 
 ### 1 · Putting a reverse proxy in front {#putting-a-reverse-proxy-in-front}
 
-The app itself never terminates TLS; the `compose.proxy.yaml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
+The app itself never terminates TLS. The API is bound to loopback specifically so that publishing
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
-easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
-proxy to `127.0.0.1:${NODE_PORT}`.
+easy path. Put any TLS proxy (nginx, Caddy, a managed load balancer) in front, terminate TLS there,
+proxy to `127.0.0.1:${NODE_PORT}`, **and set `NODE_TRUST_PROXY_HOPS=1`** (below).
 
-Rootless Podman cannot publish ports below 1024 by default, and the Traefik overlay publishes 80 and 443. Lower the limit once per host:
+If your proxy runs in a rootless Podman container, note that rootless Podman cannot publish ports
+below 1024 by default, and a proxy publishes 80 and 443. Lower the limit once per host:
 
 ```bash
 # Let unprivileged users bind 80 and up; the file makes it survive a reboot.
@@ -45,14 +46,41 @@ echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/90-unpriv
 sudo sysctl --system
 ```
 
-Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
-in the compose file sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+Set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; `.env-example` leaves
+it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
-Running **several client stacks on one host** is different enough to have its own recipe —
-`compose.proxy.yaml` fronts them all with one shared Traefik that serves each stack from its
-own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).
+Two proxy timeouts must agree with the app's, or a slow request or an idle socket turns into a
+502 or a cut upload with no problem body:
+
+- The proxy's **read** timeout is at least `NODE_HTTP_REQUEST_TIMEOUT_MS` +
+  `NODE_HTTP_HEADERS_TIMEOUT_MS`, so a slow upload ends on the app's side (`applyServerTimeouts` in
+  `src/app/security.ts`).
+- The proxy's **idle-to-app** timeout is below `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`: the proxy closes
+  idle connections first, so it never reuses a socket Node closed.
+
+#### What to set on the proxy {#proxy-settings}
+
+The idle-to-app rule above has one home; this is what it means per proxy. The table covers nginx and
+managed load balancers only, and its figures are those proxies' usual defaults, from memory: check
+your version. Any other proxy needs the same two settings under its own names.
+
+| Proxy      | Its idle time on the app side                     | What to set                                                                           |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| nginx      | `keepalive_timeout` in the `upstream` block, 60 s | Lower it under the app's value, or raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above 60 s |
+| Managed LB | Its idle timeout (AWS ALB: 60 s)                  | Raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above it                                      |
+
+Also, on every proxy:
+
+- **Never retry a `POST` at the proxy.** A retried write that the app already ran is a duplicate.
+  Writes that must survive a retry carry an `Idempotency-Key` instead.
+- **Body cap:** the proxy's own limit applies before the app's. nginx's `client_max_body_size`
+  defaults to 1 MB, below an image upload; raise it to the largest upload the app accepts.
+- **Live streams:** the SSE response sends `X-Accel-Buffering: no`, which nginx obeys and turns
+  response buffering off for that stream. Other proxies need it off in their own settings.
+- **Which copy wrote a log line:** every line carries `host.name` and `process.pid`. On Kubernetes
+  the host name is the pod name; on one host, copies differ by pid.
 
 ### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
 

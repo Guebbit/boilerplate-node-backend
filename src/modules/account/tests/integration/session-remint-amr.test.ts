@@ -26,7 +26,10 @@ const sessionWith = async (userId: string, amr: string[]) => {
     return { bearer: `Bearer ${token}`, cookie: `__Host-session=${refreshToken}` };
 };
 
-/** The `amr` a response's refreshed session cookie claims. */
+/**
+ * The `amr` a response's refreshed session cookie claims.
+ * @throws {Error} when the response sets no session cookie
+ */
 const amrOfCookie = (response: Response): unknown => {
     const cookie = setCookie(response, '__Host-session');
     if (!cookie) throw new Error(`No session cookie: ${response.status}`);

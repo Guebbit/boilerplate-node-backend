@@ -3,7 +3,7 @@
  * The contact form's creation, announced on the bus as `task.opened`, and the mail that carries
  * the visitor's own words to the main mailbox.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import { TaskCategory, TaskKind, TaskResolution, TaskSource } from '@types';
@@ -65,8 +65,10 @@ export const create = (
     return checkEmailPolicy(email).then((verdict) => {
         const suspectedSpam = honeypotFilled || verdict === 'refused';
 
-        // The message and its `task.opened` row commit together. Suspected spam is stored
-        // (closed at birth) but announces nothing: contact spam tells nobody.
+        /**
+         * The message and its `task.opened` row commit together. Suspected spam is stored
+         * (closed at birth) but announces nothing: contact spam tells nobody.
+         */
         return announceInTransaction(
             (session) =>
                 taskRepository.create(
@@ -133,14 +135,18 @@ export const mailMainMailbox = (taskId: string, reminder?: ContactReminder): Pro
             reminder
         });
 
-        // The first mail's id is derived from the task, so the reminder can name it as its parent
-        // without anything stored. `<task-<id>@<support domain>>`.
+        /**
+         * The first mail's id is derived from the task, so the reminder can name it as its parent
+         * without anything stored. `<task-<id>@<support domain>>`.
+         */
         const domain = mailbox.slice(mailbox.lastIndexOf('@') + 1);
         const firstId = `<task-${String(task._id)}@${domain}>`;
 
         return enqueueEmail(
-            // `replyTo`: the bare address only (already normalised on create), never a display
-            // name: the visitor's free-text name must not reach a header.
+            /**
+             * `replyTo`: the bare address only (already normalised on create), never a display
+             * name: the visitor's free-text name must not reach a header.
+             */
             {
                 to: mailbox,
                 subject: mail.subject,

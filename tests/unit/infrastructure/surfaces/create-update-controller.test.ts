@@ -111,8 +111,10 @@ describe('createUpdateController', () => {
         );
     });
 
-    // The uploaded-file case: a client cannot send the current value back, so an omission keeps
-    // it — but an explicit `null` still clears, as on any nullable field.
+    /**
+     * The uploaded-file case: a client cannot send the current value back, so an omission keeps
+     * it — but an explicit `null` still clears, as on any nullable field.
+     */
     it('PUT leaves a keptWhenOmitted field out of the change-set, yet still passes an explicit null', async () => {
         const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
         const { replace } = makeController({ update, keptWhenOmitted: ['note'] });

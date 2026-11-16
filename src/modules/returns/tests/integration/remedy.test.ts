@@ -90,6 +90,7 @@ const approvedReturn = async (
     return { user, shirt, orderId, id };
 };
 
+/** What the arranging helper hands each case. */
 type Opened = Awaited<ReturnType<typeof approvedReturn>>;
 
 /** A broken pair is not sellable: restock 0. */

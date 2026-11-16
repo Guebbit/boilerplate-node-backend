@@ -81,8 +81,10 @@ describe('a language that exists only as database rows', () => {
         expect(response.headers['content-language']).toBe('es');
     });
 
-    // The API has no Spanish wording of its own: each message falls back to the default language,
-    // one key at a time, and nothing throws or logs a rejected language on the way.
+    /**
+     * The API has no Spanish wording of its own: each message falls back to the default language,
+     * one key at a time, and nothing throws or logs a rejected language on the way.
+     */
     it("words the API's own messages in the default language", async () => {
         await givenSpanishProduct('Lamp', 'Lámpara');
 

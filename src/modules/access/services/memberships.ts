@@ -4,7 +4,7 @@
  * that change it. A role lives in exactly one place, the membership row — the user document holds
  * none of its own.
  *
- * @see docs/understand/authorization.md
+ * @see docs/understand/authorization.md#the-model
  */
 
 import type { ClientSession } from 'mongoose';
@@ -116,9 +116,11 @@ export const revokeRole = (
     context: CallerContext,
     session?: ClientSession
 ): Promise<void> => {
-    // Set once a membership is found, read by BOTH branches below — the failure branch needs it
-    // too, so `role` is never missing from its audit row the way it is from the other three (see
-    // `auditRoleChange`'s own docblock).
+    /**
+     * Set once a membership is found, read by BOTH branches below — the failure branch needs it
+     * too, so `role` is never missing from its audit row the way it is from the other three (see
+     * `auditRoleChange`'s own docblock).
+     */
     let revokedRole: string | undefined;
 
     const attempt = Promise.resolve()
@@ -137,8 +139,10 @@ export const revokeRole = (
 
     return attempt.then(
         (role) => {
-            // `role` is `undefined` when there was nothing to revoke — no membership existed, so
-            // there is nothing to record.
+            /**
+             * `role` is `undefined` when there was nothing to revoke — no membership existed, so
+             * there is nothing to record.
+             */
             if (role && !session) {
                 auditRoleRevoked(context, userId, role, tenantId, scope);
             }

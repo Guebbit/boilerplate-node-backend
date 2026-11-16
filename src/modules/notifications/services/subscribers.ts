@@ -95,8 +95,10 @@ const notifyTaskStaff = (
         sets: alertSetsOf(fact),
         dedupeKey: `${dedupePrefix}:${fact.taskId}`
     };
-    // A contact message is answered from the main mailbox, so here it is the bell's alone: no
-    // mail to each person. The other kinds keep theirs.
+    /**
+     * A contact message is answered from the main mailbox, so here it is the bell's alone: no
+     * mail to each person. The other kinds keep theirs.
+     */
     return notifyStaff(
         fact.kind === 'contact'
             ? { ...notice, route: { ...STAFF_ROUTES[code], email: 'none' as const } }

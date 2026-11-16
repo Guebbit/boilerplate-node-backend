@@ -65,8 +65,10 @@ export const decryptTotpSecret = (stored: string, methodId: string): string =>
  */
 export const buildOtpauthUri = (secret: string, label: string): string =>
     generateURI({
-        // The issuer shown in an authenticator app. Reuses `NODE_SMTP_SENDER`'s display name
-        // rather than adding a dedicated branding variable — this deployment already named itself.
+        /**
+         * The issuer shown in an authenticator app. Reuses `NODE_SMTP_SENDER`'s display name
+         * rather than adding a dedicated branding variable — this deployment already named itself.
+         */
         issuer: mailConfig().NODE_SMTP_SENDER?.split('<', 1)[0]?.trim() || 'Account',
         label,
         secret
@@ -93,9 +95,11 @@ export const verifyTotpCode = (
     code: string,
     afterTimeStep?: number
 ): Promise<TotpVerification> =>
-    // otplib `verify`: checks `token` against `secret`. `epochTolerance` is the clock-skew window in
-    // seconds either side; `afterTimeStep` refuses any step at or before it (replay protection).
-    // https://otplib.yeojz.dev/
+    /**
+     * otplib `verify`: checks `token` against `secret`. `epochTolerance` is the clock-skew window in
+     * seconds either side; `afterTimeStep` refuses any step at or before it (replay protection).
+     * https://otplib.yeojz.dev/
+     */
     verify({
         secret,
         token: code,
@@ -103,16 +107,20 @@ export const verifyTotpCode = (
         afterTimeStep
     })
         .then((result): TotpVerification => {
-            // `verify`'s return type covers both TOTP and HOTP results, and only TOTP's carries
-            // `timeStep` — `strategy` is never passed here (default: 'totp'), so this always holds;
-            // `'in'` is what TypeScript can actually narrow the union on.
+            /**
+             * `verify`'s return type covers both TOTP and HOTP results, and only TOTP's carries
+             * `timeStep` — `strategy` is never passed here (default: 'totp'), so this always holds;
+             * `'in'` is what TypeScript can actually narrow the union on.
+             */
             if (!result.valid) return { valid: false };
             return { valid: true, timeStep: 'timeStep' in result ? result.timeStep : undefined };
         })
         .catch(
-            // `verify` THROWS on a malformed token (wrong length, non-digits) rather than
-            // resolving `{ valid: false }` — a shape guardrail, not a rejection this caller
-            // should propagate. The verification chain tries every other factor after this one,
-            // and a ten-character backup code fails that guardrail on every attempt.
+            /**
+             * `verify` THROWS on a malformed token (wrong length, non-digits) rather than
+             * resolving `{ valid: false }` — a shape guardrail, not a rejection this caller
+             * should propagate. The verification chain tries every other factor after this one,
+             * and a ten-character backup code fails that guardrail on every attempt.
+             */
             (): TotpVerification => ({ valid: false })
         );

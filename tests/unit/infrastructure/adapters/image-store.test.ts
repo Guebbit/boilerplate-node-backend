@@ -13,6 +13,7 @@ import path from 'node:path';
 import { applyImageWriteback, filesystemImageStore } from '@infrastructure/adapters/image-store';
 import { setEnvironment } from '@tests/environment';
 
+/** Temp directory the files land in; removed after each case. */
 let root: string;
 
 /** Creates `<root>/images/<name>` and returns both halves: the real path and the stored url. */
@@ -63,8 +64,10 @@ describe('filesystemImageStore.quarantine', () => {
         );
     });
 
-    /* Staging exists so an unvalidated upload is never publicly readable; leaving a copy behind
-       would defeat it, and would leak a file per upload besides. */
+    /**
+     * Staging exists so an unvalidated upload is never publicly readable; leaving a copy behind
+     * would defeat it, and would leak a file per upload besides.
+     */
     it('consumes the staged file', async () => {
         const staged = await stageUpload('abc123.png');
 
@@ -73,8 +76,10 @@ describe('filesystemImageStore.quarantine', () => {
         expect(existsSync(staged)).toBe(false);
     });
 
-    /* Nothing else provisions this directory ahead of the first upload — same as
-       `resolveUploadDestination` does for the staging path in `http/middlewares/upload.ts`. */
+    /**
+     * Nothing else provisions this directory ahead of the first upload — same as
+     * `resolveUploadDestination` does for the staging path in `http/middlewares/upload.ts`.
+     */
     it('creates the quarantine directory on demand', async () => {
         const staged = await stageUpload('abc123.png');
         expect(existsSync(path.join(root, 'quarantine'))).toBe(false);
@@ -159,8 +164,10 @@ describe('filesystemImageStore.promote', () => {
         await filesystemImageStore.promote('abc123', Buffer.from('run one'), 'image/png');
         await filesystemImageStore.promote('abc123', Buffer.from('run two'), 'image/png');
 
-        // The second write simply lands on the same path — never a "file exists" failure, which
-        // is what makes a duplicate digest run (a redelivered job, a reclaimed lease) harmless.
+        /**
+         * The second write simply lands on the same path — never a "file exists" failure, which
+         * is what makes a duplicate digest run (a redelivered job, a reclaimed lease) harmless.
+         */
         expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe('run two');
     });
 
@@ -218,8 +225,10 @@ describe('filesystemImageStore.remove', () => {
         expect(existsSync(thumbnail)).toBe(false);
     });
 
-    /* Most images predate the digest pipeline, or never went through a broker fast enough to grow
-       one — a missing thumbnail must not stop the main image from being deleted. */
+    /**
+     * Most images predate the digest pipeline, or never went through a broker fast enough to grow
+     * one — a missing thumbnail must not stop the main image from being deleted.
+     */
     it.each([
         ['undefined', undefined],
         ['an empty string', '']
@@ -289,7 +298,7 @@ describe('filesystemImageStore.remove', () => {
         expect(existsSync(root)).toBe(true);
     });
 
-    /*
+    /**
      * `promote` lands a flat name in `<public>/images/`, so a subdirectory of it holds files this
      * store did not write as a main image. `images/seed/` is the demo fixtures, committed to the
      * repository: replacing a seeded record's image must not unlink one, or every later re-seed
@@ -305,8 +314,10 @@ describe('filesystemImageStore.remove', () => {
         expect(existsSync(fixture)).toBe(true);
     });
 
-    /* Defensive: nothing writes this shape today, but a stored value without its leading slash
-       must resolve to `<root>/images/x.png`, not to a hidden file named `.images`. */
+    /**
+     * Defensive: nothing writes this shape today, but a stored value without its leading slash
+     * must resolve to `<root>/images/x.png`, not to a hidden file named `.images`.
+     */
     it('accepts a stored url that lost its leading slash', async () => {
         const { file } = await makeImage('slashless.png');
 

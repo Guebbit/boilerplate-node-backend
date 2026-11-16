@@ -36,8 +36,10 @@ setupTestDb();
 // A requested export is built in the background and written to the sandbox: wait, then sweep.
 afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
-// A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
-// `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
+/**
+ * A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
+ * `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
+ */
 beforeEach(() => {
     setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 });
@@ -176,8 +178,10 @@ describe('POST /account/reauth with a mailed code', () => {
         const { bearer } = await sessionFor(['google'], false);
         const first = await reauthByEmail(bearer);
 
-        // The re-proof replaced the session, so the replay carries the one it handed back: in
-        // `cookie` mode the old id is gone, and the refusal under test is the code's, not a 401.
+        /**
+         * The re-proof replaced the session, so the replay carries the one it handed back: in
+         * `cookie` mode the old id is gone, and the refusal under test is the code's, not a 401.
+         */
         const replay = await api()
             .post('/account/reauth')
             .set('Authorization', bearerIn(first))

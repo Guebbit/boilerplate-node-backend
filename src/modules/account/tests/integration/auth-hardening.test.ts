@@ -215,8 +215,10 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
 
         const response = await supertest(app).post('/login').send({ email: 'ada@example.com' });
 
-        // The credential check itself still answers — no 401 from the challenge gate demanding
-        // a token nobody was asked to send yet.
+        /**
+         * The credential check itself still answers — no 401 from the challenge gate demanding
+         * a token nobody was asked to send yet.
+         */
         expect(response.status).toBe(401);
         expect(response.body).toEqual({ success: false });
     });

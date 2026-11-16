@@ -49,8 +49,10 @@ const configure = (): void => {
 const assertApp = (): void => assertModuleConfig([], APP_CONFIG_SLICES);
 
 afterEach(() => {
-    // Memoised on first resolve — a case left over from a previous one would otherwise decide
-    // this one, the same reason `analytics.test.ts` resets it in its own `beforeEach`.
+    /**
+     * Memoised on first resolve — a case left over from a previous one would otherwise decide
+     * this one, the same reason `analytics.test.ts` resets it in its own `beforeEach`.
+     */
     resetAnalyticsProvider();
 });
 
@@ -63,8 +65,10 @@ describe('application-wide variables', () => {
     });
 
     it('ignores an unset NODE_CORS_ORIGIN outside production', () => {
-        // `productionOnly`: the localhost fallback in `app/security.ts` is right for a developer
-        // and certainly wrong for a deployment, so only the deployment is asked about it.
+        /**
+         * `productionOnly`: the localhost fallback in `app/security.ts` is right for a developer
+         * and certainly wrong for a deployment, so only the deployment is asked about it.
+         */
         configure();
         setEnvironment({ NODE_CORS_ORIGIN: undefined });
 
@@ -91,8 +95,10 @@ describe('application-wide variables', () => {
     );
 
     it('ignores an unset NODE_FRONTEND_URL outside production', () => {
-        // `productionOnly`: the localhost default is the frontend's own dev origin, right for a
-        // developer, while in a deployment every mailed link would point at it.
+        /**
+         * `productionOnly`: the localhost default is the frontend's own dev origin, right for a
+         * developer, while in a deployment every mailed link would point at it.
+         */
         configure();
         setEnvironment({ NODE_FRONTEND_URL: undefined });
 
@@ -119,8 +125,10 @@ describe('application-wide variables', () => {
     });
 
     it('ignores an unset NODE_PSEUDONYM_KEY outside production', () => {
-        // `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
-        // a developer and certainly wrong for a deployment, so only the deployment is asked.
+        /**
+         * `productionOnly`: the logger's own dev fallback key (`adapters/logger.ts`) is right for
+         * a developer and certainly wrong for a deployment, so only the deployment is asked.
+         */
         configure();
         setEnvironment({ NODE_PSEUDONYM_KEY: undefined });
 
@@ -302,7 +310,7 @@ describe('the provider-selector group — refused at boot, not the first request
     });
 });
 
-/*
+/**
  * Antibot's own checks: moved here from `modules/antibot`'s manifest, since the
  * human-challenge gate they validate is cross-cutting middleware `account`/`tasks` call
  * directly — it keeps running whether or not antibot's two HTTP routes are even mounted, so

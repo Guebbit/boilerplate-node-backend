@@ -60,8 +60,10 @@ import { staffNoticeEmail } from '@modules/notifications/emails';
 import { staffDigestEmail } from '@modules/shop-tasks/emails';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
 
-// Every case in this file renders against the real collection, the same one `app.ts` builds at
-// boot — a module's own manifest is what says which directory it owns.
+/**
+ * Every case in this file renders against the real collection, the same one `app.ts` builds at
+ * boot — a module's own manifest is what says which directory it owns.
+ */
 registerTemplateDirectories(enabledModuleDirectories('templates'));
 
 describe('the template collection', () => {
@@ -357,8 +359,10 @@ describe('email templates render in every supported locale', () => {
         expect(Object.keys(contentFor('en')).toSorted()).toEqual(names.toSorted());
     });
 
-    // `enqueueEmail` never rejects, so a builder whose `template` differs from its map key fails
-    // silently in the worker; render() above resolves by key and would not see it.
+    /**
+     * `enqueueEmail` never rejects, so a builder whose `template` differs from its map key fails
+     * silently in the worker; render() above resolves by key and would not see it.
+     */
     it('has each builder publish the name it is registered under', () => {
         const content = contentFor('en');
 
@@ -373,8 +377,10 @@ describe('email templates render in every supported locale', () => {
         const html = await render(name, locale);
 
         expect(html).toContain(`<html lang="${locale}"`);
-        // A raw i18next key is a dotted identifier with no spaces — the shape a missing
-        // translation leaves behind.
+        /**
+         * A raw i18next key is a dotted identifier with no spaces — the shape a missing
+         * translation leaves behind.
+         */
         expect(html).not.toMatch(/>[^<>]*\b[a-z]+(?:\.[\da-z-]+){2,}\b[^<>]*</);
     });
 

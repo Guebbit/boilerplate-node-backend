@@ -5,7 +5,7 @@
  * `Model.updateOne`, an aggregate — so nothing is counted twice and nothing is missed.
  * `GET /observability/metrics/overview` reads the histogram's `_count` by name.
  *
- * @see docs/operate/prometheus.md
+ * @see docs/operate/prometheus.md#what-observability-metrics-exposes
  */
 
 import type { Connection, mongo } from 'mongoose';
@@ -20,8 +20,10 @@ import { infrastructureMetricData } from '@infrastructure/observability/metrics.
  */
 export const databaseOperationDuration = new Histogram({
     ...histogramConfig(infrastructureMetricData.databaseOperationDuration),
-    // `collection` and `operation` are bounded by the schema and the driver's command set;
-    // `outcome` is `success` or `error`.
+    /**
+     * `collection` and `operation` are bounded by the schema and the driver's command set;
+     * `outcome` is `success` or `error`.
+     */
     registers: [metricsRegistry]
 });
 
@@ -58,8 +60,10 @@ export const observeDatabaseCommands = (connection: Connection): void => {
     if (observed.has(client)) return;
     observed.add(client);
 
-    // Keyed by the driver's `requestId`, unique per command on this client. Entries leave on
-    // BOTH `commandSucceeded` and `commandFailed`, so the map holds only commands in flight.
+    /**
+     * Keyed by the driver's `requestId`, unique per command on this client. Entries leave on
+     * BOTH `commandSucceeded` and `commandFailed`, so the map holds only commands in flight.
+     */
     const pending = new Map<number, PendingCommand>();
 
     const finish = (

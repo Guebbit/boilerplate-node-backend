@@ -21,8 +21,6 @@ import { splitForAllocation } from './split';
 
 /**
  * Units of one product still waiting for stock on a fulfillment order.
- * @param fulfillmentOrder - the fulfillment order
- * @param productId - the product
  */
 const waitingOn = (fulfillmentOrder: FulfillmentOrderDocument, productId: string): number =>
     fulfillmentOrder.lines
@@ -33,7 +31,6 @@ const waitingOn = (fulfillmentOrder: FulfillmentOrderDocument, productId: string
  * The order's fulfillment orders that hold this product for stock, earliest promised date first:
  * the units inventory allocated go to the buyer's oldest promise.
  *
- * @param orderId - the order
  * @param productId - the product whose stock arrived
  */
 const heldFor = (orderId: string, productId: string): Promise<FulfillmentOrderDocument[]> =>

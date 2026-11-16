@@ -375,8 +375,10 @@ const outcomeFor = (paymentMethodRef: string) =>
 export const fakePaymentProvider: PaymentProvider = {
     name: 'fake',
 
-    // Derived from the payment id rather than generated, which makes it idempotent for free: the
-    // double-click case prepares the same reference twice instead of opening a second intent.
+    /**
+     * Derived from the payment id rather than generated, which makes it idempotent for free: the
+     * double-click case prepares the same reference twice instead of opening a second intent.
+     */
     prepare: (charge, metadata, existingProviderRef) => {
         const providerRef = existingProviderRef ?? `fake_pi_${metadata.paymentId}`;
         intents.set(providerRef, { ...charge, paymentId: metadata.paymentId });
@@ -387,8 +389,10 @@ export const fakePaymentProvider: PaymentProvider = {
         // Stryker restore all
         return Promise.resolve({
             providerRef,
-            // Signed rather than random, for the same reason the reference is derived: re-preparing
-            // must not invalidate a secret the browser is already holding.
+            /**
+             * Signed rather than random, for the same reason the reference is derived: re-preparing
+             * must not invalidate a secret the browser is already holding.
+             */
             clientSecret: `${providerRef}_secret_${createHmac('sha256', 'fake-psp')
                 .update(providerRef)
                 .digest('hex')
@@ -396,8 +400,10 @@ export const fakePaymentProvider: PaymentProvider = {
         });
     },
 
-    // Money duty 1: an intent that already succeeded answers that state and charges nothing again,
-    // whatever method the retry brings. A retry after a decline still goes through (not recorded here).
+    /**
+     * Money duty 1: an intent that already succeeded answers that state and charges nothing again,
+     * whatever method the retry brings. A retry after a decline still goes through (not recorded here).
+     */
     confirm: (providerRef, paymentMethodRef) => {
         const settled = outcomes.get(providerRef);
         if (settled?.status === 'succeeded') {
@@ -416,17 +422,21 @@ export const fakePaymentProvider: PaymentProvider = {
     },
 
     retrieve: (providerRef) => {
-        // No outcome on record: the intent was prepared and never confirmed, which a real provider
-        // reports as an open intent, not as money in flight.
+        /**
+         * No outcome on record: the intent was prepared and never confirmed, which a real provider
+         * reports as an open intent, not as money in flight.
+         */
         const state = outcomes.get(providerRef) ?? { status: 'open' as const };
         // Stryker disable next-line all
         logger.info(`[fake-psp] retrieve ${providerRef} → ${state.status}`);
         return Promise.resolve(withReceipt(providerRef, state));
     },
 
-    // Behaves like Stripe's idempotency: within a day of a key's first use the same answer is
-    // replayed (a definite refusal included); after that the key is forgotten, and only the
-    // adapter's own lookup by `refundId` (for a record older than a day) prevents a second refund.
+    /**
+     * Behaves like Stripe's idempotency: within a day of a key's first use the same answer is
+     * replayed (a definite refusal included); after that the key is forgotten, and only the
+     * adapter's own lookup by `refundId` (for a record older than a day) prevents a second refund.
+     */
     refund: (providerRef, charge, { idempotencyKey, refundId, createdAt }) => {
         const known = keyedAnswers.get(idempotencyKey);
         if (known && Date.now() - known.at < KEY_WINDOW_MS) {
@@ -455,8 +465,10 @@ export const fakePaymentProvider: PaymentProvider = {
 
         const failure = refundFailures.get(providerRef);
         if (failure) {
-            // Only a definite refusal is the provider's answer to this key; an unclear one is a
-            // transport problem that never reached it.
+            /**
+             * Only a definite refusal is the provider's answer to this key; an unclear one is a
+             * transport problem that never reached it.
+             */
             if (FINAL_REFUND_FAILURES.includes(failure))
                 keyedAnswers.set(idempotencyKey, { at: Date.now(), failure });
             return Promise.reject(
@@ -469,8 +481,10 @@ export const fakePaymentProvider: PaymentProvider = {
         logger.info(
             `[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef} (${idempotencyKey})`
         );
-        // Derived from the key, like a real provider's idempotent replay: the same key answers
-        // the same refund id. A key forgotten after its window makes a different one.
+        /**
+         * Derived from the key, like a real provider's idempotent replay: the same key answers
+         * the same refund id. A key forgotten after its window makes a different one.
+         */
         const refundRef = known
             ? `re_fake_${idempotencyKey}_${String(refundsByRecord.size)}`
             : `re_fake_${idempotencyKey}`;
@@ -526,9 +540,11 @@ export const fakePaymentProvider: PaymentProvider = {
             logger.info(`[fake-psp] cancel ${providerRef} → already canceled`);
             return Promise.resolve();
         }
-        // Only `succeeded` is checked: `confirm` above writes STRAIGHT to the settled outcome
-        // (see its own comment), so `outcomes` never actually rests on `processing` here — a real
-        // provider's own intent can, and must refuse a cancel there too (see the port's own doc).
+        /**
+         * Only `succeeded` is checked: `confirm` above writes STRAIGHT to the settled outcome
+         * (see its own comment), so `outcomes` never actually rests on `processing` here — a real
+         * provider's own intent can, and must refuse a cancel there too (see the port's own doc).
+         */
         if (outcomes.get(providerRef)?.status === 'succeeded') {
             // Stryker disable next-line all
             logger.info(`[fake-psp] cancel ${providerRef} refused → already succeeded`);
@@ -554,8 +570,10 @@ export const fakePaymentProvider: PaymentProvider = {
      * string belongs.
      */
     parseWebhook: (rawBody, headers: IncomingHttpHeaders) =>
-        // Inside the chain rather than in front of it: a synchronous throw from a method typed as
-        // returning a promise makes every caller need a try/catch as well as a `.catch`.
+        /**
+         * Inside the chain rather than in front of it: a synchronous throw from a method typed as
+         * returning a promise makes every caller need a try/catch as well as a `.catch`.
+         */
         Promise.resolve()
             .then(() =>
                 verifyWebhookSignature(
@@ -565,15 +583,19 @@ export const fakePaymentProvider: PaymentProvider = {
                 )
             )
             .then(() => rawBody.toString('utf8'))
-            // `JSON.parse` throws, and the throw lands in this chain's own rejection — so the
-            // `.catch` below is what turns an unparseable body into the 400 it is, rather than
-            // letting it read as a fault of ours.
+            /**
+             * `JSON.parse` throws, and the throw lands in this chain's own rejection — so the
+             * `.catch` below is what turns an unparseable body into the 400 it is, rather than
+             * letting it read as a fault of ours.
+             */
             .then((text): unknown => JSON.parse(text))
             .catch((error: unknown) => {
                 if (error instanceof WebhookRejected) throw error;
                 throw new WebhookRejected('Body is not valid JSON');
             })
-            // One cast, on purpose: the JSON is unvalidated and the port's parse is what refuses
-            // a body of the wrong shape.
+            /**
+             * One cast, on purpose: the JSON is unvalidated and the port's parse is what refuses
+             * a body of the wrong shape.
+             */
             .then((body) => body as ProviderWebhookEvent)
 };

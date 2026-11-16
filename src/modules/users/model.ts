@@ -3,7 +3,7 @@
  * The user record's Mongoose schema — long, and deliberately one
  * file, since splitting would separate the password hash hook from the `select: false` that keeps
  * the hash off every read.
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -121,7 +121,7 @@ export interface UserRecord extends Omit<
     /** The salt `twoFactorBackupCodes` is scrypt'd under — one per account, not one per code. */
     twoFactorBackupCodeSalt?: string;
 
-    /*
+    /**
      * Redeclared as `Date`, like `ProductDocument` and `OrderDocument`: the contract carries ISO
      * strings, `timestamps: true` writes real `Date`s. This model missed that treatment until a
      * fixture pinning `createdAt: string` surfaced the mismatch.
@@ -326,24 +326,28 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         email: {
             type: String,
             required: true,
-            // A backstop, not the real check — the generated `CreateUserBody`/`SignupBody`
-            // already validate every parsed body. This covers the
-            // one path that skips Zod: `accountUserService.registerFromOAuth` (`account/services/oauth.ts`)
-            // writes a provider's own `email` straight through.
-            //
-            // Loose on purpose — one "@", one "." after it, no whitespace:
-            // - rejects only what could never be a real address, never narrows a valid shape;
-            // - `[^\s@]` over `\S` in the local/domain parts blocks a second `@` or a
-            //   whitespace-free comma-joined address (`a@b.com,evil@c.test`) that `\S+@\S+` would
-            //   let through.
-            // - the domain is split as one char, then non-dots, then the dot: the same language
-            //   as `[^\s@]+\.`, but the dot can only match once, so it cannot backtrack badly.
+            /**
+             * A backstop, not the real check — the generated `CreateUserBody`/`SignupBody`
+             * already validate every parsed body. This covers the
+             * one path that skips Zod: `accountUserService.registerFromOAuth` (`account/services/oauth.ts`)
+             * writes a provider's own `email` straight through.
+             *
+             * Loose on purpose — one "@", one "." after it, no whitespace:
+             * - rejects only what could never be a real address, never narrows a valid shape;
+             * - `[^\s@]` over `\S` in the local/domain parts blocks a second `@` or a
+             *   whitespace-free comma-joined address (`a@b.com,evil@c.test`) that `\S+@\S+` would
+             *   let through.
+             * - the domain is split as one char, then non-dots, then the dot: the same language
+             *   as `[^\s@]+\.`, but the dot can only match once, so it cannot backtrack badly.
+             */
             match: /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/,
-            // Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
-            // built against this path, so login, signup, OAuth and admin writes are all covered
-            // with no call-site change — `normalizeEmail` (re-exported below, from
-            // `@infrastructure/persistence/normalize-email`) covers the in-memory comparisons
-            // Mongoose itself can't reach.
+            /**
+             * Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
+             * built against this path, so login, signup, OAuth and admin writes are all covered
+             * with no call-site change — `normalizeEmail` (re-exported below, from
+             * `@infrastructure/persistence/normalize-email`) covers the in-memory comparisons
+             * Mongoose itself can't reach.
+             */
             lowercase: true,
             trim: true
         },
@@ -351,21 +355,25 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: String,
             required: true
         },
-        // `select: false` — never loaded unless a query explicitly asks for it, so even a
-        // .lean() read that bypasses applyUserTransform still cannot leak the hash. Use the
-        // repository's *WithCredentials helpers to re-select it (see `./repository`).
-        // NOT `required`: an OAuth-only signup (`account/services/oauth.ts`) creates a user with none.
-        // The pre-save hash hook below already skips absent/unmodified passwords, unaffected.
+        /**
+         * `select: false` — never loaded unless a query explicitly asks for it, so even a
+         * .lean() read that bypasses applyUserTransform still cannot leak the hash. Use the
+         * repository's *WithCredentials helpers to re-select it (see `./repository`).
+         * NOT `required`: an OAuth-only signup (`account/services/oauth.ts`) creates a user with none.
+         * The pre-save hash hook below already skips absent/unmodified passwords, unaffected.
+         */
         password: {
             type: String,
             select: false
         },
-        // No default: an account with no image has no field, and the client draws its own
-        // placeholder. `imageUrl: null` on an update unsets it.
+        /**
+         * No default: an account with no image has no field, and the client draws its own
+         * placeholder. `imageUrl: null` on an update unsets it.
+         */
         imageUrl: {
             type: String
         },
-        /*
+        /**
          * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by
          * a client: `ThumbnailUrl` is `readOnly` on the contract. Absent for a user whose image
          * came from a remote/default url rather than an upload.
@@ -373,7 +381,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         thumbnailUrl: {
             type: String
         },
-        /*
+        /**
          * The quarantine key of an upload still awaiting its digest job — see the matching field
          * on `products/model.ts` for the full rationale, identical here.
          */
@@ -392,15 +400,17 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             default: localeConfig().NODE_DEFAULT_LOCALE,
             set: canonicalLocaleSetter
         },
-        // Self-service profile fields, no format enforced: a phone number's valid shapes vary too
-        // widely by country to regex safely, and a website is free text the same way `imageUrl` is.
+        /**
+         * Self-service profile fields, no format enforced: a phone number's valid shapes vary too
+         * widely by country to regex safely, and a website is free text the same way `imageUrl` is.
+         */
         phone: {
             type: String
         },
         website: {
             type: String
         },
-        /*
+        /**
          * "Never asked" and "denied" are the same answer for the gate — it is opt-in, so only
          * `true` captures. Read off `AuthContext` (threaded through `resolve()` in
          * `account/module.ts`), never the document directly. No default: `analyticsConsentAt`
@@ -409,14 +419,14 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         analyticsConsent: {
             type: Boolean
         },
-        /*
+        /**
          * When the choice above was last made or changed — what GDPR Art. 7(1) asks a controller
          * to be able to show. Unset until the account answers once.
          */
         analyticsConsentAt: {
             type: Date
         },
-        /*
+        /**
          * When the account accepted the terms, and which text (`GET /config` carries the version in
          * force). Stamped by signup, by provider sign-in, or by the first password set on a
          * staff-created account; the admin `/users` route itself stamps nothing, as a staff member
@@ -428,7 +438,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         termsVersion: {
             type: String
         },
-        /*
+        /**
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
          * deactivation and soft-delete are separate states that produce the same effect from
          * outside.
@@ -437,7 +447,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: Boolean,
             default: true
         },
-        /*
+        /**
          * WHEN the address was confirmed via the verify flow, or `null` until it is.
          * Enforcement is the membership role (`unverified` holds no `checkout:Cart`, see
          * `shared/authorization-keys.generated.yaml`) — this is the record of fact, kept separately because
@@ -451,7 +461,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: Date,
             default: null
         },
-        /*
+        /**
          * The address a pending `POST /account/email-change` is waiting to prove — see the field's
          * own doc comment on `UserRecord`. `select: false` for the same reason as `password`: an
          * address in flight is as credential-adjacent as a token, not public profile data.
@@ -459,9 +469,11 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         pendingEmail: {
             type: String,
             select: false,
-            // Same casters as `email` above — a pending change must compare and collide the same
-            // way the live address does, or a case-only re-send of the current address would look
-            // like a real change (see `normalizeEmail`, re-exported below).
+            /**
+             * Same casters as `email` above — a pending change must compare and collide the same
+             * way the live address does, or a case-only re-send of the current address would look
+             * like a real change (see `normalizeEmail`, re-exported below).
+             */
             lowercase: true,
             trim: true
         },
@@ -517,7 +529,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         purchaseHoldFlaggedAt: {
             type: Date
         },
-        /*
+        /**
          * Two-factor authentication. Asymmetric storage on purpose: a device method's `secret`
          * must be recoverable to recompute a code against, so it is ENCRYPTED
          * (`account/two-factor/totp.ts`), never hashed, while a delivered method's code is only
@@ -570,7 +582,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         mfaLockedUntil: {
             type: Date
         },
-        /*
+        /**
          * The step-up code in flight for an account with no password. `select: false` like the
          * 2FA fields: it is credential material, and only the re-auth flow reads it.
          */
@@ -586,7 +598,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             ),
             select: false
         },
-        /*
+        /**
          * When the FIRST factor was armed, cleared when the last one goes. Derivable from
          * `twoFactorMethods`, and stored anyway: it is the only 2FA field on the `User` contract,
          * and `postLogin` has to branch on it without loading credentials it has no other use for.
@@ -598,7 +610,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         authenticatorEnabledAt: {
             type: Date
         },
-        /*
+        /**
          * Recovery codes for a lost authenticator — salted-scrypt digests, not a bare hash: at 40
          * bits each they are short enough for an offline dump to brute-force, so storage carries
          * the strength instead. See `account/two-factor/backup-codes.ts#hashBackupCode`.
@@ -613,7 +625,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: String,
             select: false
         },
-        /*
+        /**
          * Linked provider identities — `select: false` like `password`, same reasoning: not secret
          * in the credential-theft sense (a `providerId` is useless without the provider's own
          * session), but nothing on the wire needs it by default. Written only through atomic
@@ -651,13 +663,13 @@ export const userSchema = new Schema<UserDocument, UserModel>(
  */
 userSchema.plugin(revisionPlugin);
 
-/*
+/**
  * Indexes, declared on the schema so this file is the one place deciding what's indexed. Mongoose
  * creates them on connect, so a new index needs only a line below. Names are given rather than
  * derived, and that's load-bearing: Mongo identifies an index by name as much as by key, so
  * renaming one here makes a database holding the old name fail to boot rather than silently no-op.
  */
-/*
+/**
  * Login and signup both look up by email. UNIQUE is a correctness constraint, not a performance
  * one: signup is check-then-insert, so two concurrent signups for one address can both read absent
  * and both insert — only the database can refuse the second write. Paired with the E11000 branch
@@ -666,7 +678,7 @@ userSchema.plugin(revisionPlugin);
  * an existing non-unique `users_email`: a database that never synced fails loudly at startup.
  */
 userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
-/*
+/**
  * The OAuth callback's primary lookup: "does this (provider, providerId) pair already exist".
  * UNIQUE for the same reason as `users_email` — the lookup is check-then-insert
  * (`account/services/oauth.ts`), so two callbacks minting the SAME never-before-seen identity
@@ -689,7 +701,7 @@ userSchema.index(
         partialFilterExpression: { 'oauthAccounts.0': { $exists: true } }
     }
 );
-/*
+/**
  * A pending email change is claimed by at most one account at a time — same UNIQUE reasoning as
  * `users_email`, and load-bearing for the same reason: the request-time collision check
  * (`account/services/email-change.ts`) and the confirm-time swap into `email` are up to 24 hours
@@ -706,7 +718,7 @@ userSchema.index(
         partialFilterExpression: { pendingEmail: { $exists: true } }
     }
 );
-/*
+/**
  * The purge job's read: owner-scheduled rows only, so the index stays as small as the set of
  * accounts in their grace.
  */
@@ -714,7 +726,7 @@ userSchema.index(
     { purgeAt: 1 },
     { name: 'users_purge_at', partialFilterExpression: { purgeAt: { $exists: true } } }
 );
-/*
+/**
  * `deletedAt` is deliberately not indexed — nothing searches on it. The admin listing filters
  * `active` instead, and the one login query that mentions it also matches on the near-unique,
  * indexed `email`.
@@ -725,9 +737,11 @@ userSchema.index(
  * reaches storage. The cost factors and why are in `src/infrastructure/security/password-hash.ts`.
  */
 userSchema.pre('save', function (this: UserDocument) {
-    // The second half is only reachable in principle (`isModified` true, value falsy) — an
-    // OAuth-only signup never sets `password` at all, so `isModified` is false for it — but it is
-    // what lets TypeScript see `this.password` as a `string` below, now that it is optional.
+    /**
+     * The second half is only reachable in principle (`isModified` true, value falsy) — an
+     * OAuth-only signup never sets `password` at all, so `isModified` is false for it — but it is
+     * what lets TypeScript see `this.password` as a `string` below, now that it is optional.
+     */
     if (!this.isModified('password') || !this.password) return;
 
     return hashPassword(this.password).then((hashedPassword) => {
@@ -781,18 +795,22 @@ export type UserWire = Omit<UserRecord, (typeof WIRE_OMITTED_FIELDS)[number]>;
  * is where a document becomes the wire shape; see `presentUser` there.
  */
 export const applyUserTransform = applySerialization(userSchema, {
-    // `password` is a secret; `pendingImageKey` is document-only bookkeeping for the
-    // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt`, `lastActiveAt`, `lastApiKeyUseAt`, `inactivityMinimisedAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
-    // `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
-    // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
-    // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
-    // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
+    /**
+     * `password` is a secret; `pendingImageKey` is document-only bookkeeping for the
+     * image digest pipeline, never part of the `User` contract — same reasoning as `products`.
+     * `inactivityWarnedAt`, `lastActiveAt`, `lastApiKeyUseAt`, `inactivityMinimisedAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
+     * `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
+     * `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
+     * the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
+     * part of the `User` contract, `select: false` on the schema already, this is defense in depth.
+     */
     omit: [...WIRE_OMITTED_FIELDS],
     after: (serialized) => {
-        // `setBy` names the staff member who set a hold: the audit row keeps that, no output does
-        // (the data export serialises this document whole, and the account's owner reads it).
-        // One `as`: the serialized bag is untyped, and the hold's stored shape is known here.
+        /**
+         * `setBy` names the staff member who set a hold: the audit row keeps that, no output does
+         * (the data export serialises this document whole, and the account's owner reads it).
+         * One `as`: the serialized bag is untyped, and the hold's stored shape is known here.
+         */
         const hold = serialized.purchaseHold as Partial<PurchaseHoldRecord> | undefined;
         if (hold) delete hold.setBy;
         // Stored `null` means unverified; the wire says it by leaving the key out.

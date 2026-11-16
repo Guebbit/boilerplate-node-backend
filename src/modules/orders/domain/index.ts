@@ -20,8 +20,10 @@ export type { OwedLine } from './backorder';
 export { buyerIdOf, checkOrderLines, isBuyer, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';
 
-// `ORDER_EVENTS` is published for reading; a sibling module asks a named predicate
-// (`isPayable`, `canProcessOrder`, ...) and never lists statuses or reads the table itself.
+/**
+ * `ORDER_EVENTS` is published for reading; a sibling module asks a named predicate
+ * (`isPayable`, `canProcessOrder`, ...) and never lists statuses or reads the table itself.
+ */
 export {
     ORDER_EVENTS,
     UNDELIVERABLE_EVENT,

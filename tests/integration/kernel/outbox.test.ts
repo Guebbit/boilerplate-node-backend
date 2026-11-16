@@ -478,8 +478,10 @@ describe('nudgeOutbox', () => {
                 });
             }
             seen.push({ n });
-            // The first delivery announces a second event, which starts a NEW pass mid-wait.
-            // Stay busy while the new pass claims its row, so this pass ends before that one does.
+            /**
+             * The first delivery announces a second event, which starts a NEW pass mid-wait.
+             * Stay busy while the new pass claims its row, so this pass ends before that one does.
+             */
             return write(2, 'agg-2').then(() => {
                 nudgeOutbox();
                 return new Promise((resolve) => setTimeout(resolve, 30));

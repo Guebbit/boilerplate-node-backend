@@ -39,9 +39,11 @@ export const pdfEInvoicingProvider: EInvoicingProvider = {
 
     render: (document) =>
         ejs
-            // `root: process.cwd()` — the template's `/shared/templates/layouts/...` include is
-            // root-relative, so this resolves correctly regardless of this module's own depth
-            // under `src/modules`. https://ejs.co/#docs (Includes)
+            /**
+             * `root: process.cwd()` — the template's `/shared/templates/layouts/...` include is
+             * root-relative, so this resolves correctly regardless of this module's own depth
+             * under `src/modules`. https://ejs.co/#docs (Includes)
+             */
             .renderFile(DOCUMENT_TEMPLATE, buildDocumentView(document.locale, document), {
                 root: process.cwd()
             })

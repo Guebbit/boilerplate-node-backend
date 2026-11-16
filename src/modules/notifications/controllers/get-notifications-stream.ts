@@ -3,7 +3,7 @@
  * Controller for `GET /notifications/stream`: opens the caller's SSE stream and wires its
  * permission recheck to the same cookie that opened it. See `services/stream.ts` for the stream.
  *
- * @see docs/modules/notifications.md
+ * @see docs/modules/notifications.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';
@@ -19,10 +19,12 @@ import { notificationsService } from '../services';
  * and re-checked every 30 seconds for as long as the stream stays open.
  */
 export const getNotificationsStream = (request: Request, response: Response) => {
-    // Both set by `requireSessionViaCookie`, which this route is mounted behind. Read without
-    // `!` because this route is deliberately not behind `isAuth` (that guard wants a bearer
-    // token), so the "controllers behind isAuth" check forbids asserting them; absent means fail
-    // closed.
+    /**
+     * Both set by `requireSessionViaCookie`, which this route is mounted behind. Read without
+     * `!` because this route is deliberately not behind `isAuth` (that guard wants a bearer
+     * token), so the "controllers behind isAuth" check forbids asserting them; absent means fail
+     * closed.
+     */
     const user = request.authContext;
     if (!user || !request.sessionRecheck) {
         rejectResponse(response, 401, [

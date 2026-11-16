@@ -19,6 +19,7 @@ import {
 } from '@infrastructure/adapters/mail-spool';
 import { setEnvironment } from '@tests/environment';
 
+/** Temp directory the mail spool writes to; removed after each case. */
 let spoolRoot: string;
 
 beforeEach(async () => {
@@ -91,8 +92,10 @@ describe('discardSpooled', () => {
         await expect(discardSpooled('../../etc/passwd.pdf')).resolves.toBeUndefined();
     });
 
-    // Proof the traversal refusal is load-bearing, not just a type check: a file genuinely
-    // sitting outside the spool root survives a discard call naming it via `..`.
+    /**
+     * Proof the traversal refusal is load-bearing, not just a type check: a file genuinely
+     * sitting outside the spool root survives a discard call naming it via `..`.
+     */
     it('leaves a file outside the spool root untouched even when a key tries to name it', async () => {
         const outside = await mkdtemp(path.join(tmpdir(), 'mail-spool-outside-'));
         const precious = path.join(outside, 'keep.pdf');

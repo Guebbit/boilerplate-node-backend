@@ -9,6 +9,7 @@ import '../../metrics';
 
 jest.mock('../../services/dependency-health', () => ({ dependencyHealth: jest.fn() }));
 
+/** The dependency-health reader, mocked so a case picks what each dependency reports. */
 const mockedDependencyHealth = jest.mocked(dependencyHealth);
 
 /** A reading with every dependency ready, overridden per case. */

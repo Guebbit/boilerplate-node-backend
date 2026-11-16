@@ -36,6 +36,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     }
 }));
 
+/** The logger, mocked so cases can assert what was logged. */
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
 /** A CastError-shaped object: `kind` as an own property is the discriminator. */
@@ -56,8 +57,10 @@ describe('databaseErrorInterpreter', () => {
     });
 
     it('substitutes a placeholder when the Error carries an empty message', () => {
-        // `||` rather than `??` on purpose: '' must fall through, or the client receives a
-        // failure envelope with no message at all.
+        /**
+         * `||` rather than `??` on purpose: '' must fall through, or the client receives a
+         * failure envelope with no message at all.
+         */
         // eslint-disable-next-line unicorn/error-message -- the empty message is the input under test
         const result = databaseErrorInterpreter(new Error(''));
 
@@ -65,8 +68,10 @@ describe('databaseErrorInterpreter', () => {
     });
 
     it('discriminates on an OWN `kind` property, not an inherited one', () => {
-        // `Object.prototype.hasOwnProperty.call(...)` is used so an object that merely inherits
-        // `kind` is not mistaken for a CastError.
+        /**
+         * `Object.prototype.hasOwnProperty.call(...)` is used so an object that merely inherits
+         * `kind` is not mistaken for a CastError.
+         */
         const inheritsKind = Object.create({ kind: 'ObjectId' }) as Error;
         Object.assign(inheritsKind, { message: 'inherited, not own' });
 
@@ -96,16 +101,20 @@ describe('databaseErrorInterpreter', () => {
         });
 
         it('does not leak the schema type name as the message', () => {
-            // `kind` is 'ObjectId' — internal detail describing how ids are built, and not a
-            // sentence anyone can act on.
+            /**
+             * `kind` is 'ObjectId' — internal detail describing how ids are built, and not a
+             * sentence anyone can act on.
+             */
             const [, message] = databaseErrorInterpreter(makeCastError());
 
             expect(message).not.toBe('ObjectId');
         });
 
         it('ignores any number that happens to lead the prose message', () => {
-            // Reading the status out of the message text would let a Mongoose message starting
-            // with a number silently become the HTTP status — the behaviour this refuses.
+            /**
+             * Reading the status out of the message text would let a Mongoose message starting
+             * with a number silently become the HTTP status — the behaviour this refuses.
+             */
             const castError = asStub<CastError>(
                 Object.assign(new Error('404 not castable'), {
                     kind: 'ObjectId'
@@ -145,14 +154,18 @@ const makeBsonError = () =>
 
 describe('duplicate-key branch', () => {
     it('answers 409, which is what makes `unique: true` safe to declare', () => {
-        // Without this branch, closing the signup race converts a duplicate account into a 500 —
-        // trading a data bug for an availability bug.
+        /**
+         * Without this branch, closing the signup race converts a duplicate account into a 500 —
+         * trading a data bug for an availability bug.
+         */
         expect(databaseErrorInterpreter(makeDuplicateKeyError())).toEqual([409, 'Already exists']);
     });
 
     it('does not echo the driver message, which contains user data', () => {
-        // E11000's text carries the duplicated value — an email address, on the index that
-        // produces this in practice.
+        /**
+         * E11000's text carries the duplicated value — an email address, on the index that
+         * produces this in practice.
+         */
         const [, message] = databaseErrorInterpreter(makeDuplicateKeyError());
 
         expect(message).not.toContain('users_email');
@@ -162,13 +175,15 @@ describe('duplicate-key branch', () => {
 
 describe('BSONError branch', () => {
     it('answers 422 rather than falling through to the catch-all 500', () => {
-        // Without this branch the case is reachable WITHOUT A TOKEN: `POST /products/search` is
-        // public and takes an `id` filter, so `{"id": ""}` produces a server error.
-        //
-        // The fixture is a plain Error carrying `name: 'BSONError'`, and that is the contract:
-        // the branch matches on the NAME, never on `instanceof`. `bson` arrives as a transitive
-        // dependency of two different packages, so an identity check against the wrong copy
-        // returns false and the branch goes dead with nothing to show for it.
+        /**
+         * Without this branch the case is reachable WITHOUT A TOKEN: `POST /products/search` is
+         * public and takes an `id` filter, so `{"id": ""}` produces a server error.
+         *
+         * The fixture is a plain Error carrying `name: 'BSONError'`, and that is the contract:
+         * the branch matches on the NAME, never on `instanceof`. `bson` arrives as a transitive
+         * dependency of two different packages, so an identity check against the wrong copy
+         * returns false and the branch goes dead with nothing to show for it.
+         */
         expect(databaseErrorInterpreter(makeBsonError())).toEqual([422, 'Invalid identifier']);
     });
 
@@ -181,7 +196,7 @@ describe('BSONError branch', () => {
 
 describe('ValidationError branch', () => {
     it('answers 422 rather than falling through to the catch-all 500', () => {
-        /*
+        /**
          * A schema validator that refused a write is describing the REQUEST. Without this branch
          * `POST /locales` answered 500 to a display name of one space: `minLength: 1` in the
          * contract is satisfied by `' '`, the schema's `trim` reduces it to `''`, and `required`
@@ -191,8 +206,10 @@ describe('ValidationError branch', () => {
     });
 
     it('matches on the name, never on instanceof', () => {
-        // Same contract as the BSONError branch above, for the same reason: a second copy of the
-        // package in the tree makes an identity check silently false and the branch dead.
+        /**
+         * Same contract as the BSONError branch above, for the same reason: a second copy of the
+         * package in the tree makes an identity check silently false and the branch dead.
+         */
         const notMongoose = Object.assign(new Error('something else'), { name: 'ValidationError' });
 
         expect(databaseErrorInterpreter(notMongoose)).toEqual([422, 'Invalid request']);
@@ -206,8 +223,10 @@ describe('ValidationError branch', () => {
     });
 
     it('leaves an unrecognised error on the 500, which is what makes the branches meaningful', () => {
-        // The catch-all still has to be reachable: a genuine server failure must not be reported
-        // as the caller's fault just because the interpreter grew another 4xx.
+        /**
+         * The catch-all still has to be reachable: a genuine server failure must not be reported
+         * as the caller's fault just because the interpreter grew another 4xx.
+         */
         expect(databaseErrorInterpreter(new Error('connection reset'))).toEqual([
             500,
             'connection reset'
@@ -217,8 +236,10 @@ describe('ValidationError branch', () => {
 
 describe('ConflictError branch', () => {
     it('answers 409 with the subclass message — a module raises its OWN subclass', () => {
-        // `access`'s `AccessInvariantError` is today's one caller; a bare `ConflictError` fixture
-        // here is the honest unit — `infrastructure` never imports `access` to build one.
+        /**
+         * `access`'s `AccessInvariantError` is today's one caller; a bare `ConflictError` fixture
+         * here is the honest unit — `infrastructure` never imports `access` to build one.
+         */
         class ModuleOwnedConflict extends ConflictError {}
 
         expect(databaseErrorInterpreter(new ModuleOwnedConflict('role not declared'))).toEqual([
@@ -228,9 +249,11 @@ describe('ConflictError branch', () => {
     });
 
     it('matches on instanceof, never on a `name` string a module happens to have chosen', () => {
-        // The opposite contract from BSONError/ValidationError above, and deliberately so: this
-        // class has exactly one copy (defined here, in infrastructure), so `instanceof` is safe —
-        // a same-shaped error that never extended it must NOT be mistaken for one.
+        /**
+         * The opposite contract from BSONError/ValidationError above, and deliberately so: this
+         * class has exactly one copy (defined here, in infrastructure), so `instanceof` is safe —
+         * a same-shaped error that never extended it must NOT be mistaken for one.
+         */
         const sameShapeButNotASubclass = Object.assign(new Error('role not declared'), {
             name: 'AccessInvariantError'
         });
@@ -313,7 +336,7 @@ describe('rejectDatabaseError', () => {
     });
 
     it('logs the operation and the interpreter detail, which the response no longer carries', () => {
-        /*
+        /**
          * The detail is not dropped, it is relocated. Both halves are developer-facing — the
          * operation name is internal layout, the detail describes the driver — and the log line is
          * where an operator can act on them and a stranger cannot. This is what makes it safe for
@@ -344,8 +367,10 @@ describe('rejectDatabaseError', () => {
             expect.objectContaining({ title: 'Internal Server Error', status: 500 })
         );
         expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
-        // `error`, not `warn`: this is the genuine server fault the split exists to still page on.
-        // The headline names the class, never the message: the logger scrubs the `error` itself.
+        /**
+         * `error`, not `warn`: this is the genuine server fault the split exists to still page on.
+         * The headline names the class, never the message: the logger scrubs the `error` itself.
+         */
         expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Error', {
             status: 500,
             error
@@ -379,8 +404,10 @@ describe('rejectDatabaseError', () => {
     });
 
     it('never puts the driver message in the user-facing errors array', () => {
-        // `errors[]` is the translated, user-facing array by this repo's convention. The
-        // driver's prose is neither.
+        /**
+         * `errors[]` is the translated, user-facing array by this repo's convention. The
+         * driver's prose is neither.
+         */
         const response = makeResponseStub();
 
         rejectDatabaseError(response, 'getProducts', new Error('connection reset to shard-02'));
@@ -483,8 +510,10 @@ describe('query-timeout branch', () => {
 });
 
 describe('connection-error branch', () => {
-    // An anonymous caller's login attempt must not be told "your credentials are wrong" (401)
-    // when the real answer is "the database is unreachable" — RFC 9110 §15.5.2 vs §15.6.4.
+    /**
+     * An anonymous caller's login attempt must not be told "your credentials are wrong" (401)
+     * when the real answer is "the database is unreachable" — RFC 9110 §15.5.2 vs §15.6.4.
+     */
     it('answers 503, not the catch-all 500, for a Mongo outage', () => {
         expect(databaseErrorInterpreter(makeConnectionError())).toEqual([
             503,
@@ -526,7 +555,7 @@ describe('connection-error branch', () => {
 });
 
 describe('rejectDatabaseEnvelope', () => {
-    /*
+    /**
      * The counterpart for services, which report failure by RETURNING an envelope and so have no
      * `Response` to send. Without it, six `.catch` handlers each re-derived the status inline and
      * spread the interpreter's tuple into the envelope, dropping the detail on the floor.
@@ -540,8 +569,10 @@ describe('rejectDatabaseEnvelope', () => {
     });
 
     it('logs the operation and the interpreter detail, with the status as metadata', () => {
-        // The half a `Response`-less caller would otherwise lose: this is the only record that the
-        // failure happened at all, and the only place the driver's own words are kept.
+        /**
+         * The half a `Response`-less caller would otherwise lose: this is the only record that the
+         * failure happened at all, and the only place the driver's own words are kept.
+         */
         rejectDatabaseEnvelope('login', makeBsonError());
 
         // `warn`, not `error`: a 422 is the request's fault, not a server failure worth paging.

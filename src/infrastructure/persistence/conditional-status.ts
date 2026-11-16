@@ -41,8 +41,10 @@ export const updateStatusIfIn = <TDocument>(
         .findOneAndUpdate(
             { ...match, status: { $in: [...from] } },
             { $set: { ...set, status: to } },
-            // `returnDocument: 'after'` answers the written row; `session` joins the transaction.
-            // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+            /**
+             * `returnDocument: 'after'` answers the written row; `session` joins the transaction.
+             * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+             */
             { returnDocument: 'after', ...(session ? { session } : {}) }
         )
         .exec();

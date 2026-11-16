@@ -53,19 +53,25 @@ export const update = (
     // Read before anything is assigned onto the document.
     const changed = rectifiedFields(user, data);
     if (data.username !== undefined) user.username = data.username;
-    // The old url is captured before the overwrite so the save can delete it once
-    // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
-    // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
-    // same old-url capture then deletes the file and its thumbnail.
+    /**
+     * The old url is captured before the overwrite so the save can delete it once
+     * the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
+     * shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
+     * same old-url capture then deletes the file and its thumbnail.
+     */
     const oldImageUrl = applyImageWriteback(user, data);
-    // The preference that outlives the request — see the `locale` field on the user
-    // schema. `null` clears the override — $unset on save.
+    /**
+     * The preference that outlives the request — see the `locale` field on the user
+     * schema. `null` clears the override — $unset on save.
+     */
     if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
     if (data.phone !== undefined)
         user.phone = data.phone === null ? undefined : encryptPii(data.phone, phoneAad(user.id));
     if (data.website !== undefined) user.website = clearedOrValue(data.website);
-    // Absent leaves the stored choice alone, same as every field above; only an explicit
-    // boolean changes it. The date moves with the answer: the first one, or a different one.
+    /**
+     * Absent leaves the stored choice alone, same as every field above; only an explicit
+     * boolean changes it. The date moves with the answer: the first one, or a different one.
+     */
     if (
         data.analyticsConsent !== undefined &&
         (user.analyticsConsentAt === undefined || data.analyticsConsent !== user.analyticsConsent)
@@ -156,8 +162,10 @@ export type SaveHook = (session: ClientSession) => Promise<unknown>;
  */
 const saveInTransaction = (user: UserDocument, alsoInSave?: SaveHook): Promise<UserDocument> =>
     withTransaction((session) => {
-        // The transaction may re-run this on a transient conflict: each attempt checks the caller's
-        // `If-Match` against the row it holds, instead of the first attempt's having used it up.
+        /**
+         * The transaction may re-run this on a transient conflict: each attempt checks the caller's
+         * `If-Match` against the row it holds, instead of the first attempt's having used it up.
+         */
         rearmPrecondition();
 
         return userRepository
@@ -231,6 +239,8 @@ export const updateById = (
     data: UpdateByIdData,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    // The plain finder: an admin edit touches no credential, and the pending address is the
-    // owner's to read (`GET /account`), so it stays unloaded and out of the answer.
+    /**
+     * The plain finder: an admin edit touches no credential, and the pending address is the
+     * owner's to read (`GET /account`), so it stays unloaded and out of the answer.
+     */
     withClearedAccount(id, context, (user) => applyUpdate(user, data, context));

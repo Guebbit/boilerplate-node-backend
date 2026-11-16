@@ -53,8 +53,10 @@ export const userActionsFor = (
 
     return {
         update: mayUpdate,
-        // The role door is the grant, not the protection of staff accounts: whoever holds
-        // `assign:Role` passes that protection anyway, and nobody else reaches the door.
+        /**
+         * The role door is the grant, not the protection of staff accounts: whoever holds
+         * `assign:Role` passes that protection anyway, and nobody else reaches the door.
+         */
         assignRole: holdsAssignRole && !deleted,
         revokeRole: holdsAssignRole && !deleted && ownerHoldsTenantRole,
         delete: mayDelete && !deleted,

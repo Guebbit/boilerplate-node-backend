@@ -66,9 +66,11 @@ export const listSessions = (
         accountUserService.findAuthenticatableById(userId),
         accessService.rolesOf(userId, DEPLOYMENT_TENANT_ID)
     ]).then(([allRows, user, roles]) => {
-        // A ban moves the account's epoch and deletes no row, and a staff session past its idle
-        // limit or lifetime cap is only ended when someone next presents it: neither signs anyone
-        // in, so neither is a session. A row stamped before `authTime` existed has no epoch to judge.
+        /**
+         * A ban moves the account's epoch and deletes no row, and a staff session past its idle
+         * limit or lifetime cap is only ended when someone next presents it: neither signs anyone
+         * in, so neither is a session. A row stamped before `authTime` existed has no epoch to judge.
+         */
         const rows = allRows.filter(
             (row) =>
                 (row.authTime === undefined ||

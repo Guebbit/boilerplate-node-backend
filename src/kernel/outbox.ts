@@ -15,7 +15,7 @@
  *             and each claim carries its own `leaseToken`: a relay whose lease lapsed mid-dispatch
  *             finds the token changed, writes nothing and counts nothing (a warning is logged).
  *
- * @see docs/understand/outbox.md
+ * @see docs/understand/outbox.md#using-it
  */
 
 import { randomUUID } from 'node:crypto';
@@ -104,7 +104,7 @@ const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventModel>(
     { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-/*
+/**
  * Wire shape: the claim's token is relay bookkeeping, never a fact about the event, so a
  * serialized row (`toJSON`) does not carry it.
  */
@@ -116,12 +116,12 @@ applySerialization(outboxEventSchema, { omit: ['leaseToken'] });
  */
 const outboxRetentionDays = outboxConfig().NODE_OUTBOX_RETENTION_DAYS;
 
-/*
+/**
  * The relay's read: pending rows in write order, grouped by aggregate.
  */
 outboxEventSchema.index({ status: 1, createdAt: 1, _id: 1 });
 
-/*
+/**
  * Cleanup of published rows. Same caveat as every TTL index here: changing
  * `NODE_OUTBOX_RETENTION_DAYS` and restarting fails the boot until `npm run db:sync` rebuilds it.
  */
@@ -153,7 +153,6 @@ export const outboxBackoffMs = (failedAttempts: number): number =>
  * commits, and vanishes with it if it aborts.
  *
  * @param name - the domain event
- * @param payload - the event's payload
  * @param aggregateId - what the event is about; per-aggregate ordering keys on it
  * @param session - the transaction's session (`withTransaction`'s argument)
  */
@@ -163,8 +162,10 @@ export const enqueueOutboxEvent = <TEventName extends DomainEventName>(
     aggregateId: string,
     session: ClientSession
 ): Promise<void> =>
-    // Mongoose: `create` takes `{ session }` only in its array form.
-    // https://mongoosejs.com/docs/transactions.html
+    /**
+     * Mongoose: `create` takes `{ session }` only in its array form.
+     * https://mongoosejs.com/docs/transactions.html
+     */
     outboxEventModel
         .create([{ name, payload, aggregateId, nextAttemptAt: new Date() }], { session })
         .then(() => undefined);
@@ -236,8 +237,10 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
                     leaseToken: token
                 }
             },
-            // Mongoose: `returnDocument: 'after'` returns the row as updated, so `attempts` is the stored value.
-            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            /**
+             * Mongoose: `returnDocument: 'after'` returns the row as updated, so `attempts` is the stored value.
+             * https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+             */
             { returnDocument: 'after' }
         )
         .exec()
@@ -250,10 +253,12 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
  * @returns `undefined` when every consumer succeeded, otherwise what to record as the failure
  */
 const dispatch = (row: OutboxRow): Promise<string | undefined> =>
-    // Both casts name what `enqueue` stored: `name` was a `DomainEventName` and `payload` the map's
-    // value for it (the row is written only through `enqueue`, which is typed). The compiler cannot
-    // see through the stored string and `Mixed`. A name nobody subscribes to any more has no
-    // handlers.
+    /**
+     * Both casts name what `enqueue` stored: `name` was a `DomainEventName` and `payload` the map's
+     * value for it (the row is written only through `enqueue`, which is typed). The compiler cannot
+     * see through the stored string and `Mixed`. A name nobody subscribes to any more has no
+     * handlers.
+     */
     emitDomainEvent<DomainEventName>(
         row.name as DomainEventName,
         row.payload as DomainEventMap[DomainEventName],
@@ -386,8 +391,10 @@ const MAX_ROUNDS = 20;
 export const relayOutbox = async (): Promise<RelayResult> => {
     const result: RelayResult = { published: 0, retried: 0, dead: 0 };
 
-    // Nobody is subscribed here (a script that never called `registerModules`): dispatching would
-    // mark rows published with no listener. Leave them for a process that is wired.
+    /**
+     * Nobody is subscribed here (a script that never called `registerModules`): dispatching would
+     * mark rows published with no listener. Leave them for a process that is wired.
+     */
     if (!domainEventsWired()) return result;
 
     for (let round = 0; round < MAX_ROUNDS; round += 1) {
@@ -450,8 +457,10 @@ const enqueueAll = async <TEventName extends DomainEventName>(
     announcements: OutboxAnnouncements<TEventName>
 ): Promise<void> => {
     const list = 'name' in announcements ? [announcements] : announcements;
-    // One after another: a transaction's session does not take parallel operations, and the rows
-    // must land in the order they were announced.
+    /**
+     * One after another: a transaction's session does not take parallel operations, and the rows
+     * must land in the order they were announced.
+     */
     for (const { name, payload, aggregateId } of list)
         await enqueueOutboxEvent(name, payload, aggregateId, session);
 };

@@ -13,8 +13,8 @@
  *               every caller downstream.
  * Mongo-only:   the kernel's one store-specific file besides `../outbox.ts`.
  *
- * @see docs/understand/authorization.md
- * @see docs/understand/layers.md
+ * @see docs/understand/authorization.md#the-model
+ * @see docs/understand/layers.md#tier-stack
  */
 
 import { accessibleBy } from '@casl/mongoose';
@@ -61,7 +61,7 @@ const ownerObjectId = (value: string): Types.ObjectId =>
 
 /** Fields whose VALUE has to be coerced on the way into a query. */
 const coerce: Record<string, (value: unknown) => unknown> = {
-    /*
+    /**
      * The owner is an ObjectId in the collection and a string on the caller. Left as a string the
      * filter silently matches nothing, which is the same failure as a missing restriction wearing
      * the opposite disguise — everything hidden rather than everything shown.
@@ -173,8 +173,10 @@ export const accessibleFilterFor = (
     subject: PermissionSubject,
     action: PermissionAction = 'read'
 ): Record<string, unknown> => {
-    // CASL `accessibleBy(ability, action).ofType(subject)`: the ability's rules for that action on
-    // that subject, turned into a MongoDB filter. https://casl.js.org/v6/en/package/casl-mongoose
+    /**
+     * CASL `accessibleBy(ability, action).ofType(subject)`: the ability's rules for that action on
+     * that subject, turned into a MongoDB filter. https://casl.js.org/v6/en/package/casl-mongoose
+     */
     const compiled = accessibleBy(buildAbility(caller ?? anonymousCaller()), action).ofType(
         subject
     );

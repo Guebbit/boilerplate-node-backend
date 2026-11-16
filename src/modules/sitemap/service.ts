@@ -6,7 +6,7 @@
  *
  * Nothing is stored: every call reads the live catalogue, which is why the HTTP side may cache.
  *
- * @see docs/modules/sitemap.md
+ * @see docs/modules/sitemap.md#the-files
  */
 
 import type { SitemapItemLoose } from 'sitemap';
@@ -110,8 +110,10 @@ export const sitemapService = {
     listProducts: async (page: number): Promise<SitemapItemLoose[] | null> => {
         const languages = servedLanguages();
         const size = productsPerFile(languages.tags.length);
-        // A page past the last never reaches the page query: its `skip` stays bounded by the
-        // catalogue, not by what the caller typed.
+        /**
+         * A page past the last never reaches the page query: its `skip` stays bounded by the
+         * catalogue, not by what the caller typed.
+         */
         const total = await productService.countListed();
         if (page > Math.ceil(total / size)) return null;
 

@@ -6,7 +6,7 @@
  * Types and the method list come from `openapi-types` (the same package Modelina already pulls
  * in), so no step keeps its own copy of "what an OpenAPI document looks like".
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#the-flow
  */
 
 import { OpenAPIV3, type OpenAPIV3_1 } from 'openapi-types';
@@ -95,8 +95,10 @@ export const isHttpMethod = (key: string): key is OpenAPIV3.HttpMethods =>
  * @throws Error if the text does not parse to an object
  */
 export const parseOpenApi = (bundled: string): OpenApiDocument => {
-    // `yaml`: parse into a plain object graph, typed `unknown` until the guard below narrows it.
-    // https://eemeli.org/yaml/#parse-yaml-to-json-value
+    /**
+     * `yaml`: parse into a plain object graph, typed `unknown` until the guard below narrows it.
+     * https://eemeli.org/yaml/#parse-yaml-to-json-value
+     */
     const parsed: unknown = parseYaml(bundled);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
         throw new Error('[openapi] the bundled document did not parse to an object.');

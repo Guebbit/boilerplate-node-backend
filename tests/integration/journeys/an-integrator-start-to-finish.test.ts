@@ -30,6 +30,7 @@ import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 
+/** The webhook receiver the journey runs against; closed after each case. */
 let receiver: WebhookReceiver | undefined;
 
 afterEach(async () => {
@@ -197,9 +198,11 @@ describe('a key follows its minter', () => {
         await api().get('/webhooks/subscriptions').set('Authorization', demoted.key).expect(200);
         await api().get('/webhooks/subscriptions').set('Authorization', banned.key).expect(200);
 
-        // Demoted to a role that cannot read subscriptions, the key can no longer either; banned,
-        // the key no longer resolves at all, so it is refused as a credential (401), not as a
-        // caller who lacks the rule (403). Neither key was touched.
+        /**
+         * Demoted to a role that cannot read subscriptions, the key can no longer either; banned,
+         * the key no longer resolves at all, so it is refused as a credential (401), not as a
+         * caller who lacks the rule (403). Neither key was touched.
+         */
         await api()
             .post(`/users/${demoted.user.id}/assign-role`)
             .set('Authorization', admin)

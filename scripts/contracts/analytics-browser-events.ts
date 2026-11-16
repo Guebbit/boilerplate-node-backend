@@ -71,7 +71,6 @@ const localiseReferences = (node: unknown): unknown => {
  * The event name a schema declares: its `event` property's single enum value.
  *
  * @param name - the schema's name, for the error
- * @param schema - the event schema
  * @throws {Error} when `event` is not a one-value enum
  */
 const eventNameOf = (name: string, schema: Schema): string => {
@@ -111,15 +110,19 @@ export const withBrowserEvents = (
                 throw new Error(
                     `[openapi] browser event ${name} (${event}) is declared twice — the second is ${file}.`
                 );
-            // `localiseReferences` only rewrites `$ref` strings and keeps the shape, so a schema in
-            // is a schema out.
+            /**
+             * `localiseReferences` only rewrites `$ref` strings and keeps the shape, so a schema in
+             * is a schema out.
+             */
             added[name] = localiseReferences(schema) as Schema;
             mapping[event] = `#/components/schemas/${name}`;
         }
     }
 
-    // `!` is safe: `schemas` above was read off `components`, so it exists.
-    // Rebuilt rather than assigned so the events sit right after the request schema they belong to.
+    /**
+     * `!` is safe: `schemas` above was read off `components`, so it exists.
+     * Rebuilt rather than assigned so the events sit right after the request schema they belong to.
+     */
     document_.components!.schemas = Object.fromEntries(
         Object.entries(schemas).flatMap<[string, Schema]>(([name, schema]) =>
             name === REQUEST_SCHEMA

@@ -22,16 +22,20 @@ import productsModule from '@modules/products/module';
 
 setupTestDb();
 
-// `registerModules` runs locales' `onRegistered`, which resolves `translatables` off every
-// registered module's own manifest — `productsModule` declares `product` there, so registering
-// both is what installs the translation port `products` writes through.
+/**
+ * `registerModules` runs locales' `onRegistered`, which resolves `translatables` off every
+ * registered module's own manifest — `productsModule` declares `product` there, so registering
+ * both is what installs the translation port `products` writes through.
+ */
 beforeAll(() => registerModules([localesModule, productsModule]));
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
-// Every case below writes the fallback locale at least once — see the same note in
-// `locales/tests/integration/translations.test.ts`.
+/**
+ * Every case below writes the fallback locale at least once — see the same note in
+ * `locales/tests/integration/translations.test.ts`.
+ */
 beforeEach(async () => {
     await givenLocale(FALLBACK);
 });

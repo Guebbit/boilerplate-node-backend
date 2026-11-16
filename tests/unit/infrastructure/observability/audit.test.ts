@@ -16,10 +16,12 @@ jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
 jest.spyOn(auditLogger, 'warn').mockImplementation(() => auditLogger);
 
 describe('coreAuditActions', () => {
-    // Only the three actions core genuinely owns: this file is core's, and core does not know
-    // which domains exist. Every module's own strings are read off `audit.ts` straight into
-    // `docs/operate/winston.md`'s generated table; the cross-cutting sweep proves the shape of all
-    // of them without naming a domain.
+    /**
+     * Only the three actions core genuinely owns: this file is core's, and core does not know
+     * which domains exist. Every module's own strings are read off `audit.ts` straight into
+     * `docs/operate/winston.md`'s generated table; the cross-cutting sweep proves the shape of all
+     * of them without naming a domain.
+     */
     it('defines the app-level security actions', () => {
         expect(coreAuditActions.SECURITY_UNAUTHORIZED).toBe('security.unauthorized');
         expect(coreAuditActions.SECURITY_FORBIDDEN).toBe('security.forbidden');
@@ -110,8 +112,10 @@ describe('recordAudit', () => {
     // The sink lives in a module closure: put an inert one back so it cannot see later tests.
     afterEach(() => registerAuditSink(() => {}));
 
-    // A background job has no caller behind it, so nothing is emitted. Services pass `context`
-    // straight through, so this one door covers every service that audits.
+    /**
+     * A background job has no caller behind it, so nothing is emitted. Services pass `context`
+     * straight through, so this one door covers every service that audits.
+     */
     it('emits nothing when there is no caller context', () => {
         const sink = jest.fn();
         registerAuditSink(sink);
@@ -125,8 +129,10 @@ describe('recordAudit', () => {
 
 describe('registerAuditSink', () => {
     beforeEach(() => jest.clearAllMocks());
-    // Every test here registers a sink, and the module holds it in a closure — so each one puts
-    // an inert sink back, or it would keep receiving the *next* test's events.
+    /**
+     * Every test here registers a sink, and the module holds it in a closure — so each one puts
+     * an inert sink back, or it would keep receiving the *next* test's events.
+     */
     afterEach(() => registerAuditSink(() => {}));
 
     const event: AuditEvent = {
@@ -175,15 +181,19 @@ describe('registerAuditSink', () => {
         emitAuditEvent({ ...event, outcome: 'failure' });
 
         const entry = sink.mock.calls[0][0] as AuditEntry;
-        // A Date, not an ISO string: the model stores it as a BSON date so the TTL index and the
-        // `timestamp: -1` sort work on a real date rather than on lexicographic string order.
+        /**
+         * A Date, not an ISO string: the model stores it as a BSON date so the TTL index and the
+         * `timestamp: -1` sort work on a real date rather than on lexicographic string order.
+         */
         expect(entry.timestamp).toBeInstanceOf(Date);
         expect(entry.level).toBe('warn');
     });
 
     it('still writes the log line when no sink is registered', () => {
-        // The unregistered state is what unit tests and the queue workers run in — the compliance
-        // record must not depend on persistence being wired up.
+        /**
+         * The unregistered state is what unit tests and the queue workers run in — the compliance
+         * record must not depend on persistence being wired up.
+         */
         registerAuditSink(() => {});
         emitAuditEvent(event);
 
@@ -191,8 +201,10 @@ describe('registerAuditSink', () => {
     });
 
     it('does not let a throwing sink escape into the caller', () => {
-        // The property the whole audit path rests on: these run while answering requests, so a
-        // broken sink must never turn a successful login into a 500.
+        /**
+         * The property the whole audit path rests on: these run while answering requests, so a
+         * broken sink must never turn a successful login into a 500.
+         */
         const failure = new Error('mongo is down');
         registerAuditSink(() => {
             throw failure;
@@ -201,8 +213,10 @@ describe('registerAuditSink', () => {
         expect(() => emitAuditEvent(event)).not.toThrow();
         // The failure is reported rather than swallowed silently: the log line, then the warning.
         expect(auditLogger.log).toHaveBeenCalledTimes(1);
-        // The Error itself, not its message: `redactFormat` hands anything under `error` to
-        // `serializeError`, which keeps the name and — outside production — the stack.
+        /**
+         * The Error itself, not its message: `redactFormat` hands anything under `error` to
+         * `serializeError`, which keeps the name and — outside production — the stack.
+         */
         expect(auditLogger.warn).toHaveBeenCalledWith(
             'audit.sink.failed',
             expect.objectContaining({ error: failure })
@@ -276,9 +290,11 @@ describe('buildAuditEvent — default actorRole', () => {
         expect(event.actorRole).toBe('user');
     });
 
-    // The fix this guards: before `unrestricted` was carried on `Caller`, `resolveActorRole`
-    // could only tell an authenticated caller from an anonymous one — an admin action whose call
-    // site passed no explicit `actorRole` was logged as `user` alongside everybody else's.
+    /**
+     * The fix this guards: before `unrestricted` was carried on `Caller`, `resolveActorRole`
+     * could only tell an authenticated caller from an anonymous one — an admin action whose call
+     * site passed no explicit `actorRole` was logged as `user` alongside everybody else's.
+     */
     it('reports admin for a caller holding every key its scope declares', () => {
         const event = buildAuditEvent(callerContextAs('admin', 'admin-1'), {
             action: 'admin.user.erased',
@@ -288,9 +304,11 @@ describe('buildAuditEvent — default actorRole', () => {
         expect(event.actorRole).toBe('admin');
     });
 
-    // `SYSTEM_ACTOR` is unrestricted too, exactly like `admin` — this must be checked FIRST,
-    // or a background job's own action reads as an admin's. `id: 'system'` is what `Caller.system`
-    // is computed from (`kernel/permissions.ts`'s `assembleCaller`).
+    /**
+     * `SYSTEM_ACTOR` is unrestricted too, exactly like `admin` — this must be checked FIRST,
+     * or a background job's own action reads as an admin's. `id: 'system'` is what `Caller.system`
+     * is computed from (`kernel/permissions.ts`'s `assembleCaller`).
+     */
     it('reports system for the system actor, never admin, though both are unrestricted', () => {
         const event = buildAuditEvent(callerContextAs('system', 'system'), {
             action: 'auth.login',

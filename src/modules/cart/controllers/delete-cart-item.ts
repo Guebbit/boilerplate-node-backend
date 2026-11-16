@@ -19,8 +19,10 @@ import { catchAs, refused } from '@infrastructure/http/controller';
  */
 export const deleteCartItem = (request: Request<{ productId?: string }>, response: Response) => {
     const userId = request.authContext!.id;
-    // The path segment is the only source; a malformed one answers the same 404 copy as a line
-    // not in the cart.
+    /**
+     * The path segment is the only source; a malformed one answers the same 404 copy as a line
+     * not in the cart.
+     */
     const productId = requireId(request, response, {
         notFound: 'cart.item-not-found',
         name: 'productId',

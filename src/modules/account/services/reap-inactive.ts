@@ -30,8 +30,10 @@ const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {
-    // The name only when the address is the verified one: this mail also goes to accounts that
-    // never proved theirs, and a display name is user-supplied text.
+    /**
+     * The name only when the address is the verified one: this mail also goes to accounts that
+     * never proved theirs, and a display name is user-supplied text.
+     */
     const mail = inactivityWarningEmail(
         user.locale ?? getDefaultLocale(),
         greetableName(user, user.email),
@@ -89,8 +91,10 @@ const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => 
     const toHardDelete = await accountUserService.findReaperSoftDeletedPastGrace(
         daysAgo(GRACE_DAYS)
     );
-    // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
-    // request behind it, so it hands its own audit context.
+    /**
+     * Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
+     * request behind it, so it hands its own audit context.
+     */
     for (const user of toHardDelete)
         await accountUserService.eraseInactive(user, systemCallerContext('User'));
 

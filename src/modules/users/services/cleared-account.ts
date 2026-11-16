@@ -4,7 +4,7 @@
  * with 403 when the caller may not manage a staff account. One home, because a copy that drifts
  * is a privilege bug.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#soft-delete-vs-erasure
  */
 
 import { t } from '@infrastructure/i18n';
@@ -21,7 +21,6 @@ import { userRepository } from '../repository';
  * @internal A step behind a guarded door: it runs the check, so it is the check. Unpublished: a
  * sibling that reached for the loaded account without it would skip the staff-role protection.
  *
- * @param id - the account
  * @param context - the caller, judged against the account
  * @param next - what to do with the loaded account once cleared
  * @returns what `next` answers; 404 when there is no such account, 403 `ROLE_MANAGEMENT_REQUIRED`

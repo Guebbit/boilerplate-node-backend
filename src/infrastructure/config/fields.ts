@@ -12,7 +12,7 @@
  * Presence rules (length, placeholder, production-only) are data on the field, not parse rules:
  * a developer machine legitimately leaves a secret unset, so they are checked at boot only.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#add-a-variable
  */
 
 import { z } from 'zod';
@@ -137,8 +137,10 @@ function build<T>(inner: z.ZodType<T>, options: BuildOptions<T> & { default: T }
 function build<T>(inner: z.ZodType<T>, options: BuildOptions<T>): Field<T | undefined>;
 function build<T>(inner: z.ZodType<T>, options: BuildOptions<T>): Field<T | undefined> {
     const fallback = options.default;
-    // Zod: `.optional()` lets `undefined` through; the transform then puts the default in.
-    // Not `.default()`: its typing refuses a generic `T`. https://zod.dev/api#optionals
+    /**
+     * Zod: `.optional()` lets `undefined` through; the transform then puts the default in.
+     * Not `.default()`: its typing refuses a generic `T`. https://zod.dev/api#optionals
+     */
     const rule = inner.optional().transform((value) => value ?? fallback);
     return {
         // preprocess: run `blankAsUnset` first, then the rule above. https://zod.dev/api#preprocess
@@ -220,8 +222,10 @@ export function decimal(
 ): Field<number | undefined> {
     const label = rangeLabel('decimal', options);
     return build(
-        // Zod: regex gate on the raw string, then parse, then the range check on the number.
-        // `.pipe` hands the transformed value to the next schema. https://zod.dev/api#pipes
+        /**
+         * Zod: regex gate on the raw string, then parse, then the range check on the number.
+         * `.pipe` hands the transformed value to the next schema. https://zod.dev/api#pipes
+         */
         z
             .string()
             .regex(DECIMAL, label)
@@ -278,8 +282,10 @@ export function choice<const T extends string>(
         z
             .string()
             .transform((text) => text.toLowerCase())
-            // Zod: `custom<T>` narrows the output type through the guard, no cast needed.
-            // https://zod.dev/api#custom
+            /**
+             * Zod: `custom<T>` narrows the output type through the guard, no cast needed.
+             * https://zod.dev/api#custom
+             */
             .pipe(
                 z.custom<T>(
                     // Widened to `string` for the lookup only: `value` is not yet known to be a `T`.
@@ -355,8 +361,10 @@ const canonicalZone = (value: string): string | undefined => {
     if (FIXED_OFFSET.test(value)) return undefined;
     // eslint-disable-next-line no-restricted-syntax -- Intl has no non-throwing zone check; the RangeError is contained here and read as "not a zone"
     try {
-        // Intl: the constructor throws a RangeError on a name it does not know; `resolvedOptions`
-        // hands back the canonical spelling. https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/resolvedOptions
+        /**
+         * Intl: the constructor throws a RangeError on a name it does not know; `resolvedOptions`
+         * hands back the canonical spelling. https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/resolvedOptions
+         */
         return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone;
     } catch {
         // The throw IS the answer: an unknown zone is a refusal, not an error to surface.

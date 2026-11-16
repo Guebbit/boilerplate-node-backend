@@ -27,7 +27,7 @@ const addressBookFixtures = [
     makeAddressBook({
         userId: SEED_ADMIN_ID,
         items: [
-            /*
+            /**
              * A shipped order restates (never references) a copy of this entry as its
              * `shippingAddress`: an order's address is a snapshot that must be free to differ from
              * the live book — sharing the literal would make them unable to disagree, which is what
@@ -57,7 +57,7 @@ const addressBookFixtures = [
             }
         ]
     }),
-    /*
+    /**
      * The ordinary customer, with the phone number omitted rather than blank: `phone` is optional
      * in the contract, and a dataset where every optional field happens to be filled never shows a
      * client what an absent one looks like.

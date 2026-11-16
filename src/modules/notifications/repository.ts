@@ -5,7 +5,7 @@
  * whose it is, which is what makes "another user's id is a 404" a property of the query rather
  * than of a check someone has to remember.
  *
- * @see docs/modules/notifications.md
+ * @see docs/modules/notifications.md#the-pipeline
  */
 
 import type { ClientSession } from 'mongoose';
@@ -160,8 +160,10 @@ export const notificationRepository: Repository<
             .exec()
             .then(({ deletedCount }) => deletedCount > 0),
 
-    /** Empty a user's inbox: what a hard account deletion owes it (inside that deletion's own
-     * transaction), and what "clear everything" does. */
+    /**
+     * Empty a user's inbox: what a hard account deletion owes it (inside that deletion's own
+     * transaction), and what "clear everything" does.
+     */
     deleteByUserId: (userId: string, session?: ClientSession) =>
         notificationModel
             .deleteMany({ userId: toObjectId(userId) }, session ? { session } : undefined)

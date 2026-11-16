@@ -6,7 +6,7 @@
  * Delete it if: the module has no upload (with the controller, the route, the contract path and the
  * manifest entry).
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#architecture
  */
 
 import type { CallerContext, Example } from '@types';
@@ -47,8 +47,10 @@ const applyCover = (
     image: ImageChanges,
     context: CallerContext
 ): Promise<ResponseSuccess<Example> | ResponseReject> => {
-    // Url, thumbnail and pending key change together, or not at all; the old url comes
-    // back so it can be deleted once the save has landed — never before.
+    /**
+     * Url, thumbnail and pending key change together, or not at all; the old url comes
+     * back so it can be deleted once the save has landed — never before.
+     */
     const replaced = applyImageWriteback(example, image);
 
     return exampleRepository

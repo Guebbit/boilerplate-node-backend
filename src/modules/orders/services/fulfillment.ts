@@ -20,7 +20,6 @@ import { isPayable, type FulfillmentSummary } from '../domain';
  * still being fulfillable (`paid`, `processing`, `shipped` or `delivered`), which is what makes a shipment and
  * a cancel racing each other resolve to exactly one winner.
  *
- * @param orderId - the order
  * @param summary - recomputed from the fulfillment orders inside the same transaction
  * @param session - the act's transaction
  * @returns the order as it now stands, or `null` when it can no longer be fulfilled
@@ -35,7 +34,6 @@ export const recordFulfillmentProgress = (
  * One order read inside an act's transaction — the snapshot the act's own writes land in, so a
  * refusal decided from it cannot be stale by the time the writes commit.
  *
- * @param orderId - the order
  * @param session - the act's transaction
  * @returns the order, or `null` when it does not exist
  */

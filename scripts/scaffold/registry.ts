@@ -119,8 +119,10 @@ export const registerModule = (source: string, names: ModuleNames): string => {
         names.kebab
     );
 
-    // Array entries are ordered by identifier, the import lines by folder name: for a name like
-    // `api-keys` those differ, and each list stays sorted by what it prints.
+    /**
+     * Array entries are ordered by identifier, the import lines by folder name: for a name like
+     * `api-keys` those differ, and each list stays sorted by what it prints.
+     */
     const array = splitAfter(withImport, 'export const enabledModules');
     const withEntry = [
         ...array.head,

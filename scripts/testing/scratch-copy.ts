@@ -53,10 +53,12 @@ export const assembleScratchCopy = (repoRoot: string, scratch: string): void => 
     // Node resolves through the symlink exactly as it would a real directory.
     symlinkSync(path.join(repoRoot, 'node_modules'), path.join(scratch, 'node_modules'), 'dir');
 
-    // A symlinked `node_modules` resolves outside the scratch tree, and TypeScript then refuses to
-    // name a type reached through it (TS2883): an artifact of the measurement, not of the code.
-    // `preserveSymlinks` makes it resolve through the link the way a real install would.
-    // https://www.typescriptlang.org/tsconfig/#preserveSymlinks
+    /**
+     * A symlinked `node_modules` resolves outside the scratch tree, and TypeScript then refuses to
+     * name a type reached through it (TS2883): an artifact of the measurement, not of the code.
+     * `preserveSymlinks` makes it resolve through the link the way a real install would.
+     * https://www.typescriptlang.org/tsconfig/#preserveSymlinks
+     */
     const tsconfig = path.join(scratch, 'tsconfig.json');
     writeFileSync(
         tsconfig,

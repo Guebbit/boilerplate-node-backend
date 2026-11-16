@@ -5,7 +5,7 @@
  * a partial one carries only the refunded share (see `../domain/credit-shares.ts`), so an order refunded
  * in parts ends up with a credit note per part.
  *
- * @see docs/modules/invoicing.md
+ * @see docs/modules/invoicing.md#issuing-a-document
  */
 
 import { Types, type ClientSession } from 'mongoose';
@@ -208,7 +208,6 @@ export const findCreditNotesForOrder = (orderId: string): Promise<CreditNoteDocu
  * One credit note within an order, or `null` — `GET /orders/{id}/credit-notes/{creditNoteId}`'s
  * read. A credit note belonging to another order is `null` too.
  * @param orderId - the order it must belong to
- * @param creditNoteId - the credit note
  */
 export const findCreditNoteForOrderById = (
     orderId: string,

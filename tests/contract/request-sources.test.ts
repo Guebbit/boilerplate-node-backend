@@ -30,6 +30,7 @@ import { parse } from 'yaml';
 import type { RequestInputSource } from '@infrastructure/http/request';
 import { REPO_ROOT } from '@tests/paths';
 
+/** A route as mounted: its verb and path. */
 interface MountedRoute {
     method: string;
     /** Full express path, e.g. `/products/:id/hard`. */
@@ -46,6 +47,7 @@ interface MountedRoute {
     controllerFile?: string;
 }
 
+/** Reads a repo file as text, relative to the repo root. */
 const read = (relative: string): string => readFileSync(path.join(REPO_ROOT, relative), 'utf8');
 
 /**
@@ -59,9 +61,11 @@ const read = (relative: string): string => readFileSync(path.join(REPO_ROOT, rel
 const readMountPrefixes = (): Map<string, string> => {
     const prefixes = new Map<string, string>();
 
-    // Enabled modules only. A module folder that exists but is absent from the `enabledModules`
-    // array is absent from the build, so its routes must not count as mounted — which is exactly
-    // the mistake this check should catch rather than paper over.
+    /**
+     * Enabled modules only. A module folder that exists but is absent from the `enabledModules`
+     * array is absent from the build, so its routes must not count as mounted — which is exactly
+     * the mistake this check should catch rather than paper over.
+     */
     const registry = read('src/modules.ts');
     const listed = new Set(
         (/enabledModules[^=]*=\s*\[([^\]]*)\]/.exec(registry)?.[1] ?? '')
@@ -75,8 +79,10 @@ const readMountPrefixes = (): Map<string, string> => {
     )) {
         if (!listed.has(binding)) continue;
         const manifest = read(`src/modules/${name}/module.ts`);
-        // `import { router } from './routes'` or `{ router as ordersRouter } from './order-routes'`:
-        // binding to file, so each mount's prefix lands on the file that declares its router.
+        /**
+         * `import { router } from './routes'` or `{ router as ordersRouter } from './order-routes'`:
+         * binding to file, so each mount's prefix lands on the file that declares its router.
+         */
         const files = new Map<string, string>();
         for (const [, imported, alias, file] of manifest.matchAll(
             /import\s*\{\s*(\w+)(?:\s+as\s+(\w+))?\s*\}\s*from\s*'\.\/([^']*)'/g
@@ -92,8 +98,10 @@ const readMountPrefixes = (): Map<string, string> => {
         }
     }
 
-    // The one router `src/app/routes.ts` still names, resolved through its import so a rename of
-    // the file is caught rather than silently dropping `GET /` from this check.
+    /**
+     * The one router `src/app/routes.ts` still names, resolved through its import so a rename of
+     * the file is caught rather than silently dropping `GET /` from this check.
+     */
     const app = read('src/app/routes.ts');
     const imports = new Map<string, string>();
     for (const [, binding, module] of app.matchAll(
@@ -197,6 +205,7 @@ const readSurfaceSources = (): Record<string, RequestInputSource[]> => {
     return table;
 };
 
+/** The sources each request surface reads, read from the code. */
 const SURFACE_SOURCES = readSurfaceSources();
 
 /**
@@ -263,15 +272,18 @@ interface SpecParameter {
     $ref?: string;
 }
 
+/** The slice of an OpenAPI operation these cases read. */
 interface SpecOperation {
     parameters?: SpecParameter[];
     requestBody?: unknown;
 }
 
+/** A path item: its operations by verb. */
 type SpecPathItem = Record<string, SpecOperation | undefined> & {
     parameters?: SpecParameter[];
 };
 
+/** The slice of the OpenAPI document these cases read. */
 interface Spec {
     paths: Record<string, SpecPathItem>;
     components?: { parameters?: Record<string, SpecParameter> };
@@ -305,11 +317,13 @@ const readAllowedSources = (
     ];
 
     for (const parameter of parameters) {
-        // Resolved, not guessed from the name. A check for `$ref.includes('Path')` reads like it
-        // should work — "every shared parameter here is a path parameter" — but is false
-        // (`PageParam`, `TextParam` and `IdParam` are all `in: query`), and would pass only
-        // because every route using one of those also has an inline query parameter to be found
-        // instead. The bundle inlines every component, so the reference resolves here with no I/O.
+        /**
+         * Resolved, not guessed from the name. A check for `$ref.includes('Path')` reads like it
+         * should work — "every shared parameter here is a path parameter" — but is false
+         * (`PageParam`, `TextParam` and `IdParam` are all `in: query`), and would pass only
+         * because every route using one of those also has an inline query parameter to be found
+         * instead. The bundle inlines every component, so the reference resolves here with no I/O.
+         */
         const location = parameter.in ?? resolveParameter(spec, parameter.$ref)?.in;
         if (location === 'path') allowed.add('params');
         if (location === 'query') allowed.add('query');
@@ -322,13 +336,17 @@ const readAllowedSources = (
     return allowed;
 };
 
+/** The contract, parsed from the root openapi.yaml. */
 const spec = parse(read('openapi.yaml')) as Spec;
+/** Every route the app mounts. */
 const mountedRoutes = readMountedRoutes();
 
 describe('request sources agree with openapi.yaml', () => {
     it('recovered the route table from the source', () => {
-        // A regex that silently stops matching would turn every assertion below into a vacuous
-        // pass. This is the tripwire for that.
+        /**
+         * A regex that silently stops matching would turn every assertion below into a vacuous
+         * pass. This is the tripwire for that.
+         */
         expect(mountedRoutes.length).toBeGreaterThan(30);
     });
 
@@ -344,10 +362,12 @@ describe('request sources agree with openapi.yaml', () => {
      * substantial share of the controllers rather than from none.
      */
     it('recovered the surface table and the declarations that use it', () => {
-        // Pinned, not merely non-empty. `RequestSurface` is a CLOSED set on purpose — precedence
-        // is meant to be a property of the route's kind, not an ordering the newest controller
-        // picked — so a sixth row should fail here once and be added deliberately, alongside its
-        // row in `docs/understand/request-input.md` and a look at what the spec declares for it.
+        /**
+         * Pinned, not merely non-empty. `RequestSurface` is a CLOSED set on purpose — precedence
+         * is meant to be a property of the route's kind, not an ordering the newest controller
+         * picked — so a sixth row should fail here once and be added deliberately, alongside its
+         * row in `docs/understand/request-input.md` and a look at what the spec declares for it.
+         */
         expect(Object.keys(SURFACE_SOURCES).toSorted()).toEqual([
             'create',
             'delete',
@@ -410,8 +430,10 @@ describe('request sources agree with openapi.yaml', () => {
                 );
         }
 
-        // Named rather than counted: the message is the list of controllers taking undocumented
-        // input, and the routes they are reachable through, which is what someone has to act on.
+        /**
+         * Named rather than counted: the message is the list of controllers taking undocumented
+         * input, and the routes they are reachable through, which is what someone has to act on.
+         */
         expect(violations).toEqual([]);
     });
 });

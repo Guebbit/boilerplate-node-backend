@@ -4,7 +4,7 @@
  * the doors need and the bulk writes the erasure needs. A move is ONE `findOneAndUpdate` filtered
  * on the status the caller read, so two clicks cannot both win.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import type { ClientSession } from 'mongoose';
@@ -110,8 +110,10 @@ export const taskRepository: TaskRepository = {
     ...base,
 
     moveFrom: (id, from, patch) =>
-        // Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
-        // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+        /**
+         * Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
+         * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+         */
         taskModel
             .findOneAndUpdate(
                 { _id: toObjectId(id), status: from },
@@ -175,9 +177,11 @@ export const taskRepository: TaskRepository = {
             .exec(),
 
     claimOverdue: (now, session) =>
-        // Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
-        // The filter and the stamp are one atomic step.
-        // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+        /**
+         * Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
+         * The filter and the stamp are one atomic step.
+         * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+         */
         taskModel
             .findOneAndUpdate(
                 {
@@ -186,21 +190,27 @@ export const taskRepository: TaskRepository = {
                     overdueNotifiedAt: { $exists: false }
                 },
                 { $set: { overdueNotifiedAt: now } },
-                // Oldest deadline first: the claim (and outbox write) order. Delivery order across
-                // tasks is not promised: each task is its own aggregate.
+                /**
+                 * Oldest deadline first: the claim (and outbox write) order. Delivery order across
+                 * tasks is not promised: each task is its own aggregate.
+                 */
                 { returnDocument: 'after', sort: { dueAt: 1 }, session }
             )
             .exec(),
 
     claimDueSoon: (now, session) =>
-        // Mongo: `$expr` compares two fields of the same document, here the task's whole life.
-        // https://www.mongodb.com/docs/manual/reference/operator/query/expr/
+        /**
+         * Mongo: `$expr` compares two fields of the same document, here the task's whole life.
+         * https://www.mongodb.com/docs/manual/reference/operator/query/expr/
+         */
         taskModel
             .findOneAndUpdate(
                 {
                     status: { $in: OPEN_STATUSES },
-                    // A contact message owes only a short SLA, so it is skipped; a privacy request
-                    // owes a month, so it gets the warning.
+                    /**
+                     * A contact message owes only a short SLA, so it is skipped; a privacy request
+                     * owes a month, so it gets the warning.
+                     */
                     $or: [{ kind: { $ne: TaskKind.contact } }, { category: TaskCategory.privacy }],
                     noDueSoon: { $exists: false },
                     dueAt: { $gt: now, $lte: new Date(now.getTime() + DUE_SOON_MS) },
@@ -246,8 +256,10 @@ export const taskRepository: TaskRepository = {
                 {
                     $set: { lastSeenAt: now },
                     $inc: { seenCount: 1 },
-                    // Mongo: `$push` with `$each` + `$slice: -N` keeps only the last N entries.
-                    // https://www.mongodb.com/docs/manual/reference/operator/update/slice/
+                    /**
+                     * Mongo: `$push` with `$each` + `$slice: -N` keeps only the last N entries.
+                     * https://www.mongodb.com/docs/manual/reference/operator/update/slice/
+                     */
                     ...(eventId
                         ? { $push: { eventIds: { $each: [eventId], $slice: -REMEMBERED_EVENTS } } }
                         : {})
@@ -262,9 +274,11 @@ export const taskRepository: TaskRepository = {
     findOpenByKey: (openKey) => taskModel.findOne({ openKey }).exec(),
 
     deleteOwned: (filter, session) =>
-        // Mongoose: Model.deleteMany(filter, { session }) joins the caller's transaction.
-        // https://mongoosejs.com/docs/api/model.html#Model.deleteMany()
-        // Ids first, in the same transaction: `deleteMany` reports only a count.
+        /**
+         * Mongoose: Model.deleteMany(filter, { session }) joins the caller's transaction.
+         * https://mongoosejs.com/docs/api/model.html#Model.deleteMany()
+         * Ids first, in the same transaction: `deleteMany` reports only a count.
+         */
         taskModel
             .find(filter)
             .select('_id')
@@ -311,8 +325,10 @@ export const taskRepository: TaskRepository = {
             )
             .exec()
             .then(() =>
-                // Mongoose: `arrayFilters` addresses every matching element of `notes`.
-                // https://mongoosejs.com/docs/tutorials/findoneandupdate.html#arrayfilters
+                /**
+                 * Mongoose: `arrayFilters` addresses every matching element of `notes`.
+                 * https://mongoosejs.com/docs/tutorials/findoneandupdate.html#arrayfilters
+                 */
                 taskModel
                     .updateMany(
                         { 'notes.authorId': toObjectId(userId) },

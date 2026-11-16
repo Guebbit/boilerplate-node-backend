@@ -29,6 +29,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -70,8 +71,10 @@ const paidOrder = async () => {
         { productId: String(product._id), quantity: 2 }
     ]);
     await payByCard(order, user);
-    // Delivery is after the response: let the relay publish the settlement's rows before the
-    // test moves the order on, as the paid order of a real shop has them delivered long before.
+    /**
+     * Delivery is after the response: let the relay publish the settlement's rows before the
+     * test moves the order on, as the paid order of a real shop has them delivered long before.
+     */
     await settleOutboxNudges();
     return { user, order, orderId: String(order._id) };
 };

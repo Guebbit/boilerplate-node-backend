@@ -12,7 +12,7 @@
  *
  * Run before `app`/`cron` start — see `compose.production.yaml`'s `setup` service.
  *
- * @see docs/reference/ops.md
+ * @see docs/reference/ops.md#the-compose-stack
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

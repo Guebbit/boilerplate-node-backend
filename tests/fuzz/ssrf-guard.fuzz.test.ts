@@ -25,8 +25,10 @@ import {
     registerSsrfExemptOrigin
 } from '@infrastructure/adapters/ssrf-exemptions';
 
-// `resolve4`/`resolve6` are mocked so "a DNS name resolving to private space" is deterministic —
-// this suite must never depend on what a real DNS server answers.
+/**
+ * `resolve4`/`resolve6` are mocked so "a DNS name resolving to private space" is deterministic —
+ * this suite must never depend on what a real DNS server answers.
+ */
 jest.mock('node:dns/promises', () => ({
     resolve4: jest.fn(),
     resolve6: jest.fn()
@@ -84,8 +86,10 @@ describe('resolveSafeOutboundTarget — literal IP hostiles, refused with unsafe
             'Teredo-encoded loopback (RFC 4380)',
             'https://[2001:0000:4136:e378:8000:63bf:3fff:fdd2]/hook'
         ],
-        // Not globally routable either, and missed by a list of known-bad ranges — the reason
-        // the guard allows only public unicast instead.
+        /**
+         * Not globally routable either, and missed by a list of known-bad ranges — the reason
+         * the guard allows only public unicast instead.
+         */
         ['"this network" beyond 0.0.0.0 (RFC 1122)', 'https://0.1.2.3/hook'],
         ['benchmarking (RFC 2544)', 'https://198.18.0.1/hook'],
         ['reserved class E (RFC 1112)', 'https://240.0.0.1/hook'],
@@ -188,8 +192,10 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
         });
         expect(singleAnswer).toEqual({ address: '93.184.215.9', family: 4 });
 
-        // Called a second time (`{ all: true }`, the shape `https.request` uses when it wants
-        // every candidate address) — still the one address that was actually checked.
+        /**
+         * Called a second time (`{ all: true }`, the shape `https.request` uses when it wants
+         * every candidate address) — still the one address that was actually checked.
+         */
         const allAnswer = await new Promise((resolve, reject) => {
             target.lookup('pin-me.example.test', { all: true }, (error, addresses) =>
                 error ? reject(error) : resolve(addresses)
@@ -197,13 +203,15 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
         });
         expect(allAnswer).toEqual([{ address: '93.184.215.9', family: 4 }]);
 
-        // The DNS mock was consulted exactly once, by `resolveSafeOutboundTarget` itself — the
-        // pinned `lookup` above answered from the already-validated address, not a new query.
+        /**
+         * The DNS mock was consulted exactly once, by `resolveSafeOutboundTarget` itself — the
+         * pinned `lookup` above answered from the already-validated address, not a new query.
+         */
         expect(dns.resolve4).toHaveBeenCalledTimes(1);
     });
 });
 
-/*
+/**
  * A registered exempt origin — what the development doubles register for the demo sink. The WHOLE origin:
  * scheme, host and port. Literal IPs, not DNS names: `resolveAllAddresses` returns a literal
  * straight back without calling `resolve4`/`resolve6`, so these cases need no `mockDns`.

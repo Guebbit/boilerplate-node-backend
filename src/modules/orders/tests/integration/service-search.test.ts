@@ -13,7 +13,7 @@ import { orderService } from '@modules/orders/services';
 
 setupTestDb();
 
-/*
+/**
  * `totalItems`, `totalQuantity` and `totalPrice` are not stored — `applyOrderTransform` derives
  * them, and `.aggregate()` bypasses the schema's `toJSON`, so the only thing that puts them on a
  * result is the repository's `normalize` step. These assert that every read path runs it.
@@ -244,7 +244,7 @@ describe('orderService.search', () => {
     });
 });
 
-/*
+/**
  * The order line no longer freezes an image, so `current` is resolved LIVE from the catalogue
  * product every read — the three branches that matter are unchanged, replaced-since-purchase,
  * and gone.
@@ -267,8 +267,10 @@ describe('orderService.search — current (live) image', () => {
 
         await createOrder(user, [toOrderItem(product, 1)]);
 
-        // The catalogue row changes after the order exists — the order line itself carries no
-        // image at all to go stale, so this can only ever show the live one.
+        /**
+         * The catalogue row changes after the order exists — the order line itself carries no
+         * image at all to go stale, so this can only ever show the live one.
+         */
         product.imageUrl = '/images/replaced.jpg';
         await saveProduct(product);
 

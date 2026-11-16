@@ -76,7 +76,6 @@ export const remainingOfLine = (line: FulfillmentLine): number =>
 
 /**
  * Units left across a fulfillment order's lines.
- * @param lines - the lines
  */
 export const remainingOf = (lines: readonly FulfillmentLine[]): number =>
     lines.reduce((total, line) => total + remainingOfLine(line), 0);
@@ -177,8 +176,10 @@ export const groupOrderLines = (
     const nowOrdinary = now.filter(({ noWithdrawal }) => noWithdrawal !== true);
     const nowBespoke = now.filter(({ noWithdrawal }) => noWithdrawal === true);
 
-    // Key: the day, then 0 for ordinary and 1 for bespoke so a day's ordinary group sorts first,
-    // then the cause and whether the date was defaulted, so nothing of a different kind shares one.
+    /**
+     * Key: the day, then 0 for ordinary and 1 for bespoke so a day's ordinary group sorts first,
+     * then the cause and whether the date was defaulted, so nothing of a different kind shares one.
+     */
     const byKey = new Map<string, Waiting[]>();
     for (const wait of waiting) {
         const bespoke = wait.line.noWithdrawal === true ? 1 : 0;
@@ -227,15 +228,16 @@ export const groupOrderLines = (
  * nothing remains → `closed` if anything shipped from it, else `canceled`; a hold wins over the
  * rest; otherwise `in_progress` once something shipped and `open` before.
  *
- * @param lines - the lines
  * @param held - whether a hold is in force
  */
 export const statusOfLines = (
     lines: readonly FulfillmentLine[],
     held: boolean
 ): FulfillmentOrderStatus => {
-    // No lines at all: everything it held moved to another fulfillment order (a lost parcel's
-    // owed units), so nothing was canceled and nothing is left to do here.
+    /**
+     * No lines at all: everything it held moved to another fulfillment order (a lost parcel's
+     * owed units), so nothing was canceled and nothing is left to do here.
+     */
     if (lines.length === 0) return FulfillmentOrderStatus.closed;
     if (remainingOf(lines) === 0)
         return lines.some(({ shippedQuantity }) => shippedQuantity > 0)
@@ -338,7 +340,6 @@ export const withRemainderCanceled = (lines: readonly FulfillmentLine[]): Fulfil
 /**
  * What is left on each line, as the quantities a cancel or an option lists — only lines with a
  * remainder.
- * @param lines - the lines
  */
 export const remainderLines = (lines: readonly FulfillmentLine[]): ProductQuantity[] =>
     lines
@@ -394,8 +395,10 @@ export const summarize = ({ fulfillmentOrders, shipments }: SummaryInputs): Fulf
         awaitingStock: units(
             held.filter(({ holdReason }) => holdReason === FulfillmentHoldReason.awaiting_stock)
         ),
-        // A `lost` shipment is neither out nor arrived: it waits on nothing, but still counts in
-        // `shipped` above, which is what keeps the whole-order cancel closed after a loss.
+        /**
+         * A `lost` shipment is neither out nor arrived: it waits on nothing, but still counts in
+         * `shipped` above, which is what keeps the whole-order cancel closed after a loss.
+         */
         undelivered: shipments.filter(({ status }) => status === ShipmentStatus.shipped).length,
         ...(last ? { lastDeliveredAt: last } : {})
     };

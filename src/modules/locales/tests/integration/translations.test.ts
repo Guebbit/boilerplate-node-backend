@@ -23,10 +23,12 @@ import { enabledModules } from '../../../../modules';
 setupTestDb();
 
 beforeAll(() => {
-    // The real registered target, not a hand-rolled duplicate — `writeDerived` is products' own
-    // repository method, and a locales test importing that repository directly is exactly the
-    // hidden cross-module coupling `tests/cross-cutting/translatable-targets.test.ts` guards against
-    // (it resolves the same way).
+    /**
+     * The real registered target, not a hand-rolled duplicate — `writeDerived` is products' own
+     * repository method, and a locales test importing that repository directly is exactly the
+     * hidden cross-module coupling `tests/cross-cutting/translatable-targets.test.ts` guards against
+     * (it resolves the same way).
+     */
     localeService.setTranslatables(resolveTranslatables(enabledModules));
 });
 
@@ -37,8 +39,10 @@ afterAll(() => {
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
-// Every case below writes the fallback locale at least once — it is a row like any other, no
-// special case, so the write path checks it exists and is active exactly as it would any other.
+/**
+ * Every case below writes the fallback locale at least once — it is a row like any other, no
+ * special case, so the write path checks it exists and is active exactly as it would any other.
+ */
 beforeEach(async () => {
     await givenLocale(FALLBACK);
 });
@@ -124,9 +128,11 @@ describe('updateEntityTranslations', () => {
     });
 
     it('rejects rather than writing anything for a malformed entity id', async () => {
-        // `target.revisionOf` throws the same `BSONError` `toObjectId` always does on a bad id
-        // (`create-repository.ts`) — the controller's `catchAs` turns it into a 422. The property
-        // under test here is the ORDER: the rejection must land before any row is written.
+        /**
+         * `target.revisionOf` throws the same `BSONError` `toObjectId` always does on a bad id
+         * (`create-repository.ts`) — the controller's `catchAs` turns it into a 422. The property
+         * under test here is the ORDER: the rejection must land before any row is written.
+         */
         const malformedId = 'not-an-object-id';
 
         await expect(
@@ -240,8 +246,10 @@ describe('updateEntityTranslations', () => {
         await localeService.updateEntityTranslations('product', id, {
             it: { fields: { title: 'Cuccia' } }
         });
-        // Straight at the model: the cascade would take the translation rows with it, and a delete
-        // racing a write is exactly the case where the row outlives its language.
+        /**
+         * Straight at the model: the cascade would take the translation rows with it, and a delete
+         * racing a write is exactly the case where the row outlives its language.
+         */
         await localeModel.deleteOne({ tag: 'it' }).exec();
 
         const resolved = await translationRepository.resolveEntityFields(
@@ -348,8 +356,10 @@ describe('updateEntityTranslations', () => {
     it('writes the fallback locale even with no locale row for it', async () => {
         const product = await createProduct();
 
-        // The fallback can't be deleted or deactivated, so writing it needs no `locales` row at
-        // all — remove the one `beforeEach` seeded to prove the write path doesn't look it up.
+        /**
+         * The fallback can't be deleted or deactivated, so writing it needs no `locales` row at
+         * all — remove the one `beforeEach` seeded to prove the write path doesn't look it up.
+         */
         const fallbackRow = await localeRepository.findOne({ tag: FALLBACK });
         if (fallbackRow) await localeRepository.deleteOne(fallbackRow);
 
@@ -514,9 +524,11 @@ describe('updateEntityTranslations', () => {
         const id = String(product._id);
         await givenLocale('it');
 
-        // The fallback row has to already exist for there to be anything to digest against — in
-        // real use it always does, written by `productService.create` before a translator ever
-        // opens this door. Two requests here for the same reason.
+        /**
+         * The fallback row has to already exist for there to be anything to digest against — in
+         * real use it always does, written by `productService.create` before a translator ever
+         * opens this door. Two requests here for the same reason.
+         */
         await localeService.updateEntityTranslations('product', id, {
             [FALLBACK]: { fields: { title: 'Cozy Bed' } }
         });

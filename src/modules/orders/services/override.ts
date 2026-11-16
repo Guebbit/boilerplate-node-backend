@@ -49,11 +49,13 @@ const applyOverride = (
     reason: string,
     context: CallerContext
 ): Promise<OrderDocument | null> => {
-    // `caller.id` is optional on the type only because a stranger genuinely has none — this
-    // function is never reached without `override:Order`, which no stranger holds. Rejected,
-    // not resolved to `null`: `null` here means "lost a race", which this is not, and
-    // `overrideStatus` would otherwise report a genuinely missing actor as a 409 conflict rather
-    // than the invariant violation it actually is.
+    /**
+     * `caller.id` is optional on the type only because a stranger genuinely has none — this
+     * function is never reached without `override:Order`, which no stranger holds. Rejected,
+     * not resolved to `null`: `null` here means "lost a race", which this is not, and
+     * `overrideStatus` would otherwise report a genuinely missing actor as a 409 conflict rather
+     * than the invariant violation it actually is.
+     */
     const actorUserId = context.caller.id;
     if (!actorUserId)
         return Promise.reject(
@@ -66,9 +68,11 @@ const applyOverride = (
     const observedFrom = order.status;
     const at = new Date();
 
-    // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
-    // exists: the deadline is counted from the override itself, which is when the shop says the
-    // order arrived — or from payment, for digital content.
+    /**
+     * An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
+     * exists: the deadline is counted from the override itself, which is when the shop says the
+     * order arrived — or from payment, for digital content.
+     */
     const clock =
         to === OrderStatus.delivered
             ? deliveryClockFor(order, at, withdrawalPeriodDays())
@@ -94,8 +98,10 @@ const applyOverride = (
         statusOverriddenEvent(orderId, observedFrom, to, at)
     ];
 
-    // Overriding past dispatch is still a dispatch: whatever has not shipped yet leaves the shelf
-    // with the status. `processing` is not one; a hold already `shipped` makes the stock half a no-op.
+    /**
+     * Overriding past dispatch is still a dispatch: whatever has not shipped yet leaves the shelf
+     * with the status. `processing` is not one; a hold already `shipped` makes the stock half a no-op.
+     */
     const move =
         to === OrderStatus.processing
             ? announceInTransaction(write, announce)
@@ -159,8 +165,10 @@ export const overrideStatus = (
             ]);
 
         return applyOverride(order, to, reason, context).then((updated) =>
-            // Lost a race against another write since the read above — same shape as the
-            // ordinary `update`'s 409, not a 404: the order still exists.
+            /**
+             * Lost a race against another write since the read above — same shape as the
+             * ordinary `update`'s 409, not a 404: the order still exists.
+             */
             updated ? generateSuccess(updated) : notAllowed(order.status, to)
         );
     });

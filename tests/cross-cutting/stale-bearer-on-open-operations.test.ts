@@ -8,7 +8,7 @@
  * operation is covered the moment its contract declares it. Every one is sent a stale bearer
  * over the real mounted chain; none may answer the `invalid_token` challenge.
  *
- * @see docs/understand/security.md
+ * @see docs/understand/security.md#a-bad-bearer-on-a-public-page
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -33,6 +33,7 @@ const STALE_BEARER = 'Bearer stale.bearer.token';
 /** The challenge `getAuth` answers a bad bearer with. */
 const INVALID_TOKEN = 'Bearer error="invalid_token"';
 
+/** The contract, parsed from the root openapi.yaml. */
 const spec = parse(readFileSync(path.join(REPO_ROOT, 'openapi.yaml'), 'utf8')) as SpecDocument;
 
 /** Every `security: []` operation, with its `{param}` segments filled in so a request can name it. */

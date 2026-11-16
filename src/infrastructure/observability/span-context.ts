@@ -23,9 +23,11 @@ export const getActiveSpanContext = (): {
     traceId: string | undefined;
     spanId: string | undefined;
 } => {
-    // Reads from OTel's async context (AsyncLocalStorage), so it works anywhere in a traced
-    // request without threading a span through every signature — the glue for cross-signal
-    // correlation: every log line, audit row and analytics event stamps the same traceId.
+    /**
+     * Reads from OTel's async context (AsyncLocalStorage), so it works anywhere in a traced
+     * request without threading a span through every signature — the glue for cross-signal
+     * correlation: every log line, audit row and analytics event stamps the same traceId.
+     */
     const activeSpan = trace.getActiveSpan();
     if (!activeSpan) return { traceId: undefined, spanId: undefined };
     // `spanContext()` returns the wire-propagatable identity: traceId, spanId, trace flags.

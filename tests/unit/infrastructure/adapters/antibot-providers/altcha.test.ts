@@ -79,8 +79,10 @@ describe('the altcha provider', () => {
         decoded.challenge.signature = '0'.repeat(decoded.challenge.signature.length);
 
         await expect(altchaProvider.verify(btoa(JSON.stringify(decoded)))).resolves.toBe('refused');
-        // Same challenge id as the forged one: a claim made before the signature check would have
-        // spent it here.
+        /**
+         * Same challenge id as the forged one: a claim made before the signature check would have
+         * spent it here.
+         */
         await expect(altchaProvider.verify(payload)).resolves.toBe('ok');
     });
 

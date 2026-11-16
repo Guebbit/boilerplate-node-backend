@@ -40,8 +40,10 @@ export const applyRefundState = (
             { providerRefundRef: refundRef, from: OPEN_REFUND_STATUSES },
             undefined
         );
-    // The provider's own failure, definite: a settled refund was taken back, an open one refused.
-    // Never `canceled`: that is staff's void, closed for good.
+    /**
+     * The provider's own failure, definite: a settled refund was taken back, an open one refused.
+     * Never `canceled`: that is staff's void, closed for good.
+     */
     if (state.status === 'failed' && isOpenOrSettled(refund))
         return reverseRefund(payment, refund, state.failureReason ?? RefundFailureReason.declined);
     return Promise.resolve(null);

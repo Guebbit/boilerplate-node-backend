@@ -25,7 +25,6 @@ const NOTES = {
  * Take one line: reserve the free shelf units, claim the rest as `owed`, outside the preorder cap. A product with no stock
  * level (deleted) claims nothing: the loss is recorded elsewhere and there is nothing to count.
  *
- * @param orderId - the order
  * @param line - the units the lost parcel carried
  * @param session - the act's transaction
  * @throws {Error} when a counter refuses a write the same snapshot said would land

@@ -127,8 +127,10 @@ describe('a resource with a lifecycle status publishes required actions', () => 
     );
 
     it('finds the records it means to check', () => {
-        // A canary: a changed fragment layout would leave the sweep empty and passing.
-        // Floors are what the foundation modules alone clear, so the sweep also holds with the shop stripped.
+        /**
+         * A canary: a changed fragment layout would leave the sweep empty and passing.
+         * Floors are what the foundation modules alone clear, so the sweep also holds with the shop stripped.
+         */
         expect(lifecycleRecords.length).toBeGreaterThanOrEqual(3);
     });
 

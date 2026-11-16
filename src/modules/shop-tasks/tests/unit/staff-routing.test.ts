@@ -14,6 +14,9 @@ import { SHOP_STAFF_ROUTES, SUMMARY_PAGES, summaryLinkOf } from '../../staff-rou
 /** The shared staff screen paths the links are compared against. */
 const PAGES = FRONTEND_LINK_RULES.staffPages;
 
+/**
+ * Every notice code that has a staff route, so a new code is covered without editing the cases.
+ */
 const CODES = Object.keys(SHOP_STAFF_ROUTES) as (keyof typeof SHOP_STAFF_ROUTES)[];
 
 describe('SHOP_STAFF_ROUTES', () => {

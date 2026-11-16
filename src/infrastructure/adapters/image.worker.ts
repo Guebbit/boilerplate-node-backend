@@ -7,7 +7,7 @@
  * inverted port — {@link ImageWriteback} plus a registration function — supplied at boot by
  * `app/workers.ts`.
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#architecture
  */
 
 import { createHash } from 'node:crypto';
@@ -44,6 +44,7 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
  * `consumeFromQueue` retries the second kind instead of discarding it.
  */
 export class UnsupportedImageFormatError extends Error {
+    /** What logs and `error.name` print; a subclass does not set it by itself. */
     override name = 'UnsupportedImageFormatError';
 }
 
@@ -140,16 +141,20 @@ export const digestQuarantinedImage = (key: string, owner: string): Promise<Dige
                 `Quarantined image ${key} does not match an accepted format.`
             );
 
-        // Digest first, then thumbnail the digested bytes: the original is decoded once, and the
-        // (smaller, metadata-free) re-encode is what the thumbnail decodes.
+        /**
+         * Digest first, then thumbnail the digested bytes: the original is decoded once, and the
+         * (smaller, metadata-free) re-encode is what the thumbnail decodes.
+         */
         return digestImage(raw, mime)
             .then((digested) =>
                 thumbnailImage(digested).then((thumbnail) => [digested, thumbnail] as const)
             )
             .catch((error: unknown) => {
-                // Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
-                // truncated or corrupt body, or past the pixel limit) fail identically on every
-                // redelivery, so this is permanent, not the transient kind the storage steps below are.
+                /**
+                 * Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
+                 * truncated or corrupt body, or past the pixel limit) fail identically on every
+                 * redelivery, so this is permanent, not the transient kind the storage steps below are.
+                 */
                 throw new UnsupportedImageFormatError(
                     `Quarantined image ${key} could not be decoded.`,
                     { cause: error }
@@ -193,12 +198,16 @@ const settleWriteback = (
     collection: string
 ): Promise<void> =>
     writeback(documentId, key, urls).then((matched) => {
-        // Only now: the urls are durably on the document, so no retry will need these bytes.
-        // Best-effort — a leftover is swept by `reap:quarantine` regardless.
+        /**
+         * Only now: the urls are durably on the document, so no retry will need these bytes.
+         * Best-effort — a leftover is swept by `reap:quarantine` regardless.
+         */
         const clearQuarantine = imageStore.removeQuarantined(key);
         if (!matched) {
-            // Stale job or deleted document: nobody will ever read these urls, so they are
-            // unlinked rather than left as orphans nothing can find again.
+            /**
+             * Stale job or deleted document: nobody will ever read these urls, so they are
+             * unlinked rather than left as orphans nothing can find again.
+             */
             // Stryker disable all
             logger.info({
                 message: 'Image digest writeback matched no document; cleaning up promoted files.',
@@ -251,16 +260,20 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
         )
         .catch((error: unknown) => {
             if (error instanceof UnsupportedImageFormatError) {
-                // Permanent — every redelivery decodes the same bytes the same way — so the
-                // quarantine file is removed along with dead-lettering the job.
+                /**
+                 * Permanent — every redelivery decodes the same bytes the same way — so the
+                 * quarantine file is removed along with dead-lettering the job.
+                 */
                 // Stryker disable next-line all
                 logger.warn({ message: 'Image digest worker: unsupported format.', error, key });
                 return imageStore.removeQuarantined(key).then(() => false);
             }
 
-            // Presumed TRANSIENT (disk full, a storage write failing, the writeback's own DB
-            // call) — rethrown so `consumeFromQueue` nacks and retries, and the quarantine file
-            // stays put for that retry to read.
+            /**
+             * Presumed TRANSIENT (disk full, a storage write failing, the writeback's own DB
+             * call) — rethrown so `consumeFromQueue` nacks and retries, and the quarantine file
+             * stays put for that retry to read.
+             */
             // Stryker disable next-line all
             logger.error({ message: 'Image digest worker failed.', error, key });
             throw error;
@@ -298,9 +311,11 @@ export const enqueueImageDigest = (
             ).then(() => urls)
         );
 
-    // No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
-    // the broker is unconfigured, which the `!published` branch below runs inline exactly as a
-    // configured-but-unreachable broker would — one fallback covers both.
+    /**
+     * No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
+     * the broker is unconfigured, which the `!published` branch below runs inline exactly as a
+     * configured-but-unreachable broker would — one fallback covers both.
+     */
     return publishToQueue<ImageDigestJobPayload>({
         queue: IMAGE_QUEUE,
         payload

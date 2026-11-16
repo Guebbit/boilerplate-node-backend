@@ -16,7 +16,6 @@ import type { ReturnDocument } from '../model';
  * A return in export shape — what the customer wrote, what staff wrote back to them
  * (`declineReason` and `declineMessage`: mailed to the customer and on their own `GET /returns`) and where it
  * stands. Never the deciding staff member's id.
- * @param returned - the return
  */
 const toExportReturn = (returned: ReturnDocument): ExportReturn => ({
     id: String(returned._id),

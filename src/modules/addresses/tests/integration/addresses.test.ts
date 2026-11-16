@@ -9,8 +9,10 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { createUser } from '@modules/users/tests/factories';
-// Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
-// barrel rules apply to tests too), so this reaches the sibling file directly.
+/**
+ * Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
+ * barrel rules apply to tests too), so this reaches the sibling file directly.
+ */
 import { addressService } from '../../service';
 import { addressBookModel } from '../../model';
 import { HOME, OFFICE } from './fixtures';
@@ -25,6 +27,9 @@ const labelsOf = (userId: string) =>
 const withCap = (body: () => Promise<void>) =>
     withEnvironmentOverrides({ NODE_ADDRESS_BOOK_MAX: '3' }, body);
 
+/**
+ * The caller's default addresses, read through the service; the invariant says there is at most one.
+ */
 const defaults = async (userId: string) => {
     const view = await addressService.list(userId);
     return view.addresses.filter(({ default: isDefault }) => isDefault);
@@ -131,8 +136,10 @@ describe('adding an entry that claims the default', () => {
         expect(await labelsOf(user.id)).toHaveLength(2);
     });
 
-    // In an update pipeline a string starting with `$` is a field path. The entry is wrapped in
-    // `$literal`, so user text is data: a label of `$items` stays the text `$items`.
+    /**
+     * In an update pipeline a string starting with `$` is a field path. The entry is wrapped in
+     * `$literal`, so user text is data: a label of `$items` stays the text `$items`.
+     */
     it('stores user text that looks like a pipeline field path as plain text', async () => {
         const user = await createUser();
         await addressService.create(user.id, HOME);
@@ -154,7 +161,7 @@ describe('adding an entry that claims the default', () => {
     });
 });
 
-/*
+/**
  * One book is ONE document, and entries are PII-encrypted, so a book that grows without bound
  * walks toward the 16 MB document limit and breaks its owner's own writes. The cap is in the
  * update's filter, so it holds under concurrency too.
@@ -248,8 +255,10 @@ describe('PII at rest', () => {
         const user = await createUser();
         await addressService.create(user.id, { ...HOME, phone: '+39 059 000001' });
 
-        // Bypasses the repository's own decrypt on purpose — this is what a raw DB read, or a
-        // stolen disk/backup, would actually see.
+        /**
+         * Bypasses the repository's own decrypt on purpose — this is what a raw DB read, or a
+         * stolen disk/backup, would actually see.
+         */
         const stored = await addressBookModel.findOne({ userId: user._id }).lean();
         const [entry] = stored?.items ?? [];
 

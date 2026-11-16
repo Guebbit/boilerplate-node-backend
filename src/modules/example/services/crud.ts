@@ -8,7 +8,7 @@
  * Who may see or change which row is not decided by hand: `accessibleFilterFor` compiles the
  * caller's keys (`authorization.yaml`) into the query, so a row you may not touch is simply not found.
  *
- * @see docs/understand/layers.md
+ * @see docs/understand/layers.md#example-from-this-repo
  */
 
 import type {
@@ -238,7 +238,6 @@ export const updateById = (
 /**
  * Delete an example already loaded and cleared, its cover image with it, and audit it.
  *
- * @param example - the loaded example
  * @param context - the caller
  */
 const deleteLoaded = (

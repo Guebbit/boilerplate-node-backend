@@ -24,9 +24,11 @@ const RETENTION_SECONDS =
 
 describe('auditLogSchema — what an entry must carry', () => {
     it('requires who, in which world, what, how it went, when and at what level', () => {
-        // The six that make an entry answerable. Everything else — ip, user agent, request and
-        // trace ids, the target, the metadata — enriches an entry that is already complete, and
-        // is absent on events that genuinely have none (a scheduled job has no IP).
+        /**
+         * The six that make an entry answerable. Everything else — ip, user agent, request and
+         * trace ids, the target, the metadata — enriches an entry that is already complete, and
+         * is absent on events that genuinely have none (a scheduled job has no IP).
+         */
         expect(requiredPaths(auditLogSchema)).toEqual([
             'action',
             'actorRole',
@@ -39,9 +41,11 @@ describe('auditLogSchema — what an entry must carry', () => {
     });
 
     it('restricts the role, the outcome and the level to closed sets', () => {
-        // These three are queried and aggregated on. A free-form value would not error; it would
-        // quietly fall outside every filter an operator writes, which is indistinguishable from
-        // the event never happening.
+        /**
+         * These three are queried and aggregated on. A free-form value would not error; it would
+         * quietly fall outside every filter an operator writes, which is indistinguishable from
+         * the event never happening.
+         */
         expect(enumOf(auditLogSchema, 'actorRole')).toEqual([
             'admin',
             'user',
@@ -53,14 +57,18 @@ describe('auditLogSchema — what an entry must carry', () => {
     });
 
     it('includes anonymous as a role, so an unauthenticated event is still attributable', () => {
-        // A failed login has no user. Without this value the entry that matters most — the one
-        // before an account is taken — has nowhere to record who it was not.
+        /**
+         * A failed login has no user. Without this value the entry that matters most — the one
+         * before an account is taken — has nowhere to record who it was not.
+         */
         expect(enumOf(auditLogSchema, 'actorRole')).toContain('anonymous');
     });
 
     it('carries the real role name beside the closed bucket, open and optional', () => {
-        // Open where `actorRole` is closed: a preset role renamed in `authorization-roles.yaml`
-        // must not fail a write, so no enum and no `required` — see `AuditEvent.actorRoleName`.
+        /**
+         * Open where `actorRole` is closed: a preset role renamed in `authorization-roles.yaml`
+         * must not fail a write, so no enum and no `required` — see `AuditEvent.actorRoleName`.
+         */
         expect(pathNames(auditLogSchema)).toContain('actorRoleName');
         expect(requiredPaths(auditLogSchema)).not.toContain('actorRoleName');
         expect(enumOf(auditLogSchema, 'actorRoleName')).toEqual([]);
@@ -69,8 +77,10 @@ describe('auditLogSchema — what an entry must carry', () => {
 
 describe('auditLogSchema — the credential behind an entry', () => {
     it('stores the api-key id, open and optional', () => {
-        // Strict mode drops a field the schema lacks, so without this path a stored row could
-        // never say "done with an API key" although the event carries it.
+        /**
+         * Strict mode drops a field the schema lacks, so without this path a stored row could
+         * never say "done with an API key" although the event carries it.
+         */
         expect(pathNames(auditLogSchema)).toContain('actorCredentialId');
         expect(requiredPaths(auditLogSchema)).not.toContain('actorCredentialId');
     });
@@ -78,25 +88,31 @@ describe('auditLogSchema — the credential behind an entry', () => {
 
 describe('auditLogSchema — options', () => {
     it('stamps entries from the event, not from the write', () => {
-        // `timestamps: false` and a required `timestamp`. The row is written by whatever drained
-        // the queue, which can be seconds or a restart later; the entry is about when it happened.
+        /**
+         * `timestamps: false` and a required `timestamp`. The row is written by whatever drained
+         * the queue, which can be seconds or a restart later; the entry is about when it happened.
+         */
         expect(optionsOf(auditLogSchema).timestamps).toBe(false);
         expect(requiredPaths(auditLogSchema)).toContain('timestamp');
     });
 
     it('fails an audit write outright rather than buffering it', () => {
-        // The caller's fallback is to log the entry where it will at least be collected, and it
-        // can only take that path if the write rejects. A buffer that resolves later removes the
-        // signal — `auditSinkFailuresTotal` counts exactly this — and the entry is lost silently.
+        /**
+         * The caller's fallback is to log the entry where it will at least be collected, and it
+         * can only take that path if the write rejects. A buffer that resolves later removes the
+         * signal — `auditSinkFailuresTotal` counts exactly this — and the entry is lost silently.
+         */
         expect(optionsOf(auditLogSchema).bufferCommands).toBe(false);
     });
 });
 
 describe('auditLogSchema — indexes and retention', () => {
     it('indexes the four questions an operator or a moderator asks, newest first', () => {
-        // "What did this account do", "who did this action", "what happened to this row" and
-        // "whose data was this about" — all four read latest-first, which is what the `-1` buys. The fifth index is the
-        // retention sweep below.
+        /**
+         * "What did this account do", "who did this action", "what happened to this row" and
+         * "whose data was this about" — all four read latest-first, which is what the `-1` buys. The fifth index is the
+         * retention sweep below.
+         */
         expect(indexSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: action+1, timestamp-1',
             'actorUserId_1_timestamp_-1: actorUserId+1, timestamp-1',
@@ -107,9 +123,11 @@ describe('auditLogSchema — indexes and retention', () => {
     });
 
     it('expires entries at the configured retention window, and only those', () => {
-        // The one place documents are deleted by the database. Asserted against the configured
-        // window rather than a literal, so changing `NODE_AUDIT_RETENTION_DAYS` moves the policy
-        // and the test together — and so a TTL appearing on a different index fails here.
+        /**
+         * The one place documents are deleted by the database. Asserted against the configured
+         * window rather than a literal, so changing `NODE_AUDIT_RETENTION_DAYS` moves the policy
+         * and the test together — and so a TTL appearing on a different index fails here.
+         */
         expect(indexOptionSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: (none)',
             'actorUserId_1_timestamp_-1: (none)',
@@ -120,9 +138,11 @@ describe('auditLogSchema — indexes and retention', () => {
     });
 
     it('expires ascending by timestamp, which is the direction a TTL index needs', () => {
-        // Mongo only honours `expireAfterSeconds` on a single-field ascending index. The same
-        // field appears descending in the two compound indexes above; getting these confused
-        // produces an index that silently never deletes anything.
+        /**
+         * Mongo only honours `expireAfterSeconds` on a single-field ascending index. The same
+         * field appears descending in the two compound indexes above; getting these confused
+         * produces an index that silently never deletes anything.
+         */
         expect(indexSpecs(auditLogSchema)).toContain('timestamp_1: timestamp+1');
     });
 });

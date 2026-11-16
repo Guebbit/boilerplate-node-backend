@@ -11,7 +11,7 @@
  *
  * Runs on the bundled document, like the other post-bundle steps in `./openapi-bundle`.
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#what-a-fragment-contains
  */
 
 import { operationsOf, type Operation, type Step } from './openapi-document';

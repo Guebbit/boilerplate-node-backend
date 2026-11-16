@@ -19,8 +19,10 @@ import {
     withdrawUntilFrom
 } from '../../domain';
 
+/** One day in milliseconds. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** The instant the withdrawal window is judged at. */
 const NOW = new Date('2026-03-10T12:00:00Z');
 
 describe('withdrawalStartFor', () => {
@@ -170,8 +172,10 @@ describe('isBeforeDispatch', () => {
     );
 
     it('reads a processing order that shipped in part as past the shop’s hands', () => {
-        // The shipment is the fact, not the status: refunding this whole would refund goods the
-        // buyer already holds.
+        /**
+         * The shipment is the fact, not the status: refunding this whole would refund goods the
+         * buyer already holds.
+         */
         expect(
             isBeforeDispatch({ status: OrderStatus.processing, fulfillment: { shipped: true } })
         ).toBe(false);

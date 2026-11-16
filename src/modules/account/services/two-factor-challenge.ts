@@ -122,8 +122,10 @@ const redeemChallenge = (
     amr: VerifiedChallenge['amr'],
     challenge: string
 ): Promise<ResponseSuccess<VerifiedChallenge> | ResponseReject> =>
-    // No action of its own to commit with the spend: the second factor was already proven and
-    // consumed, each by its own atomic write.
+    /**
+     * No action of its own to commit with the spend: the second factor was already proven and
+     * consumed, each by its own atomic write.
+     */
     spendThen(MFA_CHALLENGE_TOKEN_TYPE, challenge, () => Promise.resolve(true)).then(
         (spentByThisRequest) =>
             spentByThisRequest
@@ -151,8 +153,10 @@ export const verifyLoginChallenge = (
         .then<ResponseSuccess<VerifiedChallenge> | ResponseReject>((found) => {
             if (!found) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
             const { user, entry } = found;
-            // A challenge names how its first factor was proven; one without is refused rather
-            // than defaulted to a password proof it never made.
+            /**
+             * A challenge names how its first factor was proven; one without is refused rather
+             * than defaulted to a password proof it never made.
+             */
             if (!user.twoFactorEnabledAt || !entry.amr) return generateReject(401, []);
             const { amr } = entry;
 
@@ -162,9 +166,11 @@ export const verifyLoginChallenge = (
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
-    // Failure only: a successful challenge is not itself a completed login — `postLoginTwoFactor`
-    // fires `AUTH_LOGIN` once a session actually exists. Auditing success here too would claim a
-    // login happened before it has.
+    /**
+     * Failure only: a successful challenge is not itself a completed login — `postLoginTwoFactor`
+     * fires `AUTH_LOGIN` once a session actually exists. Auditing success here too would claim a
+     * login happened before it has.
+     */
     return outcome.then((result) => {
         if (!result.success)
             recordAudit(context, {

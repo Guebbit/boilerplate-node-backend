@@ -9,7 +9,7 @@
  * they are registered before the config gate and any request.
  * `src/cluster.ts` is the other entry (`npm run start:cluster`, a bare VM with no process manager).
  *
- * @see docs/understand/clustering.md
+ * @see docs/understand/clustering.md#two-ways-to-run-it
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';

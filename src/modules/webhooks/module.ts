@@ -11,7 +11,7 @@
  * Deleting this module is then enough to stop the queue meaning anything, with nothing left to
  * also delete in `app/`.
  *
- * @see docs/modules/webhooks.md
+ * @see docs/modules/webhooks.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -50,7 +50,7 @@ export default {
     jobs: webhooksJobs,
     locales: path.join(__dirname, 'locales'),
     onRegistered,
-    /*
+    /**
      * `handler: processDeliveryJob` directly, no separate guard in front of it: `schema` below
      * already refuses a job missing any required field before `consumeFromQueue` ever calls the
      * handler (`infrastructure/adapters/queue.ts`'s `handleDelivery`), so a check repeating that
@@ -70,11 +70,13 @@ export default {
     config: [webhooksConfig.slice],
     // Every subscription's signing-secret ring is encrypted at rest.
     reencrypt: webhooksService.reencryptWebhookSecrets,
-    // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
-    // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
-    // duplicates personal data that `users` already owns, and no email is stored at all. The
-    // pointer is forgotten when that account is erased; `collect` resolves nothing, so the
-    // section appears in no export (the precedent is `account`'s `accountExports`).
+    /**
+     * `ownerUserId` on a subscription points at whoever configured the shop's integration — an
+     * operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
+     * duplicates personal data that `users` already owns, and no email is stored at all. The
+     * pointer is forgotten when that account is erased; `collect` resolves nothing, so the
+     * section appears in no export (the precedent is `account`'s `accountExports`).
+     */
     personalData: [
         {
             section: 'webhookOwnership',

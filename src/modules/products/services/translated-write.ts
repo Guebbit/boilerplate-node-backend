@@ -148,8 +148,10 @@ export const updateById = async (
         : undefined;
     if (plan && !isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 
-    // An upsert at the fallback locale is the only slot that touches the derived index column;
-    // `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
+    /**
+     * An upsert at the fallback locale is the only slot that touches the derived index column;
+     * `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
+     */
     const fallbackEntry = translations?.[getFallbackLocale()];
     const derivedFields = fallbackEntry
         ? {

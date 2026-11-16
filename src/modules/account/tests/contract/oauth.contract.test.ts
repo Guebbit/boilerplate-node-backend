@@ -151,8 +151,10 @@ describe('GET /account/oauth/:provider/callback', () => {
         const stateCookie = setCookie(start, '__Host-oauth_state')!.split(';', 1)[0];
         const callbackUrl = new URL(start.headers.location);
 
-        // The state cookie rides along, the verifier does not — the trap the build order warns
-        // about: this must fail closed, not silently redeem the code with no PKCE at all.
+        /**
+         * The state cookie rides along, the verifier does not — the trap the build order warns
+         * about: this must fail closed, not silently redeem the code with no PKCE at all.
+         */
         const response = await api()
             .get(callbackUrl.pathname + callbackUrl.search)
             .set('Cookie', stateCookie);
@@ -325,9 +327,11 @@ describe('GET /account/oauth/:provider/callback', () => {
         const start = await api().get('/account/oauth/fake');
         const callbackUrl = new URL(start.headers.location);
 
-        // A raw HTTP client can set any cookie it likes on the callback request directly —
-        // `httpOnly` only keeps a BROWSER's own script off it, not a client that skips the
-        // browser. The callback must re-validate, not trust the cookie on its name alone.
+        /**
+         * A raw HTTP client can set any cookie it likes on the callback request directly —
+         * `httpOnly` only keeps a BROWSER's own script off it, not a client that skips the
+         * browser. The callback must re-validate, not trust the cookie on its name alone.
+         */
         const response = await api()
             .get(callbackUrl.pathname + callbackUrl.search)
             .set(
@@ -344,8 +348,10 @@ describe('GET /account/oauth/:provider/callback', () => {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const start = await api().get('/account/oauth/fake');
             const callbackUrl = new URL(start.headers.location);
-            // Sequential on purpose: the second attempt only matters once the first has actually
-            // landed — running them concurrently would test a race, not this.
+            /**
+             * Sequential on purpose: the second attempt only matters once the first has actually
+             * landed — running them concurrently would test a race, not this.
+             */
             await api()
                 .get(callbackUrl.pathname + callbackUrl.search)
                 .set('Cookie', attemptCookies(start));
@@ -355,8 +361,10 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(matches).toBe(1);
     });
 
-    // An admin logging in through an already-linked identity is audited/metriced as an admin, not
-    // a plain user: table-driven across every login path now, in `login-paths.contract.test.ts`.
+    /**
+     * An admin logging in through an already-linked identity is audited/metriced as an admin, not
+     * a plain user: table-driven across every login path now, in `login-paths.contract.test.ts`.
+     */
 });
 
 /**
@@ -381,9 +389,11 @@ const fakeLogin = async (continueTo?: string, provider = 'fake') => {
         .set('Cookie', cookies);
 };
 
-// A deactivated or soft-deleted account's already-linked identity refusing the login, with no
-// session and no successful AUTH_LOGIN, is table-driven across every login path now, in
-// `login-paths.contract.test.ts`.
+/**
+ * A deactivated or soft-deleted account's already-linked identity refusing the login, with no
+ * session and no successful AUTH_LOGIN, is table-driven across every login path now, in
+ * `login-paths.contract.test.ts`.
+ */
 
 describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
     it('challenges instead of minting a session, and mints one only once the code is answered', async () => {
@@ -400,8 +410,10 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 0) });
 
-        // Second login: the same linked identity, now with 2FA armed. `continue` must survive
-        // the MFA detour too — the frontend's 2FA step forwards it on once the code is answered.
+        /**
+         * Second login: the same linked identity, now with 2FA armed. `continue` must survive
+         * the MFA detour too — the frontend's 2FA step forwards it on once the code is answered.
+         */
         const challenged = await fakeLogin('/checkout');
 
         expect(challenged.status).toBe(302);
@@ -417,8 +429,10 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         expect(setCookie(challenged, 'isAuth')).toBeUndefined();
         expect(setCookie(challenged, '__Host-oauth_mfa_challenge')).toBeTruthy();
 
-        // The challenge token never left the server — only its cookie did. `code` alone in the
-        // body, carrying the cookie, is what a real browser can actually do here.
+        /**
+         * The challenge token never left the server — only its cookie did. `code` alone in the
+         * body, carrying the cookie, is what a real browser can actually do here.
+         */
         const finished = await api()
             .post('/account/login/2fa')
             .set('Cookie', setCookie(challenged, '__Host-oauth_mfa_challenge')!)

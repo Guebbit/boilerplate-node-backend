@@ -5,6 +5,7 @@
 import type { AnalyticsEventRequest, CallerContext } from '@types';
 import { asStub } from '@tests/stub';
 
+/** Stands in for the analytics provider's emit; the cases assert what the relay passed it. */
 const mockEmit = jest.fn();
 
 jest.mock('@infrastructure/observability/analytics', () => ({

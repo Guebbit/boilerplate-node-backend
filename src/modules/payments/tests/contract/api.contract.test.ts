@@ -32,11 +32,14 @@ import { transferOrder as openTransferOrder } from '../factories';
 
 setupTestDb();
 
-// Literals, not imported from the fake PSP's file — a contract test's inputs come from what the
-// provider's own documentation publishes (`pm_card_visa` succeeds, `pm_card_declined` is refused),
-// not from the code the contract describes. Importing the double would make a rename of either
-// value pass silently while this test quietly stopped meaning anything.
+/**
+ * Literals, not imported from the fake PSP's file — a contract test's inputs come from what the
+ * provider's own documentation publishes (`pm_card_visa` succeeds, `pm_card_declined` is refused),
+ * not from the code the contract describes. Importing the double would make a rename of either
+ * value pass silently while this test quietly stopped meaning anything.
+ */
 const GOOD_METHOD = 'pm_card_visa';
+/** The provider test payment method that always declines. */
 const DECLINE_METHOD = 'pm_card_declined';
 
 /** Logs a customer in with one pending order, returning both. */
@@ -185,8 +188,10 @@ describe('POST /payments', () => {
         });
     });
 
-    // A 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
-    // row an order can have, so it answers 200 — the same payment, no second Location.
+    /**
+     * A 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
+     * row an order can have, so it answers 200 — the same payment, no second Location.
+     */
     it('answers 200 for the same intent when asked again, and 201 with a Location only the first time', async () => {
         const { bearer, order } = await authenticateWithOrder();
         const ask = () =>
@@ -206,9 +211,11 @@ describe('POST /payments', () => {
     });
 
     it('never publishes the provider reference, and returns the client secret only here', async () => {
-        // Two opposite rules on one response. `providerRef` operates on real money at the provider
-        // and no client has an operation that needs it. `clientSecret` authorises COMPLETING this
-        // payment, so it must reach the browser exactly once and be stored nowhere.
+        /**
+         * Two opposite rules on one response. `providerRef` operates on real money at the provider
+         * and no client has an operation that needs it. `clientSecret` authorises COMPLETING this
+         * payment, so it must reach the browser exactly once and be stored nowhere.
+         */
         const { bearer, order } = await authenticateWithOrder();
 
         const intent = await api()
@@ -301,8 +308,10 @@ describe('POST /payments/{id}/confirm', () => {
             const response = await api()
                 .post(`/payments/${paymentId}/confirm`)
                 .set('Authorization', bearer)
-                // The contract wants a provider handle, which always holds a letter: every
-                // spelling of a card number (spaces, digits only, dashes, underscores) is a 422.
+                /**
+                 * The contract wants a provider handle, which always holds a letter: every
+                 * spelling of a card number (spaces, digits only, dashes, underscores) is a 422.
+                 */
                 .send({ paymentMethodRef });
 
             expect(response.status).toBe(422);
@@ -313,8 +322,10 @@ describe('POST /payments/{id}/confirm', () => {
         ['too short', 'ab'],
         ['too long', 'a'.repeat(256)]
     ])('matches the error contract for a %s method reference', async (_label, paymentMethodRef) => {
-        // The contract states minLength: 3 and maxLength: 255 — only the `pattern` half (spaces,
-        // above) was ever exercised, so a length regression on either bound had nothing to fail it.
+        /**
+         * The contract states minLength: 3 and maxLength: 255 — only the `pattern` half (spaces,
+         * above) was ever exercised, so a length regression on either bound had nothing to fail it.
+         */
         const { bearer, paymentId } = await authenticateWithIntent();
 
         const response = await api()
@@ -333,8 +344,10 @@ describe('POST /payments/{id}/confirm', () => {
             .set('Authorization', bearer)
             .send({ paymentMethodRef: 'pm_card_authentication_required' });
 
-        // A 4xx here would tell the browser to stop, and the browser is the only thing that can
-        // answer the challenge.
+        /**
+         * A 4xx here would tell the browser to stop, and the browser is the only thing that can
+         * answer the challenge.
+         */
         expect(response.status).toBe(200);
         expect(response.body.status).toBe('requires_action');
         // The answer replaces the stored payment: without `sync` the Finish button would vanish.
@@ -360,10 +373,12 @@ describe('POST /payments/{id}/sync', () => {
     });
 
     it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
-        // Not the idempotency test its old name claimed — this calls sync exactly ONCE, against a
-        // payment the confirm above already settled. What it actually pins is the terminal
-        // early-return branch: a payment outside SETTLEABLE_PAYMENT_STATUSES is answered from the
-        // row alone, spending no call to be told what it already knows.
+        /**
+         * Not the idempotency test its old name claimed — this calls sync exactly ONCE, against a
+         * payment the confirm above already settled. What it actually pins is the terminal
+         * early-return branch: a payment outside SETTLEABLE_PAYMENT_STATUSES is answered from the
+         * row alone, spending no call to be told what it already knows.
+         */
         const { bearer, paymentId } = await authenticateWithIntent();
         await api()
             .post(`/payments/${paymentId}/confirm`)
@@ -501,8 +516,10 @@ describe('POST /payments/webhook/{provider}', () => {
     });
 
     it('verifies the signature over the raw body whatever the case of the path', async () => {
-        // Express routes `/Payments/Webhook` to the same handler; the raw-body allowlist must match
-        // it too, or the handler sees no raw body and refuses a delivery that is validly signed.
+        /**
+         * Express routes `/Payments/Webhook` to the same handler; the raw-body allowlist must match
+         * it too, or the handler sees no raw body and refuses a delivery that is validly signed.
+         */
         const { paymentId, providerRef } = await preparedPayment();
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
 
@@ -551,9 +568,11 @@ describe('POST /payments/webhook/{provider}', () => {
     });
 
     it('answers 204 with no body, not the payment every other route answers', async () => {
-        // A deliberate shape difference: the caller is a machine with no use for the payment back.
-        // This is the assertion that catches a controller change that started leaking the payment
-        // into the webhook's response.
+        /**
+         * A deliberate shape difference: the caller is a machine with no use for the payment back.
+         * This is the assertion that catches a controller change that started leaking the payment
+         * into the webhook's response.
+         */
         const { providerRef } = await preparedPayment();
 
         const response = await deliver({ id: 'evt_envelope_shape', providerRef });
@@ -578,8 +597,10 @@ describe('POST /payments/webhook/{provider}', () => {
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const event = { id: `evt_replay_${paymentId}`, providerRef };
 
-        // What the conditional writes actually protect: `first`/`replay` alone answer 204 on both
-        // branches, so a status-only assertion can never fail on a double settlement.
+        /**
+         * What the conditional writes actually protect: `first`/`replay` alone answer 204 on both
+         * branches, so a status-only assertion can never fail on a double settlement.
+         */
         const commitSpy = jest.spyOn(inventoryService, 'commitForOrder');
         const statusChanges: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => {
@@ -713,9 +734,11 @@ const freshKey = (): string => randomUUID();
 
 describe('POST /payments/{id}/refunds', () => {
     it('refuses the order`s own owner — the refund is staff-only', async () => {
-        // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
-        // admin status would let exactly this caller through, and a stranger's order would not
-        // have caught it.
+        /**
+         * "Own order" matters here specifically: a mis-ordered guard that checked ownership before
+         * admin status would let exactly this caller through, and a stranger's order would not
+         * have caught it.
+         */
         const { bearer, paymentId } = await paidOrder();
 
         const response = await api()
@@ -778,8 +801,10 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         expect(response.headers.location).toBe(
             `/payments/${paymentId}/refunds/${String(response.body.id)}`
         );
-        // The payment is read again for the running totals: `status` stays `succeeded` after a
-        // refund; `displayStatus` and `amountRefunded` say how much went back.
+        /**
+         * The payment is read again for the running totals: `status` stays `succeeded` after a
+         * refund; `displayStatus` and `amountRefunded` say how much went back.
+         */
         const reread = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
         expect(reread.body.status).toBe('succeeded');
         expect(reread.body.displayStatus).toBe('refunded');

@@ -79,9 +79,11 @@ export const encryptVersionedSecret = (
 ): string => {
     const { version, key } = ring[0];
     const iv = randomBytes(12);
-    // AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
-    // length, so it is stretched with HKDF-SHA256 (`purpose` is the HKDF `info`, the domain
-    // separation between rings) — see `./subkey`.
+    /**
+     * AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
+     * length, so it is stretched with HKDF-SHA256 (`purpose` is the HKDF `info`, the domain
+     * separation between rings) — see `./subkey`.
+     */
     const cipher = createCipheriv('aes-256-gcm', deriveSubkey(key, binding.purpose), iv);
     // Associated data: authenticated but not stored, so it must be re-supplied to decrypt.
     cipher.setAAD(Buffer.from(binding.aad, 'utf8'));
@@ -121,9 +123,11 @@ export const decryptVersionedSecret = (
         'aes-256-gcm',
         deriveSubkey(configured.key, binding.purpose),
         Buffer.from(ivHex, 'hex'),
-        // The full 16-byte tag `encryptVersionedSecret` writes. Unset, Node also accepts a tag
-        // truncated to as little as 4 bytes, which is far easier to forge.
-        // https://nodejs.org/api/crypto.html#cryptocreatedecipherivalgorithm-key-iv-options
+        /**
+         * The full 16-byte tag `encryptVersionedSecret` writes. Unset, Node also accepts a tag
+         * truncated to as little as 4 bytes, which is far easier to forge.
+         * https://nodejs.org/api/crypto.html#cryptocreatedecipherivalgorithm-key-iv-options
+         */
         { authTagLength: AUTH_TAG_BYTES }
     );
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));

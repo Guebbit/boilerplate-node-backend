@@ -4,7 +4,7 @@
  * 404 (an unknown id and a malformed one answer the same). Here: `GET /examples/:id`, which sits
  * above the auth gate because a published example is open to anyone.
  *
- * @see docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
  */
 
 import { callerContextOf } from '@infrastructure/http/request';

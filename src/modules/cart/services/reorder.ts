@@ -61,8 +61,10 @@ export const reorderIntoCart = (
             }));
 
             return mergeLines(userId, requested, context).then((lines) => {
-                // Nothing landed: every line is gone from the catalogue or found the cart full.
-                // A full cart is the news the shopper can act on, so it is the one named.
+                /**
+                 * Nothing landed: every line is gone from the catalogue or found the cart full.
+                 * A full cart is the news the shopper can act on, so it is the one named.
+                 */
                 const unaddable = lines.every(
                     ({ reason }) => reason === 'removed' || reason === 'cart_full'
                 );

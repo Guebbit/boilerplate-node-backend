@@ -56,9 +56,11 @@ export const createListController = <TSchema extends ZodType, TResult>({
     const operation = operationName('get', entity);
 
     return namedHandler(operation, (request: Request, response: Response) => {
-        // readInput merges the query string into one object per the `list` surface's rules
-        // (docs/understand/request-input.md); parseBody then validates it against the query
-        // schema, 422ing and returning undefined on failure.
+        /**
+         * readInput merges the query string into one object per the `list` surface's rules
+         * (docs/understand/request-input.md); parseBody then validates it against the query
+         * schema, 422ing and returning undefined on failure.
+         */
         const parsed = parseBody(
             schema,
             readInput(request, { ...input, surface: 'list' }),

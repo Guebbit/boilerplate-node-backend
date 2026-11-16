@@ -5,8 +5,8 @@ audience: [developer]
 
 # Cluster testing
 
-`npm run test:cluster` — the only suite that boots `src/cluster.ts` and forks real worker
-processes. One cluster plus a refusal boot, about 25 seconds, and it needs a Redis. A third case, `tests/cluster/redis-idle.test.ts`, forks nothing: it leaves one real shared Redis client idle past its socket ceiling and checks the keepalive holds it open.
+`npm run test:cluster` — the suites that boot the app as several processes: `src/cluster.ts` with real worker
+processes, and separate copies behind a proxy ([below](#the-multi-copy-suite)). The whole run takes about 80 seconds and needs a Redis. A third case, `tests/cluster/redis-idle.test.ts`, forks nothing: it leaves one real shared Redis client idle past its socket ceiling and checks the keepalive holds it open.
 
 ## What it is for, and why nothing else could do it
 
@@ -17,7 +17,7 @@ does not care whether the two callers share an event loop.
 
 One process cannot observe the class of bug this directory exists for: **state that is correct
 within a worker and absent across the cluster.** A per-process counter is indistinguishable from a
-shared one when there is only one process. Cluster mode (`npm run start:cluster`) forks a worker per CPU, and `--scale app=N` runs several processes, so every such bug is
+shared one when there is only one process. Cluster mode (`npm run start:cluster`) forks a worker per CPU, and orchestrator replicas run several processes, so every such bug is
 real there and unreachable from the rest of the suite.
 
 The first target is the rate limiter, because it is the one where the gap is a security control:
@@ -80,9 +80,49 @@ it talks to a Docker socket, and this repo is podman-first (see
 `DOCKER_HOST` everywhere — a new dependency _and_ a workaround for it. Starting a container with
 the engine the repo already names is thirty lines and no dependency.
 
+## The multi-copy suite
+
+`tests/replicas/` is the same idea with the shape an orchestrator gives you: N **separate**
+single-process copies (`node --import tsx src/main.ts`, `NODE_ENABLE_CLUSTERING=0`, one port each) behind a
+round-robin proxy written with `node:http`, over one Mongo and one Redis. It runs under the same
+`npm run test:cluster`, so it is already in `complete:manual` and in CI's `cluster` job.
+
+```mermaid
+flowchart LR
+  T[jest case] --> P[round-robin proxy<br/>keep-alive, polls /readyz every 250 ms]
+  P --> A[copy A] & B[copy B] & C[copy C]
+  A & B & C --> M[(one Mongo)] & R[(one Redis)]
+  T -. direct .-> A
+```
+
+The proxy acts like a real balancer on purpose: per-request round robin over the copies whose
+`/readyz` answers 200, pooled keep-alive sockets, `X-Forwarded-For` appended, answers streamed
+unbuffered, its own 502s and 503s counted. Every copy gets the proxy's address as `NODE_URL`,
+because a token's issuer is that address and real replicas share one.
+
+| Case                                | Asserts                                                                     |
+| ----------------------------------- | --------------------------------------------------------------------------- |
+| one rate-limit budget across copies | exactly `LIMIT` allowed through the proxy; at least two copies answered     |
+| a session across copies             | login anywhere, use on every copy, refresh on B, logout on C kills A        |
+| one write for one `Idempotency-Key` | same key on two copies at once: one 201, the other replayed or 409; one row |
+
+Every case ends on a control that breaks when the rig does: the proxy's spread shows at least two
+copies answered, or the assertion is about a second copy by name. A case that only passes when
+the rig is broken would be worse than none.
+
+Two harness rules that bit:
+
+- Each copy is signalled by its own pid with one `SIGTERM` (the cluster harness signals a process
+  group; through `npx` a copy would be told twice).
+- `tests/replicas/` is ignored by `jest.config.js` and `stryker.json`, next to `tests/cluster/`:
+  a copy needs its own Mongo and a real port, not the shared in-process setup.
+
+A "scheduled job runs once" case is not here: `tests/integration/persistence/lease.test.ts` already
+proves the Mongo atomicity two callers contend on, and a second process adds nothing to it.
+
 ## Why it is not in `complete`
 
-~25 seconds and a container engine, on a gate that otherwise runs in about ninety. It sits in
+~80 seconds and a container engine, on a gate that otherwise runs in about ninety. It sits in
 `complete:manual` — the same category as `test:prism`, which also binds a real port — and runs in
 CI on every push, where a Redis service container is already there.
 

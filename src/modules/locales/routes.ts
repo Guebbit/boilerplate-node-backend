@@ -73,26 +73,32 @@ const publicLocaleCache = setCache(HOUR_SECONDS, {
     scopeKey: (request: Request) => hasAnonymousReadScope(localeService.callerScope, request.caller)
 });
 
-// GET /locales — which languages this deployment offers, and what each of them can do.
-// `getAuth` (and only that: no token still answers) so an admin's manifest can include the
-// inactive rows a visitor is not offered. Before the cache, whose `scopeKey` reads that caller.
+/**
+ * GET /locales — which languages this deployment offers, and what each of them can do.
+ * `getAuth` (and only that: no token still answers) so an admin's manifest can include the
+ * inactive rows a visitor is not offered. Before the cache, whose `scopeKey` reads that caller.
+ */
 router.get('/', getAuth, publicLocaleCache, getLocales);
 
 // GET /locales/apps — the keyspaces an entry can belong to. Before `/:locale`, see above.
 router.get('/apps', publicLocaleCache, getLocaleApps);
 
-// GET /locales/:locale/messages — the client's dictionary, out of the database.
-// `getAuth` (and only that: no token still answers) so staff can preview an inactive language.
+/**
+ * GET /locales/:locale/messages — the client's dictionary, out of the database.
+ * `getAuth` (and only that: no token still answers) so staff can preview an inactive language.
+ */
 router.get('/:locale/messages', getAuth, messagesCache, getLocaleMessages);
 
 // GET /locales/:locale/dictionary — the API's own dictionary, off the filesystem.
 router.get('/:locale/dictionary', publicLocaleCache, getLocaleDictionary);
 
-// GET /locales/:locale — one language, as the list shows it. `getAuth` for the same reason as the
-// list: staff see a switched-off language a visitor gets a 404 for.
+/**
+ * GET /locales/:locale — one language, as the list shows it. `getAuth` for the same reason as the
+ * list: staff see a switched-off language a visitor gets a 404 for.
+ */
 router.get('/:locale', getAuth, publicLocaleCache, getLocale);
 
-/*
+/**
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
  * feeds the screen those writes are made from.
  */
@@ -125,8 +131,10 @@ router.patch(
     updateLocale
 );
 
-// POST /locales/:locale/activate and /deactivate — switch a language on or off. `update:Locale`
-// like the edit: it was the same PATCH until `active` left the body.
+/**
+ * POST /locales/:locale/activate and /deactivate — switch a language on or off. `update:Locale`
+ * like the edit: it was the same PATCH until `active` left the body.
+ */
 router.post(
     '/:locale/activate',
     getAuth,
@@ -154,10 +162,12 @@ router.delete(
     deleteLocale
 );
 
-// Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-// `update:Locale`, not `read:Locale`: every visitor holds the read key — it is how
-// the shop renders in their language — and this is the EDITING screen, which lists every string
-// including the ones no page has asked for yet.
+/**
+ * Uncached on purpose — see the controller for why the editing screen is the one read that is not.
+ * `update:Locale`, not `read:Locale`: every visitor holds the read key — it is how
+ * the shop renders in their language — and this is the EDITING screen, which lists every string
+ * including the ones no page has asked for yet.
+ */
 router.get(
     '/:locale/entries',
     getAuth,
@@ -165,8 +175,10 @@ router.get(
     requirePermission('update', 'Locale'),
     getLocaleEntries
 );
-// One app's slice of the entries is a resource of its own — the app is a path segment, so a
-// PUT replaces exactly what the GET on the same URI lists. See `controllers/put-locale-entry.ts` and `controllers/update-locale-entries.ts`.
+/**
+ * One app's slice of the entries is a resource of its own — the app is a path segment, so a
+ * PUT replaces exactly what the GET on the same URI lists. See `controllers/put-locale-entry.ts` and `controllers/update-locale-entries.ts`.
+ */
 router.get(
     '/:locale/apps/:app/entries',
     getAuth,
@@ -234,7 +246,7 @@ router.delete(
     deleteLocaleEntry
 );
 
-/*
+/**
  * The translator's door onto user-authored content — generic across whatever `translatables`
  * declares, `product` in V1. Uncached, like `/:locale/entries` above: this is the screen someone
  * is actively typing into. Its own cache tag (the registry-declared one, `products` today) is

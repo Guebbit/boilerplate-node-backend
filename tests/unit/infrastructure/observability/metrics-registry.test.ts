@@ -6,6 +6,7 @@ jest.mock('@infrastructure/persistence/lease', () => ({
     listLeaseSummaries: jest.fn()
 }));
 
+/** The lease summaries reader, mocked. */
 const mockedListLeaseSummaries = jest.mocked(listLeaseSummaries);
 
 /** Drive `connection.readyState` without opening a database — same helper as `dependency-health.test.ts`. */

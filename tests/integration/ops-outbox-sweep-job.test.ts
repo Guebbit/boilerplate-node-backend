@@ -38,6 +38,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     ...jest.requireActual('@infrastructure/adapters/mailer'),
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert how it was called. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -49,7 +50,10 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-/** The backstop job, as declared. */
+/**
+ * The backstop job, as declared.
+ * @throws {Error} when the job is not declared
+ */
 const sweepOutbox = () => {
     const job = appJobs.find(({ name }) => name === 'sweep:outbox');
     if (!job) throw new Error('sweep:outbox is not declared');

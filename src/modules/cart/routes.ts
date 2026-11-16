@@ -36,45 +36,57 @@ import { checkoutLimiter, mergeLimiter } from './rate-limits';
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
 
-// All cart routes require authentication. Every signed-in account shops, staff included, so a
-// basket is always the caller's own and no rule gates the router.
+/**
+ * All cart routes require authentication. Every signed-in account shops, staff included, so a
+ * basket is always the caller's own and no rule gates the router.
+ */
 router.use(getAuth, isAuth);
 
 // GET /cart/summary
 router.get('/summary', getCartSummary);
 
-// POST /cart/checkout — money out. `checkout:Cart`: an unproven address must not be able to
-// place an order and start receiving order mail at an inbox nobody has confirmed it owns.
-// `idempotencyKey` in the same position as `POST /orders`' own (`orders/routes.ts`): a retried
-// checkout after a lost response must replay the order it already placed, never mint a second one.
-// The key is asked before the fresh session: a caller who can never pass is refused, not challenged.
+/**
+ * POST /cart/checkout — money out. `checkout:Cart`: an unproven address must not be able to
+ * place an order and start receiving order mail at an inbox nobody has confirmed it owns.
+ * `idempotencyKey` in the same position as `POST /orders`' own (`orders/routes.ts`): a retried
+ * checkout after a lost response must replay the order it already placed, never mint a second one.
+ * The key is asked before the fresh session: a caller who can never pass is refused, not challenged.
+ */
 router.post(
     '/checkout',
     requirePermission('checkout', 'Cart'),
     requireFreshAuth('critical'),
-    // After the permission, so a refused caller never spends it; before the idempotency ledger, so
-    // a replayed request still counts (a loop of retries is the thing being bounded).
+    /**
+     * After the permission, so a refused caller never spends it; before the idempotency ledger, so
+     * a replayed request still counts (a loop of retries is the thing being bounded).
+     */
     checkoutLimiter,
     idempotencyKey,
     invalidateCache(['products']),
     postCheckout
 );
 
-// POST /cart/merge — fold a guest cart in; one result per line comes back, and a line that could
-// not be added at all becomes a notification. `idempotencyKey` for the same reason as checkout's:
-// a retry after a lost response must replay the answer, never add the guest's quantities twice.
-// `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
+/**
+ * POST /cart/merge — fold a guest cart in; one result per line comes back, and a line that could
+ * not be added at all becomes a notification. `idempotencyKey` for the same reason as checkout's:
+ * a retry after a lost response must replay the answer, never add the guest's quantities twice.
+ * `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
+ */
 router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 
-// POST /cart/reorder {orderId} — copy one of the caller's own orders back into the cart. Merge-shaped
-// like `/cart/merge`, so keyed for the same reason: a retry must not add the order's quantities twice.
+/**
+ * POST /cart/reorder {orderId} — copy one of the caller's own orders back into the cart. Merge-shaped
+ * like `/cart/merge`, so keyed for the same reason: a retry must not add the order's quantities twice.
+ */
 router.post('/reorder', idempotencyKey, postReorder);
 
 // GET /cart
 router.get('/', getCart);
 
-// POST /cart/items — add a line, or grow the one already there. `idempotencyKey` so a retry after a
-// lost answer does not grow the line twice; a deliberate second click is a new key and still adds.
+/**
+ * POST /cart/items — add a line, or grow the one already there. `idempotencyKey` so a retry after a
+ * lost answer does not grow the line twice; a deliberate second click is a new key and still adds.
+ */
 router.post('/items', idempotencyKey, postCartItems);
 
 // DELETE /cart/items — clear every line

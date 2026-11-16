@@ -27,7 +27,6 @@ import type { ShipmentDocument } from '../model';
 
 /**
  * What a shipment carries, as an email lists it.
- * @param shipment - the shipment
  */
 const emailLines = (shipment: ShipmentDocument) =>
     shipment.lines.map(({ title, quantity }) => ({ title, quantity }));

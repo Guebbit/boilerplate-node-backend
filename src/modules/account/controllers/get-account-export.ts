@@ -52,8 +52,10 @@ export const getAccountExport = (request: Request, response: Response) => {
                 return undefined;
             }
 
-            // Express: `attachment(name)` sets `Content-Disposition: attachment; filename=…` (RFC 6266,
-            // encoded by the `content-disposition` package). The server owns the download's name.
+            /**
+             * Express: `attachment(name)` sets `Content-Disposition: attachment; filename=…` (RFC 6266,
+             * encoded by the `content-disposition` package). The server owns the download's name.
+             */
             response.attachment(`account-export-${opened.requestedDay}.json`);
             response
                 .status(200)
@@ -61,9 +63,11 @@ export const getAccountExport = (request: Request, response: Response) => {
                 // A person's whole data — never a shared cache, never the browser's disk cache.
                 .setHeader('Cache-Control', 'private, no-store');
 
-            // Node: pipes with backpressure and destroys both ends on error. Rejects if either
-            // side closes early (a client that hangs up mid-download).
-            // https://nodejs.org/api/stream.html#streampipelinesource-transforms-destination-options
+            /**
+             * Node: pipes with backpressure and destroys both ends on error. Rejects if either
+             * side closes early (a client that hangs up mid-download).
+             * https://nodejs.org/api/stream.html#streampipelinesource-transforms-destination-options
+             */
             return pipeline(opened.stream, response);
         })
         .catch((error: unknown) => {

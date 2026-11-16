@@ -13,7 +13,7 @@
  * of the conditional write that re-asserts it while mongod holds the document, and a `Set` would
  * need re-spreading for the second.
  *
- * @see docs/understand/tactical-ddd.md
+ * @see docs/understand/tactical-ddd.md#who-writes-the-status
  */
 
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
@@ -276,8 +276,10 @@ export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts
  */
 export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFacts): boolean => {
     if (isHandRecorded(payment)) return refund.status === RefundStatus.pending;
-    // A refund refused as disputed is the bank's to settle: once a lost chargeback covers it, the
-    // bank paid the buyer, so it is reported returned. Until then (or if the shop won) it is not.
+    /**
+     * A refund refused as disputed is the bank's to settle: once a lost chargeback covers it, the
+     * bank paid the buyer, so it is reported returned. Until then (or if the shop won) it is not.
+     */
     if (refund.failureReason === RefundFailureReason.disputed)
         return lostChargebackCovers(payment, refund.amount, refund.currency);
     if (exceedsRemaining(payment, refund)) return true;
@@ -301,8 +303,10 @@ export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFac
 export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): boolean =>
     !isReversed(refund) &&
     (mayBeSettledByHand(payment, refund) ||
-        // A refund refused as `disputed` whose dispute is decided (the shop won) moved no money
-        // and is owed no more: staff void it. While a chargeback is open it is left alone.
+        /**
+         * A refund refused as `disputed` whose dispute is decided (the shop won) moved no money
+         * and is owed no more: staff void it. While a chargeback is open it is left alone.
+         */
         (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
 
 /** The legal deadline a refund is stamped with when it opens, and the rule behind that date. */

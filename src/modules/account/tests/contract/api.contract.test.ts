@@ -45,7 +45,7 @@ setupTestDb();
 // A requested export is built in the background and written to the sandbox: wait, then sweep.
 afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
-/*
+/**
  * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes
  * under swc). Needed here because a token is a digest at rest: the plaintext verify
@@ -70,6 +70,7 @@ const readVerifyToken = (userId: string) =>
  *
  * Reads `mailerPort.enqueueEmail` directly rather than through `observePort` (`@tests/ports`):
  * that helper CLEARS the mock's history on hand-out, which would erase the very call this reads.
+ * @throws {Error} when no verification mail is queued
  */
 const verifyTokenFromMail = (): string => {
     const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
@@ -129,11 +130,15 @@ describe('POST /account/login — remember me', () => {
             .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'medium' });
 
         expect(response.status).toBe(200);
-        // Read through the same accessor the app signs with, not the raw variable: the tiers carry
-        // code-side defaults, so an environment that never sets them still has a right answer.
+        /**
+         * Read through the same accessor the app signs with, not the raw variable: the tiers carry
+         * code-side defaults, so an environment that never sets them still has a right answer.
+         */
         const expected = getExpiryTime(RememberTier.medium);
-        // `jwt` counts the tier exactly; `cookie` counts what is left of the row, which a second
-        // may already have eaten into.
+        /**
+         * `jwt` counts the tier exactly; `cookie` counts what is left of the row, which a second
+         * may already have eaten into.
+         */
         expect(cookieMaxAge(response, '__Host-session')).toBeGreaterThan(expected - 5);
         expect(cookieMaxAge(response, '__Host-session')).toBeLessThanOrEqual(expected);
         // The UI hint expires in step with the credential it describes.
@@ -192,8 +197,10 @@ const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: 
         user,
         bearer: `Bearer ${response.body.token as string}` as const,
         jwtCookie,
-        // What the browser sends next: `jwt` mode needs the access token beside the refresh
-        // cookie, `cookie` mode the cookie alone (a bearer would make the reply a bearer's: no cookie).
+        /**
+         * What the browser sends next: `jwt` mode needs the access token beside the refresh
+         * cookie, `cookie` mode the cookie alone (a bearer would make the reply a bearer's: no cookie).
+         */
         headers: (getSessionMode() === 'cookie'
             ? { Cookie: jwtCookie }
             : {
@@ -365,8 +372,10 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it("reauth ignores another user's refresh cookie rather than adopting its tier", async () => {
-        // A refresh cookie riding beside a bearer is a `jwt` mode shape: in `cookie` mode the
-        // bearer IS the session and the cookie is never consulted.
+        /**
+         * A refresh cookie riding beside a bearer is a `jwt` mode shape: in `cookie` mode the
+         * bearer IS the session and the cookie is never consulted.
+         */
         inJwtMode();
         const remembered = await loginRemembering('long', 'other@example.com');
         const { bearer } = await loginRemembering();
@@ -383,9 +392,11 @@ describe('the "remember me" choice survives every re-mint', () => {
 });
 
 describe('PUT /account', () => {
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `username` and `analyticsConsent` are
-    // the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
-    // is cleared rather than left alone. The email is not part of it: `POST /account/email-change`.
+    /**
+     * A PUT body IS the new resource (RFC 9110 §9.3.4) — `username` and `analyticsConsent` are
+     * the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
+     * is cleared rather than left alone. The email is not part of it: `POST /account/email-change`.
+     */
     it('replaces the profile, requiring username and analyticsConsent', async () => {
         const { bearer } = await authenticateAs('user');
 
@@ -546,8 +557,10 @@ describe('POST /account/email-change', () => {
         // The account keeps its current, proven address until the new one is confirmed.
         expect(response.body.email).toBe(user.email);
         expect(response.body.pendingEmail).toBe('fresh-address@example.com');
-        // Still verified, at the same instant: an unconfirmed new address must not unverify the
-        // proven one it has not yet replaced.
+        /**
+         * Still verified, at the same instant: an unconfirmed new address must not unverify the
+         * proven one it has not yet replaced.
+         */
         expect(response.body.verifiedAt).toBe(user.verifiedAt!.toISOString());
     });
 
@@ -582,8 +595,10 @@ describe('PATCH /account refuses what a profile edit may not carry', () => {
     it('cannot escalate: role, active and password are refused whole, and nothing changes', async () => {
         const { bearer, user } = await authenticateAs('user');
 
-        // The contract body is strict — `role`/`active`/`password` are not fields it accepts, so
-        // the whole body is refused rather than applying `username` and silently dropping the rest.
+        /**
+         * The contract body is strict — `role`/`active`/`password` are not fields it accepts, so
+         * the whole body is refused rather than applying `username` and silently dropping the rest.
+         */
         const response = await api().patch('/account').set('Authorization', bearer).send({
             username: 'still-plain',
             role: 'admin',
@@ -637,7 +652,7 @@ const requestChangeAndWait = async (address: string) => {
     return session;
 };
 
-/*
+/**
  * The resend is the only way to ask for the pending address's link again: restating it on `PATCH
  * /account` is a no-op. The cooldown is stepped over with a frozen clock rather than a wait.
  */
@@ -830,7 +845,7 @@ describe('POST /account/password', () => {
         expect(response.status).toBe(422);
     });
 
-    /*
+    /**
      * Unlike reauth, the password write and the session revoke have already happened
      * by the time the re-mint runs — a 500 here would misreport a change that DID succeed. The
      * degrade to 200-without-a-token is correct; what was missing is any trail at all for it.
@@ -873,9 +888,11 @@ describe('POST /account/reauth', () => {
     });
 
     it('matches the error contract for a wrong password — 422, never 401', async () => {
-        // Same reasoning POST /account/password already established: a 401 here reads as
-        // "session expired" to a client interceptor and would log out a session that is, in
-        // fact, still perfectly valid — the opposite of what re-authentication exists to do.
+        /**
+         * Same reasoning POST /account/password already established: a 401 here reads as
+         * "session expired" to a client interceptor and would log out a session that is, in
+         * fact, still perfectly valid — the opposite of what re-authentication exists to do.
+         */
         const { bearer } = await loginWithCookie();
 
         const response = await api()
@@ -899,13 +916,15 @@ describe('POST /account/reauth', () => {
         const fresh = setCookie(response, '__Host-session');
         expect(fresh).toBeDefined();
         expect(fresh).not.toBe(jwtCookie);
-        // The new cookie is checked before the old one: refreshing the old first could not tell
-        // "reauth killed it" from "the probe order did".
+        /**
+         * The new cookie is checked before the old one: refreshing the old first could not tell
+         * "reauth killed it" from "the probe order did".
+         */
         expect(await statusOfSession(fresh!)).toBe(200);
         expect(await statusOfSession(jwtCookie)).toBe(401);
     });
 
-    /*
+    /**
      * Unlike `POST /account/password`, `accountService.reauth` writes nothing and revokes no
      * session — it only compares the password. A failed re-mint here means the whole point of the
      * endpoint (a fresh session, to clear a step-up challenge) did not happen, so it must answer
@@ -952,8 +971,10 @@ describe('POST /account/export', () => {
 });
 
 describe('POST /account/export for an account that is gone', () => {
-    // A valid session whose account vanished (deleted between the session check and the export) is
-    // unauthenticated, as it is on every other self-service route; the contract declares no 404.
+    /**
+     * A valid session whose account vanished (deleted between the session check and the export) is
+     * unauthenticated, as it is on every other self-service route; the contract declares no 404.
+     */
     it('answers 401', async () => {
         const { bearer } = await loginWithCookie();
         jest.spyOn(accountUserService, 'getById').mockResolvedValueOnce(undefined);
@@ -1064,9 +1085,11 @@ describe('POST /account/logout', () => {
 
         expect(response.status).toBe(204);
 
-        // The revoked cookie names nothing any more (it can no longer mint access tokens in `jwt`
-        // mode, no longer authenticates in `cookie` mode): the session is dead server-side, not
-        // merely cleared client-side.
+        /**
+         * The revoked cookie names nothing any more (it can no longer mint access tokens in `jwt`
+         * mode, no longer authenticates in `cookie` mode): the session is dead server-side, not
+         * merely cleared client-side.
+         */
         expect(await statusOfSession(jwtCookie)).toBe(401);
     });
 
@@ -1141,8 +1164,10 @@ describe('GET /account/sessions', () => {
      * — splitting them would let either regress alone while the field never actually changed.
      */
     it('reports lastUsedAt only once the session has been used', async () => {
-        // A request that is not the person acting leaves the session unused; an ordinary one is a
-        // use. (A refresh is neither: it renews a token and carries the clock over.)
+        /**
+         * A request that is not the person acting leaves the session unused; an ordinary one is a
+         * use. (A refresh is neither: it renews a token and carries the clock over.)
+         */
         inJwtMode();
         const { bearer, jwtCookie } = await loginWithCookie();
         const listed = () =>
@@ -1247,7 +1272,7 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
         expect(await readVerifyToken(response.body.id)).toBeDefined();
     });
 
-    /*
+    /**
      * Unverified is a role, not a waiting room: the new account is signed in from here and is
      * stopped at `checkout:Cart` alone. The BODY stays a bare profile so rung 2's refusal — which
      * `post-signup.ts` answers before it ever reaches the session — is still indistinguishable in
@@ -1267,12 +1292,14 @@ describe('POST /account/email-verification/resend and /account/email-verificatio
 
         expect(setCookie(response, '__Host-session')).toBeDefined();
 
-        // The session is the cookie: `jwt` mode turns it into an access token through the
-        // bootstrap the frontend already runs after OAuth, `cookie` mode authenticates by it.
+        /**
+         * The session is the cookie: `jwt` mode turns it into an access token through the
+         * bootstrap the frontend already runs after OAuth, `cookie` mode authenticates by it.
+         */
         expect(await statusOfSession(cookieHeader(response, '__Host-session'))).toBe(200);
     });
 
-    /*
+    /**
      * The mongoose `email` schema's own `match` — the backstop behind the Zod-validated
      * route, see `users/model.ts` — must accept a plus-tag and an 8+ character TLD, both real
      * shapes an inbox can hold. Signup is the first place either would ever reach it.
@@ -1381,8 +1408,10 @@ describe('POST /account/email-change and /account/email-change/confirm', () => {
         const confirm = await api().post('/account/email-change/confirm').send({ token });
         expect(confirm.status).toBe(204);
 
-        // A confirmed email change ends every session (the old bearer included, in `cookie`
-        // mode), so the account signs in again under the new address.
+        /**
+         * A confirmed email change ends every session (the old bearer included, in `cookie`
+         * mode), so the account signs in again under the new address.
+         */
         const account = await api()
             .get('/account')
             .set('Authorization', await loginBearer('ada+shop@mail.example.photography'));
@@ -1460,7 +1489,7 @@ describe('POST /account/email-change and /account/email-change/confirm', () => {
         expect(response.status).toBe(422);
     });
 
-    /*
+    /**
      * `PATCH /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
      * SECOND request naming an address already pending elsewhere — so the only way this write
      * still collides is a genuine concurrent race that check cannot see (two requests landing

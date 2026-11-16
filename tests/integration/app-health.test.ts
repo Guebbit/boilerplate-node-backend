@@ -32,8 +32,10 @@ describe('System routes', () => {
         expect(response.status).toBe(404);
     });
 
-    // The id this service answers with is always one it chose: a client-supplied value is kept
-    // beside it as `clientRequestId`, never adopted — see request-context.ts.
+    /**
+     * The id this service answers with is always one it chose: a client-supplied value is kept
+     * beside it as `clientRequestId`, never adopted — see request-context.ts.
+     */
     it('answers with its own request id and logs the client one beside it', async () => {
         const clientId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
         const log = jest.spyOn(logger, 'log').mockImplementation(() => logger);
@@ -59,9 +61,11 @@ describe('System routes', () => {
     });
 
     it('replaces a malformed x-request-id rather than reflecting it', async () => {
-        // Node's http client already refuses a literal CR/LF in a header value, so this asserts
-        // against an ordinary non-UUID string — the shape check is what closes the log-injection
-        // gap for values a client CAN actually send, long/odd ones included.
+        /**
+         * Node's http client already refuses a literal CR/LF in a header value, so this asserts
+         * against an ordinary non-UUID string — the shape check is what closes the log-injection
+         * gap for values a client CAN actually send, long/odd ones included.
+         */
         const response = await api().get('/').set('x-request-id', 'not-a-uuid');
 
         expect(response.headers['x-request-id']).not.toBe('not-a-uuid');
@@ -72,10 +76,12 @@ describe('System routes', () => {
 });
 
 describe('GET /livez and GET /readyz across the process lifecycle', () => {
-    // The phase only moves forward (`readiness.ts`), and `src/app.ts`'s auto-start is skipped under
-    // `NODE_ENV=test` (see `tests/support/http.ts`'s own docblock), so this process starts in
-    // 'booting' and never calls `markServerListening` on its own. One case walks the whole path,
-    // because separate cases would pass only in file order, and the suite also runs shuffled.
+    /**
+     * The phase only moves forward (`readiness.ts`), and `src/app.ts`'s auto-start is skipped under
+     * `NODE_ENV=test` (see `tests/support/http.ts`'s own docblock), so this process starts in
+     * 'booting' and never calls `markServerListening` on its own. One case walks the whole path,
+     * because separate cases would pass only in file order, and the suite also runs shuffled.
+     */
     it('answers 503 booting, 200 listening, 503 draining, while /livez stays 200 with an empty body', async () => {
         const booting = await api().get('/readyz');
         // Liveness does not care that the process is still booting.

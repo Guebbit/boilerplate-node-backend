@@ -8,7 +8,7 @@
  *
  * Not in the import graph: `account` writes this same document — the shared kernel.
  *
- * @see docs/modules/users.md
+ * @see docs/modules/users.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -76,20 +76,22 @@ export default {
     jobs: usersJobs,
     publicEvents,
     subscribe: () => {
-        /*
+        /**
          * The account is gone; the analytics provider may still hold its id. A rejection fails the
          * dispatch, so the outbox retries it and parks it `dead` (alerting) rather than losing it.
          */
         onDomainEvent(USER_ERASED, ({ userId }) => resolveAnalyticsProvider().forget(userId));
     },
-    /*
+    /**
      * `account`'s signup and profile-update flows write through this same `userRepository` —
      * there is no separate `users` collection for them to register their own target under.
      */
     imageTargets: { users: { writeback: userRepository.writebackImage } },
     personalData: [
-        // `undefined` when the subject's own row is gone — `account`'s assembly answers 404 for
-        // this section specifically, since nothing else in the export means anything without it.
+        /**
+         * `undefined` when the subject's own row is gone — `account`'s assembly answers 404 for
+         * this section specifically, since nothing else in the export means anything without it.
+         */
         {
             section: 'profile',
             collect: (subject) => findByIdWithCredentials(subject.userId)

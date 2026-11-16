@@ -4,7 +4,7 @@
  * `blank.ts` can read it too, without the two files importing each other: `index.ts` builds
  * `blank` and `shop` alike from these entries, so a value both need cannot live inside either.
  *
- * @see docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md#how-a-scenario-is-built
  */
 
 import type { SeedOutcome } from '@scenarios/seed';
@@ -87,10 +87,12 @@ export const historyEdits = (): ((owner: Caller) => Promise<void>)[] => {
  * than duplicating a second copy of whichever entries happen to be baseline today.
  */
 export const baselineShopModules = (): Record<string, ShopModuleEntry> => {
-    // `shopModules`' own type is the union of each entry's OWN literal shape (`satisfies` keeps
-    // it that way on purpose, for `check.ts`'s `keyof typeof shopModules`) — widening it to the
-    // common `ShopModuleEntry` shape here is exactly what a table of otherwise-differently-shaped
-    // entries needs before it can be filtered by a field not every entry's literal type carries.
+    /**
+     * `shopModules`' own type is the union of each entry's OWN literal shape (`satisfies` keeps
+     * it that way on purpose, for `check.ts`'s `keyof typeof shopModules`) — widening it to the
+     * common `ShopModuleEntry` shape here is exactly what a table of otherwise-differently-shaped
+     * entries needs before it can be filtered by a field not every entry's literal type carries.
+     */
     const entries: Record<string, ShopModuleEntry> = shopModules;
 
     return Object.fromEntries(Object.entries(entries).filter(([, entry]) => entry.baseline));

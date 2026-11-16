@@ -19,13 +19,15 @@ const budget = (namespace: string) => budgetIn(accountRateLimits, namespace);
 
 describe('credentialLimiters', () => {
     it('keeps the identity budget a small fraction of the browsing budget', () => {
-        // The point of a second limiter is that browsing traffic and password guesses do not
-        // spend the same allowance. Raise the credential budget to the global one and the
-        // module still works — it just stops doing the thing it was added for.
+        /**
+         * The point of a second limiter is that browsing traffic and password guesses do not
+         * spend the same allowance. Raise the credential budget to the global one and the
+         * module still works — it just stops doing the thing it was added for.
+         */
         expect(budget('credentials-identity').defaultMax).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
     });
 
-    /*
+    /**
      * The Rung-1 property that matters is the ORDERING within the triple, not any one value:
      * identity ≤ address ≤ block, since a block is shared by many honest callers and a single
      * account or address is not. A block budget set below its own address budget would defeat
@@ -85,8 +87,10 @@ describe('the MFA budgets', () => {
     it.each(['mfa-challenge', 'mfa-send'])(
         "window %s to the challenge's own lifetime, which the YAML cannot import",
         (namespace) => {
-            // `module.yaml` holds the number; the TTL is code. A window shorter than the challenge
-            // would refill while the challenge is still live.
+            /**
+             * `module.yaml` holds the number; the TTL is code. A window shorter than the challenge
+             * would refill while the challenge is still live.
+             */
             expect(budget(namespace).windowMs).toBe(MFA_CHALLENGE_DELIVERED_TTL_MS);
         }
     );

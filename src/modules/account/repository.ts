@@ -282,7 +282,6 @@ const removeSessionFamily = (userId: string, familyId: string): Promise<number> 
  * Delete every row of a session family but one — the successor a re-proof just stored.
  *
  * @param userId - the account
- * @param familyId - the session
  * @param keepHash - the digest of the row to keep
  * @returns how many rows went
  */
@@ -388,7 +387,6 @@ const sessionFamilyActivity = (
  * counterpart of {@link touchSession}, which `cookie` mode calls with the id it holds.
  *
  * @param userId - the account
- * @param familyId - the session family
  * @param now - the moment of use
  * @param minIntervalMs - skip the write when the row was stamped more recently than this
  * @returns whether a write happened
@@ -513,8 +511,10 @@ const upsertLiveToken = (token: NewVerificationToken): Promise<void> => {
 
     return write()
         .catch((error: unknown) => {
-            // The upsert raced another upsert for the same (user, type): the row now exists, so
-            // the same call is a plain update.
+            /**
+             * The upsert raced another upsert for the same (user, type): the row now exists, so
+             * the same call is a plain update.
+             */
             if (isDuplicateKey(error)) return write();
             throw error;
         })
@@ -676,9 +676,11 @@ const upsertErasureLedgerRow = (
 ): Promise<void> => {
     const write = (): Promise<unknown> =>
         erasureLedgerModel
-            // Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is
-            // newer than the stored one.
-            // https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+            /**
+             * Update pipeline (MongoDB 4.2+): the new `purgeAt` is kept only when this event is
+             * newer than the stored one.
+             * https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+             */
             .updateOne(
                 { userId: toObjectId(userId), kind },
                 [
@@ -707,9 +709,11 @@ const upsertErasureLedgerRow = (
             )
             .exec();
 
-    // Two upserts racing for the same (user, kind): the loser hits the unique index, and the same
-    // call is then a plain update. Inside a transaction a duplicate key aborts it, so there the
-    // driver's own transaction retry owns the race and this retry does not apply.
+    /**
+     * Two upserts racing for the same (user, kind): the loser hits the unique index, and the same
+     * call is then a plain update. Inside a transaction a duplicate key aborts it, so there the
+     * driver's own transaction retry owns the race and this retry does not apply.
+     */
     return write()
         .catch((error: unknown) => {
             if (!options.session && isDuplicateKey(error)) return write();

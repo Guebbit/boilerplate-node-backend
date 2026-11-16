@@ -25,10 +25,12 @@ import { startRabbitMq, type TestRabbitMq } from './support/rabbitmq';
 /** A schema that accepts any JSON — these cases are about delivery, not the contract. */
 const anyPayload = z.unknown();
 
+/** The queue adapter module as imported fresh for each case. */
 type QueueAdapter = typeof import('@infrastructure/adapters/queue');
 
 /** Short knobs: a retry that takes seconds, and two attempts, keep each case under a few seconds. */
 const RETRY_DELAY_SECONDS = 1;
+/** Delivery attempts the test queue allows before a message is parked. */
 const MAX_ATTEMPTS = 2;
 
 /** The broker's own delivery limit on a work queue (`QUORUM_DELIVERY_LIMIT` in `queue.ts`). */
@@ -37,10 +39,12 @@ const DELIVERY_LIMIT = 3;
 /** Real TTLs and a container image pull are slower than jest's default. */
 jest.setTimeout(120_000);
 
+/** The throwaway RabbitMQ the suite runs against; started once, stopped after the suite. */
 let broker: TestRabbitMq;
 
 /** Adapter copies and raw connections a case opened; closed after it, whatever it asserted. */
 const adapters: QueueAdapter[] = [];
+/** Connections the cases opened, so afterEach can close every one. */
 const connections: ChannelModel[] = [];
 
 beforeAll(() =>
@@ -179,8 +183,10 @@ const crashOnce = (queue: string): Promise<ConsumeMessage> =>
     rawChannel().then(
         (channel) =>
             new Promise<ConsumeMessage>((resolve, reject) => {
-                // `consume(queue, onMessage)`: no `noAck`, so the delivery stays unacknowledged.
-                // https://amqp-node.github.io/amqplib/channel_api.html#channel_consume
+                /**
+                 * `consume(queue, onMessage)`: no `noAck`, so the delivery stays unacknowledged.
+                 * https://amqp-node.github.io/amqplib/channel_api.html#channel_consume
+                 */
                 channel
                     .consume(queue, (message) => {
                         if (!message) return;
@@ -212,8 +218,10 @@ describe('the topology on a real broker', () => {
             const { handler, seen } = recorder();
 
             expect(await first.publishToQueue({ queue, payload: { n: 1 } })).toBe(true);
-            // The second copy declares the same queue again: a differing argument would answer
-            // PRECONDITION_FAILED and close its channel, so a delivery proves the re-declare took.
+            /**
+             * The second copy declares the same queue again: a differing argument would answer
+             * PRECONDITION_FAILED and close its channel, so a delivery proves the re-declare took.
+             */
             await second.consumeFromQueue({ queue, handler, schema: anyPayload });
             await waitUntil(() => seen.length === 1, 'the second copy to receive the job');
 
@@ -325,7 +333,7 @@ describe('a consumer that dies without answering', () => {
             expect(await depth(adapter.deadLetterQueueOf(queue))).toBe(0);
         }));
 
-    /*
+    /**
      * `x-delivery-limit` dead-letters the job straight to `<queue>.dead` (reason `delivery_limit`),
      * so a job that kills its consumer on contact is parked, never dropped.
      */
@@ -412,9 +420,11 @@ describe('delivery order and flow control', () => {
 
 describe('a connection dropped by the broker', () => {
     it('is recovered: the consumer is re-bound and jobs flow again', () =>
-        // `NODE_ENV` outside `test` for the module load: under `test` the adapter's recovery gets
-        // `maxRetries: 0` (`RECOVERY_OPTIONS`) so a broker that never answers cannot hang jest, and
-        // that is precisely the behaviour this case must not run under.
+        /**
+         * `NODE_ENV` outside `test` for the module load: under `test` the adapter's recovery gets
+         * `maxRetries: 0` (`RECOVERY_OPTIONS`) so a broker that never answers cannot hang jest, and
+         * that is precisely the behaviour this case must not run under.
+         */
         inBrokerEnvironment(async () => {
             const queue = uniqueQueue();
             const adapter = await bootAdapter({ NODE_ENV: 'development' });

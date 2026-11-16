@@ -4,7 +4,7 @@
  * ("which country do we charge VAT in", "where do returns go"), and the one public read of the lot,
  * `GET /shop`'s body.
  *
- * @see docs/modules/shop.md
+ * @see docs/modules/shop.md#the-story
  */
 
 import { ConfigError } from '@infrastructure/config/define';
@@ -17,9 +17,7 @@ import { shopConfig } from './config';
 /**
  * A required variable's value. `NODE_ENV=test` skips the boot check, so a suite that forgot to
  * set one gets this refusal instead of a silent `undefined` on a legal notice.
- * @param name - the variable, for the message
  * @param value - what the slice parsed
- * @returns the value
  * @throws {ConfigError} when it is unset
  */
 const requiredValue = (name: string, value: string | undefined): string => {

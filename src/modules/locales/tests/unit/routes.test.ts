@@ -78,8 +78,10 @@ describe('locale routes — what is mounted', () => {
     it('declares /apps before /:locale, so it is reachable at all', () => {
         const paths = routeTable(router).map(({ path }) => path);
 
-        // Both are one segment and Express takes the first match: reversed, `GET /locales/apps`
-        // becomes a dictionary lookup for a language called "apps" and 404s.
+        /**
+         * Both are one segment and Express takes the first match: reversed, `GET /locales/apps`
+         * becomes a dictionary lookup for a language called "apps" and 404s.
+         */
         expect(paths.indexOf('/apps')).toBeLessThan(paths.indexOf('/:locale'));
     });
 });
@@ -88,16 +90,20 @@ describe('locale routes — authorization', () => {
     it.each(PUBLIC)('%s answers without a token', (signature) => {
         const guards = guardsOn(router, signature);
 
-        // The documented decision. A guard here makes the copy unavailable to the clients that
-        // most need it — see this file's header, and the router's own.
+        /**
+         * The documented decision. A guard here makes the copy unavailable to the clients that
+         * most need it — see this file's header, and the router's own.
+         */
         expect(identityGuardIndex(guards)).toBe(-1);
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('reads the caller on the manifest, without demanding one', () => {
-        // `GET /` is the one public read that takes `getAuth`: an admin's manifest also lists the
-        // inactive languages a visitor is not offered. Dropping it silently narrows the admin
-        // view; adding an identity guard beside it would break the anonymous case.
+        /**
+         * `GET /` is the one public read that takes `getAuth`: an admin's manifest also lists the
+         * inactive languages a visitor is not offered. Dropping it silently narrows the admin
+         * view; adding an identity guard beside it would break the anonymous case.
+         */
         expect(guardsOn(router, 'GET /')).toContain('getAuth');
         expect(identityGuardIndex(guardsOn(router, 'GET /'))).toBe(-1);
         // One language is the same read narrowed to a tag, so it reads the caller the same way.
@@ -118,9 +124,11 @@ describe('locale routes — authorization', () => {
     });
 
     it('has no route that is neither a documented public read nor fully guarded', () => {
-        // The sweep that catches a route added later: with no router-level gate, a new mount is
-        // unguarded by default, which is the failure direction this module trades away for the
-        // per-route clarity it needs.
+        /**
+         * The sweep that catches a route added later: with no router-level gate, a new mount is
+         * unguarded by default, which is the failure direction this module trades away for the
+         * per-route clarity it needs.
+         */
         const ungoverned = routeSignatures(router).filter(
             (signature) =>
                 !PUBLIC.includes(signature) &&
@@ -142,9 +150,11 @@ describe('locale routes — caching', () => {
     });
 
     it('tells browsers to revalidate, so a translator sees their own save', () => {
-        // The failure this prevents: an edit clears Redis but cannot reach the copy already in
-        // the editor's browser, so they reload and see the old string for up to an hour. That
-        // reads as "saving is broken" to the one audience with no other way to tell.
+        /**
+         * The failure this prevents: an edit clears Redis but cannot reach the copy already in
+         * the editor's browser, so they reload and see the old string for up to an hour. That
+         * reads as "saving is broken" to the one audience with no other way to tell.
+         */
         for (const signature of PUBLIC)
             expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
                 browserRevalidate: true
@@ -152,16 +162,20 @@ describe('locale routes — caching', () => {
     });
 
     it.each([...ENTRY_READS, ...TRANSLATIONS])('%s is left uncached', (signature) => {
-        // `GET /:locale/entries` feeds the screen the writes are made from, and both translation
-        // routes are the same kind of screen — a cached copy would show a stale save.
+        /**
+         * `GET /:locale/entries` feeds the screen the writes are made from, and both translation
+         * routes are the same kind of screen — a cached copy would show a stale save.
+         */
         expect(chainOf(router, signature).some((each) => each.startsWith('setCache'))).toBe(false);
     });
 
     it.each(
         ADMIN.filter((signature) => !ENTRY_READS.has(signature) && !TRANSLATIONS.has(signature))
     )('%s invalidates the locales tag it just changed', (signature) => {
-        // Every write changes what every visitor reads, and the tag reaches shared Redis, so
-        // one call covers every app instance.
+        /**
+         * Every write changes what every visitor reads, and the tag reaches shared Redis, so
+         * one call covers every app instance.
+         */
         expect(chainOf(router, signature)).toContain('invalidateCache([locales])');
     });
 

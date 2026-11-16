@@ -8,7 +8,7 @@
  * `payments` opens its refund record from that event, and the outbox relay retries the event
  * until it has.
  *
- * @see docs/understand/outbox.md
+ * @see docs/understand/outbox.md#using-it
  */
 
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
@@ -190,8 +190,10 @@ export const CANCEL_CAUSES = {
         analytics: ordersAnalyticsEvents.ORDER_CANCELED,
         refundIsChoice: false
     },
-    // Written by `markUndeliverable`, not by `cancel()`: the remainder cancel (returns' transaction)
-    // already refunded, so this cause carries `refund: false` and `refundIsChoice` does not apply.
+    /**
+     * Written by `markUndeliverable`, not by `cancel()`: the remainder cancel (returns' transaction)
+     * already refunded, so this cause carries `refund: false` and `refundIsChoice` does not apply.
+     */
     lost: {
         by: 'system',
         mail: 'none',
@@ -220,9 +222,11 @@ export const afterCancel = (
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const emitContext = context ?? systemCallerContext('Order');
 
-    // No override needed: `emitContext.caller` is `SYSTEM_ACTOR`'s own caller for a system cancel,
-    // and `buildAuditEvent`'s defaults already read `actorUserId`/`actorRole` off
-    // `context.caller.id`/`.system` — see `resolveActorRole`.
+    /**
+     * No override needed: `emitContext.caller` is `SYSTEM_ACTOR`'s own caller for a system cancel,
+     * and `buildAuditEvent`'s defaults already read `actorUserId`/`actorRole` off
+     * `context.caller.id`/`.system` — see `resolveActorRole`.
+     */
     recordAudit(emitContext, {
         action: ordersAuditActions.ORDER_CANCELED,
         outcome: 'success',
@@ -279,11 +283,13 @@ const attemptCancel = (
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const refund = rules.refundIsChoice ? (refundChoice ?? true) : true;
 
-    // The write's OWN scope: an operator's update scope, or the caller's own live orders — never
-    // the read scope, which a warehouse or support account holds over every order.
+    /**
+     * The write's OWN scope: an operator's update scope, or the caller's own live orders — never
+     * the read scope, which a warehouse or support account holds over every order.
+     */
     const scope = cancelScope(authContext, cause === 'withdrawal' && !onBuyersBehalf);
 
-    /*
+    /**
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
      * table answers per column: a customer may cancel from `pending` and `paid`, an operator also
      * from `processing`.
@@ -291,9 +297,11 @@ const attemptCancel = (
     return moveToCanceled(
         id,
         statusesLeadingTo(OrderStatus.canceled, rules.by),
-        // Part of the WRITE's filter, not a preceding read: a shipment racing this cancel
-        // writes `fulfillment.shipped` in its own transaction, and exactly one of the two
-        // matches. Goods that left cannot be canceled whole.
+        /**
+         * Part of the WRITE's filter, not a preceding read: a shipment racing this cancel
+         * writes `fulfillment.shipped` in its own transaction, and exactly one of the two
+         * matches. Goods that left cannot be canceled whole.
+         */
         { ...scope, 'fulfillment.shipped': { $ne: true } },
         refund,
         cause,

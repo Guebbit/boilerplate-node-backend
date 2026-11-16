@@ -26,7 +26,6 @@ import { presentInventoryLevel } from '../presenter';
 /**
  * One product's counters, read back after a write.
  *
- * @param productId - the product
  * @param title - the product's title, already loaded by the caller's existence check
  * @returns its level, or `null` if the product has no level row (never received, or gone)
  */
@@ -106,9 +105,11 @@ const applyAdminStockTransition = ({
     auditAction,
     buildAuditMetadata
 }: AdminStockTransition): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
-    // Checked BEFORE the write: `conditionFor`'s `receive` case is `{}` (any row matches, or a
-    // fresh one is created), so an unknown product would otherwise still get a level row AND a
-    // ledger entry before this ever found out there was nothing to receive against.
+    /**
+     * Checked BEFORE the write: `conditionFor`'s `receive` case is `{}` (any row matches, or a
+     * fresh one is created), so an unknown product would otherwise still get a level row AND a
+     * ledger entry before this ever found out there was nothing to receive against.
+     */
     productService.findByIdRaw(productId).then((product) => {
         if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
@@ -143,7 +144,6 @@ const applyAdminStockTransition = ({
  * Units arrive from a supplier. The only guard is that the product exists, so a refusal means
  * it does not.
  *
- * @param productId - the product
  * @param quantity - how many arrived; strictly positive, the contract enforces it too
  * @param note - what to record: supplier, delivery note, operator's words
  * @param context - the caller, audited as `ADMIN_STOCK_RECEIVED`. Required: a stock write with no
@@ -172,7 +172,6 @@ export const receive = (
  * would leave fewer units than are already reserved: those are promised to orders that exist, and
  * the fix is to cancel orders rather than let availability go negative and oversell.
  *
- * @param productId - the product
  * @param delta - signed and non-zero; the controller rejects zero
  * @param note - why; an unexplained correction is what an audit looks for
  * @param context - the caller, audited as `ADMIN_STOCK_ADJUSTED`. Required, like {@link receive}'s
@@ -192,7 +191,7 @@ export const adjust = (
         context,
         // Units a stocktake finds are sellable: the paid buyer who waits comes first.
         allocates: delta > 0,
-        /*
+        /**
          * The write's guard covers two things at once — the product existing and the correction
          * fitting above what is reserved — so `false` alone can't say which refused. Re-reading
          * separates them, so a product deleted between the check and this write reports 404
@@ -218,7 +217,6 @@ export const adjust = (
  * shelf changes — so it writes no ledger row; it is audited. Lowering it below what is outstanding
  * is allowed: those orders stand and only new ones are refused.
  *
- * @param productId - the product
  * @param backorderLimit - the new allowance; `0` closes it, `null` removes the cap
  * @param context - audit context for `ADMIN_BACKORDER_LIMIT_SET`; tests omit it to skip the emit
  * @returns the counters after the change, or 404 if the product is unknown
@@ -247,8 +245,10 @@ export const setBackorderLimit = (
                         )
                 )
                 .then((metadata) =>
-                    // The catalogue's copy carries the allowance, which is what a preorder's
-                    // `available` counts down from: bring it into step with the new limit.
+                    /**
+                     * The catalogue's copy carries the allowance, which is what a preorder's
+                     * `available` counts down from: bring it into step with the new limit.
+                     */
                     refreshStockCache(productId)
                         .then(() => levelFor(productId, product.title))
                         .then((level) => ({ level, metadata }))

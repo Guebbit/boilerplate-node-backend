@@ -146,7 +146,7 @@ describe('POST /products', () => {
         expect(response.status).toBe(422);
     });
 
-    /*
+    /**
      * `products` never writes `onHand`, and the create body carries none: a new product starts at
      * zero, and units enter only through a receipt, which leaves the ledger row. `admin`, not
      * `editor`: reading the ledger back needs `read:StockLevel`.
@@ -230,8 +230,10 @@ describe('PUT /products/{id}', () => {
         expect(response.body.title).toBe('Bed, replaced');
     });
 
-    // `releaseDate` is part of the replaced representation too: omitting it clears it, so a
-    // preorder ends and the product is on the shelf like any other.
+    /**
+     * `releaseDate` is part of the replaced representation too: omitting it clears it, so a
+     * preorder ends and the product is on the shelf like any other.
+     */
     it('clears a release date the PUT leaves out, which ends the preorder', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({
@@ -263,8 +265,10 @@ describe('PUT /products/{id}', () => {
         expect(after?.releaseDate).toBeUndefined();
     });
 
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
-    // `tags` have no legal "cleared" state, so all of them are required alongside price/translations.
+    /**
+     * A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
+     * `tags` have no legal "cleared" state, so all of them are required alongside price/translations.
+     */
     it.each(['allowBackorder', 'noWithdrawal'])(
         'refuses a PUT that leaves out %s: it has no cleared state',
         async (field) => {
@@ -304,8 +308,10 @@ describe('PUT /products/{id}', () => {
         expect(response.status).toBe(422);
     });
 
-    // `translations` is part of the replaced representation too: a stored locale
-    // the PUT leaves out is deleted, not kept. Keeping one is what PATCH is for.
+    /**
+     * `translations` is part of the replaced representation too: a stored locale
+     * the PUT leaves out is deleted, not kept. Keeping one is what PATCH is for.
+     */
     it('deletes every stored locale the PUT leaves out', async () => {
         await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
@@ -361,8 +367,10 @@ describe('PUT /products/{id}', () => {
         expect(response.status).toBe(422);
     });
 
-    // The factory now validates PUT against `zodProductReplaceSchema`, not the raw generated one —
-    // otherwise this message never surfaces, refused first by the contract's generic minimum.
+    /**
+     * The factory now validates PUT against `zodProductReplaceSchema`, not the raw generated one —
+     * otherwise this message never surfaces, refused first by the contract's generic minimum.
+     */
     it('422s a negative price with the field-named message, not a generic one', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: '10.00' });
@@ -404,10 +412,12 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.title).toBe('Bed, revised');
     });
 
-    // The write route stacks `update:Product` AND `update:Translation`. No preset role
-    // holds one without the other, so the "one key alone refuses" half of this cannot be
-    // exercised over HTTP today — `shared/cases/authorization.cases.yaml` asserts it at the
-    // ability layer instead ("the dictionary keys do not update a price, even together").
+    /**
+     * The write route stacks `update:Product` AND `update:Translation`. No preset role
+     * holds one without the other, so the "one key alone refuses" half of this cannot be
+     * exercised over HTTP today — `shared/cases/authorization.cases.yaml` asserts it at the
+     * ability layer instead ("the dictionary keys do not update a price, even together").
+     */
     it('lets the editor change a price', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: '10.00' });
@@ -421,8 +431,10 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.price).toBe('999.00');
     });
 
-    // `taxClass: null` means "back to the shop's standard rate", the same as every other
-    // clearable field on this schema.
+    /**
+     * `taxClass: null` means "back to the shop's standard rate", the same as every other
+     * clearable field on this schema.
+     */
     it('clears taxClass back to the standard rate on an explicit null', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: '10.00', taxClass: 'reduced' });
@@ -436,8 +448,10 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.taxClass).toBeUndefined();
     });
 
-    // The factory now validates PATCH against `zodProductUpdateSchema` directly, and
-    // `updateById` no longer re-parses — this message has exactly one place left to come from.
+    /**
+     * The factory now validates PATCH against `zodProductUpdateSchema` directly, and
+     * `updateById` no longer re-parses — this message has exactly one place left to come from.
+     */
     it('422s a negative price with the field-named message, not a generic one', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: '10.00' });
@@ -601,9 +615,11 @@ describe('SKU', () => {
         expect(response.body.sku).toBe('DOG-BED-15KG');
     });
 
-    // Unique across the catalogue, not per request — the sparse unique index
-    // (`products/model.ts`'s `products_sku`) is what a second product colliding with an
-    // ALREADY-STORED sku refuses against, same 409 shape `users`' duplicate email answers with.
+    /**
+     * Unique across the catalogue, not per request — the sparse unique index
+     * (`products/model.ts`'s `products_sku`) is what a second product colliding with an
+     * ALREADY-STORED sku refuses against, same 409 shape `users`' duplicate email answers with.
+     */
     it('409s a sku that collides with another product', async () => {
         const { bearer } = await authenticateAsRole('editor');
         await createProduct({ title: 'Existing', sku: 'DUP-1' });
@@ -631,8 +647,10 @@ describe('SKU', () => {
 });
 
 describe('VAT rate type', () => {
-    // `rateType` says WHY a `taxClass: zero` product is 0% — `zero_rated` or `exempt` — round
-    // tripping each value the same way `taxClass` itself already does.
+    /**
+     * `rateType` says WHY a `taxClass: zero` product is 0% — `zero_rated` or `exempt` — round
+     * tripping each value the same way `taxClass` itself already does.
+     */
     it.each(['zero_rated', 'exempt'] as const)(
         'creates a product carrying rateType %s',
         async (rateType) => {

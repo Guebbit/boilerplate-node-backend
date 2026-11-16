@@ -42,6 +42,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
@@ -176,8 +177,10 @@ describe('the statuses the order shows beside its own', () => {
 });
 
 describe('goods excluded from the right of withdrawal', () => {
-    // The domain tests say excluded goods never hold the order back from `returned`; this runs it
-    // through the receive, where the status is actually written.
+    /**
+     * The domain tests say excluded goods never hold the order back from `returned`; this runs it
+     * through the receive, where the status is actually written.
+     */
     it('reads returned once the withdrawable goods are back, and keeps the delivery charge', async () => {
         customers += 1;
         const user = await createUser({ email: `buyer-${customers}@example.com` });
@@ -210,8 +213,10 @@ describe('goods excluded from the right of withdrawal', () => {
 
         const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        // Only the shirt: the engraved mug cannot be withdrawn, so the order is not wholly returned
-        // and the delivery charge stays with the shop.
+        /**
+         * Only the shirt: the engraved mug cannot be withdrawn, so the order is not wholly returned
+         * and the delivery charge stays with the shop.
+         */
         expect(result.success && result.data.refundAmount).toBe('30.00');
         const after = await wireOrder(orderId);
         expect(after.returnStatus).toBe('returned');

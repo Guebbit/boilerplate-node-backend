@@ -8,7 +8,7 @@
  * these counters into `GET /observability/metrics/overview`'s JSON live in
  * `modules/observability/http-readback.ts` — this file only defines and records them.
  *
- * @see docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md#what-is-instrumented-out-of-the-box
  */
 
 import type { Request } from 'express';
@@ -28,18 +28,22 @@ import { infrastructureMetricData } from '@infrastructure/observability/metrics.
  */
 export const httpRequestsTotal = new Counter({
     ...counterConfig(infrastructureMetricData.httpRequestsTotal),
-    // Labels = the dimensions you can slice by. Every distinct label *combination* becomes its
-    // own time series, so cardinality must stay bounded — which is exactly why `route` is the
-    // template Express matched (see `getRouteLabel`) and never a path from the request.
+    /**
+     * Labels = the dimensions you can slice by. Every distinct label *combination* becomes its
+     * own time series, so cardinality must stay bounded — which is exactly why `route` is the
+     * template Express matched (see `getRouteLabel`) and never a path from the request.
+     */
     registers: [metricsRegistry]
 });
 
 /** Request duration histogram (milliseconds). */
 export const httpRequestDuration = new Histogram({
     ...histogramConfig(infrastructureMetricData.httpRequestDuration),
-    // No `status_code` label (would multiply series by bucket count). Buckets are roughly
-    // logarithmic — cache hits (5-25ms), DB-backed (50-250ms), pathological (1-5s) — tighter at
-    // the low end since percentiles can only resolve to a bucket boundary.
+    /**
+     * No `status_code` label (would multiply series by bucket count). Buckets are roughly
+     * logarithmic — cache hits (5-25ms), DB-backed (50-250ms), pathological (1-5s) — tighter at
+     * the low end since percentiles can only resolve to a bucket boundary.
+     */
     registers: [metricsRegistry]
 });
 
@@ -84,8 +88,10 @@ export const getRouteLabel = (request: Request): string => {
     if (template === undefined) return UNMATCHED_ROUTE;
 
     const mounted = `${request.baseUrl}${template}`;
-    // `router.get('/')` mounted at `/orders` spells itself `/orders/`; the trailing slash is the
-    // same route as `/orders` and must not be a second series.
+    /**
+     * `router.get('/')` mounted at `/orders` spells itself `/orders/`; the trailing slash is the
+     * same route as `/orders` and must not be a second series.
+     */
     return mounted.length > 1 ? mounted.replace(/\/$/, '') : '/';
 };
 
@@ -112,11 +118,15 @@ export const recordRequestMetric = ({
     const labels = { method, route, status_code: String(statusCode) };
     // `inc()` with no amount increments by 1.
     httpRequestsTotal.inc(labels);
-    // `observe(labels, value)` files the duration into the matching bucket. Note the narrower
-    // label set — the histogram has no `status_code` dimension.
+    /**
+     * `observe(labels, value)` files the duration into the matching bucket. Note the narrower
+     * label set — the histogram has no `status_code` dimension.
+     */
     httpRequestDuration.observe({ method, route }, durationMs);
-    // 4xx and 5xx both count as errors here. Splitting client from server faults is left to
-    // queries over the `status_code` label.
+    /**
+     * 4xx and 5xx both count as errors here. Splitting client from server faults is left to
+     * queries over the `status_code` label.
+     */
     if (statusCode >= 400) httpRequestErrorsTotal.inc(labels);
 };
 

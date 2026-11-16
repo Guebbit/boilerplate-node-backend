@@ -72,12 +72,16 @@ export const requireDeclaredContentType = (
         const path = request.path.length > 1 ? request.path.replace(/\/$/, '') : request.path;
         const operation = declaredOperation(operations, request.method, path);
 
-        // `request.is` (type-is): `false` when the type is not listed. An empty list means the
-        // operation takes no body at all, and `request.is([])` would answer with the request's own
-        // type instead of `false`, so that case is decided here.
+        /**
+         * `request.is` (type-is): `false` when the type is not listed. An empty list means the
+         * operation takes no body at all, and `request.is([])` would answer with the request's own
+         * type instead of `false`, so that case is decided here.
+         */
         if (operation && carriesBody(request) && !acceptsBody(request, operation.types)) {
-            // `Accept` on a 415 names the types the server takes (RFC 9110 §12.5.1); on a PATCH
-            // `Accept-Patch` says it again (RFC 5789 §2.2). A body-less operation names neither.
+            /**
+             * `Accept` on a 415 names the types the server takes (RFC 9110 §12.5.1); on a PATCH
+             * `Accept-Patch` says it again (RFC 5789 §2.2). A body-less operation names neither.
+             */
             if (operation.types.length > 0) {
                 response.setHeader('Accept', operation.types.join(', '));
                 if (operation.method === 'PATCH')

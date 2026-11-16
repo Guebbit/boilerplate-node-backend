@@ -38,7 +38,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
             service: loggingConfig().NODE_SERVICE_NAME,
             runtimeVersion: process.version,
             uptimeSeconds: snapshot.uptimeSeconds,
-            /*
+            /**
              * One vocabulary for three unlike services, so the payload reads without a legend.
              * Objects rather than bare strings: a per-dependency latency or last-error is the
              * obvious next field, and this way adding one is additive.
@@ -48,7 +48,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
                 cache: { status: dependencies.cache },
                 queue: { status: dependencies.queue }
             },
-            /*
+            /**
              * Which telemetry sinks this deployment is wired to. Booleans read off the
              * environment, never reachability — `telemetry` rather than `integrations`, since
              * a name that reads like a health check invites this block to be mistaken for one.
@@ -56,7 +56,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
             telemetry: {
                 loki: Boolean(observabilityConfig().NODE_LOKI_HOST),
                 otel: Boolean(tracingConfig().OTEL_EXPORTER_OTLP_ENDPOINT),
-                /*
+                /**
                  * Frontend observability: the origin a browser loads the Umami tracking
                  * script from, plus the Faro collector. Declarative, and NOT the backend's
                  * own analytics wiring — that is `analytics` below, which needs a website id
@@ -64,7 +64,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
                  */
                 umami: Boolean(analyticsConfig().NODE_UMAMI_HOST),
                 faro: Boolean(observabilityConfig().NODE_FARO_COLLECTOR_URL),
-                /*
+                /**
                  * Which backend receives product events, and whether it can actually deliver
                  * them.
                  *
@@ -79,7 +79,7 @@ export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
                     configured: analyticsProvider.configured()
                 }
             },
-            /*
+            /**
              * Bytes, not megabytes, and the same four fields the SSE stream publishes — so a
              * dashboard showing this card beside the live feed is comparing numbers rather
              * than doing unit arithmetic to find out whether they agree.

@@ -29,15 +29,19 @@ const seedOrderFor = async (user: Parameters<typeof createOrder>[0], status?: Or
 };
 
 describe('GET /orders — the filters it now publishes', () => {
-    // `status` was applied by the repository and named nowhere in the contract, so a generated
-    // client had no way to know it worked. (`notes` is encrypted at rest, so it is not filterable.)
+    /**
+     * `status` was applied by the repository and named nowhere in the contract, so a generated
+     * client had no way to know it worked. (`notes` is encrypted at rest, so it is not filterable.)
+     */
     it('narrows by status', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const paid = await createOrder(user, [toOrderItem(product, 1)]);
         await createOrder(user, [toOrderItem(product, 1)]);
-        // Reached through the transition rather than written into the column: a status the
-        // application cannot arrive at is not one worth filtering for.
+        /**
+         * Reached through the transition rather than written into the column: a status the
+         * application cannot arrive at is not one worth filtering for.
+         */
         await orderRepository.updateStatusIfIn(String(paid._id), ['pending'], 'paid');
 
         const byStatus = await api().get('/orders?status=paid').set('Authorization', bearer);
@@ -45,7 +49,7 @@ describe('GET /orders — the filters it now publishes', () => {
         expect(byStatus.body.items.map((o: { id: string }) => o.id)).toEqual([String(paid._id)]);
     });
 
-    /*
+    /**
      * The bug this pins: `display:Order` is held by name, not through the scope wildcard a
      * moderator never holds — asking for the wildcard alone silently dropped this filter for
      * them, so a moderator narrowing to one customer's orders got everyone's instead.
@@ -66,8 +70,10 @@ describe('GET /orders — the filters it now publishes', () => {
         expect(response.body.items.map((o: { id: string }) => o.id)).toEqual([String(orderA._id)]);
     });
 
-    // `id` is a batch filter now — Tier A. `userId`/`productId` were deliberately left scalar, so
-    // a repeated key there must still 422 rather than silently reading the first value.
+    /**
+     * `id` is a batch filter now — Tier A. `userId`/`productId` were deliberately left scalar, so
+     * a repeated key there must still 422 rather than silently reading the first value.
+     */
     it('filters by a batch of ids, and still 422s a repeated userId — the filter that stayed scalar', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
@@ -110,8 +116,10 @@ describe('GET /orders', () => {
         expect(response.body.meta.totalItems).toBe(1);
     });
 
-    // `deleted=true` is a staff view: if the flag outlived the caller's scope, a customer would be
-    // listing soft-deleted orders, which hold other people's personal data.
+    /**
+     * `deleted=true` is a staff view: if the flag outlived the caller's scope, a customer would be
+     * listing soft-deleted orders, which hold other people's personal data.
+     */
     it('ignores deleted=true for a customer, whose scope has no soft-deleted rows to show', async () => {
         const { bearer, user } = await authenticateAs('user');
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
@@ -171,10 +179,12 @@ describe('GET /orders', () => {
 });
 
 describe('GET /orders/{id}', () => {
-    // Both roles resolve through the identical `findByIdScoped` query now (an empty scope for
-    // the unrestricted caller is a no-op filter addition) — asserted against the contract
-    // separately anyway, since the AUTHORIZATION each role gets is still role-specific even
-    // though the query shape isn't.
+    /**
+     * Both roles resolve through the identical `findByIdScoped` query now (an empty scope for
+     * the unrestricted caller is a no-op filter addition) — asserted against the contract
+     * separately anyway, since the AUTHORIZATION each role gets is still role-specific even
+     * though the query shape isn't.
+     */
     it('matches the contract on the unscoped path', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
@@ -195,7 +205,7 @@ describe('GET /orders/{id}', () => {
         expect(response.status).toBe(200);
     });
 
-    /*
+    /**
      * One case per role: both run the identical query, but `requireId` is what keeps a malformed
      * id at 404 rather than the 422 `databaseErrorInterpreter` would otherwise give a `BSONError`
      * — see `get-order.ts`. Both roles need their own case, or a regression that skips the
@@ -252,8 +262,10 @@ describe('POST /orders/{id}/cancel', () => {
         expect(response.body.status).toBe('canceled');
     });
 
-    // An operator's cancel can refund or keep a paid order's money, so it asks a fresh session; the
-    // customer's own cancel, on the same route, is never prompted.
+    /**
+     * An operator's cancel can refund or keep a paid order's money, so it asks a fresh session; the
+     * customer's own cancel, on the same route, is never prompted.
+     */
     it('401s REAUTH_REQUIRED for an operator on a stale session, and cancels nothing', async () => {
         freezeDate();
         const { user: owner } = await authenticateAs('user');
@@ -326,7 +338,7 @@ describe('POST /orders/{id}/cancel', () => {
         expect(second.status).toBe(409);
     });
 
-    /*
+    /**
      * `refund` decides whether money goes back. Read raw, the string `"false"` is truthy and a
      * misspelt key is ignored — both refunded. Neither may reach the service.
      */
@@ -349,10 +361,12 @@ describe('POST /orders/{id}/cancel', () => {
 });
 
 describe('POST /orders/{id}/override-status', () => {
-    // The bug this pins: the order carried its `statusOverrides` history straight through
-    // `additionalProperties: false`'s check with nothing to catch it, because no contract test
-    // ever sent a request through this route at all — the owner's admin's `actorUserId` and
-    // free-text `reason` leaked into every serialized order, this response included.
+    /**
+     * The bug this pins: the order carried its `statusOverrides` history straight through
+     * `additionalProperties: false`'s check with nothing to catch it, because no contract test
+     * ever sent a request through this route at all — the owner's admin's `actorUserId` and
+     * free-text `reason` leaked into every serialized order, this response included.
+     */
     it('matches the contract and never leaks the override history onto the order it returns', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
@@ -439,7 +453,7 @@ describe('POST /orders/search', () => {
     });
 });
 
-/*
+/**
  * The admin write, addressed by path. `email` is the edit: it is the one field every order
  * carries that no lifecycle rule guards, so the case is about the contract, not the rules.
  */
@@ -457,13 +471,15 @@ describe('PUT /orders/{id}', () => {
         expect(response.body.email).toBe('billing@example.com');
     });
 
-    // `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
-    // already-invoiced lines has no safe meaning (see `services/crud.ts`'s `update`), and
-    // reassigning the owner belongs to a support tool, not this endpoint. `status` left this body
-    // entirely with SH1 — it moves only through an action endpoint now (see the route's own
-    // description). `additionalProperties: false` on `ReplaceOrderByIdRequest` is what actually
-    // enforces all three; this pins that a real HTTP request hits that refusal, not just the
-    // generated Zod schema in isolation.
+    /**
+     * `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
+     * already-invoiced lines has no safe meaning (see `services/crud.ts`'s `update`), and
+     * reassigning the owner belongs to a support tool, not this endpoint. `status` left this body
+     * entirely with SH1 — it moves only through an action endpoint now (see the route's own
+     * description). `additionalProperties: false` on `ReplaceOrderByIdRequest` is what actually
+     * enforces all three; this pins that a real HTTP request hits that refusal, not just the
+     * generated Zod schema in isolation.
+     */
     it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
@@ -483,8 +499,10 @@ describe('PUT /orders/{id}', () => {
         expect(response.type).toBe('application/problem+json');
     });
 
-    // PUT names the whole resource: `email` is not clearable (an order always has one), so
-    // `ReplaceOrderByIdRequest` requires it rather than leaving it optional the way PATCH does.
+    /**
+     * PUT names the whole resource: `email` is not clearable (an order always has one), so
+     * `ReplaceOrderByIdRequest` requires it rather than leaving it optional the way PATCH does.
+     */
     it('requires `email` — a replace names the whole resource', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
@@ -673,8 +691,10 @@ describe('GET /orders/{id}/timeline', () => {
             { type: 'paid', data: { method: 'card' } }
         ]);
         expect(asBuyer.status).toBe(200);
-        // The invoice row is buyer-visible and lands whenever the async invoice listener finishes,
-        // so the buyer's list is "paid, maybe the invoice", never the staff-only override.
+        /**
+         * The invoice row is buyer-visible and lands whenever the async invoice listener finishes,
+         * so the buyer's list is "paid, maybe the invoice", never the staff-only override.
+         */
         const buyerRows = (asBuyer.body.items as { type: string }[]).filter(
             (row) => row.type !== 'invoice_issued'
         );

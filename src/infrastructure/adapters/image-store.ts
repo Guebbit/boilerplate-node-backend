@@ -7,7 +7,7 @@
  * under `public/`, a bucket object, or something it does not own at all. One backend exists
  * today: local, under `NODE_PUBLIC_PATH/images/`.
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#where-the-code-lives
  */
 
 import path from 'node:path';
@@ -115,8 +115,10 @@ export interface ImageStore {
  */
 export const IMAGES_SEGMENT = 'images';
 
-/** Version segment for thumbnails — bump it, rather than overwriting existing files in place, the
- * day quality settings change: every url is `immutable, 1y` and cannot be revalidated. */
+/**
+ * Version segment for thumbnails — bump it, rather than overwriting existing files in place, the
+ * day quality settings change: every url is `immutable, 1y` and cannot be revalidated.
+ */
 const THUMBNAIL_VERSION = imageRuleData.thumbnailVersion;
 
 /** The directory `express.static` serves at the site root — where a promoted image finally lands. */
@@ -197,8 +199,10 @@ export const filesystemImageStore: ImageStore = {
     quarantine: async (stagedPath) => {
         const key = path.basename(stagedPath);
         const root = quarantineRoot();
-        // Created on demand, mirroring `resolveUploadDestination` in `http/middlewares/upload.ts`: nothing else
-        // provisions this directory ahead of the first upload.
+        /**
+         * Created on demand, mirroring `resolveUploadDestination` in `http/middlewares/upload.ts`: nothing else
+         * provisions this directory ahead of the first upload.
+         */
         await mkdir(root, { recursive: true });
         await moveFile(stagedPath, path.join(root, key));
         return key;
@@ -214,9 +218,11 @@ export const filesystemImageStore: ImageStore = {
         const root = publicRoot();
         await mkdir(path.join(root, IMAGES_SEGMENT), { recursive: true });
         await writeAtomically(path.join(root, IMAGES_SEGMENT, filename), digested);
-        // Built from literals rather than `path.join`, because this is a URL: on Windows `join`
-        // would answer `\images\x.png`, which `express.static` does not serve and which is broken
-        // the moment it reaches a browser.
+        /**
+         * Built from literals rather than `path.join`, because this is a URL: on Windows `join`
+         * would answer `\images\x.png`, which `express.static` does not serve and which is broken
+         * the moment it reaches a browser.
+         */
         return `/${IMAGES_SEGMENT}/${filename}`;
     },
 
@@ -236,16 +242,20 @@ export const filesystemImageStore: ImageStore = {
         const target = resolveUnderPublicRoot(imageUrl, root);
         if (!target) return Promise.resolve(false);
 
-        // Only files this store could have written as a MAIN image. `promote` always lands a flat
-        // name in `<public>/images/` — anything in a subdirectory belongs to someone else, like
-        // `images/seed/`'s committed demo fixtures. Replacing a seeded record's image must not
-        // permanently unlink one, leaving every re-seed pointing at a 404.
+        /**
+         * Only files this store could have written as a MAIN image. `promote` always lands a flat
+         * name in `<public>/images/` — anything in a subdirectory belongs to someone else, like
+         * `images/seed/`'s committed demo fixtures. Replacing a seeded record's image must not
+         * permanently unlink one, leaving every re-seed pointing at a 404.
+         */
         if (path.dirname(target) !== path.join(root, IMAGES_SEGMENT)) return Promise.resolve(false);
 
-        // The thumbnail is deleted alongside the main image: this is the only call site that knows
-        // a document's image is going away. Left out, every hard delete and replaced image leaks
-        // its thumbnail forever. Best-effort — it may not exist (older image, or a digest job that
-        // never ran) and that's not a failure.
+        /**
+         * The thumbnail is deleted alongside the main image: this is the only call site that knows
+         * a document's image is going away. Left out, every hard delete and replaced image leaks
+         * its thumbnail forever. Best-effort — it may not exist (older image, or a digest job that
+         * never ran) and that's not a failure.
+         */
         const thumbnailPath = path.join(thumbnailsDirectory(root), thumbnailFilename(target));
 
         return Promise.all([deleteFile(target), deleteFile(thumbnailPath)]).then(

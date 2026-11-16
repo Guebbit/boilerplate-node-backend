@@ -9,8 +9,10 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { rejectServiceUnavailable } from '@infrastructure/http/errors';
 import { setEnvironment } from '@tests/environment';
 
-// The refusals are built by the real response helpers elsewhere; here only which one is chosen,
-// and for whom, matters.
+/**
+ * The refusals are built by the real response helpers elsewhere; here only which one is chosen,
+ * and for whom, matters.
+ */
 jest.mock('@infrastructure/http/response', () => ({
     ...jest.requireActual('@infrastructure/http/response'),
     __esModule: true,
@@ -22,6 +24,7 @@ jest.mock('@infrastructure/http/errors', () => ({
     rejectServiceUnavailable: jest.fn()
 }));
 
+/** How often a stream re-checks the caller's permission, copied here so a change is noticed. */
 const REVERIFY_INTERVAL_MS = 30_000;
 
 /** Every response a test made, disconnected afterwards so the per-user counts start at zero. */
@@ -80,7 +83,8 @@ describe('openSseStream', () => {
         expect(fake.headers).toEqual({
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-store, no-transform',
-            Connection: 'keep-alive'
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no'
         });
         expect(fake.flushHeaders).toHaveBeenCalledTimes(1);
     });

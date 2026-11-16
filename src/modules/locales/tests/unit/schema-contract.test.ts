@@ -30,9 +30,11 @@ const normalises = (schema: Parameters<typeof optionsOf>[0], path: string) =>
 
 describe('localeSchema', () => {
     it('requires everything needed to offer a language', () => {
-        // `baseLanguage` is required and never supplied by a caller — the `pre('validate')` hook
-        // below derives it. Required plus derived is the pairing that makes it impossible to
-        // store a row the negotiator cannot match.
+        /**
+         * `baseLanguage` is required and never supplied by a caller — the `pre('validate')` hook
+         * below derives it. Required plus derived is the pairing that makes it impossible to
+         * store a row the negotiator cannot match.
+         */
         expect(requiredPaths(localeSchema)).toEqual(['baseLanguage', 'name', 'nativeName', 'tag']);
     });
 
@@ -42,8 +44,10 @@ describe('localeSchema', () => {
     });
 
     it('stores the tag trimmed and canonical, so the unique index cannot be evaded', () => {
-        // `EN-gb` and `en-GB` are the same language. Without normalisation they are two rows
-        // under a unique index that believes it is doing its job.
+        /**
+         * `EN-gb` and `en-GB` are the same language. Without normalisation they are two rows
+         * under a unique index that believes it is doing its job.
+         */
         expect(stored(localeSchema, 'tag', '  EN-gb ')).toBe('en-GB');
         expect(stored(localeSchema, 'tag', 'zh-hant-tw')).toBe('zh-Hant-TW');
         // Never throws: a malformed tag is stored as written and refused by validation.
@@ -55,8 +59,10 @@ describe('localeSchema', () => {
     });
 
     it('defaults a language to left-to-right, active, at revision zero', () => {
-        // `active: true` — adding a language publishes it. `revision: 0` is the counter clients
-        // poll to know their dictionary is stale; absent, every client would refetch forever.
+        /**
+         * `active: true` — adding a language publishes it. `revision: 0` is the counter clients
+         * poll to know their dictionary is stale; absent, every client would refetch forever.
+         */
         expect(defaultOf(localeSchema, 'direction')).toBe(LocaleDirection.ltr);
         expect(defaultOf(localeSchema, 'active')).toBe(true);
         expect(defaultOf(localeSchema, 'revision')).toBe(0);
@@ -69,9 +75,11 @@ describe('localeSchema', () => {
 
 describe('deriveBaseLanguage', () => {
     it('takes the primary subtag', () => {
-        // `en-GB` and `en-US` must both negotiate against `en`, or a client asking for a regional
-        // variant nobody has translated falls back to the API default instead of to its own
-        // language.
+        /**
+         * `en-GB` and `en-US` must both negotiate against `en`, or a client asking for a regional
+         * variant nobody has translated falls back to the API default instead of to its own
+         * language.
+         */
         expect(deriveBaseLanguage('en-GB')).toBe('en');
         expect(deriveBaseLanguage('pt-BR')).toBe('pt');
     });
@@ -81,8 +89,10 @@ describe('deriveBaseLanguage', () => {
     });
 
     it('normalises case and surrounding whitespace', () => {
-        // The stored value feeds a case-sensitive comparison in the negotiator, and a tag arrives
-        // from an `Accept-Language` header written by whoever wrote the client.
+        /**
+         * The stored value feeds a case-sensitive comparison in the negotiator, and a tag arrives
+         * from an `Accept-Language` header written by whoever wrote the client.
+         */
         expect(deriveBaseLanguage('  EN-gb ')).toBe('en');
         expect(deriveBaseLanguage('IT')).toBe('it');
     });
@@ -90,14 +100,18 @@ describe('deriveBaseLanguage', () => {
 
 describe('localeEntrySchema', () => {
     it('requires the full compound identity of a translation', () => {
-        // `value` is not required: an empty string is a legitimate translation — it is how a
-        // string is deliberately blanked — and the default below makes that the initial state.
+        /**
+         * `value` is not required: an empty string is a legitimate translation — it is how a
+         * string is deliberately blanked — and the default below makes that the initial state.
+         */
         expect(requiredPaths(localeEntrySchema)).toEqual(['app', 'key', 'locale']);
     });
 
     it('makes one value per locale, app and key a database fact', () => {
-        // The compound identity. This is what lets a merge be an upsert rather than a
-        // read-modify-write, and what stops a re-save from shadowing the original with a copy.
+        /**
+         * The compound identity. This is what lets a merge be an upsert rather than a
+         * read-modify-write, and what stops a re-save from shadowing the original with a copy.
+         */
         expect(indexSpecs(localeEntrySchema)).toEqual([
             'localeEntries_locale_app_key: locale+1, app+1, key+1'
         ]);
@@ -107,9 +121,11 @@ describe('localeEntrySchema', () => {
     });
 
     it('canonicalises the locale, lower-cases the app, and leaves the key alone', () => {
-        // Locale and app are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
-        // and `cart.empty` are different keys, and lower-casing them would silently merge two
-        // strings into one.
+        /**
+         * Locale and app are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
+         * and `cart.empty` are different keys, and lower-casing them would silently merge two
+         * strings into one.
+         */
         expect(stored(localeEntrySchema, 'locale', 'PT-br')).toBe('pt-BR');
         expect(normalises(localeEntrySchema, 'app')).toMatchObject({ lowercase: true });
         expect(normalises(localeEntrySchema, 'key').lowercase).toBeUndefined();
@@ -117,8 +133,10 @@ describe('localeEntrySchema', () => {
     });
 
     it('defaults a value to the empty string rather than leaving it absent', () => {
-        // A missing key and a key set to nothing are different states to an editor; `''` is what
-        // makes "declared but untranslated" representable.
+        /**
+         * A missing key and a key set to nothing are different states to an editor; `''` is what
+         * makes "declared but untranslated" representable.
+         */
         expect(defaultOf(localeEntrySchema, 'value')).toBe('');
     });
 

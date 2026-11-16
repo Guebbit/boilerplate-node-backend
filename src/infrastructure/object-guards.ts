@@ -27,8 +27,10 @@ export const isPlainObject = (value: unknown): value is Record<string, unknown> 
  * @returns a copy without the keys whose value is `undefined`
  */
 export const stripUndefined = <T extends Record<string, unknown>>(source: T): T =>
-    // `Object.fromEntries` returns `{ [k: string]: unknown }`; the cast restores `T`, whose keys
-    // are the subset that survived the filter.
+    /**
+     * `Object.fromEntries` returns `{ [k: string]: unknown }`; the cast restores `T`, whose keys
+     * are the subset that survived the filter.
+     */
     Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
 
 /**

@@ -5,7 +5,7 @@
  * usually emits a domain event; one that writes a notice itself, or reads who works a set, calls
  * the service published here.
  *
- * @see docs/modules/notifications.md
+ * @see docs/modules/notifications.md#its-neighbourhood
  */
 
 export * from './services';

@@ -4,7 +4,7 @@
  * with the modules that are enabled — see `modules/account/audit.ts` for why.
  * Here: create, update, status change, delete and cover change of an example, listed in `rules.yaml`.
  *
- * @see docs/operate/winston.md
+ * @see docs/operate/winston.md#audit-events
  */
 
 import { exampleAuditActions } from './rules.generated';

@@ -71,7 +71,7 @@ export const readUploadedImage = (
         'storedImageUrls' | 'storedThumbnailUrls' | 'quarantinedImageKeys' | 'body'
     >
 ): RequestImage => {
-    /*
+    /**
      * Read back what the upload middleware recorded, never derived from multer's path: the store
      * CONSTRUCTS these urls, which is what keeps a filesystem separator out of a persisted value
      * and lets the same controller work whether the store answered a local path or a CDN url.
@@ -96,15 +96,19 @@ export const readUploadedImage = (
             deleteUpload: () => imageStore.removeQuarantined(pendingKey)
         };
 
-    // This helper is shared by every image-accepting controller, so the "no body at all" guard
-    // (express 5 leaves `request.body` unset when no parser matched the content-type) covers all
-    // of them at once.
+    /**
+     * This helper is shared by every image-accepting controller, so the "no body at all" guard
+     * (express 5 leaves `request.body` unset when no parser matched the content-type) covers all
+     * of them at once.
+     */
     const bodyImageUrl = bodyRecordOf(request).imageUrl;
 
     return {
-        // Only the literal `null` ("remove") is honoured. The contract refuses any other body
-        // value before a controller runs; a string that got here anyway is dropped rather than
-        // trusted, since a client-named path is what lets one record delete another's file.
+        /**
+         * Only the literal `null` ("remove") is honoured. The contract refuses any other body
+         * value before a controller runs; a string that got here anyway is dropped rather than
+         * trusted, since a client-named path is what lets one record delete another's file.
+         */
         imageUrl: bodyImageUrl === null ? null : undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,

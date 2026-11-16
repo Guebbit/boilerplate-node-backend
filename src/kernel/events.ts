@@ -70,7 +70,6 @@ export const domainEventsWired = (): boolean => wired;
  * Call from a module's `subscribe()` hook rather than at import time, so the set of live handlers
  * is decided by `src/modules.ts` and not by whichever file something happened to import first.
  *
- * @param name - the event name
  * @param handler - invoked with the payload and its {@link DomainEventMeta}; may be async
  */
 export const onDomainEvent = <TEventName extends DomainEventName>(
@@ -99,8 +98,6 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
  * emit was allowed to proceed. The outbox relay needs it to know whether to deliver a row again;
  * every other caller ignores it and keeps the fire-and-continue behaviour.
  *
- * @param name - the event name
- * @param payload - the event payload
  * @param meta - see {@link DomainEventMeta}; only the outbox relay passes one
  * @returns `true` when every handler resolved, `false` when at least one threw
  */
@@ -118,8 +115,8 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
             await (handler as DomainEventHandler<TEventName>)(payload, meta);
         } catch (error) {
             settled = false;
-            // Stryker disable next-line all
             // `{ error }`, not the bare error: a bare one is spread onto the record with its stack.
+            // Stryker disable next-line all
             logger.error(`Domain event handler failed for "${name}"`, { error });
         }
 

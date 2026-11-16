@@ -19,6 +19,7 @@ import {
 } from '../../../../scripts/contracts/openapi-extensions';
 import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
 
+/** Temp roots the cases created, removed after each case. */
 const roots: string[] = [];
 
 afterEach(() => {

@@ -35,8 +35,10 @@ export const readShelf = (productIds: readonly string[]): Promise<Map<string, Sh
     const ids = [...new Set(productIds)];
     return productService.findManyByIds(ids).then((products) => {
         const byId = new Map(products.map((product) => [String(product._id), product]));
-        // The catalogue says which are preorders and which are open to backorder; the ledger then
-        // answers their allowance, or the shelf and the room together, instead of the shelf.
+        /**
+         * The catalogue says which are preorders and which are open to backorder; the ledger then
+         * answers their allowance, or the shelf and the room together, instead of the shelf.
+         */
         const lines = ids.map((id) => ({ productId: id, product: byId.get(id) ?? null }));
         return inventoryService.availableFor(ids, preorderIdsOf(lines), backorderIdsOf(lines)).then(
             (positions) =>

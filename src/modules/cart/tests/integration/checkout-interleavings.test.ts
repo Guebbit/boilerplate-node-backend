@@ -95,6 +95,7 @@ interface CartWrite {
     run: (ctx: { userId: string; productId: string; otherId: string }) => Promise<unknown>;
 }
 
+/** Every cart write that can race a checkout; each case pairs one with a checkout. */
 const CART_WRITES: readonly CartWrite[] = [
     {
         name: 'adds another product',
@@ -180,8 +181,10 @@ describe('a cart write between the version read and the clear', () => {
 
 describe('a reprice between the catalogue read and the order write', () => {
     it('prices lines, shipping and the payment intent off the one reading', async () => {
-        // 3 x 40 = 120 clears standard shipping's free-above-100 line; repriced to 10 mid-join the
-        // basket would not. A mix (new price, old shipping decision) would total 30, or 125.
+        /**
+         * 3 x 40 = 120 clears standard shipping's free-above-100 line; repriced to 10 mid-join the
+         * basket would not. A mix (new price, old shipping decision) would total 30, or 125.
+         */
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ price: '40.00', onHand: 10 });

@@ -43,8 +43,10 @@ describe('RW1 — concurrent saves of the SAME product', () => {
         );
 
         expectNoServerErrors(results);
-        // Idempotence is the CONTRACT here, not a tolerated outcome: every participant is a save
-        // that succeeded, because saving what is already saved is the state each one asked for.
+        /**
+         * Idempotence is the CONTRACT here, not a tolerated outcome: every participant is a save
+         * that succeeded, because saving what is already saved is the state each one asked for.
+         */
         expect(countStatus(results, 200)).toBe(RACE_SIZE);
 
         expect(await wishlistModel.countDocuments({ userId: user._id })).toBe(1);
@@ -56,9 +58,11 @@ describe('RW1 — concurrent saves of the SAME product', () => {
 
 describe('RW1 — concurrent saves of DIFFERENT products', () => {
     it('keeps every line, on one wishlist', async () => {
-        // The multi-product shape, for the same reason `cart-races.test.ts` carries one: a
-        // single-product race cannot tell a working set-append from a broken one, because the
-        // "one line" it asserts is also what a duplicate-losing implementation produces.
+        /**
+         * The multi-product shape, for the same reason `cart-races.test.ts` carries one: a
+         * single-product race cannot tell a working set-append from a broken one, because the
+         * "one line" it asserts is also what a duplicate-losing implementation produces.
+         */
         const { user, bearer } = await authenticateAs();
         const products = await Promise.all(
             Array.from({ length: RACE_SIZE }, (_, index) =>
@@ -83,7 +87,7 @@ describe('RW1 — concurrent saves of DIFFERENT products', () => {
 });
 
 describe('RW2 — the FIRST save, raced', () => {
-    /*
+    /**
      * The document race, and the only state it is reachable from. `authenticateAs()` creates a
      * fresh account, so there is no wishlist yet and every participant's `upsert` is a live
      * insert attempt.
@@ -114,7 +118,7 @@ describe('RW2 — the FIRST save, raced', () => {
 });
 
 describe('a save and a move-to-cart on the same line', () => {
-    /*
+    /**
      * The two writes that touch one line from opposite ends. Whichever order they land in, the
      * outcomes that must NOT happen are the same: a second wishlist document, a duplicated line,
      * or a 5xx. The line itself may end up saved or moved — that is the race's honest result and
@@ -148,8 +152,10 @@ describe('a save and a move-to-cart on the same line', () => {
         );
 
         expectNoServerErrors(results);
-        // Every participant either did its write or found the line already gone. 404 is the
-        // documented answer to the second, so the two together must account for all of them.
+        /**
+         * Every participant either did its write or found the line already gone. 404 is the
+         * documented answer to the second, so the two together must account for all of them.
+         */
         expect(countStatus(results, 200) + countStatus(results, 404)).toBe(RACE_SIZE);
 
         expect(await wishlistModel.countDocuments({ userId: user._id })).toBe(1);

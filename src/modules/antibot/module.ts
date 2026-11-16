@@ -8,7 +8,7 @@
  * provider selection and its secrets, since that gate keeps running whether or not this module's
  * two HTTP routes are even mounted.
  *
- * @see docs/modules/antibot.md
+ * @see docs/modules/antibot.md#its-neighbourhood
  */
 
 import type { AppModule } from '@kernel/registry';
@@ -18,7 +18,9 @@ import { router } from './routes';
 export default {
     name: 'antibot',
     mounts: [{ basePath: '/antibot', routes: router }],
-    // No persistence, no collection — a stateless challenge issued to a caller who, by
-    // construction, has no account yet.
+    /**
+     * No persistence, no collection — a stateless challenge issued to a caller who, by
+     * construction, has no account yet.
+     */
     personalData: 'none'
 } satisfies AppModule;

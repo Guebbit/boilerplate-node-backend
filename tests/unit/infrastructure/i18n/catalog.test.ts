@@ -56,8 +56,10 @@ describe('locale discovery', () => {
 
         // The shared half is carried through verbatim...
         expect(italian).toMatchObject(itTranslation);
-        // ...and the modules layer their own namespaces on top. `users` is asserted rather than
-        // just "something was added", so a merge that silently dropped a contribution fails.
+        /**
+         * ...and the modules layer their own namespaces on top. `users` is asserted rather than
+         * just "something was added", so a merge that silently dropped a contribution fails.
+         */
         expect(italian.users).toMatchObject(itUsers.users);
     });
 
@@ -68,8 +70,10 @@ describe('locale discovery', () => {
         });
     });
 
-    // The shared file is resolved from the module's own location rather than from `process.cwd()`,
-    // so a jest worker, a one-off script and `src/cluster.ts` all read the same directory.
+    /**
+     * The shared file is resolved from the module's own location rather than from `process.cwd()`,
+     * so a jest worker, a one-off script and `src/cluster.ts` all read the same directory.
+     */
     it('finds the shared dictionaries whatever the working directory is', () => {
         const originalCwd = process.cwd();
         process.chdir('/');

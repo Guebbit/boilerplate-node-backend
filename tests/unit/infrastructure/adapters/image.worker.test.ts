@@ -14,8 +14,10 @@
 import { createHash } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
 
-/** The same derivation `image.worker.ts#contentStem` uses — computed here, not hardcoded, so a
- *  change to the hash algorithm or its length moves this expectation with it. */
+/**
+ * The same derivation `image.worker.ts#contentStem` uses — computed here, not hardcoded, so a
+ *  change to the hash algorithm or its length moves this expectation with it.
+ */
 const contentStemOf = (owner: string, digested: Buffer): string =>
     `${owner}-${createHash('sha256').update(digested).digest('hex').slice(0, 24)}`;
 
@@ -62,14 +64,23 @@ import {
     type ImageWriteback
 } from '@infrastructure/adapters/image.worker';
 
+/** Typed handle on the mocked `ReadQuarantined`. */
 const mockedReadQuarantined = imageStore.readQuarantined as jest.Mock;
+/** Typed handle on the mocked `Promote`. */
 const mockedPromote = imageStore.promote as jest.Mock;
+/** Typed handle on the mocked `PutDerivative`. */
 const mockedPutDerivative = imageStore.putDerivative as jest.Mock;
+/** Typed handle on the mocked `RemoveQuarantined`. */
 const mockedRemoveQuarantined = imageStore.removeQuarantined as jest.Mock;
+/** Typed handle on the mocked `Remove`. */
 const mockedRemove = imageStore.remove as jest.Mock;
+/** Typed handle on the mocked `DigestImage`. */
 const mockedDigestImage = digestImage as jest.Mock;
+/** Typed handle on the mocked `ThumbnailImage`. */
 const mockedThumbnailImage = thumbnailImage as jest.Mock;
+/** Typed handle on the mocked `IdentifyImage`. */
 const mockedIdentifyImage = identifyImage as jest.Mock;
+/** Typed handle on the mocked `PublishToQueue`. */
 const mockedPublishToQueue = publishToQueue as jest.Mock;
 /** The cache sweep a finished digest triggers — asserted, so a silent writeback is a failure. */
 const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
@@ -117,8 +128,10 @@ describe('digestQuarantinedImage', () => {
         expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
     });
 
-    /* A magic-byte check already ran at upload time, but a payload smuggled past it, or bytes
-       corrupted in quarantine, must not reach `digestImage` with a format it cannot re-encode. */
+    /**
+     * A magic-byte check already ran at upload time, but a payload smuggled past it, or bytes
+     * corrupted in quarantine, must not reach `digestImage` with a format it cannot re-encode.
+     */
     it('rejects bytes that do not identify as an accepted format', async () => {
         mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
         mockedIdentifyImage.mockReturnValue(undefined);
@@ -187,7 +200,7 @@ describe('handleImageDigestJob', () => {
         expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
     });
 
-    /*
+    /**
      * The writeback's own database call failing is transient: the retry must still find the
      * quarantined bytes, or every retry fails on a missing file and the upload is lost.
      */
@@ -253,8 +266,10 @@ describe('handleImageDigestJob', () => {
         expect(writeback).not.toHaveBeenCalled();
     });
 
-    /* A bad decode is permanent — every redelivery decodes the same bytes the same way — so it is
-       dead-lettered (false) rather than left to reject, and the quarantine file is cleared. */
+    /**
+     * A bad decode is permanent — every redelivery decodes the same bytes the same way — so it is
+     * dead-lettered (false) rather than left to reject, and the quarantine file is cleared.
+     */
     it('dead-letters and clears quarantine when the digest itself fails', async () => {
         mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
         mockedIdentifyImage.mockReturnValue(undefined);
@@ -266,7 +281,7 @@ describe('handleImageDigestJob', () => {
         expect(writeback).not.toHaveBeenCalled();
     });
 
-    /*
+    /**
      * A storage failure is presumed TRANSIENT — unlike a bad decode, retrying it can genuinely
      * succeed (the disk fills, then frees up again). Rethrown, not resolved `false`, so
      * `consumeFromQueue` nacks and retries the delivery, and the quarantine file the retry still
@@ -332,8 +347,10 @@ describe('enqueueImageDigest', () => {
         expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
 
-    /* The gap this file's own docblock calls out: the inline path shares `settleWriteback` with
-       the queued one, so a stale/mismatched writeback cleans up here too, not only off the queue. */
+    /**
+     * The gap this file's own docblock calls out: the inline path shares `settleWriteback` with
+     * the queued one, so a stale/mismatched writeback cleans up here too, not only off the queue.
+     */
     it('cleans up the promoted files when the inline writeback matches nothing', async () => {
         mockedPublishToQueue.mockResolvedValue(false);
         primeSuccessfulDigest();

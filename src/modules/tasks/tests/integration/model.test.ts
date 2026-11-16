@@ -13,6 +13,7 @@ import { taskService } from '@modules/tasks/services';
 
 setupTestDb();
 
+/** A task through the repository, with valid required fields. */
 const createTask = () =>
     taskRepository.create({
         email: 'reporter@example.com',

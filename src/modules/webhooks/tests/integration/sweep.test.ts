@@ -19,7 +19,9 @@ import { mintRingSecret } from '@modules/webhooks/secrets';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 
+/** Stands in for the queue publisher; a case picks whether it accepts. */
 const publishToQueueMock = jest.fn<Promise<boolean>, [unknown]>().mockResolvedValue(true);
+/** Stands in for the delivery step; the cases assert which subscriptions it ran for. */
 const deliverWebhookMock = jest.fn();
 jest.mock('@modules/webhooks/transport/webhook-delivery', () => ({
     ...jest.requireActual('@modules/webhooks/transport/webhook-delivery'),
@@ -71,8 +73,10 @@ it('publishes a due pending row, without claiming it', async () => {
         payload: { deliveryId: String(due._id) }
     });
 
-    // Unclaimed: the sweep never sets `in_flight` — see `sweep.ts`'s own docblock for why a
-    // duplicate publish is safe without it.
+    /**
+     * Unclaimed: the sweep never sets `in_flight` — see `sweep.ts`'s own docblock for why a
+     * duplicate publish is safe without it.
+     */
     const stored = await webhookDeliveryRepository.findById(String(due._id));
     expect(stored?.status).toBe('pending');
 });

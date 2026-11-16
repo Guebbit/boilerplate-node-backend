@@ -18,9 +18,11 @@
 const parseCanonical = (tag: string): string | undefined => {
     // eslint-disable-next-line no-restricted-syntax -- Intl has no non-throwing parse; the RangeError is contained here and read as "malformed"
     try {
-        // Intl: canonicalises casing and deprecated subtags (`iw` -> `he`), throws a RangeError on
-        // a malformed tag (`en-a`, `en_US`), returns `[]` for an empty one.
-        // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/getCanonicalLocales
+        /**
+         * Intl: canonicalises casing and deprecated subtags (`iw` -> `he`), throws a RangeError on
+         * a malformed tag (`en-a`, `en_US`), returns `[]` for an empty one.
+         * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/getCanonicalLocales
+         */
         return Intl.getCanonicalLocales(tag).at(0);
     } catch {
         // The throw IS the answer: a malformed tag is a refusal, not an error to surface.
@@ -53,8 +55,10 @@ export const canonicalLocale = (tag: string): string => parseCanonical(tag) ?? t
  */
 export const baseLanguage = (tag: string): string => {
     const canonical = parseCanonical(tag);
-    // Intl.Locale: `.language` is the primary subtag of a parsed tag.
-    // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/Locale/language
+    /**
+     * Intl.Locale: `.language` is the primary subtag of a parsed tag.
+     * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/Locale/language
+     */
     return canonical === undefined
         ? tag.split('-', 1)[0].toLowerCase()
         : new Intl.Locale(canonical).language;

@@ -14,6 +14,7 @@ import { orderModel } from '../../model';
 
 setupTestDb();
 
+/** A full shipping address: every field the redaction must clear. */
 const SHIPPING = {
     fullName: 'Ada Lovelace',
     street: '12 Analytical Engine Rd',
@@ -22,6 +23,7 @@ const SHIPPING = {
     country: 'GB',
     phone: '+44 20 0000 0000'
 };
+/** A full billing address: every field the redaction must clear. */
 const BILLING = {
     fullName: 'Ada Lovelace',
     street: '1 Accounts Office Way',
@@ -29,6 +31,7 @@ const BILLING = {
     zip: 'SW1A',
     country: 'GB'
 };
+/** Free text the buyer left on the order, which the redaction must clear. */
 const NOTES = 'Leave with the concierge, 2nd floor';
 
 /** One order with every encrypted field set. */

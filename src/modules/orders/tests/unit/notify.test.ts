@@ -12,6 +12,7 @@ import { mailBuyer } from '../../services/notify';
 import { ANONYMIZED_EMAIL } from '../../domain/anonymization';
 import type { OrderDocument } from '../../model';
 
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const enqueueEmailMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: (...args: unknown[]) => enqueueEmailMock(...args)

@@ -6,7 +6,7 @@
  * Driven through `POST /tasks` with signed-in callers. Supertest sends every request from one IP,
  * so two anonymous callers could not be told apart; an account id is the caller that can.
  *
- * @see docs/understand/idempotency.md
+ * @see docs/understand/idempotency.md#how-it-works
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

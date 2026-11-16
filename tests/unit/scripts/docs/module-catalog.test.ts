@@ -14,6 +14,7 @@ const entry = (over: Partial<CatalogEntry> & Pick<CatalogEntry, 'name'>): Catalo
     ...over
 });
 
+/** A small module catalogue the cases render. */
 const CATALOGUE: CatalogEntry[] = [
     entry({ name: 'orders', group: 'shop' }),
     entry({ name: 'feedback' }),

@@ -70,27 +70,27 @@ const isRawBodyPath = (url: string): boolean => {
  * @param server - the listening server returned by `app.listen`
  */
 export const applyServerTimeouts = (server: Server): void => {
-    /*
+    /**
      * Headers are small and arrive at once, so anything past a few seconds is a client trickling
      * them. Measured from the request's FIRST BYTE, not from when the socket opened, so this may
      * safely sit below `keepAliveTimeout` — an idle keep-alive socket is not affected.
      */
     server.headersTimeout = appConfig().NODE_HTTP_HEADERS_TIMEOUT_MS;
 
-    /*
+    /**
      * The whole request, headers and body. Generous rather than tight because it is also the
      * ceiling on a legitimate upload: `NODE_MAX_UPLOAD_BYTES` (5 MB) over a poor mobile link needs
      * most of this, and the endpoint answering 408 mid-upload is worse than the connection cost.
      */
     server.requestTimeout = appConfig().NODE_HTTP_REQUEST_TIMEOUT_MS;
 
-    /*
+    /**
      * Node's own 5s default, exposed rather than changed. The proxy closes idle connections
      * first: its idle-to-app timeout must stay below this. If the proxy holds a socket this server
      * has already closed, it sends the next request into a dead connection and answers 502 to a
      * caller who did nothing wrong.
      *
-     * @see docs/understand/security.md
+     * @see docs/understand/security.md#one-environment-switch
      */
     server.keepAliveTimeout = appConfig().NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
 };
@@ -101,15 +101,19 @@ export const applyServerTimeouts = (server: Server): void => {
  * @param app - the express application to configure
  */
 export const installSecurity = (app: Express): void => {
-    // Strong rather than Express's default weak ETags: a weak comparison can answer 304 for content
-    // that did change, serving stale data.
+    /**
+     * Strong rather than Express's default weak ETags: a weak comparison can answer 304 for content
+     * that did change, serving stale data.
+     */
     app.set('etag', 'strong');
 
-    // No validator on a PUT answer (RFC 9110 §9.3.4), and on any other write only an ETag the API
-    // made itself: the content tag above is neither.
+    /**
+     * No validator on a PUT answer (RFC 9110 §9.3.4), and on any other write only an ETag the API
+     * made itself: the content tag above is neither.
+     */
     app.use(dropUnownedValidators);
 
-    /*
+    /**
      * How many reverse proxies sit in front of this process — the COUNT, never `true`, so Express
      * counts back from the forgeable end of `X-Forwarded-For`. `0` means "use the socket address".
      *
@@ -123,8 +127,10 @@ export const installSecurity = (app: Express): void => {
     const trustProxyHops = appConfig().NODE_TRUST_PROXY_HOPS;
     app.set('trust proxy', trustProxyHops === 0 ? false : trustProxyHops);
 
-    // After `trust proxy`, so `request.ip` is the resolved address: the span's `client.address`
-    // follows it, not the caller's own `X-Forwarded-For`.
+    /**
+     * After `trust proxy`, so `request.ip` is the resolved address: the span's `client.address`
+     * follows it, not the caller's own `X-Forwarded-For`.
+     */
     app.use(stampClientAddress);
 
     /**
@@ -132,7 +138,7 @@ export const installSecurity = (app: Express): void => {
      */
     app.use(helmet());
 
-    /*
+    /**
      * `Vary: Origin` on EVERY response. `cors` adds it only when it reflects an allowed origin, so
      * a refused origin's answer (no CORS headers) could be stored by a shared cache under the same
      * key as the real frontend's, which would then be served the header-less variant and fail
@@ -164,7 +170,7 @@ export const installSecurity = (app: Express): void => {
                     callback(null, true);
                     return;
                 }
-                /*
+                /**
                  * `false`, never an `Error`. Handing `cors` an error marks the REQUEST as failed:
                  * it throws into the express error chain and a valid call answers a generic 500
                  * before its route ever runs. `false` omits `Access-Control-Allow-Origin` and
@@ -183,24 +189,34 @@ export const installSecurity = (app: Express): void => {
                 'X-Requested-With',
                 'x-request-id',
                 'traceparent',
-                // Declared by the contract on the retry-safe writes; a browser sending it would
-                // otherwise fail the preflight.
+                /**
+                 * Declared by the contract on the retry-safe writes; a browser sending it would
+                 * otherwise fail the preflight.
+                 */
                 'Idempotency-Key',
-                // Declared by the contract on PUT/PATCH/DELETE of a versioned row — see
-                // `src/infrastructure/http/preconditions.ts`.
+                /**
+                 * Declared by the contract on PUT/PATCH/DELETE of a versioned row — see
+                 * `src/infrastructure/http/preconditions.ts`.
+                 */
                 'If-Match',
                 // Read by humanChallengeGate (human-challenge.ts) once a provider is active.
                 'antibot-challenge-token',
-                // Read by callerContextOf (infrastructure/http/request.ts) for every request's
-                // analytics-consent flag.
+                /**
+                 * Read by callerContextOf (infrastructure/http/request.ts) for every request's
+                 * analytics-consent flag.
+                 */
                 'analytics-consent',
-                // Marks a poll or keep-alive as not the person acting (`kernel/middlewares/
-                // authorizations.ts`, declared at `/account/sessions/current/touch`); a browser sending it
-                // would otherwise fail the preflight.
+                /**
+                 * Marks a poll or keep-alive as not the person acting (`kernel/middlewares/
+                 * authorizations.ts`, declared at `/account/sessions/current/touch`); a browser sending it
+                 * would otherwise fail the preflight.
+                 */
                 'Session-Passive'
             ],
-            // What a browser client may read off a response: the rate-limit answer (IETF draft-11
-            // headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
+            /**
+             * What a browser client may read off a response: the rate-limit answer (IETF draft-11
+             * headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
+             */
             exposedHeaders: [
                 'x-request-id',
                 'traceparent',
@@ -213,8 +229,10 @@ export const installSecurity = (app: Express): void => {
                 'Location',
                 // Which resource a write's answer (and its ETag) is the representation of.
                 'Content-Location',
-                // The server-chosen download name (invoice number, dated export): a browser client
-                // cannot read it unless it is listed here.
+                /**
+                 * The server-chosen download name (invoice number, dated export): a browser client
+                 * cannot read it unless it is listed here.
+                 */
                 'Content-Disposition',
                 // Whether an `Idempotency-Key` request was answered from its stored first answer.
                 'Idempotent-Replayed'
@@ -239,7 +257,7 @@ export const installRequestParsing = (app: Express): void => {
     // First: a request past its budget is refused before its body is read.
     app.use(rateLimiter);
 
-    /*
+    /**
      * The JSON parser, plus the one exception every webhook-receiving application needs.
      *
      * A signed callback is authenticated by an HMAC over the EXACT bytes the sender transmitted,
@@ -249,24 +267,30 @@ export const installRequestParsing = (app: Express): void => {
      * unconditional copy of every body the API receives.
      */
     const jsonParser = express.json({
-        // `express.json()`'s own default (`100kb`) is already a bound, but an implicit one nobody
-        // reading this file would find. Explicit and configurable, same shape as
-        // `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
+        /**
+         * `express.json()`'s own default (`100kb`) is already a bound, but an implicit one nobody
+         * reading this file would find. Explicit and configurable, same shape as
+         * `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
+         */
         limit: appConfig().NODE_JSON_BODY_LIMIT,
-        // Any JSON value parses (RFC 8259 §2); the shape is judged by `requireJsonObjectBody` below,
-        // so a scalar or `null` body is a 422 like any other wrong shape, never the parser's 400.
+        /**
+         * Any JSON value parses (RFC 8259 §2); the shape is judged by `requireJsonObjectBody` below,
+         * so a scalar or `null` body is a 422 like any other wrong shape, never the parser's 400.
+         */
         strict: false,
         type: JSON_BODY_TYPES,
         verify: (request, _response, buffer) => {
-            // One cast, with a reason: `express.json` types its `verify` hook against the bare
-            // `http.IncomingMessage` the parser sees. It is the same object express has
-            // already decorated — `rawBody` is declared on it in `globals.d.ts`.
+            /**
+             * One cast, with a reason: `express.json` types its `verify` hook against the bare
+             * `http.IncomingMessage` the parser sees. It is the same object express has
+             * already decorated — `rawBody` is declared on it in `globals.d.ts`.
+             */
             const decorated = request as Request;
             if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
         }
     });
 
-    /*
+    /**
      * A GET or HEAD body is never parsed: `request.body` stays `undefined` whatever the route reads.
      *
      * Why: content on a GET has no defined semantics (RFC 9110 §9.3.1, §9.3.2) and Zalando says it
@@ -280,18 +304,24 @@ export const installRequestParsing = (app: Express): void => {
             : jsonParser(request, response, next)
     );
 
-    // Right after the parser: a body nested past the depth limit is refused before any walker
-    // (fingerprint, cache key, schema) can overflow the stack on it.
+    /**
+     * Right after the parser: a body nested past the depth limit is refused before any walker
+     * (fingerprint, cache key, schema) can overflow the stack on it.
+     */
     app.use(limitJsonDepth);
 
-    // After the depth guard, before idempotency fingerprinting and every route: a body that is not
-    // a JSON object is a 422 (RFC 5789 §2.2). A raw-body (webhook) path keeps whatever it was sent.
+    /**
+     * After the depth guard, before idempotency fingerprinting and every route: a body that is not
+     * a JSON object is a 422 (RFC 5789 §2.2). A raw-body (webhook) path keeps whatever it was sent.
+     */
     app.use((request, response, next) =>
         isRawBodyPath(request.url) ? next() : requireJsonObjectBody(request, response, next)
     );
 
-    // cookie-parser: fills `request.cookies` from the `Cookie` header (no secret: nothing is signed).
-    // https://github.com/expressjs/cookie-parser#readme
+    /**
+     * cookie-parser: fills `request.cookies` from the `Cookie` header (no secret: nothing is signed).
+     * https://github.com/expressjs/cookie-parser#readme
+     */
     app.use(cookieParser());
 
     // After the parsers, before any route: a body no parser understood is refused, not read as `{}`.

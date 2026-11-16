@@ -24,7 +24,7 @@
  * Also holds the hostile-CONTENT cases (depth, `__proto__`), which are a different question —
  * well-formed bodies carrying something nasty — but need this exact harness.
  *
- * @see docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md#validation-at-the-edge-rules-inside
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -233,8 +233,10 @@ describe('a body express never parsed', () => {
         }
     );
 
-    // Express matches `/Account` to the `/account` routes, so the gate has to as well: a path
-    // spelled in another case must not wave a body through unchecked.
+    /**
+     * Express matches `/Account` to the `/account` routes, so the gate has to as well: a path
+     * spelled in another case must not wave a body through unchecked.
+     */
     it('answers 415 to a text/plain body on a path spelled in another case', async () => {
         const { bearer } = await authenticateAs('user');
 

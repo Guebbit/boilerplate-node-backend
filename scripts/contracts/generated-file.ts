@@ -1,4 +1,4 @@
-/*
+/**
  * The write-or-verify tail every contract generator ends with, in one place.
  *
  * SHARED SCRIPT — byte-identical in both repos of the pair.

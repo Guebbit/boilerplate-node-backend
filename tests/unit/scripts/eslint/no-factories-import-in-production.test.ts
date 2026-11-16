@@ -12,8 +12,11 @@ import { writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '@tests/paths';
 
+/** The eslint binary the probe is run with. */
 const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
+/** Path of the probe file the case writes. */
 const PROBE_PATH = path.join(REPO_ROOT, 'src/modules/users/__factories-import-probe.ts');
+/** The probe file path, relative to the repo root, as eslint reports it. */
 const PROBE_RELATIVE = path.relative(REPO_ROOT, PROBE_PATH);
 
 /** One run of the real `eslint` CLI, `--format json` parsed back into its message list. */

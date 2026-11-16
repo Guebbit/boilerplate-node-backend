@@ -54,8 +54,10 @@ export const deliverEmailCode = (
     const code = generateDeliveredCode();
     armDeliveredCode(slot, code);
 
-    // The recipient's OWN language, exactly as the verification and reset mails choose theirs:
-    // the copy is finished before the job is published, so the worker needs no locale at all.
+    /**
+     * The recipient's OWN language, exactly as the verification and reset mails choose theirs:
+     * the copy is finished before the job is published, so the worker needs no locale at all.
+     */
     const mail = buildMail(
         recipientLocale(user.locale, context),
         greetableName(user, user.email),
@@ -68,8 +70,10 @@ export const deliverEmailCode = (
         method: 'email',
         sentTo: maskEmail(user.email),
         resendAfter: DELIVERED_CODE_RESEND_SECONDS,
-        // Non-null: `armDeliveredCode` just set it, and it is the one thing this promise
-        // is built to report back.
+        /**
+         * Non-null: `armDeliveredCode` just set it, and it is the one thing this promise
+         * is built to report back.
+         */
         expiresAt: slot.codeExpiresAt!.toISOString()
     }));
 };
@@ -86,10 +90,12 @@ export const emailMethod: TwoFactorMethodHandler = {
     name: 'email',
     delivers: true,
 
-    // The same condition every other account email already depends on: the configured transport
-    // reaches a person's inbox (`smtp` with a host, or a transport that keeps mail where it can
-    // be read). A deployment whose mail goes nowhere cannot deliver the code anywhere a caller can
-    // read it, so it must not offer the method.
+    /**
+     * The same condition every other account email already depends on: the configured transport
+     * reaches a person's inbox (`smtp` with a host, or a transport that keeps mail where it can
+     * be read). A deployment whose mail goes nowhere cannot deliver the code anywhere a caller can
+     * read it, so it must not offer the method.
+     */
     available: () => mailDelivers(mailConfig()),
 
     eligibility: (user) =>
@@ -99,8 +105,10 @@ export const emailMethod: TwoFactorMethodHandler = {
 
     target: (user) => maskEmail(user.email),
 
-    // An enrollment code and a login code are the same send: the setup payload is the delivery
-    // plus the discriminator a client reads to know which half of `TwoFactorSetup` is populated.
+    /**
+     * An enrollment code and a login code are the same send: the setup payload is the delivery
+     * plus the discriminator a client reads to know which half of `TwoFactorSetup` is populated.
+     */
     setup: (user, entry, context) =>
         deliverEmailCode(user, entry, context, twoFactorCodeEmail).then((delivery) => ({
             ...delivery,

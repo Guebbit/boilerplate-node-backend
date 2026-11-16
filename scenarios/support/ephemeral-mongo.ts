@@ -26,9 +26,11 @@
  */
 
 import { existsSync } from 'node:fs';
-// Relative, not the `@infrastructure` alias: this module is loaded from `tests/support/
-// global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
-// does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
+/**
+ * Relative, not the `@infrastructure` alias: this module is loaded from `tests/support/
+ * global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
+ * does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
+ */
 import { logger } from '../../src/infrastructure/adapters/logger';
 
 /** A running Mongo, and the way to stop it. */

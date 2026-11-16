@@ -5,7 +5,7 @@
  * every crontab job's last outcome. Split from `metrics-http.ts` so a file named for HTTP is not
  * where every module's `metrics.ts` reaches for the registry it registers onto.
  *
- * @see docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md#what-is-instrumented-out-of-the-box
  */
 
 import { getHeapStatistics } from 'node:v8';
@@ -25,9 +25,11 @@ import { infrastructureMetricData } from '@infrastructure/observability/metrics.
  */
 export const metricsRegistry = register;
 
-// Default Node.js / process metrics (CPU, memory, event loop, GC, ...).
-// One call, and prom-client installs a large set of runtime collectors — including
-// `nodejs_eventloop_lag_seconds`, which is the single best indicator of a blocked event loop.
+/**
+ * Default Node.js / process metrics (CPU, memory, event loop, GC, ...).
+ * One call, and prom-client installs a large set of runtime collectors — including
+ * `nodejs_eventloop_lag_seconds`, which is the single best indicator of a blocked event loop.
+ */
 collectDefaultMetrics({ register: metricsRegistry });
 
 /**
@@ -35,8 +37,10 @@ collectDefaultMetrics({ register: metricsRegistry });
  * Assigned to an unused underscore-prefixed variable purely to satisfy lint rules: the
  * constructor's side effect (registering itself) is the whole point, not the reference.
  */
-// Gauge: name follows Prometheus's snake_case/_seconds convention; help is mandatory and shown
-// verbatim as `# HELP`; collect() runs at scrape time (non-arrow so `this` is the gauge).
+/**
+ * Gauge: name follows Prometheus's snake_case/_seconds convention; help is mandatory and shown
+ * verbatim as `# HELP`; collect() runs at scrape time (non-arrow so `this` is the gauge).
+ */
 const _processUptimeGauge = new Gauge({
     ...gaugeConfig(infrastructureMetricData.processUptimeSeconds),
     registers: [metricsRegistry],

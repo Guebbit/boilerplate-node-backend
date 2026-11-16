@@ -17,7 +17,7 @@ import type { NewNotification } from '@modules/notifications/repository';
 import { NotificationCreatedPayloadSchema } from '@types';
 import { withTransaction } from '@infrastructure/runtime/database';
 
-/*
+/**
  * The live push is replaced by a recording wrapper around the real one, not spied on:
  * `jest.spyOn` cannot redefine the non-configurable property a CommonJS namespace import exposes
  * under the swc transform the mutation runs use.
@@ -140,8 +140,10 @@ describe('notificationsCreate', () => {
     });
 
     describe('the per-user cap', () => {
-        // The default is 100; the suite's environment decides the real number, so read it back
-        // from the behaviour rather than assuming it.
+        /**
+         * The default is 100; the suite's environment decides the real number, so read it back
+         * from the behaviour rather than assuming it.
+         */
         const CAP = Number(process.env.NODE_NOTIFICATIONS_MAX_PER_USER ?? 100);
 
         it('keeps the newest N and deletes the oldest past it', async () => {

@@ -15,6 +15,7 @@ import { findAllTasks } from '../factories';
 
 setupTestDb();
 
+/** A valid contact-form body; a case overrides only the field it tests. */
 const CONTACT_PAYLOAD = {
     name: 'Ada Lovelace',
     email: 'ada@example.com',
@@ -91,8 +92,10 @@ describe('POST /tasks', () => {
         expect(response.status).toBe(422);
     });
 
-    // `maxLength` lives in openapi.yaml itself, so the generated schema is what enforces it —
-    // this pins the limit end to end.
+    /**
+     * `maxLength` lives in openapi.yaml itself, so the generated schema is what enforces it —
+     * this pins the limit end to end.
+     */
     it('matches the error contract for a message past the 5000-character limit', async () => {
         const response = await api()
             .post('/tasks')
@@ -159,8 +162,10 @@ describe('GET /tasks', () => {
         expect(response.body.items).toHaveLength(0);
     });
 
-    // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
-    // to 100 while the other three search endpoints answer 422 for the very same request.
+    /**
+     * Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
+     * to 100 while the other three search endpoints answer 422 for the very same request.
+     */
     it.each(['pageSize=500', 'page=0'])(
         'rejects out-of-range pagination like every other search endpoint (%s)',
         async (queryString) => {
@@ -198,7 +203,7 @@ describe('GET /tasks', () => {
     });
 });
 
-/*
+/**
  * The DTO form of the list above. `GET /tasks` cannot read filters from a body — no browser
  * sends one on a GET. `POST /tasks/search` is the sibling that carries what a body would;
  * these assert it does.
@@ -227,8 +232,10 @@ describe('POST /tasks/search', () => {
         expect(response.body.items).toHaveLength(0);
     });
 
-    // The same bounds as the query form, from the same shared schema — the two spellings of one
-    // search cannot disagree about what a legal page size is.
+    /**
+     * The same bounds as the query form, from the same shared schema — the two spellings of one
+     * search cannot disagree about what a legal page size is.
+     */
     it.each([{ pageSize: 500 }, { page: 0 }])(
         'rejects out-of-range pagination exactly as the query form does (%p)',
         async (body) => {

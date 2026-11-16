@@ -6,7 +6,7 @@
  * twin. Shelf count drops when the goods leave, not when they are paid for (Shopify, Magento MSI,
  * Saleor, Medusa).
  *
- * @see docs/modules/inventory-reservations.md
+ * @see docs/modules/inventory-reservations.md#exactly-once-without-a-lock
  */
 
 import type { ClientSession } from 'mongoose';

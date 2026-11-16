@@ -22,13 +22,17 @@ export const totpMethod: TwoFactorMethodHandler = {
     target: () => undefined,
 
     setup: (user, entry) => {
-        // otplib: a fresh base32 TOTP secret, one per enrollment attempt.
-        // https://github.com/yeojz/otplib
+        /**
+         * otplib: a fresh base32 TOTP secret, one per enrollment attempt.
+         * https://github.com/yeojz/otplib
+         */
         const secret = generateSecret();
         // A hydrated subdocument always has its `_id` by now (`two-factor-enrollment.ts` pushes it first).
         entry.secret = encryptTotpSecret(secret, String(entry._id));
-        // A fresh secret means a fresh replay window: the old high-water mark belongs to a
-        // secret that no longer exists, and keeping it would refuse the first valid code.
+        /**
+         * A fresh secret means a fresh replay window: the old high-water mark belongs to a
+         * secret that no longer exists, and keeping it would refuse the first valid code.
+         */
         entry.lastUsedStep = undefined;
         return Promise.resolve({
             method: 'totp',
@@ -49,9 +53,11 @@ export const totpMethod: TwoFactorMethodHandler = {
             if (!result.valid || result.timeStep === undefined) return false;
             const { timeStep } = result;
 
-            // The replay mark is a conditional write (only a LATER step wins), so two requests
-            // carrying one code cannot both pass: the loser is a wrong code. The in-memory
-            // entry follows, so the caller's own save writes the same value.
+            /**
+             * The replay mark is a conditional write (only a LATER step wins), so two requests
+             * carrying one code cannot both pass: the loser is a wrong code. The in-memory
+             * entry follows, so the caller's own save writes the same value.
+             */
             return accountUserService
                 .claimTotpStep(user.id, entry.method, timeStep)
                 .then((claimed) => {

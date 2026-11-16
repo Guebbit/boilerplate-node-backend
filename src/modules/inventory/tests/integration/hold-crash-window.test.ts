@@ -134,8 +134,10 @@ describe('a checkout killed between two lines', () => {
             { productId: secondId, quantity: 4 }
         ]);
 
-        // The second line's counter write waits for the sweep, as a killed process would never
-        // get there; it is released afterwards so no transaction hangs past teardown.
+        /**
+         * The second line's counter write waits for the sweep, as a killed process would never
+         * get there; it is released afterwards so no transaction hangs past teardown.
+         */
         const realApplyDelta = stockLevelRepository.applyDelta;
         const gate: { open?: () => void } = {};
         const sweepDone = new Promise<void>((resolve) => {
@@ -175,8 +177,10 @@ describe('a checkout killed between two lines', () => {
         expect(await levelOf(firstId)).toEqual({ onHand: 10, reserved: 2 });
         const held = await reservationRepository.findByOrderId(ORDER);
         expect(held?.status).toBe('released');
-        // The unwind found the hold already released: it gave nothing back a second time and
-        // left the sweep's ledger rows (the take and the release of A) exactly as they were.
+        /**
+         * The unwind found the hold already released: it gave nothing back a second time and
+         * left the sweep's ledger rows (the take and the release of A) exactly as they were.
+         */
         expect(sweepRows).toHaveLength(2);
         expect(await ledgerIdsOf(ORDER)).toEqual(sweepRows);
     });
@@ -240,8 +244,10 @@ describe('a checkout unwinding while the sweep that claimed its hold is still fi
         );
         while ((await itemCount()) === 0) await new Promise((resolve) => setTimeout(resolve, 5));
 
-        // The sweep's post-commit read of the hold (which names the cache rows to refresh) waits
-        // until the checkout has finished unwinding.
+        /**
+         * The sweep's post-commit read of the hold (which names the cache rows to refresh) waits
+         * until the checkout has finished unwinding.
+         */
         const realFind = reservationRepository.findByOrderId.bind(reservationRepository);
         const readGate: { open?: () => void } = {};
         const readWaits = new Promise<void>((resolve) => {

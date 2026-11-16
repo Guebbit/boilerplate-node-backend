@@ -95,9 +95,11 @@ const computeV1Signature = (
     body: string | Buffer,
     secretBytes: Buffer
 ): string => {
-    // node:crypto HMAC: https://nodejs.org/api/crypto.html#cryptocreatehmacalgorithm-key-options
-    // `.update` accepts the id/timestamp prefix as a string and the body as whatever it already
-    // is (string or Buffer) — concatenating first would force a needless re-encoding of the body.
+    /**
+     * node:crypto HMAC: https://nodejs.org/api/crypto.html#cryptocreatehmacalgorithm-key-options
+     * `.update` accepts the id/timestamp prefix as a string and the body as whatever it already
+     * is (string or Buffer) — concatenating first would force a needless re-encoding of the body.
+     */
     const hmac = createHmac('sha256', secretBytes).update(`${id}.${timestampSeconds}.`);
     hmac.update(body);
     return `v1,${hmac.digest('base64')}`;

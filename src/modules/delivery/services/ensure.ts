@@ -21,7 +21,6 @@ import { reportProgress } from './progress';
  * An order's lines as the grouping rule reads them, off the snapshot frozen at checkout. The
  * preorder flag and release date are read from the FROZEN line, never from the product at payment
  * time: a bank transfer can be paid a week after it was ordered.
- * @param order - the order
  */
 const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
     order.items.map((item) => ({
@@ -48,7 +47,6 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
  * transaction. Idempotent on `{ orderId, number }`: a retried listener, or `start` running
  * after the listener, leaves exactly one set.
  *
- * @param orderId - the order
  * @returns settles once the order has its fulfillment orders; does nothing for an order that is
  *   missing, not yet paid, canceled, or already past dispatch — including one canceled between
  *   the read and the write, which rolls the transaction back and is not a failure: a failing

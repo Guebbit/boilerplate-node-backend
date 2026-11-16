@@ -6,7 +6,7 @@
  * checkout, order, payment, signup, login) are never accepted here; they are emitted by the
  * service that makes them true.
  *
- * @see docs/modules/analytics.md
+ * @see docs/modules/analytics.md#its-neighbourhood
  */
 
 import { resolveBrowserEvents, type AppModule } from '@kernel/registry';

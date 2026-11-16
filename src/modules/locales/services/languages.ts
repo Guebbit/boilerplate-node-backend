@@ -80,8 +80,10 @@ export const createLanguage = (
 ): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
     const tag = normalizeTag(payload.tag);
 
-    // Checked here for the message, and by a unique index for the race — a concurrent creation of
-    // the same tag reaches E11000, which the shared interpreter answers 409 for anyway.
+    /**
+     * Checked here for the message, and by a unique index for the race — a concurrent creation of
+     * the same tag reaches E11000, which the shared interpreter answers 409 for anyway.
+     */
     return localeRepository.findByTag(tag).then((existing) => {
         if (existing)
             return generateReject(409, [
@@ -153,8 +155,10 @@ export const updateLanguage = (
                 metadata
             });
 
-            // The negotiation reads an in-memory list of the served languages, refreshed by
-            // this: an edit must reach this worker's next request, not wait for the timer.
+            /**
+             * The negotiation reads an in-memory list of the served languages, refreshed by
+             * this: an edit must reach this worker's next request, not wait for the timer.
+             */
             return refreshOverlayNow().then(() => generateSuccess(saved));
         });
     });
@@ -208,8 +212,10 @@ const setActive = (
                     outcome: 'success',
                     targetType: 'locale',
                     targetId: tag,
-                    // `active` is the field worth having in the trail: it is what makes a
-                    // half-finished translation public.
+                    /**
+                     * `active` is the field worth having in the trail: it is what makes a
+                     * half-finished translation public.
+                     */
                     metadata: { changes: { active: { from: !active, to: active } } }
                 });
 

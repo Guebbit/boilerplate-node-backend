@@ -35,7 +35,7 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
 
-/*
+/**
  * `getAuth` on everything, no identity guard here: the reads below are a storefront and must
  * answer an anonymous browser. Each write names its own guard instead, and that guard is
  * `isAuthOrCredential` — catalogue writes are `Product`/`Translation` rules over
@@ -57,7 +57,7 @@ const cacheScopeKey = (request: Request): boolean =>
     !canSeeStock(request.caller) &&
     !canSeeTranslations(request.caller);
 
-/*
+/**
  * `previewDraftLanguage` leads each of the three catalogue reads: it must run before `setCache`,
  * whose key is built from `request.locale`, or a draft answer could be stored under a live key.
  */
@@ -83,13 +83,15 @@ router.post('/search', previewDraftLanguage, cacheProductsSearch, getProducts);
 // GET /products — public
 router.get('/', previewDraftLanguage, cacheProductsSearch, getProducts);
 
-// POST /products — admin only (create). Two keys: `create:Product` for the record itself,
-// `update:Translation` since the same write always carries every language's copy alongside it.
-// Both are required: neither key alone completes this write, which is what stops a rewording
-// from becoming a repricing.
-// `idempotencyKey` after `upload.image()`: multipart fields exist only once multer has parsed them,
-// so the ledger fingerprints the real body. A product with no SKU has no other key, so a retry
-// after a lost answer would put a second live product in the shop.
+/**
+ * POST /products — admin only (create). Two keys: `create:Product` for the record itself,
+ * `update:Translation` since the same write always carries every language's copy alongside it.
+ * Both are required: neither key alone completes this write, which is what stops a rewording
+ * from becoming a repricing.
+ * `idempotencyKey` after `upload.image()`: multipart fields exist only once multer has parsed them,
+ * so the ledger fingerprints the real body. A product with no SKU has no other key, so a retry
+ * after a lost answer would put a second live product in the shop.
+ */
 router.post(
     '/',
     uploadLimiter,
@@ -102,11 +104,13 @@ router.post(
     createProduct
 );
 
-// GET /products/facets — the filter chips; a static segment, so declared before /:id
-// for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
-// `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
-// never reads more for an admin the way search/`:id` do, so every caller already shares one
-// answer and there is nobody to bypass the cache for.
+/**
+ * GET /products/facets — the filter chips; a static segment, so declared before /:id
+ * for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
+ * `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
+ * never reads more for an admin the way search/`:id` do, so every caller already shares one
+ * answer and there is nobody to bypass the cache for.
+ */
 router.get(
     '/facets',
     setCache(HOUR_SECONDS, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
@@ -117,9 +121,11 @@ router.get(
 router.get(
     '/:id',
     previewDraftLanguage,
-    // `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
-    // 304 when nothing changed), because the page shows `available`, which a stock write changes
-    // and no server-side clear can reach in someone's browser.
+    /**
+     * `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
+     * 304 when nothing changed), because the page shows `available`, which a stock write changes
+     * and no server-side clear can reach in someone's browser.
+     */
     setCache(HOUR_SECONDS, {
         tags: ['products'],
         keyParameters: [],
@@ -129,8 +135,10 @@ router.get(
     getProductItem
 );
 
-// PUT /products/:id — replace the product; admin only. Same two keys as the create door:
-// neither key alone completes the write.
+/**
+ * PUT /products/:id — replace the product; admin only. Same two keys as the create door:
+ * neither key alone completes the write.
+ */
 router.put(
     '/:id',
     uploadLimiter,

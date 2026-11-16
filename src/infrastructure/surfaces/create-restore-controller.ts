@@ -4,7 +4,7 @@
  * `POST /x/:id/restore` that undoes it. A separate verb because DELETE must be safe to repeat
  * (RFC 9110 §9.2.2) — a retried DELETE must never bring a record back.
  *
- * @see docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md#put-replaces-patch-merges
  */
 
 import type { Request, Response } from 'express';

@@ -4,7 +4,7 @@
  * what is added here is what this collection alone needs. Nothing outside the module imports it —
  * the service is the door. Here: translation, image and erasure writes beside the plain CRUD.
  *
- * @see docs/understand/layers.md
+ * @see docs/understand/layers.md#example-from-this-repo
  */
 
 import { updateStatusIfIn as conditionalStatus } from '@infrastructure/persistence/conditional-status';
@@ -45,8 +45,10 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
 } = {
     ...createRepository<ExampleDocument, ExampleRow>(exampleModel, {
         transform: applyExampleTransform,
-        // What `search` accepts. `status` is left out on purpose: it is a closed enum, so the
-        // service passes it as a scope rather than a free filter.
+        /**
+         * What `search` accepts. `status` is left out on purpose: it is a closed enum, so the
+         * service passes it as a scope rather than a free filter.
+         */
         searchable: {
             objectIds: { id: '_id' },
             text: ['title', 'body'],

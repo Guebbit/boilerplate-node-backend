@@ -27,8 +27,10 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () => {
         .requireActual<typeof import('@tests/routes')>('@tests/routes')
         .securityMock();
 
-    // Same label key `routeTable` reads back (`Symbol.for` is the shared registry); the prefix
-    // marks the middleware as a budget, whatever its namespace is.
+    /**
+     * Same label key `routeTable` reads back (`Symbol.for` is the shared registry); the prefix
+     * marks the middleware as a budget, whatever its namespace is.
+     */
     const tagged = (label: string) =>
         Object.assign(() => undefined, { [Symbol.for('tests.routeLabel')]: `limiter:${label}` });
 
@@ -59,8 +61,10 @@ const keyedRoutes = (): [string, string[]][] =>
     );
 
 describe('every budget refuses before the idempotency key is claimed', () => {
-    // A vacuous pass would read as green: if the walker stopped seeing keyed routes, or the
-    // tagging stopped marking limiters, the sweep below would check nothing.
+    /**
+     * A vacuous pass would read as green: if the walker stopped seeing keyed routes, or the
+     * tagging stopped marking limiters, the sweep below would check nothing.
+     */
     it('finds keyed routes to check', () => {
         expect(keyedRoutes().length).toBeGreaterThan(0);
     });

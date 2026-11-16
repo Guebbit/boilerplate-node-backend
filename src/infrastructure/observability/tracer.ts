@@ -3,16 +3,20 @@
  * Tracer helper — a thin wrapper around the OpenTelemetry API. Import `getTracer()` or
  * `withSpan()` anywhere a custom span is needed.
  *
- * @see docs/operate/opentelemetry.md
+ * @see docs/operate/opentelemetry.md#trace-flow-with-otel-collector
  */
 
-// `@opentelemetry/api` is the *interface* package, separate from the SDK — trace/SpanStatusCode/
-// Span/Attributes. Importing it when no SDK is registered is harmless: every call becomes a
-// no-op, which is what lets tests run without booting OpenTelemetry.
+/**
+ * `@opentelemetry/api` is the *interface* package, separate from the SDK — trace/SpanStatusCode/
+ * Span/Attributes. Importing it when no SDK is registered is harmless: every call becomes a
+ * no-op, which is what lets tests run without booting OpenTelemetry.
+ */
 import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
-// js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
-// rejection that is not an `Error` still yields its message. `String(error)` is the fallback
-// rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
+/**
+ * js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
+ * rejection that is not an `Error` still yields its message. `String(error)` is the fallback
+ * rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
+ */
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
@@ -36,24 +40,30 @@ export const getTracer = () => trace.getTracer(TRACER_NAME);
  */
 export const withSpan = <T>(spanName: string, callback: (span: Span) => Promise<T>): Promise<T> => {
     const tracer = getTracer();
-    // startActiveSpan (vs startSpan) makes the span *current* for the callback's duration, so
-    // anything called inside — a Mongoose query, `getActiveSpanContext()` — attaches as a child
-    // automatically, with no span threaded through the call stack.
+    /**
+     * startActiveSpan (vs startSpan) makes the span *current* for the callback's duration, so
+     * anything called inside — a Mongoose query, `getActiveSpanContext()` — attaches as a child
+     * automatically, with no span threaded through the call stack.
+     */
     return tracer.startActiveSpan(spanName, (span) => {
-        // Attributes are the callback's to set, through its `span` argument, once it has computed
-        // values worth recording.
-        // Two-callback `.then(onFulfilled, onRejected)` rather than `.then().catch()`: it keeps
-        // the success and failure paths mutually exclusive, so a throw inside the success
-        // handler could not end the span twice.
-        // Started inside a promise, so a callback that throws synchronously still reaches the
-        // failure branch below — and its span still ends.
+        /**
+         * Attributes are the callback's to set, through its `span` argument, once it has computed
+         * values worth recording.
+         * Two-callback `.then(onFulfilled, onRejected)` rather than `.then().catch()`: it keeps
+         * the success and failure paths mutually exclusive, so a throw inside the success
+         * handler could not end the span twice.
+         * Started inside a promise, so a callback that throws synchronously still reaches the
+         * failure branch below — and its span still ends.
+         */
         return Promise.resolve()
             .then(() => callback(span))
             .then(
                 (result) => {
                     span.setStatus({ code: SpanStatusCode.OK });
-                    // `end()` stamps the duration. A span that is never ended is never exported —
-                    // the single most common way to lose telemetry.
+                    /**
+                     * `end()` stamps the duration. A span that is never ended is never exported —
+                     * the single most common way to lose telemetry.
+                     */
                     span.end();
                     return result;
                 },
@@ -61,8 +71,10 @@ export const withSpan = <T>(spanName: string, callback: (span: Span) => Promise<
                     // Marks the span red / counted toward error rates, then ends it.
                     markSpanFailed(span, error);
                     span.end();
-                    // Re-throw: this wrapper observes, it never swallows. Callers keep their
-                    // existing error handling unchanged.
+                    /**
+                     * Re-throw: this wrapper observes, it never swallows. Callers keep their
+                     * existing error handling unchanged.
+                     */
                     throw error;
                 }
             );
@@ -102,6 +114,8 @@ export const recordErrorOnActiveSpan = (error: unknown): void => {
     // No active span (untraced context) — nothing to annotate, and not an error condition.
     if (!span) return;
     markSpanFailed(span, error);
-    // Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it
-    // (usually the auto-instrumentation's request span) and ending it here would truncate it.
+    /**
+     * Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it
+     * (usually the auto-instrumentation's request span) and ending it here would truncate it.
+     */
 };

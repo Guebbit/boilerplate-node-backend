@@ -14,8 +14,10 @@ import { setEnvironment } from '@tests/environment';
 /** Counts imports of the doubles file; the real one writes `process.env` and the registries. */
 const mockLoaded = jest.fn();
 
-// The loader imports `<cwd>/scenarios/support/development-doubles.ts`, and under jest cwd is the
-// repo root. The factory runs at that import, not at hoist time, so `mockLoaded` exists by then.
+/**
+ * The loader imports `<cwd>/scenarios/support/development-doubles.ts`, and under jest cwd is the
+ * repo root. The factory runs at that import, not at hoist time, so `mockLoaded` exists by then.
+ */
 jest.mock('../../../scenarios/support/development-doubles', () => {
     mockLoaded();
     return {};

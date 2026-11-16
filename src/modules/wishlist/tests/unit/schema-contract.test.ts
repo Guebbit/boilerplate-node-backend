@@ -21,8 +21,10 @@ import {
 
 describe('wishlistSchema', () => {
     it('requires an owner and nothing else', () => {
-        // `items` is not required: an empty wishlist is a wishlist, and the upsert that creates
-        // one has no items to give it.
+        /**
+         * `items` is not required: an empty wishlist is a wishlist, and the upsert that creates
+         * one has no items to give it.
+         */
         expect(requiredPaths(wishlistSchema)).toEqual(['userId']);
     });
 
@@ -31,8 +33,10 @@ describe('wishlistSchema', () => {
     });
 
     it('starts a new wishlist with an empty list, not an absent one', () => {
-        // `$addToSet` on a missing path works, but every reader would have to tolerate
-        // `undefined`. The default is what keeps `items.length` honest everywhere.
+        /**
+         * `$addToSet` on a missing path works, but every reader would have to tolerate
+         * `undefined`. The default is what keeps `items.length` honest everywhere.
+         */
         expect(defaultOf(wishlistSchema, 'items')).toEqual([]);
     });
 
@@ -46,17 +50,21 @@ describe('wishlistSchema', () => {
         const item = subSchema(wishlistSchema, 'items');
 
         expect(optionsOf(item)._id).toBe(false);
-        // A wishlist answers "do I want this", not "how many" — the moment an amount matters the
-        // line belongs in the cart. One field fewer is also what makes `$addToSet` the whole
-        // idempotence story.
+        /**
+         * A wishlist answers "do I want this", not "how many" — the moment an amount matters the
+         * line belongs in the cart. One field fewer is also what makes `$addToSet` the whole
+         * idempotence story.
+         */
         expect(requiredPaths(item)).toEqual(['productId']);
         expect(pathNames(item)).toEqual(['productId']);
     });
 
     it('indexes the product lookup that product deletion depends on', () => {
-        // Deleting a product must find every wishlist holding it; without this it reads the whole
-        // collection. Left unnamed deliberately — nothing else creates it, so Mongoose's derived
-        // name has nothing to disagree with.
+        /**
+         * Deleting a product must find every wishlist holding it; without this it reads the whole
+         * collection. Left unnamed deliberately — nothing else creates it, so Mongoose's derived
+         * name has nothing to disagree with.
+         */
         expect(indexSpecs(wishlistSchema)).toEqual([
             'items.productId_1: items.productId+1',
             'userId_1: userId+1'

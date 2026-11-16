@@ -38,8 +38,10 @@ describe('applyServerTimeouts', () => {
 
         applyServerTimeouts(server);
 
-        // `NODE_MAX_UPLOAD_BYTES` over a poor link needs most of this; a 408 mid-upload is worse
-        // than the connection it costs.
+        /**
+         * `NODE_MAX_UPLOAD_BYTES` over a poor link needs most of this; a 408 mid-upload is worse
+         * than the connection it costs.
+         */
         expect(server.requestTimeout).toBeGreaterThan(server.headersTimeout);
     });
 
@@ -61,8 +63,10 @@ describe('applyServerTimeouts', () => {
         ['0', 'NODE_HTTP_HEADERS_TIMEOUT_MS'],
         ['soon', 'NODE_HTTP_REQUEST_TIMEOUT_MS']
     ])('refuses %p rather than disabling the bound %s names', (value, variable) => {
-        // `0` would mean "no timeout" if it were honoured — the one value that must not pass. It
-        // is refused outright (at boot, by the gate), not quietly replaced by the default.
+        /**
+         * `0` would mean "no timeout" if it were honoured — the one value that must not pass. It
+         * is refused outright (at boot, by the gate), not quietly replaced by the default.
+         */
         setEnvironment({ [variable]: value });
 
         expect(() => applyServerTimeouts(serverStub())).toThrow(new RegExp(variable));

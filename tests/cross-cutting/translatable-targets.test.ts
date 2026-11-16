@@ -10,6 +10,7 @@ import { resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
 import { isDeployed } from '@tests/paths';
 
+/** The translatable targets the enabled modules declare. */
 const translatables = resolveTranslatables(enabledModules);
 
 /** Every registered Mongoose model, by its actual collection name. */
@@ -24,8 +25,10 @@ const modelsByCollection = new Map(
 const entries = Object.entries(translatables);
 
 describe('the translatables registry', () => {
-    // `it.each` rejects an empty table outright, so the two per-entry checks only exist when
-    // there is an entry to check.
+    /**
+     * `it.each` rejects an empty table outright, so the two per-entry checks only exist when
+     * there is an entry to check.
+     */
     if (entries.length > 0) {
         it.each(entries)('%s names a collection an actual model owns', (_entityType, target) => {
             expect(modelsByCollection.has(target!.collection)).toBe(true);
@@ -44,8 +47,10 @@ describe('the translatables registry', () => {
     }
 
     it('has an entry whenever `products`, the module that registers one, is deployed', () => {
-        // The canary for the two checks above: an empty registry must mean "nothing translatable
-        // is deployed", never "the manifest stopped being read".
+        /**
+         * The canary for the two checks above: an empty registry must mean "nothing translatable
+         * is deployed", never "the manifest stopped being read".
+         */
         expect(entries.length > 0).toBe(isDeployed('products'));
     });
 });

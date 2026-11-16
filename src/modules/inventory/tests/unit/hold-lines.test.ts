@@ -95,8 +95,10 @@ describe('takeFromHold, with preorder claims', () => {
     });
 
     it('lets a preorder line fall back on the shelf units that replaced its claim', () => {
-        // Stock arrived and was allocated, but the fulfillment order has not heard yet: its canceled
-        // remainder still names the claim, and the units that replaced it must not be stranded.
+        /**
+         * Stock arrived and was allocated, but the fulfillment order has not heard yet: its canceled
+         * remainder still names the claim, and the units that replaced it must not be stranded.
+         */
         const allocated = [{ productId: 'a', quantity: 2 }];
 
         expect(

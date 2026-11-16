@@ -39,8 +39,10 @@ describe('notificationSchema', () => {
     });
 
     it('declares the inbox index newest first, the work notice dedupe key and the TTL', () => {
-        // The first serves the inbox read and, from the far end, the cap's trim; the second keeps
-        // a redelivered event to one row per recipient; the third lets work notices age out.
+        /**
+         * The first serves the inbox read and, from the far end, the cap's trim; the second keeps
+         * a redelivered event to one row per recipient; the third lets work notices age out.
+         */
         expect(indexSpecs(notificationSchema)).toEqual([
             'expiresAt_1: expiresAt+1',
             'userId_1_createdAt_-1: userId+1, createdAt-1',

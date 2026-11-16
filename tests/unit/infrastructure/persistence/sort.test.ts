@@ -6,6 +6,7 @@
  */
 import { resolveSort, sortOf, withTiebreaker } from '@infrastructure/persistence/search';
 
+/** The sortable fields and the columns they map to. */
 const sortable = { price: 'price', title: 'titleColumn', createdAt: 'createdAt' };
 
 describe('withTiebreaker', () => {

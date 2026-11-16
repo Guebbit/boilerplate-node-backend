@@ -62,7 +62,9 @@ derived from the URL grows the registry for the life of the process.
 
 ## Alert rules
 
-Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last five rows (`Watchdog`, `AlertmanagerNotificationsFailing`, `PrometheusRuleEvaluationFailures`, `DiskAlmostFull`, `TlsCertExpiringSoon`) live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and, later, the host's and the proxy's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
+Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last four rows (`Watchdog`, `AlertmanagerNotificationsFailing`, `PrometheusRuleEvaluationFailures`, `DiskAlmostFull`) live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and the host's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
+
+**Certificate expiry is not an alert rule here.** The only certificate-expiry check is Gatus's `[CERTIFICATE_EXPIRATION]` condition on the second machine (see [Gatus](./gatus.md)). Without Gatus, nothing warns: Let's Encrypt stopped sending expiry emails on 2025-06-04.
 
 | Alert                                | What it means                                                                                                                             |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -102,7 +104,6 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)       |
 | `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                           |
 | `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)              |
-| `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `compose.proxy.yaml`)                                                        |
 
 The expression, the `for` and the severity of each are in the rules file; the conditions above are the meaning, not a copy of the thresholds.
 
@@ -110,13 +111,13 @@ The expression, the `for` and the severity of each are in the rules file; the co
 
 The rules page on symptoms, not causes. Each of these was weighed and left out:
 
-| Left out                             | Why                                                                                                   |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| MongoDB / Redis / RabbitMQ exporters | they measure causes; the app's own `dependency_up` gauge already sees up/down                         |
-| cAdvisor                             | heavy and privileged; `ApiRestarting` and `DependencyUnavailable` catch the same by symptom           |
-| blackbox_exporter                    | a probe on the same host cannot see the host die (Gatus on a second machine does); Traefik covers TLS |
-| Loki log alerts                      | every failure worth paging already has a counter                                                      |
-| CPU / memory / event-loop lag alerts | causes; the latency and in-flight rules are the symptoms                                              |
+| Left out                             | Why                                                                                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| MongoDB / Redis / RabbitMQ exporters | they measure causes; the app's own `dependency_up` gauge already sees up/down                                                            |
+| cAdvisor                             | heavy and privileged; `ApiRestarting` and `DependencyUnavailable` catch the same by symptom                                              |
+| blackbox_exporter                    | a probe on the same host cannot see the host die (Gatus on a second machine does); certificate expiry is watched only by Gatus, off-host |
+| Loki log alerts                      | every failure worth paging already has a counter                                                                                         |
+| CPU / memory / event-loop lag alerts | causes; the latency and in-flight rules are the symptoms                                                                                 |
 
 The image stays on Prometheus `v2.55.1`: the move to v3 is its own upgrade, not taken yet.
 

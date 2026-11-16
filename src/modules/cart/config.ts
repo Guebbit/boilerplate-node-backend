@@ -3,7 +3,7 @@
  * The cart's knobs: how long an untouched cart is kept, how many units one line may hold, how many
  * lines a cart may have, and how many unpaid orders one account may have open at checkout.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';
@@ -15,8 +15,10 @@ export const cartConfig = defineConfig({
     shape: {
         NODE_CART_RETENTION_DAYS: int({ default: 365, min: 1 }),
         NODE_CART_LINE_MAX_QUANTITY: int({ default: 10, min: 1, max: 999 }),
-        // `max: 500` is Shopify's own cart ceiling: the cart is never paginated, so the bound
-        // must hold whatever an operator sets.
+        /**
+         * `max: 500` is Shopify's own cart ceiling: the cart is never paginated, so the bound
+         * must hold whatever an operator sets.
+         */
         NODE_CART_MAX_LINES: int({ default: 100, min: 1, max: 500 }),
         NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({ default: 2, min: 1 })
     }

@@ -80,8 +80,10 @@ describe('overrideStatus', () => {
 
         expect(result.success).toBe(true);
         expect(result.data?.status).toBe(OrderStatus.processing);
-        // `order.status_changed` stays the one every listener reads (`webhooks` filters on `to`
-        // alone); the override announces itself separately, below.
+        /**
+         * `order.status_changed` stays the one every listener reads (`webhooks` filters on `to`
+         * alone); the override announces itself separately, below.
+         */
         await settleOutboxNudges();
         expect(events).toEqual([
             {

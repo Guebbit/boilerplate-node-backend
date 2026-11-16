@@ -13,8 +13,11 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT } from '@tests/paths';
 
+/** The eslint binary the probe is run with. */
 const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
+/** Folder the probe module is written to, removed after each case. */
 const PROBE_DIR = path.join(REPO_ROOT, 'src/modules/__audit-names-probe');
+/** Folder the probe module is written to, removed after each case. */
 const PROBE_RELATIVE = path.relative(REPO_ROOT, path.join(PROBE_DIR, 'audit.ts'));
 
 /** Lints `source` as a module's `audit.ts` and returns the `no-restricted-syntax` messages. */

@@ -111,7 +111,7 @@ const keepReportWhole = (): void => {
     );
 };
 
-/*
+/**
  * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
  * them — docs/build/mutation-testing.md#worker-heap-cap.

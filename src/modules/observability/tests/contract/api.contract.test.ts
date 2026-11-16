@@ -47,9 +47,11 @@ describe('GET /observability/health', () => {
     });
 
     it('reports the database state the process is actually in', async () => {
-        /* `setupTestDb()` has connected, so this is the one assertion that would fail if the
+        /**
+         * `setupTestDb()` has connected, so this is the one assertion that would fail if the
          * snapshot ever stopped reading a live connection and started reporting a constant —
-         * which is what a hard-coded 'ready' would look like to every shape check. */
+         * which is what a hard-coded 'ready' would look like to every shape check.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
@@ -59,14 +61,16 @@ describe('GET /observability/health', () => {
     });
 
     it('describes cache and queue in the same words as the database', async () => {
-        /* The point of one vocabulary: a reader does not need to know which of the three is a
+        /**
+         * The point of one vocabulary: a reader does not need to know which of the three is a
          * document store and which is a broker to read the payload.
          *
          * WHICH value each reports is deliberately not asserted — that depends on the `.env` of
          * whoever is running the suite, and a test that demanded a reachable Redis would fail on a
          * laptop for a reason that has nothing to do with the contract. What must hold everywhere
          * is that all three speak the same four words, and that `status` is the honest fold of
-         * them. `dependency-health.test.ts` pins the mapping itself, with the state controlled. */
+         * them. `dependency-health.test.ts` pins the mapping itself, with the state controlled.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
@@ -86,7 +90,7 @@ describe('GET /observability/health', () => {
     });
 
     it('names the analytics provider AND whether it can deliver', async () => {
-        /*
+        /**
          * Two facts, and neither works alone. A bare boolean could not distinguish "PostHog is
          * unconfigured" from "this deployment uses Umami"; a bare name could not distinguish a
          * working provider from one that warned once at boot and has discarded every event since —
@@ -103,9 +107,11 @@ describe('GET /observability/health', () => {
     });
 
     it("answers `queues` as an array, empty in this test environment's disabled RabbitMQ", async () => {
-        // Never zero-filled by queue name (`ObservabilityHealthQueue`'s own contract): with no
-        // broker configured here, `parkedCounts()` reaches none, so this proves the field's shape
-        // — a seeded, non-empty case belongs to `queue.test.ts`, where the broker is mocked.
+        /**
+         * Never zero-filled by queue name (`ObservabilityHealthQueue`'s own contract): with no
+         * broker configured here, `parkedCounts()` reaches none, so this proves the field's shape
+         * — a seeded, non-empty case belongs to `queue.test.ts`, where the broker is mocked.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
@@ -115,7 +121,7 @@ describe('GET /observability/health', () => {
     });
 
     it("reports a seeded lease's real outcome in `jobs`, not just an empty array", async () => {
-        /*
+        /**
          * Every other case in this file hits an empty `leases` collection, which proves the shape
          * is right but not that `jobHealth()` actually reads the collection — a hard-coded `[]`
          * would pass every assertion above too. A real document, written the same way `lease.ts`
@@ -154,10 +160,12 @@ describe('GET /observability/metrics/overview', () => {
     });
 
     it('answers a full shape even for counters no module in this build owns', async () => {
-        /* `readCounter` returns [] for an absent metric and the overview reports zero for that
+        /**
+         * `readCounter` returns [] for an absent metric and the overview reports zero for that
          * row — which is what lets this module survive the deletion of the domains it reports on.
          * The contract requires the keys either way, so their absence would be a 500, not a
-         * smaller body. */
+         * smaller body.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
@@ -165,10 +173,12 @@ describe('GET /observability/metrics/overview', () => {
             .set('Authorization', bearer);
 
         expect(typeof response.body.http.totalRequests).toBe('number');
-        /* `auth.*` and `business.*` are the rows read out of counters `account`, `cart` and
+        /**
+         * `auth.*` and `business.*` are the rows read out of counters `account`, `cart` and
          * `orders` own. In this suite nothing has checked out, so `checkoutSuccess` is a zero the
          * overview REPORTS rather than a key it omits — the difference between a dashboard that
-         * survives a deleted module and one that 500s on it. */
+         * survives a deleted module and one that 500s on it.
+         */
         expect(response.body.auth.loginSuccess).toBeGreaterThan(0);
         expect(response.body.business.checkoutSuccess).toBe(0);
     });
@@ -185,7 +195,7 @@ describe('GET /observability/audit', () => {
 
     it('matches the contract for a log holding rows, narrowed by outcome', async () => {
         const { bearer } = await authenticateAs('admin');
-        /*
+        /**
          * A REAL failed login rather than a synthetic entry. `account/audit.ts` owns `auth.login`,
          * and `outcome: 'failure'` is what this filter narrows by — a test that drives the
          * endpoint that emits is worth more than one that writes the row it then reads.
@@ -197,15 +207,19 @@ describe('GET /observability/audit', () => {
         expect(response.status).toBe(200);
         expect(response.body.items.length).toBeGreaterThan(0);
         for (const entry of response.body.items) expect(entry.outcome).toBe('failure');
-        // The page's own meta, not a bare count: `totalItems` is every failure matching the
-        // filter, and `totalPages` is how many requests reach the rest of them.
+        /**
+         * The page's own meta, not a bare count: `totalItems` is every failure matching the
+         * filter, and `totalPages` is how many requests reach the rest of them.
+         */
         expect(response.body.meta.totalItems).toBeGreaterThan(0);
         expect(response.body.meta.pageSize).toBe(10);
     });
 
     it('refuses a page size the contract does not allow', async () => {
-        // `maximum: 100`, answered with a 422 rather than a quietly smaller page — this endpoint
-        // pages, so an out-of-range page size is a broken request like anywhere else.
+        /**
+         * `maximum: 100`, answered with a 422 rather than a quietly smaller page — this endpoint
+         * pages, so an out-of-range page size is a broken request like anywhere else.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
@@ -216,9 +230,11 @@ describe('GET /observability/audit', () => {
     });
 
     it('matches the error contract for an unparseable `since`', async () => {
-        /* The one input this endpoint validates itself: a bad date reaching Mongo as `Invalid
+        /**
+         * The one input this endpoint validates itself: a bad date reaching Mongo as `Invalid
          * Date` filters nothing rather than erroring, so the page would look complete and be
-         * wrong. */
+         * wrong.
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()

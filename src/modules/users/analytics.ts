@@ -11,8 +11,10 @@
 export const usersAnalyticsEvents = {
     // Administrative account lifecycle
     USER_CREATED: 'user_created',
-    // Deactivation is a product event as well as an administrative one: it is what a churn
-    // dashboard counts, and it is invisible in a plain "updated" signal.
+    /**
+     * Deactivation is a product event as well as an administrative one: it is what a churn
+     * dashboard counts, and it is invisible in a plain "updated" signal.
+     */
     USER_DEACTIVATED: 'user_deactivated'
 } as const;
 

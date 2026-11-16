@@ -14,7 +14,7 @@ import { carryVersion } from '@infrastructure/persistence/versioning';
 /**
  * Does this caller see exact stock? Asks for the rule `read:StockLevel`, which only a stock
  * reader holds.
-
+ *
  *
  * @param caller - `request.caller`, or `undefined` for an anonymous request
  */
@@ -33,9 +33,11 @@ export const redactStock = <T extends Product>(product: T, seesStock: boolean): 
 
     const { onHand: _onHand, reserved: _reserved, available: _available, ...visible } = product;
 
-    // The row's version rides beside the wire object (for the `ETag`), not on it, so the copy the
-    // rest-spread made has to be handed it again.
-    // `as T`: the rest-spread type drops the three optional fields, which is the point; the
-    // result is still every other field `T` declared.
+    /**
+     * The row's version rides beside the wire object (for the `ETag`), not on it, so the copy the
+     * rest-spread made has to be handed it again.
+     * `as T`: the rest-spread type drops the three optional fields, which is the point; the
+     * result is still every other field `T` declared.
+     */
     return carryVersion(product, visible as T);
 };

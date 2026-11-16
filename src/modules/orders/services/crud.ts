@@ -102,10 +102,12 @@ const resolveItemProducts = (
  * @param items - `{ productId, quantity }` pairs
  * @param context - caller context for the `order_created` analytics/audit emit
  */
-// `async` so `toObjectId(userId)` rejects rather than throws — malformed input must reach the
-// caller as a rejected promise like every other failure here. Flat `await`s, not nested
-// `.then()`s, for the same reason `@modules/cart`'s `runCheckout` uses them: each step depends
-// on the last one's resolved value.
+/**
+ * `async` so `toObjectId(userId)` rejects rather than throws — malformed input must reach the
+ * caller as a rejected promise like every other failure here. Flat `await`s, not nested
+ * `.then()`s, for the same reason `@modules/cart`'s `runCheckout` uses them: each step depends
+ * on the last one's resolved value.
+ */
 export const create = async (
     userId: string,
     email: string,
@@ -115,26 +117,34 @@ export const create = async (
     const overLimit = lineLimitRefusal(items);
     if (overLimit) return overLimit;
 
-    // The buyer must exist: an order for nobody is a dangling reference. A failed lookup is a
-    // 500, never an order placed for someone unchecked.
+    /**
+     * The buyer must exist: an order for nobody is a dangling reference. A failed lookup is a
+     * 500, never an order placed for someone unchecked.
+     */
     const buyer = await userService.getById(userId);
     if (!buyer) return generateReject(404, [t('users.not-found')]);
 
-    // The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
-    // endpoint lets an admin place an order for someone else, and `context.locale` there is the
-    // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
+    /**
+     * The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
+     * endpoint lets an admin place an order for someone else, and `context.locale` there is the
+     * admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
+     */
     const buyerLocale = buyer.locale ?? getDefaultLocale();
 
-    // `Promise.all([])` settles without a query, so an empty basket still costs no round trip. The
-    // read is scoped to what the caller may see (`display:Product` reads hidden products): a product
-    // outside it is a plain 404, and a snapshot never widens the caller's read.
+    /**
+     * `Promise.all([])` settles without a query, so an empty basket still costs no round trip. The
+     * read is scoped to what the caller may see (`display:Product` reads hidden products): a product
+     * outside it is a plain 404, and a snapshot never widens the caller's read.
+     */
     const resolvedItems = await resolveItemProducts(
         items,
         productService.callerScope(context.caller)
     );
 
-    // Staff may sell a hidden or off-sale product (Solidus, Shopify draft orders); a removed one is
-    // refused, every one named.
+    /**
+     * Staff may sell a hidden or off-sale product (Solidus, Shopify draft orders); a removed one is
+     * refused, every one named.
+     */
     const removed = resolvedItems.filter(({ product }) => product?.deletedAt);
     if (removed.length > 0)
         return generateReject(409, [
@@ -145,8 +155,10 @@ export const create = async (
             }
         ]);
 
-    // The same write, freeze, invoice allocation and stock hold `placeOrder` runs for
-    // `@modules/cart`'s checkout, with no payment method or shipping: this endpoint offers neither.
+    /**
+     * The same write, freeze, invoice allocation and stock hold `placeOrder` runs for
+     * `@modules/cart`'s checkout, with no payment method or shipping: this endpoint offers neither.
+     */
     const outcome = await placeOrder({
         userId,
         email,
@@ -165,8 +177,10 @@ export const create = async (
             {
                 code: ERROR_CODES.ORDER_INSUFFICIENT_STOCK,
                 message: t('orders.insufficient-stock'),
-                // Which line blocked it, and what was asked for. What is on the shelf (`available`)
-                // goes only to a caller who may read stock: a refusal must not widen that read.
+                /**
+                 * Which line blocked it, and what was asked for. What is on the shelf (`available`)
+                 * goes only to a caller who may read stock: a refusal must not widen that read.
+                 */
                 details: {
                     lines: outcome.shortfalls.map(({ available, ...line }) =>
                         canSeeStock(context.caller) ? { ...line, available } : line
@@ -209,8 +223,10 @@ export const updateById = (
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
-        // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
-        // at the `.catch()` that has to tell them apart.
+        /**
+         * Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
+         * at the `.catch()` that has to tell them apart.
+         */
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
         // Read before `update` assigns onto the document. The email is personal data: by name only.

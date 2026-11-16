@@ -27,7 +27,9 @@ import { accountExportLink, accountFrontendLink, accountTermsLink } from '@modul
 import { privacyFrontendLink } from '@modules/users';
 import { setEnvironment } from '@tests/environment';
 
+/** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+/** A fixed token the link in the mail is built from. */
 const TOKEN = 'a1b2c3d4e5f6';
 
 /** When the erasure falls due, in the scheduled-deletion mail. */
@@ -77,9 +79,11 @@ describe('account emails — the template each one names', () => {
     });
 
     it('gives every email a distinct template', () => {
-        // Six templates, six emails. A copy-paste that leaves two builders pointing at the same
-        // template sends the wrong copy for one whole flow, and every individual assertion above
-        // would still pass if the pair agreed with each other.
+        /**
+         * Six templates, six emails. A copy-paste that leaves two builders pointing at the same
+         * template sends the wrong copy for one whole flow, and every individual assertion above
+         * would still pass if the pair agreed with each other.
+         */
         const templates = [
             ...LINK_EMAILS.map(([, build]) => build('en', NAME, TOKEN).template),
             ...CONFIRM_EMAILS.map(([, build]) => build('en', NAME).template)
@@ -95,18 +99,22 @@ describe('account emails — the action links', () => {
         (_name, build, _template, kind) => {
             const { data } = build('en', NAME, TOKEN);
 
-            // The whole link, not just the token: `accountFrontendLink`/`frontendLink` are covered
-            // by their own unit suites (`src/modules/account/tests/unit/config.test.ts`,
-            // `tests/unit/infrastructure/http/frontend-link.test.ts`) — what this builder owns is
-            // picking the right KIND and passing the recipient's own locale and token through
-            // unchanged, never a swapped or hard-coded one.
+            /**
+             * The whole link, not just the token: `accountFrontendLink`/`frontendLink` are covered
+             * by their own unit suites (`src/modules/account/tests/unit/config.test.ts`,
+             * `tests/unit/infrastructure/http/frontend-link.test.ts`) — what this builder owns is
+             * picking the right KIND and passing the recipient's own locale and token through
+             * unchanged, never a swapped or hard-coded one.
+             */
             expect(data.linkUrl).toBe(accountFrontendLink(kind, { locale: 'en', token: TOKEN }));
         }
     );
 
     it('sends each token to its own kind, never another flow"s', () => {
-        // The consequence worth naming: a reset token delivered on the restore page, or the other
-        // way round, is an account action performed by someone who asked for a different one.
+        /**
+         * The consequence worth naming: a reset token delivered on the restore page, or the other
+         * way round, is an account action performed by someone who asked for a different one.
+         */
         const verify = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
         const reset = resetRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
         const remove = scheduledWithDate('en', NAME, TOKEN).data.linkUrl as string;
@@ -135,9 +143,11 @@ describe('account emails — the action links', () => {
 describe('account emails — the copy', () => {
     it.each(LINK_EMAILS)('%s resolves every slot to real copy', (_name, build) => {
         for (const [key, value] of copySlots(build('en', NAME, TOKEN))) {
-            // Non-empty, and not the key echoed back — i18next returns the key itself when it
-            // cannot find a translation, which renders in the inbox as
-            // `account.email.verify-request.intro`.
+            /**
+             * Non-empty, and not the key echoed back — i18next returns the key itself when it
+             * cannot find a translation, which renders in the inbox as
+             * `account.email.verify-request.intro`.
+             */
             expect(typeof value).toBe('string');
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^account\.email\./);
@@ -154,8 +164,10 @@ describe('account emails — the copy', () => {
     });
 
     it('interpolates the recipient"s name rather than dropping it', () => {
-        // The `{ name }` argument. Without it the greeting still resolves to real copy and still
-        // passes every "is it non-empty" check — it just greets nobody, or renders `{{name}}`.
+        /**
+         * The `{ name }` argument. Without it the greeting still resolves to real copy and still
+         * passes every "is it non-empty" check — it just greets nobody, or renders `{{name}}`.
+         */
         const greeting = verifyRequestEmail('en', NAME, TOKEN).data.greeting as string;
         const confirmGreeting = resetConfirmEmail('en', NAME).data.greeting as string;
 
@@ -165,8 +177,10 @@ describe('account emails — the copy', () => {
     });
 
     it('carries the locale through to the template, and translates by it', () => {
-        // `locale` in `data` is what the renderer sets `<html lang>` from; the copy differing is
-        // what proves the locale reached `translator()` as well as the payload.
+        /**
+         * `locale` in `data` is what the renderer sets `<html lang>` from; the copy differing is
+         * what proves the locale reached `translator()` as well as the payload.
+         */
         const english = verifyRequestEmail('en', NAME, TOKEN);
         const italian = verifyRequestEmail('it', NAME, TOKEN);
 
@@ -176,8 +190,10 @@ describe('account emails — the copy', () => {
     });
 
     it('shares one footer across every account email, bar the security notices that name support', () => {
-        // `email.footer` is a shared key deliberately: six footers that drift are six places to
-        // update when the company address changes.
+        /**
+         * `email.footer` is a shared key deliberately: six footers that drift are six places to
+         * update when the company address changes.
+         */
         const footers = [
             ...LINK_EMAILS.map(([, build]) => build('en', NAME, TOKEN).data.footer),
             ...CONFIRM_EMAILS.map(([, build]) => build('en', NAME).data.footer)
@@ -288,8 +304,10 @@ describe('account emails — the name in a greeting', () => {
         expect(build(NAME).data.greeting).toContain(NAME);
     });
 
-    // The name is user-supplied text. For a mailbox nobody has proven it is withheld, and every
-    // template that greets must cope with having none.
+    /**
+     * The name is user-supplied text. For a mailbox nobody has proven it is withheld, and every
+     * template that greets must cope with having none.
+     */
     it.each(everyBuilder)('%s says a plain Hello! when it has none', (_name, build) => {
         expect(build('').data.greeting).toBe('Hello!');
     });

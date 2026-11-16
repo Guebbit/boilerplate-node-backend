@@ -77,9 +77,11 @@ export const authenticateAs = async (
  * `createUser`'s own `role` parameter, which writes the membership `rolesOf` actually reads.
  */
 export const authenticateAsRole = async (role: string): Promise<AuthenticatedTestUser> => {
-    // Distinct per role, not `createUser`'s shared default: the contract sweep this exists for
-    // authenticates several roles inside ONE test, and a second account at the same address is a
-    // duplicate-key error, not a second caller.
+    /**
+     * Distinct per role, not `createUser`'s shared default: the contract sweep this exists for
+     * authenticates several roles inside ONE test, and a second account at the same address is a
+     * duplicate-key error, not a second caller.
+     */
     const user = await createUser(
         {
             email: `${role}@example.com`,

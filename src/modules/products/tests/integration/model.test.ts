@@ -30,8 +30,10 @@ describe('product serialization', () => {
             productService.callerScope(callerAs('admin'))
         );
 
-        // Already the wire shape, not a hydrated document — `getById` runs `.toJSON()` itself
-        // before resolving a translation over it, so there is no second transform to call here.
+        /**
+         * Already the wire shape, not a hydrated document — `getById` runs `.toJSON()` itself
+         * before resolving a translation over it, so there is no second transform to call here.
+         */
         expect(found).toMatchObject({
             id: product._id.toString(),
             title: 'Lookup Product'

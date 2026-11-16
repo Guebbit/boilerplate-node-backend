@@ -126,7 +126,6 @@ const apply = async (
 /**
  * Judge one waiting fulfillment order against its products' dates, in one transaction.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @returns what to mail after the commit, if anything
  */
 const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =>
@@ -151,7 +150,9 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
  */
 export const onDateChanged = async (productId: string, cause: WaitCause): Promise<void> => {
     const waiting = await fulfillmentOrderRepository.findWaitingForProduct(productId, cause);
-    // One after another: each judgement is its own transaction over its own fulfillment order, and
-    // the buyer's mail rides each commit's event.
+    /**
+     * One after another: each judgement is its own transaction over its own fulfillment order, and
+     * the buyer's mail rides each commit's event.
+     */
     for (const fulfillmentOrder of waiting) await judgeOne(String(fulfillmentOrder._id));
 };

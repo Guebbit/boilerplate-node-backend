@@ -34,8 +34,10 @@ export const requireAllowedOrigin = (
         next();
         return;
     }
-    // A foreign origin is someone else's page acting with the browser's cookie: leave a trail
-    // (ASVS 5.0 V16.3.2). Capped, since the header is the attacker's to write.
+    /**
+     * A foreign origin is someone else's page acting with the browser's cookie: leave a trail
+     * (ASVS 5.0 V16.3.2). Capped, since the header is the attacker's to write.
+     */
     recordAudit(callerContextOf(request), {
         action: coreAuditActions.SECURITY_FORBIDDEN,
         actorUserId: 'anonymous',

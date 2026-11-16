@@ -196,7 +196,8 @@ const withDefaults = (
  * Runs on the BUNDLED document rather than on each fragment, because `$ref`s are already resolved
  * by then and an operation is reachable exactly once.
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#the-flow
+ * @throws {Error} when the root declares no `x-app-level-responses`
  */
 export const withAppLevelResponses: Step = (document_) => {
     const appLevel = document_['x-app-level-responses'];
@@ -206,8 +207,10 @@ export const withAppLevelResponses: Step = (document_) => {
     for (const target of operationsOf(document_))
         target.operation.responses = withDefaults(target, appLevel);
 
-    // Deleted once it has been spent: it is an instruction to this script, and a consumer reading
-    // the published contract has no use for a key describing how the contract was assembled.
+    /**
+     * Deleted once it has been spent: it is an instruction to this script, and a consumer reading
+     * the published contract has no use for a key describing how the contract was assembled.
+     */
     delete document_['x-app-level-responses'];
 };
 
@@ -231,6 +234,7 @@ interface VersionedPathItem {
 /**
  * Adds the `ETag` header to an operation's inline `200`. A `200` that is a `$ref` cannot take one
  * — a sibling of `$ref` is ignored — so it is refused loudly rather than left silently bare.
+ * @throws {Error} when the operation has no inline 200 to hang the `ETag` on
  */
 const withEtagHeader = (operation: Operation, where: string): void => {
     const ok = operation.responses?.['200'];
@@ -246,6 +250,7 @@ const withEtagHeader = (operation: Operation, where: string): void => {
  * Adds `ETag` and `Content-Location` to every inline 2xx of a create or an action: the answer's tag
  * is the new resource's, and `Content-Location` says which resource (RFC 9110 §6.4.2 rule 7).
  * A 2xx that is a `$ref` is refused, as {@link withEtagHeader} refuses it.
+ * @throws {Error} when the operation has no 2xx, or one that is a `$ref`, to hang the `ETag` on
  */
 const withAnswerHeaders = (operation: Operation, where: string): void => {
     const answered = Object.entries(operation.responses ?? {}).filter(([status]) =>
@@ -309,8 +314,10 @@ export const withVersionedResources: Step = (document_) => {
                 withAnswerHeaders(operation, `${method} ${route}`);
             else if (VERSIONED_WRITE_METHODS.has(method)) withIfMatch(operation);
             else throw new Error(`[openapi] ${route}: x-versioned cannot name ${method}.`);
-            // Only a PATCH answer carries the new tag: a PUT answer carries no validator
-            // (RFC 9110 §9.3.4, enforced by `dropUnownedValidators`).
+            /**
+             * Only a PATCH answer carries the new tag: a PUT answer carries no validator
+             * (RFC 9110 §9.3.4, enforced by `dropUnownedValidators`).
+             */
             if (method === 'patch') withEtagHeader(operation, `${method} ${route}`);
         }
     }
@@ -509,9 +516,11 @@ export const withModuleStamps = (
     moduleByPath: Record<string, string>
 ): void => {
     for (const { route, operation } of operationsOf(document_)) {
-        // `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
-        // value for every key, so an index access reads as always-present to TypeScript even
-        // though a `system` path is never in this map at all — see `moduleOfPath`.
+        /**
+         * `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
+         * value for every key, so an index access reads as always-present to TypeScript even
+         * though a `system` path is never in this map at all — see `moduleOfPath`.
+         */
         if (Object.hasOwn(moduleByPath, route)) operation['x-module'] = moduleByPath[route];
     }
 };
@@ -606,8 +615,10 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         withVersionedResources,
         // The headers every answer carries.
         withAppLevelHeaders,
-        // `Idempotent-Replayed` on every answer of an idempotent write but a 429, through
-        // `<Name>Replayable` twins of the shared responses.
+        /**
+         * `Idempotent-Replayed` on every answer of an idempotent write but a 429, through
+         * `<Name>Replayable` twins of the shared responses.
+         */
         withIdempotentReplay,
         // The `x-module` each operation's owning fragment names, never hand-written.
         (document_) => {
@@ -641,6 +652,7 @@ let compiled: string | undefined;
  * committed copy is stale, once to write it, and again in the second phase that lets the client
  * collections read a current contract. The sources cannot change mid-run, so the answer cannot
  * either, and bundling three times only makes the log look like something went wrong.
+ * @throws {Error} when redocly cannot bundle; the cause carries its output
  */
 const compile = (): string => {
     if (compiled !== undefined) return compiled;
@@ -665,7 +677,7 @@ const compile = (): string => {
             { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'pipe'] }
         );
     } catch (error) {
-        /*
+        /**
          * Almost always a `$ref` a fragment or the root names and no file answers. Redocly says
          * which line, so let it through verbatim rather than wrapping it in a summary that hides
          * the location.
@@ -679,16 +691,18 @@ const compile = (): string => {
     const document_ = parseOpenApi(readFileSync(temporary, 'utf8'));
     for (const step of bundleSteps(collectErrorCodes())) step(document_);
 
-    /*
+    /**
      * The marker has to be prepended rather than written into a source, because redocly PARSES: a
      * comment at the top of `openapi.root.yaml` would be dropped like every other one. Two lines of
      * YAML comment ahead of `openapi: 3.1.0` are legal, and spectral, orval and the AsyncAPI-style
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */
-    // `lineWidth: 0` turns off folding, so an unrelated edit never rewraps a description.
-    // `aliasDuplicateObjects: false` writes a shared object out in full, never as a YAML anchor.
-    // https://eemeli.org/yaml/#tostring-options
+    /**
+     * `lineWidth: 0` turns off folding, so an unrelated edit never rewraps a description.
+     * `aliasDuplicateObjects: false` writes a shared object out in full, never as a YAML anchor.
+     * https://eemeli.org/yaml/#tostring-options
+     */
     compiled = MARKER + stringifyYaml(document_, { lineWidth: 0, aliasDuplicateObjects: false });
     return compiled;
 };

@@ -32,6 +32,7 @@ const sourceFiles = (directory: string): string[] =>
         return full.endsWith('.ts') ? [full] : [];
     });
 
+/** The alert rules file, parsed. */
 const rules = parse(
     readFileSync(
         path.join(REPO_ROOT, 'docker', 'observability', 'prometheus.alert-rules.yaml'),

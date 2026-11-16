@@ -3,6 +3,7 @@ import { assertCorpusDigest } from '../../../../scripts/security/corpus-digest';
 
 /** A small body and its real SHA-256, so the happy path proves the digest is computed over the bytes. */
 const body = new TextEncoder().encode('123456\npassword\n');
+/** The sha256 of the corpus body, as the manifest records it. */
 const digest = createHash('sha256').update(body).digest('hex');
 
 describe('assertCorpusDigest', () => {

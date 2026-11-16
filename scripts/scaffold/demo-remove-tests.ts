@@ -73,7 +73,6 @@ const specifiersOf = (source: string): string[] =>
  * spellings a test uses for repo code: `@modules/<name>/...`, `@scenarios/...`, `@tests/...` and a relative path.
  * @param specifier - as written in the import
  * @param importer - the absolute path of the file that wrote it
- * @param repoRoot - repo root
  */
 const resolveSpecifier = (
     specifier: string,
@@ -102,15 +101,16 @@ const isGone = (resolved: string, gone: readonly string[]): boolean =>
 /**
  * Delete every test that imports a removed module, then every test that imports one of those, until
  * nothing new falls out.
- * @param repoRoot - repo root
  * @param names - the removed module names (their folders are already deleted)
  * @returns one note per deleted file
  */
 export const removeResidueTests = (repoRoot: string, names: readonly string[]): RemovalNote[] => {
     const files = testRoots(repoRoot).flatMap((root) => walkTypeScript(root));
-    // A module's own scenario fixtures (`scenarios/<name>.ts`) and its test doubles
-    // (`scenarios/support/doubles/<name>/`) go with it, so a test importing either is as orphaned as
-    // one importing the module.
+    /**
+     * A module's own scenario fixtures (`scenarios/<name>.ts`) and its test doubles
+     * (`scenarios/support/doubles/<name>/`) go with it, so a test importing either is as orphaned as
+     * one importing the module.
+     */
     const gone = names.flatMap((name) => [
         path.join(repoRoot, 'src', 'modules', name),
         path.join(repoRoot, 'scenarios', name),

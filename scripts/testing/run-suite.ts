@@ -27,7 +27,7 @@
  * written down instead of copied into `package.json`. It still bounds the workers, unless the
  * caller passed `--runInBand` or `--maxWorkers` itself.
  *
- * @see docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md#start-here-—-the-two-mechanisms
  */
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -45,8 +45,10 @@ import {
 import { REPO_ROOT } from '../modules-on-disk';
 import { SUITES } from './suites';
 
-/** True when invoked with `--unsharded`: run every named suite's patterns as one jest process,
- *  skipping the budget math below entirely — see the module header's "WHY --unsharded" section. */
+/**
+ * True when invoked with `--unsharded`: run every named suite's patterns as one jest process,
+ *  skipping the budget math below entirely — see the module header's "WHY --unsharded" section.
+ */
 const unsharded = process.argv.includes('--unsharded');
 
 /** Every CLI arg after the flag above is stripped, leaving suite names then jest passthrough. */
@@ -107,8 +109,10 @@ if (suiteNames.length === 0) {
 
 // `--unsharded`: one jest process for every named suite, then exit with its status.
 if (unsharded) {
-    // One process, every named suite's patterns at once — no shard/heap math, no `suite` lookup:
-    // the caller (the JSON report, randomized order) already chose its own jest flags.
+    /**
+     * One process, every named suite's patterns at once — no shard/heap math, no `suite` lookup:
+     * the caller (the JSON report, randomized order) already chose its own jest flags.
+     */
     const patterns = suiteNames.flatMap((name) => SUITES[name].patterns);
 
     // Worker-bounded like a sharded run, unless the caller already chose in band or a count.
@@ -158,8 +162,10 @@ if (suiteNames.length > 1) {
 /** The single layer name a sharded run always takes — {@link suiteNames} has exactly one here. */
 const [suiteName] = suiteNames;
 
-/** This run's {@link Suite} — guaranteed present, since {@link splitSuiteNames} only collects
- *  known keys. */
+/**
+ * This run's {@link Suite} — guaranteed present, since {@link splitSuiteNames} only collects
+ *  known keys.
+ */
 const suite = SUITES[suiteName];
 
 /**
@@ -182,8 +188,10 @@ const countTestFiles = (): number => {
         encoding: 'utf8'
     });
 
-    // A spawn that never started reports through `error` and has no usable stdout — the 0 this
-    // returns for that case is the documented answer above, not a count of zero files.
+    /**
+     * A spawn that never started reports through `error` and has no usable stdout — the 0 this
+     * returns for that case is the documented answer above, not a count of zero files.
+     */
     if (listed.error) return 0;
 
     return listed.stdout.split('\n').filter((line) => line.trimEnd().endsWith('.test.ts')).length;
@@ -242,9 +250,11 @@ const shards = shardsOverride
       ? shardCount(fileCount, perShard)
       : 1;
 
-/** `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) in band,
+/**
+ * `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) in band,
  *  which has no worker to recycle. The `suite.serialized` test stays: it carries the narrowing
- *  that makes `workerPeakMb` reachable. */
+ *  that makes `workerPeakMb` reachable.
+ */
 const recycleLimitMb = recycleLimitFor(suite.serialized ? 0 : suite.workerPeakMb);
 
 /**
@@ -287,8 +297,10 @@ const runShard = (shard: number): Promise<number> =>
                 stdio: 'inherit',
                 env: {
                     ...process.env,
-                    // Pinned per shard rather than left to Node, which derives its ceiling from
-                    // TOTAL RAM and so hands a weak machine a limit it cannot honour.
+                    /**
+                     * Pinned per shard rather than left to Node, which derives its ceiling from
+                     * TOTAL RAM and so hands a weak machine a limit it cannot honour.
+                     */
                     NODE_OPTIONS:
                         `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=${heapMb}`.trim()
                 }
@@ -312,8 +324,10 @@ const main = async () => {
     for (let shard = 1; shard <= shards; shard += 1) {
         if (shards > 1) console.log(`\n[test] ${suiteName}: shard ${shard}/${shards}`);
 
-        // Sequential on purpose: the whole point is that only one shard's memory is live at a time,
-        // so this await inside a loop is the feature rather than an oversight.
+        /**
+         * Sequential on purpose: the whole point is that only one shard's memory is live at a time,
+         * so this await inside a loop is the feature rather than an oversight.
+         */
         const code = await runShard(shard);
 
         if (code === 0) {

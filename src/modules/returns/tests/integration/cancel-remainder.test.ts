@@ -60,6 +60,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /** The `returns.notice` mails queued so far. */
@@ -145,6 +146,7 @@ const paidMixed = async (
     return { user, shirt, mug, orderId };
 };
 
+/** What the arranging helper hands each case. */
 type Fixture = Awaited<ReturnType<typeof partlyShipped>>;
 
 /** The buyer's own request to cancel what has not shipped. */
@@ -160,7 +162,10 @@ const buyerCancels = (fixture: Fixture) =>
         callerContextAs('customer', fixture.user.id)
     );
 
-/** A created cancellation, or a loud failure. */
+/**
+ * A created cancellation, or a loud failure.
+ * @throws {Error} when the outcome is a refusal
+ */
 const created = (outcome: Awaited<ReturnType<typeof returnService.createReturn>>) => {
     if (!outcome.success)
         throw new Error(`expected a cancellation: ${JSON.stringify(outcome.errors)}`);
@@ -718,8 +723,10 @@ describe('staff cancelling what has not shipped', () => {
         );
     });
 
-    // The buyer's withdrawal can be recorded by staff, but only with the day the buyer stated it and
-    // the channel: without them the request is refused, so a legal record is never written blind.
+    /**
+     * The buyer's withdrawal can be recorded by staff, but only with the day the buyer stated it and
+     * the channel: without them the request is refused, so a legal record is never written blind.
+     */
     it('refuses staff naming withdrawal without the stated date and channel, and writes nothing', async () => {
         const fixture = await partlyShipped();
 
@@ -935,8 +942,10 @@ describe('the delivery, across several cancels and returns', () => {
 
         await Promise.all([buyerCancels(fixture), returnShippedGoods(fixture)]);
 
-        // Whichever path was last took the delivery: 60.00 + 15.00, or 10.00 + 65.00. Both taking
-        // it would refund 80.00 and neither 70.00, so the sum alone tells the three apart.
+        /**
+         * Whichever path was last took the delivery: 60.00 + 15.00, or 10.00 + 65.00. Both taking
+         * it would refund 80.00 and neither 70.00, so the sum alone tells the three apart.
+         */
         const amounts = await refundsOf(fixture.orderId).then((all) =>
             all.map(({ amount }) => amount).toSorted()
         );

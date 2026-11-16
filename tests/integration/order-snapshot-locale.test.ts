@@ -24,6 +24,7 @@ setupTestDb();
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
+/** Stores a translation for the given product and locale. */
 const givenTranslation = (
     productId: string,
     locale: string,
@@ -41,9 +42,11 @@ const givenTranslation = (
 
 describe("orderService.create freezes the snapshot in the buyer's stored locale", () => {
     it("embeds the Italian title/description from `user.locale`, over the caller's own", async () => {
-        // The admin path: an English-speaking operator placing an order for an Italian customer.
-        // The caller's locale is deliberately the WRONG answer here — if it ever wins again, the
-        // customer is mailed a receipt in a language they never chose, frozen beyond repair.
+        /**
+         * The admin path: an English-speaking operator placing an order for an Italian customer.
+         * The caller's locale is deliberately the WRONG answer here — if it ever wins again, the
+         * customer is mailed a receipt in a language they never chose, frozen beyond repair.
+         */
         await givenLocale('it');
         const user = await createUser({ locale: 'it' });
         const product = await createProduct({ title: 'Dog Bed', description: 'A soft bed' });
@@ -63,8 +66,10 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
         expect(order.items[0].locale).toBe('it');
         expect(order.items[0].product.title).toBe('Cuccia');
         expect(order.items[0].product.description).toBe('Una cuccia morbida');
-        // The order's own `_id`, not a freshly minted one — `resolveSnapshotProducts` merges
-        // through `.toObject()`, never `.toJSON()`, exactly to keep this true.
+        /**
+         * The order's own `_id`, not a freshly minted one — `resolveSnapshotProducts` merges
+         * through `.toObject()`, never `.toJSON()`, exactly to keep this true.
+         */
         expect(String(order.items[0].product._id)).toBe(String(product._id));
     });
 

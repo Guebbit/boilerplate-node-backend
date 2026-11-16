@@ -34,8 +34,10 @@ describe('mergeBase', () => {
 
     it('exits 2 on an explicit --base that fails to resolve, without trying origin/HEAD', () => {
         const resolve = jest.fn(() => undefined);
-        // `process.exit` really does end the process; the throw is what stops this function from
-        // reading on to the origin/HEAD fallback, the same as it would in reality.
+        /**
+         * `process.exit` really does end the process; the throw is what stops this function from
+         * reading on to the origin/HEAD fallback, the same as it would in reality.
+         */
         const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
             throw new Error('process.exit');
         });

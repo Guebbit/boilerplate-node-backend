@@ -18,8 +18,8 @@
  * there means "the paired FRONTEND holds a copy", which is not this file's story at all: it is
  * shared with the PHP twin, a repository this one has no access to and no pairing test for.
  *
- * @see docs/build/contract-fragmentation.md
- * @see docs/understand/authorization.md
+ * @see docs/build/contract-fragmentation.md#the-seven-bundles
+ * @see docs/understand/authorization.md#where-it-lives
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -112,6 +112,7 @@ const sectionsOnDisk = (): string[] => [...modulesWith(MODULES_ROOT, 'authorizat
 /**
  * Assemble the bundle from the root file plus every fragment that exists, in `PREFERRED_ORDER`, extras appended.
  * A module deleted from the tree drops out with its own fragment — nothing lists it by hand.
+ * @throws {Error} when the root file lacks a marker the assembly splices at
  */
 export const assembleAuthorizationKeys = (): string => {
     const root = readFileSync(ROOT_FILE, 'utf8');

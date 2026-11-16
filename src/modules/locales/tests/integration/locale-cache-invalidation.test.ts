@@ -40,8 +40,10 @@ jest.mock('@infrastructure/adapters/cache', () => {
             }
             tagged.delete(tag);
         }
-        // The real adapter reports whether the cache was reached, so the middleware can count
-        // a write whose stale response survived it. This fake always reaches.
+        /**
+         * The real adapter reports whether the cache was reached, so the middleware can count
+         * a write whose stale response survived it. This fake always reaches.
+         */
         return Promise.resolve({ deleted, reachable: true });
     };
 
@@ -61,10 +63,12 @@ jest.mock('@infrastructure/adapters/cache', () => {
             return Promise.resolve();
         },
         invalidateCacheTags,
-        // The real `invalidateCacheTagsLogged` calls `invalidateCacheTags` through its own
-        // module-local binding, which `jest.requireActual` captures before this factory ever
-        // runs — so overriding the export above does not reach it. Redeclared here against the
-        // same double, or every write "succeeds" against the real (unreachable) Redis instead.
+        /**
+         * The real `invalidateCacheTagsLogged` calls `invalidateCacheTags` through its own
+         * module-local binding, which `jest.requireActual` captures before this factory ever
+         * runs — so overriding the export above does not reach it. Redeclared here against the
+         * same double, or every write "succeeds" against the real (unreachable) Redis instead.
+         */
         invalidateCacheTagsLogged: (tags: string[]) =>
             invalidateCacheTags(tags).then(() => undefined)
     };
@@ -84,8 +88,10 @@ const givenPublishedLanguage = async (bearer: string) => {
         .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
     await api()
-        // `demo-fe`: the frontend app, which is the half `GET /locales/:locale/messages`
-        // serves and therefore the half whose cached copy this test is about.
+        /**
+         * `demo-fe`: the frontend app, which is the half `GET /locales/:locale/messages`
+         * serves and therefore the half whose cached copy this test is about.
+         */
         .post('/locales/pt/apps/demo-fe/entries')
         .set('Authorization', bearer)
         .send({ key: 'cart.title', value: 'Carrinho' });
@@ -101,7 +107,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         expect(first.headers['cache-status']).toContain('fwd=miss');
         expect(first.body.messages).toEqual({ cart: { title: 'Carrinho' } });
 
-        /*
+        /**
          * Second read is served from the store. Asserted explicitly, because it is what makes the
          * third read meaningful: without a proven HIT here, a MISS below would prove nothing.
          */
@@ -116,17 +122,21 @@ describe('an admin write invalidates the cached public dictionary', () => {
             .set('Authorization', bearer)
             .send({ value: 'O seu carrinho' });
 
-        // The stored response is gone, so the next anonymous reader gets the edit rather than the
-        // hour-old copy.
+        /**
+         * The stored response is gone, so the next anonymous reader gets the edit rather than the
+         * hour-old copy.
+         */
         const afterEdit = await api().get('/locales/pt/messages');
         expect(afterEdit.headers['cache-status']).toContain('fwd=miss');
         expect(afterEdit.body.messages).toEqual({ cart: { title: 'O seu carrinho' } });
     });
 
     it('clears the manifest too, so a new language is visible immediately', async () => {
-        // Both public reads carry the same tag, and a client discovering languages through a stale
-        // manifest cannot ask for the one that was just added — the dictionary being current would
-        // not help it.
+        /**
+         * Both public reads carry the same tag, and a client discovering languages through a stale
+         * manifest cannot ask for the one that was just added — the dictionary being current would
+         * not help it.
+         */
         const { bearer } = await authenticateAs('admin');
 
         await api().get('/locales');

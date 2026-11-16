@@ -31,7 +31,9 @@ export default {
     // The scrape token's placeholder gate and the telemetry sinks: see `./config`.
     config: [observabilityConfig.slice],
     locales: path.join(__dirname, 'locales'),
-    // Infrastructure — health, metrics, the audit read endpoint, the SSE stream. Owns no
-    // collection of its own; records nothing personal.
+    /**
+     * Infrastructure — health, metrics, the audit read endpoint, the SSE stream. Owns no
+     * collection of its own; records nothing personal.
+     */
     personalData: 'none'
 } satisfies AppModule;

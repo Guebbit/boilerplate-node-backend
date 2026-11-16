@@ -61,8 +61,10 @@ describe('generateSuccess', () => {
     });
 
     it('carries no errors key at runtime', () => {
-        // `errors: never` exists only to drive type narrowing; emitting the key would put an
-        // `errors` field on every successful response.
+        /**
+         * `errors: never` exists only to drive type narrowing; emitting the key would put an
+         * `errors` field on every successful response.
+         */
         const response = generateSuccess({ id: 'x' });
 
         expect(Object.keys(response).toSorted()).toEqual(['data', 'status', 'success']);
@@ -145,8 +147,10 @@ describe('generateReject', () => {
     });
 
     it('defaults to status 400 with a generic message', () => {
-        // 400 is "a safer accidental default than 500" — an unannotated reject must not report
-        // a server fault for what is usually a client one.
+        /**
+         * 400 is "a safer accidental default than 500" — an unannotated reject must not report
+         * a server fault for what is usually a client one.
+         */
         const response = generateReject();
 
         expect(response.status).toBe(400);
@@ -164,7 +168,7 @@ describe('generateReject', () => {
         ]);
     });
 
-    /*
+    /**
      * The one convention: callers cannot pass a message, so a given status always reads the same
      * way, rather than a bare 'Not Found' next to an operation-prefixed
      * 'getProductItem - not found' whose prefix leaks the handler layout into every 404.
@@ -196,7 +200,7 @@ describe('generateReject', () => {
         expect(resolveErrorTitle(status)).toBe(title);
     });
 
-    /*
+    /**
      * `errors[0].message` is what a person reads, so a status-only failure is translated: one
      * `generic.*` key per status, while the top-level `message` above stays English (AIP-193).
      */
@@ -248,7 +252,7 @@ describe('generateReject', () => {
         expect(response.data).toBeUndefined();
     });
 
-    /*
+    /**
      * The rule, pinned for every status that has a code of its own: UPPER_SNAKE of the RFC 9110
      * name. A client branches on `code`, so distinct statuses must not collapse and a rename of
      * Node's phrase table must not silently rename a code.
@@ -287,8 +291,10 @@ describe('generateReject', () => {
     });
 
     it('treats 499 as a client error, not a server one', () => {
-        // The `>= 500` boundary from below. With `> 500`, a plain 500 would fall through to
-        // CLIENT_ERROR and clients would stop recognising server failures.
+        /**
+         * The `>= 500` boundary from below. With `> 500`, a plain 500 would fall through to
+         * CLIENT_ERROR and clients would stop recognising server failures.
+         */
         expect(codeFor(499)).toBe('CLIENT_ERROR');
     });
 
@@ -300,8 +306,10 @@ describe('generateReject', () => {
     it('normalises a mixed list of strings and structured items', () => {
         const response = generateReject(422, [
             'Email is required',
-            // The merge rule is generic over WHATEVER code a caller supplies — this value's only
-            // job is to prove it passes through untouched, not to name a real catalogue entry.
+            /**
+             * The merge rule is generic over WHATEVER code a caller supplies — this value's only
+             * job is to prove it passes through untouched, not to name a real catalogue entry.
+             */
             { code: 'TOO_SHORT' as ErrorCode, message: 'Password too short' }
         ]);
 
@@ -312,9 +320,11 @@ describe('generateReject', () => {
     });
 
     it('fills a structured item missing its code from the status', () => {
-        // `''` is deliberately not a real code: it exercises the `error.code || fallback` branch,
-        // which only fires on a falsy value — the type does not forbid an empty string arriving
-        // this way, since it can still come from an un-narrowed external source at runtime.
+        /**
+         * `''` is deliberately not a real code: it exercises the `error.code || fallback` branch,
+         * which only fires on a falsy value — the type does not forbid an empty string arriving
+         * this way, since it can still come from an un-narrowed external source at runtime.
+         */
         const response = generateReject(409, [
             { code: '' as ErrorCode, message: 'Email already used' }
         ]);
@@ -332,8 +342,10 @@ describe('generateReject', () => {
     });
 
     it('omits details entirely rather than serialising it as undefined', () => {
-        // A `"details": undefined` key survives some serialisers as `null` and shows up in
-        // contract validation as an undeclared field.
+        /**
+         * A `"details": undefined` key survives some serialisers as `null` and shows up in
+         * contract validation as an undeclared field.
+         */
         const response = generateReject(422, [{ code: 'X' as ErrorCode, message: 'Y' }]);
 
         expect(response.errors[0]).not.toHaveProperty('details');
@@ -580,8 +592,10 @@ describe('rejectResponse', () => {
     });
 
     it('does not throw, so controllers must return it', () => {
-        // Documented: forgetting the `return` lets execution continue and trips Express'
-        // "headers already sent". Pinned so the contract cannot change silently.
+        /**
+         * Documented: forgetting the `return` lets execution continue and trips Express'
+         * "headers already sent". Pinned so the contract cannot change silently.
+         */
         const response = makeResponseStub();
 
         expect(() => rejectResponse(response, 500)).not.toThrow();

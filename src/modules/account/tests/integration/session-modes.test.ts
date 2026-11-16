@@ -9,7 +9,7 @@
  * `jwt`:      the access/refresh pair.
  * Switching:  a session belongs to the mode that issued it; neither half crosses over.
  *
- * @see docs/understand/sessions.md
+ * @see docs/understand/sessions.md#which-one-to-pick
  */
 
 import { api } from '@tests/http';
@@ -218,8 +218,10 @@ const armTotp = async (headers: Record<string, string>) => {
  */
 const claimedBy = async (cookie: string): Promise<unknown> => {
     const credential = cookieValue(cookie);
-    // jose: the payload, unverified — the test only reads back what the app itself signed.
-    // https://github.com/panva/jose/blob/main/docs/util/decode_jwt/functions/decodeJwt.md
+    /**
+     * jose: the payload, unverified — the test only reads back what the app itself signed.
+     * https://github.com/panva/jose/blob/main/docs/util/decode_jwt/functions/decodeJwt.md
+     */
     if (!credential.startsWith('ses_')) return decodeJwt(credential).amr;
     const row = await sessionRowFor(credential);
     return row?.amr;
@@ -374,8 +376,10 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
     it('refuses a login whose password check a password change overtook, storing nothing', async () => {
         const user = await createUser({ email: 'raced@example.com', verifiedAt: new Date() });
         const { login } = accountService;
-        // Held between the credential check and the mint: the epoch a password change on another
-        // device writes lands while this login is still in flight, in the same second.
+        /**
+         * Held between the credential check and the mint: the epoch a password change on another
+         * device writes lands while this login is still in flight, in the same second.
+         */
         const held = jest
             .spyOn(accountService, 'login')
             .mockImplementationOnce((...args) =>
@@ -1074,8 +1078,10 @@ describe('jwt mode only', () => {
             const { session } = await account('jwt');
             const claims = decodeJwt(session.response.body.token as string);
             const [secret = ''] = getAccessTokenRing();
-            // jose: the same claims re-signed under the real access key, one registered claim swapped.
-            // https://github.com/panva/jose/blob/main/docs/jwt/sign/classes/SignJWT.md
+            /**
+             * jose: the same claims re-signed under the real access key, one registered claim swapped.
+             * https://github.com/panva/jose/blob/main/docs/jwt/sign/classes/SignJWT.md
+             */
             const forged = await new SignJWT({ ...claims, ...overrides })
                 .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt', kid: keyId(secret) })
                 .sign(new TextEncoder().encode(secret));

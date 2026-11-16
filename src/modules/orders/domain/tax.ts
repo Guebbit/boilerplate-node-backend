@@ -234,8 +234,10 @@ export const orderTaxBreakdown = ({
     const rates = items.map((item) => frozenRate(item));
 
     const grossAmounts = items.map((item) => lineGross(item, currency));
-    // Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
-    // carries none of it, so its weight in the apportionment is zero rather than its gross value.
+    /**
+     * Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
+     * carries none of it, so its weight in the apportionment is zero rather than its gross value.
+     */
     const shippingWeights = items.map((item, index) =>
         isShippedItem(item) ? grossAmounts[index] : NO_MONEY
     );

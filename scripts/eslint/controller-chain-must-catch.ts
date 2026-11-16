@@ -17,8 +17,10 @@ type Options = [];
 /** The one message this rule reports: a controller chain with no terminal `.catch`. */
 type MessageIds = 'missing';
 
-/** Looks up a node's parent — TSESTree does not type a bare `.parent` link, so this is built once
- * per visited call from `context.sourceCode.getAncestors()`, which does. */
+/**
+ * Looks up a node's parent — TSESTree does not type a bare `.parent` link, so this is built once
+ * per visited call from `context.sourceCode.getAncestors()`, which does.
+ */
 type ParentOf = (node: TSESTree.Node) => TSESTree.Node | undefined;
 
 /** The method names of a chain, read from its outermost call inwards. */
@@ -137,17 +139,21 @@ export const controllerChainMustCatch = ESLintUtils.RuleCreator.withoutDocs<Opti
     create(context) {
         return {
             CallExpression(node) {
-                // Built once per visited call: `getAncestors` gives the chain from Program down
-                // to `node`'s own immediate parent, in order — consecutive pairs are exactly the
-                // `.parent` links TSESTree does not type.
+                /**
+                 * Built once per visited call: `getAncestors` gives the chain from Program down
+                 * to `node`'s own immediate parent, in order — consecutive pairs are exactly the
+                 * `.parent` links TSESTree does not type.
+                 */
                 const chain = [...context.sourceCode.getAncestors(node), node];
                 const parents = new Map<TSESTree.Node, TSESTree.Node>(
                     chain.slice(1).map((child, index) => [child, chain[index]])
                 );
                 const parentOf: ParentOf = (target) => parents.get(target);
 
-                // Only judge the OUTERMOST call of a chain: an inner `.then` is part of the
-                // same expression and would otherwise be reported a second time.
+                /**
+                 * Only judge the OUTERMOST call of a chain: an inner `.then` is part of the
+                 * same expression and would otherwise be reported a second time.
+                 */
                 const parent = parentOf(node);
                 if (parent?.type === AST_NODE_TYPES.MemberExpression && parent.object === node)
                     return;

@@ -71,8 +71,10 @@ export const defineLifecycle = <
     table: LifecycleTable<TStatus, TEvent, TActor>
 ): Lifecycle<TStatus, TEvent, TActor> => {
     const known = new Set<string>(statuses);
-    // `Object.keys` widens to string[]; the keys of `table.events` ARE the TEvent names. Event names
-    // are unique by construction: they are object keys.
+    /**
+     * `Object.keys` widens to string[]; the keys of `table.events` ARE the TEvent names. Event names
+     * are unique by construction: they are object keys.
+     */
     const names = Object.keys(table.events) as TEvent[];
     const eventOf = (name: TEvent): LifecycleEvent<TStatus, TActor> => table.events[name];
 

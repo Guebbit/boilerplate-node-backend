@@ -32,10 +32,13 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn().mockResolvedValue(undefined)
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/* Replaced for the same reason `orders/tests/integration/cancel.test.ts` replaces it — see
- * `tests/support/ports.ts`. */
+/**
+ * Replaced for the same reason `orders/tests/integration/cancel.test.ts` replaces it — see
+ * `tests/support/ports.ts`.
+ */
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
@@ -45,7 +48,7 @@ setupTestDb();
 /** The `task.opened` facts announced since the test began. */
 let opened: DomainEventMap['task.opened'][] = [];
 
-/*
+/**
  * `mailMainMailbox` reads `NODE_SUPPORT_EMAIL` at call time. `.env` supplies it via
  * `dotenv/config` in `src/app.ts`, which a service-level suite never imports, so it is set here.
  * Modules are not registered: the announcement is caught by a listener of the test's own.
@@ -78,8 +81,10 @@ describe('create', () => {
     it('stores a new request with status "new"', async () => {
         const task = await taskService.create(makePayload());
 
-        // Every request starts in the same state regardless of what a client sent — the status
-        // field is admin-controlled, not caller-controlled.
+        /**
+         * Every request starts in the same state regardless of what a client sent — the status
+         * field is admin-controlled, not caller-controlled.
+         */
         expect(task.status).toBe(TaskStatus.new);
         expect(task.subject).toBe('Broken checkout');
     });
@@ -107,8 +112,10 @@ describe('create', () => {
     });
 
     it('treats a blank name as absent rather than empty', async () => {
-        // `|| undefined` — the field is optional, and '' would render as an empty author line in
-        // any admin view instead of falling back to the email.
+        /**
+         * `|| undefined` — the field is optional, and '' would render as an empty author line in
+         * any admin view instead of falling back to the email.
+         */
         const task = await taskService.create(makePayload({ name: '   ' }));
 
         expect(task.name).toBeUndefined();
@@ -328,8 +335,10 @@ describe('create — disposable-email policy', () => {
 
         const task = await taskService.create(makePayload({ email: 'someone@mailinator.com' }));
 
-        // Filed and returned exactly like the honeypot catches a bot: no visible refusal that
-        // would tell a spam script which signal caught it.
+        /**
+         * Filed and returned exactly like the honeypot catches a bot: no visible refusal that
+         * would tell a spam script which signal caught it.
+         */
         expect(task.status).toBe(TaskStatus.spam);
         await settleOutboxNudges();
         expect(opened).toEqual([]);
@@ -428,8 +437,10 @@ describe('search', () => {
         const { items, meta } = await taskService.search({ page: 1, pageSize: 2 }, staff);
 
         expect(items).toHaveLength(2);
-        // The three meta fields must agree with each other and with the page actually returned;
-        // a totalPages computed from the page size rather than the total is a classic off-by-one.
+        /**
+         * The three meta fields must agree with each other and with the page actually returned;
+         * a totalPages computed from the page size rather than the total is a classic off-by-one.
+         */
         expect(meta).toMatchObject({ page: 1, pageSize: 2, totalItems: 3, totalPages: 2 });
     });
 });

@@ -43,16 +43,20 @@ export const search = (
 }> => {
     const pattern = toSearchPattern(filters.text ?? filters.title);
 
-    // No free-text term: `category`/`tag`/`priceMin`/`priceMax`/`active` still apply as declared
-    // on the repository, unioning nothing.
+    /**
+     * No free-text term: `category`/`tag`/`priceMin`/`priceMax`/`active` still apply as declared
+     * on the repository, unioning nothing.
+     */
     const resultPromise = pattern
         ? searchWithTranslatedText(filters, scope, pattern)
         : productRepository.search(filters, scope);
 
-    // `.search()` already normalized every item (`_id` → `id`, promise dates to shop days), so this
-    // overlays the caller's locale on top of an already wire-shaped page — one batched query,
-    // never one per item. A no-op when nothing is registered or no row matches, which is why
-    // this can sit in the base function rather than only in the viewed wrapper below.
+    /**
+     * `.search()` already normalized every item (`_id` → `id`, promise dates to shop days), so this
+     * overlays the caller's locale on top of an already wire-shaped page — one batched query,
+     * never one per item. A no-op when nothing is registered or no row matches, which is why
+     * this can sit in the base function rather than only in the viewed wrapper below.
+     */
     return resultPromise.then((result) =>
         applyTranslations('product', result.items).then((items) => ({ ...result, items }))
     );

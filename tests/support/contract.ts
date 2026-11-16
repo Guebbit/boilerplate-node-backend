@@ -62,8 +62,10 @@ const patchSupertestThen = (): void => {
     const testPrototype = asStub<{ then: SupertestThen }>(supertest.Test.prototype);
     const originalThen = testPrototype.then;
 
-    // Deliberately patching supertest's OWN thenable, not creating a new one — that is the whole
-    // mechanism this function exists for.
+    /**
+     * Deliberately patching supertest's OWN thenable, not creating a new one — that is the whole
+     * mechanism this function exists for.
+     */
     // eslint-disable-next-line unicorn/no-thenable -- patches an existing thenable, not a new one
     testPrototype.then = function (onFulfilled, onRejected) {
         return originalThen.call(

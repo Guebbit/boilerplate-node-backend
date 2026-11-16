@@ -185,8 +185,10 @@ describe('what an order offers each caller — what a client renders', () => {
         expect([byBuyer.recordPayment, byBuyer.pay]).toEqual([false, true]);
     });
 
-    // Own money is trusted and recorded, not refused: an administrator's own unpaid order offers
-    // them the cash step like anyone else's, and the audit row carries `ownOrder`.
+    /**
+     * Own money is trusted and recorded, not refused: an administrator's own unpaid order offers
+     * them the cash step like anyone else's, and the audit row carries `ownOrder`.
+     */
     it('offers the offline payment to the buyer on their own order, whatever they hold', async () => {
         const order = await orderOf('admin');
 
@@ -195,8 +197,10 @@ describe('what an order offers each caller — what a client renders', () => {
         expect(actions.recordPayment).toBe(true);
     });
 
-    // `pay` is every buyer's step: a staff member or an administrator is a customer too, so the
-    // checkout key comes with the audience.
+    /**
+     * `pay` is every buyer's step: a staff member or an administrator is a customer too, so the
+     * checkout key comes with the audience.
+     */
     it.each(['moderator', 'admin'])(
         'offers a buyer who is %s the card payment on their own pending order',
         async (role) => {
@@ -274,8 +278,10 @@ describe('no rank on an order', () => {
         expect(result.success).toBe(true);
     });
 
-    // Own money is trusted and recorded: the cancel row carries `ownOrder` when the staff member
-    // is the buyer, and nothing when the order is someone else's.
+    /**
+     * Own money is trusted and recorded: the cancel row carries `ownOrder` when the staff member
+     * is the buyer, and nothing when the order is someone else's.
+     */
     it.each([
         ['their own', true],
         ['someone else’s', false]

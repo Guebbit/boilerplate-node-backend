@@ -25,6 +25,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -32,6 +33,7 @@ setupTestDb();
 /** An account that exists as an id: the system reads it back as an ObjectId. */
 const USER = new Types.ObjectId().toString();
 
+/** Counter behind the outbox row ids the cases hand out. */
 let eventCounter = 0;
 
 /** A fresh outbox row id, as the relay would stamp one. */

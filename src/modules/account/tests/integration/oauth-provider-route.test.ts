@@ -158,7 +158,10 @@ describe('GET /account/oauth/google/callback issuer check (RFC 9207)', () => {
     });
 });
 
-/** The `r=` (remaining) of the address budget, read off a response's `RateLimit` header. */
+/**
+ * The `r=` (remaining) of the address budget, read off a response's `RateLimit` header.
+ * @throws {Error} when the header carries no address budget
+ */
 const addressRemaining = (response: { headers: Record<string, unknown> }): number => {
     const header = String(response.headers.ratelimit);
     const match = /"credentials-address";r=(\d+)/.exec(header);

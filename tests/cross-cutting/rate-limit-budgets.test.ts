@@ -46,8 +46,10 @@ describe('rate-limit budgets, as a set', () => {
         expect(duplicatesOf('namespace')).toEqual([]);
     });
 
-    // A new budget fails SECURE without asking (`onStoreError` defaults to `memory`); passing a
-    // request unbudgeted during a Redis outage is a decision, and this is the list of them.
+    /**
+     * A new budget fails SECURE without asking (`onStoreError` defaults to `memory`); passing a
+     * request unbudgeted during a Redis outage is a decision, and this is the list of them.
+     */
     it('lets a request through a store outage only on the browsing brake', () => {
         const passing = allBudgets
             .filter((budget) => budget.onStoreError === 'pass')

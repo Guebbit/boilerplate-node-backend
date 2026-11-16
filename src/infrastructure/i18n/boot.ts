@@ -6,7 +6,7 @@
  * module registry, a disk glob, or a mock-safe read done before the framework installs — so this
  * only takes the resolved list.
  *
- * @see docs/understand/i18n.md
+ * @see docs/understand/i18n.md#what-is-in-the-module
  */
 
 import i18next from 'i18next';
@@ -37,11 +37,13 @@ export const bootI18n = (
 ): Promise<TFunction> => {
     registerLocaleDirectories(localeDirectories);
 
-    // i18next `init`: `lng` is the active language, `fallbackLng` answers a missing key,
-    // `supportedLngs` rejects any other tag, `resources` is the in-memory dictionaries (no backend).
-    // `interpolation.escapeValue: false` — values are escaped once, at the sink (the HTML
-    // template), so a name is not escaped twice and a plain-text subject stays plain.
-    // https://www.i18next.com/overview/configuration-options
+    /**
+     * i18next `init`: `lng` is the active language, `fallbackLng` answers a missing key,
+     * `supportedLngs` rejects any other tag, `resources` is the in-memory dictionaries (no backend).
+     * `interpolation.escapeValue: false` — values are escaped once, at the sink (the HTML
+     * template), so a name is not escaped twice and a plain-text subject stays plain.
+     * https://www.i18next.com/overview/configuration-options
+     */
     return i18next.init({
         lng,
         fallbackLng: getFallbackLocale(),

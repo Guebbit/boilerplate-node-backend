@@ -5,7 +5,7 @@
  * scrape failed (`up` = 0) from the status alone and never reads its body; the type keeps the
  * answer true to the contract.
  *
- * @see docs/modules/observability.md
+ * @see docs/modules/observability.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';

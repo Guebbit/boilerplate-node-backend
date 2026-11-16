@@ -53,7 +53,7 @@ export interface ChallengeParameters {
  * the environment rather than from the request, and treat a network failure as `refused` rather
  * than as a pass.
  *
- * @see docs/modules/antibot.md
+ * @see docs/modules/antibot.md#choosing-a-provider
  */
 export interface HumanChallengeProvider {
     /** The name `NODE_ANTIBOT_PROVIDER` selects, and the one `antibot` on `GET /config` publishes. */

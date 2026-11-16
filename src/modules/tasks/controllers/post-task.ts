@@ -3,7 +3,7 @@
  * Controller for `POST /tasks` — the one public write this module has, mounted above
  * the admin gate in `../routes` rather than exempted from it.
  *
- * @see docs/modules/tasks.md
+ * @see docs/modules/tasks.md#the-story
  */
 
 import type { Request, Response } from 'express';
@@ -39,7 +39,7 @@ export const postTask = (
     const body = parseBody(createContactTaskSchema, request.body, response);
     if (!body) return;
 
-    /*
+    /**
      * The support notification is `taskService.create`'s: who gets told, and in which
      * language, are facts about the task rather than about the request that filed it.
      *

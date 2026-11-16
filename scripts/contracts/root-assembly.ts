@@ -201,8 +201,10 @@ const appendTagGroups = (document: Document, fragments: readonly ModuleFragment[
  * @throws Error if the root has no `paths` map
  */
 export const assembleRoot = (rootText: string, fragments: readonly ModuleFragment[]): string => {
-    // `yaml`'s Document API keeps comments, anchors and key order while we edit.
-    // https://eemeli.org/yaml/#documents
+    /**
+     * `yaml`'s Document API keeps comments, anchors and key order while we edit.
+     * https://eemeli.org/yaml/#documents
+     */
     const document = parseDocument(rootText);
     const paths = document.get('paths');
     if (!isMap(paths)) throw new Error('[openapi] the root document has no `paths` map.');

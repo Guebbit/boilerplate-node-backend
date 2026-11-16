@@ -24,7 +24,9 @@ export const inventoryCommitOrphanedTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-// Zero from startup, so an `increase()` alert sees the first orphan after a restart. The stages
-// are the ones `raiseOrphanAlarm` in `holds.ts` takes.
-// https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+/**
+ * Zero from startup, so an `increase()` alert sees the first orphan after a restart. The stages
+ * are the ones `raiseOrphanAlarm` in `holds.ts` takes.
+ * https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+ */
 for (const stage of ['commit', 'ship']) inventoryCommitOrphanedTotal.inc({ stage }, 0);

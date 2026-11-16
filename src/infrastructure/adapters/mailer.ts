@@ -3,19 +3,25 @@
  * Email adapter: EJS template rendering + delivery through the named transport, optionally via the
  * queue.
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#email-pipeline
  */
 
-// EJS = the HTML templating engine used for email bodies. `Data` is its type for the
-// variables interpolated into a template (`<%= user.name %>`).
+/**
+ * EJS = the HTML templating engine used for email bodies. `Data` is its type for the
+ * variables interpolated into a template (`<%= user.name %>`).
+ */
 import { readFile } from 'node:fs/promises';
 import ejs, { type Data } from 'ejs';
-// nodemailer: `SendMailOptions` is `sendMail`'s own envelope shape — https://nodemailer.com/message/
-// The sending itself is a transport's job (`./mail-transports`); `smtp` is `./smtp-transport`.
+/**
+ * nodemailer: `SendMailOptions` is `sendMail`'s own envelope shape — https://nodemailer.com/message/
+ * The sending itself is a transport's job (`./mail-transports`); `smtp` is `./smtp-transport`.
+ */
 import type { SendMailOptions } from 'nodemailer';
-// OTel semantic-convention keys for messaging spans — using the standard names lets tracing
-// backends render this as a messaging operation instead of an opaque span. Still incubating,
-// hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated.
+/**
+ * OTel semantic-convention keys for messaging spans — using the standard names lets tracing
+ * backends render this as a messaging operation instead of an opaque span. Still incubating,
+ * hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated.
+ */
 import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
@@ -23,12 +29,16 @@ import { mailConfig, supportEmail } from '@infrastructure/adapters/config';
 import { resolveMailTransport } from '@infrastructure/adapters/mail-transports';
 import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { withSpan } from '@infrastructure/observability/tracer';
-// The queue name comes from the adapter, not from the worker that drains it: producer and
-// consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
+/**
+ * The queue name comes from the adapter, not from the worker that drains it: producer and
+ * consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
+ */
 import { publishToQueue, EMAIL_QUEUE, type JobPriority } from '@infrastructure/adapters/queue';
-// Split into its own leaf module, with no `ejs`/`nodemailer` import of its own — see that
-// file's own header for why `tests/support/setup.ts` needs it kept that way. Re-exported below so
-// every OTHER caller keeps importing from this one file, the mail adapter's own public surface.
+/**
+ * Split into its own leaf module, with no `ejs`/`nodemailer` import of its own — see that
+ * file's own header for why `tests/support/setup.ts` needs it kept that way. Re-exported below so
+ * every OTHER caller keeps importing from this one file, the mail adapter's own public surface.
+ */
 import { templateFile } from '@infrastructure/adapters/template-registry';
 
 export {
@@ -91,20 +101,24 @@ const renderMessage = (
     data: Data
 ): Promise<SendMailOptions> =>
     Promise.all([
-        // `renderFile` reads the template from disk and returns the interpolated HTML.
-        // EJS caches compiled templates internally, so repeat sends skip recompilation.
-        /*
+        /**
+         * `renderFile` reads the template from disk and returns the interpolated HTML.
+         * EJS caches compiled templates internally, so repeat sends skip recompilation.
+         */
+        /**
          * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
          * ambient. Every string a template prints was translated by the producer while
          * the request that asked for the email was still alive, so this function (and
          * the worker that calls it, possibly in another process, hours later) does not
          * need to know what a locale is.
          */
-        // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
-        // include is root-relative (EJS: a leading `/` resolves against `root`, not
-        // against the including file's own directory), so this stays correct however
-        // deep under `src/modules/<name>/templates` the file itself now lives.
-        // https://ejs.co/#docs (Includes)
+        /**
+         * `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
+         * include is root-relative (EJS: a leading `/` resolves against `root`, not
+         * against the including file's own directory), so this stays correct however
+         * deep under `src/modules/<name>/templates` the file itself now lives.
+         * https://ejs.co/#docs (Includes)
+         */
         ejs.renderFile(templateFile(templateName), { ...data }, { root: process.cwd() }),
         resolveAttachments(attachments)
     ]).then(([html, resolvedAttachments]) => ({
@@ -113,12 +127,16 @@ const renderMessage = (
         to: envelope.to,
         subject: envelope.subject,
         text: envelope.text,
-        // nodemailer `replyTo`: sets the Reply-To header — https://nodemailer.com/message/
-        // A mail that names none gets the support address, so a customer's reply reaches a person
-        // (the sender is a `noreply@` by default).
+        /**
+         * nodemailer `replyTo`: sets the Reply-To header — https://nodemailer.com/message/
+         * A mail that names none gets the support address, so a customer's reply reaches a person
+         * (the sender is a `noreply@` by default).
+         */
         replyTo: envelope.replyTo ?? supportEmail(),
-        // nodemailer `messageId`, `inReplyTo` and `references`: the thread headers.
-        // `References` repeats the one parent, which is all a two-mail thread needs.
+        /**
+         * nodemailer `messageId`, `inReplyTo` and `references`: the thread headers.
+         * `References` repeats the one parent, which is all a two-mail thread needs.
+         */
         ...(envelope.messageId === undefined ? {} : { messageId: envelope.messageId }),
         ...(envelope.inReplyTo === undefined
             ? {}
@@ -156,20 +174,26 @@ export const sendTemplatedEmail = (
 
     // Wrap the entire email operation in an OTel span to track latency and failures.
     return withSpan('email.send', (span) => {
-        // Span attributes = searchable/filterable dimensions on the trace. These let you ask
-        // "which template is slowest?" in the tracing backend. Never the recipient: a trace
-        // backend applies none of the logger's personal-field redaction.
+        /**
+         * Span attributes = searchable/filterable dimensions on the trace. These let you ask
+         * "which template is slowest?" in the tracing backend. Never the recipient: a trace
+         * backend applies none of the logger's personal-field redaction.
+         */
         span.setAttributes({
-            // `messaging.system` — the transport being used. Standard key, so backends group
-            // this alongside other messaging spans.
+            /**
+             * `messaging.system` — the transport being used. Standard key, so backends group
+             * this alongside other messaging spans.
+             */
             [ATTR_MESSAGING_SYSTEM]: mailConfig().NODE_MAIL_TRANSPORT,
             // Custom attribute: email template used to render the body.
             'email.template': templateName
         });
 
         return (
-            // Inside the chain: an unknown transport name throws, and a throw from a function
-            // typed as returning a promise would need every caller to try/catch as well.
+            /**
+             * Inside the chain: an unknown transport name throws, and a throw from a function
+             * typed as returning a promise would need every caller to try/catch as well.
+             */
             Promise.resolve()
                 .then(resolveMailTransport)
                 .then((transport) =>
@@ -181,14 +205,18 @@ export const sendTemplatedEmail = (
                     })
                 )
                 .then((info) => {
-                    // `messageId` is the transport's identifier — the handle you need to trace a
-                    // specific email through mail-server logs or a provider dashboard. A
-                    // transport that keeps the mail for a test to read has no receipt to log.
+                    /**
+                     * `messageId` is the transport's identifier — the handle you need to trace a
+                     * specific email through mail-server logs or a provider dashboard. A
+                     * transport that keeps the mail for a test to read has no receipt to log.
+                     */
                     // Stryker disable next-line all
                     if (info) logger.info({ message: 'Message sent.', messageId: info.messageId });
                 })
-            // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
-            // and the caller (or the queue worker's nack path) can react.
+            /**
+             * No .catch(): a rejection propagates so `withSpan` can mark the span as errored
+             * and the caller (or the queue worker's nack path) can react.
+             */
         );
     });
 };
@@ -259,18 +287,22 @@ export const enqueueEmail = (
     data: Data,
     priority: JobPriority = 'normal'
 ): Promise<void> => {
-    // No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
-    // the broker is unconfigured, which the `!published` branch below sends inline exactly as a
-    // configured-but-unreachable broker would — one fallback covers both, not two copies of it.
-    //
-    // The type argument is the point: this literal is checked against the very type the worker
-    // declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
-    // type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
-    // local widening would permit a field the contract forbids.
+    /**
+     * No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
+     * the broker is unconfigured, which the `!published` branch below sends inline exactly as a
+     * configured-but-unreachable broker would — one fallback covers both, not two copies of it.
+     *
+     * The type argument is the point: this literal is checked against the very type the worker
+     * declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
+     * type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
+     * local widening would permit a field the contract forbids.
+     */
     const dispatch = publishToQueue<EmailJobPayload>({
         queue: EMAIL_QUEUE,
-        // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
-        // (streams, Buffers, functions) in `request` would not survive the round trip.
+        /**
+         * Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
+         * (streams, Buffers, functions) in `request` would not survive the round trip.
+         */
         payload: { request, templateName, data },
         priority
     }).then((published) => {
@@ -289,10 +321,12 @@ export const enqueueEmail = (
         // Stryker restore all
     });
 
-    // Callers fire and forget — a rejection here has nobody left to catch it, and would otherwise
-    // surface as an unhandled rejection with no request id and no idea which email was lost. Logged with the two facts needed to find it
-    // (which template, which recipient), then resolved: a lost email is never worth failing the
-    // request that triggered it.
+    /**
+     * Callers fire and forget — a rejection here has nobody left to catch it, and would otherwise
+     * surface as an unhandled rejection with no request id and no idea which email was lost. Logged with the two facts needed to find it
+     * (which template, which recipient), then resolved: a lost email is never worth failing the
+     * request that triggered it.
+     */
     return dispatch.catch((error: unknown) => {
         logger.error({
             message: 'Email dispatch failed; the message was not delivered.',

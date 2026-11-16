@@ -25,8 +25,10 @@ export const getReturnById = (request: Request<{ id?: string }>, response: Respo
         .getReturn(id, authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            // The return model holds no buyer on purpose; the person the read is about is the
-            // order's buyer, resolved here and stored only on the audit row.
+            /**
+             * The return model holds no buyer on purpose; the person the read is about is the
+             * order's buyer, resolved here and stored only on the audit row.
+             */
             return orderService.getById(result.data.orderId).then((order) => {
                 recordStaffRead(request, {
                     key: 'read:Return',

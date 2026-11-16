@@ -11,7 +11,7 @@
  * arrives the other way, as `PRODUCT_CREATED` — `products` cannot import this module back, so it
  * emits instead of calling in.
  *
- * @see docs/modules/inventory.md
+ * @see docs/modules/inventory.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -33,7 +33,7 @@ export default {
     mounts: [{ basePath: '/inventory', routes: router }],
     jobs: inventoryJobs,
     config: [inventoryConfig.slice],
-    /*
+    /**
      * `products` cannot call this module back (it already imports `products`, and the graph must
      * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its stock
      * level. `openLevel` creates the row at zero — a zero-stock product must still be visible to the
@@ -43,12 +43,14 @@ export default {
      */
     subscribe: () => {
         onDomainEvent(PRODUCT_CREATED, ({ productId }) => openLevel(productId));
-        // Only the HARD half — a soft delete (or its restore) must leave the counters exactly
-        // where a restore has to come back to them. See `removeLevel`'s own docblock.
+        /**
+         * Only the HARD half — a soft delete (or its restore) must leave the counters exactly
+         * where a restore has to come back to them. See `removeLevel`'s own docblock.
+         */
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
             hardDelete ? removeLevel(productId) : undefined
         );
-        /*
+        /**
          * This module's own announcement: a payment that serves a preorder moves counters inside the
          * payer's transaction, where the catalogue copy cannot be written (it would not roll back).
          * The cache's owner brings it into step once the commit has landed. A plain commit moves no
@@ -61,14 +63,16 @@ export default {
         // Same reason for a late payment that took a released hold's units again.
         onDomainEvent(STOCK_RETAKEN, ({ productIds }) => refreshStockCacheForProducts(productIds));
     },
-    /*
+    /**
      * No entry in `scenarios/index.ts`: a hold only exists once someone has checked out, so a
      * seeded one would be a state the application cannot reach by seeding — see the note in
      * `scenarios/flows/shop-history.ts`. A reservation is also never serialized to a client
      * (see `./model`), so there is nothing to export even if there were something to seed.
      */
     locales: path.join(__dirname, 'locales'),
-    // Stock movements and holds are keyed by product and order, never by person — see the
-    // `scenarios` comment above on why a reservation is never even serialized to a client.
+    /**
+     * Stock movements and holds are keyed by product and order, never by person — see the
+     * `scenarios` comment above on why a reservation is never even serialized to a client.
+     */
     personalData: 'none'
 } satisfies AppModule;

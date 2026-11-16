@@ -137,8 +137,10 @@ const buildView = (
     lines: CartLine[],
     positions: Map<string, StockPosition>
 ): CartView => {
-    // A cart never freezes a currency of its own — it hasn't checked out — so it always
-    // prices against the shop's CURRENT setting, unlike an order's own frozen `currency`.
+    /**
+     * A cart never freezes a currency of its own — it hasn't checked out — so it always
+     * prices against the shop's CURRENT setting, unlike an order's own frozen `currency`.
+     */
     const currency = shopCurrency();
     const { count, quantity, price } = sumLineItems(lines, currency);
     const joined = lines.filter((line) => isJoined(line));
@@ -162,8 +164,10 @@ const buildView = (
         quantity,
         itemsTotal: price,
         shippingCost,
-        // The order and the payment intent total in minor units; adding the two decimals here
-        // would show 5.5600000000000005 for a basket that is charged 5.56.
+        /**
+         * The order and the payment intent total in minor units; adding the two decimals here
+         * would show 5.5600000000000005 for a basket that is charged 5.56.
+         */
         totalPrice: orderTotal({ items: lines, shippingCost, currency }),
         currency,
         shipping: { required, ...(selected === undefined ? {} : { selected }), options },

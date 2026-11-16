@@ -62,6 +62,7 @@ const transportOptions = async (
     return createTransportMock.mock.calls[0][0] as Record<string, unknown>;
 };
 
+/** The variables that select and configure the SMTP transport. */
 const SMTP_ENVIRONMENT = {
     NODE_MAIL_TRANSPORT: 'smtp',
     NODE_SMTP_HOST: 'smtp.example.com'
@@ -69,8 +70,10 @@ const SMTP_ENVIRONMENT = {
 
 describe('the test environment uses a transport that sends nothing', () => {
     it('renders through nodemailer’s jsonTransport on the log double', async () => {
-        // The guarantee that a stray test cannot email a real person: the suite's default
-        // (`tests/support/setup-environment.ts`) is the log double, which opens no socket.
+        /**
+         * The guarantee that a stray test cannot email a real person: the suite's default
+         * (`tests/support/setup-environment.ts`) is the log double, which opens no socket.
+         */
         const options = await transportOptions({ NODE_MAIL_TRANSPORT: 'log' });
 
         expect(options).toEqual({
@@ -102,8 +105,10 @@ describe('TLS mode follows the port, which is a security decision', () => {
     });
 
     it('does NOT use implicit TLS on 587, where the connection is upgraded instead', async () => {
-        // `secure: true` here means the client speaks TLS to a server expecting plaintext, and
-        // the connection simply fails. The inverse mistake is the dangerous one — see below.
+        /**
+         * `secure: true` here means the client speaks TLS to a server expecting plaintext, and
+         * the connection simply fails. The inverse mistake is the dangerous one — see below.
+         */
         const options = await transportOptions({
             ...SMTP_ENVIRONMENT,
             NODE_SMTP_PORT: '587'
@@ -114,8 +119,10 @@ describe('TLS mode follows the port, which is a security decision', () => {
     });
 
     it('refuses to send on 587 unless the connection upgrades to TLS', async () => {
-        // Without it, an attacker who strips the server's STARTTLS advertisement receives the
-        // AUTH credentials in cleartext.
+        /**
+         * Without it, an attacker who strips the server's STARTTLS advertisement receives the
+         * AUTH credentials in cleartext.
+         */
         const options = await transportOptions({ ...SMTP_ENVIRONMENT, NODE_SMTP_PORT: '587' });
 
         expect(options.requireTLS).toBe(true);
@@ -131,8 +138,10 @@ describe('TLS mode follows the port, which is a security decision', () => {
     });
 
     it('defaults to 587 with implicit TLS off when no port is configured', async () => {
-        // The safe default: submission with STARTTLS is the modern convention, and defaulting to
-        // 465 instead would silently break every deployment that did not set the variable.
+        /**
+         * The safe default: submission with STARTTLS is the modern convention, and defaulting to
+         * 465 instead would silently break every deployment that did not set the variable.
+         */
         const options = await transportOptions({
             ...SMTP_ENVIRONMENT,
             NODE_SMTP_PORT: undefined
@@ -155,9 +164,11 @@ describe('credentials and identity', () => {
     });
 
     it('falls back to empty credentials rather than undefined', async () => {
-        // Deliberate: email is not a hard startup dependency, so an unconfigured mailer must not
-        // stop the process from booting. The failure surfaces at send time instead, which is
-        // where someone can act on it.
+        /**
+         * Deliberate: email is not a hard startup dependency, so an unconfigured mailer must not
+         * stop the process from booting. The failure surfaces at send time instead, which is
+         * where someone can act on it.
+         */
         const options = await transportOptions({
             ...SMTP_ENVIRONMENT,
             NODE_SMTP_USER: undefined,
@@ -168,8 +179,10 @@ describe('credentials and identity', () => {
     });
 
     it('announces the configured EHLO name, empty when unset', async () => {
-        // Some strict servers check it; an undefined here would be sent as the string
-        // "undefined" rather than omitted.
+        /**
+         * Some strict servers check it; an undefined here would be sent as the string
+         * "undefined" rather than omitted.
+         */
         const options = await transportOptions({
             ...SMTP_ENVIRONMENT,
             NODE_SMTP_NAME: undefined

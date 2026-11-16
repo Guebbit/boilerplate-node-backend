@@ -297,8 +297,10 @@ const upsertConfirmable = (
                 ...setAndUnset(changes),
                 $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
             },
-            // `includeResultMetadata`: the driver's own answer to "did this insert or update" —
-            // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+            /**
+             * `includeResultMetadata`: the driver's own answer to "did this insert or update" —
+             * https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
+             */
             { upsert: true, returnDocument: 'after', includeResultMetadata: true }
         )
     );
@@ -457,7 +459,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * Scoped in the FILTER, not checked after the read: checking ownership post-read turns a
      * scoped find into an information leak, with a window between the check and the read's use.
      *
-     * @param paymentId - the payment
      * @param scope - the caller's scope, or `undefined` for an admin
      * @returns the payment if it is theirs to see, otherwise `null`
      */
@@ -468,7 +469,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * The payment behind an order, or `null` when no intent was ever created — or when it is not
      * this caller's to see. Same scope-in-the-filter rule as {@link findByIdScoped}.
      *
-     * @param orderId - the order
      * @param scope - the caller's scope, or `undefined` for an admin
      * @param session - the caller's transaction, when the read must see its own writes
      */
@@ -525,8 +525,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 method: PaymentMethod.card,
                 status: 'requires_confirmation'
             },
-            // A buyer who placed a transfer order may still pay by card: the same row switches over,
-            // keeping its reference so a transfer sent meanwhile can still be matched.
+            /**
+             * A buyer who placed a transfer order may still pay by card: the same row switches over,
+             * keeping its reference so a transfer sent meanwhile can still be matched.
+             */
             [OPEN_TRANSFER_ROW]
         ),
 
@@ -549,8 +551,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 providerRef: undefined,
                 cardLast4: undefined
             },
-            // The open transfer row is the very payment being recorded; a canceled one is a
-            // transfer that arrived after its order was canceled (the settlement owes it back).
+            /**
+             * The open transfer row is the very payment being recorded; a canceled one is a
+             * transfer that arrived after its order was canceled (the settlement owes it back).
+             */
             [OPEN_TRANSFER_ROW, CANCELED_TRANSFER_ROW]
         ),
 
@@ -623,8 +627,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentModel
             .deleteMany({
                 status: { $in: [...REAPABLE_PAYMENT_STATUSES] },
-                // A bank transfer's row outlives the rest: its reference still has to find the
-                // order when a late transfer shows up.
+                /**
+                 * A bank transfer's row outlives the rest: its reference still has to find the
+                 * order when a late transfer shows up.
+                 */
                 $or: [
                     { transferReference: { $exists: false }, updatedAt: { $lte: cutoff } },
                     { transferReference: { $exists: true }, updatedAt: { $lte: transferCutoff } }
@@ -643,7 +649,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * The new total arrives computed, not `$inc`-ed: it is summed in integer minor units by the
      * caller, where a float `$inc` would drift (0.1 + 0.2).
      *
-     * @param paymentId - the payment
      * @param expectedRefunded - `amountRefunded` as the caller read it
      * @param newRefunded - `amountRefunded` once this refund is counted
      * @param refund - the record to append
@@ -694,7 +699,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * a redelivered event imports nothing. There is deliberately NO ceiling on the new total: the
      * money really moved, so the record exists even when it pushes the payment past what was paid.
      *
-     * @param paymentId - the payment
      * @param expectedRefunded - `amountRefunded` as the caller read it
      * @param newRefunded - `amountRefunded` once this refund is counted
      * @param refund - the settled record to append
@@ -739,7 +743,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * conditional write that makes a settled refund settle exactly once, however many callers (the
      * request, the sweep) race to finish it. A `null` answer means someone else already did.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param fields - the provider's refund id when there was one, and `settledByHand` for money
      *   an operator returned outside the application
@@ -754,11 +758,15 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     refunds: {
                         $elemMatch: {
                             _id: toObjectId(refundId),
-                            // Only an operator may settle a record the provider took back: its
-                            // own late success report would walk back the reversal.
+                            /**
+                             * Only an operator may settle a record the provider took back: its
+                             * own late success report would walk back the reversal.
+                             */
                             ...(fields.settledByHand ? {} : { reversedAt: { $exists: false } }),
-                            // The provider's answer must come from the attempt that is still
-                            // current; an operator's report (no attempt) takes any open record.
+                            /**
+                             * The provider's answer must come from the attempt that is still
+                             * current; an operator's report (no attempt) takes any open record.
+                             */
                             ...(fields.attempt
                                 ? { status: RefundStatus.pending, attemptedAt: fields.attempt }
                                 : { status: { $in: fields.from ?? OPEN_REFUND_STATUSES } })
@@ -785,7 +793,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * current can fail it (`pending`, same `attemptedAt`): a slow old attempt's late error never
      * overwrites a newer attempt, and never walks back a refund that already succeeded.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param failure - the closed code for what the provider said, the attempt that got it, and
      *   when the sweep may send again (absent for a final refusal)
@@ -824,7 +832,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * Sendable is {@link claimableRefund}. A `null` answer means the record is not due, is final,
      * or another caller claimed it first.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param window - the instant of the claim, and the age past which a `pending` attempt is
      *   taken to have died
@@ -854,7 +862,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * Keep the provider's own id on a refund it accepted but has not settled (`pending` at the
      * provider). Fenced like a settle: only the attempt that got the answer may write it.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param attempt - the fence token of the attempt that got the answer
      * @param providerRefundRef - the provider's refund id
@@ -887,7 +895,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * Set once: a record already reversed matches nothing, so a redelivered report changes nothing.
      * `settledAt` goes, the money is not back with the buyer.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param reversal - the closed reason, and the statuses the record may be taken from
      * @param session - the caller's transaction, when the order stamp and the event commit with it
@@ -930,7 +938,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * so a sweep that claimed the record, a settle, or a racing refund makes it miss instead of
      * voiding money that moved or releasing a share twice.
      *
-     * @param paymentId - the payment
+     * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
      * @param observed - the status and failure reason the caller read and decided on
      * @param amounts - `amountRefunded` as read, and as it is once this record's share is released
@@ -980,8 +988,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             scope
         );
         const totalItems = await base.count(where);
-        // Hydrated, not lean: the presenter serializes a document the one way everywhere, and the
-        // provider ids it adds for staff are read off the document, not off a mutated lean row.
+        /**
+         * Hydrated, not lean: the presenter serializes a document the one way everywhere, and the
+         * provider ids it adds for staff are read off the document, not off a mutated lean row.
+         */
         const query = paymentModel
             .find(where)
             .sort(chosen ?? DEFAULT_SORT)
@@ -1065,8 +1075,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 $match: {
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
                     ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {}),
-                    // A canceled record is closed: it needs nobody, whichever kind is asked for.
-                    // A canceled record is closed: it needs nobody, whichever kind is asked for.
+                    /**
+                     * A canceled record is closed: it needs nobody, whichever kind is asked for.
+                     * A canceled record is closed: it needs nobody, whichever kind is asked for.
+                     */
                     'refunds.failureReason': { $ne: RefundFailureReason.canceled },
                     ...refusalMatch(refusal)
                 }
@@ -1087,11 +1099,15 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     findWithOpenRefunds: (updatedBefore: Date, limit: number) =>
         paymentModel
             .find({
-                // A hand-paid refund has no provider to resend to; left in, 200 of them would
-                // fill the batch and no card refund would ever be retried.
+                /**
+                 * A hand-paid refund has no provider to resend to; left in, 200 of them would
+                 * fill the batch and no card refund would ever be retried.
+                 */
                 provider: { $ne: MANUAL_PROVIDER },
-                // Only records the sweep may actually send: a final refusal, a refund still
-                // waiting out its retry delay, and an attempt in flight must not fill the batch.
+                /**
+                 * Only records the sweep may actually send: a final refusal, a refund still
+                 * waiting out its retry delay, and an attempt in flight must not fill the batch.
+                 */
                 refunds: {
                     $elemMatch: {
                         $or: [
@@ -1113,7 +1129,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * than, or as old as, what is stored matches neither, so an out-of-order or repeated delivery
      * changes and announces nothing. There is no terminal state: a closed dispute may flip.
      *
-     * @param paymentId - the payment
      * @param dispute - the report, with dates revived
      * @param session - the caller's transaction, so the timeline row and the event commit with it
      * @returns what was done, or `null` when the report was stale or repeated
@@ -1186,8 +1201,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .find({
                 status: { $in: [...SETTLEABLE_PAYMENT_STATUSES] },
                 providerRef: { $exists: true, $ne: null },
-                // A provider this process no longer has cannot be asked; left in, its payments
-                // would sit at the head of the line forever.
+                /**
+                 * A provider this process no longer has cannot be asked; left in, its payments
+                 * would sit at the head of the line forever.
+                 */
                 provider: { $in: paymentProviderRegistry.names(), $ne: MANUAL_PROVIDER },
                 updatedAt: { $lte: updatedBefore }
             })

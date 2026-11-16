@@ -14,7 +14,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
 
-/*
+/**
  * The audit port is REPLACED, not spied on — see `orders/tests/integration/create-audit.test.ts`
  * for the full reasoning (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS
  * namespace import exposes).

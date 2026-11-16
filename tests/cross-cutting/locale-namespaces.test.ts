@@ -22,6 +22,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { MODULES_ROOT, REPO_ROOT } from '@tests/paths';
 
+/** Folder holding the dictionaries both backends share. */
 const SHARED_LOCALES = path.join(REPO_ROOT, 'shared', 'locales');
 
 /** Every dotted leaf key in a dictionary, e.g. `account.email.reset-request.subject`. */
@@ -32,6 +33,7 @@ const flatten = (value: unknown, prefix = ''): string[] => {
     );
 };
 
+/** Reads one dictionary file as an object. */
 const readDictionary = (file: string): Record<string, unknown> =>
     JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 
@@ -55,10 +57,12 @@ const CO_OWNED_NAMESPACES = ['tasks.task-kind.', 'tasks.task-category.'];
 
 describe('locale namespaces across modules', () => {
     it('finds dictionaries in every module that ships copy', () => {
-        // A canary: an empty sweep must mean "no module ships copy", not "the sweep broke".
-        //
-        // Against the disk, not a count. How many modules ship copy is a fact about
-        // `src/modules.ts`, and pinning it here means adding a domain fails a test about locales.
+        /**
+         * A canary: an empty sweep must mean "no module ships copy", not "the sweep broke".
+         *
+         * Against the disk, not a count. How many modules ship copy is a fact about
+         * `src/modules.ts`, and pinning it here means adding a domain fails a test about locales.
+         */
         expect(readdirSync(MODULES_ROOT).length).toBeGreaterThan(0);
         expect(moduleKeys().size).toBeGreaterThanOrEqual(1);
     });
@@ -88,9 +92,11 @@ describe('locale namespaces across modules', () => {
     });
 
     it('keeps every module inside a namespace it owns', () => {
-        // A module's keys must sit under its own name, so "which module ships this string" is
-        // answerable from the key alone — and so deleting the module cannot orphan half a
-        // namespace that another module also writes into.
+        /**
+         * A module's keys must sit under its own name, so "which module ships this string" is
+         * answerable from the key alone — and so deleting the module cannot orphan half a
+         * namespace that another module also writes into.
+         */
         const strays: string[] = [];
 
         for (const [name, keys] of moduleKeys())

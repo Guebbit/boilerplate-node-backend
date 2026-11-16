@@ -53,7 +53,6 @@ const notCancelable = (id: string): Promise<ResponseReject> =>
  * transaction: a lost race writes no row. The note stays in the audit row; the timeline row
  * carries ids only.
  *
- * @param id - the return
  * @param note - why, optional
  * @param context - the staff member, audited
  * @returns the canceled return, or a refusal when it was not `approved`
@@ -71,8 +70,10 @@ export const cancelReturn = (
                 returnLifecycle.toOf('cancel'),
                 { canceledAt: new Date() },
                 session,
-                // Atomic with the claim: a refund opened by the proof of sending is owed, so the return
-                // cannot be canceled out from under it.
+                /**
+                 * Atomic with the claim: a refund opened by the proof of sending is owed, so the return
+                 * cannot be canceled out from under it.
+                 */
                 {
                     $nor: [
                         {

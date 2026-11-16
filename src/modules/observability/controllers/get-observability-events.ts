@@ -3,7 +3,7 @@
  * Controller for `GET /observability/events`: opens the SSE stream and wires its permission
  * recheck to the same cookie that opened it. See `services/stream.ts` for the stream itself.
  *
- * @see docs/modules/observability.md
+ * @see docs/modules/observability.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';
@@ -21,9 +21,11 @@ import { observabilityService } from '../services';
  * `streamObservabilityMetrics`.
  */
 export const getObservabilityEvents = (request: Request, response: Response) => {
-    // `requirePermissionViaCookie` already resolved a rule-holding caller and left its recheck on
-    // the request, or this handler would never run. Read without `!` (this route is not behind
-    // `isAuth`); absent means fail closed.
+    /**
+     * `requirePermissionViaCookie` already resolved a rule-holding caller and left its recheck on
+     * the request, or this handler would never run. Read without `!` (this route is not behind
+     * `isAuth`); absent means fail closed.
+     */
     const user = request.authContext;
     if (!user) {
         rejectResponse(response, 401, [

@@ -116,8 +116,10 @@ describe('the per-account credential budget', () => {
             SMALL_ACCOUNT_BUDGET,
             (module) => module.credentialLimiters
         );
-        // The attacker is the owner of one account and names ANOTHER in the body: their own
-        // session and their own device cookie must not turn the victim's budget off.
+        /**
+         * The attacker is the owner of one account and names ANOTHER in the body: their own
+         * session and their own device cookie must not turn the victim's budget off.
+         */
         const app = appAnswering(
             401,
             true,

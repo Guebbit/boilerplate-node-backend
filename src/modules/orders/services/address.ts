@@ -40,7 +40,6 @@ const locked = (): ResponseReject =>
  * Replace the shipping address of the units that have not left yet. Parcels already cut keep the
  * address they went to (each shipment stores its own copy).
  *
- * @param orderId - the order
  * @param address - the corrected address
  * @param context - the staff member, who holds `update:Order` (the route asked)
  * @returns the order as it now stands, a 404 for an unknown one, a 422 for a country the shop does

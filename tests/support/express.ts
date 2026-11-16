@@ -44,8 +44,10 @@ export type ResponseStub = Response & {
  *          response itself, so `status(...).json(...)` works as it does in production code
  */
 export const makeResponseStub = (): ResponseStub => {
-    // Headers set so far, names lower-cased as Express compares them: `rejectResponse` asks
-    // `hasHeader` before it adds a default challenge and reads `x-request-id`, so the stub has to answer truthfully.
+    /**
+     * Headers set so far, names lower-cased as Express compares them: `rejectResponse` asks
+     * `hasHeader` before it adds a default challenge and reads `x-request-id`, so the stub has to answer truthfully.
+     */
     const headers = new Map<string, unknown>();
     const response = asStub<ResponseStub>({
         status: jest.fn(),

@@ -20,8 +20,10 @@ import { decodablePng, publicDirectory } from '@tests/images';
  * — asserting on the disk, since that is where an orphan would show.
  */
 
-// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
-// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+/**
+ * `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+ * runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+ */
 const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 
 /** A genuinely decodable PNG: with no broker the upload is digested inline, so sharp decodes it. */
@@ -52,6 +54,7 @@ beforeEach(() => givenLocale('en').then(() => {}));
 
 afterEach(emptyFileSandbox);
 
+/** The file metadata of a valid image upload. */
 const IMAGE = { filename: 'upload.png', contentType: 'image/png' };
 
 describe('POST /products', () => {

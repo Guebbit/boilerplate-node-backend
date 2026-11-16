@@ -91,7 +91,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
             arrayRegex: { category: 'categories', tag: 'tags' },
             // `title` searches the same column the public catalogue already exposes.
             regex: { title: 'title' },
-            /*
+            /**
              * Admin-effective: a stranger's visibility scope pins `active: true`, so the two
              * clauses contradict and the page is empty rather than listing the unlisted catalogue.
              */
@@ -114,7 +114,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * branch (see `accessibleFilter`). `async` because `toObjectId` throws on a malformed id —
      * see `create-repository.ts`; `orders.findByIdScoped` is the same idea.
      *
-     * @param productId - the product's id
      * @param scope - the caller's filter fragment, or `undefined` to read unrestricted
      * @returns the product if it matches the scope, otherwise `null`
      */
@@ -126,7 +125,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * that finds it — {@link findByIdScoped} for a reader that embeds a snapshot (an order line).
      * `async` because `toObjectId` throws on a malformed id.
      *
-     * @param productId - the product's id
      * @param scope - the caller's filter fragment (`{}` reads everything, the admin branch)
      * @returns the product if it matches the scope, otherwise `null`
      */
@@ -140,7 +138,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * The publicly visible product with this id, or `null` — {@link findByIdScoped} bound to the
      * public scope, used by `wishlist/service.ts`.
      *
-     * @param productId - the product's id
      * @returns the product if it is published and not soft-deleted, otherwise `null`
      */
     findPublicById: (productId: string) =>
@@ -210,7 +207,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * slow older snapshot cannot overwrite a newer one (lost update). `timestamps: false` — a
      * stock change isn't an edit an admin made.
      *
-     * @param productId - the product
      * @param counters - the values to write, verbatim
      * @param session - the transaction the write joins, when the caller announces in it
      * @returns the product as it stood BEFORE the write, `null` when there is none or the

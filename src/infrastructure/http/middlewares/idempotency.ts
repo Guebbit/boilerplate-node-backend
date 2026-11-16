@@ -19,7 +19,7 @@
  * The ledger never sees a 429: every budget refuses before the key is claimed, and a handler must
  * not answer 429 after a write.
  *
- * @see docs/understand/idempotency.md
+ * @see docs/understand/idempotency.md#how-it-works
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
@@ -89,7 +89,7 @@ const hasPrototypeKey = (value: unknown): boolean => {
  * @param request - the incoming request, already matched to its route
  */
 const fingerprintOf = (request: Request): string => {
-    /*
+    /**
      * js-toolkit: rebuilds the body with every object's keys sorted, recursively, so the SAME
      * body with its fields in a different order fingerprints identically. `JSON.stringify` of the
      * result is the stable string — a `sort` replacer would only order the top level.
@@ -298,8 +298,10 @@ const tellStaffOutcomeUnknown = (
         });
         return;
     }
-    // A promise chain, not a bare call: a sink that throws synchronously, against its contract,
-    // must still not fail the 409 that is being answered.
+    /**
+     * A promise chain, not a bare call: a sink that throws synchronously, against its contract,
+     * must still not fail the 409 that is being answered.
+     */
     Promise.resolve()
         .then(() =>
             sink({
@@ -432,9 +434,11 @@ const armOutcomeCapture = (response: Response, claim: Claim): void => {
             .exec()
             .then(() => undefined)
             .catch((error: unknown) => {
-                // The response has already gone out — there is nothing left to roll back. Left
-                // 'in_flight', the record rides out its TTL, exactly as if the process had
-                // crashed here; a retry past the lease is then treated as a crashed attempt.
+                /**
+                 * The response has already gone out — there is nothing left to roll back. Left
+                 * 'in_flight', the record rides out its TTL, exactly as if the process had
+                 * crashed here; a retry past the lease is then treated as a crashed attempt.
+                 */
                 // Stryker disable all
                 logger[claim.doNotRetry ? 'error' : 'warn']({
                     message:
@@ -467,8 +471,10 @@ const armOutcomeCapture = (response: Response, claim: Claim): void => {
             else warnUnrecordableEnd(key);
         }
         return responseEnd(...endArguments);
-        // `end` is overloaded, so the wrapper's rest-args signature cannot be matched to any one
-        // overload; it forwards its arguments untouched.
+        /**
+         * `end` is overloaded, so the wrapper's rest-args signature cannot be matched to any one
+         * overload; it forwards its arguments untouched.
+         */
     }) as Response['end'];
 };
 
@@ -555,8 +561,10 @@ const onDuplicateKey = (
                     ]);
                     return;
                 }
-                // Retried and still nothing to claim or find — give up rather than loop
-                // forever; this one request runs uncaptured, same as before the retry.
+                /**
+                 * Retried and still nothing to claim or find — give up rather than loop
+                 * forever; this one request runs uncaptured, same as before the retry.
+                 */
                 next();
                 return;
             }
@@ -567,10 +575,12 @@ const onDuplicateKey = (
             respondToCollision(response, existing, claim.fingerprint);
         })
         .catch((error: unknown) => {
-            // The collision branch is the NORMAL path for a retried request — a failure
-            // here (the lookup, or respondToCollision's own write) must still answer,
-            // or the retry hangs until the client's own timeout instead of getting the
-            // ordinary 500 a caller already knows how to handle.
+            /**
+             * The collision branch is the NORMAL path for a retried request — a failure
+             * here (the lookup, or respondToCollision's own write) must still answer,
+             * or the retry hangs until the client's own timeout instead of getting the
+             * ordinary 500 a caller already knows how to handle.
+             */
             next(error);
         });
 

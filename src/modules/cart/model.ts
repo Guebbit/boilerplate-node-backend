@@ -5,7 +5,7 @@
  * Mongo, not Redis: Redis here is cache-only, fails open — the wrong properties for the only
  * durable copy of what's in someone's cart.
  *
- * @see docs/modules/cart.md
+ * @see docs/modules/cart.md#the-pipeline
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -124,7 +124,7 @@ export const cartSchema = new Schema<CartDocument>(
     }
 );
 
-/*
+/**
  * The one query that reaches a cart by something other than `userId`: deleting a product has
  * to find every cart holding it, and without an index that reads the whole collection. Left
  * unnamed since nothing else creates it.
@@ -138,7 +138,7 @@ cartSchema.index({ 'items.productId': 1 });
  */
 const cartRetentionDays = cartConfig().NODE_CART_RETENTION_DAYS;
 
-/*
+/**
  * TTL index: an abandoned cart is convenience state with no legal basis for
  * indefinite storage, unlike an order. `updatedAt`, not `createdAt` — any change to the cart
  * (a quantity bump, an added line) restarts the clock, which is what "abandoned" means.

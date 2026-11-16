@@ -91,8 +91,10 @@ describe('payments — detach on account erasure', () => {
     });
 });
 
-/** Backdates a payment's `updatedAt` without disturbing anything else — `timestamps: false` is
- *  what keeps Mongoose from immediately overwriting it back to "now". */
+/**
+ * Backdates a payment's `updatedAt` without disturbing anything else — `timestamps: false` is
+ *  what keeps Mongoose from immediately overwriting it back to "now".
+ */
 const touch = (paymentId: string, updatedAt: Date): Promise<unknown> =>
     paymentModel
         .updateOne({ _id: paymentId }, { $set: { updatedAt } }, { timestamps: false })

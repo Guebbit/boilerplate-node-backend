@@ -10,7 +10,7 @@
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { counter, histogram, runOverview } from './metrics-overview.support';
 
-/*
+/**
  * Loading the MANIFESTS, not the counters.
  *
  * A counter registers itself on the shared registry when its module's `metrics.ts` is first
@@ -64,8 +64,10 @@ describe('observability metrics overview', () => {
     });
 
     it('leaves the business block out when no shop module registered a metric', async () => {
-        // A foundation-only build: every counter behind the block is gone, so zeros would claim
-        // figures nobody is measuring. `business` is optional in `openapi.yaml` for this case.
+        /**
+         * A foundation-only build: every counter behind the block is gone, so zeros would claim
+         * figures nobody is measuring. `business` is optional in `openapi.yaml` for this case.
+         */
         const names = [
             'cart_checkout_total',
             'order_created_total',

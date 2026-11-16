@@ -18,6 +18,7 @@ interface WorkerSettings {
  * @param file the config's path from the repo root
  * @param workers the value to set `JEST_WORKERS` to
  * @returns the config's worker settings
+ * @throws {Error} when the config did not load
  */
 const loadWith = (file: string, workers: string): WorkerSettings => {
     // Restored after the case by the harness, so nothing leaks into the next file.

@@ -18,8 +18,10 @@ import { decodablePng, publicDirectory } from '@tests/images';
  * The assertion that matters is on the filesystem: the victim's file survives.
  */
 
-// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
-// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+/**
+ * `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+ * runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+ */
 const PUBLIC_DIRECTORY = publicDirectory();
 
 /** A decodable PNG: every upload without a broker is digested inline, so sharp must accept it. */
@@ -46,6 +48,7 @@ interface Door {
     body: Record<string, string | boolean | number | object>;
 }
 
+/** Every door that reaches an image, each checked against the owner rule. */
 const doors: Door[] = [
     {
         name: 'PATCH /account',
@@ -223,8 +226,10 @@ describe('imageUrl is never a client-named path', () => {
             expect(fileExists(ownUrl)).toBe(true);
         });
 
-        // A client cannot send the current path back, so a PUT is lossless only if an
-        // omitted `imageUrl` keeps the image. An explicit null is still the way to remove it.
+        /**
+         * A client cannot send the current path back, so a PUT is lossless only if an
+         * omitted `imageUrl` keeps the image. An explicit null is still the way to remove it.
+         */
         it('a PUT that never mentions imageUrl keeps the image; an explicit null clears it', async () => {
             const uploaded = await api()
                 .patch('/account')

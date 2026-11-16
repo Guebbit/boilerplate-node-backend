@@ -5,7 +5,7 @@
  * Here: `GET /examples` and `POST /examples/search`, one search in its query and DTO spellings,
  * built on the shared search-controller factory.
  *
- * @see docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
  */
 
 import { SearchExamplesBody } from '@api/schemas.zod';

@@ -29,21 +29,25 @@ const SIGNUP_LOCATION = '/account';
  * Register a new user account.
  */
 export const postSignup = (
-    // `| undefined`: express 5 leaves `request.body` unset when no parser matched the
-    // content-type, and multer is no protection — it calls `next()` untouched on a non-multipart
-    // body. See the `?? {}` below.
+    /**
+     * `| undefined`: express 5 leaves `request.body` unset when no parser matched the
+     * content-type, and multer is no protection — it calls `next()` untouched on a non-multipart
+     * body. See the `?? {}` below.
+     */
     request: Request<unknown, unknown, SignupRequest | undefined>,
     response: Response
 ) => {
-    /*
+    /**
      * Passed whole, not parsed here — deliberate, not a gap. `accountService.signup` parses it
      * against `SignupBody` plus the two rules the contract cannot say (the repeat matches, terms
      * accepted), so every caller of the service gets the same 422, an unknown field included. An
      * absent body (`?? {}`) answers the 422 a body of empty fields does, instead of throwing.
      */
     const body: unknown = request.body ?? {};
-    // The password this request sets is its proof. The account is new, so no epoch can predate
-    // it; stated anyway, since every first session says when its proof began.
+    /**
+     * The password this request sets is its proof. The account is new, so no epoch can predate
+     * it; stated anyway, since every first session says when its proof began.
+     */
     const proof = { amr: [AMR.password], provedAt: Date.now() };
 
     return accountService
@@ -57,15 +61,21 @@ export const postSignup = (
 
             const { data } = result;
 
-            // `Document#isNew` stays true until `.save()`: true means rung 2 refused and NO
-            // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+            /**
+             * `Document#isNew` stays true until `.save()`: true means rung 2 refused and NO
+             * account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+             */
             if (data.isNew) {
-                // Rung 2 refused this address — `signup` still hands back an unsaved document so
-                // this answers exactly like a real signup, minus the verification email.
+                /**
+                 * Rung 2 refused this address — `signup` still hands back an unsaved document so
+                 * this answers exactly like a real signup, minus the verification email.
+                 */
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
-                // No role, exactly what a genuine signup's response shows, which is the whole
-                // point of this branch being indistinguishable.
+                /**
+                 * No role, exactly what a genuine signup's response shows, which is the whole
+                 * point of this branch being indistinguishable.
+                 */
                 createdResponse<Account>(
                     response,
                     accountUserService.toAccount(data, null),
@@ -76,7 +86,7 @@ export const postSignup = (
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
-            /*
+            /**
              * Start email verification — the account works either way (`verified` is
              * informational), so this is fire-and-forget like every other account email and the
              * 201 does not wait on the queue.
@@ -91,7 +101,7 @@ export const postSignup = (
                     });
                 });
 
-            /*
+            /**
              * Signed in from here, as an `unverified` audience: the role model already lets an unproven
              * address browse freely and stops it only at `checkout:Cart`, so a second login
              * before reaching that state would be friction with no security benefit.

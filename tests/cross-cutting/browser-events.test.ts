@@ -28,8 +28,10 @@ describe('browser events: contract fragment and manifest agree', () => {
     );
 
     it('finds an owner whenever `products`, the module that declares one, is deployed', () => {
-        // The canary for the table below: no owner must mean "none is deployed", never "the
-        // fragment stopped being read".
+        /**
+         * The canary for the table below: no owner must mean "none is deployed", never "the
+         * fragment stopped being read".
+         */
         expect(owners.length > 0).toBe(isDeployed('products'));
     });
 

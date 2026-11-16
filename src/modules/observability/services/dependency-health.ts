@@ -6,7 +6,7 @@
  * degraded instead of killing a healthy container. No I/O: each dependency already tracks its
  * own state, so this is a memory read across one shared vocabulary spanning three unlike backends.
  *
- * @see docs/understand/observability-layer.md
+ * @see docs/understand/observability-layer.md#the-layer-in-one-table
  */
 
 import { connection } from '@infrastructure/runtime/database';

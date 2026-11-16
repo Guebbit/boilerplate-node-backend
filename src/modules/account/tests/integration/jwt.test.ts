@@ -42,7 +42,9 @@ import { plantSession, reapDueSessions, sessionRowFor, sessionRowsOf } from '../
 
 setupTestDb();
 
+/** Signing key the access tokens in this file are minted and verified with. */
 const ACCESS_SECRET = 'test-access-secret';
+/** Signing key the refresh tokens in this file are minted and verified with. */
 const REFRESH_SECRET = 'test-refresh-secret';
 
 /**
@@ -65,8 +67,10 @@ const signAs = (
             ...(!refresh && { client_id: FIRST_PARTY_CLIENT_ID }),
             ...payload
         })
-            // The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
-            // cases that are about a wrong one.
+            /**
+             * The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
+             * cases that are about a wrong one.
+             */
             .setProtectedHeader({
                 alg: 'HS256',
                 typ: typ ?? (refresh ? 'rt+jwt' : 'at+jwt'),
@@ -167,8 +171,10 @@ describe('verifyRefreshToken', () => {
     });
 
     it('rejects a validly-signed token that is not stored on any user', async () => {
-        // This is the revocation check. A correct signature is necessary but not sufficient —
-        // otherwise logout could never invalidate anything.
+        /**
+         * This is the revocation check. A correct signature is necessary but not sufficient —
+         * otherwise logout could never invalidate anything.
+         */
         await createUser();
         const orphanToken = await signAs(REFRESH_SECRET, { sub: 'user-1' }, { expiresIn: 3600 });
 
@@ -206,8 +212,10 @@ describe('startSession', () => {
 
         const issued = await startSession(String(user._id), ['pwd'], RememberTier.short);
 
-        // Round-trip through the verifier rather than inspecting the string: what matters is
-        // that the token this function produced is one the system will later accept.
+        /**
+         * Round-trip through the verifier rather than inspecting the string: what matters is
+         * that the token this function produced is one the system will later accept.
+         */
         await expect(verifyRefreshToken(issued)).resolves.toMatchObject({ sub: String(user._id) });
     });
 
@@ -234,10 +242,12 @@ describe('startSession', () => {
         ).rejects.toThrow('User not found');
     });
 
-    // A deactivated or soft-deleted account must never get a fresh session, no matter which
-    // caller resolved it — `findForLogin` already blocks the password path; this is the mint
-    // itself refusing, the backstop for a resolver that doesn't filter (an OAuth login through an
-    // already-linked identity, chiefly).
+    /**
+     * A deactivated or soft-deleted account must never get a fresh session, no matter which
+     * caller resolved it — `findForLogin` already blocks the password path; this is the mint
+     * itself refusing, the backstop for a resolver that doesn't filter (an OAuth login through an
+     * already-linked identity, chiefly).
+     */
     it.each([
         ['deactivated', { active: false }],
         ['soft-deleted', { deletedAt: new Date() }]
@@ -255,8 +265,10 @@ describe('startSession', () => {
         const first = await startSession(String(user._id), ['pwd'], RememberTier.short);
         const second = await startSession(String(user._id), ['pwd'], RememberTier.short);
 
-        // Both must remain individually verifiable: signing in on a phone must not sign the
-        // laptop out. A write that replaced the account's rows would break exactly this.
+        /**
+         * Both must remain individually verifiable: signing in on a phone must not sign the
+         * laptop out. A write that replaced the account's rows would break exactly this.
+         */
         await expect(verifyRefreshToken(first)).resolves.toMatchObject({ sub: String(user._id) });
         await expect(verifyRefreshToken(second)).resolves.toMatchObject({ sub: String(user._id) });
 
@@ -305,9 +317,11 @@ describe('createAccessToken', () => {
         expect(payload.sub).not.toBe(String(other._id));
     });
 
-    // "The one that matters most": if this regresses, the step-up freshness gate silently
-    // degrades to nothing, because a client that refreshes every ten minutes is
-    // never more than ten minutes from "fresh". Everything else keeps working; nothing else fails.
+    /**
+     * "The one that matters most": if this regresses, the step-up freshness gate silently
+     * degrades to nothing, because a client that refreshes every ten minutes is
+     * never more than ten minutes from "fresh". Everything else keeps working; nothing else fails.
+     */
     it('COPIES auth_time forward from the refresh token — never re-stamps it from the clock', async () => {
         freezeDate();
         try {
@@ -315,8 +329,10 @@ describe('createAccessToken', () => {
             const refreshToken = await startSession(String(user._id), ['pwd'], RememberTier.short);
             const { auth_time: mintedAt } = await verifyRefreshToken(refreshToken);
 
-            // Past a whole second — `auth_time` has second resolution — so a `createAccessToken`
-            // that re-stamped the claim from the clock would produce a different value.
+            /**
+             * Past a whole second — `auth_time` has second resolution — so a `createAccessToken`
+             * that re-stamped the claim from the clock would produce a different value.
+             */
             advanceDate(1100);
 
             const accessToken = await createAccessToken(refreshToken);
@@ -339,9 +355,11 @@ describe('createAccessToken', () => {
 });
 
 describe('rotateRefreshToken', () => {
-    // The same guard `startSession` applies, at rotation's own reissue step —
-    // deactivating an account mid-session must stop its NEXT refresh from reissuing, not just
-    // block a fresh login.
+    /**
+     * The same guard `startSession` applies, at rotation's own reissue step —
+     * deactivating an account mid-session must stop its NEXT refresh from reissuing, not just
+     * block a fresh login.
+     */
     it('refuses to reissue for an account deactivated since the token was minted', async () => {
         const user = await createUser();
         const refreshToken = await startSession(String(user._id), ['pwd'], RememberTier.short);
@@ -496,9 +514,11 @@ describe('rotateRefreshToken reuse detection', () => {
             await rotateRefreshToken(attacked);
             pastGrace();
 
-            // The TTL monitor, run between the rotation and the replay. Present here on purpose: a
-            // row purged before this point would leave rotateRefreshToken nothing to recognise as
-            // reuse.
+            /**
+             * The TTL monitor, run between the rotation and the replay. Present here on purpose: a
+             * row purged before this point would leave rotateRefreshToken nothing to recognise as
+             * reuse.
+             */
             await reapDueSessions();
 
             await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);

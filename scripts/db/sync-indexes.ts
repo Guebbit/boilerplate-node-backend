@@ -1,4 +1,4 @@
-/*
+/**
  * Make the database's indexes match the schemas — `npm run db:sync`.
  *
  * The replacement for a migration tool's schema half. Indexes are declared on each module's
@@ -16,7 +16,7 @@
  *   npm run db:sync -- --prune   # also drop every undeclared index (dev; a deploy never does)
  *   npm run host -- db:sync      # against a containerised database, from the host
  *
- * @see docs/reference/data.md
+ * @see docs/reference/data.md#schema-db-sync
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.
@@ -64,7 +64,7 @@ const report = (plan: IndexDiff[], heading: string): void => {
 
 /** Connect, then either report the plan or apply it. */
 const sync = async (): Promise<void> => {
-    /*
+    /**
      * Mongoose builds every declared index on connect when `autoIndex` is on, which it is
      * everywhere else — that is what gives the app and the test suite their constraints for free.
      * Here it is wrong twice over: it would make `--check` WRITE to the database it was asked only
@@ -79,7 +79,7 @@ const sync = async (): Promise<void> => {
         const plan = await planIndexSync({ prune });
         report(plan, `${plan.length} collection(s) differ from their schemas:`);
 
-        /*
+        /**
          * Non-zero when applying would change something, so this is usable as a deploy gate. An
          * undeclared index that would be kept is reported but is not a change. `runScript` owns
          * the exit code on the failure path, and a plan is not a failure — set it directly rather
@@ -92,7 +92,9 @@ const sync = async (): Promise<void> => {
     report(await applyIndexSync({ prune }), 'Indexes synced:');
 };
 
-// `undefined`: a deploy-time setup script, not a `docker/crontab` job — no expected interval to
-// alert on, so it takes no part in the job-health/metric tracking (`docs/reference/ops.md`).
+/**
+ * `undefined`: a deploy-time setup script, not a `docker/crontab` job — no expected interval to
+ * alert on, so it takes no part in the job-health/metric tracking (`docs/reference/ops.md`).
+ */
 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, sync, () => connection.close());

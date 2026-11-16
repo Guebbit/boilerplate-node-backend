@@ -37,7 +37,6 @@ import { paymentNotFound } from './errors';
 /**
  * The payment behind an order, for the order page's payment panel.
  *
- * @param orderId - the order
  * @param authContext - the caller; sees only their own, admins see anyone's
  */
 export const getForOrder = (
@@ -57,7 +56,6 @@ export const getForOrder = (
  * order has one payment row). The order is read first, so a caller who cannot see it gets the 404
  * and one who can gets `[]` for an order nobody has started paying.
  *
- * @param orderId - the order
  * @param authContext - the caller; sees only their own, `display:Payment` sees anyone's
  * @returns the list, or the 404 for an order the caller cannot see
  */
@@ -79,7 +77,6 @@ export const listForOrder = (
  * of a payment whatever the reader may see, like the staff notice for a refund whose outcome is
  * unknown.
  *
- * @param paymentId - the payment
  * @returns the order's id, or `undefined` for a missing payment
  */
 export const orderIdOf = (paymentId: string): Promise<string | undefined> =>
@@ -90,7 +87,6 @@ export const orderIdOf = (paymentId: string): Promise<string | undefined> =>
 /**
  * One payment by its own id — the address `Location` names after `POST /payments`.
  *
- * @param paymentId - the payment
  * @param authContext - the caller; sees only their own, `display:Payment` sees anyone's
  * @returns the payment with its `actions`, or the same 404 whether it is missing or another's
  */
@@ -177,8 +173,10 @@ const mayPay = (
     order: OrderDocument | undefined,
     authContext?: AuthContext
 ): boolean => {
-    // Confirmable, and the order can still get to `paid`. Both halves, because a retryable decline
-    // on an order that has since been canceled is not a payment anyone may complete.
+    /**
+     * Confirmable, and the order can still get to `paid`. Both halves, because a retryable decline
+     * on an order that has since been canceled is not a payment anyone may complete.
+     */
     const payable =
         CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) ||
         // A transfer is taken over with a card through the intent, which needs a provider.
@@ -237,7 +235,6 @@ const cancelableRefunds = (payment: PaymentDocument, authContext?: AuthContext):
 /**
  * What this caller may do to a payment, as the contract's `PaymentActions`.
  *
- * @param payment - the payment
  * @param order - its order, for `pay`; absent where the payment cannot be payable (a `succeeded`
  *   one, a list row)
  * @param authContext - the caller
@@ -252,8 +249,10 @@ export const withActions = (
     actions: {
         pay: mayPay(payment, order, authContext),
         sync: maySync(payment, authContext),
-        // Only an operator returns money, and only money that actually arrived and the bank has
-        // not taken back: an open chargeback closes the door (`PAYMENT_DISPUTED`).
+        /**
+         * Only an operator returns money, and only money that actually arrived and the bank has
+         * not taken back: an open chargeback closes the door (`PAYMENT_DISPUTED`).
+         */
         refund:
             mayRefund(authContext) &&
             payment.status === REFUNDABLE_PAYMENT_STATUS &&

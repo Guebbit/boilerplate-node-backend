@@ -10,7 +10,10 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 setupTestDb();
 
-/** Reads the `r=` (remaining) of the signed-in budget off a response's `RateLimit` header. */
+/**
+ * Reads the `r=` (remaining) of the signed-in budget off a response's `RateLimit` header.
+ * @throws {Error} when the header carries no signed-in budget
+ */
 const signedInRemaining = (response: { headers: Record<string, unknown> }): number => {
     const header = String(response.headers.ratelimit);
     const match = /"credentials-signed-in";r=(\d+)/.exec(header);

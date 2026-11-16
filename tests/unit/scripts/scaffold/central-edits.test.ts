@@ -17,6 +17,7 @@ const names = deriveNames('scaffold-probe');
  * The edit for one file.
  * @param file - repo-relative path
  * @returns the edit's transform
+ * @throws {Error} when no edit targets that file
  */
 const editFor = (file: string) => {
     const edit = centralEdits(names).find((candidate) => candidate.path === file);

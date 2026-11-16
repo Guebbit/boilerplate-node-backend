@@ -42,7 +42,9 @@ const checkOnly = hasFlag('check');
 /** The page the tables live in. */
 const PAGE = path.join(ROOT, 'docs/use-the-shop/start.md');
 
+/** Opening marker of the role matrix block the generator rewrites in place. */
 const START = '<!-- role-matrix:start -->';
+/** Closing marker of the role matrix block the generator rewrites in place. */
 const END = '<!-- role-matrix:end -->';
 
 /** One row of the table: a stored staff role (or none) and the audience the request is in. */
@@ -92,8 +94,10 @@ const modules = [...new Set(PERMISSION_RULES.map((rule) => rule.module))];
 const callerFor = (persona: Persona): Caller => {
     const permissions = keysInScope(persona.role, persona.scope, persona.audience);
 
-    // Never `system` — this generates the DOCUMENTED role matrix, and `system` is not a role a
-    // deployment assigns or a reader looks up by name.
+    /**
+     * Never `system` — this generates the DOCUMENTED role matrix, and `system` is not a role a
+     * deployment assigns or a reader looks up by name.
+     */
     return assembleCaller(
         persona.audience === 'guest' ? null : 'generated',
         persona.scope === 'platform' ? null : 'generated',
@@ -178,6 +182,7 @@ const body = (): string =>
 
 /** The marker pair a module page carries around its generated "who can do what" table. */
 const MODULE_START = '<!-- permissions:start -->';
+/** Closing marker of the permissions block the generator rewrites in place. */
 const MODULE_END = '<!-- permissions:end -->';
 
 /**

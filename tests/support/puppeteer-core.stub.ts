@@ -6,13 +6,14 @@
  * route table, would fail to PARSE rather than fail an assertion. Nothing ever wanted the real
  * one: CI installs no Chromium, and the suites that exercise the adapter mock it themselves.
  *
- * @see docs/build/unit-testing.md
+ * @see docs/build/unit-testing.md#middleware-adapter-tests-—-jest-mock-at-the-module-boundary
  */
 
 /**
  * Throws rather than resolving a fake browser: a test that genuinely means to render must say so
  * with its own `jest.mock`, the way `tests/unit/infrastructure/adapters/pdf.test.ts` does. A silent
  * no-op here would let such a test pass while asserting nothing.
+ * @throws {Error} always: the real renderer must never be reached from a test
  */
 const launch = (): never => {
     throw new Error(

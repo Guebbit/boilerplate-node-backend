@@ -47,8 +47,10 @@ export const statsHandler = <
     run: (period: Period, query: TSchema['_output'], request: Request) => Promise<object>
 ) =>
     namedHandler(name, (request: Request, response: Response) => {
-        // readInput, `list` surface: the query only. Every stats route is a GET, and a GET body is
-        // never parsed (`app/security.ts`).
+        /**
+         * readInput, `list` surface: the query only. Every stats route is a GET, and a GET body is
+         * never parsed (`app/security.ts`).
+         */
         const query = parseBody(schema, readInput(request, { surface: 'list' }), response);
         if (!query) return undefined;
 

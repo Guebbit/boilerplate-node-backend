@@ -20,8 +20,10 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
     return accountService
         .logoutEverywhere(request.authContext!.id, callerContextOf(request))
         .then((result) => {
-            // A failed revocation must not read as success: the caller would believe every
-            // device is out while a stolen one keeps working.
+            /**
+             * A failed revocation must not read as success: the caller would believe every
+             * device is out while a stolen one keeps working.
+             */
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);
                 return;

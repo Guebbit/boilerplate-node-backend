@@ -42,8 +42,10 @@ import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext, Caller } from '@types';
 
-// Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
-// event that stops matching the real builder's shape fails here rather than in production.
+/**
+ * Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
+ * event that stops matching the real builder's shape fails here rather than in production.
+ */
 jest.mock('@infrastructure/observability/audit', () => {
     const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
         '@infrastructure/observability/audit'
@@ -52,9 +54,11 @@ jest.mock('@infrastructure/observability/audit', () => {
     return {
         ...actual,
         emitAuditEvent,
-        // `auditRefusal` (`kernel/middlewares/authorizations.ts`) calls `recordAudit`, which
-        // closes over its own module's real `emitAuditEvent` — immune to the override above.
-        // Reroute it through the replacement so this mocked `emitAuditEvent` still sees it.
+        /**
+         * `auditRefusal` (`kernel/middlewares/authorizations.ts`) calls `recordAudit`, which
+         * closes over its own module's real `emitAuditEvent` — immune to the override above.
+         * Reroute it through the replacement so this mocked `emitAuditEvent` still sees it.
+         */
         recordAudit: (
             context: Parameters<typeof actual.recordAudit>[0],
             fields: Parameters<typeof actual.recordAudit>[1]
@@ -65,7 +69,7 @@ jest.mock('@infrastructure/observability/audit', () => {
     };
 });
 
-/*
+/**
  * The guards do not look a user up themselves — they ask `kernel/authentication` for one, and
  * `account` supplies the implementation at boot. So the fake here is the RESOLVER, which is also
  * the whole contract these guards depend on:
@@ -94,7 +98,9 @@ const runPaymentsStaffGuard = (authContext: AuthContext) => {
     return { next, response };
 };
 
+/** Stands in for verifying an access token. */
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
+/** Stands in for verifying a refresh token. */
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
 /** What a stream's family recheck answers, standing in for the strategy's live-family check. */
 const recheckFamily = jest.fn<Promise<unknown>, []>();
@@ -126,9 +132,13 @@ registerCredentialResolver({
     fromBearerToken: (token) => fromBearerToken(token) as never
 });
 
+/** Stands in for verifying an access token. */
 const mockedVerifyAccessToken = fromAccessToken;
+/** Stands in for verifying a refresh token. */
 const mockedVerifyRefreshToken = fromRefreshToken;
+/** Alias kept for the cases: the bearer-credential resolver. */
 const mockedResolveCredential = fromBearerToken;
+/** The audit emitter, typed so cases can read its calls. */
 const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 
 /** Request stub carrying an optional Authorization header and auth context. */
@@ -140,8 +150,10 @@ const makeRequest = (options: { authorization?: string; authContext?: AuthContex
         authContext: options.authContext,
         // `getAuth` says how the session was carried; here, only a bearer header ever does.
         sessionVia: options.authContext && options.authorization ? 'bearer' : undefined,
-        // Both, because `getAuth` sets both: a stub carrying only the session would let a guard
-        // pass a test while attributing every denial in the trail to nobody.
+        /**
+         * Both, because `getAuth` sets both: a stub carrying only the session would let a guard
+         * pass a test while attributing every denial in the trail to nobody.
+         */
         caller: options.authContext && callerInScope(options.authContext, 'tenant'),
         baseUrl: '',
         path: '/protected',
@@ -254,8 +266,10 @@ describe('getAuth', () => {
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(request.authContext).toBeUndefined();
-        // The JWT boundary must not even be reached — verifying an absent token would be work
-        // done to produce a guaranteed failure.
+        /**
+         * The JWT boundary must not even be reached — verifying an absent token would be work
+         * done to produce a guaranteed failure.
+         */
         expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
     });
 
@@ -267,16 +281,20 @@ describe('getAuth', () => {
         await runUntilNext(getAuth, request, makeResponseStub());
 
         expect(request.authContext).toEqual(resolved);
-        // The caller is resolved alongside the session, in the shop: everything downstream reads
-        // keys, and turning two role names into keys twice is how the two answers drift.
+        /**
+         * The caller is resolved alongside the session, in the shop: everything downstream reads
+         * keys, and turning two role names into keys twice is how the two answers drift.
+         */
         expect(request.caller).toEqual(callerInScope(resolved, 'tenant'));
     });
 
     it.each(['malformed', 'invalid_signature', 'expired', 'revoked'] as const)(
         'answers 401 with WWW-Authenticate for a %s bearer, never anonymous',
         async (reason) => {
-            // RFC 6750 §3.1: a bearer somebody chose to present and that is bad is told so, so
-            // the client can refresh and retry instead of a public page quietly answering as a guest.
+            /**
+             * RFC 6750 §3.1: a bearer somebody chose to present and that is bad is told so, so
+             * the client can refresh and retry instead of a public page quietly answering as a guest.
+             */
             mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
             const request = makeRequest({ authorization: 'Bearer stale.token' });
             const next = jest.fn();
@@ -338,9 +356,11 @@ describe('getAuth', () => {
     );
 
     it('forwards a failure nobody anticipated to the error handler, instead of going anonymous', async () => {
-        // Only a miss proceeds anonymous. A resolver that REJECTS — an outage or anything else —
-        // is a fault, not "your credentials are wrong": it is handed to the global handler (503 for
-        // infrastructure, 500 otherwise, logged), never swallowed into a guest.
+        /**
+         * Only a miss proceeds anonymous. A resolver that REJECTS — an outage or anything else —
+         * is a fault, not "your credentials are wrong": it is handed to the global handler (503 for
+         * infrastructure, 500 otherwise, logged), never swallowed into a guest.
+         */
         const failure = new Error('unexpected');
         mockedVerifyAccessToken.mockRejectedValue(failure);
 
@@ -353,8 +373,10 @@ describe('getAuth', () => {
         expect(request.caller).toBeUndefined();
     });
 
-    // A DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
-    // §15.5.2). `getAuth` forwards it to the global error handler instead, which answers 503.
+    /**
+     * A DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
+     * §15.5.2). `getAuth` forwards it to the global error handler instead, which answers 503.
+     */
     it('forwards an infrastructure failure to the error handler, instead of going anonymous', async () => {
         const outage = Object.assign(new Error('server selection timed out'), {
             name: 'MongooseServerSelectionError'
@@ -379,8 +401,10 @@ describe('getAuth', () => {
         expect(response.json).not.toHaveBeenCalled();
     });
 
-    // A forged or garbled bearer has no customer behind it: it is audited and counted. A stale
-    // one (expired, or a revoked session) is only a metric — the FE token expires every few minutes.
+    /**
+     * A forged or garbled bearer has no customer behind it: it is audited and counted. A stale
+     * one (expired, or a revoked session) is only a metric — the FE token expires every few minutes.
+     */
     it.each([
         ['invalid_signature', coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE],
         ['malformed', coreAuditActions.SECURITY_TOKEN_MALFORMED]
@@ -464,9 +488,11 @@ describe('getAuth', () => {
     );
 
     it('resolves once when two mounted routers both apply it to the same request', async () => {
-        // Two modules sharing a URL prefix (`account`, `addresses`) both mount this guard on
-        // their own router; an unmatched request in the first falls through Express to the
-        // second. The JWT boundary must be hit once, not twice.
+        /**
+         * Two modules sharing a URL prefix (`account`, `addresses`) both mount this guard on
+         * their own router; an unmatched request in the first falls through Express to the
+         * second. The JWT boundary must be hit once, not twice.
+         */
         const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
         mockedVerifyAccessToken.mockResolvedValue({ ok: resolved });
 
@@ -484,15 +510,19 @@ describe('getAuth', () => {
 
         const next = await runUntilNext(getAuth, request, makeResponseStub());
 
-        // Already resolved (by whichever router ran first) — the second pass must not touch the
-        // JWT boundary at all, credential or not.
+        /**
+         * Already resolved (by whichever router ran first) — the second pass must not touch the
+         * JWT boundary at all, credential or not.
+         */
         expect(next).toHaveBeenCalledTimes(1);
         expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
     });
 
-    // The credential twin of the JWT-path test above: `resolveCredential` failing because
-    // the database is unreachable is not "unknown credential" (which resolves a `{ miss }`, never
-    // rejects — see `resolveCredential`'s own docblock).
+    /**
+     * The credential twin of the JWT-path test above: `resolveCredential` failing because
+     * the database is unreachable is not "unknown credential" (which resolves a `{ miss }`, never
+     * rejects — see `resolveCredential`'s own docblock).
+     */
     it('forwards an infrastructure failure on the credential path too, instead of going anonymous', async () => {
         const outage = Object.assign(new Error('server selection timed out'), {
             name: 'MongooseServerSelectionError'
@@ -742,8 +772,10 @@ describe('isAuth', () => {
     });
 
     it('rejects with 401 when a context exists but the bearer token is gone', () => {
-        // Both conditions are required. Accepting a context without its token would let an
-        // already-populated request object stand in for a credential.
+        /**
+         * Both conditions are required. Accepting a context without its token would let an
+         * already-populated request object stand in for a credential.
+         */
         const next = jest.fn();
         const response = makeResponseStub();
 
@@ -856,9 +888,11 @@ describe('requirePermission', () => {
     });
 
     it('refuses a caller holding only the narrow key of the same action and subject', () => {
-        // `read:Payment` and `display:Payment` are both `read` on `Payment`, and every
-        // signed-in account holds the first: the guard asks for the literal key, or a customer
-        // reads the staff list.
+        /**
+         * `read:Payment` and `display:Payment` are both `read` on `Payment`, and every
+         * signed-in account holds the first: the guard asks for the literal key, or a customer
+         * reads the staff list.
+         */
         const customer = runPaymentsStaffGuard(asCustomer('user-1'));
         const staff = runPaymentsStaffGuard(asAdmin('user-2'));
 
@@ -909,8 +943,10 @@ describe('requirePermission', () => {
     });
 
     it('answers 401, not 403, for an unauthenticated caller', () => {
-        // No `authContext` at all means no credentials were presented — 401, distinct from the
-        // case above (authenticated, just not admin), which is 403.
+        /**
+         * No `authContext` at all means no credentials were presented — 401, distinct from the
+         * case above (authenticated, just not admin), which is 403.
+         */
         const next = jest.fn();
         const response = makeResponseStub();
 
@@ -929,8 +965,10 @@ describe('requirePermission', () => {
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
-                // An absent session is an authentication failure, so it is audited as one — the
-                // same action `isAuth` emits, rather than a permission denial.
+                /**
+                 * An absent session is an authentication failure, so it is audited as one — the
+                 * same action `isAuth` emits, rather than a permission denial.
+                 */
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actorUserId: 'anonymous',
                 actorRole: 'anonymous',
@@ -940,8 +978,10 @@ describe('requirePermission', () => {
     });
 
     it('attributes a not-permitted denial to the actual user, not to anonymous', () => {
-        // The whole value of the audit record: "who tried". Falling back to 'anonymous' here
-        // would erase the identity of a real user probing admin routes.
+        /**
+         * The whole value of the audit record: "who tried". Falling back to 'anonymous' here
+         * would erase the identity of a real user probing admin routes.
+         */
         requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeRequest({ authContext: asCustomer('user-9') }),
             makeResponseStub(),
@@ -958,7 +998,7 @@ describe('requirePermission', () => {
     });
 
     it('separates "not authenticated" (401) from "not permitted" (403)', () => {
-        /*
+        /**
          * The statuses differ because the client's next move differs: 401 means "authenticate and
          * retry", which the frontend turns into a login redirect that returns the visitor to where
          * they were aiming; 403 means "you are known and still refused", where logging in again
@@ -1055,8 +1095,10 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('verifies the REFRESH token, not the access token', async () => {
-        // The whole design decision: the cookie holds a refresh token, and verifying it against
-        // the access-token secret would either always fail or, worse, accept the wrong audience.
+        /**
+         * The whole design decision: the cookie holds a refresh token, and verifying it against
+         * the access-token secret would either always fail or, worse, accept the wrong audience.
+         */
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         await runUntilNext(
@@ -1082,8 +1124,10 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('populates authContext with the resolved caller', async () => {
-        // Downstream handlers read the caller's keys; a context that arrives without them turns
-        // an authorized request into a confusing 403 further down.
+        /**
+         * Downstream handlers read the caller's keys; a context that arrives without them turns
+         * an authorized request into a confusing 403 further down.
+         */
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
         const request = makeCookieRequest('cookie.jwt');
 
@@ -1098,8 +1142,10 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('rejects a valid session without the wildcard with 403', async () => {
-        // The mutant that matters most: a key check forced to `true` would hand every logged-in
-        // customer a document only the shop's staff may see.
+        /**
+         * The mutant that matters most: a key check forced to `true` would hand every logged-in
+         * customer a document only the shop's staff may see.
+         */
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
         const response = makeResponseStub();
         const next = jest.fn();
@@ -1169,8 +1215,10 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('rejects a cookie whose signature does not verify, with 401 not 403', async () => {
-        // 401 and 403 are different statements: "I do not know who you are" versus "I know, and
-        // no". A forged cookie is the first.
+        /**
+         * 401 and 403 are different statements: "I do not know who you are" versus "I know, and
+         * no". A forged cookie is the first.
+         */
         mockedVerifyRefreshToken.mockResolvedValueOnce({ miss: 'invalid_signature' });
         const response = makeResponseStub();
         const next = jest.fn();
@@ -1203,8 +1251,10 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('hands a failed user lookup to the error handler: no answer, no audit row', async () => {
-        // An outage is not "your credentials are wrong": the central handler answers 503 and the
-        // security trail records nothing.
+        /**
+         * An outage is not "your credentials are wrong": the central handler answers 503 and the
+         * security trail records nothing.
+         */
         const outage = new Error('mongo is down');
         mockedVerifyRefreshToken.mockRejectedValueOnce(outage);
         const response = makeResponseStub();
@@ -1507,8 +1557,10 @@ describe('requireFreshAuth', () => {
     });
 
     it('answers 401 defensively when mounted without isAuth first, rather than throwing', () => {
-        // The expected path always has isAuth upstream; this is what stops a route that forgets
-        // it from crashing instead of merely misbehaving.
+        /**
+         * The expected path always has isAuth upstream; this is what stops a route that forgets
+         * it from crashing instead of merely misbehaving.
+         */
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
@@ -1518,7 +1570,7 @@ describe('requireFreshAuth', () => {
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
-    /*
+    /**
      * The module docblock promises "every rejection from the identity guards is audited",
      * but this direct mount challenged with no trail at all — unlike `requirePermission`'s own
      * declared-stepUp path, which already emits the same action.
@@ -1552,8 +1604,10 @@ describe('requireFreshAuth', () => {
 
 describe('requireFreshAuthWhen', () => {
     it("skips the gate entirely when the predicate says this request doesn't need it", () => {
-        // PUT /account uploading a new avatar: the predicate reads the body and says "no email
-        // change", so a stale session must not be asked for a password it wasn't going to need.
+        /**
+         * PUT /account uploading a new avatar: the predicate reads the body and says "no email
+         * change", so a stale session must not be asked for a password it wasn't going to need.
+         */
         const next = jest.fn();
         const response = makeResponseStub();
 

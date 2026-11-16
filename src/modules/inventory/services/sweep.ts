@@ -116,8 +116,10 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
         if (!lastBatchWasFull) break;
     }
 
-    // Still full after the last allowed batch: more is waiting. Said out loud, so a truncated run
-    // is not read as done.
+    /**
+     * Still full after the last allowed batch: more is waiting. Said out loud, so a truncated run
+     * is not read as done.
+     */
     if (lastBatchWasFull)
         // Stryker disable all
         logger.warn(

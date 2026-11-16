@@ -20,7 +20,6 @@ export interface OpenableOrder {
 /**
  * The buyer's own order, or `undefined`. Ownership, not just visibility: an operator who can read
  * any order is not its buyer. Acting FOR the buyer is a separate door, {@link openableOrder}.
- * @param orderId - the order
  * @param authContext - the caller
  */
 export const ownOrder = (
@@ -35,7 +34,6 @@ export const ownOrder = (
  * The order a caller may open a return on: their own, or — for a caller holding `update:Return` —
  * anyone's, on the buyer's behalf (the phone call that asks for it). A staff member buying for
  * themselves is a buyer first. Anyone else gets `undefined`, which the door answers as 404.
- * @param orderId - the order
  * @param authContext - the caller
  */
 export const openableOrder = (

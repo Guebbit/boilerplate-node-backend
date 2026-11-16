@@ -5,7 +5,7 @@
  * total, and a refunding `ORDER_CANCELED` opens the refund — see `docs/modules/payments.md`)
  * Detaches an erased account through its own `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
- * @see docs/modules/payments.md
+ * @see docs/modules/payments.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -18,9 +18,11 @@ import { paymentService } from './services';
 import { cancelOpenIntentForOrder } from './services/intent';
 import { refundForOrder } from './services/refunds';
 import { paymentsRateLimits } from './rate-limits';
-// Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
-// PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
-// module-barrel rule.
+/**
+ * Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
+ * PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
+ * module-barrel rule.
+ */
 import {
     PAYMENT_SUCCEEDED,
     PAYMENT_FAILED,
@@ -122,41 +124,53 @@ export default {
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
     rateLimits: paymentsRateLimits,
-    // The provider signs over the exact bytes it sent — relative to the first mount's `basePath`, composed by the
-    // app tier, so the mount point is stated once and the two cannot drift.
+    /**
+     * The provider signs over the exact bytes it sent — relative to the first mount's `basePath`, composed by the
+     * app tier, so the mount point is stated once and the two cannot drift.
+     */
     rawBodyPaths: ['/webhook'],
-    // The webhook secret and the bank-transfer values: see `./config`. The
-    // provider selector is probed beside its registry, since the resolver imports the config.
+    /**
+     * The webhook secret and the bank-transfer values: see `./config`. The
+     * provider selector is probed beside its registry, since the resolver imports the config.
+     */
     config: [paymentsConfig.slice, paymentProviderProbe.slice],
     personalData: [
         {
             section: 'payments',
             collect: (subject) => paymentService.findOwnPaymentsForExport(subject.userId),
-            // Detach, never delete — the payment survives the account, inside the same
-            // hard-delete transaction. See `detachUserId`.
+            /**
+             * Detach, never delete — the payment survives the account, inside the same
+             * hard-delete transaction. See `detachUserId`.
+             */
             erase: ({ userId }, session) => paymentService.detachUserId(userId, session)
         }
     ],
     subscribe: () => {
-        // `ORDER_CANCELED` is both halves of what a cancel leaves with `payments`: a card intent
-        // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
-        // when `refund` says so — the money already taken. The refund is the durable half: its
-        // event is an outbox row, and a rejection here makes the relay deliver it again.
-        // `meta.eventId` is the outbox row id, stable across redeliveries: the refund remembers it,
-        // so a redelivery after staff voided the refund cannot pay again.
+        /**
+         * `ORDER_CANCELED` is both halves of what a cancel leaves with `payments`: a card intent
+         * nobody finished, still open at the provider (closed best-effort, never rethrown), and —
+         * when `refund` says so — the money already taken. The refund is the durable half: its
+         * event is an outbox row, and a rejection here makes the relay deliver it again.
+         * `meta.eventId` is the outbox row id, stable across redeliveries: the refund remembers it,
+         * so a redelivery after staff voided the refund cannot pay again.
+         */
         onDomainEvent(ORDER_CANCELED, ({ orderId, refund, cause, informedAt }, { eventId }) =>
             cancelOpenIntentForOrder(orderId, cause === 'reservation_expired').then(() =>
                 refund ? refundForOrder(orderId, { cause, informedAt }, eventId) : undefined
             )
         );
-        // A bank-transfer order is owed money from the moment it is placed: its payment, with the
-        // reference and the instructions, opens with it.
+        /**
+         * A bank-transfer order is owed money from the moment it is placed: its payment, with the
+         * reference and the instructions, opens with it.
+         */
         onDomainEvent(ORDER_CREATED, ({ orderId }) => paymentService.openTransferPayment(orderId));
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, paymentService.mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, paymentService.mailRefundIssued);
-        // One mail, two triggers: a refusal that ended the retrying, and a settled refund the bank
-        // sent back. The listener reads the record, so a refusal that is not the card's mails nobody.
+        /**
+         * One mail, two triggers: a refusal that ended the retrying, and a settled refund the bank
+         * sent back. The listener reads the record, so a refusal that is not the card's mails nobody.
+         */
         onDomainEvent(PAYMENT_REFUND_FAILED, paymentService.mailRefundUndeliverable);
         onDomainEvent(PAYMENT_REFUND_REVERSED, paymentService.mailRefundUndeliverable);
     },

@@ -159,9 +159,11 @@ export const refuseRateLimited =
         handChargedSeconds?: number
     ) =>
     (request: Request, response: Response): Response => {
-        // With the library's own headers off it sets no `Retry-After` either: `rejectResponse`
-        // writes it (RFC 9110 §10.2.3) from the wait below, beside the budget's `RateLimit` entry.
-        // A budget charged by hand has no info to read, so its caller passes the wait it computed.
+        /**
+         * With the library's own headers off it sets no `Retry-After` either: `rejectResponse`
+         * writes it (RFC 9110 §10.2.3) from the wait below, beside the budget's `RateLimit` entry.
+         * A budget charged by hand has no info to read, so its caller passes the wait it computed.
+         */
         announceBudget(budget, request, response);
         const info = rateLimitInfoOf(request, infoSlotOf(budget));
         const seconds = info ? secondsUntil(info.resetTime) : (handChargedSeconds ?? 1);
@@ -171,7 +173,7 @@ export const refuseRateLimited =
             method: request.method
         });
 
-        /*
+        /**
          * Every refusal, audited or not — `installSecurity` mounts these limiters before
          * `installRequestContext` mounts the request logger, so a 429 short-circuits before
          * anything else would record it, leaving the global brake with no trace at all.
@@ -234,7 +236,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler => {
         // Off: `announceBudget` writes the headers (see there for why not the library).
         standardHeaders: false,
         legacyHeaders: false,
-        /*
+        /**
          * Only a `pass` budget lets a request through when its store cannot answer. Every other
          * budget's store falls back to counting in this process (see `failoverStore`), so a Redis
          * blip is neither an authentication outage nor an open door. Logged once per outage.
@@ -253,9 +255,11 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler => {
         ...(budget.skip ? { skip: budget.skip } : {})
     });
 
-    // The limiter records its info on the request and calls `next` when the request fits; the
-    // headers follow on that same pass. A refusal never reaches `next`: `refuseRateLimited` writes
-    // them there.
+    /**
+     * The limiter records its info on the request and calls `next` when the request fits; the
+     * headers follow on that same pass. A refusal never reaches `next`: `refuseRateLimited` writes
+     * them there.
+     */
     return (request, response, next) =>
         limiter(request, response, (error?: unknown) => {
             if (error === undefined) announceBudget(budget, request, response);
@@ -280,8 +284,10 @@ const chargedStoreOf = (budget: RateLimitBudget): Store => {
     if (existing) return existing;
 
     const store = rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory');
-    // The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
-    // Cast: `windowMs` is the only option a store reads; the rest of `Options` is the limiter's.
+    /**
+     * The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
+     * Cast: `windowMs` is the only option a store reads; the rest of `Options` is the limiter's.
+     */
     const storeOptions = { windowMs: budgetWindowMs(budget) };
     store.init(storeOptions as Options);
     chargedStores.set(budget.namespace, store);
@@ -305,9 +311,11 @@ export interface BudgetCharge {
  * @param key - what is being counted, already pseudonymised if it names a person
  */
 export const chargeBudget = async (budget: RateLimitBudget, key: string): Promise<BudgetCharge> => {
-    // `async`, so `chargedStoreOf` throwing synchronously still reaches the caller as a rejection;
-    // that rejection (and a `pass` budget's store being down) is the caller's to handle, who knows
-    // what refusing means for its own door.
+    /**
+     * `async`, so `chargedStoreOf` throwing synchronously still reaches the caller as a rejection;
+     * that rejection (and a `pass` budget's store being down) is the caller's to handle, who knows
+     * what refusing means for its own door.
+     */
     const { totalHits, resetTime } = await chargedStoreOf(budget).increment(key);
 
     return {
@@ -439,13 +447,17 @@ export const addressBlockOf = (request: Request): string => {
 const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
     ...infrastructureRateLimitData.global,
     keyedBy: KEYED_BY_ADDRESS,
-    // Refund, not skip: the key is only known after `getAuth`, which runs after this limiter, and a
-    // `Bearer sk_` header alone must not buy an exemption. "Successful" here means "a key
-    // resolved" — it says nothing about the status code.
+    /**
+     * Refund, not skip: the key is only known after `getAuth`, which runs after this limiter, and a
+     * `Bearer sk_` header alone must not buy an exemption. "Successful" here means "a key
+     * resolved" — it says nothing about the status code.
+     */
     skipSuccessfulRequests: true,
     requestWasSuccessful: (request) => request.credentialId !== undefined,
-    // `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
-    // `RateLimitBudget.skip`.
+    /**
+     * `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
+     * `RateLimitBudget.skip`.
+     */
     skip: (request) =>
         request.method === 'GET' && (request.path === '/livez' || request.path === '/readyz')
 };
@@ -462,8 +474,10 @@ export const rateLimiter: RequestHandler = buildRateLimiter(GLOBAL_RATE_LIMIT_BU
 const API_KEY_RATE_LIMIT_BUDGET: RateLimitBudget = {
     ...infrastructureRateLimitData.apiKey,
     keyedBy: 'the api-key credential',
-    // `request.credentialId` is always present when this runs — `getAuth` only calls it after a
-    // credential has resolved — so the `!` is safe, not a suppression.
+    /**
+     * `request.credentialId` is always present when this runs — `getAuth` only calls it after a
+     * credential has resolved — so the `!` is safe, not a suppression.
+     */
     keyGenerator: (request) => request.credentialId!
 };
 

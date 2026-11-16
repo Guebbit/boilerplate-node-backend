@@ -40,6 +40,7 @@ const base = flagValue('base') ?? 'origin/main';
  * The bundle is not committed, so there is nothing to `git show`: the commit's own tree is
  * exported to a scratch folder and bundled there with its own fragments and its own bundler.
  * `node_modules` is linked in rather than installed; the bundle step needs no generated file.
+ * @throws {CommandTimeoutError} when git does not answer in time; any other failure reads as "no such ref"
  */
 const bundleAt = (ref: string): string | undefined => {
     const scratch = mkdtempSync(path.join(tmpdir(), 'asyncapi-base-'));
@@ -121,7 +122,7 @@ Promise.all([
             process.exit(2);
         }
 
-        /*
+        /**
          * @asyncapi/diff refuses to compare across a major version (a `TypeError`, not a result) —
          * and a major bump IS the deliberate, reviewed break this gate exists to catch everything
          * ELSE from being. Nothing to diff structurally; say so and pass.

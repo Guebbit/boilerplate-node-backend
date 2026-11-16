@@ -221,7 +221,6 @@ export const enqueueApproved = (
  * The `return.closed` announcement for a return that just closed — one payload for the three ways
  * a return closes (goods refunded, a withdrawal before dispatch, a remainder cancel). Keyed on the
  * order, like every return event.
- * @param closed - the return, closed
  */
 export const returnClosedEvent = (
     closed: ReturnDocument

@@ -45,8 +45,10 @@ describe('cartSchema', () => {
     });
 
     it('indexes the product lookup that product deletion depends on', () => {
-        // Deleting a product must find every cart holding it; without this it reads the whole
-        // collection.
+        /**
+         * Deleting a product must find every cart holding it; without this it reads the whole
+         * collection.
+         */
         expect(indexSpecs(cartSchema)).toEqual([
             'carts_updatedAt_ttl: updatedAt+1',
             'items.productId_1: items.productId+1',
@@ -55,9 +57,11 @@ describe('cartSchema', () => {
     });
 
     it('expires an abandoned cart at the configured retention window, and only that index', () => {
-        // Asserted against the configured window rather than a literal, so
-        // changing `NODE_CART_RETENTION_DAYS` moves the policy and the test together — and so a
-        // TTL appearing on a different index fails here.
+        /**
+         * Asserted against the configured window rather than a literal, so
+         * changing `NODE_CART_RETENTION_DAYS` moves the policy and the test together — and so a
+         * TTL appearing on a different index fails here.
+         */
         expect(indexOptionSpecs(cartSchema)).toEqual([
             'carts_updatedAt_ttl: expireAfterSeconds=' + RETENTION_SECONDS,
             'items.productId_1: (none)',
@@ -76,14 +80,18 @@ describe('cartSchema — a line', () => {
 
         expect(requiredPaths(item)).toEqual(['productId', 'quantity']);
         expect(optionsOf(item)._id).toBe(false);
-        // No `ref` into `Product`: `services/view.ts` joins through `productService`, never a
-        // Mongoose `populate()` on this field — see `docs/understand/strategic-ddd.md` §5.
+        /**
+         * No `ref` into `Product`: `services/view.ts` joins through `productService`, never a
+         * Mongoose `populate()` on this field — see `docs/understand/strategic-ddd.md` §5.
+         */
         expect(refOf(item, 'productId')).toBeUndefined();
     });
 
     it('refuses a quantity below one', () => {
-        // A zero-quantity line is a removal that did not remove: it survives every "is it in the
-        // cart" check while contributing nothing to any total. Removal is deleting the line.
+        /**
+         * A zero-quantity line is a removal that did not remove: it survives every "is it in the
+         * cart" check while contributing nothing to any total. Removal is deleting the line.
+         */
         const item = subSchema(cartSchema, 'items');
 
         expect(pathOptions(item, 'quantity').min).toBe(1);

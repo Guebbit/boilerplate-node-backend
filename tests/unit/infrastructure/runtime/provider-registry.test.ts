@@ -5,6 +5,7 @@
  */
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
 
+/** A registry description with two development-only names. */
 const DEVELOPMENT = { noun: 'transport', names: ['log', 'outbox'] } as const;
 
 describe('requireProvider', () => {

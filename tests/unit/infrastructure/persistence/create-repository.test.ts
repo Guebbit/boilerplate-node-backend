@@ -19,13 +19,17 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import { asStub } from '@tests/stub';
 
+/** The document shape of the stub model. */
 interface FixtureDocument extends Document {
     name: string;
 }
 
+/** A model stub; the repository is given it and never queries it. */
 const stubModel = asStub<Model<FixtureDocument>>({});
+/** A transform that returns the item unchanged. */
 const identityTransform = (item: Record<string, unknown>): Record<string, unknown> => item;
 
+/** The filter the repository builds for a search spec. */
 const buildWhereFor = (searchable: SearchSpec) =>
     createRepository<FixtureDocument, Wire<FixtureDocument>>(stubModel, {
         transform: identityTransform,
@@ -117,8 +121,10 @@ describe('buildWhere — booleans', () => {
     });
 
     it('omits the path for anything that is not literally a boolean', () => {
-        // The type check is deliberately stricter than `isPresent`: a pre-decoded value is
-        // required, so a raw query-string 'false' must not be treated as a filter here.
+        /**
+         * The type check is deliberately stricter than `isPresent`: a pre-decoded value is
+         * required, so a raw query-string 'false' must not be treated as a filter here.
+         */
         expect(buildWhere({ active: 'false' })).toEqual({});
         expect(buildWhere({})).toEqual({});
     });

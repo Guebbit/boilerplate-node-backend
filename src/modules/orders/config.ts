@@ -10,7 +10,7 @@
  * Order link:             owned here, because `infrastructure/http/frontend-link.ts` does not know
  *                         `orders` exists (see `docs/understand/layers.md`).
  *
- * @see docs/modules/orders.md
+ * @see docs/modules/orders.md#configuration
  */
 
 import { defineConfig } from '@infrastructure/config/define';
@@ -59,14 +59,12 @@ export const maxAdminOrderLineQuantity = (): number =>
  * Art. 9); the minimum here is 21 so a weekend or holiday roll-over can never matter. Read per
  * call, like every getter here.
  * See docs/modules/orders.md#the-withdrawal-window
- * @returns the withdrawal period, in days
  */
 export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL_PERIOD_DAYS;
 
 /**
  * Days a delivered order keeps the buyer after its legal-guarantee window (`conformityUntil`).
  * See docs/understand/data-retention.md#orders-after-the-account
- * @returns the days
  */
 export const orderPiiDaysAfterGuarantee = (): number =>
     ordersConfig().NODE_ORDER_PII_DAYS_AFTER_GUARANTEE;
@@ -74,7 +72,6 @@ export const orderPiiDaysAfterGuarantee = (): number =>
 /**
  * Days a paid order that ended without delivery keeps the buyer, counted from `paidAt`.
  * See docs/understand/data-retention.md#orders-after-the-account
- * @returns the days
  */
 export const orderPiiDaysUndelivered = (): number => ordersConfig().NODE_ORDER_PII_DAYS_UNDELIVERED;
 
@@ -82,7 +79,6 @@ export const orderPiiDaysUndelivered = (): number => ordersConfig().NODE_ORDER_P
  * Days a timeline row keeps the free text staff wrote on it, counted from the row's own instant.
  * Its own clock because the order's starts only at erasure or inactivity, so a live customer's
  * text would otherwise never go.
- * @returns the retention, in days
  */
 export const orderEventTextRetentionDays = (): number =>
     ordersConfig().NODE_ORDER_EVENT_TEXT_RETENTION_DAYS;
@@ -98,7 +94,6 @@ export const orderExportMaxRows = (): number => ordersConfig().NODE_ORDER_EXPORT
  * The path of an order's page on the paired frontend, under the language segment: the
  * `NODE_FRONTEND_LINK_ORDER` template with the id filled in and URL-encoded. A bare path, not a
  * URL: callers that already hold a path (the staff outbox notice) link through it.
- * @param id - the order's id
  * @returns the path, e.g. `orders/65f0`
  */
 export const orderPagePath = (id: string): string =>

@@ -67,7 +67,7 @@ import {
     ListAddresses200Response
 } from '@api/schemas.zod';
 
-/*
+/**
  * `connect`/`disconnect` rather than `setupTestDb()`, which is the only suite in the repo that
  * does: `setupTestDb` empties the database before every `it()`, and the database IS the subject
  * here. One build, read by every case below — rebuilding it twenty-two times would cost a quarter
@@ -98,10 +98,12 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 /** The subject map the build produced — guarantee name → row id. */
 let subjects: Readonly<Record<string, string>>;
 
-// `products.seed()` writes its rows' `translations` through the same write surface
-// `productService.create` does. `createApp()` below already registers every enabled
-// module — including `products`' own `translatables` declaration — so nothing here builds that
-// lookup by hand.
+/**
+ * `products.seed()` writes its rows' `translations` through the same write surface
+ * `productService.create` does. `createApp()` below already registers every enabled
+ * module — including `products`' own `translatables` declaration — so nothing here builds that
+ * lookup by hand.
+ */
 const { app } = createApp();
 
 beforeAll(async () => {
@@ -137,7 +139,7 @@ describe('each subject names a row that really has the property', () => {
         const product = await productModel.findById(subjects['product.outOfStock']).exec();
         expect(product).not.toBeNull();
 
-        /*
+        /**
          * `available`, not `onHand`: the storefront's badge reads the derived counter, which a row
          * held entirely in reservations would also be zero on. `presentProduct` is the mapping a
          * response goes through, so this reads it exactly where the consumer does.
@@ -266,8 +268,10 @@ describe('each subject names a row that really has the property', () => {
     it('order.otherPending is pending, a filler shopper owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.otherPending']).exec();
         expect(order?.status).toBe('pending');
-        // Neither the signed-in customer nor the administrator: staff and administrators do not
-        // shop, and the `customer` account must not own the order meant to be foreign to it.
+        /**
+         * Neither the signed-in customer nor the administrator: staff and administrators do not
+         * shop, and the `customer` account must not own the order meant to be foreign to it.
+         */
         expect(order?.userId?.toString()).toBe(SEED_CUSTOMER_IDS.harper);
 
         const hold = await reservationModel
@@ -315,8 +319,10 @@ describe('each subject names a row that really has the property', () => {
     });
 
     it('every backdated order can still be saved: an order nobody reported on carries no half-built summary', async () => {
-        // The pass that dates an order must not invent a `fulfillment` object for one that has none:
-        // a save would then fail on the summary's required fields, a soft delete included.
+        /**
+         * The pass that dates an order must not invent a `fulfillment` object for one that has none:
+         * a save would then fail on the summary's required fields, a soft delete included.
+         */
         const orders = await orderModel.find().exec();
         expect(orders.length).toBeGreaterThan(0);
         await Promise.all(orders.map((order) => order.validate()));
@@ -429,8 +435,10 @@ describe('each subject names a row that really has the property', () => {
     it('order.softDeleted is hidden, and sits on the non-admin account', async () => {
         const order = await orderModel.findById(subjects['order.softDeleted']).exec();
         expect(order?.deletedAt).toBeInstanceOf(Date);
-        // The case this exists for is "the owner cannot see their own soft-deleted order", which
-        // an admin-owned row could never catch.
+        /**
+         * The case this exists for is "the owner cannot see their own soft-deleted order", which
+         * an admin-owned row could never catch.
+         */
         expect(order?.userId?.toString()).toBe(SEED_USER_ID);
     });
 
@@ -473,8 +481,10 @@ describe('the history reads as a history', () => {
         const oldest = orders[0].createdAt!;
         const daysBack = (Date.now() - oldest.getTime()) / 86_400_000;
         expect(daysBack).toBeGreaterThan(30);
-        // Inside `NODE_AUDIT_RETENTION_DAYS` (180), or the trail behind the oldest order is reaped
-        // and the dataset contradicts itself in the one screen meant to explain it.
+        /**
+         * Inside `NODE_AUDIT_RETENTION_DAYS` (180), or the trail behind the oldest order is reaped
+         * and the dataset contradicts itself in the one screen meant to explain it.
+         */
         expect(daysBack).toBeLessThan(180);
     });
 
@@ -494,9 +504,11 @@ describe('the history reads as a history', () => {
         const order = await orderModel.findById(subjects['order.delivered']).exec();
         expect(order?.withdrawUntil).toBeDefined();
 
-        // Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
-        // (30 days by default) after `createdAt`, rounded up to the end of that UTC day (the
-        // window ends with the last hour of its last day). Left at boot time it would be weeks later.
+        /**
+         * Delivery follows the checkout within seconds, so the deadline sits one withdrawal period
+         * (30 days by default) after `createdAt`, rounded up to the end of that UTC day (the
+         * window ends with the last hour of its last day). Left at boot time it would be weeks later.
+         */
         const gapMs = order!.withdrawUntil!.getTime() - order!.createdAt!.getTime();
         const periodMs = 30 * 86_400_000;
         expect(gapMs).toBeGreaterThanOrEqual(periodMs);
@@ -515,12 +527,14 @@ describe('the history reads as a history', () => {
     });
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {
-        // Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
-        // `POST /inventory/levels/{productId}/receive`, so a product with stock and no receipt cannot exist. Rather
-        // than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
-        // `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
-        // the counter, which is the module's stated source of truth
-        // (`docs/modules/inventory.md#why-products-still-carries-a-copy`).
+        /**
+         * Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
+         * `POST /inventory/levels/{productId}/receive`, so a product with stock and no receipt cannot exist. Rather
+         * than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
+         * `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
+         * the counter, which is the module's stated source of truth
+         * (`docs/modules/inventory.md#why-products-still-carries-a-copy`).
+         */
         const stocked = await productModel
             .find({ onHand: { $gt: 0 } })
             .select('_id onHand')
@@ -554,9 +568,11 @@ describe('conformance: a produced row parses as the response the API would serve
         const orders = await orderModel.find().exec();
         expect(orders.length).toBeGreaterThan(0);
 
-        // `withActions` — not a bare `.toJSON()` — is the real serialization boundary: it is
-        // also what resolves each line's `current` picture, live against the catalogue, which a
-        // stored order never carries. See `orders/services/current.ts`.
+        /**
+         * `withActions` — not a bare `.toJSON()` — is the real serialization boundary: it is
+         * also what resolves each line's `current` picture, live against the catalogue, which a
+         * stored order never carries. See `orders/services/current.ts`.
+         */
         for (const order of orders) {
             const wire = await orderService.withActions(order);
             expect(() => CreateOrder201Response.parse(wireShape(wire))).not.toThrow();
@@ -567,8 +583,10 @@ describe('conformance: a produced row parses as the response the API would serve
         const users = await userModel.find().exec();
         expect(users.length).toBeGreaterThan(0);
 
-        // `toUserContract` is the real serialization boundary: it adds the role and the `actions`
-        // block the response requires, which a stored row never carries.
+        /**
+         * `toUserContract` is the real serialization boundary: it adds the role and the `actions`
+         * block the response requires, which a stored row never carries.
+         */
         const { caller } = callerContextAs('admin');
         for (const user of users) {
             const wire = await userService.toUserContract(user, caller);

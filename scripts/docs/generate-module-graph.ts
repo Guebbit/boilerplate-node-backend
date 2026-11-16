@@ -37,6 +37,7 @@ import { MODULES_ROOT, REPO_ROOT as ROOT } from '../modules-on-disk';
 import { hasFlag } from '../cli';
 import { failScript } from '../fail-script';
 
+/** Whether to only verify the tables instead of rewriting them. */
 const checkOnly = hasFlag('check');
 
 /** Every module folder under `src/modules`. */
@@ -46,10 +47,12 @@ const PAGE = path.join(ROOT, 'docs', 'modules', 'start.md');
 
 /** Markers bounding the generated block — everything between them is replaced, nothing outside. */
 const START = '<!-- module-graph:start -->';
+/** Closing marker of the module graph block the generator rewrites in place. */
 const END = '<!-- module-graph:end -->';
 
 /** Markers bounding the generated module list on the same page. */
 const LIST_START = '<!-- module-list:start -->';
+/** Closing marker of the module list block the generator rewrites in place. */
 const LIST_END = '<!-- module-list:end -->';
 
 /** One module announcing a domain event that another module subscribes to. */
@@ -249,6 +252,7 @@ const renderNeighbourhood = (
     ].join('\n');
 };
 
+/** Renders the edges as the Mermaid graph. */
 const render = (edges: [string, string][]): string => {
     const names = Object.keys(SUBDOMAIN).toSorted();
     const connected = new Set(edges.flat());
@@ -338,6 +342,7 @@ const targets = (): Target[] => {
     ];
 };
 
+/** Builds the graph and returns the process exit code. */
 const run = async (): Promise<number> => {
     let code = 0;
     // Sequential so the log reads in page order, and so one missing marker does not hide the rest.

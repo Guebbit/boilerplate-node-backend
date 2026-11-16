@@ -7,7 +7,9 @@ import { ReturnReason } from '@types';
 import { reasonsOpenAt } from '../../domain';
 import { frozenDeadlinesOf } from '../../services/deadlines';
 
+/** The instant the order was announced, which the withdrawal deadline counts from. */
 const ANNOUNCED = new Date('2026-03-15T23:59:59.999Z');
+/** The end of the legal-guarantee window. */
 const GUARANTEE = new Date('2028-03-08T23:59:59.999Z');
 
 describe('frozenDeadlinesOf', () => {

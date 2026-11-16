@@ -68,8 +68,10 @@ describe('transferInstructions', () => {
     it('is absent for a pending bank_transfer order with no transferReference — no fabricated reference', async () => {
         const user = await createUser();
         const product = await createProduct();
-        // No `transferReference` — the shape a `bank_transfer` order placed before that field
-        // existed carries; `applyTransferInstructions` no longer falls back to the raw id for it.
+        /**
+         * No `transferReference` — the shape a `bank_transfer` order placed before that field
+         * existed carries; `applyTransferInstructions` no longer falls back to the raw id for it.
+         */
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer'
         });
@@ -82,7 +84,7 @@ describe('transferInstructions', () => {
 
 describe('embedded product snapshot indexes', () => {
     it('does not let the embedded product schema smuggle its indexes into orders', () => {
-        /*
+        /**
          * Mongoose copies a nested schema's indexes onto the schema that embeds it, so an order
          * line's own `orderLineProductSchema` gaining one (unlikely — it carries no index calls
          * today) would need `excludeIndexes` at the embed site or every order would silently gain

@@ -6,6 +6,7 @@
  */
 import { flagValue, hasFlag } from '../../../scripts/cli';
 
+/** argv as the runner set it, restored after each case. */
 const originalArguments = process.argv;
 
 /** Runs the script as if it was started with these arguments after `node script`. */

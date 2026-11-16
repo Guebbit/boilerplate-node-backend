@@ -84,7 +84,6 @@ export const runAct = <T>(work: (session: ClientSession) => Promise<T>): Promise
  * acts that start from a fulfillment order (hold, release, ship, fulfill) read it here, so the
  * door needs no read of its own: this one is the one the writes land in.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @param session - the act's transaction
  * @throws {ActRefusal} 404 when either record is missing
  */

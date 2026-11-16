@@ -50,7 +50,6 @@ interface Changed {
 /**
  * Whether the order is still being worked: a hold or release on a delivered or canceled order is
  * meaningless.
- * @param order - the order
  */
 const isWorked = (order: OrderDocument): boolean => isAwaitingGoods(order.status);
 
@@ -125,7 +124,6 @@ const releaseAct = async (
 
 /**
  * Run a hold or a release, then answer with the fulfillment order.
- * @param fulfillmentOrderId - the fulfillment order
  * @param act - the act to run
  * @param action - the audit action to record on success
  * @param authContext - the caller, for the response's own `actions`
@@ -146,8 +144,10 @@ const guarded = (
             outcome: 'success',
             targetType: 'order',
             targetId: String(fulfillmentOrder.orderId),
-            // The code only, never `holdNote`: free text the operator log has no business
-            // holding (it reaches Loki unhashed).
+            /**
+             * The code only, never `holdNote`: free text the operator log has no business
+             * holding (it reaches Loki unhashed).
+             */
             metadata: { fulfillmentOrderId, ...(reason ? { reason } : {}) }
         });
         return orderService
@@ -162,7 +162,6 @@ const guarded = (
 /**
  * Put a fulfillment order on hold.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @param input - why, and an optional note
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry
@@ -184,7 +183,6 @@ export const holdFulfillmentOrder = (
 /**
  * Release a fulfillment order from hold. A hold for `awaiting_stock` is refused.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry
  */

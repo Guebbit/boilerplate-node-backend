@@ -5,7 +5,7 @@
  * Here: the mail the owner gets when an example is published.
  * Delete it if: the module sends no mail (with `services/notify.ts` and `templates/`).
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#mails-we-send
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
@@ -15,7 +15,6 @@ import { translator } from '@infrastructure/i18n';
  * The mail telling an owner their example is now public.
  * @param locale - the owner's own language
  * @param name - the greeting's name
- * @param title - the published example's title
  */
 export const examplePublishedEmail = (
     locale: string,

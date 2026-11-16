@@ -6,7 +6,7 @@
  * write reach `t()` only through an overlay rebuilt off the request path.
  */
 
-/*
+/**
  * No loose re-exports beside the namespace: `localeService` is the only name anything imports from
  * here — controllers, `module.ts` and tests alike — and a second list naming every function said
  * that twice, which is one list too many to keep in step with the folder.
@@ -97,8 +97,10 @@ export const localeService = {
     getEntityTranslations,
     updateEntityTranslations,
     replaceEntityTranslations,
-    // A controller may not reach `../model` directly (the persistence wall), so the two
-    // controllers validating a display name ride through the service instead.
+    /**
+     * A controller may not reach `../model` directly (the persistence wall), so the two
+     * controllers validating a display name ride through the service instead.
+     */
     localeDisplayName,
     normalizeTag
 };

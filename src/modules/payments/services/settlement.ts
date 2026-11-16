@@ -169,8 +169,10 @@ const settleMismatch = (
             },
             session
         );
-        // The money is real the moment it is recorded, so its way back is opened with it: never
-        // durable without the record that returns it.
+        /**
+         * The money is real the moment it is recorded, so its way back is opened with it: never
+         * durable without the record that returns it.
+         */
         if (recorded) {
             await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
             await enqueueOutboxEvent(
@@ -278,8 +280,10 @@ const settleWithin = async (
         session
     );
     if (!moved) {
-        // The write matched nothing: either the order is already past payment, or it is gone.
-        // Read inside the settlement's own snapshot, the one `markPaid` judged, never a fresh one.
+        /**
+         * The write matched nothing: either the order is already past payment, or it is gone.
+         * Read inside the settlement's own snapshot, the one `markPaid` judged, never a fresh one.
+         */
         const current = await orderService.readOrder(orderId, session);
         if (!current || !paymentSettled(current.status)) {
             const opened = await openRefund(succeeded, LATE_PAYMENT_REQUEST, undefined, session);
@@ -314,8 +318,10 @@ const afterSettlement = (
     const orderId = String(payment.orderId);
 
     if (outcome.kind === 'replay')
-        // Whoever won already did the rest. The answer is the payment as they left it, never the
-        // pre-read this call holds: that copy still says `requires_confirmation`.
+        /**
+         * Whoever won already did the rest. The answer is the payment as they left it, never the
+         * pre-read this call holds: that copy still says `requires_confirmation`.
+         */
         return paymentRepository.findByOrderId(orderId).then((current) => ({
             payment: current ?? payment,
             orderLost: false,
@@ -324,9 +330,11 @@ const afterSettlement = (
 
     nudgeOutbox();
 
-    // Hand-recorded money (a late transfer) has no provider to ask: the record the transaction
-    // opened is the whole refund, owed to an operator. Written here, after the commit, so a row
-    // never describes a record that rolled back.
+    /**
+     * Hand-recorded money (a late transfer) has no provider to ask: the record the transaction
+     * opened is the whole refund, owed to an operator. Written here, after the commit, so a row
+     * never describes a record that rolled back.
+     */
     if (outcome.kind === 'lost' && isHandRecorded(outcome.payment)) {
         if (outcome.refund) recordOwedByHand(outcome.payment, outcome.refund, context);
         return Promise.resolve({ payment: outcome.payment, orderLost: true, transitioned: true });
@@ -385,18 +393,22 @@ export const settlePayment = (
     const orderId = String(payment.orderId);
     const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
 
-    // No attempt on record at the provider: nothing happened, so nothing is written. The row stays
-    // `requires_confirmation` and the hold keeps the window it was given.
+    /**
+     * No attempt on record at the provider: nothing happened, so nothing is written. The row stays
+     * `requires_confirmation` and the hold keeps the window it was given.
+     */
     if (state.status === 'open')
         return Promise.resolve({ payment, orderLost: false, transitioned: false });
 
-    // Nothing has landed yet: record where the payment got to and stop. Both of these are states
-    // the browser has more work to do in, and neither may touch the order.
+    /**
+     * Nothing has landed yet: record where the payment got to and stop. Both of these are states
+     * the browser has more work to do in, and neither may touch the order.
+     */
     if (state.status !== 'succeeded' && state.status !== 'declined')
         return paymentRepository
             .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, state.status, extra)
             .then(async (updated) => {
-                /*
+                /**
                  * `processing` means the PROVIDER still has work to do — a SEPA debit, some bank
                  * redirects — which can take days, so the hold gets the bank-transfer window
                  * instead of the ordinary 30 minutes. `requires_action`
@@ -429,13 +441,17 @@ export const settlePayment = (
             transitioned: updated !== null
         }));
 
-    // The money must be the money we asked for, checked before anything is paid. A hand-recorded
-    // payment (`manual`) has no provider reporting figures: its amount IS the order's own.
+    /**
+     * The money must be the money we asked for, checked before anything is paid. A hand-recorded
+     * payment (`manual`) has no provider reporting figures: its amount IS the order's own.
+     */
     const mismatched = isHandRecorded(payment) ? [] : receiptMismatch(payment, state);
     if (mismatched.length > 0) return settleMismatch(payment, state, mismatched);
 
-    // A card settling the order is how it was paid, whatever checkout chose: the order page shows
-    // its payment method beside "Paid, card ending …", and the two must agree.
+    /**
+     * A card settling the order is how it was paid, whatever checkout chose: the order page shows
+     * its payment method beside "Paid, card ending …", and the two must agree.
+     */
     const paidBy = payment.method === 'card' ? 'card' : undefined;
     return withTransaction((session) =>
         settleWithin(payment, extra, { paidBy, actor: context?.caller.id }, session)
@@ -460,8 +476,10 @@ export const settlementResponse = ({
             { code: ERROR_CODES.PAYMENT_DECLINED, message: t('payments.declined') }
         ]);
 
-    // In flight is a success on the wire, not a refusal: the browser has a next step to take and
-    // a 4xx would tell it to stop. The payment's `status` says which of the two it is looking at.
+    /**
+     * In flight is a success on the wire, not a refusal: the browser has a next step to take and
+     * a 4xx would tell it to stop. The payment's `status` says which of the two it is looking at.
+     */
     return generateSuccess(payment, 200);
 };
 
@@ -525,15 +543,19 @@ const findConfirmable = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[]
 ): ConfirmablePayment | ResponseReject => {
-    // No reference means the provider was never asked for an intent, so there is nothing at
-    // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
-    // to create the intent again either way.
+    /**
+     * No reference means the provider was never asked for an intent, so there is nothing at
+     * the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
+     * to create the intent again either way.
+     */
     if (!payment.providerRef || !allowed.includes(payment.status))
         return generateReject(409, [
             { code: ERROR_CODES.PAYMENT_NOT_CONFIRMABLE, message: t('payments.not-confirmable') }
         ]);
-    // The guard above proves `providerRef` is present, but narrowing a property does not narrow
-    // the object it lives on — TS has no way to fold that back into `payment`'s own type here.
+    /**
+     * The guard above proves `providerRef` is present, but narrowing a property does not narrow
+     * the object it lives on — TS has no way to fold that back into `payment`'s own type here.
+     */
     return payment as ConfirmablePayment;
 };
 
@@ -548,8 +570,10 @@ const findConfirmable = (
  *   `null` to let the confirm proceed
  */
 const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
-    // Money is taken only for units set aside: `isPayableNow` also refuses an order whose hold was
-    // already released (an expiry whose cancellation has not landed yet).
+    /**
+     * Money is taken only for units set aside: `isPayableNow` also refuses an order whose hold was
+     * already released (an expiry whose cancellation has not landed yet).
+     */
     orderService.isPayableNow(orderId).then((payable) => (payable ? null : notPayable()));
 
 /**
@@ -620,16 +644,22 @@ export const confirmPayment = (
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
         if (!payment) return paymentNotFound();
-        // Confirming IS an attempt at paying, so a decline here is a new one even when the
-        // payment is already `declined` from the card before.
+        /**
+         * Confirming IS an attempt at paying, so a decline here is a new one even when the
+         * payment is already `declined` from the card before.
+         */
         return settleFound(
             payment,
             CONFIRMABLE_PAYMENT_STATUSES,
-            // The payment itself, narrowed to prove `providerRef`, so the call reaches the provider
-            // named on THIS payment rather than the deployment's currently configured one.
+            /**
+             * The payment itself, narrowed to prove `providerRef`, so the call reaches the provider
+             * named on THIS payment rather than the deployment's currently configured one.
+             */
             (confirmable) =>
-                // Inside a chain: `providerNamed` throws at once for a provider this process no
-                // longer has, and a synchronous throw would skip every `.catch` upstream.
+                /**
+                 * Inside a chain: `providerNamed` throws at once for a provider this process no
+                 * longer has, and a synchronous throw would skip every `.catch` upstream.
+                 */
                 Promise.resolve().then(() =>
                     providerNamed(confirmable.provider).confirm(
                         confirmable.providerRef,
@@ -661,12 +691,16 @@ export const syncPayment = (
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
         if (!payment) return paymentNotFound();
-        // Terminal already: there is nothing the provider could say that this module would
-        // act on, and asking would spend a call to be told so.
+        /**
+         * Terminal already: there is nothing the provider could say that this module would
+         * act on, and asking would spend a call to be told so.
+         */
         if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
             return generateSuccess(payment, 200);
-        // A hand-recorded payment (a bank transfer still waiting for its money) has no provider to
-        // re-read: only an operator recording the money moves it.
+        /**
+         * A hand-recorded payment (a bank transfer still waiting for its money) has no provider to
+         * re-read: only an operator recording the money moves it.
+         */
         if (isHandRecorded(payment)) return generateSuccess(payment, 200);
 
         return settleFound(
@@ -738,8 +772,10 @@ export const applyWebhookDelivery = (
     delivery: ProviderWebhookEvent,
     providerName: string
 ): Promise<void> => {
-    // Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
-    // https://zod.dev/api#safeparse
+    /**
+     * Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
+     * https://zod.dev/api#safeparse
+     */
     const parsed = ReceivePaymentWebhookBody.safeParse(delivery);
     if (!parsed.success)
         return Promise.reject(new WebhookRejected('Event does not match the event schema'));
@@ -863,8 +899,10 @@ export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement
         return Promise.resolve(null);
 
     const { providerRef } = payment;
-    // Inside a chain: a provider this process no longer has throws at once, and that throw must
-    // reject this promise (the sweep's `.catch` handles it) instead of escaping the whole sweep.
+    /**
+     * Inside a chain: a provider this process no longer has throws at once, and that throw must
+     * reject this promise (the sweep's `.catch` handles it) instead of escaping the whole sweep.
+     */
     return Promise.resolve()
         .then(() => providerNamed(payment.provider).retrieve(providerRef))
         .then((state) => settlePayment(payment, state));

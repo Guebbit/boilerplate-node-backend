@@ -17,7 +17,9 @@ import {
 import { orderTotal } from '@modules/orders/domain';
 import { orderFrontendLink } from '@modules/orders/config';
 
+/** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+/** The order the mail refers to. */
 const ORDER_ID = 'order-1';
 
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
@@ -38,16 +40,20 @@ describe('orderConfirmEmail', () => {
     });
 
     it('renders one line per item, and only for the items on the order', () => {
-        // The count is the assertion an "email was sent" check cannot make: a builder mapping the
-        // wrong array confirms the wrong number of things and still sends successfully.
+        /**
+         * The count is the assertion an "email was sent" check cannot make: a builder mapping the
+         * wrong array confirms the wrong number of things and still sends successfully.
+         */
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
         expect(data.lines).toHaveLength(ORDER.items.length);
     });
 
     it('puts each item"s own title, quantity and price on its own line', () => {
-        // Distinct values per field per line, so a builder that swapped `quantity` for `price`,
-        // or reused the first item for both lines, cannot pass.
+        /**
+         * Distinct values per field per line, so a builder that swapped `quantity` for `price`,
+         * or reused the first item for both lines, cannot pass.
+         */
         const lines = orderConfirmEmail('en', NAME, ORDER, ORDER_ID).data.lines as string[];
 
         expect(lines[0]).toContain('Grain-Free Dog Food');
@@ -122,8 +128,10 @@ describe('orderConfirmEmail', () => {
     });
 
     it('states the same total the order itself computes, shipping included', () => {
-        // Not a recomputation: the point is that this builder defers to `orderTotal`, so the
-        // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
+        /**
+         * Not a recomputation: the point is that this builder defers to `orderTotal`, so the
+         * email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
+         */
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
         expect(orderTotal(ORDER)).toBe('226.75');
@@ -138,8 +146,10 @@ describe('orderConfirmEmail', () => {
     });
 
     it('includes the shipping cost in that total rather than quoting the goods alone', () => {
-        // The specific drift worth naming: an email that quotes the basket subtotal while the
-        // card is charged the delivered total.
+        /**
+         * The specific drift worth naming: an email that quotes the basket subtotal while the
+         * card is charged the delivered total.
+         */
         const withShipping = orderConfirmEmail('en', NAME, ORDER, ORDER_ID).data.total;
         const withoutShipping = orderConfirmEmail(
             'en',
@@ -159,9 +169,11 @@ describe('orderConfirmEmail', () => {
     });
 
     it('confirms an empty order without inventing a line', () => {
-        // Not reachable through checkout, but reachable through an admin-created order — and a
-        // builder that indexed `items[0]` rather than mapping would throw here rather than in a
-        // test.
+        /**
+         * Not reachable through checkout, but reachable through an admin-created order — and a
+         * builder that indexed `items[0]` rather than mapping would throw here rather than in a
+         * test.
+         */
         const { data } = orderConfirmEmail('en', NAME, { items: [], currency: 'EUR' }, ORDER_ID);
 
         expect(data.lines).toEqual([]);
@@ -185,7 +197,7 @@ describe('orderConfirmEmail', () => {
         }
     });
 
-    /*
+    /**
      * The link is what lets a customer reach the order's page and its invoice download button —
      * the email sends immediately and always links to the same place, whether or not the customer
      * has visited it yet. `orderFrontendLink`/`frontendLink` are covered by their own unit suites
@@ -199,7 +211,7 @@ describe('orderConfirmEmail', () => {
         expect(data.linkUrl).toBe(orderFrontendLink({ locale: 'en', id: ORDER_ID }));
     });
 
-    /*
+    /**
      * The Phase 6 regression: a line's own product text is frozen upstream, at order-creation
      * time (`resolveSnapshotProducts`) — this builder only INTERPOLATES `item.product.title`,
      * never re-resolves it. A title that happens to collide with a real translation key is the
@@ -220,7 +232,7 @@ describe('orderConfirmEmail', () => {
         expect(italian[0]).toContain(collidingTitle);
     });
 
-    /*
+    /**
      * SH2 = C: every order this builder mails is still `pending` — the payment hasn't been made
      * yet, by card or by transfer (whose instructions are `payments`' own mail). Nothing here may
      * claim the money already moved.

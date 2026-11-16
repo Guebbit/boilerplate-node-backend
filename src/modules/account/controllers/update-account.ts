@@ -40,8 +40,10 @@ export const { replace: replaceAccount, update: updateAccount } = createUpdateCo
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             accountService.updateProfile(id, { ...changes, ...image }, callerContextOf(request))
         ),
-    // The role comes straight off the already-resolved auth context, same as `get-account.ts` —
-    // a profile edit never changes it, so no second lookup here.
+    /**
+     * The role comes straight off the already-resolved auth context, same as `get-account.ts` —
+     * a profile edit never changes it, so no second lookup here.
+     */
     present: (user, request) =>
         accountUserService.toAccount(user, request.authContext!.roles.tenant)
 });

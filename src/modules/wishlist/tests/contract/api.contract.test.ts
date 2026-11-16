@@ -125,8 +125,10 @@ describe('DELETE /wishlist/items/{productId}', () => {
         expect(response.body.items).toHaveLength(0);
     });
 
-    // The move writes a basket, and every signed-in account holds one: a staff member keeps a
-    // wishlist and fills a basket through it like any customer.
+    /**
+     * The move writes a basket, and every signed-in account holds one: a staff member keeps a
+     * wishlist and fills a basket through it like any customer.
+     */
     it.each(['manager', 'moderator', 'admin'])(
         'moves a saved line into the basket of a %s',
         async (role) => {

@@ -4,7 +4,7 @@
  * permission recheck and the teardown. What each stream writes (frames, heartbeat) and what it
  * tracks (its connection registry) stay with the module that owns the stream.
  *
- * @see docs/understand/defences/real-time.md
+ * @see docs/understand/defences/real-time.md#opening-the-stream
  */
 
 import type { Response } from 'express';
@@ -91,11 +91,16 @@ export const openSseStream = (
     response.status(200);
     // The MIME type that makes this an SSE stream for the browser's `EventSource`.
     response.setHeader('Content-Type', 'text/event-stream');
-    // no-store:     one caller's live data, cookie-authenticated, which RFC 9111 §3.5 does not
-    //               protect; the browser's own `EventSource` asks for `no-store` as well.
-    // no-transform: stops a proxy gzipping or buffering the body, which would hold frames back.
+    /**
+     * no-store:     one caller's live data, cookie-authenticated, which RFC 9111 §3.5 does not
+     *               protect; the browser's own `EventSource` asks for `no-store` as well.
+     * no-transform: stops a proxy rewriting (gzipping) the body. It does NOT stop buffering: that is
+     *               what `X-Accel-Buffering` below is for.
+     */
     response.setHeader('Cache-Control', 'no-store, no-transform');
     response.setHeader('Connection', 'keep-alive');
+    // nginx buffers a response by default, which would hold every frame back; this header turns it off for this response.
+    response.setHeader('X-Accel-Buffering', 'no');
     // Send the headers now, before any body, so the client sees the stream open.
     response.flushHeaders();
 

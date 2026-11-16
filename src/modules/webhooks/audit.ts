@@ -16,9 +16,11 @@ export const webhooksAuditActions = {
     ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED: 'admin.webhook_subscription.secret_removed',
     ADMIN_WEBHOOK_SUBSCRIPTION_DELETED: 'admin.webhook_subscription.deleted',
     ADMIN_WEBHOOK_DELIVERY_REPLAYED: 'admin.webhook_delivery.replayed',
-    /** `system.` — no caller behind it: `services/attempt.ts`'s own consecutive-failure streak
+    /**
+     * `system.` — no caller behind it: `services/attempt.ts`'s own consecutive-failure streak
      *  decided this, not a request. `actorUserId: 'system'` records that plainly rather than
-     *  attributing it to whichever worker process happened to run the failing delivery. */
+     *  attributing it to whichever worker process happened to run the failing delivery.
+     */
     SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED: 'system.webhook_subscription.auto_disabled'
 } as const;
 

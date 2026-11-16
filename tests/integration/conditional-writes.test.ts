@@ -161,7 +161,10 @@ const storedRevision = (collection: string, id: string): Promise<unknown> =>
         .findOne({ _id: new Types.ObjectId(id) })
         .then((row) => row?.editRevision);
 
-/** A GET's `ETag` header, asserted present. */
+/**
+ * A GET's `ETag` header, asserted present.
+ * @throws {Error} when the response carries no ETag
+ */
 const etagOf = (response: { headers: Record<string, unknown> }): string => {
     const tag = response.headers.etag;
     if (typeof tag !== 'string') throw new Error('no ETag on the response');
@@ -801,7 +804,7 @@ describe('a hard delete is fenced, not only checked', () => {
 
 /**
  * One of {@link RESOURCES} by name.
- * @param name - the resource's `name`
+ * @throws {Error} when no resource has that name
  */
 const resourceNamed = (name: string): Resource => {
     const found = RESOURCES.find((resource) => resource.name === name);

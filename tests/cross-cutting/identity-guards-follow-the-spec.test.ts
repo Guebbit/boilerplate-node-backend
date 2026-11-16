@@ -17,7 +17,7 @@
  * Route table and bundled spec only: no database, so it runs in the commit gate and under Stryker,
  * which has no mutator that removes an argument and so cannot see a guard dropped from a route.
  *
- * @see docs/build/contract-testing.md
+ * @see docs/build/contract-testing.md#patterns
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -51,6 +51,7 @@ interface Access {
     schemes: Set<string>;
 }
 
+/** The contract, parsed from the root openapi.yaml. */
 const spec = parse(readFileSync(path.join(REPO_ROOT, 'openapi.yaml'), 'utf8')) as SpecDocument;
 
 /** `METHOD /spec/{path}` → how the spec says it is reached. */
@@ -93,6 +94,7 @@ const APP_LEVEL_OPERATIONS = [
     'GET /.well-known/security.txt'
 ];
 
+/** Every mounted route with its declared operation. */
 const mounted = everyMountedRoute().map((route) => ({ route, operation: operationOf(route) }));
 
 describe('the route table and the contract agree on who must be signed in', () => {

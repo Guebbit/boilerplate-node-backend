@@ -71,8 +71,10 @@ const accountMail = ({
     body,
     security = false
 }: {
-    // `readonly`: the cross-cutting sweeps read every line that starts `template:` as a published
-    // name, and this is a type, not one.
+    /**
+     * `readonly`: the cross-cutting sweeps read every line that starts `template:` as a published
+     * name, and this is a type, not one.
+     */
     readonly template: `account.${string}`;
     locale: string;
     name: string;

@@ -73,7 +73,7 @@ export const searchEntries = (
         const unknownApp = filters.app === undefined ? undefined : rejectUnknownApp(filters.app);
         if (unknownApp) return unknownApp;
 
-        /*
+        /**
          * Scoped to this language, and sorted by key rather than by the shared `createdAt` default:
          * a translator reads an alphabetical list. The unique index is `(locale, app, key)`, so
          * without an `app` filter one key repeats once per app: `app` breaks that tie, and the
@@ -82,8 +82,10 @@ export const searchEntries = (
         return (
             localeEntryRepository
                 .search(filters, { locale: language.tag }, { key: 1, app: 1 })
-                // The page carries the language's `revision` as its version, so its `ETag` is the
-                // dictionary's: every write to any app moves it, and an import fences on it.
+                /**
+                 * The page carries the language's `revision` as its version, so its `ETag` is the
+                 * dictionary's: every write to any app moves it, and an import fences on it.
+                 */
                 .then((result) =>
                     generateSuccess(carryVersion({ [EDIT_REVISION]: language.revision }, result))
                 )
@@ -109,7 +111,7 @@ export const createEntry = async (
     if (unknownApp) return unknownApp;
 
     const key = payload.key.trim();
-    /*
+    /**
      * Both checks below are narrowed to the app being written. The same key legitimately
      * exists in two apps — `generic.error-internal-server-error` is one string in each — so checking against
      * every row would refuse the second half of a perfectly correct pair, and a collision between
@@ -151,7 +153,6 @@ export const createEntry = async (
  *
  * @param tag - the language
  * @param app - the app the URI names; the entry must belong to it
- * @param entryId - the entry
  * @returns the entry, or the 404 a missing one (or one of another app or language) earns
  */
 export const getEntry = (
@@ -195,9 +196,11 @@ export const updateEntry = (
                     outcome: 'success',
                     targetType: 'locale_entry',
                     targetId: entryId,
-                    // The key, not the new text. An audit trail records that the Spanish product
-                    // title changed and who changed it; storing the copy itself would make the trail
-                    // a second, unmanaged copy of the dictionary.
+                    /**
+                     * The key, not the new text. An audit trail records that the Spanish product
+                     * title changed and who changed it; storing the copy itself would make the trail
+                     * a second, unmanaged copy of the dictionary.
+                     */
                     metadata: { locale: tag, app, entryKey: saved.key, ...moved }
                 });
 
@@ -319,7 +322,7 @@ export const importEntries = async (
             }
         ]);
 
-    /*
+    /**
      * What the batch will have to coexist with once it lands. For a replace that is nothing —
      * every stored key it does not name is about to be deleted — and for a merge it is the stored
      * keys the batch neither writes nor deletes. Checking the batch against keys it is about to
@@ -347,10 +350,12 @@ export const importEntries = async (
         outcome: 'success',
         targetType: 'locale',
         targetId: language.tag,
-        // `mode` is the field that makes this record worth keeping: a replace that
-        // removed three hundred keys and a merge that added two are the same action name
-        // and very different events. `app` says whose dictionary it happened to, which
-        // the counts alone cannot.
+        /**
+         * `mode` is the field that makes this record worth keeping: a replace that
+         * removed three hundred keys and a merge that added two are the same action name
+         * and very different events. `app` says whose dictionary it happened to, which
+         * the counts alone cannot.
+         */
         metadata: { mode, app, ...counts, revision }
     });
 

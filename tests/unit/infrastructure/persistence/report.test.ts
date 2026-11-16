@@ -4,6 +4,7 @@
  */
 import { bucketOf } from '@infrastructure/persistence/report';
 
+/** A report window of the given interval. */
 const window = (interval: 'day' | 'week' | 'month') => ({
     from: new Date('2026-01-01T00:00:00Z'),
     to: new Date('2026-02-01T00:00:00Z'),

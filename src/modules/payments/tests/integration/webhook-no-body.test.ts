@@ -55,8 +55,10 @@ describe('POST /payments/webhook/:provider without a body', () => {
     });
 
     it('answers 400 and logs no error for a bodyless POST the JSON parser skips', async () => {
-        // `text/plain` is not parsed, so no raw body is kept: the only bodyless shape that reaches
-        // the controller with `rawBody` unset (an empty JSON request keeps an empty buffer).
+        /**
+         * `text/plain` is not parsed, so no raw body is kept: the only bodyless shape that reaches
+         * the controller with `rawBody` unset (an empty JSON request keeps an empty buffer).
+         */
         const response = await webhookApp(true)
             .post('/payments/webhook/fake')
             .set('Content-Type', 'text/plain');

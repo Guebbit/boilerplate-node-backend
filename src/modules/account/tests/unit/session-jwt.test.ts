@@ -16,7 +16,7 @@ import { SignJWT, decodeJwt, decodeProtectedHeader } from 'jose';
 import { asStub } from '@tests/stub';
 import { keyId } from '@modules/account/session/key-ring';
 
-/*
+/**
  * The session store and the SERVICE, not the model: `session/jwt.ts` reaches `sessionRepository`
  * and `accountUserService.findAuthenticatableById` rather than running raw queries itself, so this suite
  * doubles those instead. What the QUERIES look like is asserted in `../integration/auth-storage.test.ts`, against a
@@ -69,13 +69,16 @@ import { sessionRepository } from '@modules/account/repository';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { setEnvironment } from '@tests/environment';
 
+/** Id of the one user every case in this file signs a session for. */
 const USER_ID = '507f1f77bcf86cd799439011';
 
+/** The account user service, cut down to the two reads the session code makes. */
 const mockedUsers = asStub<{
     findAuthenticatableById: jest.Mock;
     touchLastActive: jest.Mock;
 }>(accountUserService);
 
+/** The session repository, cut down to the lookup and the insert the strategy uses. */
 const mockedSessions = asStub<{
     findByHash: jest.Mock;
     insert: jest.Mock;
@@ -154,8 +157,10 @@ const signAs = (
             ...(registered.aud !== null && { aud: registered.aud }),
             ...payload
         })
-            // The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
-            // cases that are about a wrong one.
+            /**
+             * The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
+             * cases that are about a wrong one.
+             */
             .setProtectedHeader({
                 alg: 'HS256',
                 typ: typ ?? (refresh ? 'rt+jwt' : 'at+jwt'),
@@ -169,9 +174,11 @@ const signAs = (
 };
 
 beforeEach(() => {
-    // `reset`, not `clear`: these doubles are given a resolved or rejected value per test, and
-    // `clearAllMocks` keeps the implementation while wiping only the call log — so a rejection
-    // set in one case leaks into the next and fails it with the wrong error.
+    /**
+     * `reset`, not `clear`: these doubles are given a resolved or rejected value per test, and
+     * `clearAllMocks` keeps the implementation while wiping only the call log — so a rejection
+     * set in one case leaks into the next and fails it with the wrong error.
+     */
     jest.resetAllMocks();
     setEnvironment({ NODE_TOKEN_ACCESS: 'access-secret' });
     setEnvironment({ NODE_TOKEN_REFRESH: 'refresh-secret' });
@@ -201,8 +208,10 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects a token signed with the REFRESH secret', async () => {
-        // The separation that matters: a refresh token presented as a bearer token must not be
-        // accepted, or the long-lived credential becomes the API credential.
+        /**
+         * The separation that matters: a refresh token presented as a bearer token must not be
+         * accepted, or the long-lived credential becomes the API credential.
+         */
         const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
         await expect(verifyAccessToken(refresh)).rejects.toMatchObject({
@@ -276,9 +285,11 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects the same forgery even naming a real kid', async () => {
-        // `verifyAgainstRing` resolves a secret from `kid` BEFORE calling `verify` — a forgery
-        // naming a real ring member gets further in than one that doesn't, so this is the case
-        // that actually exercises the `algorithms: ['HS256']` pin rather than just the kid lookup.
+        /**
+         * `verifyAgainstRing` resolves a secret from `kid` BEFORE calling `verify` — a forgery
+         * naming a real ring member gets further in than one that doesn't, so this is the case
+         * that actually exercises the `algorithms: ['HS256']` pin rather than just the kid lookup.
+         */
         const header = Buffer.from(
             JSON.stringify({ alg: 'none', typ: 'JWT', kid: keyId('access-secret') })
         ).toString('base64url');
@@ -390,14 +401,18 @@ describe('verifyRefreshToken', () => {
         holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: USER_ID });
-        // Looked up BY THE TOKEN's digest, not by the id in its payload: the stored rows are the
-        // authority on which sessions are live, and a payload cannot be asked whether it was revoked.
+        /**
+         * Looked up BY THE TOKEN's digest, not by the id in its payload: the stored rows are the
+         * authority on which sessions are live, and a payload cannot be asked whether it was revoked.
+         */
         expect(mockedSessions.findByHash).toHaveBeenCalledWith(hashToken(token));
     });
 
     it('rejects a validly signed token that is no longer stored', async () => {
-        // Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
-        // still verifies until it expires, whatever the database says.
+        /**
+         * Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
+         * still verifies until it expires, whatever the database says.
+         */
         const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockResolvedValue(null);
 
@@ -434,15 +449,19 @@ describe('verifyRefreshToken', () => {
     });
 
     it('does not reach the database when the signature already fails', async () => {
-        // A forged token must cost nothing: checking the signature first is what stops an
-        // unauthenticated flood from becoming a database query per request.
+        /**
+         * A forged token must cost nothing: checking the signature first is what stops an
+         * unauthenticated flood from becoming a database query per request.
+         */
         await expect(verifyRefreshToken('not-a-jwt')).rejects.toThrow();
         expect(mockedSessions.findByHash).not.toHaveBeenCalled();
     });
 
     it('rejects rather than resolving when the lookup itself fails', async () => {
-        // A database error must not be read as "no such token" OR as success. It rejects, and the
-        // caller answers 500 rather than silently logging someone out or letting them in.
+        /**
+         * A database error must not be read as "no such token" OR as success. It rejects, and the
+         * caller answers 500 rather than silently logging someone out or letting them in.
+         */
         const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockRejectedValue(new Error('connection lost'));
 
@@ -460,8 +479,10 @@ describe('the signing-key ring', () => {
     });
 
     it('still verifies a token signed under an entry a rotation later prepends past', async () => {
-        // The property rotation depends on: a token signed moments before a new key is
-        // prepended must not be invalidated by that deploy.
+        /**
+         * The property rotation depends on: a token signed moments before a new key is
+         * prepended must not be invalidated by that deploy.
+         */
         const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 
@@ -480,8 +501,10 @@ describe('the signing-key ring', () => {
     });
 
     it('rejects a kid naming a key already dropped from the ring', async () => {
-        // The other half of rotation: once an old secret is removed, a token still carrying its
-        // kid is a retired key presented as current — 401, "log in again", never a crash.
+        /**
+         * The other half of rotation: once an old secret is removed, a token still carrying its
+         * kid is a retired key presented as current — 401, "log in again", never a crash.
+         */
         const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret' });
@@ -541,8 +564,10 @@ describe('startSession', () => {
     });
 
     it('pins HS256 rather than letting the header choose the algorithm', async () => {
-        // `alg: none` and algorithm confusion are the classic JWT forgeries. Pinning at signing
-        // time is half of the defence; the library's default verification is the other half.
+        /**
+         * `alg: none` and algorithm confusion are the classic JWT forgeries. Pinning at signing
+         * time is half of the defence; the library's default verification is the other half.
+         */
         mintable();
 
         const token = await startSession(USER_ID, ['pwd']);
@@ -551,8 +576,10 @@ describe('startSession', () => {
     });
 
     it('gives every issued token a unique id', async () => {
-        // ``jti: randomUUID()``. Without it two logins by the same user inside the same second
-        // produce byte-identical tokens, and revoking one revokes both.
+        /**
+         * ``jti: randomUUID()``. Without it two logins by the same user inside the same second
+         * produce byte-identical tokens, and revoking one revokes both.
+         */
         mintable();
 
         const first = await startSession(USER_ID, ['pwd']);
@@ -565,9 +592,11 @@ describe('startSession', () => {
     });
 
     it('honours the remember-me window, in seconds on the token and milliseconds on the row', async () => {
-        // Two units, one setting. The JWT's `exp` is in seconds and the stored expiry is a
-        // JavaScript timestamp; getting the pair out of step makes the database and the token
-        // disagree about when a session ends.
+        /**
+         * Two units, one setting. The JWT's `exp` is in seconds and the stored expiry is a
+         * JavaScript timestamp; getting the pair out of step makes the database and the token
+         * disagree about when a session ends.
+         */
         mintable();
 
         const token = await startSession(USER_ID, ['pwd'], 'long');
@@ -619,8 +648,10 @@ describe('createAccessToken', () => {
     });
 
     it('refuses to mint one from a revoked refresh token', async () => {
-        // The property that makes logout mean anything: a revoked session must not be able to
-        // keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
+        /**
+         * The property that makes logout mean anything: a revoked session must not be able to
+         * keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
+         */
         const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockResolvedValue(null);
 
@@ -638,8 +669,10 @@ describe('createAccessToken', () => {
     });
 
     it('gives the access token the short TTL, not the refresh window', async () => {
-        // The whole point of the pair: the credential sent on every request is the short-lived
-        // one. Signing it with the refresh window would make revocation irrelevant for a month.
+        /**
+         * The whole point of the pair: the credential sent on every request is the short-lived
+         * one. Signing it with the refresh window would make revocation irrelevant for a month.
+         */
         const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 

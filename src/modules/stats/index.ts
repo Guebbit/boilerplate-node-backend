@@ -4,7 +4,7 @@
  * `docs/understand/strategic-ddd.md` §5 for the rule). Nothing depends on this module today; the
  * barrel exists because every module publishes one.
  *
- * @see docs/modules/stats.md
+ * @see docs/modules/stats.md#its-neighbourhood
  */
 
 export * from './services';

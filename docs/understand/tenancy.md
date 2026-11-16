@@ -105,9 +105,8 @@ flowchart TB
 
 The app, a one-shot `setup` and a `cron` container, plus the stores behind the `bundled` profile
 (database, cache, rate-limit Redis, queue) and an optional `monitoring` profile. Named volumes hold
-the stores and the uploads; one published port —
-or none, once the [Traefik overlay](../operate/two-client-stacks.md#many-clients-behind-one-proxy)
-fronts several stacks on one host. `COMPOSE_PROJECT_NAME` is the only thing that changes between
+the stores and the uploads; one published port, on loopback.
+`COMPOSE_PROJECT_NAME` is the only thing that changes between
 clients: it namespaces every container, network and volume, and selects that client's `.env`.
 
 ## 5 · How a request finds its organisation

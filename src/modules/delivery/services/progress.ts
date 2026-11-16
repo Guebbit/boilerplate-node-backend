@@ -30,7 +30,6 @@ export interface ProgressReport {
  * longer be fulfilled — canceled in the meantime, which is the half of "a ship racing a cancel
  * cannot both win" that lives here.
  *
- * @param orderId - the order
  * @param session - the act's transaction
  */
 export const reportProgress = (orderId: string, session: ClientSession): Promise<ProgressReport> =>
@@ -76,7 +75,6 @@ export const startFulfillment = async (
  * move was due and did not land. `orders` picks the edge (ship, deliver, both at once, or the
  * lost-parcel cancel); this module only states that the goods moved.
  *
- * @param orderId - the order
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
  * @param actor - the staff member whose act this is, for the order's timeline; absent for the system

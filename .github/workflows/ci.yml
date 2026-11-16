@@ -329,9 +329,10 @@ jobs:
               run: npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=origin/${{ github.base_ref }}
 
     cluster:
-        # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
-        # `complete` — two clusters and a Redis is ~25s and needs a container engine — so CI is
-        # where it runs on every push. `complete:manual` is the local equivalent.
+        # The suites that boot the app as several processes: `src/cluster.ts` with real workers,
+        # and N separate copies behind a proxy (`tests/replicas`). They are not in `complete` —
+        # several boots and a Redis, and a container engine — so CI is where they run on every
+        # push. `complete:manual` is the local equivalent.
         runs-on: ubuntu-latest
         timeout-minutes: 20
         permissions:
@@ -356,7 +357,7 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
 
-            - name: Rate limiting spends one budget across workers
+            - name: Shared state holds across workers and copies
               # The service container above is already listening, so the suite uses it instead of
               # starting its own — see tests/cluster/support/redis.ts.
               env:

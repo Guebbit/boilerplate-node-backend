@@ -22,9 +22,11 @@ describe('apiKeySchema', () => {
     });
 
     it('leaves lifecycle fields absent until they apply', () => {
-        // `lastUsedAt` (never presented yet) and `revokedAt` (never revoked) mean something
-        // specific by their absence — a `default` on either would misreport a fresh credential as
-        // already used or revoked. (`expiresAt` is required: every credential expires.)
+        /**
+         * `lastUsedAt` (never presented yet) and `revokedAt` (never revoked) mean something
+         * specific by their absence — a `default` on either would misreport a fresh credential as
+         * already used or revoked. (`expiresAt` is required: every credential expires.)
+         */
         for (const path of ['lastUsedAt', 'revokedAt'])
             expect(requiredPaths(apiKeySchema)).not.toContain(path);
     });

@@ -71,6 +71,7 @@ const orderFor = async (price = '25.00', quantity = 2) => {
     return { user, order };
 };
 
+/** The given user as a customer caller. */
 const auth = (user: { id: string }) => asCustomer(user.id);
 
 /** A customer who paid: intent, then a good card. The fixture the money tests start from. */
@@ -289,9 +290,11 @@ describe('confirmPayment', () => {
     });
 
     it('refuses to confirm once the order it was for is canceled, before ever charging the card', async () => {
-        // The order is canceled in the window between opening the intent and confirming.
-        // Charging the card and then refunding it would still work, but it loses the provider's
-        // own fee on that refund — the confirm refuses up front instead, before the provider is ever asked.
+        /**
+         * The order is canceled in the window between opening the intent and confirming.
+         * Charging the card and then refunding it would still work, but it loses the provider's
+         * own fee on that refund — the confirm refuses up front instead, before the provider is ever asked.
+         */
         const { user, order } = await orderFor();
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
@@ -314,8 +317,10 @@ describe('confirmPayment', () => {
         confirmSpy.mockRestore();
         refundSpy.mockRestore();
 
-        // Nothing moved: the payment sits exactly where the intent left it, not refunded — there
-        // was never any money to give back.
+        /**
+         * Nothing moved: the payment sits exactly where the intent left it, not refunded — there
+         * was never any money to give back.
+         */
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('requires_confirmation');
     });
@@ -334,7 +339,7 @@ describe('getForOrder', () => {
         expect(asReject(other).status).toBe(404);
     });
 
-    /*
+    /**
      * The bug this pins: `create:Refund` is held by name, not through the scope wildcard
      * a moderator never holds — asking for the wildcard alone hid the refund action from them
      * despite the key they do hold, on a payment an operator has every reason to refund.
@@ -351,8 +356,10 @@ describe('getForOrder', () => {
         expect(asSelfResult.data?.actions?.refund).toBe(false);
     });
 
-    // A client renders its buttons from `actions`: holding the key is the whole answer, so the
-    // refund is offered on a staff member's money exactly as on a customer's.
+    /**
+     * A client renders its buttons from `actions`: holding the key is the whole answer, so the
+     * refund is offered on a staff member's money exactly as on a customer's.
+     */
     it('offers the refund on a customer’s money and on a staff member’s alike', async () => {
         const { user, order } = await paidOrder();
 
@@ -367,8 +374,10 @@ describe('getForOrder', () => {
     });
 });
 
-// Own money is trusted and recorded, not refused: a buyer promoted to staff keeps their orders,
-// may refund one, and the audit row says it was their own.
+/**
+ * Own money is trusted and recorded, not refused: a buyer promoted to staff keeps their orders,
+ * may refund one, and the audit row says it was their own.
+ */
 describe('a refund on one’s own order', () => {
     it('is offered, allowed and flagged ownOrder for a buyer promoted to moderator', async () => {
         const { user, order } = await paidOrder();
@@ -405,7 +414,7 @@ describe('a refund on one’s own order', () => {
     });
 });
 
-/*
+/**
  * The refund rides the `order.canceled` event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
  * happens and pass for the wrong reason (same shape as the cart's erasure suite).
@@ -486,7 +495,7 @@ describe('refund on cancel', () => {
         expect(await countersOf(line.product._id)).toMatchObject({ reserved: 0 });
     });
 
-    /*
+    /**
      * The record is opened BEFORE the provider is asked, so a refusal leaves it open: the cancel's
      * event is delivered (nothing is retried through it), and the refund sweep finishes the same
      * record with the same idempotency key. The payment stays `succeeded` throughout.
@@ -536,17 +545,21 @@ describe('refund on cancel', () => {
             const refundSpy = jest
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
-            // The order is canceled DURING the provider round trip — after the confirm's own payable check
-            // already read it as still pending, before the settlement transaction sees it gone.
-            // That is settlement's own "order lost" branch, not a cancel's own refund (not a
-            // cancel's own refund), and the payable check only closes the window BEFORE the provider is asked.
+            /**
+             * The order is canceled DURING the provider round trip — after the confirm's own payable check
+             * already read it as still pending, before the settlement transaction sees it gone.
+             * That is settlement's own "order lost" branch, not a cancel's own refund (not a
+             * cancel's own refund), and the payable check only closes the window BEFORE the provider is asked.
+             */
             const originalConfirm = fakePaymentProvider.confirm;
             const confirmSpy = jest
                 .spyOn(fakePaymentProvider, 'confirm')
                 .mockImplementationOnce(async (providerRef, methodRef) => {
                     await orderService.cancelOnRequestById(String(order._id), auth(user));
-                    // The cancel's own listeners finish before the charge lands: the other order
-                    // (charge first, then the listener) is the cancel path's reconciliation.
+                    /**
+                     * The cancel's own listeners finish before the charge lands: the other order
+                     * (charge first, then the listener) is the cancel path's reconciliation.
+                     */
                     await settleOutboxNudges();
                     return originalConfirm(providerRef, methodRef);
                 });
@@ -558,9 +571,11 @@ describe('refund on cancel', () => {
                 testCallerContext
             );
 
-            // settlePayment answers its own caller regardless — a rejected refund attempt is
-            // logged, never rethrown. The record was opened with the `succeeded` write, so the
-            // money is never durable without its way back.
+            /**
+             * settlePayment answers its own caller regardless — a rejected refund attempt is
+             * logged, never rethrown. The record was opened with the `succeeded` write, so the
+             * money is never durable without its way back.
+             */
             expect(asReject(result).status).toBe(409);
             const stuck = await paymentRepository.findByOrderId(String(order._id));
             expect(stuck!.status).toBe('succeeded');
@@ -575,7 +590,7 @@ describe('refund on cancel', () => {
             confirmSpy.mockRestore();
         }));
 
-    /*
+    /**
      * A refund must go to the PAYMENT's own provider, never whichever one `NODE_PAYMENT_PROVIDER`
      * names today — dormant while only `fake` is ever registered, live the day a deployment
      * switches providers with old payments still outstanding under the old one.
@@ -631,8 +646,10 @@ describe('refund on cancel', () => {
             'succeeded'
         );
 
-        // The webhook arrives unbidden and late — the browser-driven confirm already settled and
-        // the cancel already refunded it by the time the provider's own callback catches up.
+        /**
+         * The webhook arrives unbidden and late — the browser-driven confirm already settled and
+         * the cancel already refunded it by the time the provider's own callback catches up.
+         */
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
         await paymentService.applyWebhookSettlement(providerRef);
 
@@ -642,7 +659,7 @@ describe('refund on cancel', () => {
         expect(stored!.status).not.toBe('paid');
     });
 
-    /*
+    /**
      * A cancel that lands between the provider's charge and the settlement transaction: the order
      * is gone when the money arrives. The `succeeded` write and the refund record commit together,
      * so there is exactly one record, and the provider is asked once the transaction has closed.
@@ -665,8 +682,10 @@ describe('refund on cancel', () => {
             auth(user),
             testCallerContext
         );
-        // The cancel nudged the relay, whose `order.canceled` delivery reaches this module's
-        // listener: wait for it, so the asserts read the settled state, not a race.
+        /**
+         * The cancel nudged the relay, whose `order.canceled` delivery reaches this module's
+         * listener: wait for it, so the asserts read the settled state, not a race.
+         */
         await settleOutboxNudges();
 
         expect((await orderService.getById(orderId))!.status).toBe('canceled');
@@ -694,6 +713,7 @@ const placedOrder = async (onHand = 10, quantity = 3, email?: string) => {
     return { user, product, order: created.data! };
 };
 
+/** Pays an order as its owner, through the service's own entry point. */
 const payFor = async (orderId: string, user: { id: string }) => {
     const intent = await paymentService.createIntent(orderId, auth(user));
     return paymentService.confirmPayment(
@@ -736,8 +756,10 @@ describe('the confirm commits the order’s held units', () => {
         );
 
         expect(declined.success).toBe(false);
-        // Still held, not sold and not released: a decline is retryable state, and dropping the
-        // hold here would let someone else take the units mid-retry.
+        /**
+         * Still held, not sold and not released: a decline is retryable state, and dropping the
+         * hold here would let someone else take the units mid-retry.
+         */
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
@@ -749,16 +771,20 @@ describe('the confirm commits the order’s held units', () => {
         await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
         await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        // No ledger row for a payment, replayed or not. Two guards refuse the replay independently — the order's
-        // conditional `pending → paid` and the reservation's own `held → committed` claim.
+        /**
+         * No ledger row for a payment, replayed or not. Two guards refuse the replay independently — the order's
+         * conditional `pending → paid` and the reservation's own `held → committed` claim.
+         */
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
         expect(movements.items.map((row) => row.reason)).toEqual(['reserve']);
     });
 
     it('settles a payment whose order is already paid: nothing is refunded', async () => {
-        // The replay branch: the payment write lands but `markPaid` matches nothing, because the
-        // order moved to `paid` while the card was being charged.
+        /**
+         * The replay branch: the payment write lands but `markPaid` matches nothing, because the
+         * order moved to `paid` while the card was being charged.
+         */
         const { user, order } = await placedOrder(10, 3);
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, auth(user));
@@ -785,9 +811,11 @@ describe('the confirm commits the order’s held units', () => {
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {
-        // The reason `settlePayment` exists as ONE function: the provider's callback and the
-        // browser's own "I finished" call race routinely, and two copies of this choreography
-        // would each commit the hold.
+        /**
+         * The reason `settlePayment` exists as ONE function: the provider's callback and the
+         * browser's own "I finished" call race routinely, and two copies of this choreography
+         * would each commit the hold.
+         */
         const { user, product, order } = await placedOrder(10, 3);
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
@@ -810,10 +838,12 @@ describe('the confirm commits the order’s held units', () => {
     });
 
     it('commits once when the browser settles before the webhook — the reverse race', async () => {
-        // Same choreography as the test above, arriving in the other order: the browser polls
-        // `syncPayment` and wins the race, then the webhook's own delivery of the same outcome
-        // arrives after. `settlePayment`'s idempotence must hold from either direction, not just
-        // the one the test above happens to cover.
+        /**
+         * Same choreography as the test above, arriving in the other order: the browser polls
+         * `syncPayment` and wins the race, then the webhook's own delivery of the same outcome
+         * arrives after. `settlePayment`'s idempotence must hold from either direction, not just
+         * the one the test above happens to cover.
+         */
         const { user, product, order } = await placedOrder(10, 3);
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
@@ -864,8 +894,10 @@ describe('cancelling a paid order releases its claim', () => {
         const { user, product, order } = await placedOrder(10, 3);
         await payFor(String(order._id), user);
         const release = inventoryService.releaseCommittedForOrder;
-        // The real release runs to completion, THEN throws — the worst case: counters already
-        // moved inside the transaction, so only a rollback puts them back.
+        /**
+         * The real release runs to completion, THEN throws — the worst case: counters already
+         * moved inside the transaction, so only a rollback puts them back.
+         */
         jest.spyOn(inventoryService, 'releaseCommittedForOrder').mockImplementationOnce(
             async (orderId, session) => {
                 await release(orderId, session);
@@ -910,8 +942,10 @@ describe('one settlement transaction', () => {
         const { user, product, order } = await placedOrder(10, 3);
         const orderId = String(order._id);
         const before = await outboxCount('order.status_changed');
-        // The commit runs AFTER the order's own move inside the transaction: the worst case,
-        // where two writes already happened and only a rollback undoes them.
+        /**
+         * The commit runs AFTER the order's own move inside the transaction: the worst case,
+         * where two writes already happened and only a rollback undoes them.
+         */
         jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
             new Error('connection reset')
         );
@@ -1024,7 +1058,7 @@ describe('in-flight settlement', () => {
         expect(stored!.status).toBe('pending');
     });
 
-    /*
+    /**
      * A payment that goes `processing` can settle over days (a SEPA debit, some bank
      * redirects), so the ordinary 30-minute hold gets extended to the bank-transfer window —
      * otherwise the reservation sweep would cancel an order whose money is still on its way.
@@ -1053,9 +1087,11 @@ describe('in-flight settlement', () => {
             expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
         }));
 
-    // An expiry that released the hold before its cancellation landed leaves the order `pending`
-    // and payable on paper, with nothing set aside for it: taking money then is the oversell the
-    // hold exists to prevent.
+    /**
+     * An expiry that released the hold before its cancellation landed leaves the order `pending`
+     * and payable on paper, with nothing set aside for it: taking money then is the oversell the
+     * hold exists to prevent.
+     */
     it('refuses a card confirm once the order has no hold, rather than charging for stock that may be gone', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         const intent = await paymentService.createIntent(String(order._id), auth(user));
@@ -1088,8 +1124,10 @@ describe('in-flight settlement', () => {
 
             await inventoryService.runReservationSweep();
 
-            // The zeroed TTL hold is stale immediately, and requires_action gets no grace — the
-            // sweep releases it, same as any other abandoned checkout.
+            /**
+             * The zeroed TTL hold is stale immediately, and requires_action gets no grace — the
+             * sweep releases it, same as any other abandoned checkout.
+             */
             expect(await countersOf(product._id)).toEqual({
                 onHand: 10,
                 reserved: 0,
@@ -1098,8 +1136,10 @@ describe('in-flight settlement', () => {
         }));
 
     it('does not offer the pay action again while a payment is in flight', async () => {
-        // Offering the form back is how a customer pays twice: the browser is mid-challenge at
-        // the provider, and a second method attached here would open a second charge.
+        /**
+         * Offering the form back is how a customer pays twice: the browser is mid-challenge at
+         * the provider, and a second method attached here would open a second charge.
+         */
         const { user, order } = await orderFor();
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         await paymentService.confirmPayment(
@@ -1115,8 +1155,10 @@ describe('in-flight settlement', () => {
     });
 
     it('withdraws the pay action once the order is already paid', async () => {
-        // `isPayable` refuses the echo `system` may still write onto `paid` — this pins that the
-        // withdrawal actually reaches the wire, not just the domain function in isolation.
+        /**
+         * `isPayable` refuses the echo `system` may still write onto `paid` — this pins that the
+         * withdrawal actually reaches the wire, not just the domain function in isolation.
+         */
         const { user, order } = await orderFor();
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         await paymentService.confirmPayment(
@@ -1171,8 +1213,10 @@ describe('syncPayment', () => {
             testCallerContext
         );
 
-        // The provider's own eventual answer, forced rather than awaited — this is the outcome a
-        // real async method CAN settle to, not one `pm_card_processing`'s own fixture produces.
+        /**
+         * The provider's own eventual answer, forced rather than awaited — this is the outcome a
+         * real async method CAN settle to, not one `pm_card_processing`'s own fixture produces.
+         */
         const retrieveSpy = jest
             .spyOn(fakePaymentProvider, 'retrieve')
             .mockResolvedValueOnce({ status: 'declined' });
@@ -1187,8 +1231,10 @@ describe('syncPayment', () => {
     });
 
     it('refuses to sync a row the provider was never asked to open', async () => {
-        // Built straight off the repository, skipping createIntent — so there is no providerRef,
-        // which is the one thing this branch exists to catch before it ever reaches the provider.
+        /**
+         * Built straight off the repository, skipping createIntent — so there is no providerRef,
+         * which is the one thing this branch exists to catch before it ever reaches the provider.
+         */
         const { user, order } = await orderFor();
         const upserted = await paymentRepository.upsertIntent(String(order._id), user.id, {
             amount: '10.00',
@@ -1245,8 +1291,10 @@ describe('applyWebhookSettlement', () => {
     });
 
     it('settles what the provider answers, not what a delivery might claim', async () => {
-        // Nobody confirmed: the provider has no outcome for this intent, so it says `open`, which
-        // settles nothing. A body that claimed `succeeded` would have paid the order.
+        /**
+         * Nobody confirmed: the provider has no outcome for this intent, so it says `open`, which
+         * settles nothing. A body that claimed `succeeded` would have paid the order.
+         */
         const { order, providerRef } = await unconfirmedIntent();
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
@@ -1265,8 +1313,10 @@ describe('applyWebhookSettlement', () => {
         await paymentService.applyWebhookSettlement(providerRef);
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
-        // A later `declined` for an intent that already succeeded must not un-pay the order —
-        // the terminal states are outside `SETTLEABLE_PAYMENT_STATUSES` for exactly this.
+        /**
+         * A later `declined` for an intent that already succeeded must not un-pay the order —
+         * the terminal states are outside `SETTLEABLE_PAYMENT_STATUSES` for exactly this.
+         */
         setFakeOutcome(providerRef, { status: 'declined' });
         await paymentService.applyWebhookSettlement(providerRef);
 
@@ -1464,7 +1514,7 @@ describe('refundPayment', () => {
         refundSpy.mockRestore();
     });
 
-    /*
+    /**
      * The provider is asked first through THIS endpoint too, so a rejection leaves the payment
      * `succeeded` rather than answering 500 with the refund already counted — a retry here
      * really is a retry, not a 409 "already refunded" over money that never actually came back.
@@ -1482,8 +1532,10 @@ describe('refundPayment', () => {
         expect(stored!.status).toBe('succeeded');
         expect(stored!.refunds[0].status).toBe('failed');
 
-        // The failed record keeps the money reserved, so a click is not a second send: the sweep
-        // owns the retry, with the same idempotency key.
+        /**
+         * The failed record keeps the money reserved, so a click is not a second send: the sweep
+         * owns the retry, with the same idempotency key.
+         */
         const asked = await refundOrderPayment(
             String(order._id),
             asAdmin(),
@@ -1519,9 +1571,11 @@ describe('recordOfflinePayment', () => {
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
-    // The money booked is the order's own total, not whatever a card intent once froze: dropping
-    // the delivery, or keeping a stale amount when the row is converted, books the wrong money, and
-    // refunds and invoices are computed from it.
+    /**
+     * The money booked is the order's own total, not whatever a card intent once froze: dropping
+     * the delivery, or keeping a stale amount when the row is converted, books the wrong money, and
+     * refunds and invoices are computed from it.
+     */
     it('books the order total, delivery included, over a stale card intent, and announces the payment and the status change once', async () => {
         const user = await createUser();
         const product = await createProduct({ price: '50.00' });
@@ -1565,8 +1619,10 @@ describe('recordOfflinePayment', () => {
         expect(payment!.receivedAt!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
-    // Own money is trusted and recorded: an administrator who raised an order for themselves may
-    // also record the cash for it, and the audit row is flagged.
+    /**
+     * Own money is trusted and recorded: an administrator who raised an order for themselves may
+     * also record the cash for it, and the audit row is flagged.
+     */
     it('lets the buyer record cash on their own order, flagged ownOrder', async () => {
         const { user, order } = await orderFor();
         await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
@@ -1640,8 +1696,10 @@ describe('recordOfflinePayment', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
-        // The refusal comes from asking the PROVIDER, not a locally cached guess — the row stays
-        // untouched rather than being silently overwritten out from under an open intent.
+        /**
+         * The refusal comes from asking the PROVIDER, not a locally cached guess — the row stays
+         * untouched rather than being silently overwritten out from under an open intent.
+         */
         expect(cancelSpy).toHaveBeenCalledWith(prepared!.providerRef, {
             reason: 'Recorded as an offline payment'
         });
@@ -1740,7 +1798,7 @@ describe('recordOfflinePayment — refunding it back', () => {
         resetDomainEvents();
     });
 
-    /*
+    /**
      * Only an operator confirming the cash came back may record `settledByHand: true` — the
      * automatic cancel listener leaves a hand-paid order's payment `succeeded` instead, rather
      * than the system saying money moved that nobody actually moved.
@@ -1828,8 +1886,10 @@ describe('order.canceled — closing a still-open intent at the provider', () =>
     });
 
     it('still cancels the order when the provider refuses or fails to close the intent', async () => {
-        // Best-effort: unlike `recordOfflinePayment`'s own synchronous guard, the order is already
-        // gone by the time this listener runs — there is no request left here to refuse.
+        /**
+         * Best-effort: unlike `recordOfflinePayment`'s own synchronous guard, the order is already
+         * gone by the time this listener runs — there is no request left here to refuse.
+         */
         const { user, order } = await orderFor();
         await paymentService.createIntent(String(order._id), auth(user));
 
@@ -1917,8 +1977,10 @@ describe('getForOrder — what the caller may do', () => {
     });
 
     it('withdraws `pay` once the order is canceled, even with the intent still open', async () => {
-        // Both halves of the question. A retryable intent on an order that can no longer reach
-        // `paid` is not a payment anyone may complete.
+        /**
+         * Both halves of the question. A retryable intent on an order that can no longer reach
+         * `paid` is not a payment anyone may complete.
+         */
         const { user, order } = await orderFor();
         await paymentService.createIntent(String(order._id), auth(user));
         await orderService.cancelOnRequestById(String(order._id), auth(user));
@@ -1931,8 +1993,10 @@ describe('getForOrder — what the caller may do', () => {
         });
     });
 
-    // The caller's half of `pay`, the same two questions `Order.actions.pay` asks: the payer, and
-    // an account that shops.
+    /**
+     * The caller's half of `pay`, the same two questions `Order.actions.pay` asks: the payer, and
+     * an account that shops.
+     */
     it('offers `pay` to the payer and withholds it from staff reading the same payment', async () => {
         const { user, order } = await orderFor();
         await paymentService.createIntent(String(order._id), auth(user));

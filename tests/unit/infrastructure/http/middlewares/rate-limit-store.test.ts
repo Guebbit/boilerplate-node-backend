@@ -41,6 +41,7 @@ let connectCalls = 0;
  */
 type FakeClient = ReturnType<typeof fakeClient>;
 
+/** A Redis client double that answers the commands the store sends. */
 const fakeClient = () => {
     let ready = false;
     let opening = false;
@@ -62,7 +63,7 @@ const fakeClient = () => {
                 }, 10)
             );
         }),
-        /*
+        /**
          * Replies shaped the way `rate-limit-redis` insists on: `SCRIPT LOAD` must answer a string
          * sha or it throws before the connection is ever exercised, and the increment script
          * answers `[totalHits, resetMs]`.
@@ -102,7 +103,7 @@ describe('the rate limiter’s Redis connection', () => {
     afterEach(() => stopLimitsRedis());
 
     it('opens one socket for commands issued before the handshake finishes', () => {
-        /*
+        /**
          * The regression. Two commands, neither awaiting the other — which is what `RedisStore`
          * does with its two script loads — and exactly one `connect()`.
          */
@@ -115,7 +116,7 @@ describe('the rate limiter’s Redis connection', () => {
     });
 
     it('answers both of them rather than destroying the client one is using', () => {
-        /*
+        /**
          * The consequence, asserted separately: the original failure was not a duplicate connect
          * but what the duplicate's rejection did — `destroy()` on the shared client, so the command
          * that had done nothing wrong failed too and the limiter passed the request through.
@@ -142,7 +143,7 @@ describe('the rate limiter’s Redis connection', () => {
     });
 });
 
-/*
+/**
  * Two budgets keyed alike on one request are two counters, not one hit counted twice.
  *
  * `POST /payments/:id/confirm` mounts the attempt and the decline budgets, both keyed on the
@@ -191,8 +192,10 @@ describe('payment budgets keyed on the same account, counted through a Redis-bac
         app.post('/confirm', attempt, decline, (_request, response) => {
             response.status(200).json({ success: true });
         });
-        // A real listener and `fetch`, not supertest: this is a store test, and a unit test may not
-        // boot the app. Port 0 asks the OS for a free one.
+        /**
+         * A real listener and `fetch`, not supertest: this is a store test, and a unit test may not
+         * boot the app. Port 0 asks the OS for a free one.
+         */
         const server = app.listen(0);
         try {
             const { port } = server.address() as AddressInfo;

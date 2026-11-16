@@ -9,7 +9,7 @@
  *
  * No producer imports this module: delete it and the shop's events simply have no listener.
  *
- * @see docs/modules/shop-tasks.md
+ * @see docs/modules/shop-tasks.md#its-neighbourhood
  */
 
 import path from 'node:path';

@@ -19,8 +19,10 @@ import {
     type AnalyticsEvent,
     type AnalyticsEventInput
 } from '@infrastructure/observability/analytics';
-// A real name rather than a string literal: the transport is what is under test here, but the
-// event it carries should still be one the app can actually emit.
+/**
+ * A real name rather than a string literal: the transport is what is under test here, but the
+ * event it carries should still be one the app can actually emit.
+ */
 import { accountAnalyticsEvents } from '@modules/account/analytics';
 import { productsAnalyticsEvents } from '@modules/products/analytics';
 import { cartAnalyticsEvents } from '@modules/cart/analytics';
@@ -30,7 +32,9 @@ import { setEnvironment } from '@tests/environment';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+/** Stands in for the provider's capture call. */
 const mockCapture = jest.fn();
+/** Stands in for the provider's shutdown. */
 const mockShutdown = jest.fn().mockResolvedValue(void 0);
 
 jest.mock('posthog-node', () => ({
@@ -40,7 +44,9 @@ jest.mock('posthog-node', () => ({
     }))
 }));
 
+/** Stands in for the logger's warn. */
 const mockLoggerWarn = jest.fn();
+/** Stands in for the logger's debug. */
 const mockLoggerDebug = jest.fn();
 
 jest.mock('@infrastructure/adapters/logger', () => ({
@@ -66,12 +72,14 @@ const configureUmami = () => {
     setEnvironment({ NODE_UMAMI_WEBSITE_ID: 'site-uuid' });
 };
 
+/** Sets the variables that select and configure the PostHog provider. */
 const configurePostHog = () => {
     setEnvironment({ NODE_ANALYTICS_PROVIDER: 'posthog' });
     setEnvironment({ NODE_POSTHOG_API_KEY: 'phc_test_key' });
     setEnvironment({ NODE_POSTHOG_HOST: 'https://app.posthog.com' });
 };
 
+/** Removes every analytics variable, so a case starts from none. */
 const clearAnalyticsEnvironment = () => {
     setEnvironment({ NODE_ANALYTICS_PROVIDER: undefined });
     setEnvironment({ NODE_UMAMI_INGEST_HOST: undefined });
@@ -79,9 +87,11 @@ const clearAnalyticsEnvironment = () => {
     setEnvironment({ NODE_UMAMI_WEBSITE_ID: undefined });
     setEnvironment({ NODE_POSTHOG_API_KEY: undefined });
     setEnvironment({ NODE_POSTHOG_HOST: undefined });
-    // Set, not deleted: the real default is `true`, and every case in this file except the
-    // "consent gate" describe block below is testing what a provider DOES with an event once
-    // `emitAnalyticsEvent` has decided to capture it in full — not the gate itself.
+    /**
+     * Set, not deleted: the real default is `true`, and every case in this file except the
+     * "consent gate" describe block below is testing what a provider DOES with an event once
+     * `emitAnalyticsEvent` has decided to capture it in full — not the gate itself.
+     */
     setEnvironment({ NODE_ANALYTICS_REQUIRE_CONSENT: 'false' });
 };
 
@@ -103,6 +113,7 @@ const sentRequest = (): { url: string; headers: Record<string, string>; body: Js
     };
 };
 
+/** The JSON body the provider is sent. */
 interface JsonPayload {
     type: string;
     payload: {
@@ -178,8 +189,10 @@ describe('the umami provider', () => {
 
     it('bounds the request, so a hung Umami cannot hold a socket for minutes per event', () => {
         configureUmami();
-        // Jest's fake timers do not fire `AbortSignal.timeout` (probed on Jest 30 / Node 24), so
-        // the bound is read off the call. Pass-through spy: the real signal still reaches fetch.
+        /**
+         * Jest's fake timers do not fire `AbortSignal.timeout` (probed on Jest 30 / Node 24), so
+         * the bound is read off the call. Pass-through spy: the real signal still reaches fetch.
+         */
         const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -209,8 +222,10 @@ describe('the umami provider', () => {
     });
 
     it('falls back to the public host when no ingest host is set', () => {
-        // Correct only where the API and the browser reach Umami at the same address, which is
-        // why it is a fallback rather than the setting.
+        /**
+         * Correct only where the API and the browser reach Umami at the same address, which is
+         * why it is a fallback rather than the setting.
+         */
         setEnvironment({ NODE_ANALYTICS_PROVIDER: 'umami' });
         setEnvironment({ NODE_UMAMI_HOST: 'https://analytics.example.com' });
         setEnvironment({ NODE_UMAMI_WEBSITE_ID: 'site-uuid' });
@@ -333,8 +348,10 @@ describe('the umami provider', () => {
     });
 
     it('strips the port from the hostname, which Umami rejects with a 400', () => {
-        // `Host` carries a port on every non-default port, so `localhost:3000` — the entire
-        // local development case — would be refused outright by Umami without this stripped.
+        /**
+         * `Host` carries a port on every non-default port, so `localhost:3000` — the entire
+         * local development case — would be refused outright by Umami without this stripped.
+         */
         configureUmami();
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -415,8 +432,10 @@ describe('the umami provider', () => {
         ).not.toThrow();
 
         return settle().then(() => {
-            // Debug, not warn: a developer running without the analytics container up would
-            // otherwise get one warning per request.
+            /**
+             * Debug, not warn: a developer running without the analytics container up would
+             * otherwise get one warning per request.
+             */
             expect(mockLoggerDebug).toHaveBeenCalled();
             expect(mockLoggerWarn).not.toHaveBeenCalled();
         });
@@ -650,8 +669,10 @@ describe('shutdownAnalytics', () => {
     });
 
     it('resolves without resolving a provider when none was ever used', () => {
-        // Otherwise a misconfigured NODE_ANALYTICS_PROVIDER would throw on the way OUT of a
-        // process that never emitted an event, turning a config typo into a crashing shutdown.
+        /**
+         * Otherwise a misconfigured NODE_ANALYTICS_PROVIDER would throw on the way OUT of a
+         * process that never emitted an event, turning a config typo into a crashing shutdown.
+         */
         setEnvironment({ NODE_ANALYTICS_PROVIDER: 'nonsense' });
 
         return expect(shutdownAnalytics()).resolves.toBeUndefined();
@@ -769,7 +790,9 @@ describe('emitAnalyticsEvent — consent gate', () => {
     });
 });
 
-// The CATALOGUE itself is not asserted here. Each module owns its names in
-// `src/modules/<name>/analytics.ts`, and `tests/cross-cutting/contract-bundles.test.ts` checks
-// that the published frontend catalogue lists none of what those modules declare. This file
-// owns the transport.
+/**
+ * The CATALOGUE itself is not asserted here. Each module owns its names in
+ * `src/modules/<name>/analytics.ts`, and `tests/cross-cutting/contract-bundles.test.ts` checks
+ * that the published frontend catalogue lists none of what those modules declare. This file
+ * owns the transport.
+ */

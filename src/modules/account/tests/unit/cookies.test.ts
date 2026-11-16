@@ -25,8 +25,10 @@ const makeResponse = () =>
     });
 
 beforeEach(() => {
-    // Real values, so the maxAge assertions exercise the actual token-config wiring rather than
-    // a mock that would agree with anything.
+    /**
+     * Real values, so the maxAge assertions exercise the actual token-config wiring rather than
+     * a mock that would agree with anything.
+     */
     setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
     setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 });
@@ -89,8 +91,10 @@ describe('createSessionCookie', () => {
 
         createSessionCookie(response, 'token');
 
-        // No Max-Age and no Expires: the browser drops it on close. `maxAge` undefined is what
-        // makes Express emit neither.
+        /**
+         * No Max-Age and no Expires: the browser drops it on close. `maxAge` undefined is what
+         * makes Express emit neither.
+         */
         const options = response.cookie.mock.calls[0][2];
         expect(options.maxAge).toBeUndefined();
         expect(options.expires).toBeUndefined();
@@ -105,8 +109,10 @@ describe('destroySessionCookie', () => {
 
         const [name, options] = response.clearCookie.mock.calls[0];
         expect(name).toBe('__Host-session');
-        // A browser drops a cookie only on a matching name/path/flags triple. Any drift here is
-        // a logout that appears to succeed and leaves the session alive.
+        /**
+         * A browser drops a cookie only on a matching name/path/flags triple. Any drift here is
+         * a logout that appears to succeed and leaves the session alive.
+         */
         expect(options).toEqual(
             expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' })
         );
@@ -131,8 +137,10 @@ describe('the isAuth hint set with the session cookie', () => {
         const [name, value, options] = response.cookie.mock.calls[1];
         expect(name).toBe('isAuth');
         expect(value).toBe('true');
-        // Deliberately NOT httpOnly: the frontend has to read it. Asserted explicitly so the
-        // two cookies can never be "hardened" into each other's role by mistake.
+        /**
+         * Deliberately NOT httpOnly: the frontend has to read it. Asserted explicitly so the
+         * two cookies can never be "hardened" into each other's role by mistake.
+         */
         expect(options.httpOnly).toBeUndefined();
         expect(options.sameSite).toBe('lax');
         expect(options.path).toBe('/');
@@ -143,8 +151,10 @@ describe('the isAuth hint set with the session cookie', () => {
 
         createSessionCookie(response, 'token', 3_600_000);
 
-        // If the hint outlived the credential the UI would show a logged-in state for a session
-        // the API has already stopped honouring.
+        /**
+         * If the hint outlived the credential the UI would show a logged-in state for a session
+         * the API has already stopped honouring.
+         */
         expect(response.cookie.mock.calls[1][2].maxAge).toBe(3_600_000);
     });
 

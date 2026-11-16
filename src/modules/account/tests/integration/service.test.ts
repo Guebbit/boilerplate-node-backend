@@ -27,7 +27,7 @@ import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 
-/*
+/**
  * The analytics port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes. See `tests/support/ports.ts`.
  */
@@ -84,9 +84,11 @@ describe('signup', () => {
     });
 
     it('never stores the password as it was sent', async () => {
-        // The `pre('save')` hook hashes it. If that hook stops firing — or someone "simplifies"
-        // this service to write the field directly — every account in the database becomes a
-        // plaintext credential, and no happy-path assertion notices.
+        /**
+         * The `pre('save')` hook hashes it. If that hook stops firing — or someone "simplifies"
+         * this service to write the field directly — every account in the database becomes a
+         * plaintext credential, and no happy-path assertion notices.
+         */
         await accountService.signup(
             {
                 email: 'hashed@example.com',
@@ -127,8 +129,10 @@ describe('signup', () => {
     });
 
     it('rejects an address already in use with 409, not 422', async () => {
-        // The status is the contract: 409 tells a client "this is a conflict with existing state",
-        // which is what drives "that email is taken" in the UI rather than a field-level error.
+        /**
+         * The status is the contract: 409 tells a client "this is a conflict with existing state",
+         * which is what drives "that email is taken" in the UI rather than a field-level error.
+         */
         await createUser({ email: 'taken@example.com' });
 
         const response = asReject(
@@ -187,9 +191,11 @@ describe('signup', () => {
                 )
             );
 
-            // The ruse: an envelope indistinguishable from a genuine signup, built from a
-            // document `isNew` marks as never saved — `post-signup.ts` reads that flag to keep
-            // the audit trail and the upload cleanup honest.
+            /**
+             * The ruse: an envelope indistinguishable from a genuine signup, built from a
+             * document `isNew` marks as never saved — `post-signup.ts` reads that flag to keep
+             * the audit trail and the upload cleanup honest.
+             */
             expect(response.data.email).toBe('someone@mailinator.com');
             expect(response.data.isNew).toBe(true);
 
@@ -222,8 +228,10 @@ describe('signup', () => {
         expect(response.errors.length).toBeGreaterThan(0);
     });
 
-    // `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own `minLength: 1`) — an
-    // absent image is an absent field, and the client draws its own placeholder.
+    /**
+     * `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own `minLength: 1`) — an
+     * absent image is an absent field, and the client draws its own placeholder.
+     */
     it('stores an absent image as no field at all, never an empty string', async () => {
         await accountService.signup(
             {
@@ -347,14 +355,16 @@ describe('login', () => {
     });
 
     it('does not reveal whether the account exists', async () => {
-        // THE case in this file. Two different failures — no such account, and wrong password —
-        // must be one answer, or the endpoint becomes an account-existence oracle: an attacker
-        // learns which addresses are registered by reading the difference, which is the input to
-        // credential stuffing and to targeted phishing.
-        //
-        // Asserting them equal (rather than each against a literal) is deliberate: it keeps
-        // holding when the message or status is deliberately changed later, and fails the moment
-        // the two arms diverge for any reason.
+        /**
+         * THE case in this file. Two different failures — no such account, and wrong password —
+         * must be one answer, or the endpoint becomes an account-existence oracle: an attacker
+         * learns which addresses are registered by reading the difference, which is the input to
+         * credential stuffing and to targeted phishing.
+         *
+         * Asserting them equal (rather than each against a literal) is deliberate: it keeps
+         * holding when the message or status is deliberately changed later, and fails the moment
+         * the two arms diverge for any reason.
+         */
         await createLoginUser();
 
         const unknownAccount = asReject(
@@ -371,9 +381,11 @@ describe('login', () => {
     });
 
     it('refuses a soft-deleted account', async () => {
-        // `deletedAt: undefined` in the filter is the whole of this rule, and it is one key in an
-        // object literal. Dropping it lets someone who deleted their account keep signing in —
-        // and every other login test still passes, because they use live accounts.
+        /**
+         * `deletedAt: undefined` in the filter is the whole of this rule, and it is one key in an
+         * object literal. Dropping it lets someone who deleted their account keep signing in —
+         * and every other login test still passes, because they use live accounts.
+         */
         await createLoginUser({ deletedAt: new Date() });
 
         const response = asReject(
@@ -384,12 +396,14 @@ describe('login', () => {
     });
 
     it('rejects a password too short to be valid before checking it, for anyone', async () => {
-        // `LoginBody` enforces the same minimum length signup does, so a one-character password
-        // is a malformed request (422) rather than wrong credentials (401).
-        //
-        // That is worth pinning precisely BECAUSE it is a second answer the endpoint can give:
-        // the two must not depend on whether the account exists, or the shape of the reply leaks
-        // the thing the 401s above are careful not to.
+        /**
+         * `LoginBody` enforces the same minimum length signup does, so a one-character password
+         * is a malformed request (422) rather than wrong credentials (401).
+         *
+         * That is worth pinning precisely BECAUSE it is a second answer the endpoint can give:
+         * the two must not depend on whether the account exists, or the shape of the reply leaks
+         * the thing the 401s above are careful not to.
+         */
         await createLoginUser();
 
         const existingAccount = asReject(
@@ -409,8 +423,10 @@ describe('login', () => {
         ['a missing password', 'login@example.com', undefined],
         ['a malformed email', 'not-an-email', PLAIN_PASSWORD]
     ])('rejects %s with 422, before touching the database', async (_label, email, password) => {
-        // 422 rather than 401: the request could not be understood, which is a different fact
-        // from "these credentials are wrong" and must not be flattened into it.
+        /**
+         * 422 rather than 401: the request could not be understood, which is a different fact
+         * from "these credentials are wrong" and must not be flattened into it.
+         */
         const response = asReject(await accountService.login({ email: email, password: password }));
 
         expect(response.status).toBe(422);
@@ -436,8 +452,10 @@ describe('validatePasswordChange', () => {
     });
 
     it('reports empty input rather than accepting it', () => {
-        // Called with no arguments by a caller that forgot to pass the body through. Defaulting
-        // to `''` must produce errors, not an empty array meaning "fine".
+        /**
+         * Called with no arguments by a caller that forgot to pass the body through. Defaulting
+         * to `''` must produce errors, not an empty array meaning "fine".
+         */
         expect(accountService.validatePasswordChange().length).toBeGreaterThan(0);
     });
 });
@@ -464,9 +482,11 @@ describe('passwordChange', () => {
     });
 
     it('leaves the stored password untouched when the pair is rejected', async () => {
-        // The ordering guarantee: validation happens before the assignment, so a rejected change
-        // is not a change. If the write moved ahead of the check, this account's password would
-        // be set to a value its owner never confirmed.
+        /**
+         * The ordering guarantee: validation happens before the assignment, so a rejected change
+         * is not a change. If the write moved ahead of the check, this account's password would
+         * be set to a value its owner never confirmed.
+         */
         const user = await createUser({
             email: 'unchanged@example.com',
             password: PASSPHRASE_PASSWORD
@@ -498,9 +518,11 @@ describe('issueToken', () => {
     });
 
     it('returns 32 hex characters, so the token is 16 bytes of real entropy', () => {
-        // The length is the security parameter. `randomBytes(16).toString('hex')` is 32 chars;
-        // anything shorter is a guessable reset link, and the value is only ever compared for
-        // equality, so nothing else in the system would complain.
+        /**
+         * The length is the security parameter. `randomBytes(16).toString('hex')` is 32 chars;
+         * anything shorter is a guessable reset link, and the value is only ever compared for
+         * equality, so nothing else in the system would complain.
+         */
         return createUser({ email: 'entropy@example.com' })
             .then((user) => issueToken(user.id, 'password', 60_000))
             .then((token) => {
@@ -509,9 +531,11 @@ describe('issueToken', () => {
     });
 
     it('keeps both tokens when two of a many-live kind are issued concurrently', async () => {
-        // The invariant: each issue is its own row, so two writers cannot lose each other's token.
-        // Concretely: two login challenges, and one of them silently
-        // does not work, if one write could overwrite the other.
+        /**
+         * The invariant: each issue is its own row, so two writers cannot lose each other's token.
+         * Concretely: two login challenges, and one of them silently
+         * does not work, if one write could overwrite the other.
+         */
         const user = await createUser({ email: 'concurrent@example.com' });
 
         const [first, second] = await Promise.all([
@@ -526,8 +550,10 @@ describe('issueToken', () => {
     });
 
     it('leaves one live link when two of a one-live kind are issued concurrently', async () => {
-        // The mirror: for a reset link the point is that the OLD one dies, atomically, so a race
-        // cannot leave two working links.
+        /**
+         * The mirror: for a reset link the point is that the OLD one dies, atomically, so a race
+         * cannot leave two working links.
+         */
         const user = await createUser({ email: 'concurrent-reset@example.com' });
 
         const [first, second] = await Promise.all([
@@ -556,8 +582,10 @@ describe('issueToken', () => {
         await issueToken(user.id, 'password', 60_000);
 
         const [row] = await tokenRowsOf(user.id);
-        // Offset from *now*, not an absolute constant: an expiry computed from the wrong origin
-        // is either already expired or effectively permanent.
+        /**
+         * Offset from *now*, not an absolute constant: an expiry computed from the wrong origin
+         * is either already expired or effectively permanent.
+         */
         expect(row.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
         expect(row.expiresAt.getTime()).toBeLessThan(before + 60_000 + 10_000);
     });
@@ -582,8 +610,10 @@ describe('logoutEverywhere', () => {
     });
 
     it('reports the logout under the same name as a single-session one', async () => {
-        // One funnel counts logouts, whichever route ended the session; `scope` is what tells the
-        // two apart. A second event name would make every rate built on the first silently wrong.
+        /**
+         * One funnel counts logouts, whichever route ended the session; `scope` is what tells the
+         * two apart. A second event name would make every rate built on the first silently wrong.
+         */
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUserWithSessionsAndAReset();
 
@@ -598,8 +628,10 @@ describe('logoutEverywhere', () => {
     });
 
     it('leaves a pending password-reset link alone', async () => {
-        // "Log out everywhere" must not also burn a link the user is midway through using; only
-        // a changed password purges those.
+        /**
+         * "Log out everywhere" must not also burn a link the user is midway through using; only
+         * a changed password purges those.
+         */
         const user = await createUserWithSessionsAndAReset();
 
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
@@ -610,9 +642,11 @@ describe('logoutEverywhere', () => {
     it('moves the session epoch, so access tokens already handed out stop working', async () => {
         const user = await createUserWithSessionsAndAReset();
 
-        // The epoch is stored to the millisecond, so the bracket cannot flake. The upper bound
-        // catches an epoch dated in the future, which would lock the user out.
-        // The HTTP sibling ("logout-all signs the caller out too…") proves the 401 end to end.
+        /**
+         * The epoch is stored to the millisecond, so the bracket cannot flake. The upper bound
+         * catches an epoch dated in the future, which would lock the user out.
+         * The HTTP sibling ("logout-all signs the caller out too…") proves the 401 end to end.
+         */
         const before = new Date();
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
         const after = new Date();
@@ -634,15 +668,17 @@ describe('logoutEverywhere', () => {
     });
 
     it('cannot be undone by a write holding an older copy of the account', async () => {
-        // The same invariant from the dangerous direction, stated as a sequence rather than a
-        // race — no timing is involved:
-        //
-        //   1. a request loads the user
-        //   2. "log out everywhere" removes the sessions
-        //   3. that first request finishes its own work and saves the account
-        //
-        // Sessions live in their own collection now, so saving the user cannot bring them back;
-        // this case is what notices if they ever move back onto the document.
+        /**
+         * The same invariant from the dangerous direction, stated as a sequence rather than a
+         * race — no timing is involved:
+         *
+         *   1. a request loads the user
+         *   2. "log out everywhere" removes the sessions
+         *   3. that first request finishes its own work and saves the account
+         *
+         * Sessions live in their own collection now, so saving the user cannot bring them back;
+         * this case is what notices if they ever move back onto the document.
+         */
         const user = await createUserWithSessionsAndAReset();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
@@ -654,9 +690,11 @@ describe('logoutEverywhere', () => {
     });
 
     it('answers 422 for an id that is not an identifier at all', async () => {
-        // A malformed id reaches mongoose as a CastError. It must come back as a client error,
-        // not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
-        // was fixed for elsewhere.
+        /**
+         * A malformed id reaches mongoose as a CastError. It must come back as a client error,
+         * not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
+         * was fixed for elsewhere.
+         */
         const response = asReject(
             await accountService.logoutEverywhere('not-an-id', testCallerContext)
         );

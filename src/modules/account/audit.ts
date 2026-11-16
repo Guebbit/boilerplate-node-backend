@@ -39,7 +39,7 @@ export const accountAuditActions = {
     /** `POST /account/email-change/resend` mailed the pending address a fresh link. */
     AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
-    /*
+    /**
      * A refresh token was presented AFTER it was already rotated away, and outside the grace
      * window a benign two-tabs race would fall inside — the signal that the token value itself
      * has leaked. `rotateRefreshToken` fires this and revokes the whole refresh set in the same

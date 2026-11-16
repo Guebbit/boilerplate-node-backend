@@ -165,8 +165,10 @@ const refineDateWithinYear = (
     context: z.RefinementCtx
 ): void => {
     if (value === undefined || value === null) return;
-    // A refinement still runs after the field's own `format: date` check failed; that issue is
-    // already reported, and there is no day to resolve.
+    /**
+     * A refinement still runs after the field's own `format: date` check failed; that issue is
+     * already reported, and there is no day to resolve.
+     */
     if (!z.iso.date().safeParse(value).success) return;
     if (startOfShopDay(value).getTime() > latestReleaseDate(new Date()).getTime())
         context.addIssue({
@@ -258,7 +260,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             required: true
         },
         price: moneyPath({ required: true }),
-        /*
+        /**
          * Absent means the shop's standard rate — `resolveTaxRate` (`./tax`) never returns "no
          * rate", it only narrows which one. `enum` matches the contract's `TaxClass` exactly, so
          * an invalid value fails at the database layer as well as at validation.
@@ -267,7 +269,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: String,
             enum: Object.values(TaxClass)
         },
-        /*
+        /**
          * WHY `taxClass` is `zero`, when it is — meaningless otherwise. Absent means `standard`,
          * same convention as `taxClass` leaving its own absence to mean the shop's default rate.
          * `enum` matches the contract's `RateType` exactly, same reasoning as `taxClass` above.
@@ -276,7 +278,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: String,
             enum: Object.values(RateType)
         },
-        /*
+        /**
          * An optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`
          * below (`unique: true, sparse: true`), not enforced here — the schema declares the
          * shape, the index is what makes a collision a database fact rather than a race two
@@ -285,7 +287,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         sku: {
             type: String
         },
-        /*
+        /**
          * `onHand` (units that exist) and `reserved` (units an open order has claimed) — not a
          * single `stock` column, which would have to be decremented at order time and so remove
          * unpaid units from the world rather than merely reserve them. `available` derives from
@@ -304,7 +306,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: 0,
             min: 0
         },
-        /*
+        /**
          * The preorder allowance and what is claimed against it: a copy of `inventory`'s own
          * counters, for the same reason `onHand` is one (the catalogue read must not call across).
          * A preorder's `available` is what is left of the allowance, so the shelf stops selling
@@ -320,8 +322,10 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: 0,
             min: 0
         },
-        // Version of the stock level the counters were copied at. `syncStockCache` writes only a
-        // newer one. Default -1: a fresh product is older than the level's first snapshot (0).
+        /**
+         * Version of the stock level the counters were copied at. `syncStockCache` writes only a
+         * newer one. Default -1: a fresh product is older than the level's first snapshot (0).
+         */
         stockVersion: {
             type: Number,
             default: -1
@@ -330,12 +334,14 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         description: {
             type: String
         },
-        // No default: a product with no image has no field, and the client draws its own
-        // placeholder. `imageUrl: null` on an update unsets it.
+        /**
+         * No default: a product with no image has no field, and the client draws its own
+         * placeholder. `imageUrl: null` on an update unsets it.
+         */
         imageUrl: {
             type: String
         },
-        /*
+        /**
          * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by
          * a client: `ThumbnailUrl` is `readOnly` on the contract. Absent for a product whose image
          * came from a remote/default url rather than an upload.
@@ -343,7 +349,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         thumbnailUrl: {
             type: String
         },
-        /*
+        /**
          * The quarantine key of an upload still awaiting its digest job — set alongside the
          * pending-image placeholder, cleared by the writeback once the job completes. Internal
          * bookkeeping only: never part of the `Product` contract, never read by a controller.
@@ -360,7 +366,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: [String],
             default: []
         },
-        /*
+        /**
          * Visibility only: can a shopper see it at all. `false` is hidden (404 for shoppers,
          * visible to staff). Independent of `deletedAt` — `publicScope()` requires both active AND
          * not deleted, so a soft-deleted product looks hidden from outside while staying a
@@ -370,7 +376,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: true
         },
-        /*
+        /**
          * Buyability, stock aside: `false` is listed but "Not available right now". Cart accepts
          * it like a sold-out product, checkout refuses it. Ignored while `active` is false (hidden
          * wins). Defaults `true`, matching `openapi.yaml`.
@@ -380,7 +386,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: true
         },
-        /*
+        /**
          * "Ships from". A future date on an active, purchasable product makes it a preorder; the
          * flag itself is derived (`./domain/preorder`), never stored, so the date passing needs no
          * job. No default: absent means the product is simply on sale.
@@ -389,7 +395,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         releaseDate: {
             type: Date
         },
-        /*
+        /**
          * The backorder switch: a RELEASED product keeps selling while its shelf is empty, against
          * the cap in `inventory`. Off by default. `backorder` on the wire is derived from it, never
          * stored (`./domain/backorder`).
@@ -399,14 +405,14 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: false
         },
-        /*
+        /**
          * When stock is expected back. Optional: without one the shop promises "within 30 days". A
          * passed one reads sold out until staff set a new date or clear it.
          */
         restockDate: {
             type: Date
         },
-        /*
+        /**
          * Default `true`, matching `openapi.yaml`: most products are physical. `false` marks a
          * digital good — `cart` reads this to decide whether a checkout even needs a shipping
          * method, not this module's own concern.
@@ -415,7 +421,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: true
         },
-        /*
+        /**
          * Art. 16 of the Consumer Rights Directive: personalised, sealed-hygiene or perishable
          * goods carry no right of withdrawal. Frozen onto each order line; `returns` reads it.
          */
@@ -423,7 +429,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: false
         },
-        /*
+        /**
          * Grams, optional. Absent counts as 0 wherever a basket's weight is summed
          * (`delivery`'s shipping-method filter, `cart`'s checkout refusal) — not a concern of
          * this module's own, which is why there is no default here the way `onHand` has one.
@@ -451,7 +457,7 @@ productSchema.plugin(moneyPlugin);
  */
 productSchema.plugin(revisionPlugin);
 
-/*
+/**
  * Declared here so this file is the one place deciding what's indexed. Named explicitly: Mongo
  * matches an index by name as much as by key, so requesting an existing key under a different
  * name fails at startup rather than silently doing nothing — these are the existing names.
@@ -460,7 +466,7 @@ productSchema.plugin(revisionPlugin);
 productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 /* Storefront filters: active + not soft-deleted (`publicScope` in `./repository`). */
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
-/*
+/**
  * Unique when set. Sparse, same reasoning as `orders`' `orders_transferReference` — most
  * products never carry a `sku` at all, and an unfiltered unique index would index every absent
  * value as an equal `null`, colliding on the second such product.
@@ -493,8 +499,10 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
             restockDate: serialized.restockDate instanceof Date ? serialized.restockDate : undefined
         })
     );
-    // The two promise dates go out as the shop's day, after the derivation above used the Date.
-    // Only a `Date` is converted, so a row that already went through here is left alone.
+    /**
+     * The two promise dates go out as the shop's day, after the derivation above used the Date.
+     * Only a `Date` is converted, so a row that already went through here is left alone.
+     */
     if (serialized.releaseDate instanceof Date)
         serialized.releaseDate = shopDayOf(serialized.releaseDate);
     if (serialized.restockDate instanceof Date)
@@ -511,9 +519,11 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
  * see `./repository`.
  */
 export const applyProductTransform = applySerialization(productSchema, {
-    // Document-only bookkeeping for the image digest pipeline, never part of the `Product`
-    // contract — see the schema field's own comment. `additionalProperties: false` makes a leaked
-    // `pendingImageKey` fail response validation rather than just look untidy.
+    /**
+     * Document-only bookkeeping for the image digest pipeline, never part of the `Product`
+     * contract — see the schema field's own comment. `additionalProperties: false` makes a leaked
+     * `pendingImageKey` fail response validation rather than just look untidy.
+     */
     omit: ['pendingImageKey'],
     after: applyProductAvailability,
     // A product stores no currency: its price is in the shop's live one.

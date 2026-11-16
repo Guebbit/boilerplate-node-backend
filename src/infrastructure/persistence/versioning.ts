@@ -42,6 +42,7 @@ export interface Precondition {
  * interpreter answers it with 412, so no controller spells that out.
  */
 export class PreconditionFailedError extends Error {
+    /** What logs and `error.name` print; a subclass does not set it by itself. */
     override name = 'PreconditionFailedError';
 }
 

@@ -20,7 +20,7 @@ import { SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
  */
 export const deploymentRateLimitRedisUrl = limitsRedisUrl();
 
-/*
+/**
  * OVERRIDES `.env`: a deployment's budgets are sized for a person, and a seed makes several
  * hundred requests from one address in seconds. Safe because `apply.ts` refuses production.
  */

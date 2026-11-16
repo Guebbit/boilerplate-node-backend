@@ -36,8 +36,10 @@ router.get('/config', (_request, response) => {
     return antibotService
         .config()
         .then((antibot) => {
-            // Success only, and overwriting the app-wide `no-store` default as the sitemap does:
-            // a refusal must never be kept by a cache.
+            /**
+             * Success only, and overwriting the app-wide `no-store` default as the sitemap does:
+             * a refusal must never be kept by a cache.
+             */
             response.setHeader('Cache-Control', CACHE_CONTROL);
             successResponse<Config>(response, {
                 session: accountService.sessionConfig(),

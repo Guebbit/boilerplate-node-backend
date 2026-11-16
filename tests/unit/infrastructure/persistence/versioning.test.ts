@@ -15,6 +15,7 @@ import {
     type Precondition
 } from '@infrastructure/persistence/versioning';
 
+/** The revision the precondition names. */
 const REVISION = 7;
 
 /** A body digest; a write never compares it. */
@@ -273,6 +274,7 @@ describe('checkedDelete', () => {
     });
 });
 
+/** The filter the precondition produces for a key. */
 const filterOn = (precondition: Precondition | undefined, key = 'row-1') =>
     runWithPrecondition(precondition, () =>
         Promise.resolve(preconditionFilter(key, 'editRevision'))

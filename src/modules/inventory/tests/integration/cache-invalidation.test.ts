@@ -13,7 +13,7 @@ import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { testCallerContext } from '@tests/callers';
 
-/*
+/**
  * Replaced, not spied on: a CommonJS namespace import exposes a non-configurable getter, which
  * `jest.spyOn` cannot redefine. See `tests/support/ports.ts`.
  */
@@ -31,6 +31,7 @@ beforeEach(() => jest.mocked(invalidateCacheTagsLogged).mockClear());
 
 /** A syntactically valid order id, distinct per call. */
 let orderCounter = 0;
+/** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'c');
 
 describe('the products cache tag, cleared where stock is written', () => {

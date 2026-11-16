@@ -18,8 +18,10 @@ import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limi
  * `src/modules/tasks/tests/integration/contact-identity-rate-limit.test.ts`.
  */
 
-/** {@link withReloadedRateLimits} bound to this module's limiters, since every case below wants
- * the same one. */
+/**
+ * {@link withReloadedRateLimits} bound to this module's limiters, since every case below wants
+ * the same one.
+ */
 const withAccountRateLimits = <T>(
     overrides: Record<string, string>,
     pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
@@ -74,8 +76,10 @@ describe('credentialLimiters on a public route', () => {
             (module) => module.credentialLimiters
         );
 
-        // The attacker holds a session of their own and guesses the victim's password through
-        // `/login`: the per-account budget is the victim's, not the attacker's.
+        /**
+         * The attacker holds a session of their own and guesses the victim's password through
+         * `/login`: the per-account budget is the victim's, not the attacker's.
+         */
         const app = appAnswering(401, true, asAccount, ...credentialLimiters);
         const guess = () =>
             supertest(app)
@@ -235,8 +239,10 @@ describe('resetRequestLimiters', () => {
     afterEach(() => jest.resetModules());
 
     it('spends the identity budget on the 200 postResetRequest always answers', async () => {
-        // Standing in for `postResetRequest`'s indistinguishable-response design: every attempt,
-        // real account or not, gets the same status, so the limiter must count every one.
+        /**
+         * Standing in for `postResetRequest`'s indistinguishable-response design: every attempt,
+         * real account or not, gets the same status, so the limiter must count every one.
+         */
         const resetRequestLimiters = await withAccountRateLimits(
             {
                 NODE_RESET_RATE_LIMIT_MAX: '2',
@@ -346,8 +352,10 @@ describe('mfaChallengeLimiter', () => {
     });
 
     it('keys an OAuth continuation on its challenge cookie, one budget per cookie', async () => {
-        // The OAuth callback never sends the challenge in a body: it rides in a cookie. Without
-        // reading it, every such caller would share its address block's single bucket.
+        /**
+         * The OAuth callback never sends the challenge in a body: it rides in a cookie. Without
+         * reading it, every such caller would share its address block's single bucket.
+         */
         const mfaChallengeLimiter = await withAccountRateLimits(
             { NODE_MFA_CHALLENGE_MAX: '1' },
             (module) => module.mfaChallengeLimiter
@@ -368,9 +376,11 @@ describe('mfaChallengeLimiter', () => {
     });
 
     it('does not let two callers with no challenge exhaust the same bucket', async () => {
-        // A request naming no `challenge` must key on the caller's address BLOCK, not one shared
-        // key — a shared key would let any two such callers spend the same budget. See
-        // `challengeKey` in `account/rate-limits.ts`.
+        /**
+         * A request naming no `challenge` must key on the caller's address BLOCK, not one shared
+         * key — a shared key would let any two such callers spend the same budget. See
+         * `challengeKey` in `account/rate-limits.ts`.
+         */
         const mfaChallengeLimiter = await withAccountRateLimits(
             { NODE_MFA_CHALLENGE_MAX: '1' },
             (module) => module.mfaChallengeLimiter
@@ -391,7 +401,7 @@ describe('mfaChallengeLimiter', () => {
 describe('mounted on the real routes', () => {
     setupTestDb();
 
-    /*
+    /**
      * `ratelimit` (draft-7) headers are the limiter's fingerprint, same as
      * `auth-hardening.test.ts`'s login case — present means the array actually reached the route,
      * not just that the module compiles.

@@ -51,7 +51,7 @@ describe('escapeRegex', () => {
         expect(new RegExp(escapeRegex('1.5')).test('1x5')).toBe(false);
     });
 
-    /*
+    /**
      * The cases above are the named, memorable ones: a specific metacharacter, a specific
      * expectation. The general claim — "escapes whatever it is given" — belongs in
      * `search.property.test.ts`, where it is generated over arbitrary input rather than sampled
@@ -101,8 +101,10 @@ describe('control characters', () => {
     const NUL = String.fromCodePoint(0);
 
     it('strips a NUL but keeps the search the caller meant', () => {
-        // The realistic shape: an injected NUL alongside real text. Dropping the whole term would
-        // turn a valid search into "everything"; keeping the NUL is the 500.
+        /**
+         * The realistic shape: an injected NUL alongside real text. Dropping the whole term would
+         * turn a valid search into "everything"; keeping the NUL is the 500.
+         */
         expect(toSearchPattern(`shoes${NUL}`)).toBe('shoes');
         expect(toSearchPattern(`${NUL}blue${NUL}shoes`)).toBe('blueshoes');
     });
@@ -114,8 +116,10 @@ describe('control characters', () => {
         ['escape', String.fromCodePoint(27)],
         ['DEL', String.fromCodePoint(127)]
     ])('treats a term that is only %s as blank rather than as a match-all', (_name, character) => {
-        // `undefined`, not `''`. `$regex: ''` matches every document, so returning an empty
-        // pattern would invert the filter instead of dropping it.
+        /**
+         * `undefined`, not `''`. `$regex: ''` matches every document, so returning an empty
+         * pattern would invert the filter instead of dropping it.
+         */
         expect(toSearchPattern(character)).toBeUndefined();
     });
 

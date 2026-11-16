@@ -14,9 +14,13 @@ import {
     slippedDays
 } from '../../domain';
 
+/** One day in milliseconds. */
 const DAY = 86_400_000;
+/** One hour in milliseconds. */
 const HOUR = 3_600_000;
+/** The release date the buyer agreed to; moved dates are measured against it. */
 const AGREED = new Date('2026-12-01T00:00:00Z');
+/** Zone the release dates are read in. */
 const ZONE = 'Europe/Rome';
 
 /** A date `days` after the agreed one. */
@@ -25,8 +29,10 @@ const afterAgreed = (days: number): Date => new Date(AGREED.getTime() + days * D
 describe('judgeSlip', () => {
     it.each([
         ['a slip of a few days', 5],
-        // However long the slip is, the shop tells and the buyer decides: there is no length at
-        // which silence starts to mean anything else.
+        /**
+         * However long the slip is, the shop tells and the buyer decides: there is no length at
+         * which silence starts to mean anything else.
+         */
         ['a slip of 29 days', 29],
         ['a slip of a year', 365]
     ])('tells the buyer about %s', (_name, days) => {

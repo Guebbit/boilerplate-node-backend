@@ -101,8 +101,10 @@ describe('upsertLine under a lost unique-index race', () => {
 
 describe('upsertLine when the atomic add keeps missing a line that has room', () => {
     it('stops after three attempts with an explicit error, writing nothing', async () => {
-        // The filter keeps missing (as if another write changed the line each time) while the
-        // follow-up read shows room, so every pass decides "retry" until the budget is spent.
+        /**
+         * The filter keeps missing (as if another write changed the line each time) while the
+         * follow-up read shows room, so every pass decides "retry" until the budget is spent.
+         */
         const { userId, productId } = await cartWithLine(2);
         const before = await stateOf(userId, productId);
         const attempts = jest

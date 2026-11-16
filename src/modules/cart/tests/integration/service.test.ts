@@ -13,12 +13,15 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
-// The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
-// exactly when the order stood. The copy itself is pinned by the mailer template suite.
+/**
+ * The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
+ * exactly when the order stood. The copy itself is pinned by the mailer template suite.
+ */
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /** Waits for a mail queued from an outbox-event listener: the relay delivers it after the commit. */
@@ -63,8 +66,10 @@ const EMPTY_CART = {
     },
     // Nothing to buy is not something checkout can run on.
     checkoutable: false,
-    // An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
-    // for an empty line list, the same as an all-digital one.
+    /**
+     * An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
+     * for an empty line list, the same as an all-digital one.
+     */
     shipping: { required: false, options: [] }
 };
 
@@ -149,8 +154,10 @@ describe('cart storage', () => {
     });
 
     it('stamps createdAt on the cart it creates', async () => {
-        // The cart is born from an upsert rather than from a `create()`, so this is the one
-        // collection whose `createdAt` depends on `timestamps` reaching the insert branch.
+        /**
+         * The cart is born from an upsert rather than from a `create()`, so this is the one
+         * collection whose `createdAt` depends on `timestamps` reaching the insert branch.
+         */
         const user = await createUser();
         const product = await createProduct();
 
@@ -161,8 +168,10 @@ describe('cart storage', () => {
     });
 
     it('stores a line as productId and quantity, with no id of its own', async () => {
-        // `CartItem` is additionalProperties:false, so a generated subdocument `_id` would be a
-        // contract violation the moment anything serialized a cart.
+        /**
+         * `CartItem` is additionalProperties:false, so a generated subdocument `_id` would be a
+         * contract violation the moment anything serialized a cart.
+         */
         const user = await createUser();
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
@@ -206,8 +215,10 @@ describe('get', () => {
     });
 
     it('returns an empty list for a user that does not exist', async () => {
-        // A read, not a mutation: answering "no items" is more useful than throwing, and every
-        // caller already renders an empty cart.
+        /**
+         * A read, not a mutation: answering "no items" is more useful than throwing, and every
+         * caller already renders an empty cart.
+         */
         await expect(cartService.get(MISSING_ID)).resolves.toEqual([]);
     });
 
@@ -221,14 +232,18 @@ describe('get', () => {
         expect(items).toHaveLength(1);
         expect(items[0].productId).toBe(String(product._id));
         expect(items[0].quantity).toBe(2);
-        // This is the variant that deliberately DOES carry the product — it is what prices the
-        // cart. See getForBadge for the one that must not.
+        /**
+         * This is the variant that deliberately DOES carry the product — it is what prices the
+         * cart. See getForBadge for the one that must not.
+         */
         expect(items[0].product).toMatchObject({ title: 'Keyboard' });
     });
 
     it('keeps the product id on a line whose product has been deleted', async () => {
-        // The catalogue join resolves to `null` for a product that no longer exists, so a
-        // caller reading the id off that field would lose it exactly when it matters most.
+        /**
+         * The catalogue join resolves to `null` for a product that no longer exists, so a
+         * caller reading the id off that field would lose it exactly when it matters most.
+         */
         const user = await createUser();
         const product = await createProduct({ title: 'Discontinued' });
         await cartService.setItemById(user.id, String(product._id), 1);
@@ -277,8 +292,10 @@ describe('getForBadge', () => {
 
         const { summary } = await cartService.getForBadge(user.id);
 
-        // Distinct numbers on purpose: 2 lines, 5 units, 80.00 total — no two of the three can
-        // be confused for each other if one is computed wrongly.
+        /**
+         * Distinct numbers on purpose: 2 lines, 5 units, 80.00 total — no two of the three can
+         * be confused for each other if one is computed wrongly.
+         */
         expect(summary).toEqual({
             itemsCount: 2,
             totalQuantity: 5,
@@ -296,7 +313,7 @@ describe('getForBadge', () => {
     });
 });
 
-/*
+/**
  * `shipping.options` is priced through the same `priceShipping`/`methodFitsWeight`
  * checkout itself uses, not a copy — these cases exercise the live pricing and the "still fits"
  * check a stored choice is re-derived against on every read, not just at the moment it was set.
@@ -340,9 +357,11 @@ describe('shipping (FA-D6/B3)', () => {
         await cartService.setItemById(user.id, String(light._id), 1);
         await cartService.setShippingMethod(user.id, 'express');
 
-        // A second, heavy line pushes the basket past `express`'s 5000g ceiling — the stored
-        // choice stands (`setShippingMethod` only checks at the moment of choosing), but a
-        // fresh read no longer offers or selects a method the basket has outgrown.
+        /**
+         * A second, heavy line pushes the basket past `express`'s 5000g ceiling — the stored
+         * choice stands (`setShippingMethod` only checks at the moment of choosing), but a
+         * fresh read no longer offers or selects a method the basket has outgrown.
+         */
         const heavy = await createProduct({ weight: 6000 });
         await cartService.setItemById(user.id, String(heavy._id), 1);
 
@@ -420,8 +439,10 @@ describe('setItemById', () => {
                 currency: 'EUR'
             },
             checkoutable: true,
-            // A weightless product fits every method's range, so all three are on offer, priced
-            // against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
+            /**
+             * A weightless product fits every method's range, so all three are on offer, priced
+             * against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
+             */
             shipping: {
                 required: true,
                 options: [
@@ -433,7 +454,7 @@ describe('setItemById', () => {
         });
     });
 
-    /*
+    /**
      * The catalogue gate, from the service rather than through a route.
      *
      * Both halves of `findPublicById`'s predicate get their own case: they are independent
@@ -462,7 +483,7 @@ describe('setItemById', () => {
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBeUndefined();
     });
 
-    /*
+    /**
      * The quietest failure the gate prevents: a well-formed id no product has ever had. Without
      * the check it stores a line that every response then omits — `readCartLines` drops a
      * reference resolving to nothing — so the write looks like it did nothing at all.
@@ -609,9 +630,11 @@ describe('addItemById', () => {
     });
 
     it('loses none of three overlapping increments', async () => {
-        // The increment is evaluated by Mongo against the stored document, so overlapping writes
-        // cannot each compute from the same stale quantity — which is precisely what a
-        // read-modify-write through the user document did.
+        /**
+         * The increment is evaluated by Mongo against the stored document, so overlapping writes
+         * cannot each compute from the same stale quantity — which is precisely what a
+         * read-modify-write through the user document did.
+         */
         const user = await createUser();
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 1);
@@ -626,10 +649,12 @@ describe('addItemById', () => {
     });
 
     it('gives two racing first-adds one cart holding both lines', async () => {
-        // Nothing exists yet, so both requests reach the `upsert`. Whether they collide on the
-        // unique `userId` index is a matter of timing — usually the second finds the cart the
-        // first inserted and simply appends — so this pins the outcome, not the path. The
-        // duplicate-key retry is exercised deterministically by the same-product case below.
+        /**
+         * Nothing exists yet, so both requests reach the `upsert`. Whether they collide on the
+         * unique `userId` index is a matter of timing — usually the second finds the cart the
+         * first inserted and simply appends — so this pins the outcome, not the path. The
+         * duplicate-key retry is exercised deterministically by the same-product case below.
+         */
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
@@ -645,9 +670,11 @@ describe('addItemById', () => {
     });
 
     it('opens one line, not two, when the same new product is added twice at once', async () => {
-        // The race the `$ne` guard exists for: two tabs adding a product the cart has never held.
-        // Both append steps ask Mongo "and only if this product is absent", so the one that loses
-        // matches nothing and comes back through the increment instead of pushing a second line.
+        /**
+         * The race the `$ne` guard exists for: two tabs adding a product the cart has never held.
+         * Both append steps ask Mongo "and only if this product is absent", so the one that loses
+         * matches nothing and comes back through the increment instead of pushing a second line.
+         */
         const user = await createUser();
         const anchor = await createProduct({ title: 'Anchor' });
         const product = await createProduct({ title: 'Contested' });
@@ -666,7 +693,7 @@ describe('addItemById', () => {
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
     });
 
-    /*
+    /**
      * The line, not just the request: `AddCartItemRequest.quantity` already bounds one
      * request to 999, but nothing stopped two `'add'`s from clearing that ceiling together until
      * the repository filter carried the cap itself.
@@ -727,7 +754,7 @@ describe('reorderIntoCart', () => {
         }));
 });
 
-/*
+/**
  * The shop's own per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`, default 10): one of the three knobs on
  * denial of inventory.
  */
@@ -795,8 +822,10 @@ describe('NODE_CART_LINE_MAX_QUANTITY', () => {
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
         }));
 
-    // A basket filled while the ceiling was higher: refused at checkout, naming the lines, never
-    // quietly trimmed (what to drop is the buyer's call).
+    /**
+     * A basket filled while the ceiling was higher: refused at checkout, naming the lines, never
+     * quietly trimmed (what to drop is the buyer's call).
+     */
     it('refuses a checkout holding a line filled before the ceiling was lowered', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
@@ -851,8 +880,10 @@ describe('removeItemById', () => {
     });
 
     it('rejects with 404 when the product is not in the cart', async () => {
-        // Distinguished from "removed nothing, all good": a client that deletes a line it cannot
-        // see needs to know its view is stale.
+        /**
+         * Distinguished from "removed nothing, all good": a client that deletes a line it cannot
+         * see needs to know its view is stale.
+         */
         const user = await createUser();
         const other = await createProduct({ title: 'Other' });
         const product = await createProduct();
@@ -940,8 +971,10 @@ describe('orderConfirm', () => {
         await cartService.setItemById(user.id, String(keyboard._id), 2);
         await cartService.setItemById(user.id, String(mouse._id), 1);
 
-        // `pickup`: both products are physical, so checkout needs a method — pickup needs no
-        // address either, keeping this test about order creation, not shipping.
+        /**
+         * `pickup`: both products are physical, so checkout needs a method — pickup needs no
+         * address either, keeping this test about order creation, not shipping.
+         */
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -961,8 +994,10 @@ describe('orderConfirm', () => {
         await cartRepository.setShippingMethod(user.id, 'pickup');
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
-        // Ordering matters: the cart must only be cleared after the order was created, or a
-        // failure mid-checkout loses the basket.
+        /**
+         * Ordering matters: the cart must only be cleared after the order was created, or a
+         * failure mid-checkout loses the basket.
+         */
         await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 
@@ -977,7 +1012,7 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
-    /*
+    /**
      * The failure CODE, not just the status. Two of the three reasons share 409, so the status
      * cannot tell them apart — and `postCheckout` reports this code as the `CHECKOUT_FAILED`
      * analytics reason, where a translated sentence would vary by locale and a bare 409 would merge
@@ -995,8 +1030,10 @@ describe('orderConfirm', () => {
     });
 
     it('rejects with 404 for a user that does not exist', async () => {
-        // The one cart operation that still needs the user: an order records the address it was
-        // placed from, and there is none to record.
+        /**
+         * The one cart operation that still needs the user: an order records the address it was
+         * placed from, and there is none to record.
+         */
         const result = await cartService.orderConfirm(MISSING_ID, testCallerContext);
 
         expect(asReject(result).status).toBe(404);
@@ -1045,7 +1082,7 @@ describe('orderConfirm', () => {
         expect(order!.shippingCost).toBe('0.00');
     });
 
-    /*
+    /**
      * The free-above rule counts the whole basket, digital lines included (Shopify, WooCommerce):
      * the cart's quote and the order's charge read one function, so they cannot disagree.
      */
@@ -1089,17 +1126,21 @@ describe('orderConfirm', () => {
     it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
-        // Digital: a physical line would refuse checkout outright with no method chosen — this
-        // case is about what an omitted method itself leaves behind, not that refusal.
+        /**
+         * Digital: a physical line would refuse checkout outright with no method chosen — this
+         * case is about what an omitted method itself leaves behind, not that refusal.
+         */
         const product = await createProduct({ requiresShipping: false });
         await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartService.orderConfirm(user.id, testCallerContext);
 
         const order = await findOrder({ userId: user._id });
-        // Both absent together, per `shared/contracts/openapi.root.yaml`: "shipping is not
-        // required to buy". A chosen method that happens to cost 0 (`pickup`, or `standard`
-        // above `freeAbove`) is a DIFFERENT state — `shippingMethod` present, cost legitimately 0.
+        /**
+         * Both absent together, per `shared/contracts/openapi.root.yaml`: "shipping is not
+         * required to buy". A chosen method that happens to cost 0 (`pickup`, or `standard`
+         * above `freeAbove`) is a DIFFERENT state — `shippingMethod` present, cost legitimately 0.
+         */
         expect(order!.shippingMethod).toBeUndefined();
         expect(order!.shippingCost).toBeUndefined();
     });
@@ -1197,8 +1238,10 @@ describe('orderConfirm', () => {
     });
 
     it('never freezes the caller default address onto a pickup order', async () => {
-        // The real-world bug this guards: a caller WITH a default on file, checking out under a
-        // method that ships to nobody, must not have that default silently attached anyway.
+        /**
+         * The real-world bug this guards: a caller WITH a default on file, checking out under a
+         * method that ships to nobody, must not have that default silently attached anyway.
+         */
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
@@ -1326,8 +1369,10 @@ describe('orderConfirm', () => {
     });
 
     it('sends no email when the checkout is refused', async () => {
-        // "Stock moved if and only if the order stands" extends to the inbox: a refused
-        // checkout must not congratulate anyone.
+        /**
+         * "Stock moved if and only if the order stands" extends to the inbox: a refused
+         * checkout must not congratulate anyone.
+         */
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         await giveUserAnAddress(user.id);
@@ -1362,9 +1407,11 @@ const withBankTransferConfigured = (body: () => Promise<void>) =>
     );
 
 describe('orderConfirm — paymentMethod', () => {
-    // FA32c: `payBy` comes from the SAME hold `inventoryService.reserveForOrder` actually took,
-    // never a second, separately-computed guess — so the deadline shown to the buyer and the
-    // sweep's own timeout can never disagree.
+    /**
+     * FA32c: `payBy` comes from the SAME hold `inventoryService.reserveForOrder` actually took,
+     * never a second, separately-computed guess — so the deadline shown to the buyer and the
+     * sweep's own timeout can never disagree.
+     */
     it('defaults to card, with payBy from the reservation hold', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
@@ -1377,8 +1424,10 @@ describe('orderConfirm — paymentMethod', () => {
 
         const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
-        // NODE_RESERVATION_TTL_MINUTES' default (15) away — a window, not an exact millisecond,
-        // for the same reason the bank_transfer case below allows one.
+        /**
+         * NODE_RESERVATION_TTL_MINUTES' default (15) away — a window, not an exact millisecond,
+         * for the same reason the bank_transfer case below allows one.
+         */
         const expected = before + 15 * 60_000;
         expect(order!.payBy).toBeDefined();
         expect(order!.payBy!.getTime()).toBeGreaterThanOrEqual(expected - 5000);
@@ -1386,8 +1435,10 @@ describe('orderConfirm — paymentMethod', () => {
     });
 
     it('refuses bank_transfer when this deployment has not configured it', () =>
-        // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
-        // "this deployment offers no transfer" is a state this case has to create.
+        /**
+         * Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
+         * "this deployment offers no transfer" is a state this case has to create.
+         */
         withEnvironmentOverrides(
             { NODE_BANK_TRANSFER_BENEFICIARY: undefined, NODE_BANK_TRANSFER_IBAN: undefined },
             async () => {
@@ -1425,8 +1476,10 @@ describe('orderConfirm — paymentMethod', () => {
                     expect(result.success).toBe(true);
                     const order = await findOrder({ userId: user._id });
                     expect(order!.paymentMethod).toBe('bank_transfer');
-                    // A window, not an exact millisecond: the checkout itself takes some time
-                    // between `Date.now()` here and the write inside `runCheckout`.
+                    /**
+                     * A window, not an exact millisecond: the checkout itself takes some time
+                     * between `Date.now()` here and the write inside `runCheckout`.
+                     */
                     const expected = before + 48 * 60 * 60_000;
                     expect(order!.payBy!.getTime()).toBeGreaterThanOrEqual(expected - 5000);
                     expect(order!.payBy!.getTime()).toBeLessThanOrEqual(expected + 5000);
@@ -1435,8 +1488,10 @@ describe('orderConfirm — paymentMethod', () => {
         10_000
     );
 
-    // The instructions are the payment's: `order.created` opens it (`payments`), and the order
-    // carries neither a reference nor a block of them.
+    /**
+     * The instructions are the payment's: `order.created` opens it (`payments`), and the order
+     * carries neither a reference nor a block of them.
+     */
     it('stamps no reference and serves no instructions on the order itself', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
@@ -1509,8 +1564,10 @@ describe('orderConfirm — paymentMethod', () => {
             await expect(countOrders({ userId: user._id })).resolves.toBe(2);
         }));
 
-    // The cap used to bind `bank_transfer` alone, so a card order (15 minutes of held stock, or a
-    // week once `processing`) was free to repeat without end.
+    /**
+     * The cap used to bind `bank_transfer` alone, so a card order (15 minutes of held stock, or a
+     * week once `processing`) was free to repeat without end.
+     */
     it('holds a card checkout to the same cap', async () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
@@ -1713,8 +1770,10 @@ describe('productRemoveFromCartsById', () => {
 
         await cartService.productRemoveFromCartsById(String(doomed._id), {});
 
-        // Both carts cleaned, and the unrelated line survives — a `$pull` that matched too
-        // broadly would empty the whole cart instead.
+        /**
+         * Both carts cleaned, and the unrelated line survives — a `$pull` that matched too
+         * broadly would empty the whole cart instead.
+         */
         await expect(cartService.get(second.id)).resolves.toEqual([]);
         const firstItems = await cartService.get(first.id);
         expect(firstItems).toHaveLength(1);
@@ -1729,7 +1788,7 @@ describe('productRemoveFromCartsById', () => {
         ).resolves.toBeUndefined();
     });
 
-    /*
+    /**
      * A repository failure must not be caught INSIDE this function and turned into a resolved
      * `ResponseReject` — a shape nothing ever reads, since this function is only ever a domain-event
      * handler (see the module docblock), never an HTTP response. `emitDomainEvent` only notices a
@@ -1778,8 +1837,10 @@ describe('deleteByUserId', () => {
     });
 
     it('takes the cart with a hard-deleted account', async () => {
-        // The cart is its own collection, reachable only through its owner — so one left behind
-        // when the account is hard-deleted is unreadable forever unless this cleanup runs.
+        /**
+         * The cart is its own collection, reachable only through its owner — so one left behind
+         * when the account is hard-deleted is unreadable forever unless this cleanup runs.
+         */
         const user = await createUser();
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);

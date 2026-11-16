@@ -59,9 +59,11 @@ describe('payment routes', () => {
     });
 
     it('leaves the webhook unauthenticated, which is what lets the provider reach it', () => {
-        // Not an oversight and not a weakening: a PSP has no account here, and the signature over
-        // the raw body is a stronger proof of origin than any session this API could ask it for.
-        // A session guard added on top of it would silently stop every delivery arriving.
+        /**
+         * Not an oversight and not a weakening: a PSP has no account here, and the signature over
+         * the raw body is a stronger proof of origin than any session this API could ask it for.
+         * A session guard added on top of it would silently stop every delivery arriving.
+         */
         expect(guardsOn(router, WEBHOOK)).not.toContain('isAuth');
         expect(guardsOn(router, WEBHOOK)).not.toContain('getAuth');
     });
@@ -76,17 +78,21 @@ describe('payment routes', () => {
     });
 
     it('declares the webhook before the auth wall', () => {
-        // Order is the mechanism: `router.use(getAuth, isAuth)` applies to everything declared
-        // after it, so a webhook moved below this line stops working with no error anywhere.
+        /**
+         * Order is the mechanism: `router.use(getAuth, isAuth)` applies to everything declared
+         * after it, so a webhook moved below this line stops working with no error anywhere.
+         */
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
     it('admin-guards the staff reads, the refund, its hand settlement and its void, and nothing else', () => {
-        // The three routes an operator drives instead of a customer's own checkout — money moving
-        // back out, a claim that money moved in some way the provider never saw, or finding the
-        // order that claim is about. The shopper's key is excluded: `checkout:Cart` gates the three customer-facing card steps below
-        // and is the
-        // customer's own, not admin ones — see the module docblock's "Verified" row.
+        /**
+         * The three routes an operator drives instead of a customer's own checkout — money moving
+         * back out, a claim that money moved in some way the provider never saw, or finding the
+         * order that claim is about. The shopper's key is excluded: `checkout:Cart` gates the three customer-facing card steps below
+         * and is the
+         * customer's own, not admin ones — see the module docblock's "Verified" row.
+         */
         const shopperRules = new Set(['checkout:Cart']);
         const adminGuarded = routeTable(router)
             .filter(({ permissions }) =>
@@ -106,14 +112,16 @@ describe('payment routes', () => {
     });
 
     it('guards the sync exactly as it guards the confirm, plus the velocity budgets and idempotency key confirm alone carries', () => {
-        // `sync` settles money just as `confirm` does — from the provider's answer rather than
-        // from a method the caller supplied — so it carries every guard `confirm` does, not
-        // fewer. The deliberate exceptions are the three payment-velocity limiters, the decline
-        // challenge gate and `idempotencyKey`: card testing validates a card at CONFIRM, `sync`
-        // never accepts a `paymentMethodRef`, and `sync` is already idempotent by construction,
-        // keyed on the provider's own payment reference. Compared as a whole rather than named
-        // one by one: `requireFreshAuth(…)` is a closure with no name of its own, and asserting
-        // the two lists match survives that.
+        /**
+         * `sync` settles money just as `confirm` does — from the provider's answer rather than
+         * from a method the caller supplied — so it carries every guard `confirm` does, not
+         * fewer. The deliberate exceptions are the three payment-velocity limiters, the decline
+         * challenge gate and `idempotencyKey`: card testing validates a card at CONFIRM, `sync`
+         * never accepts a `paymentMethodRef`, and `sync` is already idempotent by construction,
+         * keyed on the provider's own payment reference. Compared as a whole rather than named
+         * one by one: `requireFreshAuth(…)` is a closure with no name of its own, and asserting
+         * the two lists match survives that.
+         */
         expect(withoutHandler('POST /:id/confirm')).toEqual([
             ...withoutHandler('POST /:id/sync').filter((guard) => guard !== INTENT_BUDGET),
             'payments-confirm-attempts',
@@ -122,8 +130,10 @@ describe('payment routes', () => {
             'paymentDeclineChallengeGate',
             'idempotencyKey'
         ]);
-        // And that shared prefix is not trivially empty — the checkout-key check (asked first, so a
-        // caller who can never pass is refused, not challenged) and the fresh-session closure are all in there, and the pooled intent/sync budget closes it.
+        /**
+         * And that shared prefix is not trivially empty — the checkout-key check (asked first, so a
+         * caller who can never pass is refused, not challenged) and the fresh-session closure are all in there, and the pooled intent/sync budget closes it.
+         */
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',
@@ -134,8 +144,10 @@ describe('payment routes', () => {
     });
 
     it('spends one pooled per-account budget on the intent and the sync, and keys neither', () => {
-        // `/intent` has no `idempotencyKey`: the ledger would store the response, the
-        // `clientSecret` included. Asking again already refreshes the same intent.
+        /**
+         * `/intent` has no `idempotencyKey`: the ledger would store the response, the
+         * `clientSecret` included. Asking again already refreshes the same intent.
+         */
         expect(withoutHandler('POST /')).toEqual(withoutHandler('POST /:id/sync'));
         expect(withoutHandler('POST /')).not.toContain('idempotencyKey');
         expect(withoutHandler('POST /:id/sync')).not.toContain('idempotencyKey');

@@ -126,8 +126,10 @@ const MFA_LOCK_MINUTES = MFA_LOCK_MS / MINUTE_MS;
  * @param now - the clock; a parameter so a test pins it
  */
 export const rejectLocked = (user: UserDocument, now = new Date()): ResponseReject => {
-    // A lock set by a concurrent request after this user was loaded is not on the document yet:
-    // the full length is then the honest upper bound.
+    /**
+     * A lock set by a concurrent request after this user was loaded is not on the document yet:
+     * the full length is then the honest upper bound.
+     */
     const lockedUntil = user.mfaLockedUntil;
     const retryAfter =
         lockedUntil && lockedUntil > now

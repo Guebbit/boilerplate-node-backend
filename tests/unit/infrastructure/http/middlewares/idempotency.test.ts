@@ -30,8 +30,11 @@ import {
     type OutcomeUnknownSink
 } from '@infrastructure/http/middlewares/idempotency';
 
+/** Stands in for the ledger model's create. */
 const create = idempotencyRecordModel.create as jest.Mock;
+/** Stands in for the ledger model's updateOne. */
 const updateOne = idempotencyRecordModel.updateOne as jest.Mock;
+/** Stands in for the ledger model's findOne. */
 const findOne = idempotencyRecordModel.findOne as jest.Mock;
 
 /** Lets a pending promise chain (the mocked `create().then(...)`) settle before assertions run. */
@@ -93,8 +96,10 @@ describe('idempotencyKey', () => {
     });
 
     it("fingerprints identically regardless of a NESTED object's key order", async () => {
-        // `idempotency.ts`'s own doc says `canonicalize` sorts keys recursively, not just at the
-        // top level — this is the case that actually exercises the recursive half of that claim.
+        /**
+         * `idempotency.ts`'s own doc says `canonicalize` sorts keys recursively, not just at the
+         * top level — this is the case that actually exercises the recursive half of that claim.
+         */
         const next = jest.fn();
 
         idempotencyKey(
@@ -141,8 +146,10 @@ describe('idempotencyKey', () => {
     });
 
     it('fingerprints two resources behind one route template differently', async () => {
-        // An empty-bodied write per resource, e.g. a refund of order A then order B: one
-        // fingerprint for both would replay A's answer for B.
+        /**
+         * An empty-bodied write per resource, e.g. a refund of order A then order B: one
+         * fingerprint for both would replay A's answer for B.
+         */
         const next = jest.fn();
 
         idempotencyKey(makeRequest('key-1', {}, '/widgets/a'), makeResponseStub(), next);
@@ -214,9 +221,11 @@ describe('idempotencyKey', () => {
     ])('refuses a body with __proto__ %s, before touching the ledger', (_label, json) => {
         const response = makeResponseStub();
 
-        // Parsed from a JSON STRING, the way express's body parser actually produces
-        // `request.body` — that is what gives `__proto__` an own key. A hand-written object
-        // literal's `__proto__: {...}` sets the prototype instead, which this fixture must avoid.
+        /**
+         * Parsed from a JSON STRING, the way express's body parser actually produces
+         * `request.body` — that is what gives `__proto__` an own key. A hand-written object
+         * literal's `__proto__: {...}` sets the prototype instead, which this fixture must avoid.
+         */
         const body: unknown = JSON.parse(json);
 
         idempotencyKey(makeRequest('key-1', body), response, jest.fn());
@@ -277,8 +286,10 @@ describe('idempotencyKey', () => {
         await flush();
         await flush();
 
-        // The retried create isn't rejected (the default mock from beforeEach), so this run
-        // claims the key on its second attempt rather than running uncaptured.
+        /**
+         * The retried create isn't rejected (the default mock from beforeEach), so this run
+         * claims the key on its second attempt rather than running uncaptured.
+         */
         expect(create).toHaveBeenCalledTimes(2);
         expect(next).toHaveBeenCalledWith();
     });
@@ -295,8 +306,10 @@ describe('idempotencyKey', () => {
         await flush();
         await flush();
 
-        // Retried exactly once, not indefinitely — the second vanished lookup gives up rather
-        // than looping, and the request still proceeds (uncaptured) instead of hanging.
+        /**
+         * Retried exactly once, not indefinitely — the second vanished lookup gives up rather
+         * than looping, and the request still proceeds (uncaptured) instead of hanging.
+         */
         expect(create).toHaveBeenCalledTimes(2);
         expect(next).toHaveBeenCalledWith();
     });

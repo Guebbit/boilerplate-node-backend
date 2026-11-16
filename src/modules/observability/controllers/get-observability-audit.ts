@@ -4,7 +4,7 @@
  * `audit-logs`' collection — the one place this module reaches beyond its own process snapshot, and
  * the reason it depends on `audit-logs` at all.
  *
- * @see docs/modules/observability.md
+ * @see docs/modules/observability.md#the-pipeline
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
@@ -20,9 +20,11 @@ import { createListController } from '@infrastructure/surfaces/create-list-contr
  */
 export const getObservabilityAuditLogs = createListController({
     entity: 'observabilityAuditLogs',
-    // The generated `outcome` enum rejects anything outside `success`/`failure` with a 422
-    // instead of the filter silently matching every row — `page`/`pageSize` swapped for the
-    // infra pair so an absent one stays absent for `normalizePagination` to default.
+    /**
+     * The generated `outcome` enum rejects anything outside `success`/`failure` with a 422
+     * instead of the filter silently matching every row — `page`/`pageSize` swapped for the
+     * infra pair so an absent one stays absent for `normalizePagination` to default.
+     */
     schema: ListObservabilityAuditEntriesQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema

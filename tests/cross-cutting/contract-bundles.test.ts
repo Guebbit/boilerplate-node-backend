@@ -49,6 +49,10 @@ import { REPO_ROOT } from '../../scripts/modules-on-disk';
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
     groups.reduce((total, group) => total + (group.items ?? group.children ?? []).length, 0);
 
+/**
+ * Finds a bundle by name; a missing one fails loudly.
+ * @throws {Error} when no bundle has that name
+ */
 const bundleByName = (name: string): ContractBundle => {
     const bundle = CONTRACT_BUNDLES.find((candidate) => candidate.name === name);
     if (!bundle) throw new Error(`no bundle named ${name}`);
@@ -57,7 +61,7 @@ const bundleByName = (name: string): ContractBundle => {
 
 describe('every contract bundle', () => {
     it('produces exactly the shared files that are domain-shaped', () => {
-        /*
+        /**
          * The AUTHORED bundles the frontend receives are a subset of the cross-repo guard:
          * everything built here and copied over is also compared against that copy, because a fork
          * in one of those is a fork in what the two sides believe they share.
@@ -88,11 +92,13 @@ describe('every contract bundle', () => {
 
 describe('MODULE_SECTIONS', () => {
     it('lists exactly the enabled modules that ship their own openapi.yaml', () => {
-        // `openapi-bundle.ts` derives MODULE_SECTIONS from disk directly and throws on an
-        // undeclared addition, but it cannot check itself against `enabledModules` — that would
-        // pull in every module's code, which imports the generated `@api/` client the bundler
-        // itself produces, and the bundler has to run before codegen. This is the second,
-        // independent computation that catches a section outliving the module it named.
+        /**
+         * `openapi-bundle.ts` derives MODULE_SECTIONS from disk directly and throws on an
+         * undeclared addition, but it cannot check itself against `enabledModules` — that would
+         * pull in every module's code, which imports the generated `@api/` client the bundler
+         * itself produces, and the bundler has to run before codegen. This is the second,
+         * independent computation that catches a section outliving the module it named.
+         */
         const shouldBeListed = enabledModules
             .map(({ name }) => name)
             .filter((name) =>
@@ -114,11 +120,15 @@ describe('the OpenAPI bundle', () => {
                 components?: { schemas?: Record<string, unknown> };
             };
 
-            // Standalone means standalone: a module document is valid OpenAPI on its own, which is
-            // what lets it be linted and opened in an editor without the rest of the contract.
+            /**
+             * Standalone means standalone: a module document is valid OpenAPI on its own, which is
+             * what lets it be linted and opened in an editor without the rest of the contract.
+             */
             expect(document_.openapi).toBeDefined();
-            // A components-only module (`access`) declares `paths: {}`: the key must exist, the
-            // routes need not.
+            /**
+             * A components-only module (`access`) declares `paths: {}`: the key must exist, the
+             * routes need not.
+             */
             expect(document_.paths).toBeDefined();
             expect(Object.keys(document_.components?.schemas ?? {}).length).toBeGreaterThan(0);
         }
@@ -139,10 +149,12 @@ describe('the OpenAPI bundle', () => {
             )
         );
 
-        // Whatever the bundle documents and no module claims belongs to the root — the
-        // application shell answering for itself: `GET /` (the client ping), `GET /livez`
-        // (liveness) and `GET /readyz` (readiness) and `GET /.well-known/security.txt`,
-        // all in `src/app/system-routes.ts`, and `GET /config` in `src/app/config-routes.ts`, none owned by a module.
+        /**
+         * Whatever the bundle documents and no module claims belongs to the root — the
+         * application shell answering for itself: `GET /` (the client ping), `GET /livez`
+         * (liveness) and `GET /readyz` (readiness) and `GET /.well-known/security.txt`,
+         * all in `src/app/system-routes.ts`, and `GET /config` in `src/app/config-routes.ts`, none owned by a module.
+         */
         const fromRoot = documented.filter((url) => !fromModules.includes(url));
 
         expect([...fromModules, ...fromRoot].toSorted()).toEqual(documented.toSorted());
@@ -175,8 +187,10 @@ const asyncDocument = (
 
 describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
     it('parses, and every channel declares a message every operation can reach', () => {
-        // The generated realtime types are an output of these documents, so a bundle that parses
-        // but has lost a channel forks `src/types/asyncapi.generated.ts` one `gen:asyncapi` later.
+        /**
+         * The generated realtime types are an output of these documents, so a bundle that parses
+         * but has lost a channel forks `src/types/asyncapi.generated.ts` one `gen:asyncapi` later.
+         */
         const document = asyncDocument(name);
 
         const channels = Object.entries(document.channels);
@@ -196,8 +210,10 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
                 }).toEqual({ channel: channelName, message, known: true });
         }
 
-        // Every operation resolves to a channel that actually exists, and to one of that
-        // channel's own messages — a bare `$ref` two sections could each get wrong independently.
+        /**
+         * Every operation resolves to a channel that actually exists, and to one of that
+         * channel's own messages — a bare `$ref` two sections could each get wrong independently.
+         */
         for (const [operationId, operation] of Object.entries(document.operations)) {
             const channelName = operation.channel.$ref.replace('#/channels/', '');
             const channel = document.channels[channelName];
@@ -224,10 +240,12 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
     });
 
     it('declares a server for every channel, and no server without one', () => {
-        // A server travels with the section whose channels bind to it, which is what lets the
-        // public bundle drop the broker. The failure that makes cheap: a section moved between
-        // scopes and left its server behind, so one document advertises a transport nothing on it
-        // can reach and the other names a transport it never declared.
+        /**
+         * A server travels with the section whose channels bind to it, which is what lets the
+         * public bundle drop the broker. The failure that makes cheap: a section moved between
+         * scopes and left its server behind, so one document advertises a transport nothing on it
+         * can reach and the other names a transport it never declared.
+         */
         const document = asyncDocument(name);
         const declared = Object.keys(document.servers);
 
@@ -247,10 +265,12 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
 
 describe('the public AsyncAPI bundle', () => {
     it('carries the SSE channels and none of the backend-only ones', () => {
-        // What the split is for. The frontend holds this file as its `asyncapi.yaml` and generates
-        // its types from it, so a queue that leaked in would hand a browser the payload shape of a
-        // message it can neither publish nor consume — and, worse, would read as a contract it is
-        // expected to honour.
+        /**
+         * What the split is for. The frontend holds this file as its `asyncapi.yaml` and generates
+         * its types from it, so a queue that leaked in would hand a browser the payload shape of a
+         * message it can neither publish nor consume — and, worse, would read as a contract it is
+         * expected to honour.
+         */
         const full = Object.keys(asyncDocument('asyncapi').channels);
         const shared = Object.keys(asyncDocument('asyncapi-public').channels);
 
@@ -259,8 +279,10 @@ describe('the public AsyncAPI bundle', () => {
     });
 
     it('is a strict subset of the full contract, preamble included', () => {
-        // Two bundles from one set of sections: anything the shared half says, the full one says
-        // identically. A drift here means the merge stopped being the same merge.
+        /**
+         * Two bundles from one set of sections: anything the shared half says, the full one says
+         * identically. A drift here means the merge stopped being the same merge.
+         */
         const full = asyncDocument('asyncapi');
         const shared = asyncDocument('asyncapi-public');
 
@@ -276,7 +298,7 @@ describe('the public AsyncAPI bundle', () => {
 });
 
 describe('the API client collections', () => {
-    /*
+    /**
      * Built here rather than read off disk: they are `.gitignore`d, so on a clean checkout there is
      * nothing to read. Generated once for the whole block — the generator walks every module
      * contract and synthesises an example per operation, which is not work worth repeating per
@@ -310,23 +332,29 @@ describe('the API client collections', () => {
     });
 
     it('leaves no probe token unresolved', () => {
-        // A probe writes `{{seedSoftDeletedProductId}}` rather than pasting an id, and the
-        // generator throws on a token it does not know — but a token that never reached the
-        // generator (a typo in a key it does not scan, a probe field added later) would ship as a
-        // literal.
+        /**
+         * A probe writes `{{seedSoftDeletedProductId}}` rather than pasting an id, and the
+         * generator throws on a token it does not know — but a token that never reached the
+         * generator (a typo in a key it does not scan, a probe field added later) would ship as a
+         * literal.
+         */
         expect(collection('bruno')).not.toContain('{{seed');
     });
 
     it('names no probe twice', () => {
-        // The name is what someone reads in a folder of 70 requests; two probes under one name
-        // would make a failing request unaddressable by name.
+        /**
+         * The name is what someone reads in a folder of 70 requests; two probes under one name
+         * would make a failing request unaddressable by name.
+         */
         expect(new Set(probeNames).size).toBe(probeNames.length);
     });
 
     it('carries one request per operation the contract declares', () => {
-        // This is the assertion that would have caught the rot they were generated to end: before
-        // it, the collections covered 37 of 56 operations and named no feedback, locales or
-        // observability endpoint, while some requests pointed at URLs the app had stopped serving.
+        /**
+         * This is the assertion that would have caught the rot they were generated to end: before
+         * it, the collections covered 37 of 56 operations and named no feedback, locales or
+         * observability endpoint, while some requests pointed at URLs the app had stopped serving.
+         */
         const contract = parseYaml(readCommittedBundle(bundleByName('openapi'))) as {
             paths: Record<string, Record<string, unknown>>;
         };
@@ -341,8 +369,10 @@ describe('the API client collections', () => {
             items: { items?: unknown[] }[];
         };
 
-        // The collection also carries the probes — the requests the contract cannot describe, so
-        // that they are the only difference between what it holds and what the API declares.
+        /**
+         * The collection also carries the probes — the requests the contract cannot describe, so
+         * that they are the only difference between what it holds and what the API declares.
+         */
         const probes = probeCount;
         expect(probes).toBeGreaterThan(0);
 

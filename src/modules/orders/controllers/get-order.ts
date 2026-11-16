@@ -42,9 +42,11 @@ export const getOrderItem = (
                 targetId: id,
                 subjectId: buyerIdOf(order)
             });
-            // `respondWithOrder` stamps the version an edit sends back as `If-Match`.
-            // The body carries what THIS caller may do to the order, so the client renders its
-            // controls from the server's answer rather than from a copy of the lifecycle.
+            /**
+             * `respondWithOrder` stamps the version an edit sends back as `If-Match`.
+             * The body carries what THIS caller may do to the order, so the client renders its
+             * controls from the server's answer rather than from a copy of the lifecycle.
+             */
             return respondWithOrder(response, order, request.authContext, 'getOrderItem');
         })
         .catch(catchAs(response, 'getOrderItem'));

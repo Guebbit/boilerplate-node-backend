@@ -6,7 +6,7 @@
  * Its own file so the layer runner and the staged-tests step read one list:
  * `run-suite.ts` runs on import, so it cannot be imported for its table.
  *
- * @see docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md#start-here-—-the-two-mechanisms
  */
 
 /**
@@ -25,8 +25,10 @@ export type Suite =
     | {
           readonly patterns: readonly string[];
           readonly serialized: false;
-          /** Measured peak cost of one parallel worker, MB — meaningless once `serialized`, so
-           *  the type only carries it for a layer that actually runs workers. */
+          /**
+           * Measured peak cost of one parallel worker, MB — meaningless once `serialized`, so
+           *  the type only carries it for a layer that actually runs workers.
+           */
           readonly workerPeakMb: number;
       };
 

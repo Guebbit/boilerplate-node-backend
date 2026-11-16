@@ -31,7 +31,6 @@ export interface PreorderSweepResult {
  * Tell the buyer of one fulfillment order whose date will be missed, in a transaction. Re-read there, so a
  * notice another run (or an allocation) already settled is not sent twice.
  *
- * @param fulfillmentOrderId - the fulfillment order
  * @param now - the instant of the sweep
  * @returns what to mail after the commit, if anything
  */
@@ -60,8 +59,10 @@ const noticeOne = (fulfillmentOrderId: string, now: Date): Promise<SentNotice | 
 export const runPreorderSweep = async (now: Date = new Date()): Promise<PreorderSweepResult> => {
     let notified = 0;
 
-    // One after another: each is a transaction over its own fulfillment order, and the buyer's mail
-    // rides each commit's event.
+    /**
+     * One after another: each is a transaction over its own fulfillment order, and the buyer's mail
+     * rides each commit's event.
+     */
     for (const fulfillmentOrder of await fulfillmentOrderRepository.findDatePassed(now)) {
         const sent = await noticeOne(String(fulfillmentOrder._id), now);
         if (sent) notified += 1;

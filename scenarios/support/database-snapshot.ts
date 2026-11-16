@@ -5,11 +5,13 @@
  * different concern from taking and replaying a snapshot, and only `./demo` and
  * `scenarios/apply.ts` need this half.
  *
- * @see docs/understand/mongodb-mongoose.md
+ * @see docs/understand/mongodb-mongoose.md#seeds
  */
 
-// The driver's own raw-document type: what `collection.find()` yields and `collection.insertMany()`
-// takes, with no Mongoose hydration in between. https://mongodb.github.io/node-mongodb-native/
+/**
+ * The driver's own raw-document type: what `collection.find()` yields and `collection.insertMany()`
+ * takes, with no Mongoose hydration in between. https://mongodb.github.io/node-mongodb-native/
+ */
 import type { Document } from 'mongodb';
 import { connection, JOB_MAX_TIME_MS } from '@infrastructure/runtime/database';
 

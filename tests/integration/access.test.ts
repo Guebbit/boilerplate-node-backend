@@ -38,9 +38,11 @@ describe('the seeded model', () => {
 
         const rootMemberships = await accessService.membershipsOf(SEED_ADMIN_ID);
 
-        // Two memberships for one person, because running a shop and operating the installation
-        // are two jobs. Which one a request acts as is settled by the key it asks about — this is
-        // the account everybody logs in as, so the split is exercised by the demo itself.
+        /**
+         * Two memberships for one person, because running a shop and operating the installation
+         * are two jobs. Which one a request acts as is settled by the key it asks about — this is
+         * the account everybody logs in as, so the split is exercised by the demo itself.
+         */
         expect(
             rootMemberships
                 .map((one) => ({ scope: one.scope, role: one.role }))
@@ -56,9 +58,11 @@ describe('the seeded model', () => {
             accessService.membershipIn(SEED_MODERATOR_ID, DEPLOYMENT_TENANT_ID, 'tenant')
         ]);
 
-        // The shopper holds no role at all (a customer is computed from `verifiedAt`); each staff
-        // account holds exactly one tenant role, unlike root's two jobs above — the whole point of
-        // adding them is a staff account that can be logged into on its own.
+        /**
+         * The shopper holds no role at all (a customer is computed from `verifiedAt`); each staff
+         * account holds exactly one tenant role, unlike root's two jobs above — the whole point of
+         * adding them is a staff account that can be logged into on its own.
+         */
         expect(customer).toBeNull();
         expect(editor?.role).toBe('editor');
         expect(moderator?.role).toBe('moderator');
@@ -99,7 +103,7 @@ describe('the seeded model', () => {
         );
         const published = await userRepository.findById(SEED_ADMIN_ID);
 
-        /*
+        /**
          * One store, one answer — the redundancy this phase closed. A role field on the user
          * document could drift from the membership that actually decides authorization; the fix
          * is not to keep them in sync, it is to have only one of them at all.

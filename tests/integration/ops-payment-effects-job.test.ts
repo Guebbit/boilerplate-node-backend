@@ -27,6 +27,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     ...jest.requireActual('@infrastructure/adapters/mailer'),
     enqueueEmail: jest.fn()
 }));
+/** Stands in for the mail queue; the cases assert how it was called. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
@@ -36,7 +37,10 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-/** The payment effects sweep, as declared. */
+/**
+ * The payment effects sweep, as declared.
+ * @throws {Error} when the job is not declared
+ */
 const sweepPaymentEffects = () => {
     const job = paymentsJobs.find(({ name }) => name === 'sweep:payment-effects');
     if (!job) throw new Error('sweep:payment-effects is not declared');

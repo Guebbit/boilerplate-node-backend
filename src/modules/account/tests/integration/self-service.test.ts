@@ -42,7 +42,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { ageTokenSend, plantSession, plantToken, sessionRowsOf, tokenRowsOf } from '../factories';
 
-/*
+/**
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
  * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
@@ -108,8 +108,10 @@ describe('updateProfile', () => {
     });
 
     it('answers 401, not 404, for an account that no longer exists', async () => {
-        // A verified token for a deleted account is unauthenticated, not missing — `openapi.yaml`
-        // declares no 404 on `PUT/PATCH /account`, and `isAuth` treats this exact case as 401 everywhere else.
+        /**
+         * A verified token for a deleted account is unauthenticated, not missing — `openapi.yaml`
+         * declares no 404 on `PUT/PATCH /account`, and `isAuth` treats this exact case as 401 everywhere else.
+         */
         const user = await createUser();
         await userRepository.deleteOne(user);
 
@@ -358,8 +360,10 @@ describe('passwordChangeWithCurrent', () => {
             )
         );
 
-        // The new credential works and the old one is dead — both directions, or the test
-        // passes on a no-op.
+        /**
+         * The new credential works and the old one is dead — both directions, or the test
+         * passes on a no-op.
+         */
         const withNew = await accountService.login({
             email: user.email,
             password: REPLACEMENT_PASSWORD
@@ -492,9 +496,11 @@ describe('sessionRevoke', () => {
 
 describe('logoutCurrentSession', () => {
     it('revokes the named refresh token and records the logout', async () => {
-        // Reported HERE and not by the paired frontend: this is a real request the API answers, so
-        // it can count the logout that succeeded rather than the one that was attempted. `scope`
-        // separates it from a logout-everywhere without splitting the funnel across two names.
+        /**
+         * Reported HERE and not by the paired frontend: this is a real request the API answers, so
+         * it can count the logout that succeeded rather than the one that was attempted. `scope`
+         * separates it from a logout-everywhere without splitting the funnel across two names.
+         */
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
@@ -520,8 +526,10 @@ describe('logoutCurrentSession', () => {
     });
 
     it('records the logout even with no cookie to revoke', async () => {
-        // `getRefreshToken` answers 200 for "already logged out here" — the audit event fires
-        // either way, matching that: there is simply nothing to revoke.
+        /**
+         * `getRefreshToken` answers 200 for "already logged out here" — the audit event fires
+         * either way, matching that: there is simply nothing to revoke.
+         */
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
@@ -551,8 +559,10 @@ describe('sendVerificationEmail', () => {
         const secondTokens = await readTokens(user.id);
         const verifyTokens = secondTokens.filter(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE);
 
-        // One live link at any moment, and it is the NEWEST one — the re-send exists for the
-        // user whose first mail vanished.
+        /**
+         * One live link at any moment, and it is the NEWEST one — the re-send exists for the
+         * user whose first mail vanished.
+         */
         expect(verifyTokens).toHaveLength(1);
         expect(verifyTokens[0]?.tokenHash).not.toBe(first?.tokenHash);
     });
@@ -588,7 +598,7 @@ describe('requestEmailVerification', () => {
     });
 });
 
-/*
+/**
  * `credentialLimiters` carries `skipSuccessfulRequests`, so the route's own budget is never spent
  * by the presses that actually send mail — which is why the cooldown is the service's job.
  */
@@ -647,7 +657,7 @@ describe('requestEmailVerificationFor', () => {
 const ageEmailChangeSend = (userId: string): Promise<void> =>
     ageTokenSend(userId, EMAIL_CHANGE_TOKEN_TYPE, (VERIFY_RESEND_SECONDS + 1) * 1000);
 
-/*
+/**
  * The pending address cannot be re-asked for through `POST /account/email-change` (a restated
  * pending address is a 409), so this is the only way a lost link is mailed again. Same cooldown and
  * same send-spends-no-limiter-budget reasoning as `requestEmailVerificationFor` above.
@@ -725,8 +735,10 @@ describe('resendPendingEmailVerificationFor', () => {
     });
 
     it('is not slowed by a verification link the account asked for separately', async () => {
-        // The cooldown reads the `email-change` token, not the signup-kind one — the two buttons
-        // do not share a clock.
+        /**
+         * The cooldown reads the `email-change` token, not the signup-kind one — the two buttons
+         * do not share a clock.
+         */
         const user = await createUser({ email: 'before@example.com' }, 'unverified');
         await accountService.requestEmailVerificationFor(user.id, testCallerContext);
         await accountService.requestEmailChange(user.id, 'after@example.com', testCallerContext);
@@ -835,10 +847,12 @@ describe('scheduleAccountDeletion', () => {
 });
 
 describe('requestPasswordReset', () => {
-    // The audit is written by this service function, not the `postResetRequest` controller.
-    // This pins that the "audit fires either way" contract holds there, since an
-    // account-enumeration defense that only audits a REAL address would leak the same fact the
-    // identical HTTP response is built to hide. See `docs/build/module-lifecycle.md` rule 1.
+    /**
+     * The audit is written by this service function, not the `postResetRequest` controller.
+     * This pins that the "audit fires either way" contract holds there, since an
+     * account-enumeration defense that only audits a REAL address would leak the same fact the
+     * identical HTTP response is built to hide. See `docs/build/module-lifecycle.md` rule 1.
+     */
     it('audits the attempt unconditionally, even for an address with no account', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
@@ -892,8 +906,10 @@ const resetDigests = (userId: string) =>
     );
 
 describe('one live reset link per account', () => {
-    // Every request used to push another working link (5 a minute per address, ~300 an hour),
-    // each valid for its whole TTL.
+    /**
+     * Every request used to push another working link (5 a minute per address, ~300 an hour),
+     * each valid for its whole TTL.
+     */
     it('replaces the previous link when another is requested, so only the newest works', async () => {
         const user = await createUser();
 
@@ -935,8 +951,10 @@ describe('one live reset link per account', () => {
 });
 
 describe('the reset request is paced per account, silently', () => {
-    // A 429 would tell a stranger which addresses have an account — the one thing the uniform 200
-    // exists to hide — so a request inside the window is skipped: same answer, nothing sent.
+    /**
+     * A 429 would tell a stranger which addresses have an account — the one thing the uniform 200
+     * exists to hide — so a request inside the window is skipped: same answer, nothing sent.
+     */
     it('mails nothing and mints nothing for a second request inside the window', async () => {
         const user = await createUser();
         const first = await accountService.requestPasswordReset(user.email, testCallerContext);
@@ -1073,7 +1091,7 @@ describe('what a completed reset leaves behind', () => {
         );
     });
 
-    /*
+    /**
      * The reset token reached the account's mailbox and nowhere else, so spending it proves
      * possession as strongly as a `verify` token does. Without this, the visitor whose
      * verification mail never arrived resets from that same inbox and is still held at
@@ -1091,7 +1109,7 @@ describe('what a completed reset leaves behind', () => {
         expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
     });
 
-    /*
+    /**
      * The audit-role lookup after a completed reset caught its own rejection with no
      * logging at all — a swallowed failure had no trail. The reset itself must still succeed:
      * the password already changed, and a missing audit row is the worst case, not a reason to
@@ -1142,7 +1160,7 @@ describe('findLiveToken', () => {
     });
 
     it('refuses an expired token', async () => {
-        /*
+        /**
          * Planted already expired: `issueToken` cannot produce this state, and it is the one a
          * link reaches by sitting in an inbox overnight while the database's TTL monitor (which
          * runs about once a minute) has yet to delete the row. Reads check the expiry themselves.

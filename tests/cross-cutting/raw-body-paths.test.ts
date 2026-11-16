@@ -12,14 +12,18 @@ import { routeSignatures } from '@tests/routes';
 
 describe('rawBodyPaths', () => {
     it('finds at least one module declaring a raw-body path', () => {
-        // The canary. An empty sweep must mean "nothing declares one", not "the sweep broke and
-        // every assertion below passed vacuously".
+        /**
+         * The canary. An empty sweep must mean "nothing declares one", not "the sweep broke and
+         * every assertion below passed vacuously".
+         */
         const declaring = enabledModules.filter(
             (appModule) => (appModule.rawBodyPaths ?? []).length > 0
         );
 
-        // `payments` is the module that verifies a provider's signature over the raw body; with it
-        // gone, an empty sweep is the right answer and only the module walk itself is checked.
+        /**
+         * `payments` is the module that verifies a provider's signature over the raw body; with it
+         * gone, an empty sweep is the right answer and only the module walk itself is checked.
+         */
         expect(isDeployed('payments') ? declaring.length : enabledModules.length).toBeGreaterThan(
             0
         );
@@ -36,8 +40,10 @@ describe('rawBodyPaths', () => {
                 )
             );
 
-            // A declared path also covers the routes under it (`/webhook` covers
-            // `/webhook/:provider`): the allowlist matches at a segment boundary, prefix included.
+            /**
+             * A declared path also covers the routes under it (`/webhook` covers
+             * `/webhook/:provider`): the allowlist matches at a segment boundary, prefix included.
+             */
             const covers = (path: string): boolean =>
                 [...mounted].some((route) => route === path || route.startsWith(`${path}/`));
 

@@ -60,8 +60,10 @@ const staffRow = (
     order: { orderNumber: string; email: string } | undefined,
     authContext?: AuthContext
 ): Payment => ({
-    // No order document is read for a list: `pay` is the payer's own step and stays false here, so
-    // the row carries the same `actions.refund` the order page's panel does.
+    /**
+     * No order document is read for a list: `pay` is the payer's own step and stays false here, so
+     * the row carries the same `actions.refund` the order page's panel does.
+     */
     ...withActions(payment, undefined, authContext),
     ...(order ? { orderNumber: order.orderNumber, email: order.email } : {})
 });
@@ -206,7 +208,6 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
 
 /**
  * How much of a payment has been returned for good: its settled refunds that were not taken back.
- * @param payment - the payment
  */
 const refundedForGood = (payment: PaymentDocument): string =>
     toDecimalString(

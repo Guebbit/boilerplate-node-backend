@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the accepted upload types from `openapi.yaml`: every multipart `imageUpload` part
  * declares `encoding.imageUpload.contentType`, stamped there by the bundler from the root's
  * `x-image-upload-types`. The backend's `fileFilter` and the frontend's file picker both read the
@@ -74,6 +74,7 @@ if (declared.size !== 1) {
 
 /** The accepted media types, in the order the contract lists them. */
 const [accepted = ''] = declared.keys();
+/** The accepted media types, one string each. */
 const types = accepted.split(',').map((type) => type.trim());
 
 /** The whole file's text. */

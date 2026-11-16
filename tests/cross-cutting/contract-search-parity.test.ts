@@ -124,11 +124,15 @@ const successShape = (operation: Record<string, unknown>): string => {
 };
 
 describe('a search accepts the same filters in both spellings', () => {
-    // Discovered by walking `x-alias-of`, so a new pair is covered without editing this file —
-    // and a regex that stopped matching would make every case below vacuous.
+    /**
+     * Discovered by walking `x-alias-of`, so a new pair is covered without editing this file —
+     * and a regex that stopped matching would make every case below vacuous.
+     */
     it('found every search pair', () => {
-        // Owning module and route prefix, which share a name for every pair bar `example`: its
-        // collection path is the plural `/examples`, like `/products`.
+        /**
+         * Owning module and route prefix, which share a name for every pair bar `example`: its
+         * collection path is the plural `/examples`, like `/products`.
+         */
         const owners: [module: string, prefix: string][] = [
             ['example', 'examples'],
             ['orders', 'orders'],
@@ -145,8 +149,10 @@ describe('a search accepts the same filters in both spellings', () => {
     });
 
     it.each(searchPairs)(
-        // `$searchRoute` reads off the object jest is given, so it names the pair in the title
-        // without this signature having to destructure it.
+        /**
+         * `$searchRoute` reads off the object jest is given, so it names the pair in the title
+         * without this signature having to destructure it.
+         */
         '$listRoute and $searchRoute declare the same filters',
         ({ listRoute, post }) => {
             const listOperation = ((

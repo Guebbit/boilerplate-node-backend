@@ -34,6 +34,9 @@ afterEach(() => {
     resetDomainEvents();
 });
 
+/**
+ * A staff note that carries a phone number, so the redaction cases have personal data to remove.
+ */
 const NOTE = 'Called 0612345678: agreed to ship Monday';
 
 /** A paid order of a signed-in buyer, plus that buyer's and a staff member's bearers. */

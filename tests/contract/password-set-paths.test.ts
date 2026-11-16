@@ -26,8 +26,10 @@ import { REPO_ROOT } from '@tests/paths';
 
 setupTestDb();
 
-// A listed, composition-valid entry in `shared/rules/breached-passwords.txt` — same fixture every
-// existing breach case in this repo uses, so composition rules alone can't be what refuses it.
+/**
+ * A listed, composition-valid entry in `shared/rules/breached-passwords.txt` — same fixture every
+ * existing breach case in this repo uses, so composition rules alone can't be what refuses it.
+ */
 const BREACHED_PASSWORD = 'Password1!';
 
 /** One place a password gets written, exercised over HTTP through its real route. */
@@ -165,9 +167,11 @@ const operationsThatSetAPassword = (): string[] => {
 };
 
 describe('the routes that can set a password', () => {
-    // The owner's own three, and nobody else's: no staff route sets, resets or creates one. The
-    // exact list is the canary, so a new route that sets a password fails here until it is a
-    // deliberate addition (and gains a breach-check case above).
+    /**
+     * The owner's own three, and nobody else's: no staff route sets, resets or creates one. The
+     * exact list is the canary, so a new route that sets a password fails here until it is a
+     * deliberate addition (and gains a breach-check case above).
+     */
     it('are exactly signup, the owner’s own change and the reset or setup link', () => {
         expect(operationsThatSetAPassword()).toEqual([
             'POST /account/password',

@@ -111,9 +111,11 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.billingAddress).toBeUndefined();
     });
 
-    // BR-CO-17: VAT is rounded once per rate, on the rate's whole taxable total. Three 0.10 lines
-    // at the standard rate (22%) owe round(30 x 0.22/1.22) = 5 cents, where rounding each line
-    // (round(1.80) = 2) and summing would bill 6.
+    /**
+     * BR-CO-17: VAT is rounded once per rate, on the rate's whole taxable total. Three 0.10 lines
+     * at the standard rate (22%) owe round(30 x 0.22/1.22) = 5 cents, where rounding each line
+     * (round(1.80) = 2) and summing would bill 6.
+     */
     it('freezes VAT rounded once per rate, not summed from per-line rounded amounts', async () => {
         const user = await createUser();
         const products = await Promise.all(
@@ -140,9 +142,11 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(invoice.grandTotal).toBe('0.30');
     });
 
-    // `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
-    // and freezes again onto the invoice line here — the field a rendered PDF needs to tell a
-    // zero_rated line from an exempt one, neither of which `taxRate` alone can say.
+    /**
+     * `rateType` rides frozen onto the order line at checkout (`orders/services/snapshot.ts`)
+     * and freezes again onto the invoice line here — the field a rendered PDF needs to tell a
+     * zero_rated line from an exempt one, neither of which `taxRate` alone can say.
+     */
     it('freezes the order line’s rateType onto the invoice line', async () => {
         const user = await createUser();
         const zeroRated = await createProduct({
@@ -192,8 +196,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         });
         const year = yearInZone(new Date(), shopTimezone());
 
-        // Two callers racing the same fact — a redelivered event, or two settlements — both call
-        // this; the unique index refuses the second insert and its transaction gives the number back.
+        /**
+         * Two callers racing the same fact — a redelivered event, or two settlements — both call
+         * this; the unique index refuses the second insert and its transaction gives the number back.
+         */
         const [first, second] = await Promise.all([
             invoicingService.issueInvoice(order),
             invoicingService.issueInvoice(order)
@@ -283,8 +289,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         }
     });
 
-    // The printed date reads in the zone frozen here, so a later config change cannot move a
-    // legal document's day; a credit note reads like the invoice it corrects.
+    /**
+     * The printed date reads in the zone frozen here, so a later config change cannot move a
+     * legal document's day; a credit note reads like the invoice it corrects.
+     */
     it('freezes the shop’s time zone at issue, and keeps it when the setting changes later', async () => {
         const user = await createUser();
         const product = await createProduct({ price: '10.00' });
@@ -298,8 +306,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(stored?.timezone).toBe('Europe/Rome');
     });
 
-    // The seller is a legal fact of the day of sale: a later rename or a new VAT number must not
-    // reach a document that already exists.
+    /**
+     * The seller is a legal fact of the day of sale: a later rename or a new VAT number must not
+     * reach a document that already exists.
+     */
     it('freezes the seller as issued, without the shop’s email or phone, and keeps it when the settings change', async () => {
         setEnvironment({ NODE_LEGAL_VAT_NUMBER: 'IT12345678901' });
         const user = await createUser();

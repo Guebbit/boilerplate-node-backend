@@ -237,6 +237,7 @@ describe('GET /returns and GET /returns/{id}', () => {
 
 /** A staff account with a verified address, distinct per call, whose session a test can age. */
 let staffAccounts = 0;
+/** A staff user with the given role. */
 const staffUser = (role: string) => {
     staffAccounts += 1;
     return createUser(
@@ -849,8 +850,10 @@ describe('POST /returns — a staff cancellation asks a fresh session, the buyer
         expect(await stillWaiting(orderId)).toBe(true);
     });
 
-    // The ledger records any JSON answer: the 401 must be refused before it, or the same key would
-    // replay it after the staff member has re-authenticated.
+    /**
+     * The ledger records any JSON answer: the 401 must be refused before it, or the same key would
+     * replay it after the staff member has re-authenticated.
+     */
     it('lets the same Idempotency-Key through once the staff member has re-authenticated', async () => {
         const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
         const { moderator, bearer: stale } = await staleModerator();

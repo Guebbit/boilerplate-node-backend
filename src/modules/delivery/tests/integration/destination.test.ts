@@ -42,6 +42,7 @@ const SECOND = { ...FIRST, street: '14 Difference Engine Ln', zip: '20121' };
 
 /** A `processing` order of two units that ships to {@link FIRST}. */
 let buyers = 0;
+/** A processing order of two units for a fresh buyer; each case ships or redirects it. */
 const twoUnitOrder = async () => {
     buyers += 1;
     const user = await createUser({ email: `buyer-${buyers}@example.com` });

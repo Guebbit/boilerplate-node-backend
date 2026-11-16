@@ -28,8 +28,10 @@ export const postAdjustment = (request: Request<{ productId?: string }>, respons
     if (!body) return Promise.resolve();
 
     const { delta, note } = body;
-    // Zero can't be expressed as a schema constraint, so it's checked here.
-    // Refused rather than silently accepted — a no-op would write a meaningless ledger row.
+    /**
+     * Zero can't be expressed as a schema constraint, so it's checked here.
+     * Refused rather than silently accepted — a no-op would write a meaningless ledger row.
+     */
     if (delta === 0) {
         rejectResponse(response, 422, [fieldError('delta', t('inventory.adjust-zero'))]);
         return Promise.resolve();

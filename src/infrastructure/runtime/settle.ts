@@ -20,8 +20,10 @@ export const settleWithin = (
     let timer: NodeJS.Timeout | undefined;
     const deadline = new Promise<void>((resolve) => {
         timer = setTimeout(resolve, timeoutMs);
-        // Never, on its own, the thing keeping the process alive.
-        // https://nodejs.org/api/timers.html#timeoutunref
+        /**
+         * Never, on its own, the thing keeping the process alive.
+         * https://nodejs.org/api/timers.html#timeoutunref
+         */
         timer.unref();
     });
     return Promise.race([Promise.allSettled(pending).then(() => undefined), deadline]).finally(() =>

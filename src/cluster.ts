@@ -1,6 +1,6 @@
 /**
  * The cluster entry: `npm run start:cluster`, for a bare VM with no PM2 or systemd. Not the
- * default (`src/main.ts` is); containers scale with `--scale app=N` instead.
+ * default (`src/main.ts` is); containers scale with orchestrator replicas instead.
  *
  * Like `main.ts`, it starts OTel before `serve` loads express and mongoose: `serve` is imported
  * dynamically below, while a static import is hoisted above any statement. Under
@@ -31,7 +31,7 @@ import {
 /**
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
-
+ *
  *
  * Read once at import, on purpose: this file is the process entry point, so no test or
  * `createApp({ env })` override can arrive after it, and the primary/worker split is
@@ -138,8 +138,10 @@ const supervise = (): void => {
             if (aliveWorkers === 0) {
                 // Stryker disable next-line all
                 logger.info('All workers exited; primary shutting down.');
-                // `??=`: a forced shutdown or a crash loop already recorded a failure, and the
-                // last worker's exit must not overwrite it with success.
+                /**
+                 * `??=`: a forced shutdown or a crash loop already recorded a failure, and the
+                 * last worker's exit must not overwrite it with success.
+                 */
                 process.exitCode ??= 0;
             }
             return;
@@ -187,8 +189,10 @@ const supervise = (): void => {
  * @throws {ConfigError} when 2+ workers would run with no `NODE_RATE_LIMIT_REDIS_URL`
  */
 const refuseUnsharedRateLimits = (): Promise<void> =>
-    // Lazy: a static import is hoisted above `startTracing()`, so the Redis client would load
-    // before OTel patches it (the same reason `serve` is imported dynamically).
+    /**
+     * Lazy: a static import is hoisted above `startTracing()`, so the Redis client would load
+     * before OTel patches it (the same reason `serve` is imported dynamically).
+     */
     import('@infrastructure/adapters/limits-redis').then(({ limitsRedisUrl }) => {
         assertSharedRateLimitCounters({
             clustered: CLUSTER_ENABLED,
@@ -218,7 +222,7 @@ const enter = (): void => {
             });
         return;
     }
-    /*
+    /**
      * Workers execute `./serve` — `createApp()` built, started, and wired to this
      * worker's own signal handlers. Side-effect only: nothing here needs the instance back.
      */

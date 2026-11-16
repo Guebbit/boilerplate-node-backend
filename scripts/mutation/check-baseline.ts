@@ -66,7 +66,7 @@ try {
 /** The recorded baseline, or `undefined` when none exists yet. */
 const baseline = readBaseline();
 
-/*
+/**
  * A first baseline is only ever written on purpose. Writing on ANY invocation (bare
  * `mutation:check` included) would let a local `mutation` run before a full sweep had ever
  * recorded one silently create a partial, three-file baseline from whatever it happened
@@ -141,7 +141,7 @@ if (merge) {
     process.exit(0);
 }
 
-/*
+/**
  * Guard the baseline against a PARTIAL report before anything is written. See
  * `missingFromReport`: recording one would quietly erase every file the run did not measure. A
  * sharded sweep's partial coverage belongs under `--merge` above, which is written for exactly
@@ -192,8 +192,10 @@ const regressions = formatRegressions(comparisons);
 // Any regression fails the check.
 if (regressions) {
     console.error(`\n[mutation-baseline] ${regressions}\n`);
-    // `--update` still rewrites the file, but `nextBaseline` keeps the higher of the two scores,
-    // so a regressed file keeps its old baseline and stays failing until it is genuinely fixed.
+    /**
+     * `--update` still rewrites the file, but `nextBaseline` keeps the higher of the two scores,
+     * so a regressed file keeps its old baseline and stays failing until it is genuinely fixed.
+     */
     if (update) writeBaseline(nextBaseline(current, baseline));
     process.exit(1);
 }

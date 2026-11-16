@@ -7,11 +7,13 @@
  *        a snapshot without it.
  * Never: overrides a variable the shell already set (dotenv's own rule).
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#read-once-override-on-top
  */
 
-// dotenv: loads `.env` from the working directory into `process.env`, skipping keys already set.
-// https://github.com/motdotla/dotenv#readme
+/**
+ * dotenv: loads `.env` from the working directory into `process.env`, skipping keys already set.
+ * https://github.com/motdotla/dotenv#readme
+ */
 import 'dotenv/config';
 import { refreshEnvironment } from './store';
 

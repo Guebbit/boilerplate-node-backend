@@ -25,8 +25,10 @@ export const patchCartItem = (
 ) => {
     const userId = request.authContext!.id;
 
-    // productId is the path segment; the body carries only the quantity. A malformed one answers
-    // as the unknown product the service would have found.
+    /**
+     * productId is the path segment; the body carries only the quantity. A malformed one answers
+     * as the unknown product the service would have found.
+     */
     const productId = requireId(request, response, {
         notFound: 'products.not-found',
         name: 'productId',

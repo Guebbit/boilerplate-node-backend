@@ -20,7 +20,10 @@ setupTestDb();
 /** The tasks section, off the manifest — the way `account` and `users` reach it. */
 const [{ collect }] = tasksModule.personalData;
 
-/** The erase hook, off the manifest — the way `users` reaches it. */
+/**
+ * The erase hook, off the manifest — the way `users` reaches it.
+ * @throws {Error} when the tasks section declares no erase hook
+ */
 const erase = (
     subject: Parameters<PersonalDataEraser>[0],
     session: Parameters<PersonalDataEraser>[1]

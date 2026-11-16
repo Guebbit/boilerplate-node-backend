@@ -117,31 +117,33 @@ export default defineConfig(
      * off the type-aware program instead of the whole linter.
      */
     globalIgnores([
-        /*
+        /**
          * The k6 load scenarios. They are JavaScript, but not this project's JavaScript: they run
          * inside the k6 Go runtime and import from `k6/http`, a module specifier that resolves
          * only there. Linting them means resolving imports that cannot resolve and enforcing
          * rules written for the app on a file the app never loads.
          */
         'tests/load/**',
-        /*
+        /**
          * Mongo's own init convention: a script mongosh runs directly against `db`, a global
          * that mongosh injects and this project never defines. Same shape as the k6 scripts
          * above — foreign runtime, not this project's JavaScript.
          */
         'docker/mongo-init.js',
-        /*
+        /**
          * Runs inside a bare base image during `docker build`, before this project's
          * dependencies or tsconfig exist there — plain Node with only `node:` imports.
          */
         'docker/install-supercronic.mjs',
         '**/node_modules/**',
         '**/dist/**',
-        // The built docs site and its build cache; the authored source under `docs/` is markdown,
-        // and the VitePress config is linted through the tool-config block below.
+        /**
+         * The built docs site and its build cache; the authored source under `docs/` is markdown,
+         * and the VitePress config is linted through the tool-config block below.
+         */
         'docs/.vitepress/dist/**',
         'docs/.vitepress/cache/**',
-        /*
+        /**
          * `tmp/` holds every run's throwaway output: jest coverage, mutation reports, Stryker's
          * own per-run sandbox copy of the whole project, and the per-run in-memory Mongo data
          * directories (`tests/support/global-setup.ts`). Without this, `npm run lint` fails with
@@ -157,7 +159,7 @@ export default defineConfig(
         'src/types/asyncapi.generated.ts',
         '.prism/**',
         '.dev/**',
-        /*
+        /**
          * A working directory that belongs to tooling rather than to this codebase — `.claude/`
          * holds git WORKTREES, whole copies of this project sitting outside the `tsconfig`
          * project `parserOptions.project` resolves against. Same failure as `tmp/**` above and
@@ -304,22 +306,26 @@ export default defineConfig(
             'no-console': 'warn',
             'no-debugger': 'warn',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts],
-            // `as X` narrows a value that exists; an object literal cast to a type claims fields it
-            // may not have. Type a variable, or use `satisfies`, so the compiler checks the literal.
+            /**
+             * `as X` narrows a value that exists; an object literal cast to a type claims fields it
+             * may not have. Type a variable, or use `satisfies`, so the compiler checks the literal.
+             */
             '@typescript-eslint/consistent-type-assertions': [
                 'error',
                 { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }
             ],
-            // `void p` is checked like `p`: `void` alone hides a rejection.
-            // Handle it at the site, or opt out on the line with a reason.
+            /**
+             * `void p` is checked like `p`: `void` alone hides a rejection.
+             * Handle it at the site, or opt out on the line with a reason.
+             */
             '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],
-            /*
+            /**
              * A comment may point at `docs/` and nothing else that ends in `.md`. Root-level plan
              * and audit docs are deleted when their change lands, and every comment that named one
              * becomes a dangling pointer nothing catches.
              */
             'local/comment-links': 'error',
-            /*
+            /**
              * `nesting <= 3 levels`, the block-statement half. The callback half follows.
              * A chain nests one `.then` deeper per step, so 4 is the line: past it, name the step.
              * Tests are exempt — `describe` > `describe` > `it` > `expect` callbacks are the
@@ -327,7 +333,7 @@ export default defineConfig(
              */
             'max-depth': ['error', 3],
             'max-nested-callbacks': ['error', 4],
-            /*
+            /**
              * `!` is allowed where a value has ALREADY been proven present by something the
              * compiler cannot follow — the `isAdmin` middleware guaranteeing `request.authContext`,
              * a `.some(x => !x)` guard proving the `.map` below it finds no `undefined`. The
@@ -341,7 +347,7 @@ export default defineConfig(
             'unicorn/no-nested-ternary': 'off',
             'unicorn/prefer-top-level-await': 'off',
 
-            /*
+            /**
              * Four unicorn rules turned off rather than exempted seventeen times.
              *
              * Each was being disabled inline wherever it fired, which is the signal that the rule
@@ -374,7 +380,7 @@ export default defineConfig(
                 }
             ],
 
-            /*
+            /**
              * strictTypeChecked's default rejects numbers in template literals, which turns every
              * log line and metric label into a `String()` ceremony. Numbers stringify one way;
              * the risk the rule guards against is objects and `undefined`, which stay banned.
@@ -386,7 +392,7 @@ export default defineConfig(
                 }
             ],
 
-            /*
+            /**
              * `value || fallback` on a STRING is this codebase's idiom for "empty means unset" —
              * the `host` npm script deliberately sets `NODE_DB_URI=` to blank, and a blank
              * feedback name falls back to translated copy. For everything non-string, `??` stays
@@ -399,7 +405,7 @@ export default defineConfig(
                 }
             ],
 
-            /*
+            /**
              * `(request, response) => response.json(body)` is the shape of half the controllers
              * in an Express app; the "confusing" void return is Express's own idiom, and the
              * fixer's `{ response.json(body); }` says nothing the shorthand does not.
@@ -411,7 +417,7 @@ export default defineConfig(
                 }
             ],
 
-            /*
+            /**
              * An underscore prefix is the deliberate spelling of "unused on purpose" — a handler
              * signature that must take `(error, request, response, next)` to be an error handler,
              * a destructuring that drops a key. Everything unprefixed stays an error.
@@ -425,7 +431,7 @@ export default defineConfig(
                 }
             ],
 
-            /*
+            /**
              * `const { name } = user` over `const name = user.name` — one read of the object per
              * binding site instead of a scatter of member accesses. Only for declarations that
              * read a property into a same-named variable; assignments and arrays are exempt
@@ -442,7 +448,7 @@ export default defineConfig(
 
             '@typescript-eslint/naming-convention': [
                 'error',
-                /*
+                /**
                  * `allowSingleOrDouble`, not `allow`. A single leading underscore was permitted
                  * and a double one was not, which is the entire reason this rule was being
                  * disabled inline nineteen times: `__esModule` (the flag every `jest.mock`
@@ -508,7 +514,7 @@ export default defineConfig(
                         match: true
                     }
                 },
-                /*
+                /**
                  * `snake_case` is in the list because wire formats decide these names, not this
                  * codebase: analytics properties (`order_id`) and header-shaped keys are both read by
                  * something outside the repo.
@@ -524,8 +530,10 @@ export default defineConfig(
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
             'unicorn/consistent-destructuring': 'error',
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/filename-case.md
-            // Every file is kebab-case
+            /**
+             * https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/filename-case.md
+             * Every file is kebab-case
+             */
             'unicorn/filename-case': [
                 'error',
                 {
@@ -558,9 +566,11 @@ export default defineConfig(
                         ref: {
                             reference: false
                         },
-                        // 76 added `repository -> repo` and `configuration -> config`. This
-                        // codebase spells both out on purpose: `repository` is a DDD term with a
-                        // rules section of its own in CLAUDE.md, and `config` is ambiguous here.
+                        /**
+                         * 76 added `repository -> repo` and `configuration -> config`. This
+                         * codebase spells both out on purpose: `repository` is a DDD term with a
+                         * rules section of its own in CLAUDE.md, and `config` is ambiguous here.
+                         */
                         repository: false,
                         configuration: false
                     }
@@ -649,22 +659,22 @@ export default defineConfig(
     },
 
     /**
-     * Exported API carries its own documentation, and the documentation is checked.
+     * Every top-level declaration carries a docblock, and what the docblock says is checked.
      *
-     * Two halves, both of them MUSTs in CLAUDE.md, both checked by this one rule:
+     * Presence:   a function, class, variable, type, interface, enum or class member at the top of
+     *             a file has a docblock. `enableFixer` is off on purpose: `lint:fix` must never
+     *             insert an empty stub that passes this rule and says nothing.
+     * Accuracy:   `@param` names match the signature, tag names are real ones, a thrown error is
+     *             declared, and a description is never just the name it describes.
+     * Scope:      every linted file, tests and scripts included: a top-level declaration has no
+     *             exemption in the comment rules.
+     * Severity:   `error`. `lint` runs with `--max-warnings 0`, so a warning already failed.
      *
-     * Presence:   an exported function, interface, type or enum has a docblock.
-     * Accuracy:   `@param` names match the signature, and tag names are real ones.
-     *
-     * Warnings, not errors, and `publicOnly` — the point is the contract a caller reads, not a
-     * docblock ceremony on every internal helper. Accuracy is the half that pays: a `@param` left
-     * behind by a rename is worse than no comment, and only a rule ever notices.
+     * @see docs/build/code-comments.md#the-form-at-a-glance
      * https://github.com/gajus/eslint-plugin-jsdoc
      */
     {
-        files: ['src/**/*.ts', 'scenarios/**/*.ts'],
-        // Co-located module specs are exempt: their exports are fixtures for one file, not API.
-        ignores: ['src/modules/*/tests/**/*.ts'],
+        files: ['**/*.{ts,mts,cts,js,mjs,cjs}'],
 
         plugins: {
             jsdoc: pluginJsdoc
@@ -677,23 +687,37 @@ export default defineConfig(
 
         rules: {
             'jsdoc/require-jsdoc': [
-                'warn',
+                'error',
                 {
-                    publicOnly: true,
+                    publicOnly: false,
+                    enableFixer: false,
                     require: {
-                        FunctionDeclaration: true,
-                        ArrowFunctionExpression: true,
-                        FunctionExpression: true,
-                        ClassDeclaration: true
+                        FunctionDeclaration: false,
+                        ArrowFunctionExpression: false,
+                        FunctionExpression: false,
+                        ClassDeclaration: false
                     },
+                    // Top-level selectors, not `require`: that would also flag every nested arrow.
                     contexts: [
-                        'TSInterfaceDeclaration',
-                        'TSTypeAliasDeclaration',
-                        'TSEnumDeclaration'
+                        'Program > FunctionDeclaration',
+                        'Program > ClassDeclaration',
+                        // `const x = require(…)` is an import, not a declaration of ours.
+                        'Program > VariableDeclaration:not(:has(CallExpression[callee.name="require"]))',
+                        'Program > TSInterfaceDeclaration',
+                        'Program > TSTypeAliasDeclaration',
+                        'Program > TSEnumDeclaration',
+                        // The docblock sits above `export`, so the plugin reads it from this node.
+                        'Program > ExportNamedDeclaration[declaration]',
+                        'Program > ExportDefaultDeclaration',
+                        'Program > ClassDeclaration > ClassBody > MethodDefinition',
+                        'Program > ClassDeclaration > ClassBody > PropertyDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > MethodDefinition',
+                        'Program > ExportNamedDeclaration > ClassDeclaration > ClassBody > PropertyDefinition'
                     ]
                 }
             ],
-            /*
+            'jsdoc/informative-docs': 'error',
+            /**
              * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
              * checks here are about truth, not presence:
              *
@@ -710,9 +734,9 @@ export default defineConfig(
                 { checkDestructured: false, disableMissingParamChecks: true }
             ],
             'jsdoc/check-tag-names': 'error',
-            'jsdoc/require-param-description': 'warn',
-            'jsdoc/require-returns-description': 'warn',
-            'jsdoc/require-throws': 'warn'
+            'jsdoc/require-param-description': 'error',
+            'jsdoc/require-returns-description': 'error',
+            'jsdoc/require-throws': 'error'
         }
     },
 
@@ -955,14 +979,14 @@ export default defineConfig(
      */
     {
         settings: {
-            /*
+            /**
              * `src/` and `scenarios/`. The tiers live here, and this is the tree `no-unknown-files`
              * is meant to hold exhaustively — `tests/`, `scripts/` and `shared/` have no tier and
              * would each need a descriptor for the sake of being ignored.
              */
             'boundaries/include': ['src/**/*.ts', 'scenarios/**/*.ts'],
 
-            /*
+            /**
              * Every wall below is stated in terms of the FILE an import resolves to, so an
              * unresolved specifier is a silent pass: `@modules/products` reads as an npm package,
              * belongs to no element, and matches no policy. The TypeScript resolver reads the
@@ -973,7 +997,7 @@ export default defineConfig(
                 typescript: { alwaysTryTypes: true, project: './tsconfig.json' }
             },
 
-            /*
+            /**
              * Anchored at the repo root (`partialMatch: false`) rather than matched right-to-left.
              * The default tries progressively longer suffixes, so a bare `modules/*` would also
              * claim `src/infrastructure/modules/anything` — the anchored form says where each tier
@@ -996,7 +1020,7 @@ export default defineConfig(
                     partialMatch: false
                 },
                 { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
-                /*
+                /**
                  * Our own pure code that every tier — `domain/` included — may import: generic
                  * (Money) or domain-specific (the postal-address PII fields). It reaches npm and
                  * `@types` and nothing else, so sharing it loosens no wall.
@@ -1010,7 +1034,7 @@ export default defineConfig(
                 { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
                 { type: 'app', pattern: 'src/app', partialMatch: false },
                 { type: 'types', pattern: 'src/types', partialMatch: false },
-                /*
+                /**
                  * Outside `src/` entirely, on purpose. A scenario file imports a module's
                  * repository, model and factories directly, which is wider access than the
                  * one-door rule below grants a sibling module; the trade is that nothing under
@@ -1020,7 +1044,7 @@ export default defineConfig(
                 { type: 'scenarios', pattern: 'scenarios', partialMatch: false }
             ],
 
-            /*
+            /**
              * The file layer, for the files that are a tier each on their own — an element
              * descriptor matches folders, and these have no folder.
              *
@@ -1039,7 +1063,7 @@ export default defineConfig(
             ]
         },
         rules: {
-            /*
+            /**
              * The uncovered check. A file under `src/` that matches no element and no category is
              * an error here, one commit before it can quietly import anything it likes.
              */
@@ -1051,7 +1075,7 @@ export default defineConfig(
                     default: 'disallow',
                     message:
                         '{{from.element.type}} may not depend on {{to.element.type}} — see docs/understand/layers.md.',
-                    /*
+                    /**
                      * The plugin skips same-element imports by default (`isInternalDependency`) —
                      * without this, the own-barrel disallow below and the spec-vs-own-index split
                      * never run, since both are same-module (same captured element) edges.
@@ -1059,7 +1083,7 @@ export default defineConfig(
                      */
                     checkInternals: true,
                     policies: [
-                        /*
+                        /**
                          * ── What is permitted ─────────────────────────────────────────────────
                          *
                          * The default is `disallow`, so this half is not decoration: an edge no
@@ -1074,18 +1098,24 @@ export default defineConfig(
                          * legitimate arrows and the walls below close the illegitimate ones.
                          */
                         {
-                            // npm. The graph being described is this repository's, and a package
-                            // belongs to no tier of it.
+                            /**
+                             * npm. The graph being described is this repository's, and a package
+                             * belongs to no tier of it.
+                             */
                             allow: { to: { module: { origin: 'external' } } }
                         },
                         {
-                            // Downward, which is what the tiers are for: everything may reach the
-                            // substrate below it, and `types` is erased at compile time.
+                            /**
+                             * Downward, which is what the tiers are for: everything may reach the
+                             * substrate below it, and `types` is erased at compile time.
+                             */
                             allow: { to: { element: { type: ['infrastructure', 'types'] } } }
                         },
                         {
-                            // `domain-primitives` is the Shared Kernel: generic, npm only, so every tier
-                            // may take from it — `domain` included, which is the reason it exists.
+                            /**
+                             * `domain-primitives` is the Shared Kernel: generic, npm only, so every tier
+                             * may take from it — `domain` included, which is the reason it exists.
+                             */
                             from: {
                                 element: {
                                     type: [
@@ -1110,14 +1140,18 @@ export default defineConfig(
                             allow: { to: { element: { type: 'kernel' } } }
                         },
                         {
-                            // `app` assembles the application and is the one tier allowed to know
-                            // which domains exist.
+                            /**
+                             * `app` assembles the application and is the one tier allowed to know
+                             * which domains exist.
+                             */
                             from: { element: { type: 'app' } },
                             allow: { to: { element: { type: ['app', 'module'] } } }
                         },
                         {
-                            // A tier reaches its own files freely — that is what makes it a tier
-                            // rather than a pile of files that happen to share a folder.
+                            /**
+                             * A tier reaches its own files freely — that is what makes it a tier
+                             * rather than a pile of files that happen to share a folder.
+                             */
                             from: { element: { type: 'infrastructure' } },
                             allow: { to: { element: { type: 'infrastructure' } } }
                         },
@@ -1126,7 +1160,7 @@ export default defineConfig(
                             allow: { to: { element: { type: 'kernel' } } }
                         },
                         {
-                            /*
+                            /**
                              * The four files that are a tier each — `app.ts` composes,
                              * `main.ts` and `cluster.ts` supervise, `serve.ts` starts what `app.ts` composed
                              * and wires it to the process signals, `modules.ts` IS the
@@ -1148,9 +1182,11 @@ export default defineConfig(
                             allow: { to: { element: { type: '*' } } }
                         },
                         {
-                            // …including each other: `cluster.ts` imports `serve.ts`, `serve.ts`
-                            // imports `app.ts`, and none of them belongs to an element, so each
-                            // edge is named by category on both ends.
+                            /**
+                             * …including each other: `cluster.ts` imports `serve.ts`, `serve.ts`
+                             * imports `app.ts`, and none of them belongs to an element, so each
+                             * edge is named by category on both ends.
+                             */
                             from: {
                                 file: {
                                     categories: [
@@ -1176,7 +1212,7 @@ export default defineConfig(
                         },
 
                         {
-                            /*
+                            /**
                              * The registry is readable by the tier that composes the application
                              * and by any spec that needs the real module list — `app/routes.ts`
                              * mounts what it enumerates, and a co-located spec asserting
@@ -1192,7 +1228,7 @@ export default defineConfig(
                             allow: { to: { file: { categories: ['registry'] } } }
                         },
 
-                        /*
+                        /**
                          * ── What is refused ───────────────────────────────────────────────────
                          */
                         {
@@ -1235,7 +1271,7 @@ export default defineConfig(
                                 'A module may not reach the app tier. `app` assembles the application and is allowed to know every domain; reaching back would point the arrow both ways. A guard every module needs belongs in @kernel behind a port — see kernel/authentication.ts.'
                         },
 
-                        /*
+                        /**
                          * The one door. A sibling is reachable through `index.ts` — its runtime
                          * API — and nothing else; every other file of it is internal.
                          */
@@ -1252,7 +1288,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * Friend files. `users/friends/account.ts` is the one file of `users` that
                          * `account` may import besides the barrel; the owner publishes it for ONE
                          * named friend, and the template lets only that module in. A friend uses
@@ -1292,7 +1328,7 @@ export default defineConfig(
                                 'account uses `accountUserService` from @modules/users/friends/account, never the public `userService`. Not caught (deliberate evasion, unused today): `import * as users`, `export *`, dynamic `import()`.'
                         },
 
-                        /*
+                        /**
                          * `scenarios/` reaches down into every tier: a scenario file imports its
                          * module's repository, model and factories directly, which is wider than
                          * the one door above grants a sibling module — see the element descriptor
@@ -1319,7 +1355,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * `scenarios/apply.ts` (the CLI), `scenarios/run-server.ts` (the
                          * demo-profile server) and `scenarios/check.ts` (the guarantee checker) are
                          * the files under `scenarios/` that are not data: they boot the real app
@@ -1344,7 +1380,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * A module reaches its own files freely — a service imports its repository,
                          * a controller imports its service — so "the same module" is compared by
                          * the captured name rather than listed per domain.
@@ -1360,7 +1396,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * A module never imports its own barrel. `index.ts` re-exports every file
                          * the barrel allows with `export *`, so a file inside the module reaching
                          * back through it risks a load-order cycle the same way any `export *`
@@ -1384,7 +1420,7 @@ export default defineConfig(
                                 'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/understand/strategic-ddd.md §5.'
                         },
 
-                        /*
+                        /**
                          * The domain layer: plain TypeScript over plain data. It is the only tier
                          * whose rule is about what it may TOUCH rather than which tier it may
                          * reach — no framework, no tier, no sibling, and not even the outer files
@@ -1422,7 +1458,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * Co-located specs, and the two reaches they are allowed that production
                          * code is not.
                          *
@@ -1452,7 +1488,7 @@ export default defineConfig(
                             }
                         },
 
-                        /*
+                        /**
                          * The doubles, and only the doubles. A module's own test drives a payment
                          * through the fake PSP (and spies on it), but the fake is not in `src/` —
                          * production has none — so the spec reaches out to where it lives.
@@ -1600,8 +1636,10 @@ export default defineConfig(
             'no-console': 'off',
             // `props`, `env`, `dir`: the VitePress/orval config surface spells its own keys.
             'unicorn/name-replacements': 'off',
-            // dependency-cruiser and jest both read CommonJS configs; `module.exports` and
-            // `require` are their interface, not a style choice.
+            /**
+             * dependency-cruiser and jest both read CommonJS configs; `module.exports` and
+             * `require` are their interface, not a style choice.
+             */
             'unicorn/prefer-module': 'off',
             '@typescript-eslint/no-require-imports': 'off'
         }
@@ -1663,9 +1701,11 @@ export default defineConfig(
             '@typescript-eslint/no-unnecessary-condition': 'off',
             '@typescript-eslint/no-dynamic-delete': 'off',
             '@typescript-eslint/no-empty-function': 'off',
-            // `expect(mock.method)` hands the method around unbound by design,
-            // and a test try/catches to assert on what was thrown. The double-cast ban stays:
-            // tests are where that idiom bred.
+            /**
+             * `expect(mock.method)` hands the method around unbound by design,
+             * and a test try/catches to assert on what was thrown. The double-cast ban stays:
+             * tests are where that idiom bred.
+             */
             '@typescript-eslint/unbound-method': 'off',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts, ...bannedEnvironmentWrites]
         }
@@ -1777,7 +1817,7 @@ export default defineConfig(
         },
 
         rules: {
-            /*
+            /**
              * Pass rate is 100%, always. A focused spec turns the suite green while running a
              * fraction of it, and a disabled one reads as green having run none — both are the
              * same failure, a gate that reports success it did not earn.
@@ -1785,7 +1825,7 @@ export default defineConfig(
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-focused-tests.md
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-disabled-tests.md
              */
-            /*
+            /**
              * The plugin's recommended set. `no-conditional-expect` is the one that bites: a check
              * inside an `if` is skipped when the branch is, and the test stays green.
              * See `docs/reference/tests.md`, "A test never checks inside a branch".
@@ -1794,7 +1834,7 @@ export default defineConfig(
             ...pluginJest.configs['flat/recommended'].rules,
             'jest/no-focused-tests': 'error',
             'jest/no-disabled-tests': 'error',
-            /*
+            /**
              * `expect-expect`: the helpers that assert on a spec's behalf count as an `expect`.
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/expect-expect.md
              */
@@ -1816,7 +1856,7 @@ export default defineConfig(
                     ]
                 }
             ],
-            /*
+            /**
              * `no-standalone-expect`: `describeCases` registers `it`s, so an `expect` in its callback is in a test.
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-standalone-expect.md
              */
@@ -1824,12 +1864,12 @@ export default defineConfig(
                 'error',
                 { additionalTestBlockFunctions: ['describeCases'] }
             ],
-            /*
+            /**
              * `valid-title`: a `describe` named by a variable (a module or route name) is fine.
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/valid-title.md
              */
             'jest/valid-title': ['error', { ignoreTypeOfDescribeName: true }],
-            /*
+            /**
              * One level more than production code gets. A spec that walks a table exhaustively —
              * every actor against every from-status against every to-status — is at four levels by
              * the third `for`, and flattening it into `flatMap` hides the very shape the case is

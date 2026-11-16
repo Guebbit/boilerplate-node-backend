@@ -26,9 +26,11 @@ export const postPayment = (request: Request, response: Response) => {
         .createIntent(body.orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            // Already the wire shape: this is the one endpoint whose answer carries a field the
-            // document does not have (`clientSecret`), so the service serializes it, not this.
-            // 201 when this ask inserted the payment; 200 when it refreshed the one already there.
+            /**
+             * Already the wire shape: this is the one endpoint whose answer carries a field the
+             * document does not have (`clientSecret`), so the service serializes it, not this.
+             * 201 when this ask inserted the payment; 200 when it refreshed the one already there.
+             */
             createdOrOk<Payment>(
                 response,
                 result.data,

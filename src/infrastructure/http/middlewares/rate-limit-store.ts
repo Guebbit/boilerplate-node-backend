@@ -2,7 +2,7 @@
  * @module
  * Where the rate limiters keep their counters. `express-rate-limit`'s default store is an
  * in-process `Map`, so each process holds its own budget: with several processes (`start:cluster`
- * workers, or `--scale app=N` replicas) the budget becomes `budget × processes`. The `limits`
+ * workers, or orchestrator replicas) the budget becomes `budget × processes`. The `limits`
  * Redis (`src/infrastructure/adapters/limits-redis.ts`) makes it one budget again,
  * across processes and instances. It is a separate INSTANCE from the response cache, so a flood of
  * cache keys can never evict a counter.
@@ -67,21 +67,25 @@ const lazyRedisStore = (namespace: string, url: string): SyncInitStore => {
         if (!inner) {
             inner = new RedisStore({
                 prefix: `${limitsKeyPrefix()}:${namespace}:`,
-                // `rate-limit-redis` speaks raw Redis commands so it works with any client; this
-                // is the one line that binds it to node-redis.
+                /**
+                 * `rate-limit-redis` speaks raw Redis commands so it works with any client; this
+                 * is the one line that binds it to node-redis.
+                 */
                 sendCommand: (...command: string[]) => sendToLimits(url, command)
             });
-            // The options `init` was given at construction, replayed now that there is a store.
-            // `windowMs` is the only one `RedisStore` reads.
-            //
-            // The `.catch()` is load-bearing: `init()` awaits Lua script loads, so any failure —
-            // Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. Left
-            // alone it surfaces as an unhandled rejection (counted and audit-logged in production,
-            // a failed test under Jest) with no hint of which store failed.
-            //
-            // The failed store is also dropped: `RedisStore` keeps the rejected script-load promise
-            // and awaits it on every later `increment`, so keeping it would leave this limiter
-            // open until a restart. The next request builds a fresh one.
+            /**
+             * The options `init` was given at construction, replayed now that there is a store.
+             * `windowMs` is the only one `RedisStore` reads.
+             *
+             * The `.catch()` is load-bearing: `init()` awaits Lua script loads, so any failure —
+             * Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. Left
+             * alone it surfaces as an unhandled rejection (counted and audit-logged in production,
+             * a failed test under Jest) with no hint of which store failed.
+             *
+             * The failed store is also dropped: `RedisStore` keeps the rejected script-load promise
+             * and awaits it on every later `increment`, so keeping it would leave this limiter
+             * open until a restart. The next request builds a fresh one.
+             */
             if (options) {
                 const failed = inner;
                 void failed.init(options).catch((error: unknown) => {
@@ -320,7 +324,7 @@ export const rateLimitStore = (
     const store = escalation
         ? escalatingStore(namespace, onStoreError, escalation)
         : plainStore(namespace, onStoreError);
-    /*
+    /**
      * `express-rate-limit`'s double-count check (`ERR_ERL_DOUBLE_COUNT`) tells two stores apart by
      * `store.prefix`, falling back to the class name. Our wrappers are plain objects, so without a
      * prefix every budget looks like one store, and two budgets keyed alike on one request (the

@@ -15,13 +15,14 @@ import { asStub } from '@tests/stub';
 import type { CreditNoteDocument, InvoiceDocument } from '../../model';
 import * as documentStore from '@infrastructure/adapters/document-store';
 
+/** Stands in for the PDF renderer; the cases assert what it was handed. */
 const renderDocument = jest.fn();
 
 jest.mock('../../providers', () => ({
     resolveEInvoicingProvider: () => ({ render: (document: unknown) => renderDocument(document) })
 }));
 
-/*
+/**
  * The store's two calls are REPLACED by pass-throughs, so one test can make one of them fail:
  * `jest.spyOn` cannot redefine a namespace import's getter under the mutation run's swc
  * transform — see `tests/support/ports.ts`.
@@ -37,6 +38,7 @@ jest.mock('@infrastructure/adapters/document-store', () => {
     };
 });
 
+/** Temp directory the PDFs land in; removed after the suite. */
 let root: string;
 
 beforeEach(async () => {
@@ -145,8 +147,10 @@ describe('a retention of 0', () => {
 });
 
 describe('a store that fails', () => {
-    // A document store is an optimisation. A full disk or a bad mount must not turn an invoice
-    // download into a 500.
+    /**
+     * A document store is an optimisation. A full disk or a bad mount must not turn an invoice
+     * download into a 500.
+     */
     it('still answers the download when the file cannot be written', async () => {
         jest.mocked(documentStore.writeDocument).mockRejectedValueOnce(new Error('disk full'));
 

@@ -55,8 +55,10 @@ const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => 
     const existing = user.twoFactorMethods.find((candidate) => candidate.method === method);
     if (existing) return existing;
     user.twoFactorMethods.push({ method });
-    // Read back rather than reusing the literal: Mongoose hydrates a pushed entry into a
-    // subdocument, and the handler about to mutate it needs that one, not the plain object.
+    /**
+     * Read back rather than reusing the literal: Mongoose hydrates a pushed entry into a
+     * subdocument, and the handler about to mutate it needs that one, not the plain object.
+     */
     return user.twoFactorMethods.at(-1)!;
 };
 
@@ -77,8 +79,10 @@ const announceAuthenticatorLoss = (user: UserDocument, hadAuthenticator: boolean
         ? accessService.rolesOf(user.id, DEPLOYMENT_TENANT_ID).then(({ tenant, platform }) => {
               if (tenant === null && platform === null) return undefined;
 
-              // A transaction with nothing to write: the outbox row is the whole act, and it is
-              // retried by the relay if the subscriber fails.
+              /**
+               * A transaction with nothing to write: the outbox row is the whole act, and it is
+               * retried by the relay if the subscriber fails.
+               */
               return announceInTransaction(
                   () => Promise.resolve(user.id),
                   (userId) => ({
@@ -99,8 +103,10 @@ export const twoFactorStatus = (
     userId: string
 ): Promise<ResponseSuccess<TwoFactorStatus> | ResponseReject> =>
     withOwnAccount(userId, (user) => {
-        // Armed ones only: an entry that has a pending code but no `enrolledAt` is an
-        // enrollment in progress, and listing it would show a factor login does not ask for.
+        /**
+         * Armed ones only: an entry that has a pending code but no `enrolledAt` is an
+         * enrollment in progress, and listing it would show a factor login does not ask for.
+         */
         const enrolled = armedEntries(user);
         const enrolledNames = new Set(enrolled.map(({ handler }) => handler.name));
 
@@ -146,12 +152,16 @@ export const setupTwoFactorMethod = (
                 eligibility.reason ?? t('account.two-factor.unknown-method')
             ]);
 
-        // The first factor needs only the fresh password the route demands: there is nothing
-        // to prove yet, and a backup code is what an account that lost its phone has.
+        /**
+         * The first factor needs only the fresh password the route demands: there is nothing
+         * to prove yet, and a backup code is what an account that lost its phone has.
+         */
         if (armedEntries(user).length === 0) return beginSetup(user, handler, context);
 
-        // Once anything is armed, changing the factors needs a factor (or a backup code), so
-        // a stolen-but-fresh session cannot swap out the very thing it would have to pass.
+        /**
+         * Once anything is armed, changing the factors needs a factor (or a backup code), so
+         * a stolen-but-fresh session cannot swap out the very thing it would have to pass.
+         */
         if (!code) return generateReject(422, [t('account.two-factor.code-required')]);
         return verifyArmedFactor(user, code, context).then((verdict) =>
             settleVerdict(verdict, user, () => beginSetup(user, handler, context))
@@ -174,15 +184,19 @@ const beginSetup = (
     const wait = handler.delivers ? deliveryCooldownRemaining(entry) : 0;
     if (wait > 0) return Promise.resolve(tooSoon(wait));
 
-    // Disarmed BEFORE the handler runs: a restart that fails halfway must not leave the
-    // old secret armed next to a new pending one.
+    /**
+     * Disarmed BEFORE the handler runs: a restart that fails halfway must not leave the
+     * old secret armed next to a new pending one.
+     */
     entry.enrolledAt = undefined;
     accountUserService.clearDeliveredCode(entry);
 
     return handler.setup(user, entry, context).then((payload) => {
-        // The armed flag is derived by the write itself, from the entries as stored: a disarmed
-        // factor mid-re-enrollment leaves the backup codes alone, since an abandoned "I lost my
-        // phone" attempt must not invalidate the list the user wrote down.
+        /**
+         * The armed flag is derived by the write itself, from the entries as stored: a disarmed
+         * factor mid-re-enrollment leaves the backup codes alone, since an abandoned "I lost my
+         * phone" attempt must not invalidate the list the user wrote down.
+         */
         return accountUserService
             .persistTwoFactorMethods(user)
             .then(() => generateSuccess(payload));
@@ -261,9 +275,11 @@ const armMethod = (
     user: UserDocument,
     entry: TwoFactorMethodRecord
 ): Promise<ResponseSuccess<TwoFactorConfirmed>> => {
-    // "The account has no recovery left", not "this is the first factor" — the two differ after a
-    // re-enrollment, and after the tenth code has been spent. Either way the answer is the same:
-    // an account with a second factor and no way back in is the state to avoid.
+    /**
+     * "The account has no recovery left", not "this is the first factor" — the two differ after a
+     * re-enrollment, and after the tenth code has been spent. Either way the answer is the same:
+     * an account with a second factor and no way back in is the state to avoid.
+     */
     const backupCodes = user.twoFactorBackupCodes.length === 0 ? generateBackupCodes() : undefined;
     const salt = backupCodes ? generateBackupCodeSalt() : undefined;
 
@@ -273,8 +289,10 @@ const armMethod = (
     accountUserService.markSessionsEnded(user);
     return accountUserService
         .persistTwoFactorWrite(user, {
-            // Stored only if the account still has no code when the write lands: two first
-            // confirms mint one set between them.
+            /**
+             * Stored only if the account still has no code when the write lands: two first
+             * confirms mint one set between them.
+             */
             ...(backupCodes &&
                 salt && { mintCodes: { salt, digests: hashBackupCodes(backupCodes, salt) } })
         })
@@ -282,8 +300,10 @@ const armMethod = (
             revokeFor('two-factor-change', user.id).then(() =>
                 generateSuccess({
                     method: entry.method,
-                    // Shown only when the stored set is this request's own; the other confirm's
-                    // codes are the ones that work.
+                    /**
+                     * Shown only when the stored set is this request's own; the other confirm's
+                     * codes are the ones that work.
+                     */
                     ...(backupCodes && stored.backupCodeSalt === salt && { backupCodes }),
                     backupCodesRemaining: stored.backupCodeCount
                 })
@@ -305,13 +325,17 @@ export const removeTwoFactorMethod = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
-    // A method this deployment does not run is absent, not "not enabled" — the same 404 setup and
-    // confirm answer, and the one the contract declares for this path.
+    /**
+     * A method this deployment does not run is absent, not "not enabled" — the same 404 setup and
+     * confirm answer, and the one the contract declares for this path.
+     */
     if (!twoFactorMethod(method))
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    // Set by the precondition, consumed by onMatch: withVerifiedCode always runs the precondition
-    // to completion before onMatch, so this is never read before it is written.
+    /**
+     * Set by the precondition, consumed by onMatch: withVerifiedCode always runs the precondition
+     * to completion before onMatch, so this is never read before it is written.
+     */
     let enrolledIndex = -1;
 
     const outcome = withVerifiedCode(
@@ -334,9 +358,11 @@ export const removeTwoFactorMethod = (
             accountUserService.markSessionsEnded(user);
             return (
                 accountUserService
-                    // Named, because the copy no longer holds the entry the write has to remove.
-                    // Turning 2FA off with the last factor takes the backup codes with it: they
-                    // recover a factor that no longer exists.
+                    /**
+                     * Named, because the copy no longer holds the entry the write has to remove.
+                     * Turning 2FA off with the last factor takes the backup codes with it: they
+                     * recover a factor that no longer exists.
+                     */
                     .persistTwoFactorWrite(user, {
                         dropped: [method],
                         discardCodesIfDisarmed: true

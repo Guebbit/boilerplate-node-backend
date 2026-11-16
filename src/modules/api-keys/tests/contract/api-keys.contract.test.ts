@@ -178,8 +178,10 @@ describe('POST /api-keys', () => {
     it('422s a permission the caller does not hold', async () => {
         const { bearer } = await authenticateAsRole('admin');
 
-        // Admin is unrestricted in TENANT scope, not platform scope — this asks for a platform
-        // key, which floors it exactly the way a permission it genuinely lacks would.
+        /**
+         * Admin is unrestricted in TENANT scope, not platform scope — this asks for a platform
+         * key, which floors it exactly the way a permission it genuinely lacks would.
+         */
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)

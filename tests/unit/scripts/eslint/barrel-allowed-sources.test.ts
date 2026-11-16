@@ -9,6 +9,7 @@ import { RuleTester } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
 import { barrelAllowedSources } from '../../../../scripts/eslint/barrel-allowed-sources';
 
+/** Runs the rule against its valid and invalid snippets. */
 const tester = new RuleTester({
     languageOptions: { parser, ecmaVersion: 'latest', sourceType: 'module' }
 });
@@ -16,13 +17,17 @@ const tester = new RuleTester({
 tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
     valid: [
         {
-            // The model may leave a barrel as types — `export *` from a repository or wiring
-            // file never may, in any form; this is the counterpart the invalid cases below check.
+            /**
+             * The model may leave a barrel as types — `export *` from a repository or wiring
+             * file never may, in any form; this is the counterpart the invalid cases below check.
+             */
             code: `export type * from './model';`
         },
         {
-            // `tax` is products' own VAT lookup — a named pick from it is allowed from THIS
-            // barrel specifically, decided off the file path the rule is actually linting.
+            /**
+             * `tax` is products' own VAT lookup — a named pick from it is allowed from THIS
+             * barrel specifically, decided off the file path the rule is actually linting.
+             */
             code: `export { resolveTaxRate } from './tax';`,
             filename: 'src/modules/products/index.ts'
         },
@@ -32,20 +37,26 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             filename: 'src/modules/products/index.ts'
         },
         {
-            // A presenter's OUTPUT TYPE is the one thing it may publish — the same
-            // types-only treatment `./model` gets above.
+            /**
+             * A presenter's OUTPUT TYPE is the one thing it may publish — the same
+             * types-only treatment `./model` gets above.
+             */
             code: `export type * from './presenter';`
         },
         {
-            // `presenters.ts` (plural) is the same allowance, for a module presenting more than
-            // one resource shape — webhooks' subscription and delivery, for one.
+            /**
+             * `presenters.ts` (plural) is the same allowance, for a module presenting more than
+             * one resource shape — webhooks' subscription and delivery, for one.
+             */
             code: `export type * from './presenters';`
         }
     ],
     invalid: [
         {
-            // The model may only leave a barrel as types — `export *` here would also publish the
-            // mongoose schema and the model object, exactly what this rule keeps out.
+            /**
+             * The model may only leave a barrel as types — `export *` here would also publish the
+             * mongoose schema and the model object, exactly what this rule keeps out.
+             */
             code: `export * from './model';`,
             errors: [{ messageId: 'modelAsValue' }]
         },
@@ -59,48 +70,62 @@ tester.run('barrel-allowed-sources', barrelAllowedSources as never, {
             errors: [{ messageId: 'wiringExport' }]
         },
         {
-            // A named re-export says what it publishes, but that includes a repository just the
-            // same — `productRepository` reached the barrel this way once, undetected.
+            /**
+             * A named re-export says what it publishes, but that includes a repository just the
+             * same — `productRepository` reached the barrel this way once, undetected.
+             */
             code: `export { productRepository } from './repository';`,
             errors: [{ messageId: 'repositoryExport' }]
         },
         {
-            // A named pick from `./model` is checked by NAME, not by source: `export type *`
-            // above already publishes structure, so a value here must be a genuinely pure helper
-            // — `userSchema` reads as the mongoose schema by this repo's own naming convention.
+            /**
+             * A named pick from `./model` is checked by NAME, not by source: `export type *`
+             * above already publishes structure, so a value here must be a genuinely pure helper
+             * — `userSchema` reads as the mongoose schema by this repo's own naming convention.
+             */
             code: `export { userSchema } from './model';`,
             errors: [{ messageId: 'modelNamedValue' }]
         },
         {
-            // The source-less form: `export { x }` re-exporting something imported earlier in
-            // the SAME file. Resolved through the rule's own import map, since the export
-            // statement itself carries no `from` to read a stem off directly.
+            /**
+             * The source-less form: `export { x }` re-exporting something imported earlier in
+             * the SAME file. Resolved through the rule's own import map, since the export
+             * statement itself carries no `from` to read a stem off directly.
+             */
             code: `import { productRepository } from './repository';\nexport { productRepository };`,
             errors: [{ messageId: 'repositoryExport' }]
         },
         {
-            // The `tax` allowance is scoped to products' own barrel — a sibling module naming
-            // the same file specifier must not get it just because the stem happens to match.
+            /**
+             * The `tax` allowance is scoped to products' own barrel — a sibling module naming
+             * the same file specifier must not get it just because the stem happens to match.
+             */
             code: `export { resolveTaxRate } from './tax';`,
             filename: 'src/modules/delivery/index.ts',
             errors: [{ messageId: 'notAllowed' }]
         },
         {
-            // The presenter may leave a barrel as types only — `export *` here would also
-            // publish the transform function, which a sibling must reach through the service.
+            /**
+             * The presenter may leave a barrel as types only — `export *` here would also
+             * publish the transform function, which a sibling must reach through the service.
+             */
             code: `export * from './presenter';`,
             errors: [{ messageId: 'presenterAsValue' }]
         },
         {
-            // A named pick names the function itself, unlike a named TYPE pick off `./model` —
-            // there is no "genuinely pure helper" exception here, since `export type *` already
-            // covers everything worth naming.
+            /**
+             * A named pick names the function itself, unlike a named TYPE pick off `./model` —
+             * there is no "genuinely pure helper" exception here, since `export type *` already
+             * covers everything worth naming.
+             */
             code: `export { presentProduct } from './presenter';`,
             errors: [{ messageId: 'presenterNamedValue' }]
         },
         {
-            // The source-less form, same as `productRepository` above: resolved through the
-            // rule's own import map since the export itself carries no `from`.
+            /**
+             * The source-less form, same as `productRepository` above: resolved through the
+             * rule's own import map since the export itself carries no `from`.
+             */
             code: `import { presentProduct } from './presenter';\nexport { presentProduct };`,
             errors: [{ messageId: 'presenterNamedValue' }]
         }

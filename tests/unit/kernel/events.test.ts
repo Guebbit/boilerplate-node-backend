@@ -33,12 +33,16 @@ describe('emitDomainEvent', () => {
     });
 
     it('resolves only after an async handler has finished', async () => {
-        // The ordering guarantee the product delete path depends on: the cart is emptied BEFORE
-        // the row disappears. A fire-and-forget bus would pass every other test in this file.
+        /**
+         * The ordering guarantee the product delete path depends on: the cart is emptied BEFORE
+         * the row disappears. A fire-and-forget bus would pass every other test in this file.
+         */
         const order: string[] = [];
         onDomainEvent('test.thing-happened', async () => {
-            // A task hop rather than a timer: a fire-and-forget bus would push 'emitter' first
-            // either way, and this cannot be slow enough to matter or fast enough to race.
+            /**
+             * A task hop rather than a timer: a fire-and-forget bus would push 'emitter' first
+             * either way, and this cannot be slow enough to matter or fast enough to race.
+             */
             await new Promise((resolve) => setImmediate(resolve));
             order.push('handler');
         });
@@ -56,8 +60,10 @@ describe('emitDomainEvent', () => {
         });
         onDomainEvent('test.thing-happened', second);
 
-        // `false`, not a rejection: the emit still succeeded, and the caller decides what an
-        // unsettled handler means to it. `orders` reads this to keep a refund marker standing.
+        /**
+         * `false`, not a rejection: the emit still succeeded, and the caller decides what an
+         * unsettled handler means to it. `orders` reads this to keep a refund marker standing.
+         */
         await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
         expect(second).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith(
@@ -78,8 +84,10 @@ describe('emitDomainEvent', () => {
     });
 
     it('reports true when every handler resolves', async () => {
-        // The other half of the signal, asserted on its own: a `false` that was never `true` for
-        // a clean emit would keep every marker standing forever.
+        /**
+         * The other half of the signal, asserted on its own: a `false` that was never `true` for
+         * a clean emit would keep every marker standing forever.
+         */
         onDomainEvent('test.thing-happened', jest.fn());
         onDomainEvent('test.thing-happened', () => Promise.resolve());
 

@@ -68,8 +68,10 @@ describe('the route door — signup and reset', () => {
             expect(statuses).toEqual([200, 200, 429]);
         }));
 
-    // The attack this exists for: every `+tag` looked like a new address, so a per-address budget
-    // never filled.
+    /**
+     * The attack this exists for: every `+tag` looked like a new address, so a per-address budget
+     * never filled.
+     */
     it('counts every +tag and casing of one mailbox as the same inbox', () =>
         withBudget(2, async () => {
             const app = await routeBehindLimiter();

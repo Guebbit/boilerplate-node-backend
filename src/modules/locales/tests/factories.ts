@@ -11,8 +11,8 @@ import type { LocaleDocument } from '../model';
 /**
  * Persist a locale by BCP-47 tag, with `name`/`nativeName` also set to the tag — the shorthand
  * every locale-scoped test reaches for when the display name itself is never under test.
- * @param overrides - fields beyond the tag, `active` above all — a test proving a disabled
- *   locale is skipped needs one that exists but isn't active
+ * `overrides` adds fields beyond the tag, `active` above all: a test proving a disabled locale is
+ * skipped needs one that exists but isn't active.
  */
 export const givenLocale = (
     tag: string,

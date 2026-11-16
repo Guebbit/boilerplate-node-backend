@@ -18,7 +18,7 @@
  * Queue:       `worker.account.export`, consumed here (`consumers`), declared in
  *              `./asyncapi.internal.yaml`.
  *
- * @see docs/modules/account.md
+ * @see docs/modules/account.md#one-module
  */
 
 import path from 'node:path';
@@ -73,7 +73,7 @@ export default {
     jobs: accountJobs,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
-    /*
+    /**
      * The export build assembles every OTHER module's section; this module's own collection holds
      * the export itself, which is a COPY of what the sections already say. So it contributes no
      * data to an export (`collect` resolves `undefined`, which omits the section) and only
@@ -85,14 +85,16 @@ export default {
             collect: () => Promise.resolve(undefined),
             erase: ({ userId }, session) => eraseExports(userId, session)
         },
-        // Metadata only. Erasing takes the one-time tokens with it: they have no section of
-        // their own, being links in flight rather than something an export describes.
+        /**
+         * Metadata only. Erasing takes the one-time tokens with it: they have no section of
+         * their own, being links in flight rather than something an export describes.
+         */
         {
             section: 'sessions',
             collect: ({ userId }) => exportSessions(userId),
             erase: ({ userId }, session) => eraseSessionsAndTokens(userId, session)
         },
-        /*
+        /**
          * The erasure ledger: one row per erased account, written INSIDE the erasure transaction
          * so it exists exactly when the account is gone. Holds no personal data (id and date), so
          * there is nothing to export: `collect` resolves `undefined`, which omits the section.
@@ -103,7 +105,7 @@ export default {
             erase: (subject, session) => recordErasure(subject, session)
         }
     ],
-    /*
+    /**
      * `prefetch: 1` — a build reads every section of one account, the heaviest job this module
      * runs; one at a time per worker keeps a burst of requests from starving the others.
      */
@@ -121,7 +123,7 @@ export default {
     reencrypt: reencryptTotpSecrets,
     onRegistered,
     subscribe: () => {
-        /*
+        /**
          * `users` creates a passwordless account and asks for a way in; this module owns the
          * tokens and mail that provide one. A deleted user before the event fires resolves to
          * `undefined` and the request is simply dropped — nobody is left to email.
@@ -129,19 +131,19 @@ export default {
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
             accountUserService.getById(userId).then((user) => user && requestAccountSetup(user))
         );
-        /*
+        /**
          * A ban ends the sessions in `users`' own save; the one-time links (a reset, an email
          * change) outlive that save and must not stay spendable: "a ban ends every credential".
          */
         onDomainEvent(USER_DEACTIVATED, ({ userId }) => revokeFor('deactivation', userId));
-        /*
+        /**
          * Staff canceled an owner's scheduled deletion in `users`; the restore link this module
          * mailed is spent by that, and the owner is told it happened.
          */
         onDomainEvent(USER_DELETION_CANCELED, ({ userId, canceledAt }) =>
             handleRestoredByStaff(userId, new Date(canceledAt))
         );
-        /*
+        /**
          * Consent withdrawn: the analytics provider may hold what was captured under it. A
          * rejection fails the dispatch, so the outbox retries it and parks it `dead` (alerting).
          */

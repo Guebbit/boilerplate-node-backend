@@ -27,16 +27,20 @@ describe('the `blank` scenario', () => {
     it('seeds only the named accounts, roles and locales — no shop data', async () => {
         await restoreScenario('blank');
 
-        // Not a count: `seedCredentials` is the actual rule (exactly these logins, no filler user
-        // sneaking in), and it only grows if a fifth account is ever added.
+        /**
+         * Not a count: `seedCredentials` is the actual rule (exactly these logins, no filler user
+         * sneaking in), and it only grows if a fifth account is ever added.
+         */
         const seededEmails = await userModel.find().distinct('email');
         expect(seededEmails.toSorted()).toEqual(
             Object.values(seedCredentials)
                 .map((credential) => credential.email)
                 .toSorted()
         );
-        // Roles themselves are no longer stored (presets live in the shared YAML alone) — what a
-        // restore must seed is the memberships that place the named accounts in those roles.
+        /**
+         * Roles themselves are no longer stored (presets live in the shared YAML alone) — what a
+         * restore must seed is the memberships that place the named accounts in those roles.
+         */
         await expect(membershipModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(localeModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(productModel.countDocuments()).resolves.toBe(0);
@@ -46,9 +50,11 @@ describe('the `blank` scenario', () => {
 
 describe('a restore never loses an index', () => {
     it('still refuses a duplicate signup after a restore, with the same 409', async () => {
-        // `emptyDatabase()` — never `dropDatabase()` — is what this asserts: a drop clears each
-        // model's index build along with the data, so `users_email`'s unique index would be gone
-        // here and the second signup would insert instead of refusing.
+        /**
+         * `emptyDatabase()` — never `dropDatabase()` — is what this asserts: a drop clears each
+         * model's index build along with the data, so `users_email`'s unique index would be gone
+         * here and the second signup would insert instead of refusing.
+         */
         await restoreScenario('blank');
 
         const email = 'twice@example.com';
@@ -75,9 +81,11 @@ describe('a restore never loses an index', () => {
 
 describe('a restore never strands the tenant cache', () => {
     it('GET /account publishes the tenant id the database holds', async () => {
-        // Twice, not once: the cache in `resolveDeploymentTenantId` is process-lifetime, so the
-        // property under test is that a SECOND restore still agrees with it, not that the first
-        // one happened to populate it correctly.
+        /**
+         * Twice, not once: the cache in `resolveDeploymentTenantId` is process-lifetime, so the
+         * property under test is that a SECOND restore still agrees with it, not that the first
+         * one happened to populate it correctly.
+         */
         await restoreScenario('blank');
         await restoreScenario('blank');
 

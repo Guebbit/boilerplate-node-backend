@@ -84,9 +84,11 @@ describe('isMetricsScraper', () => {
     });
 
     it('answers 401 rather than throwing when the token length differs', () => {
-        // `timingSafeEqual` throws on a length mismatch. Without the length comparison folded
-        // into `matches`, this case leaves the middleware as an unhandled throw — and the throw
-        // itself distinguishes a wrong-length token from a wrong-value one, which is the oracle.
+        /**
+         * `timingSafeEqual` throws on a length mismatch. Without the length comparison folded
+         * into `matches`, this case leaves the middleware as an unhandled throw — and the throw
+         * itself distinguishes a wrong-length token from a wrong-value one, which is the oracle.
+         */
         setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
@@ -97,9 +99,11 @@ describe('isMetricsScraper', () => {
     });
 
     it('rejects an equal-length token that differs in one byte', () => {
-        // Same length, so the comparison actually reaches `timingSafeEqual` rather than being
-        // short-circuited by the length guard — this is the case that proves the guard is not
-        // the only thing rejecting anything.
+        /**
+         * Same length, so the comparison actually reaches `timingSafeEqual` rather than being
+         * short-circuited by the length guard — this is the case that proves the guard is not
+         * the only thing rejecting anything.
+         */
         setEnvironment({ NODE_METRICS_TOKEN: 'scrape-me' });
         const response = makeResponseStub();
         const next = jest.fn();
@@ -111,8 +115,10 @@ describe('isMetricsScraper', () => {
     });
 
     it('rejects an empty configured token as unconfigured', () => {
-        // `!expected` treats '' as unset, which is the safe reading: an empty string in the
-        // environment is a variable someone meant to fill in.
+        /**
+         * `!expected` treats '' as unset, which is the safe reading: an empty string in the
+         * environment is a variable someone meant to fill in.
+         */
         setEnvironment({ NODE_METRICS_TOKEN: '' });
         const response = makeResponseStub();
         const next = jest.fn();

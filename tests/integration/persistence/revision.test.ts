@@ -21,12 +21,15 @@ interface Probe {
     tags: string[];
 }
 
+/** Schema of the throwaway model. */
 const probeSchema = new Schema<Probe>(
     { name: { type: String, required: true }, tags: { type: [String], default: [] } },
     { timestamps: true }
 );
 probeSchema.plugin(revisionPlugin);
+/** Schema of the throwaway model. */
 const transform = applySerialization(probeSchema);
+/** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<Probe>('RevisionProbe', probeSchema);
 
 /** The stored counter of a row, read straight off the collection. */
@@ -85,8 +88,10 @@ describe('editRevision', () => {
     });
 
     it('moves for a save() whose only change is marking updatedAt, as the role-only edit does', async () => {
-        // The clock is moved on, so the save stamps a different `updatedAt` than the create did:
-        // within one millisecond the stamp would not change and, rightly, neither would the counter.
+        /**
+         * The clock is moved on, so the save stamps a different `updatedAt` than the create did:
+         * within one millisecond the stamp would not change and, rightly, neither would the counter.
+         */
         freezeDate();
         try {
             const row = await probeModel.create({ name: 'a' });

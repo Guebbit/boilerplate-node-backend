@@ -43,7 +43,7 @@ export const processSnapshot = (): ProcessSnapshot => {
 
     return {
         uptimeSeconds: Math.floor(process.uptime()),
-        /*
+        /**
          * Picked field by field rather than spread. `process.memoryUsage()` also returns
          * `arrayBuffers`, which appears in none of the three contracts — a spread would publish it,
          * and would publish whatever Node adds next along with it.

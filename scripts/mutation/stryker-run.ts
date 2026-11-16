@@ -84,8 +84,10 @@ export interface StrykerOutcome {
 /**
  * Runs Stryker once, with this machine's settings applied and the OOM loop watched for.
  *
- * @param args CLI arguments appended verbatim after `run` — a config path, `--mutate`, `--force`
- * @param label printed alongside the settings, so one line of a long log says which piece this is
+ * Takes:   `args`: CLI arguments appended verbatim after `run` — a config path, `--mutate`,
+ *          `--force`. `label`: printed alongside the settings, so one line of a long log says
+ *          which piece this is.
+ *
  * @returns the child's exit code, and whether the OOM guard is what ended it
  */
 export const runStryker = ({
@@ -99,7 +101,7 @@ export const runStryker = ({
     const heapMb = environmentKnob('STRYKER_WORKER_HEAP_MB');
     const passedConcurrency = args.some((argument) => argument.startsWith('--concurrency'));
 
-    /*
+    /**
      * `--expose-gc` lets the test environment collect after each file, which a single-process dry
      * run needs to finish — see docs/build/mutation-testing.md#collect-after-each-file.
      *
@@ -124,7 +126,7 @@ export const runStryker = ({
             .join(' ')
     };
 
-    /*
+    /**
      * The scratch root is cleared BEFORE the run, not after: a killed jest never reaches its own
      * teardown, and Stryker kills instances as a matter of course, so the next start has to.
      */
@@ -152,8 +154,10 @@ export const runStryker = ({
                     {
                         cwd: REPO_ROOT,
                         env: childEnvironment,
-                        // `pipe` on stdout so the OOM line can be counted; every chunk is forwarded
-                        // unchanged, so the progress bar and the report still reach the terminal.
+                        /**
+                         * `pipe` on stdout so the OOM line can be counted; every chunk is forwarded
+                         * unchanged, so the progress bar and the report still reach the terminal.
+                         */
                         stdio: ['inherit', 'pipe', 'inherit']
                     }
                 );

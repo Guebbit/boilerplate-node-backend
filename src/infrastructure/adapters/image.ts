@@ -5,7 +5,7 @@
  * file: swapping the library later is a rewrite of these two functions, not a search across the
  * codebase.
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#architecture
  */
 
 import sharp from 'sharp';
@@ -26,7 +26,7 @@ export type ReencodableImageMime = Extract<
     { reencodable: true }
 >['mime'];
 
-/*
+/**
  * Sharp: cap libvips to one thread per process.
  * `registerWorkers()` runs in every cluster fork, so without it a multi-core deployment runs
  * N forks × sharp's own thread pool.
@@ -34,7 +34,7 @@ export type ReencodableImageMime = Extract<
  */
 sharp.concurrency(1);
 
-/*
+/**
  * Sharp: turn off libvips's repeated-operation cache, which a one-shot digest never benefits
  * from, and which would otherwise sit in every fork's memory.
  * https://sharp.pixelplumbing.com/api-utility#cache
@@ -53,7 +53,7 @@ sharp.cache(false);
  */
 const decode = (input: Buffer): Sharp =>
     sharp(input, {
-        /*
+        /**
          * Ceiling on decoded pixel count, checked before any resize runs. sharp's default is 268
          * megapixels; a 5 MB PNG can legally decode to gigabytes of raw pixels, so without an
          * explicit cap the decode step itself is the decompression bomb this pipeline prevents.

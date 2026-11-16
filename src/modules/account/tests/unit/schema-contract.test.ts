@@ -55,8 +55,10 @@ describe('sessionSchema', () => {
     });
 
     it('lets the database delete a row at its own purgeAt', () => {
-        // `expireAfterSeconds: 0` means "at that time": a per-row date, so changing a lifetime
-        // never rebuilds the index.
+        /**
+         * `expireAfterSeconds: 0` means "at that time": a per-row date, so changing a lifetime
+         * never rebuilds the index.
+         */
         expect(indexOptionSpecs(sessionSchema)).toContain('purgeAt_1: expireAfterSeconds=0');
     });
 
@@ -83,8 +85,10 @@ describe('verificationTokenSchema', () => {
     });
 
     it('limits one live link per account to the kinds that allow only one', () => {
-        // A PARTIAL unique index: the kinds that allow several (a delete confirmation, an MFA
-        // challenge) must not be constrained by it.
+        /**
+         * A PARTIAL unique index: the kinds that allow several (a delete confirmation, an MFA
+         * challenge) must not be constrained by it.
+         */
         const specs = indexOptionSpecs(verificationTokenSchema).join('\n');
         expect(specs).toContain('userId_1_type_1');
         expect(specs).toContain('unique=true');

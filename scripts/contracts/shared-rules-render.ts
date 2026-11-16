@@ -3,7 +3,7 @@
  * Pure half of the shared-rules code generator: turn a parsed rules document and its
  * {@link GenerateSpec} into the text of a `.generated.ts`. No filesystem, so a test can walk it.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_4-·-how-it-loads
  */
 
 import type {

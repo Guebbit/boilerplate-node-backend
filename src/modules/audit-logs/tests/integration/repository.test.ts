@@ -27,7 +27,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocumen
     ...overrides
 });
 
-/*
+/**
  * Every fixture below uses `coreAuditActions`, never a domain's.
  *
  * The action vocabulary is a union assembled from the enabled modules, so a spec that reaches for
@@ -35,7 +35,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocumen
  * opinion about products. Core's three security actions are the only ones guaranteed to exist in
  * any build, which makes them the right sample data for the module that merely stores them.
  */
-/*
+/**
  * The repository exposes the BASE `search` — the same three arguments every other collection
  * takes. `since` and the sort are policy the service applies, so they are passed explicitly here
  * rather than assumed.
@@ -142,9 +142,11 @@ describe('auditLogRepository', () => {
         });
 
         it('applies `since` as an exclusive lower bound on timestamp', async () => {
-            // Exactly the second entry's own timestamp — it must be excluded, matching the `>`
-            // the ring buffer uses, so paging by "the newest timestamp I already have" cannot
-            // return that entry a second time.
+            /**
+             * Exactly the second entry's own timestamp — it must be excluded, matching the `>`
+             * the ring buffer uses, so paging by "the newest timestamp I already have" cannot
+             * return that entry a second time.
+             */
             const { items, meta } = await search({}, new Date('2026-08-02T10:00:00.000Z'));
 
             expect(meta.totalItems).toBe(1);
@@ -152,8 +154,10 @@ describe('auditLogRepository', () => {
         });
 
         it('keeps the `since` bound a Date rather than coercing it with Number()', async () => {
-            // The reason `since` rides in `scope`: the search spec's ranges coerce their bounds
-            // with `Number()`, which turns a Date into a timestamp Mongo will not compare.
+            /**
+             * The reason `since` rides in `scope`: the search spec's ranges coerce their bounds
+             * with `Number()`, which turns a Date into a timestamp Mongo will not compare.
+             */
             const { meta } = await search({}, new Date('2026-07-01T00:00:00.000Z'));
 
             expect(meta.totalItems).toBe(3);
@@ -166,8 +170,10 @@ describe('auditLogRepository', () => {
         });
 
         it('counts every match while returning only the requested page', async () => {
-            // The distinction the admin dashboard renders as "1 of 3": a page size must not
-            // silently become the reported total.
+            /**
+             * The distinction the admin dashboard renders as "1 of 3": a page size must not
+             * silently become the reported total.
+             */
             const { items, meta } = await search({ pageSize: 1 });
 
             expect(items).toHaveLength(1);
@@ -180,8 +186,10 @@ describe('auditLogRepository', () => {
 
             expect(item._id).toBeUndefined();
             expect(item.__v).toBeUndefined();
-            // `format: date-time` in openapi.yaml — a raw Date would serialize the same over JSON,
-            // but the admin table reads this field directly.
+            /**
+             * `format: date-time` in openapi.yaml — a raw Date would serialize the same over JSON,
+             * but the admin table reads this field directly.
+             */
             expect(item.timestamp).toBe('2026-08-03T10:00:00.000Z');
         });
 
@@ -193,7 +201,7 @@ describe('auditLogRepository', () => {
         });
     });
 
-    /*
+    /**
      * A trail that counts what it cannot serve is not a trail.
      *
      * This read was capped at 200 rows while still reporting the true total, so a deployment with
@@ -205,8 +213,10 @@ describe('auditLogRepository', () => {
         const EPOCH = Date.parse('2026-08-01T00:00:00.000Z');
 
         beforeEach(async () => {
-            // Distinct timestamps a minute apart, so "newest first" has one right answer and the
-            // request id says which row a page actually returned.
+            /**
+             * Distinct timestamps a minute apart, so "newest first" has one right answer and the
+             * request id says which row a page actually returned.
+             */
             await Promise.all(
                 Array.from({ length: TOTAL }, (_, index) =>
                     auditLogRepository.create(
@@ -227,8 +237,10 @@ describe('auditLogRepository', () => {
             );
 
             expect(meta).toEqual({ page: 21, pageSize: 10, totalItems: TOTAL, totalPages: 21 });
-            // Newest first, so rows 201-205 are the five oldest entries — the ones the capped
-            // read counted and refused to send.
+            /**
+             * Newest first, so rows 201-205 are the five oldest entries — the ones the capped
+             * read counted and refused to send.
+             */
             expect(items.map((item) => item.requestId)).toEqual([
                 'entry-4',
                 'entry-3',
@@ -239,8 +251,10 @@ describe('auditLogRepository', () => {
         });
 
         it('never returns the same entry on two pages', async () => {
-            // `timestamp` alone is not unique across a bulk write; `AUDIT_SORT` adds `_id` so the
-            // count and the page cannot disagree about the tie order.
+            /**
+             * `timestamp` alone is not unique across a bulk write; `AUDIT_SORT` adds `_id` so the
+             * count and the page cannot disagree about the tie order.
+             */
             const pages = await Promise.all(
                 [1, 2, 3].map((page) =>
                     auditLogRepository.search({ page, pageSize: 100 }, {}, AUDIT_SORT)

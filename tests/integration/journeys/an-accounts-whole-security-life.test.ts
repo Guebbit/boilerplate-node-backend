@@ -68,8 +68,10 @@ const signIn = async (email: string, password: string, code: string) => {
 };
 
 it('keeps the account safe from signup to the last lapsed link', async () => {
-    // Signup behind the human check, proved from the mail. Root then makes the account an admin,
-    // so it may hold a machine credential.
+    /**
+     * Signup behind the human check, proved from the mail. Root then makes the account an admin,
+     * so it may hold a machine credential.
+     */
     const signup = await api()
         .post('/account/signup')
         .set(await solvedChallenge())
@@ -88,8 +90,10 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .expect(204);
     await seedMembership(String(signup.body.id), DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
-    // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
-    // The role came after the signup, so the account has no app yet: it enrols the real way.
+    /**
+     * Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
+     * The role came after the signup, so the account has no app yet: it enrols the real way.
+     */
     const plain = await loginBearer(ACCOUNT.email, ACCOUNT.password, {}, { arm: false });
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
@@ -139,8 +143,10 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
     expect(mailsTo(ACCOUNT.email, 'api-keys.revoked')).toHaveLength(1);
 
-    // From here the clock is frozen and only moves forward. A new session goes stale past the
-    // sensitive window, and an email change then asks for the second factor again.
+    /**
+     * From here the clock is frozen and only moves forward. A new session goes stale past the
+     * sensitive window, and an email change then asks for the second factor again.
+     */
     freezeDate();
     advanceDate(60_000);
     const third = await signIn(ACCOUNT.email, ACCOUNT.replacement, await codeFor(secret, 0));

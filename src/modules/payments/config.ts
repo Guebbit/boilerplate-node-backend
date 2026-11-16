@@ -103,8 +103,10 @@ export const validateBankTransferConfig = (): string[] => {
 
     const problems: string[] = [];
     if (iban && !beneficiary) problems.push('NODE_BANK_TRANSFER_BENEFICIARY');
-    // ibantools: `electronicFormatIBAN` strips spaces and upper-cases (`null` if not IBAN-shaped);
-    // `isValidIBAN` checks country length and the mod-97 checksum. https://github.com/Simplify/ibantools
+    /**
+     * ibantools: `electronicFormatIBAN` strips spaces and upper-cases (`null` if not IBAN-shaped);
+     * `isValidIBAN` checks country length and the mod-97 checksum. https://github.com/Simplify/ibantools
+     */
     if (iban && !isValidIBAN(electronicFormatIBAN(iban) ?? iban))
         problems.push('NODE_BANK_TRANSFER_IBAN');
     // ibantools `isValidBIC`: ISO 9362 shape (8 or 11 characters), no registry lookup.
@@ -145,8 +147,10 @@ export const paymentsConfig = defineConfig({
         NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
         NODE_PAYMENT_PROVIDER: text({ case: 'lower' }),
         NODE_PAYMENT_WEBHOOK_SECRET: secret({
-            // `0`: may stay unset (no provider, nothing to sign). Never the `.env-example`
-            // placeholder in a deployment; the 16-character floor of a SET value is `check` below.
+            /**
+             * `0`: may stay unset (no provider, nothing to sign). Never the `.env-example`
+             * placeholder in a deployment; the 16-character floor of a SET value is `check` below.
+             */
             minLength: 0,
             placeholder: 'your-payment-webhook-secret-here',
             productionOnly: true
@@ -198,7 +202,6 @@ export const paymentAttentionMinutes = (): number =>
 
 /**
  * Days an abandoned payment attempt is kept before `reapAbandonedPayments` deletes it.
- * @returns the retention, in days
  */
 export const abandonedPaymentRetentionDays = (): number =>
     paymentsConfig().NODE_PAYMENT_ABANDONED_RETENTION_DAYS;

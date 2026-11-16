@@ -112,6 +112,7 @@ export class OAuthIdentityTakenError extends Error {
  * minutes the attempt lives, or the callback was replayed. The callback answers `?error=link_expired`.
  */
 export class OAuthLinkExpiredError extends Error {
+    /** Fixed message: the callback answers the `link_expired` code, never this text. */
     constructor() {
         super('OAuth connect attempt expired or already used');
         this.name = 'OAuthLinkExpiredError';
@@ -187,12 +188,16 @@ export const linkProviderToSignedInAccount = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    // Every refusal below comes BEFORE the spend, so a refused attempt leaves the token live; the
-    // link and the spend then commit together or not at all.
+    /**
+     * Every refusal below comes BEFORE the spend, so a refused attempt leaves the token live; the
+     * link and the spend then commit together or not at all.
+     */
     findLiveToken(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '').then((user) => {
         if (!user) throw new OAuthLinkExpiredError();
-        // Refused as an expired attempt: the FE has one message for it, and a new reason code would
-        // be a contract change. A session that ended inside the five minutes fails the link too.
+        /**
+         * Refused as an expired attempt: the FE has one message for it, and a new reason code would
+         * be a contract change. A session that ended inside the five minutes fails the link too.
+         */
         if (sessionUserId !== user.id) throw new OAuthLinkExpiredError();
         if (!isAuthenticatable(user)) throw new OAuthAccountUnavailableError(user.id);
 
@@ -208,9 +213,11 @@ export const linkProviderToSignedInAccount = (
                         session
                     )
                 ).catch((error: unknown) => {
-                    // Another account took this identity between the check above and the write:
-                    // `users_oauth_identity` (unique) refuses it, the only unique index this
-                    // `$push` can hit. Answered like the check's own refusal; the spend rolled back.
+                    /**
+                     * Another account took this identity between the check above and the write:
+                     * `users_oauth_identity` (unique) refuses it, the only unique index this
+                     * `$push` can hit. Answered like the check's own refusal; the spend rolled back.
+                     */
                     throw isDuplicateKey(error) ? new OAuthIdentityTakenError(provider) : error;
                 });
             })
@@ -258,12 +265,16 @@ const signupFromOAuth = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    // Downloaded ONCE, here: the account keeps a local copy, never the provider's url, so no
-    // render ever sends a viewer's IP to the provider's host. Absent on any failure.
+    /**
+     * Downloaded ONCE, here: the account keeps a local copy, never the provider's url, so no
+     * render ever sends a viewer's IP to the provider's host. Absent on any failure.
+     */
     rehostRemoteImage(presentClaim(identity.imageUrl)).then((avatar) =>
-        // `verifiedAt` below is the whole of the vouching: the provider vouches for this address,
-        // so the account is a `customer` from its first request. A failure leaves no row behind,
-        // only the re-hosted avatar to discard.
+        /**
+         * `verifiedAt` below is the whole of the vouching: the provider vouches for this address,
+         * so the account is a `customer` from its first request. A failure leaves no row behind,
+         * only the re-hosted avatar to discard.
+         */
         accountUserService
             .registerFromOAuth({
                 email: identity.email,
@@ -271,8 +282,10 @@ const signupFromOAuth = (
                 username: presentClaim(identity.name) ?? identity.email,
                 imageUrl: avatar?.imageUrl,
                 thumbnailUrl: avatar?.thumbnailUrl,
-                // The provider vouches for this identity, same reasoning `userService.create`'s admin
-                // path already applies to a typed-in address — no password, so no email loop either.
+                /**
+                 * The provider vouches for this identity, same reasoning `userService.create`'s admin
+                 * path already applies to a typed-in address — no password, so no email loop either.
+                 */
                 verifiedAt: new Date(),
                 active: true,
                 locale: getCurrentLocale(),
@@ -281,10 +294,12 @@ const signupFromOAuth = (
                 oauthAccounts: [
                     { provider, providerId: identity.providerId, connectedAt: new Date() }
                 ]
-                // A concurrent signup for this SAME identity is the race `users_oauth_identity`
-                // (unique) exists for: the loser's `create` rejects with E11000, which the callback
-                // controller's catch turns into a generic `?error=provider_error` — the caller simply
-                // tries again, and the second attempt finds case 1.
+                /**
+                 * A concurrent signup for this SAME identity is the race `users_oauth_identity`
+                 * (unique) exists for: the loser's `create` rejects with E11000, which the callback
+                 * controller's catch turns into a generic `?error=provider_error` — the caller simply
+                 * tries again, and the second attempt finds case 1.
+                 */
             })
             .catch((error: unknown) => discardAvatar(avatar, error))
             .then((created) => {
@@ -342,28 +357,38 @@ export const loginOrCreateFromOAuth = (
     context: CallerContext
 ): Promise<{ user: UserDocument; outcome: OAuthOutcome }> =>
     accountUserService
-        // WITH credentials, unlike every other lookup in this file: the controller may need to
-        // build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
-        // see 1b in docs/understand/defences/authentication.md#federated-login.
+        /**
+         * WITH credentials, unlike every other lookup in this file: the controller may need to
+         * build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
+         * see 1b in docs/understand/defences/authentication.md#federated-login.
+         */
         .findByOAuthIdentity(provider, identity.providerId)
         .then((existing) => {
             if (existing) {
-                // Matched by the sign-in filter, which also returns an account in its deletion
-                // grace; one whose grace ran out since the query may not sign in.
+                /**
+                 * Matched by the sign-in filter, which also returns an account in its deletion
+                 * grace; one whose grace ran out since the query may not sign in.
+                 */
                 if (!isAuthenticatable(existing) && !isRestorable(existing))
                     throw new OAuthAccountUnavailableError(existing.id);
                 return { user: existing, outcome: 'login' as const };
             }
 
-            // Same reason as the lookup above: `linkToExistingAccount` below may hand this
-            // account straight to a 2FA challenge too.
+            /**
+             * Same reason as the lookup above: `linkToExistingAccount` below may hand this
+             * account straight to a 2FA challenge too.
+             */
             return accountUserService.findByEmail(identity.email).then((byEmail) => {
-                // Unverified is refused on BOTH branches: a signup would stamp `verifiedAt` on an
-                // address nobody proved, which pre-hijacks it (Sudhodanan & Paverd 2022).
+                /**
+                 * Unverified is refused on BOTH branches: a signup would stamp `verifiedAt` on an
+                 * address nobody proved, which pre-hijacks it (Sudhodanan & Paverd 2022).
+                 */
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
 
-                // BEFORE any write, and before the signup branch: this address belongs to an
-                // account that may not authenticate, so neither a link nor a new account fits.
+                /**
+                 * BEFORE any write, and before the signup branch: this address belongs to an
+                 * account that may not authenticate, so neither a link nor a new account fits.
+                 */
                 if (byEmail && !isAuthenticatable(byEmail))
                     throw new OAuthAccountUnavailableError(byEmail.id);
 
@@ -373,8 +398,10 @@ export const loginOrCreateFromOAuth = (
                         outcome: 'signup' as const
                     }));
 
-                // Both sides must have proved the address, not just the provider — see
-                // `OAuthAccountUnverifiedError`.
+                /**
+                 * Both sides must have proved the address, not just the provider — see
+                 * `OAuthAccountUnverifiedError`.
+                 */
                 if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
                 // Never a silent link: the account's owner connects the provider from a session.

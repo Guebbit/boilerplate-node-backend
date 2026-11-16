@@ -15,40 +15,48 @@ export default defineConfig({
     zodSchemas: {
         input: './openapi.yaml',
         output: {
-            // How operations are split across files. One of:
-            // 'single'      - everything in one file (current choice)
-            // 'split'       - one file's worth of impl + a separate schemas file
-            // 'tags'        - one file per OpenAPI tag
-            // 'tags-split'  - a folder per tag, each further split into impl/schemas
+            /**
+             * How operations are split across files. One of:
+             * 'single'      - everything in one file (current choice)
+             * 'split'       - one file's worth of impl + a separate schemas file
+             * 'tags'        - one file per OpenAPI tag
+             * 'tags-split'  - a folder per tag, each further split into impl/schemas
+             */
             mode: 'single',
             target: './api/schemas.zod.ts',
             schemas: './api/models',
-            // Which HTTP-client flavor to generate operation functions for. One of:
-            // 'fetch' / 'axios' / 'axios-functions' - typed callers of this API -
-            //     only useful if something in-repo consumes them; nothing here does
-            // 'react-query' / 'vue-query' / 'svelte-query' / 'swr' / 'angular' - same, plus frontend data-fetching hooks - N/A for a backend
-            // 'zod'   - schemas/types only, no call functions (current choice) - matches how this project actually uses generated api code
-            // 'hono'  - generates server-side route-handler scaffolding - requires the Hono framework, not Express
-            // 'mcp'   - generates an MCP server exposing these endpoints as tools for LLM agents
+            /**
+             * Which HTTP-client flavor to generate operation functions for. One of:
+             * 'fetch' / 'axios' / 'axios-functions' - typed callers of this API -
+             *     only useful if something in-repo consumes them; nothing here does
+             * 'react-query' / 'vue-query' / 'svelte-query' / 'swr' / 'angular' - same, plus frontend data-fetching hooks - N/A for a backend
+             * 'zod'   - schemas/types only, no call functions (current choice) - matches how this project actually uses generated api code
+             * 'hono'  - generates server-side route-handler scaffolding - requires the Hono framework, not Express
+             * 'mcp'   - generates an MCP server exposing these endpoints as tools for LLM agents
+             */
             client: 'zod',
             override: {
                 zod: {
-                    // Every fragment already declares `additionalProperties: false`; without this,
-                    // orval emits a plain `zod.object({…})`, which Zod SILENTLY STRIPS unknown
-                    // keys from rather than rejecting — so the generated validator would be weaker
-                    // than the contract it came from. `response` strictness is what makes
-                    // `tests/support/contract.ts`'s judge an over-serialization guard.
-                    // `query` is strict too: a query parameter the contract does not declare — a
-                    // typo, a stale name — answers 422 instead of being dropped, which would
-                    // return everything the caller may read as though the filter had been honoured.
-                    // https://orval.dev/docs/reference/configuration/output#strict
+                    /**
+                     * Every fragment already declares `additionalProperties: false`; without this,
+                     * orval emits a plain `zod.object({…})`, which Zod SILENTLY STRIPS unknown
+                     * keys from rather than rejecting — so the generated validator would be weaker
+                     * than the contract it came from. `response` strictness is what makes
+                     * `tests/support/contract.ts`'s judge an over-serialization guard.
+                     * `query` is strict too: a query parameter the contract does not declare — a
+                     * typo, a stale name — answers 422 instead of being dropped, which would
+                     * return everything the caller may read as though the filter had been honoured.
+                     * https://orval.dev/docs/reference/configuration/output#strict
+                     */
                     strict: { query: true, body: true, response: true },
-                    // One schema per DOCUMENTED STATUS (`Login200Response`, `Login422Response`, …)
-                    // instead of one per operation. Without this, only the single "success" branch
-                    // gets a schema at all — `tests/support/contract.ts` and the fuzz suite
-                    // (`tests/fuzz/endpoints.fuzz.test.ts`) both need to judge an ERROR response
-                    // (a 401, a 422) against its own declared shape too.
-                    // https://orval.dev/docs/reference/configuration/output#generateeachhttpstatus
+                    /**
+                     * One schema per DOCUMENTED STATUS (`Login200Response`, `Login422Response`, …)
+                     * instead of one per operation. Without this, only the single "success" branch
+                     * gets a schema at all — `tests/support/contract.ts` and the fuzz suite
+                     * (`tests/fuzz/endpoints.fuzz.test.ts`) both need to judge an ERROR response
+                     * (a 401, a 422) against its own declared shape too.
+                     * https://orval.dev/docs/reference/configuration/output#generateeachhttpstatus
+                     */
                     generateEachHttpStatus: true
                 }
             }

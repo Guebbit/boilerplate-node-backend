@@ -22,8 +22,10 @@ describe('observability routes — what is mounted', () => {
     });
 
     it('declares /metrics before /metrics/overview without shadowing it', () => {
-        // Two segments against one: they cannot collide, but the ordering is the file's stated
-        // convention and the pair is the one place a future `/metrics/:name` would break.
+        /**
+         * Two segments against one: they cannot collide, but the ordering is the file's stated
+         * convention and the pair is the one place a future `/metrics/:name` would break.
+         */
         const paths = routeTable(router).map(({ path }) => path);
 
         expect(paths.indexOf('/metrics')).toBeLessThan(paths.indexOf('/metrics/overview'));
@@ -62,8 +64,10 @@ describe('observability routes — the two guard styles', () => {
     );
 
     it('leaves no observability endpoint unguarded', () => {
-        // Every route here is a map of the service. The sweep covers all three guard styles at
-        // once, so a route added with any of them passes and one added with none fails.
+        /**
+         * Every route here is a map of the service. The sweep covers all three guard styles at
+         * once, so a route added with any of them passes and one added with none fails.
+         */
         const unguarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).every(
                 (guard) =>

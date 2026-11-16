@@ -217,9 +217,11 @@ const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumen
  */
 invoiceSchema.plugin(moneyPlugin);
 
-// One invoice per order — `repository.ts`'s own duplicate-key guard is what makes a redelivered
-// event idempotent; this index is what makes that guarantee real at the database, not just in the
-// listener's own logic.
+/**
+ * One invoice per order — `repository.ts`'s own duplicate-key guard is what makes a redelivered
+ * event idempotent; this index is what makes that guarantee real at the database, not just in the
+ * listener's own logic.
+ */
 invoiceSchema.index({ orderId: 1 }, { name: 'invoices_orderId', unique: true });
 
 // The money buckets of the stats read by `issuedAt`, a range scan.
@@ -244,9 +246,11 @@ const creditNoteSchema = new Schema<CreditNoteDocument, CreditNoteModel>(
  */
 creditNoteSchema.plugin(moneyPlugin);
 
-// One credit note per REFUND — `PAYMENT_REFUNDED` is fired from an at-most-once write, but the
-// event bus promises no de-duplication of its own, so this index is what makes a redelivered
-// event issue nothing twice. An order refunded in parts legitimately has several.
+/**
+ * One credit note per REFUND — `PAYMENT_REFUNDED` is fired from an at-most-once write, but the
+ * event bus promises no de-duplication of its own, so this index is what makes a redelivered
+ * event issue nothing twice. An order refunded in parts legitimately has several.
+ */
 creditNoteSchema.index({ refundId: 1 }, { name: 'creditNotes_refundId', unique: true });
 
 // Backs the per-order list `GET /orders/{id}/credit-notes` reads.

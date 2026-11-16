@@ -5,7 +5,7 @@
  * configured. No locale handling here — the producer already resolved every string before
  * publishing, so this file only interpolates and sends.
  *
- * @see docs/understand/email-and-rendering.md
+ * @see docs/understand/email-and-rendering.md#email-pipeline
  */
 
 import type { EmailJobPayload } from '@types';
@@ -38,8 +38,10 @@ const discardJobAttachments = (
  * below.
  */
 export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> => {
-    // The optional chain does the narrowing on its own — past this point TypeScript knows both
-    // fields are there, which is why no type predicate is needed to say so.
+    /**
+     * The optional chain does the narrowing on its own — past this point TypeScript knows both
+     * fields are there, which is why no type predicate is needed to say so.
+     */
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.request?.to || !job.templateName) {
         // `templateName` only: the rest of the job is a recipient, a subject and the template's data.
@@ -53,7 +55,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
         return discardJobAttachments(job?.request?.attachments).then(() => false);
     }
 
-    /*
+    /**
      * No locale handling here, by design: this job may run in another process long after the
      * request ended, so there's no locale store to restore. The producer already resolved every
      * string before publishing — `job.data` is finished copy — so this only interpolates and sends.
@@ -63,9 +65,11 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
             // `!`: proven present by the guard above, which the compiler cannot follow into this closure.
             .then(() => discardJobAttachments(job.request!.attachments).then(() => true))
             .catch((error: unknown) => {
-                // Logged AND rethrown, attachment untouched: the TTL retry is what saves the email —
-                // and the next attempt still needs a file to resolve — the log is what makes a job
-                // that keeps failing visible instead of a queue that quietly refills.
+                /**
+                 * Logged AND rethrown, attachment untouched: the TTL retry is what saves the email —
+                 * and the next attempt still needs a file to resolve — the log is what makes a job
+                 * that keeps failing visible instead of a queue that quietly refills.
+                 */
                 // Stryker disable next-line all
                 logger.error({ message: 'Email worker failed to send.', error });
                 throw error;

@@ -42,6 +42,7 @@ const makeRequest = (acceptLanguage?: string) =>
         })
     );
 
+/** A response stub that records what the code under test sets and sends. */
 const makeResponse = () =>
     asStub<Response & { set: jest.Mock; vary: jest.Mock }>({
         set: jest.fn(),
@@ -60,9 +61,11 @@ describe('attachLocale', () => {
     });
 
     it('runs next inside the locale context, not merely alongside it', () => {
-        // This is the assertion that the ambient `t` depends on. `getCurrentLocale()` reads the
-        // AsyncLocalStorage store, so it can only see 'it' if `next` executes within
-        // `runWithLocaleContext` — calling next() before or after would leave it at the default.
+        /**
+         * This is the assertion that the ambient `t` depends on. `getCurrentLocale()` reads the
+         * AsyncLocalStorage store, so it can only see 'it' if `next` executes within
+         * `runWithLocaleContext` — calling next() before or after would leave it at the default.
+         */
         const request = makeRequest('it');
         let seenInsideNext: string | undefined;
         let contextInsideNext: unknown;
@@ -83,8 +86,10 @@ describe('attachLocale', () => {
     });
 
     it('states the locale the client actually got, not the one it asked for', () => {
-        // 'zz' is served by nothing, so negotiation falls back — and the header has to say so,
-        // otherwise a cache keys an English body under a Klingon request.
+        /**
+         * 'zz' is served by nothing, so negotiation falls back — and the header has to say so,
+         * otherwise a cache keys an English body under a Klingon request.
+         */
         const request = makeRequest('zz');
         const response = makeResponse();
 
@@ -155,9 +160,11 @@ describe('attachLocale', () => {
      */
     describe('behaviour deltas from the hand-rolled parser', () => {
         it('drops a tag with an unparseable q-weight, rather than treating it as full weight', () => {
-            // Old `negotiateLocale`: an unparseable weight ('banana') fell back to full weight, so
-            // 'it' won. `negotiator` drops the tag outright instead, so the request falls through
-            // to the fallback locale.
+            /**
+             * Old `negotiateLocale`: an unparseable weight ('banana') fell back to full weight, so
+             * 'it' won. `negotiator` drops the tag outright instead, so the request falls through
+             * to the fallback locale.
+             */
             const request = makeRequest('it;q=banana');
 
             attachLocale(request, makeResponse(), jest.fn() as NextFunction);
@@ -167,9 +174,11 @@ describe('attachLocale', () => {
         });
 
         it('resolves a bare wildcard to the fallback locale, same as before', () => {
-            // Old `negotiateLocale` special-cased '*' to mean "give me the default". `negotiator`
-            // instead returns the first candidate OFFERED for a wildcard — `attachLocale` orders
-            // the fallback first specifically so this still lands on the same answer.
+            /**
+             * Old `negotiateLocale` special-cased '*' to mean "give me the default". `negotiator`
+             * instead returns the first candidate OFFERED for a wildcard — `attachLocale` orders
+             * the fallback first specifically so this still lands on the same answer.
+             */
             const request = makeRequest('*');
 
             attachLocale(request, makeResponse(), jest.fn() as NextFunction);

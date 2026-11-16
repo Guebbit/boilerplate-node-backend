@@ -51,8 +51,10 @@ describe('jobHealth', () => {
     });
 
     it('leaves a job that has never succeeded without a timestamp, rather than inventing one', async () => {
-        // The field is optional in the contract precisely for this: a job registered but never
-        // run has no last success, and `new Date(undefined)` would report the epoch as fact.
+        /**
+         * The field is optional in the contract precisely for this: a job registered but never
+         * run has no last success, and `new Date(undefined)` would report the epoch as fact.
+         */
         listLeaseSummariesMock.mockResolvedValue([{ name: 'reap:leases' }]);
 
         const [job] = await jobHealth();

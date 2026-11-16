@@ -10,9 +10,11 @@
  */
 
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-// Relative, not the `@infrastructure` alias: loaded transitively from `tests/support/
-// global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
-// does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
+/**
+ * Relative, not the `@infrastructure` alias: loaded transitively from `tests/support/
+ * global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
+ * does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
+ */
 import { logger } from '../../src/infrastructure/adapters/logger';
 import type { EphemeralMongo } from './ephemeral-mongo';
 
@@ -62,14 +64,16 @@ export const startInProcessMongod = (databasePath: string | undefined): Promise<
         );
     });
 
-    // `mongodb-memory-server`: starts a real, one-member `mongod` replica set against
-    // `databasePath` (or a temp directory of its own choosing when omitted) and returns a handle
-    // exposing its connection string and `stop()`. https://typegoose.github.io/mongodb-memory-server/
-    //
-    // `configSettings.heartbeatIntervalMillis`: the library hard-codes an election timeout of 500 ms
-    // against the server's default heartbeat of 2000 ms. Server 9.0 refuses that pair,
-    // so the heartbeat drops below 500. The spread keeps the library's 500 as it is.
-    // https://github.com/typegoose/mongodb-memory-server/blob/master/packages/mongodb-memory-server-core/src/MongoMemoryReplSet.ts
+    /**
+     * `mongodb-memory-server`: starts a real, one-member `mongod` replica set against
+     * `databasePath` (or a temp directory of its own choosing when omitted) and returns a handle
+     * exposing its connection string and `stop()`. https://typegoose.github.io/mongodb-memory-server/
+     *
+     * `configSettings.heartbeatIntervalMillis`: the library hard-codes an election timeout of 500 ms
+     * against the server's default heartbeat of 2000 ms. Server 9.0 refuses that pair,
+     * so the heartbeat drops below 500. The spread keeps the library's 500 as it is.
+     * https://github.com/typegoose/mongodb-memory-server/blob/master/packages/mongodb-memory-server-core/src/MongoMemoryReplSet.ts
+     */
     return Promise.race([
         MongoMemoryReplSet.create({
             replSet: {

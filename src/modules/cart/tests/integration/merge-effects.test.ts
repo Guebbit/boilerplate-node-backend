@@ -18,7 +18,7 @@ import { cartRepository, QUANTITY_LIMIT } from '../../repository';
 import { CART_LINES_REMOVED } from '../../events';
 import { cartService } from '../../services';
 
-/*
+/**
  * The analytics port is REPLACED with a recording wrapper around the real one, not spied on:
  * `jest.spyOn` cannot redefine the non-configurable property a CommonJS namespace import exposes
  * under the swc transform the mutation runs use.
@@ -93,8 +93,10 @@ describe('a merge that loses a race at the cap', () => {
         const user = await createUser();
         const product = await createProduct();
         await cartService.addItemById(user.id, String(product._id), 5);
-        // Between the rule's read and the write another request filled the line: the repository
-        // refuses the add. Only a race can say so, hence a stand-in for it.
+        /**
+         * Between the rule's read and the write another request filled the line: the repository
+         * refuses the add. Only a race can say so, hence a stand-in for it.
+         */
         jest.spyOn(cartRepository, 'upsertLine').mockResolvedValueOnce(QUANTITY_LIMIT);
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 

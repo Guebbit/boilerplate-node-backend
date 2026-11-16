@@ -43,10 +43,12 @@ jest.mock('@infrastructure/adapters/cache', () => {
             return Promise.resolve();
         },
         invalidateCacheTags,
-        // The real `invalidateCacheTagsLogged` calls `invalidateCacheTags` through its own
-        // module-local binding, which `jest.requireActual` captures before this factory ever
-        // runs — so overriding the export above does not reach it. Redeclared here against the
-        // same double, or every write "succeeds" against the real (unreachable) Redis instead.
+        /**
+         * The real `invalidateCacheTagsLogged` calls `invalidateCacheTags` through its own
+         * module-local binding, which `jest.requireActual` captures before this factory ever
+         * runs — so overriding the export above does not reach it. Redeclared here against the
+         * same double, or every write "succeeds" against the real (unreachable) Redis instead.
+         */
         invalidateCacheTagsLogged: (tags: string[]) =>
             invalidateCacheTags(tags).then(() => undefined)
     };

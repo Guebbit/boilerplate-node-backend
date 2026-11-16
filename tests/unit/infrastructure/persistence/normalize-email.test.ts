@@ -20,8 +20,10 @@ describe('canonicalMailbox', () => {
         expect(canonicalMailbox(input)).toBe(expected);
     });
 
-    // Gmail ignores dots and delivers googlemail.com to gmail.com; nobody else does, so a dot in
-    // another provider's address is a different mailbox.
+    /**
+     * Gmail ignores dots and delivers googlemail.com to gmail.com; nobody else does, so a dot in
+     * another provider's address is a different mailbox.
+     */
     it('drops dots and unifies the domain only for Gmail', () => {
         expect(canonicalMailbox('a.d.a+x@gmail.com')).toBe('ada@gmail.com');
         expect(canonicalMailbox('ada@googlemail.com')).toBe('ada@gmail.com');

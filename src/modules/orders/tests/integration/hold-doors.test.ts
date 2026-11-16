@@ -71,8 +71,10 @@ describe('isPayableNow', () => {
     });
 
     it('is false once the hold was released, though the order still says pending', async () => {
-        // An expiry releases the hold first and cancels the order after: in between, the shelf
-        // may be gone and a card must not be charged.
+        /**
+         * An expiry releases the hold first and cancels the order after: in between, the shelf
+         * may be gone and a card must not be charged.
+         */
         const { orderId } = await orderHolding(OrderStatus.pending);
         await inventoryService.releaseForOrder(orderId, 'expire');
 

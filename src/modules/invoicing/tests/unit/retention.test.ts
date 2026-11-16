@@ -49,8 +49,10 @@ describe('buyerRetentionScanBound', () => {
         const document = { issuedAt: new Date(issued), timezone };
         const at = new Date(now);
 
-        // UTC+14 reaches 1 January first, so Kiritimati is due at 10:00Z the day before.
-        // Every row is due; the bound must then lie after the document.
+        /**
+         * UTC+14 reaches 1 January first, so Kiritimati is due at 10:00Z the day before.
+         * Every row is due; the bound must then lie after the document.
+         */
         expect(isBuyerRetentionOver(document, 10, at)).toBe(true);
         expect(document.issuedAt < buyerRetentionScanBound(10, at)).toBe(true);
     });

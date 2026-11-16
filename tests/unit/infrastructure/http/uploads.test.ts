@@ -20,7 +20,7 @@ import {
 } from '@infrastructure/http/uploads';
 import { asStub } from '@tests/stub';
 
-/*
+/**
  * Image-store calls are mocked: the undo is asserted by WHICH store door it opens (`remove` for a
  * promoted file, `removeQuarantined` for a pending one), never by touching a disk.
  */
@@ -68,8 +68,10 @@ describe('readUploadedImage', () => {
     });
 
     it('takes only the first url when several images were committed', () => {
-        // These endpoints accept a single image; extras are ignored rather than silently
-        // overwriting each other downstream.
+        /**
+         * These endpoints accept a single image; extras are ignored rather than silently
+         * overwriting each other downstream.
+         */
         expect(
             readUploadedImage(
                 requestWith({ storedImageUrls: ['/images/first.png', '/images/second.png'] })
@@ -78,9 +80,11 @@ describe('readUploadedImage', () => {
     });
 
     it('returns undefined when the request uploaded nothing', () => {
-        // Callers distinguish "no image supplied" from "image supplied" on this being undefined,
-        // so an empty string here would read as "an image at the site root" — and, worse, would
-        // make the failure-path cleanup try to delete it.
+        /**
+         * Callers distinguish "no image supplied" from "image supplied" on this being undefined,
+         * so an empty string here would read as "an image at the site root" — and, worse, would
+         * make the failure-path cleanup try to delete it.
+         */
         expect(readUploadedImage(requestWith({})).imageUrl).toBeUndefined();
     });
 

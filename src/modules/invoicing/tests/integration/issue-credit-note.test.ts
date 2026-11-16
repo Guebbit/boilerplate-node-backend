@@ -95,9 +95,11 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         await refundForOrder(String(order._id));
         const [creditNote] = await waitForNotes(String(order._id), 1);
 
-        // Both series independently start their own year at 1 — the SAME printed number on two
-        // different documents is expected, not a collision; only `invoiceId`/`invoiceNumber`
-        // below prove the two rows are actually linked.
+        /**
+         * Both series independently start their own year at 1 — the SAME printed number on two
+         * different documents is expected, not a collision; only `invoiceId`/`invoiceNumber`
+         * below prove the two rows are actually linked.
+         */
         expect(creditNote.number).toMatch(/^\d{4}-\d{6}$/);
         expect(creditNote.invoiceId.toString()).toBe(invoice._id.toString());
         expect(creditNote.invoiceNumber).toBe(invoice.number);
@@ -198,8 +200,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         }
     });
 
-    // A credit note mirrors the invoice it corrects (Italy: AdE 427/2023; VAT Directive Art. 226(3)),
-    // so the seller is the one the sale was made under, not whoever the settings say today.
+    /**
+     * A credit note mirrors the invoice it corrects (Italy: AdE 427/2023; VAT Directive Art. 226(3)),
+     * so the seller is the one the sale was made under, not whoever the settings say today.
+     */
     it('carries the invoice’s seller when the shop changed its details in between', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 
@@ -259,9 +263,11 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(await creditNoteNumberCounterModel.findById(year).lean().exec()).toBeNull();
     });
 
-    // Money that never paid for a sale has no invoice, so no document (VAT Directive Art. 2(1)(a), 65):
-    // a note would reference nothing, and would burn a number in a gap-free series. A dead invoice
-    // event is the other case, covered by `credit-note-catch-up.test.ts`.
+    /**
+     * Money that never paid for a sale has no invoice, so no document (VAT Directive Art. 2(1)(a), 65):
+     * a note would reference nothing, and would burn a number in a gap-free series. A dead invoice
+     * event is the other case, covered by `credit-note-catch-up.test.ts`.
+     */
     it('issues nothing, and burns no number, when an order has no invoice to reverse', async () => {
         const user = await createUser();
         const product = await createProduct({ price: '25.00' });

@@ -4,7 +4,7 @@
  * actually takes: add a line, remove a line, and the two cleanup writes owed to product and user
  * deletion.
  *
- * @see docs/modules/wishlist.md
+ * @see docs/modules/wishlist.md#the-pipeline
  */
 
 import type { ClientSession } from 'mongoose';
@@ -77,18 +77,22 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
     addLine: async (userId: string, productId: string) => {
         const owner = { userId: toObjectId(userId) };
         const line = toObjectId(productId);
-        // The document as it stood BEFORE this write (`null` when this call created it): whether
-        // the product was already in it is the answer to "was this an add", and only the write
-        // itself can say so atomically. `modifiedCount` cannot — the timestamp bump makes every
-        // write a modification.
+        /**
+         * The document as it stood BEFORE this write (`null` when this call created it): whether
+         * the product was already in it is the answer to "was this an add", and only the write
+         * itself can say so atomically. `modifiedCount` cannot — the timestamp bump makes every
+         * write a modification.
+         */
         const max = wishlistMax();
         const items = { $ifNull: ['$items', []] };
         const before = await wishlistModel
             .findOneAndUpdate(
                 owner,
-                // An aggregation pipeline, so the append can test the document it is about to
-                // change: keep the array when the product is held or the list is full, else append.
-                // https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+                /**
+                 * An aggregation pipeline, so the append can test the document it is about to
+                 * change: keep the array when the product is held or the list is full, else append.
+                 * https://www.mongodb.com/docs/manual/tutorial/update-documents-with-aggregation-pipeline/
+                 */
                 [
                     {
                         $set: {
@@ -107,8 +111,10 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
                         }
                     }
                 ],
-                // `updatePipeline`: Mongoose refuses an array update without it.
-                // https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                /**
+                 * `updatePipeline`: Mongoose refuses an array update without it.
+                 * https://mongoosejs.com/docs/api/query.html#Query.prototype.setOptions()
+                 */
                 { upsert: true, returnDocument: 'before', updatePipeline: true }
             )
             .exec();

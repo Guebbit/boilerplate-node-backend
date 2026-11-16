@@ -8,7 +8,7 @@
  * i18n through `@infrastructure/i18n` — the one exception is the `app` tier, which alone may see
  * which modules exist, handing this file the `translatables` lookup it cannot collect itself.
  *
- * @see docs/modules/locales.md
+ * @see docs/modules/locales.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -33,19 +33,23 @@ import { localesConfig } from './config';
  * @param modules - every enabled module, this module's own included
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
-    // The backend app's share of this module's collection, plus which registered languages are
-    // switched on or off, handed to `@infrastructure/i18n` so an override typed into the admin
-    // screens reaches `t()` and the language the request is negotiated in is one the shop serves.
-    // Touches no database: `readLocaleOverlay` only runs on the refresh.
+    /**
+     * The backend app's share of this module's collection, plus which registered languages are
+     * switched on or off, handed to `@infrastructure/i18n` so an override typed into the admin
+     * screens reaches `t()` and the language the request is negotiated in is one the shop serves.
+     * Touches no database: `readLocaleOverlay` only runs on the refresh.
+     */
     registerLocaleOverrideProvider(() => localeService.readLocaleOverlay());
 
-    // This module's implementation of the translation port — `resolve` is what a read-path
-    // decorator batches a page against, `removeAll` is what a product's HARD delete calls to take
-    // its translations with it in the same operation, `search` is what a free-text search unions
-    // with an entity's own (fallback-language) match, `plan`/`write` are what a caller with its
-    // own entity to write (`productService.create`/`updateById`) validates and applies the
-    // translations half of its request through, and `readAll` is what that same caller's admin
-    // read populates its language tabs from.
+    /**
+     * This module's implementation of the translation port — `resolve` is what a read-path
+     * decorator batches a page against, `removeAll` is what a product's HARD delete calls to take
+     * its translations with it in the same operation, `search` is what a free-text search unions
+     * with an entity's own (fallback-language) match, `plan`/`write` are what a caller with its
+     * own entity to write (`productService.create`/`updateById`) validates and applies the
+     * translations half of its request through, and `readAll` is what that same caller's admin
+     * read populates its language tabs from.
+     */
     registerTranslationPort({
         resolve: translationRepository.resolveEntityFields,
         removeAll: translationRepository.removeEntityTranslations,
@@ -73,17 +77,19 @@ export default {
     mounts: [{ basePath: '/locales', routes: router }],
     config: [localesConfig.slice],
     onRegistered,
-    /*
+    /**
      * Its own copy, for its own error messages: without it, the module that owns the translation
      * feature is the one place in the repo where a 409 on a key collision reaches admins in
      * English regardless of what they asked for.
      */
     locales: path.join(__dirname, 'locales'),
-    // `translatedBy` is staff attribution on a `update:Translation` action — the caller's own
-    // user id, a pointer rather than a copy of anything (`services/translations.ts` sets it from
-    // `context?.caller.id`). Not an end-customer's own data either way — nothing here is ever
-    // reachable by a `POST /account/export` subject. The pointer is forgotten when that account
-    // is erased; `collect` resolves nothing, so the section appears in no export.
+    /**
+     * `translatedBy` is staff attribution on a `update:Translation` action — the caller's own
+     * user id, a pointer rather than a copy of anything (`services/translations.ts` sets it from
+     * `context?.caller.id`). Not an end-customer's own data either way — nothing here is ever
+     * reachable by a `POST /account/export` subject. The pointer is forgotten when that account
+     * is erased; `collect` resolves nothing, so the section appears in no export.
+     */
     personalData: [
         {
             section: 'translationAttribution',

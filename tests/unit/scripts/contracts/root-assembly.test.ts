@@ -28,11 +28,13 @@ paths:
         $ref: '${pathRefFor('alpha', '/alpha/{id}')}'
 `;
 
+/** A first module fragment. */
 const alpha: ModuleFragment = {
     section: 'alpha',
     paths: ['/alpha', '/alpha/{id}'],
     tags: ['Alpha']
 };
+/** A second module fragment. */
 const widgets: ModuleFragment = {
     section: 'widgets',
     paths: ['/widgets', '/widgets/{id}'],
@@ -47,6 +49,7 @@ const assembled = (fragments: ModuleFragment[]) =>
         'x-tagGroups': { name: string; tags: string[] }[];
     };
 
+/** The tag groups the assembled root declares for the fragments. */
 const groupsOf = (fragments: ModuleFragment[]) =>
     assembled(fragments)['x-tagGroups'].map(({ name, tags }) => [name, tags]);
 

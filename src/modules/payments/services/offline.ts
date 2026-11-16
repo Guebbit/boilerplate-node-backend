@@ -51,8 +51,10 @@ export interface OfflinePaymentInput {
  * @param context - the caller context to audit and analyse the attempt against — carries the
  *   admin's own identity, so a second `authContext` parameter would only repeat it
  */
-// Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
-// `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+/**
+ * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+ * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+ */
 export const recordOfflinePayment = async (
     orderId: string,
     input: OfflinePaymentInput,
@@ -64,20 +66,26 @@ export const recordOfflinePayment = async (
     const order = await orderService.getById(orderId);
     if (!order) return orderNotFound();
     const existing = await paymentRepository.findByOrderId(orderId);
-    // A transfer that lands after its order was canceled: the cancel closed the transfer payment
-    // (`canceled`, reference kept), the money is real, and the order can no longer take it. It is
-    // recorded onto that payment and owed straight back, instead of refused and left unrecorded.
+    /**
+     * A transfer that lands after its order was canceled: the cancel closed the transfer payment
+     * (`canceled`, reference kept), the money is real, and the order can no longer take it. It is
+     * recorded onto that payment and owed straight back, instead of refused and left unrecorded.
+     */
     const lateTransfer =
         existing?.status === 'canceled' &&
         existing.transferReference !== undefined &&
         !isPayable(order.status);
-    // Asked of the order lifecycle rather than compared against a literal here, so this
-    // module cannot drift from the owner of the rule.
+    /**
+     * Asked of the order lifecycle rather than compared against a literal here, so this
+     * module cannot drift from the owner of the rule.
+     */
     if (!isPayable(order.status) && !lateTransfer) return notPayable();
 
-    // A card intent still open at the provider: tell IT the customer is paying another way now,
-    // rather than overwriting this row out from under it — an intent nobody closes can
-    // still resolve there days later, with no local row left to catch the charge it makes.
+    /**
+     * A card intent still open at the provider: tell IT the customer is paying another way now,
+     * rather than overwriting this row out from under it — an intent nobody closes can
+     * still resolve there days later, with no local row left to catch the charge it makes.
+     */
     if (existing) {
         const refusal = await cancelOpenIntent(existing, 'Recorded as an offline payment')
             .then(() => undefined)
@@ -94,24 +102,30 @@ export const recordOfflinePayment = async (
     const payerId = buyerIdOf(order);
     const { currency } = order;
     const upserted = await paymentRepository.upsertOffline(orderId, payerId, {
-        // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
-        // document; spreading it copies nothing, since its schema paths are prototype getters,
-        // not the document's own enumerable properties.
+        /**
+         * Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
+         * document; spreading it copies nothing, since its schema paths are prototype getters,
+         * not the document's own enumerable properties.
+         */
         amount: orderTotal(order),
         currency,
         method: input.method,
         reference: input.reference,
         receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()
     });
-    // Nothing to upsert onto: the order's own money already moved (succeeded),
-    // raced past the `pending` check above.
+    /**
+     * Nothing to upsert onto: the order's own money already moved (succeeded),
+     * raced past the `pending` check above.
+     */
     if (!upserted) return notPayable();
     const { payment, created } = upserted;
 
     const settlement = await settlePayment(payment, { status: 'succeeded' }, false, context);
-    // Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
-    // the order: the money moved but there was no order left to keep it for. Not for a late
-    // transfer, where that is the known, recorded outcome: the answer is the payment itself.
+    /**
+     * Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
+     * the order: the money moved but there was no order left to keep it for. Not for a late
+     * transfer, where that is the known, recorded outcome: the answer is the payment itself.
+     */
     if (settlement.orderLost && !lateTransfer) return settlementResponse(settlement);
     const { payment: settled } = settlement;
 

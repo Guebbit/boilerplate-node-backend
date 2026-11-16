@@ -4,7 +4,7 @@
  * the soft/hard delete triplet, and this module has no soft-delete tier to flag. Here:
  * `DELETE /examples/:id`.
  *
- * @see docs/understand/request-flow.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
  */
 
 import type { Request, Response } from 'express';

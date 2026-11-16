@@ -39,6 +39,7 @@ afterEach(() => {
     jest.clearAllMocks();
 });
 
+/** One day in milliseconds. */
 const DAY = 86_400_000;
 
 /** A date `days` from now. */
@@ -129,8 +130,10 @@ describe('the preview', () => {
 
     it('counts an order with several fulfillment orders to tell once', async () => {
         const { orderId, productIds } = await preorder(inDays(30));
-        // A second group of the same order waiting on the same product: the same move tells both,
-        // and the order counts once.
+        /**
+         * A second group of the same order waiting on the same product: the same move tells both,
+         * and the order counts once.
+         */
         const [first] = await fulfillmentOrdersOf(orderId);
         await fulfillmentOrderModel.create({
             ...first.toObject(),

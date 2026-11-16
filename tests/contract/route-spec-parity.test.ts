@@ -73,7 +73,9 @@ const declaredOperations = (): OperationKey[] => {
 /** Whether an operation belongs to the demo extension rather than the API. */
 const isTestLever = (operation: OperationKey): boolean => operation.includes(' /__test/');
 
+/** Mounted operations, minus the test-only levers. */
 const mounted = mountedOperations().filter((operation) => !isTestLever(operation));
+/** Operations the contract declares, minus the test-only levers. */
 const declared = declaredOperations().filter((operation) => !isTestLever(operation));
 
 describe('mounted routes and the published contract', () => {
@@ -96,8 +98,10 @@ describe('mounted routes and the published contract', () => {
     });
 
     it('mounts no operation twice', () => {
-        // Two registrations of one method and path: the second is unreachable, and the contract
-        // can only describe one of them.
+        /**
+         * Two registrations of one method and path: the second is unreachable, and the contract
+         * can only describe one of them.
+         */
         const duplicates = mounted.filter(
             (operation, index) => mounted.indexOf(operation) !== index
         );

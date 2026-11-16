@@ -69,11 +69,13 @@ afterEach(() => {
 // A `shop` build uploads a replacement product picture through the real route — the file is this test's to remove.
 afterAll(emptyFileSandbox);
 
-// The default (no `scenario` in the body) reseeds `shop`, whose products write translations
-// through the same manifest a real write validates against. `@tests/http`'s `api` import (above)
-// already pulls in the real `src/app.ts`, which registers every enabled module — including
-// `products`' own `translatables` declaration — at import time, so nothing here builds that
-// lookup by hand.
+/**
+ * The default (no `scenario` in the body) reseeds `shop`, whose products write translations
+ * through the same manifest a real write validates against. `@tests/http`'s `api` import (above)
+ * already pulls in the real `src/app.ts`, which registers every enabled module — including
+ * `products`' own `translatables` declaration — at import time, so nothing here builds that
+ * lookup by hand.
+ */
 
 /**
  * A throwaway app carrying the demo surface and nothing else — enough for every case whose
@@ -96,8 +98,10 @@ const testApp = () => {
  */
 const drivableApp = () => {
     const app = express();
-    // The same installs `src/app.ts` makes, in the same order — `installRequestParsing` is what
-    // parses a JSON body, so the flows' first login 500s without it.
+    /**
+     * The same installs `src/app.ts` makes, in the same order — `installRequestParsing` is what
+     * parses a JSON body, so the flows' first login 500s without it.
+     */
     installSecurity(app);
     installRequestParsing(app);
     installRequestContext(app);
@@ -109,8 +113,10 @@ const drivableApp = () => {
 
 describe('production has no demo surface', () => {
     it('answers 404 from an app built without the demo extension', async () => {
-        // The real app, not `testApp()` above: `testApp()` calls `installDemo` directly, which
-        // is exactly the extension this case proves a plain `createApp()` does not carry.
+        /**
+         * The real app, not `testApp()` above: `testApp()` calls `installDemo` directly, which
+         * is exactly the extension this case proves a plain `createApp()` does not carry.
+         */
         const response = await api().post('/__test/restore');
 
         expect(response.status).toBe(404);
@@ -219,6 +225,7 @@ describe('POST /__test/jobs/:name', () => {
     });
 });
 
+/** Asks the fake provider for a refund against the given reference. */
 const attemptRefund = (providerRef: string) =>
     fakePaymentProvider.refund(
         providerRef,

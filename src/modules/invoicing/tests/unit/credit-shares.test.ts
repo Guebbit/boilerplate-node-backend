@@ -42,8 +42,10 @@ describe('creditShares', () => {
     });
 
     it('gives the odd cent to the heaviest rate', () => {
-        // Shares of 1000 cents by gross weight 1825 : 4405 -> floor 292 and 707, the odd cent goes
-        // to the heavier rate -> 292 / 708.
+        /**
+         * Shares of 1000 cents by gross weight 1825 : 4405 -> floor 292 and 707, the odd cent goes
+         * to the heavier rate -> 292 / 708.
+         */
         const mixed: CreditableInvoice = {
             currency: 'EUR',
             lines: [],

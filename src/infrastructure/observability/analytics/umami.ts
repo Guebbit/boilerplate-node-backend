@@ -5,7 +5,7 @@
  * into the same database: the browser posts to `/api/send` via its tracking script, and a server
  * posts the identical payload over HTTP — the whole integration, no server SDK needed.
  *
- * @see docs/understand/analytics.md
+ * @see docs/understand/analytics.md#choosing-a-provider
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -50,8 +50,10 @@ const readConfig = (): { host: string; websiteId: string } | undefined => {
 
     if (!host || !websiteId) return undefined;
 
-    // Trailing slash tolerated: `http://umami:3000/` and `http://umami:3000` must behave the same,
-    // because one of them is what someone will paste in.
+    /**
+     * Trailing slash tolerated: `http://umami:3000/` and `http://umami:3000` must behave the same,
+     * because one of them is what someone will paste in.
+     */
     return { host: host.replace(/\/+$/, ''), websiteId };
 };
 
@@ -65,8 +67,10 @@ let warnedAboutConfiguration = false;
  * are deleted by hand, so an id there would outlive the account. PostHog keeps `distinctId`.
  */
 const buildEventData = (event: AnalyticsEvent): Record<string, unknown> => ({
-    // Caller-supplied context first, so the field below cannot be overwritten by a property
-    // that happens to share its name.
+    /**
+     * Caller-supplied context first, so the field below cannot be overwritten by a property
+     * that happens to share its name.
+     */
     ...event.properties,
     ...(event.traceId ? { trace_id: event.traceId } : {})
 });
@@ -78,8 +82,10 @@ const SEND_TIMEOUT_MS = 2000;
 export const umamiAnalyticsProvider: AnalyticsProvider = {
     name: 'umami',
 
-    // Both halves of `readConfig`, so health reports the same answer `capture` acts on — a host
-    // without a website id is the misconfiguration this exists to surface.
+    /**
+     * Both halves of `readConfig`, so health reports the same answer `capture` acts on — a host
+     * without a website id is the misconfiguration this exists to surface.
+     */
     configured(): boolean {
         return readConfig() !== undefined;
     },
@@ -100,13 +106,17 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
             return;
         }
 
-        // Fire-and-forget POST to Umami's collect endpoint — not awaited, so this returns before
-        // the network call resolves. User-Agent is required or Umami drops the event (see above);
-        // X-Forwarded-For attributes it to the same visitor as the browser events around it.
+        /**
+         * Fire-and-forget POST to Umami's collect endpoint — not awaited, so this returns before
+         * the network call resolves. User-Agent is required or Umami drops the event (see above);
+         * X-Forwarded-For attributes it to the same visitor as the browser events around it.
+         */
         fetch(`${config.host}/api/send`, {
             method: 'POST',
-            // Bounded: a hung Umami would otherwise hold a socket for undici's 300s default, per
-            // event, for as long as it stays hung.
+            /**
+             * Bounded: a hung Umami would otherwise hold a socket for undici's 300s default, per
+             * event, for as long as it stays hung.
+             */
             signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
             headers: {
                 'Content-Type': 'application/json',
@@ -117,8 +127,10 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
                 type: 'event',
                 payload: {
                     website: config.websiteId,
-                    // hostname separates environments sharing one website id; url gives the
-                    // event a row in the pages view instead of an empty one.
+                    /**
+                     * hostname separates environments sharing one website id; url gives the
+                     * event a row in the pages view instead of an empty one.
+                     */
                     ...(event.hostname ? { hostname: stripPort(event.hostname) } : {}),
                     url: `/server/${event.event}`,
                     name: event.event,
@@ -128,9 +140,11 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
             })
         })
             .then((response) => {
-                // A 404 here is the one misconfiguration Umami reports honestly: the website id
-                // does not exist on that instance. Worth a log line, because every event after
-                // it will fail the same way.
+                /**
+                 * A 404 here is the one misconfiguration Umami reports honestly: the website id
+                 * does not exist on that instance. Worth a log line, because every event after
+                 * it will fail the same way.
+                 */
                 if (!response.ok)
                     // Stryker disable all
                     logger.warn({
@@ -141,9 +155,11 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
                 // Stryker restore all
             })
             .catch((error: unknown) => {
-                // Analytics is not worth an unhandled rejection. Debug rather than warn: a
-                // developer running the API without the analytics container up would otherwise
-                // get one warning per request.
+                /**
+                 * Analytics is not worth an unhandled rejection. Debug rather than warn: a
+                 * developer running the API without the analytics container up would otherwise
+                 * get one warning per request.
+                 */
                 // Stryker disable next-line all
                 logger.debug({ message: 'Umami event delivery failed', error });
             });

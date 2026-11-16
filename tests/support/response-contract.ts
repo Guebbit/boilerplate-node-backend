@@ -246,9 +246,11 @@ export const assertResponseMatchesContract = (response: Response): void => {
     assertNoPutValidator(response);
 
     const { pathname } = new URL(response.request.url);
-    // Node's http reports the verb upper-case; `HttpMethod` (and the spec walk) is lower-case —
-    // safe because this app only ever issues the five methods the spec can declare an operation
-    // under.
+    /**
+     * Node's http reports the verb upper-case; `HttpMethod` (and the spec walk) is lower-case —
+     * safe because this app only ever issues the five methods the spec can declare an operation
+     * under.
+     */
     const method = response.request.method.toLowerCase() as HttpMethod;
 
     const operationId = operationFor(method, pathname);
@@ -270,9 +272,11 @@ export const assertResponseMatchesContract = (response: Response): void => {
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) is missing the \`${missingHeader}\` header ${operationId} documents as required`
         );
 
-    // A 204 and a 304 have no body by definition (RFC 9110 §15.3.5, §15.4.5): the generated schema
-    // is `void`/`unknown`, which an empty parsed body (`{}`) would not fairly judge, so the check
-    // is that nothing was sent.
+    /**
+     * A 204 and a 304 have no body by definition (RFC 9110 §15.3.5, §15.4.5): the generated schema
+     * is `void`/`unknown`, which an empty parsed body (`{}`) would not fairly judge, so the check
+     * is that nothing was sent.
+     */
     if (response.status === 204 || response.status === 304) {
         if (response.text !== '')
             throw new Error(
@@ -281,8 +285,10 @@ export const assertResponseMatchesContract = (response: Response): void => {
         return;
     }
 
-    // supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain`
-    // one — the Prometheus exposition text — lands in `.text` instead, and `.body` stays `{}`.
+    /**
+     * supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain`
+     * one — the Prometheus exposition text — lands in `.text` instead, and `.body` stays `{}`.
+     */
     const body = response.type.startsWith('text/') ? response.text : response.body;
     const result = schema.safeParse(body);
     if (!result.success)

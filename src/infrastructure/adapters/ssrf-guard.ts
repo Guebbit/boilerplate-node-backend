@@ -94,9 +94,11 @@ const parseOutboundUrl = (rawUrl: string): URL => {
             `URL must use https:, got ${parsed.protocol}`
         );
 
-    // Rejected outright rather than stripped: a subscription that embeds credentials is already
-    // misconfigured, and silently dropping them would deliver to a URL the owner didn't intend.
-    // Never exempted, even for the demo host: the exemption only ever covers the address check.
+    /**
+     * Rejected outright rather than stripped: a subscription that embeds credentials is already
+     * misconfigured, and silently dropping them would deliver to a URL the owner didn't intend.
+     * Never exempted, even for the demo host: the exemption only ever covers the address check.
+     */
     if (parsed.username || parsed.password)
         throw new SsrfRefusedError('credentials-in-url', 'URL must not embed credentials');
 
@@ -133,13 +135,17 @@ const isPortAllowed = (url: URL): boolean => {
  * @param address - one resolved (or literal) IPv4 or IPv6 address, dotted/colon form
  */
 const isAddressUnsafe = (address: string): boolean => {
-    // Neither 4 nor 6: not a real address at all. Refusing rather than ignoring keeps the
-    // "fail closed" rule from the module docblock intact even for a malformed DNS answer.
+    /**
+     * Neither 4 nor 6: not a real address at all. Refusing rather than ignoring keeps the
+     * "fail closed" rule from the module docblock intact even for a malformed DNS answer.
+     */
     if (net.isIP(address) === 0) return true;
 
     const parsed = ipaddr.process(address);
-    // ipaddr.js has no range name for the deprecated IPv4-compatible block `::/96` (RFC 4291),
-    // so it reads as unicast; refuse it by CIDR.
+    /**
+     * ipaddr.js has no range name for the deprecated IPv4-compatible block `::/96` (RFC 4291),
+     * so it reads as unicast; refuse it by CIDR.
+     */
     if (parsed.kind() === 'ipv6' && parsed.match(ipaddr.parseCIDR('::/96'))) return true;
     return parsed.range() !== 'unicast';
 };
@@ -232,8 +238,10 @@ const rejectOnAbort = <T>(signal: AbortSignal): Promise<T> =>
 const buildPinnedLookup = (address: string): LookupFunction => {
     const family = net.isIP(address);
     return (_hostname, options, callback) => {
-        // `options` is always an object here (the `net.LookupFunction` contract, not the plain
-        // `dns.lookup` one) — only its `all` flag decides the callback shape.
+        /**
+         * `options` is always an object here (the `net.LookupFunction` contract, not the plain
+         * `dns.lookup` one) — only its `all` flag decides the callback shape.
+         */
         if (options.all) {
             callback(null, [{ address, family }]);
             return;
@@ -268,8 +276,10 @@ export const resolveSafeOutboundTarget = (
     Promise.resolve()
         .then(() => parseOutboundUrl(rawUrl))
         .then((url) => {
-            // An exempt origin is exempt on its own port only (the origin includes it), and the
-            // port rule never needs to refuse it.
+            /**
+             * An exempt origin is exempt on its own port only (the origin includes it), and the
+             * port rule never needs to refuse it.
+             */
             const isExempt = isSsrfExemptOrigin(url.origin);
             if (!isExempt && !isPortAllowed(url))
                 throw new SsrfRefusedError(
@@ -280,9 +290,11 @@ export const resolveSafeOutboundTarget = (
         })
         .then(({ hostname, isExempt }) =>
             resolveAllAddresses(hostname, signal).then((addresses) => {
-                // Wrapped rather than passed by reference: `Array.prototype.find` calls its
-                // callback with (element, index, array), and a direct reference would silently
-                // feed the index in as a second, unused argument to `isAddressUnsafe`.
+                /**
+                 * Wrapped rather than passed by reference: `Array.prototype.find` calls its
+                 * callback with (element, index, array), and a direct reference would silently
+                 * feed the index in as a second, unused argument to `isAddressUnsafe`.
+                 */
                 const unsafe = isExempt
                     ? undefined
                     : addresses.find((address) => isAddressUnsafe(address));
@@ -292,8 +304,10 @@ export const resolveSafeOutboundTarget = (
                         `Resolved address ${unsafe} for ${hostname} is not a publicly routable address`
                     );
 
-                // `addresses` is non-empty here — `resolveAllAddresses` already refused the empty
-                // case — so pinning to the first is picking an already-validated answer, not guessing.
+                /**
+                 * `addresses` is non-empty here — `resolveAllAddresses` already refused the empty
+                 * case — so pinning to the first is picking an already-validated answer, not guessing.
+                 */
                 const [resolvedAddress] = addresses as [string, ...string[]];
 
                 return { hostname, resolvedAddress, lookup: buildPinnedLookup(resolvedAddress) };

@@ -48,8 +48,10 @@ describe('findUnmetGuarantees', () => {
 
 describe('assertScenarioGuarantees', () => {
     it('throws one error naming every problem', () => {
-        // A name no module declares is a problem whatever the deployed modules declare, so this
-        // throws with or without the shop's own guarantees present.
+        /**
+         * A name no module declares is a problem whatever the deployed modules declare, so this
+         * throws with or without the shop's own guarantees present.
+         */
         expect(() =>
             assertScenarioGuarantees('shop', { 'ghost.leftBehind': '65dc8a99604c307b702b5ccc' })
         ).toThrow(/\[scenario-check\] shop guarantees not met/);

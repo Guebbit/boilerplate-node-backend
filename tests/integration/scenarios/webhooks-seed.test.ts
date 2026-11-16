@@ -37,16 +37,20 @@ const context = {
 
 beforeEach(() => {
     setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: SINK_URL });
-    // What the development doubles do for a process that has the sink configured: the sink is on
-    // loopback, which the SSRF guard refuses unless its origin is registered.
+    /**
+     * What the development doubles do for a process that has the sink configured: the sink is on
+     * loopback, which the SSRF guard refuses unless its origin is registered.
+     */
     registerWebhookSinkExemption();
 });
 
 afterEach(() => {
     clearSsrfExemptOrigins();
-    // Node >= 24.5: puts the process-wide roots back, so the sink's CA never outlives this file
-    // in a runner that shares the process (`--runInBand`, Stryker).
-    // https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+    /**
+     * Node >= 24.5: puts the process-wide roots back, so the sink's CA never outlives this file
+     * in a runner that shares the process (`--runInBand`, Stryker).
+     * https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+     */
     tls.setDefaultCACertificates(ORIGINAL_ROOTS);
 });
 

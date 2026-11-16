@@ -2,7 +2,7 @@
  * @module
  * The audit trail's one knob: how long an entry is kept.
  *
- * @see docs/operate/configuration.md
+ * @see docs/operate/configuration.md#who-owns-what
  */
 
 import { defineConfig } from '@infrastructure/config/define';

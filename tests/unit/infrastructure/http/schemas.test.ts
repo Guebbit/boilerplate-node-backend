@@ -15,8 +15,10 @@ import {
 } from '@infrastructure/http/schemas';
 
 describe('hardDeleteSchema', () => {
-    // `readInput` has already decoded the string spellings a URL can carry by the time this runs,
-    // so what arrives here is a real boolean or something that was never one.
+    /**
+     * `readInput` has already decoded the string spellings a URL can carry by the time this runs,
+     * so what arrives here is a real boolean or something that was never one.
+     */
     it.each([true, false])('accepts the boolean %p', (value) => {
         expect(hardDeleteSchema.parse(value)).toBe(value);
     });
@@ -30,16 +32,20 @@ describe('hardDeleteSchema', () => {
         expect(hardDeleteSchema.parse(value)).toBe(false);
     });
 
-    // Rejected rather than guessed at: a value nobody can interpret must not silently become
-    // the destructive option.
+    /**
+     * Rejected rather than guessed at: a value nobody can interpret must not silently become
+     * the destructive option.
+     */
     it.each(['maybe', 'not-a-boolean', 1, {}])('rejects %p', (value) => {
         expect(hardDeleteSchema.safeParse(value).success).toBe(false);
     });
 });
 
 describe('optionalBooleanSchema', () => {
-    // The full vocabulary, not just 'true'/'false' — a query string, a multipart form and an
-    // analytics-consent checkbox all spell "on"/"off" more than one way.
+    /**
+     * The full vocabulary, not just 'true'/'false' — a query string, a multipart form and an
+     * analytics-consent checkbox all spell "on"/"off" more than one way.
+     */
     it.each(['true', 'yes', '1', 'on'])('decodes %p as true', (value) => {
         expect(optionalBooleanSchema.parse(value)).toBe(true);
     });
@@ -52,8 +58,10 @@ describe('optionalBooleanSchema', () => {
         expect(optionalBooleanSchema.parse(value)).toBeUndefined();
     });
 
-    // Rejected rather than silently coerced to a fixed default — a filter nobody can interpret
-    // must not quietly become "no filter" or "false".
+    /**
+     * Rejected rather than silently coerced to a fixed default — a filter nobody can interpret
+     * must not quietly become "no filter" or "false".
+     */
     it('rejects an unrecognised word with a 422-worthy failure', () => {
         expect(optionalBooleanSchema.safeParse('garbage').success).toBe(false);
     });
@@ -65,8 +73,10 @@ describe('pageSchema / pageSizeSchema', () => {
         expect(pageSizeSchema.parse('25')).toBe(25);
     });
 
-    // Absent stays absent — `normalizePagination` is the single authority on the defaults, and a
-    // second set here could only be overwritten by it.
+    /**
+     * Absent stays absent — `normalizePagination` is the single authority on the defaults, and a
+     * second set here could only be overwritten by it.
+     */
     it.each([undefined, '', null])('leaves the absent value %p undefined', (value) => {
         expect(pageSchema.parse(value)).toBeUndefined();
         expect(pageSizeSchema.parse(value)).toBeUndefined();
@@ -76,8 +86,10 @@ describe('pageSchema / pageSizeSchema', () => {
         expect(pageSchema.safeParse(value).success).toBe(false);
     });
 
-    // openapi.yaml declares `maximum: 100`; an endpoint that ignored it was advertising a limit
-    // it never applied.
+    /**
+     * openapi.yaml declares `maximum: 100`; an endpoint that ignored it was advertising a limit
+     * it never applied.
+     */
     it('rejects a page size beyond the declared maximum', () => {
         expect(pageSizeSchema.safeParse(101).success).toBe(false);
         expect(pageSizeSchema.parse(100)).toBe(100);
