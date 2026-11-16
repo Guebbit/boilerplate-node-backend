@@ -49,11 +49,13 @@ const render = (): Promise<void> => {
         .then(({ default: mermaid }) => {
             // Mermaid initialize: `startOnLoad: false` (we render on demand), `securityLevel` strict
             // (labels are sanitised and `click` callbacks are off), `theme` is Mermaid's own name.
-            // Errors stay drawn (no `suppressErrorRendering`) so a broken diagram is visible.
+            // `suppressErrorRendering`: without it Mermaid 12 draws its error into a temp node on
+            // `document.body` and never removes it; the failure is shown inside the host instead.
             // https://mermaid.js.org/config/schema-docs/config.html
             mermaid.initialize({
                 ...mermaidOptions,
                 startOnLoad: false,
+                suppressErrorRendering: true,
                 securityLevel: 'strict',
                 // Mermaid 12 defaults to the ELK layout and the `neo` look; these two keep the
                 // diagrams as they were drawn on 11.
@@ -77,9 +79,12 @@ const render = (): Promise<void> => {
                 });
         })
         .catch((error: unknown) => {
-            // A chunk that fails to load, or a diagram Mermaid cannot parse: leave the host as it is and
-            // say why in the console, so the page still works and the cause is findable.
+            // A chunk that fails to load, or a diagram Mermaid cannot parse: say why in the console and
+            // in the diagram's own box, so the page still works and the cause is findable. A stale
+            // render (superseded, or the component gone) touches nothing.
             console.error('Mermaid diagram not drawn', error);
+            if (unmounted || current !== renderCounter || !host.value) return;
+            host.value.textContent = `Diagram not drawn: ${error instanceof Error ? error.message : 'unknown error'}`;
         });
 };
 

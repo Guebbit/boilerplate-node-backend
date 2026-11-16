@@ -22,6 +22,6 @@ describe('formatMoney', () => {
     });
 
     it('spells money the way the locale writes it', () => {
-        expect(formatMoney('it', 12_345.5, 'EUR')).toBe('12.345,50 €');
+        expect(formatMoney('it', 12_345.5, 'EUR')).toBe('12.345,50\u00A0€');
     });
 });
