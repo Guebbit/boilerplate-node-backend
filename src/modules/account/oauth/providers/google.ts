@@ -45,7 +45,7 @@ const identityOf = (claims: client.IDToken | undefined): OAuthIdentity => {
     const { sub, email, email_verified: verified, name, picture } = claims;
     if (typeof sub !== 'string' || sub.length === 0)
         throw new Error('Google ID token: missing subject');
-    if (typeof email !== 'string') throw new Error('Google ID token: missing email');
+    if (typeof email !== 'string') throw new TypeError('Google ID token: missing email');
     return {
         providerId: sub,
         email,

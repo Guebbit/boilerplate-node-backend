@@ -73,7 +73,7 @@ const githubApiGet = <T>(path: string, accessToken: string): Promise<T> =>
  */
 const identityOf = (user: GithubUser, emails: GithubEmail[]): OAuthIdentity => {
     if (typeof user.id !== 'number')
-        throw new Error('GitHub token exchange: profile response carries no id');
+        throw new TypeError('GitHub token exchange: profile response carries no id');
 
     /**
      * The primary is the one address that identifies the account; a non-primary verified

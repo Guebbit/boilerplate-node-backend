@@ -83,7 +83,7 @@ const slotRejection = (
     messageKey: string,
     parameters: Record<string, string> | undefined,
     field: string
-): ResponseReject => generateReject(422, [fieldError(field, t(messageKey, parameters))]);
+): ResponseReject => generateReject(422, [fieldError(field, t(messageKey, parameters ?? {}))]);
 
 /**
  * One locale slot's outcome, before any write happens — the whole batch validates before anything

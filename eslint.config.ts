@@ -185,7 +185,7 @@ export default defineConfig(
     /**
      * Unicorn plugin
      */
-    pluginUnicorn.configs['flat/recommended'],
+    pluginUnicorn.configs.recommended,
 
     /**
      * Regular expressions: ReDoS-prone and useless patterns, unreadable classes and escapes.
@@ -270,6 +270,47 @@ export default defineConfig(
             'unicorn/prefer-unicode-code-point-escapes': 'off',
             'unicorn/prefer-iterator-helpers': 'off',
             'unicorn/prefer-set-methods': 'off'
+        }
+    },
+
+    /**
+     * `unicorn/recommended` rules that arrived with unicorn 77-80, OFF here. Turning one on is its
+     * own decision (hundreds of fixes each, and a few would rewrite the house docblock style).
+     * `no-asterisk-prefix-in-documentation-comments` would strip the leading asterisk from every docblock line.
+     * Read off the plugin's own metadata (`recommended` of 80 against `flat/recommended` of 76).
+     */
+    {
+        rules: {
+            'unicorn/no-asterisk-prefix-in-documentation-comments': 'off',
+            'unicorn/no-conflicting-constraints': 'off',
+            'unicorn/no-incomplete-accessor-override': 'off',
+            'unicorn/no-ineffective-csp-directives': 'off',
+            'unicorn/no-invalid-boolean-attribute-value': 'off',
+            'unicorn/no-invalid-dom-token': 'off',
+            'unicorn/no-invalid-integrity': 'off',
+            'unicorn/no-invalid-intl-options': 'off',
+            'unicorn/no-invalid-property-descriptor': 'off',
+            'unicorn/no-invalid-response-options': 'off',
+            'unicorn/no-invalid-style-set-property': 'off',
+            'unicorn/no-invalid-temporal-arithmetic': 'off',
+            'unicorn/no-invalid-url-protocol-comparison': 'off',
+            'unicorn/no-leading-empty-lines': 'off',
+            'unicorn/no-prevent-default-in-passive-listener': 'off',
+            'unicorn/no-unnecessary-parameters': 'off',
+            'unicorn/no-unsafe-json-serialization': 'off',
+            'unicorn/no-url-in-search-params': 'off',
+            'unicorn/prefer-escaped-irregular-whitespace': 'off',
+            'unicorn/prefer-literal-ascii': 'off',
+            'unicorn/prefer-options-parameter': 'off',
+            'unicorn/prefer-promise-static-methods': 'off',
+            'unicorn/prefer-regexp-exec': 'off',
+            'unicorn/prefer-short-escape-sequences': 'off',
+            'unicorn/require-spread-parentheses': 'off',
+            'unicorn/require-text-decoder-streaming': 'off',
+            // 80 reports the `flatMap((x) => cond ? [v] : [])` filter-and-map idiom (38 sites): one pass, and the types narrow.
+            'unicorn/no-unnecessary-array-flat-map': 'off',
+            // 80 reports `param ?? fallback` as a default parameter; a default fires on `undefined` only, so the rewrite is not null-safe.
+            'unicorn/prefer-default-parameters': 'off'
         }
     },
 
@@ -572,7 +613,13 @@ export default defineConfig(
                          * rules section of its own in CLAUDE.md, and `config` is ambiguous here.
                          */
                         repository: false,
-                        configuration: false
+                        configuration: false,
+                        /**
+                         * 80 added the reverse, `repo -> repository`, and it covers file names
+                         * (`repo-references.ts`). `repo` is this codebase's own short form in tests
+                         * and tooling, which is as readable as `prop` and `opts` above.
+                         */
+                        repo: false
                     }
                 }
             ],

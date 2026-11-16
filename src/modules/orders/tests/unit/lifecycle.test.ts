@@ -511,10 +511,12 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
 
 describe('paymentSettled — true from `paid` onwards', () => {
     it('is true exactly for the statuses from `paid` on in the fulfillment sequence', () => {
-        const fromPaid = FULFILLMENT_SEQUENCE.slice(FULFILLMENT_SEQUENCE.indexOf(OrderStatus.paid));
+        const fromPaid = new Set(
+            FULFILLMENT_SEQUENCE.slice(FULFILLMENT_SEQUENCE.indexOf(OrderStatus.paid))
+        );
 
         for (const status of EVERY_STATUS)
-            expect(paymentSettled(status)).toBe(fromPaid.includes(status));
+            expect(paymentSettled(status)).toBe(fromPaid.has(status));
     });
 
     it('holds at every override destination', () => {

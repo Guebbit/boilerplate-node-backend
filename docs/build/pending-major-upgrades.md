@@ -32,6 +32,11 @@ flowchart LR
 | `@types/node`                              | `24.19.x` | `26.x`                           | Moves with the Node 26 runtime change               | S      |
 | `prom-client`                              | `15.1.3`  | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                                | S      |
 
+`eslint-plugin-unicorn` 80 and `i18next` 27.1.3 were taken less than seven days after release, as the
+owner's explicit one-off exception (`--min-release-age=0`). Until 2026-11-22 a plain
+`npm install <pkg>` fails with `ETARGET` on `eslint-plugin-unicorn@^80`, because `min-release-age`
+cannot resolve it; `npm ci` reads the lockfile and is unaffected.
+
 The OpenTelemetry `@opentelemetry/api` is `^1.10` with SDK 3 (`@opentelemetry/sdk-node` 0.301,
 `resources` and `sdk-trace` 3.1): the SDK-2 line peered `api <1.10`, the SDK-3 line needs it.
 

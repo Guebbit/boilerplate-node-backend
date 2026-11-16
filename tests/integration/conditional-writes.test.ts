@@ -168,7 +168,7 @@ const storedRevision = (collection: string, id: string): Promise<unknown> =>
  */
 const etagOf = (response: { headers: Record<string, unknown> }): string => {
     const tag = response.headers.etag;
-    if (typeof tag !== 'string') throw new Error('no ETag on the response');
+    if (typeof tag !== 'string') throw new TypeError('no ETag on the response');
     return tag;
 };
 

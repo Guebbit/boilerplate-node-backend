@@ -245,11 +245,12 @@ describe('the first backup-code set, when two factors are confirmed in parallel'
         const emailCode = mailedCode('account.two-factor-code');
         const { secret } = totp.body as { secret: string };
 
+        const confirmCode = await codeFor(secret, 0);
         const responses = await Promise.all([
             api()
                 .post('/account/2fa/methods/totp/confirm')
                 .set('Authorization', bearer)
-                .send({ code: await codeFor(secret, 0) }),
+                .send({ code: confirmCode }),
             confirmEmail(bearer, emailCode)
         ]);
         await forgetSessionEpoch(bearer);

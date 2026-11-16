@@ -199,7 +199,7 @@ const discriminatorValueOf = (variant: unknown, property: string, where: string)
     const values: unknown = isPlainObject(field) ? field.enum : undefined;
     const value: unknown = Array.isArray(values) ? values.at(0) : undefined;
     if (typeof value !== 'string')
-        throw new Error(
+        throw new TypeError(
             `${where} has no properties.${property}.enum to read its discriminator from.`
         );
     return value;

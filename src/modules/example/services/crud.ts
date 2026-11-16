@@ -62,9 +62,9 @@ const scopeOf = (context: CallerContext, action: 'read' | 'update' | 'delete') =
  */
 const bodyTooLong = (body: string | undefined): ResponseReject | undefined => {
     const maximum = exampleConfig().NODE_EXAMPLE_BODY_MAX_LENGTH;
-    return body !== undefined && !fitsBodyLength(body, maximum)
-        ? generateReject(422, [t('example.error-body-too-long', { maximum })])
-        : undefined;
+    return body === undefined || fitsBodyLength(body, maximum)
+        ? undefined
+        : generateReject(422, [t('example.error-body-too-long', { maximum })]);
 };
 
 /**

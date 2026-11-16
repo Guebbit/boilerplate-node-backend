@@ -107,7 +107,7 @@ const parseValue = (raw: string): unknown => {
         return inner === '' ? [] : inner.split('|');
     }
     if (raw === 'true' || raw === 'false') return raw === 'true';
-    return raw !== '' && !Number.isNaN(Number(raw)) ? Number(raw) : raw;
+    return raw === '' || Number.isNaN(Number(raw)) ? raw : Number(raw);
 };
 
 /**

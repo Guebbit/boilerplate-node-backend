@@ -47,9 +47,8 @@ const buildResponse = (statusCode = 200): Response => {
         listeners.delete(event);
         return true;
     };
-    // eslint-disable-next-line prefer-const -- the stub's own callbacks close over the variable they populate
-    let response: Response;
-    response = asStub<Response>({ statusCode, once, emit });
+    // The callbacks above close over `response`, and only run once it exists.
+    const response = asStub<Response>({ statusCode, once, emit });
     return response;
 };
 

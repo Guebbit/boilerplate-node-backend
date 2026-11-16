@@ -25,7 +25,7 @@ export const NO_MONEY = 0 as Money;
 
 /** The one constructor: normalises a non-finite result (and `-0`) to `NO_MONEY`. */
 const asMoney = (value: number): Money =>
-    (Number.isFinite(value) ? (value === 0 ? 0 : value) : 0) as Money;
+    (Number.isFinite(value) && value !== 0 ? value : 0) as Money;
 
 /**
  * ISO 4217 minor-unit exponents, pinned in-repo. A currency's exponent decides how a stored

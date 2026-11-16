@@ -75,7 +75,7 @@ const localiseReferences = (node: unknown): unknown => {
  */
 const eventNameOf = (name: string, schema: Schema): string => {
     const event = schema.properties?.event;
-    const values = event !== undefined && !('$ref' in event) ? (event.enum ?? []) : [];
+    const values = event === undefined || '$ref' in event ? [] : (event.enum ?? []);
     if (values.length !== 1 || typeof values[0] !== 'string')
         throw new Error(
             `[openapi] ${name} (browser events) must declare \`event\` as a one-value string enum.`

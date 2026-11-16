@@ -30,7 +30,7 @@ export const observePort = <T extends (...args: never[]) => unknown>(
     const mocked = port as jest.MockedFunction<T>;
 
     if (typeof mocked.mockClear !== 'function')
-        throw new Error(
+        throw new TypeError(
             'observePort received a real function, not a mock. The test file must declare the ' +
                 "module replacement itself — jest.mock('@infrastructure/observability/audit', " +
                 '...) — because jest.mock is hoisted per module registry and cannot be applied ' +
