@@ -98,11 +98,10 @@ export const presentPayment = (document: PaymentDocument, staff = false): Paymen
     const wire = {
         ...serialized,
         // The buyer's half of a refund owed another way: no reason, only that they will be asked.
-        refunds: serialized.refunds.map(
-            (refund, index): Refund =>
-                owesBuyerAnotherWay(document.refunds[index])
-                    ? { ...refund, owedAnotherWay: true }
-                    : refund
+        refunds: serialized.refunds.map((refund, index): Refund =>
+            owesBuyerAnotherWay(document.refunds[index])
+                ? { ...refund, owedAnotherWay: true }
+                : refund
         ),
         displayStatus: displayStatusOf(document),
         ...(nextAction ? { nextAction } : {})

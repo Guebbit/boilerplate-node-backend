@@ -53,8 +53,7 @@ export interface RefundBreakdown {
 
 /** The verdict: a breakdown, or why the deduction cannot stand. */
 export type RefundVerdict =
-    | { ok: true; breakdown: RefundBreakdown }
-    | { ok: false; reason: 'deduction-too-high' };
+    { ok: true; breakdown: RefundBreakdown } | { ok: false; reason: 'deduction-too-high' };
 
 /**
  * What the returned lines cost at the gross price the order froze, in minor units.

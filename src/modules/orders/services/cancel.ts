@@ -409,8 +409,7 @@ export const withdrawById = (
  * follow the owner's commit (stock cache, audit row, analytics event).
  */
 export type WithinWithdrawal =
-    | ResponseReject
-    | { success: true; settle: () => Promise<ResponseSuccess<OrderDocument>> };
+    ResponseReject | { success: true; settle: () => Promise<ResponseSuccess<OrderDocument>> };
 
 /**
  * A withdrawal's cancel inside a transaction the CALLER owns, so `returns` can commit the dated

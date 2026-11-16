@@ -13,9 +13,8 @@ import { startEphemeralMongo, type EphemeralMongo } from '@scenarios/support/eph
 import { setProcessEnvironment } from '@tests/environment';
 
 /** Stands in for starting the in-process Mongo. */
-const startInProcess = jest.fn(
-    (_dbPath: string | undefined): Promise<EphemeralMongo> =>
-        Promise.resolve({ uri: 'mongodb://127.0.0.1:1/ephemeral', stop: () => Promise.resolve() })
+const startInProcess = jest.fn((_dbPath: string | undefined): Promise<EphemeralMongo> =>
+    Promise.resolve({ uri: 'mongodb://127.0.0.1:1/ephemeral', stop: () => Promise.resolve() })
 );
 
 /**

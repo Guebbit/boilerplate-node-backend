@@ -9,15 +9,16 @@ One page per domain, top to bottom. This is the **vertical** cut through the cod
 this site is the horizontal one.
 
 ::: tip Which section answers which question
-| You want | Read |
-| --- | --- |
+
+| You want                                                   | Read                                  |
+| ---------------------------------------------------------- | ------------------------------------- |
 | What this domain does for the _business_, without the code | [Demo Shop](../use-the-shop/start.md) |
-| What a module _is_, and the rules every one obeys | [Theory](../understand/start.md) |
-| What **this** domain does, end to end | a page in this section |
-| How a mechanism works, in general | [Tools](../understand/tool-map.md) |
-| The contract-first workflow | [API](../build/api-contracts.md) |
-| "I landed on a filename" | [Files](../reference/start.md) |
-:::
+| What a module _is_, and the rules every one obeys          | [Theory](../understand/start.md)      |
+| What **this** domain does, end to end                      | a page in this section                |
+| How a mechanism works, in general                          | [Tools](../understand/tool-map.md)    |
+| The contract-first workflow                                | [API](../build/api-contracts.md)      |
+| "I landed on a filename"                                   | [Files](../reference/start.md)        |
+| :::                                                        |
 
 The division is one rule: **a horizontal page owns a mechanism, a module page owns a decision.**
 [Winston & Audit Logs](../operate/winston.md) explains what an audit action is; the

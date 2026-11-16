@@ -118,7 +118,7 @@ export const removeResidueTests = (repoRoot: string, names: readonly string[]): 
     ]);
     const deleted: string[] = [];
 
-    for (let changed = true; changed; ) {
+    for (let changed = true; changed;) {
         changed = false;
         for (const file of files.filter((candidate) => !deleted.includes(candidate))) {
             const source = readFileSync(file, 'utf8');

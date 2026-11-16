@@ -36,11 +36,7 @@ export {
  * `requires_confirmation`): there is nothing to settle, so settlement writes nothing for it.
  */
 export type ProviderPaymentStatus =
-    | 'open'
-    | 'requires_action'
-    | 'processing'
-    | 'succeeded'
-    | 'declined';
+    'open' | 'requires_action' | 'processing' | 'succeeded' | 'declined';
 
 /** What a provider says about one intent, whether asked directly or through a webhook. */
 export interface ProviderPaymentState {

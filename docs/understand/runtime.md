@@ -11,7 +11,7 @@ The runtime tools the backend stands on, and where each one is wired in.
 
 | Tool                                                 | Why it is here          | Repo role                                                                  |
 | ---------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------- |
-| [Node.js](https://nodejs.org/en/docs) (≥ 24.7)       | JavaScript runtime      | language platform; see also [Clustering](clustering.md)                    |
+| [Node.js](https://nodejs.org/en/docs) (≥ 24.15)      | JavaScript runtime      | language platform; see also [Clustering](clustering.md)                    |
 | [Express 5](https://expressjs.com/)                  | REST transport layer    | pipeline assembled in `src/app.ts` from `src/app/*`                        |
 | [Zod](https://zod.dev/)                              | validation and coercion | service and schema helpers                                                 |
 | [Multer](https://github.com/expressjs/multer#readme) | multipart/file uploads  | upload-aware endpoints via `src/infrastructure/http/middlewares/upload.ts` |

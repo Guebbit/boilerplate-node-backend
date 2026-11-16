@@ -78,9 +78,7 @@ const insidePromiseHandler = (node: TSESTree.Node, parentOf: ParentOf): boolean 
 const isEnclosingFunction = (
     node: TSESTree.Node
 ): node is
-    | TSESTree.ArrowFunctionExpression
-    | TSESTree.FunctionExpression
-    | TSESTree.FunctionDeclaration =>
+    TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression | TSESTree.FunctionDeclaration =>
     node.type === AST_NODE_TYPES.ArrowFunctionExpression ||
     node.type === AST_NODE_TYPES.FunctionExpression ||
     node.type === AST_NODE_TYPES.FunctionDeclaration;
@@ -133,9 +131,9 @@ export const controllerChainMustCatch = ESLintUtils.RuleCreator.withoutDocs<Opti
             missing:
                 'This promise chain has no .catch(). The global error handler is a net, not a ' +
                 'substitute: it cannot clean up after the failure or record the domain metric.'
-        }
+        },
+        defaultOptions: []
     },
-    defaultOptions: [],
     create(context) {
         return {
             CallExpression(node) {

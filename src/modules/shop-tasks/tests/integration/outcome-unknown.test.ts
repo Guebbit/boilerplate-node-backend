@@ -177,29 +177,27 @@ const CASES: Case[] = [
             };
         }
     },
-    ...(['receive', 'adjust'] as const).map(
-        (verb): Case => ({
-            operation: `${verb}-stock`,
-            arrange: async () => {
-                const product = await createProduct({ title: 'Cedar Toy', onHand: 10 });
-                const { bearer: admin } = await authenticateAs('admin');
-                return {
-                    send: (key) =>
-                        api()
-                            .post(`/inventory/levels/${String(product._id)}/${verb}`)
-                            .set('Authorization', admin)
-                            .set('Idempotency-Key', key)
-                            .send(verb === 'receive' ? { quantity: 5 } : { delta: -2 }),
-                    subjectName: 'Cedar Toy',
-                    subjectId: String(product._id),
-                    effect: () =>
-                        productService
-                            .findManyByIds([String(product._id)])
-                            .then(([found]) => found.onHand)
-                };
-            }
-        })
-    )
+    ...(['receive', 'adjust'] as const).map((verb): Case => ({
+        operation: `${verb}-stock`,
+        arrange: async () => {
+            const product = await createProduct({ title: 'Cedar Toy', onHand: 10 });
+            const { bearer: admin } = await authenticateAs('admin');
+            return {
+                send: (key) =>
+                    api()
+                        .post(`/inventory/levels/${String(product._id)}/${verb}`)
+                        .set('Authorization', admin)
+                        .set('Idempotency-Key', key)
+                        .send(verb === 'receive' ? { quantity: 5 } : { delta: -2 }),
+                subjectName: 'Cedar Toy',
+                subjectId: String(product._id),
+                effect: () =>
+                    productService
+                        .findManyByIds([String(product._id)])
+                        .then(([found]) => found.onHand)
+            };
+        }
+    }))
 ];
 
 describe.each(CASES)('$operation whose first attempt never reported an outcome', (scenario) => {

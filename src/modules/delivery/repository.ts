@@ -165,12 +165,7 @@ export type FulfillmentOrderPatch = Partial<
 > & {
     /** Fields to remove — a released hold carries no reason or note, a cleared date no expected date. */
     unset?: readonly (
-        | 'holdReason'
-        | 'heldAt'
-        | 'holdNote'
-        | 'holdMessage'
-        | 'expectedAt'
-        | 'promisedAt'
+        'holdReason' | 'heldAt' | 'holdNote' | 'holdMessage' | 'expectedAt' | 'promisedAt'
     )[];
 };
 

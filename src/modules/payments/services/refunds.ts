@@ -1001,11 +1001,10 @@ export const settleRefundByHand = (
             refund,
             { settledByHand: true, from: [refund.status] },
             context
-        ).then(
-            (final): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-                final
-                    ? Promise.resolve(generateSuccess(final, 200))
-                    : lostSettleRace(paymentId, refundId)
+        ).then((final): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+            final
+                ? Promise.resolve(generateSuccess(final, 200))
+                : lostSettleRace(paymentId, refundId)
         );
     });
 

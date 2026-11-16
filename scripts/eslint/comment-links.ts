@@ -91,9 +91,9 @@ export const commentLinks = ESLintUtils.RuleCreator.withoutDocs<Options, Message
                 '`{{reference}}` does not exist. A renamed or removed file leaves this comment ' +
                 'pointing at nothing — fix the reference, or wrap the varying part in ' +
                 '`<angle-brackets>` if it names a placeholder rather than a real file.'
-        }
+        },
+        defaultOptions: []
     },
-    defaultOptions: [],
     create(context) {
         return {
             Program() {

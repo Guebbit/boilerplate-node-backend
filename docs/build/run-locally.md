@@ -10,7 +10,7 @@ editing.
 
 ## Before you start
 
-- Node `>=24.7` and npm `>=11.16` (`engines` in `package.json`).
+- Node `>=24.15` and npm `>=11.16` (`engines` in `package.json`).
 - Podman or Docker with compose. The `npm run compose` wrapper uses `CONTAINER_ENGINE` and defaults to `podman`.
 - Ports `3000–3099` free: this repo owns them ([Pairing & Ports](./pairing-and-ports.md)).
 

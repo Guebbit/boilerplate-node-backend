@@ -82,8 +82,7 @@ const withdrawalRow = (order: OrderDocument, opener: Opener): Partial<ReturnDocu
  * after-commit step.
  */
 type Withdrawn =
-    | { canceled: ResponseReject }
-    | { created: ReturnDocument; settle: () => Promise<unknown> };
+    { canceled: ResponseReject } | { created: ReturnDocument; settle: () => Promise<unknown> };
 
 /**
  * The withdrawal's one transaction, under the order's lock row like a remainder cancel: the order

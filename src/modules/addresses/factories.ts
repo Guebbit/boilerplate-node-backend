@@ -33,12 +33,10 @@ export const makeAddressBook = ({ userId, items }: AddressBookOverrides): Addres
     ...(items === undefined
         ? {}
         : {
-              items: items.map(
-                  ({ id, label, phone, ...fields }): AddressItem => ({
-                      _id: new Types.ObjectId(id),
-                      ...fields,
-                      ...stripUndefined({ label, phone })
-                  })
-              )
+              items: items.map(({ id, label, phone, ...fields }): AddressItem => ({
+                  _id: new Types.ObjectId(id),
+                  ...fields,
+                  ...stripUndefined({ label, phone })
+              }))
           })
 });

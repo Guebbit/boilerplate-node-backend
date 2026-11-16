@@ -85,9 +85,9 @@ export const noPersistenceImports = ESLintUtils.RuleCreator.withoutDocs<Options,
                 'does not store anything — this layer then changes every time the schema does. ' +
                 '`import type` is not a way around it: the type IS the schema, so the coupling ' +
                 'outlives the erasure. Take the plain data the repository returns.'
-        }
+        },
+        defaultOptions: [{}]
     },
-    defaultOptions: [{}],
     create(context) {
         const options = context.options[0] ?? {};
         const bindings: string[] = options.bindings ?? DEFAULT_BINDINGS;

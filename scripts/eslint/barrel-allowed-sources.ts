@@ -117,9 +117,9 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                 '{{declaration}} publishes a wiring file — routes, controllers, the manifest, ' +
                 'probes, metrics, analytics or audit are not the module’s public surface, in any ' +
                 'export form. See docs/understand/strategic-ddd.md §5.'
-        }
+        },
+        defaultOptions: []
     },
-    defaultOptions: [],
     create(context) {
         /** local name → source stem, for `import { x } from './y'; export { x };`. */
         const importSourceOf = new Map<string, string>();

@@ -66,8 +66,7 @@ interface BulkDeleteResponse {
  * host that differs from the ingestion one.
  */
 const readErasureConfig = ():
-    | { apiKey: string; projectId: string; apiHost: string }
-    | undefined => {
+    { apiKey: string; projectId: string; apiHost: string } | undefined => {
     const {
         NODE_POSTHOG_PERSONAL_API_KEY: apiKey,
         NODE_POSTHOG_PROJECT_ID: projectId,

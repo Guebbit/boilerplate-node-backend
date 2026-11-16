@@ -104,7 +104,7 @@ A product page's path is `products`' `NODE_FRONTEND_LINK_PRODUCT` (`productPageP
   for a file, `SitemapIndexStream` for the index, `xhtml:link` alternates included. Chosen over a
   hand-rolled writer because escaping, namespaces and the schema's element order are what go wrong
   by hand. It streams, so a 50,000-entry file never sits in memory as one string. Maintained
-  (released 2026, Node ≥ 20.19.5; the repo needs ≥ 24.7). Only this module imports it.
+  (released 2026, Node ≥ 20.19.5; the repo needs ≥ 24.15). Only this module imports it.
 
 ## What this module deliberately does not do
 

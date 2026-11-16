@@ -42,8 +42,7 @@ export const resolveInLiveFamily = (
         resolveCaller()
     ]).then(
         ([activity, ok]):
-            | Resolution<AuthContext | undefined>
-            | Promise<Resolution<AuthContext | undefined>> => {
+            Resolution<AuthContext | undefined> | Promise<Resolution<AuthContext | undefined>> => {
             if (!activity) return { miss: 'revoked' };
             if (ok && hasIdledOut(activity.lastActiveAt, ok.roles, now))
                 return sessionRepository

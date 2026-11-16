@@ -136,8 +136,7 @@ const collectBlockSources = (block: ModuleBlock): GeneratedSource[] =>
     modulesWith(MODULES_ROOT, 'module.yaml').flatMap((moduleName) => {
         const source = `src/modules/${moduleName}/module.yaml`;
         const parsed = parse(readFileSync(path.join(REPO_ROOT, source), 'utf8')) as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
         if (!parsed || !(block.key in parsed)) return [];
         return [
             {

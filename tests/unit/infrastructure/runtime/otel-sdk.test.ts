@@ -27,6 +27,7 @@ import {
 } from '@opentelemetry/api';
 import { node } from '@opentelemetry/sdk-node';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace';
+import { ExportResultCode } from '@opentelemetry/core';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
 import { withEnvironmentOverrides } from '@tests/environment';
@@ -84,7 +85,7 @@ describe('otel-sdk — buildProcessors', () => {
          */
         const exportSpy = jest
             .spyOn(OTLPTraceExporter.prototype, 'export')
-            .mockImplementation((_spans, callback) => callback({ code: 0 }));
+            .mockImplementation((_spans, callback) => callback({ code: ExportResultCode.SUCCESS }));
 
         await withEnvironmentOverrides(
             { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318' },
@@ -114,7 +115,7 @@ const failedSpan = (): ReadableSpan =>
 const exportedStatus = async (nodeEnvironment: string) => {
     const exportSpy = jest
         .spyOn(OTLPTraceExporter.prototype, 'export')
-        .mockImplementation((_spans, callback) => callback({ code: 0 }));
+        .mockImplementation((_spans, callback) => callback({ code: ExportResultCode.SUCCESS }));
     await withEnvironmentOverrides(
         { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318', NODE_ENV: nodeEnvironment },
         async () => {

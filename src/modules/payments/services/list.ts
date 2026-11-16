@@ -192,18 +192,16 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
     payments.flatMap((payment) =>
         payment.refunds
             .filter((refund) => exceedsRemaining(payment, refund))
-            .map(
-                (refund): PaymentAttentionItem => ({
-                    kind: PaymentAttentionKind.refund_exceeds_remaining,
-                    orderId: String(payment.orderId),
-                    paymentId: String(payment._id),
-                    refundId: String(refund._id),
-                    amount: padDecimal(refund.amount, refund.currency),
-                    currency: refund.currency,
-                    exceedsBy: toDecimalString(exceedsBy(payment, refund), payment.currency),
-                    since: refund.createdAt.toISOString()
-                })
-            )
+            .map((refund): PaymentAttentionItem => ({
+                kind: PaymentAttentionKind.refund_exceeds_remaining,
+                orderId: String(payment.orderId),
+                paymentId: String(payment._id),
+                refundId: String(refund._id),
+                amount: padDecimal(refund.amount, refund.currency),
+                currency: refund.currency,
+                exceedsBy: toDecimalString(exceedsBy(payment, refund), payment.currency),
+                since: refund.createdAt.toISOString()
+            }))
     );
 
 /**

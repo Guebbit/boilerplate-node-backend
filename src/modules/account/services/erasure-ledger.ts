@@ -109,12 +109,7 @@ export interface ReapplyOptions {
 
 /** The ways one account can end up after a replay. */
 type ReapplyBucket =
-    | 'erased'
-    | 'alreadyGone'
-    | 'rescheduled'
-    | 'unscheduled'
-    | 'unchanged'
-    | 'failed';
+    'erased' | 'alreadyGone' | 'rescheduled' | 'unscheduled' | 'unchanged' | 'failed';
 
 /**
  * What one run did: the ids of the accounts in each bucket, since the restored audit log lost the

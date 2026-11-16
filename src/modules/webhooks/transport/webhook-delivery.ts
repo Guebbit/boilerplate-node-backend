@@ -155,11 +155,9 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
                     : `Endpoint answered ${statusCode}`
             };
         })
-        .catch(
-            (error: unknown): WebhookDeliveryResult => ({
-                success: false,
-                durationMs: elapsedMs(startedAt),
-                error: describeDeliveryError(error)
-            })
-        );
+        .catch((error: unknown): WebhookDeliveryResult => ({
+            success: false,
+            durationMs: elapsedMs(startedAt),
+            error: describeDeliveryError(error)
+        }));
 };

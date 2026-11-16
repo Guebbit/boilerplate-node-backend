@@ -14,9 +14,7 @@ export interface OrderLineCandidate {
 
 /** The verdict `checkOrderLines` returns: accepted, or refused with the specific reason why. */
 export type OrderLinesVerdict =
-    | { ok: true }
-    | { ok: false; reason: 'no-lines' }
-    | { ok: false; reason: 'product-missing' };
+    { ok: true } | { ok: false; reason: 'no-lines' } | { ok: false; reason: 'product-missing' };
 
 /**
  * Can these lines become an order?

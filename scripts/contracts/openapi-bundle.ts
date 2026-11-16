@@ -675,7 +675,12 @@ const compile = (): string => {
                 '--output',
                 temporary
             ],
-            { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'pipe'] }
+            {
+                cwd: REPO_ROOT,
+                stdio: ['ignore', 'ignore', 'pipe'],
+                // The CLI reports usage unless told not to; a gate script sends nothing outside.
+                env: { ...process.env, REDOCLY_TELEMETRY: 'off' }
+            }
         );
     } catch (error) {
         /**

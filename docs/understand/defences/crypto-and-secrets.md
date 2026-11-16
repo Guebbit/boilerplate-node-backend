@@ -34,7 +34,7 @@ primitive.** `node:crypto`, `jose` — and where a choice exists, the boring one
 **Why argon2id, and why from `node:crypto`.** It is OWASP's first choice, and unlike bcrypt it has no
 72-byte input limit: bcrypt silently ignored everything after byte 72, so two long passwords sharing
 that prefix were the same password. Node 24.7 added `crypto.argon2`, so there is no native addon to
-rebuild on every Node major and no package to patch; the boilerplate's `engines.node` is `>=24.7`
+rebuild on every Node major and no package to patch; the boilerplate's `engines.node` is `>=24.15`
 for it. Node supplies the primitive; the PHC string and the constant-time compare are the small
 part this repository still writes, tested for the cases that matter (a 100-byte password, a foreign
 hash, a hash made at another cost).

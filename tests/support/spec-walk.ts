@@ -383,8 +383,7 @@ export const errorCodeIndex = (spec: SpecDocument = readSpec()): ErrorCodeIndex 
         for (const method of METHODS) {
             const operation = pathItem[method] as Record<string, unknown> | undefined;
             const codes = operation?.['x-error-codes'] as
-                | Record<string, readonly string[]>
-                | undefined;
+                Record<string, readonly string[]> | undefined;
             if (typeof operation?.operationId === 'string' && codes)
                 listed[operation.operationId] = codes;
         }
@@ -452,8 +451,7 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
 
             const content = (
                 operation.requestBody as
-                    | { content?: Record<string, { schema?: SchemaNode }> }
-                    | undefined
+                    { content?: Record<string, { schema?: SchemaNode }> } | undefined
             )?.content;
 
             const declared = [

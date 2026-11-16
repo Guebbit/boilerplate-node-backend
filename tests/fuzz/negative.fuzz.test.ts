@@ -111,20 +111,16 @@ const isClosed = (node: SchemaNode | undefined): boolean =>
  * @param operation - one spec operation
  */
 const targetsOf = (operation: Operation): Target[] => [
-    ...operation.pathParameters.map(
-        (name): Target => ({
-            kind: 'path',
-            name,
-            closed: isClosed(operation.pathParameterSchemas[name])
-        })
-    ),
-    ...operation.queryParameters.map(
-        (parameter): Target => ({
-            kind: 'query',
-            name: parameter.name,
-            closed: isClosed(parameter.schema)
-        })
-    )
+    ...operation.pathParameters.map((name): Target => ({
+        kind: 'path',
+        name,
+        closed: isClosed(operation.pathParameterSchemas[name])
+    })),
+    ...operation.queryParameters.map((parameter): Target => ({
+        kind: 'query',
+        name: parameter.name,
+        closed: isClosed(parameter.schema)
+    }))
 ];
 
 /** The operations with something to attack; multipart ones are skipped as in the valid-value fuzzer. */

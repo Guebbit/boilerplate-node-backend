@@ -62,18 +62,16 @@ const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
     amount: padDecimal(payment.amount, payment.currency),
     currency: payment.currency,
     amountRefunded: padDecimal(payment.amountRefunded, payment.currency),
-    refunds: payment.refunds.map(
-        (refund): Refund => ({
-            id: String(refund._id),
-            amount: padDecimal(refund.amount, refund.currency),
-            currency: refund.currency,
-            status: refund.status,
-            reason: refund.reason,
-            ...(refund.returnId ? { returnId: refund.returnId } : {}),
-            ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
-            createdAt: refund.createdAt.toISOString()
-        })
-    ),
+    refunds: payment.refunds.map((refund): Refund => ({
+        id: String(refund._id),
+        amount: padDecimal(refund.amount, refund.currency),
+        currency: refund.currency,
+        status: refund.status,
+        reason: refund.reason,
+        ...(refund.returnId ? { returnId: refund.returnId } : {}),
+        ...(refund.settledAt ? { settledAt: refund.settledAt.toISOString() } : {}),
+        createdAt: refund.createdAt.toISOString()
+    })),
     status: payment.status,
     provider: payment.provider,
     ...(payment.cardLast4 === undefined ? {} : { cardLast4: payment.cardLast4 }),

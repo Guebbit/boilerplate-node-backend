@@ -110,8 +110,7 @@ const successShape = (operation: Record<string, unknown>): string => {
     const status = Object.keys(responses).find((code) => code.startsWith('2'));
     if (status === undefined) return 'NO 2xx';
     const content = resolve(responses[status]).content as
-        | Record<string, { schema?: unknown }>
-        | undefined;
+        Record<string, { schema?: unknown }> | undefined;
     return `${status} ${JSON.stringify(content?.['application/json']?.schema ?? null)}`;
 };
 

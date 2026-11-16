@@ -68,17 +68,18 @@ interface Persona {
  * documents roles an OPERATOR assigns — `system` is never one of them.
  */
 const personas: Persona[] = [
-    ...AUDIENCE_NAMES.map(
-        (name): Persona => ({ name, scope: 'tenant', role: null, audience: name })
-    ),
-    ...PRESET_ROLES.filter((role) => role.name !== 'system').map(
-        (role): Persona => ({
-            name: role.name,
-            scope: role.scope,
-            role: role.name,
-            audience: 'customer'
-        })
-    )
+    ...AUDIENCE_NAMES.map((name): Persona => ({
+        name,
+        scope: 'tenant',
+        role: null,
+        audience: name
+    })),
+    ...PRESET_ROLES.filter((role) => role.name !== 'system').map((role): Persona => ({
+        name: role.name,
+        scope: role.scope,
+        role: role.name,
+        audience: 'customer'
+    }))
 ];
 
 /** Every module that declares a rule, in declaration order — the table's columns. */

@@ -16,12 +16,7 @@ import { DAY_MS, HOUR_MS, oneCalendarMonthLaterUtc } from '@domain-primitives/ti
 
 /** The six token-bearing account links — one per kind of proof a link can carry. */
 export type AccountLinkKind =
-    | 'verify'
-    | 'reset'
-    | 'setup'
-    | 'restore'
-    | 'email-change'
-    | 'email-undo';
+    'verify' | 'reset' | 'setup' | 'restore' | 'email-change' | 'email-undo';
 
 /**
  * The frontend link templates, the two mail-link lifetimes, how long a data export is kept, the

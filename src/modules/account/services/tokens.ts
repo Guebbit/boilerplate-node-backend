@@ -192,11 +192,7 @@ export const redeemLiveToken = <T>(
 
 /** The confirm flows that spend a one-time link token. */
 export type OneTimeTokenFlow =
-    | 'password_reset'
-    | 'email_verify'
-    | 'email_change'
-    | 'email_change_undo'
-    | 'account_restore';
+    'password_reset' | 'email_verify' | 'email_change' | 'email_change_undo' | 'account_restore';
 
 /**
  * Count and audit one refused link token. `auth.` not `security.`: a customer with a stale or

@@ -276,22 +276,20 @@ const watchSession = (id: string): Promise<Resolution<StreamWatch>> =>
         if ('miss' in found) return found;
         const row = found.ok;
 
-        return resolveRowProof(row).then(
-            (context): Resolution<StreamWatch> => ({
-                ok: {
-                    context,
-                    // A stream's recheck is not the person acting: judged, never counted.
-                    recheck: () =>
-                        resolveInLiveFamily(
-                            String(row.userId),
-                            String(row.familyId),
-                            'cookie',
-                            () => resolveRowProof(row),
-                            { passive: true }
-                        )
-                }
-            })
-        );
+        return resolveRowProof(row).then((context): Resolution<StreamWatch> => ({
+            ok: {
+                context,
+                // A stream's recheck is not the person acting: judged, never counted.
+                recheck: () =>
+                    resolveInLiveFamily(
+                        String(row.userId),
+                        String(row.familyId),
+                        'cookie',
+                        () => resolveRowProof(row),
+                        { passive: true }
+                    )
+            }
+        }));
     });
 
 /** The `cookie` adapter. */

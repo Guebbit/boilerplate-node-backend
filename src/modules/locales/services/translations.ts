@@ -307,11 +307,10 @@ export const planForPort = (
             ? plan
             : {
                   fallbackLocale: plan.fallbackLocale,
-                  planned: plan.planned.map(
-                      (slot): TranslationWriteSlot =>
-                          slot.kind === 'upsert'
-                              ? { locale: slot.locale, kind: 'upsert', fields: slot.fields }
-                              : slot
+                  planned: plan.planned.map((slot): TranslationWriteSlot =>
+                      slot.kind === 'upsert'
+                          ? { locale: slot.locale, kind: 'upsert', fields: slot.fields }
+                          : slot
                   )
               }
     );
@@ -331,11 +330,10 @@ export const writeForPort = (
         entityType,
         entityId,
         writePlan.fallbackLocale,
-        writePlan.planned.map(
-            (slot): PlannedWrite =>
-                slot.kind === 'upsert'
-                    ? { locale: slot.locale, kind: 'upsert', fields: slot.fields, origin: 'human' }
-                    : slot
+        writePlan.planned.map((slot): PlannedWrite =>
+            slot.kind === 'upsert'
+                ? { locale: slot.locale, kind: 'upsert', fields: slot.fields, origin: 'human' }
+                : slot
         ),
         translatedBy,
         session

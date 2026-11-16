@@ -14,13 +14,7 @@ import type { UserDocument } from '../model';
 
 /** The fields either edit can move, as the request names them. */
 type UserAuditedKey =
-    | 'username'
-    | 'email'
-    | 'phone'
-    | 'website'
-    | 'imageUrl'
-    | 'locale'
-    | 'analyticsConsent';
+    'username' | 'email' | 'phone' | 'website' | 'imageUrl' | 'locale' | 'analyticsConsent';
 
 /**
  * Preferences are recorded with their values; everything that identifies the person (name, email,

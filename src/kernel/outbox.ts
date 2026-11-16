@@ -444,8 +444,7 @@ export interface OutboxAnnouncement<TEventName extends DomainEventName> {
 
 /** What an `announce` callback may hand back: one announcement, or several for one change. */
 export type OutboxAnnouncements<TEventName extends DomainEventName> =
-    | OutboxAnnouncement<TEventName>
-    | readonly OutboxAnnouncement<TEventName>[];
+    OutboxAnnouncement<TEventName> | readonly OutboxAnnouncement<TEventName>[];
 
 /**
  * Enqueue what `announce` builds, one row per announcement and in order, inside `session`.

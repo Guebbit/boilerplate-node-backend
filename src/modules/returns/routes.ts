@@ -54,8 +54,7 @@ import { postReturnCancel } from './controllers/post-return-cancel';
  */
 const needsFreshLogin = (request: Request): boolean => {
     const body = request.body as
-        | { kind?: unknown; reason?: unknown; statedVia?: unknown }
-        | undefined;
+        { kind?: unknown; reason?: unknown; statedVia?: unknown } | undefined;
     if (body?.statedVia !== undefined) return true;
 
     return (

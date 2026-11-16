@@ -38,9 +38,9 @@ export const noHardcodedUserText = ESLintUtils.RuleCreator.withoutDocs<Options, 
             literal:
                 'User-facing text must come from a dictionary: use t(…) instead of a literal ' +
                 'in the errors argument of {{callee}}().'
-        }
+        },
+        defaultOptions: []
     },
-    defaultOptions: [],
     create(context) {
         return {
             CallExpression(node) {
