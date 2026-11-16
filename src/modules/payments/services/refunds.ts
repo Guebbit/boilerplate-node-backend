@@ -451,15 +451,16 @@ const keepPending = (
  * `failed` and throws {@link RefundLeftOpenError}; the record stays open for the refund sweep, and
  * the caller (the `order.canceled` listener) logs it instead of rethrowing.
  *
- * @param payment - the payment (never `manual`, never without a `providerRef`)
+ * @param payment - the payment (never `manual`)
  * @param refund - the record to send
- * @param providerRef - the provider's own id for the payment
+ * @param providerRef - the provider's own id for the payment; absent only on a corrupted row,
+ * which fails the record final as `provider_removed`
  * @param context - present only for the admin request
  */
 const sendToProvider = (
     payment: PaymentDocument,
     refund: RefundRecord,
-    providerRef: string,
+    providerRef: string | undefined,
     context: CallerContext | undefined
 ): Promise<PaymentDocument | null> => {
     const refuse = (error: unknown, reason: RefundFailureReason): Promise<never> =>
@@ -489,6 +490,24 @@ const sendToProvider = (
         });
         return refuse(
             new Error(`Unknown payment provider: ${payment.provider}`),
+            RefundFailureReason.provider_removed
+        );
+    }
+
+    /**
+     * Only a `succeeded` payment reaches here, and nothing can succeed before the provider has been
+     * asked for an intent — so a missing reference is a corrupted row, not a reachable state. Nothing
+     * was asked, so the money provably did not move: the record fails final and staff see the
+     * refund-refused task, instead of a credit note and a mail for money that never left.
+     */
+    if (!providerRef) {
+        logger.error({
+            message: 'Refund on a payment carrying no provider reference — money was NOT returned.',
+            orderId: String(payment.orderId),
+            refundId: String(refund._id)
+        });
+        return refuse(
+            new Error('The payment carries no provider reference'),
             RefundFailureReason.provider_removed
         );
     }
@@ -559,22 +578,6 @@ const attemptRefund = (
      * stays open and unsent for staff to cancel or mark returned.
      */
     if (exceedsRemaining(payment, refund)) return Promise.resolve(held(refund));
-
-    if (!payment.providerRef) {
-        /**
-         * Only a `succeeded` payment reaches here, and nothing can succeed before the provider
-         * has been asked for an intent — so this is a corrupted row, not a reachable state. Loud,
-         * and the record still settles: leaving it open would invite a second attempt at the same
-         * impossible refund.
-         */
-        // Stryker disable all
-        logger.error({
-            message: 'Refunded a payment carrying no provider reference — money was NOT returned.',
-            orderId: String(payment.orderId)
-        });
-        // Stryker restore all
-        return settleRefund(payment, refund, { attempt: refund.attemptedAt }, context, 'failure');
-    }
 
     return sendToProvider(payment, refund, payment.providerRef, context);
 };
