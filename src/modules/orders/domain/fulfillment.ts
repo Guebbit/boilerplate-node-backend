@@ -5,7 +5,9 @@
  * small record, written only through `orderService.recordFulfillmentProgress`, and everything
  * `orders` itself asks about the goods reads that record.
  *
- * Pure — no I/O. See `docs/modules/orders.md#the-fulfilment-summary`.
+ * Pure — no I/O.
+ *
+ * @see docs/modules/orders.md#the-fulfilment-summary
  */
 
 import { OrderStatus } from '@types';
@@ -124,7 +126,7 @@ export const fulfillmentStatusOf = (
 /** A Mongo filter, as plain data: the domain stays free of any driver import. */
 export type FulfillmentFilter = Readonly<Record<string, unknown>>;
 
-/** `status` is one of these. */
+/** Matches orders whose stored status is one of these; an empty list matches none. */
 const statusIn = (...statuses: readonly OrderStatus[]): FulfillmentFilter => ({
     status: { $in: [...statuses] }
 });

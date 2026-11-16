@@ -5,7 +5,7 @@
  * application; a reporting module asks for the move, this file decides whether it still applies
  * and announces it once it lands.
  *
- * See `docs/understand/tactical-ddd.md` §1 "Who writes the status".
+ * @see docs/understand/tactical-ddd.md#who-writes-the-status
  */
 
 import { announceInTransaction, announceWithin, type OutboxAnnouncements } from '@kernel/outbox';
@@ -133,8 +133,7 @@ const settleRetaken = (
  * Its own conditional write (`repository.ts`'s `markPaid`), not {@link markSystemMove}: `paid` is
  * the one destination that stamps an extra fact (`paidAt`) in the same write, which
  * `markSystemMove`'s shared `$set` has no slot for. `invoicing` subscribes to the
- * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
- * `docs/modules/invoicing.md`.
+ * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice (`docs/modules/invoicing.md#issuing-a-document`).
  *
  * Paid means stock committed: the order's own rule, as canceled means stock released. The hold's
  * `held → committed` claim therefore lands in the same transaction as the status move.
@@ -142,7 +141,9 @@ const settleRetaken = (
  * Money can land after the hold was released (the window closed, the cancel not yet run). The
  * units are then taken again before the `paid` write: enough, and the order is paid as usual;
  * short, it is not written `paid` and this answers `null`, so the payment is refunded and the
- * late cancel ends the order. See `docs/modules/inventory-reservations.md`.
+ * late cancel ends the order.
+ *
+ * @see docs/modules/inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again
  * @internal Friend-only to `payments` (`friends/payments.ts`): it moves an order to paid unchecked.
  * @param orderId - the order the payment was for
  * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
@@ -201,10 +202,9 @@ export const markPaid = (
 };
 
 /**
- * Report that fulfillment started on a paid order. `delivery`'s own door for this move —
- * `POST /orders/{id}/process` — is the one caller; the admin override
- * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
- * this function — `applyOverride` writes that move itself.
+ * Report that fulfillment started on a paid order. Called by `delivery` (the process door,
+ * `POST /orders/{id}/process`, and the progress sync); the admin override reaches `processing` too
+ * but writes that move itself.
  * @param orderId - the order fulfillment started on
  * @param session - the caller's transaction, when this move belongs to one (a first
  *   shipment makes it implicitly); absent, the move opens its own

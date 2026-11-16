@@ -17,7 +17,8 @@ import { clearTimelineActor } from './timeline';
  * The `personalData.erase` hook. Unsets `userId` on every order this account placed and starts
  * its PII clock; `reap:orders` scrubs each once its claim window is over (a never-paid order at
  * once). The orders themselves are kept under Art. 17(3)(b)/(e).
- * See docs/understand/data-retention.md#orders-after-the-account
+ *
+ * @see docs/understand/data-retention.md#orders-after-the-account
  *
  * @param userId - the erased account's id
  * @param session - joins the detach to the hard-delete transaction calling this hook
@@ -106,7 +107,7 @@ const cancelUnpaidOrders = (orderIds: readonly string[]): Promise<void> =>
  * `orders`' `personalData.erase` hook: {@link detachUserId}, plus the cancelling of every
  * never-paid order the account leaves behind. A paid order is only detached — it is the invoice —
  * but a never-paid one is no record of anything, and would hold its stock until the reservation
- * sweep (up to 168 hours for a bank transfer) for a buyer who no longer exists.
+ * sweep (up to the bank-transfer hold) for a buyer who no longer exists.
  *
  * The cancel is returned, not run: it moves stock and money-adjacent state at other modules,
  * which cannot roll back, so it runs only after the erasure has committed. The ids are read here,

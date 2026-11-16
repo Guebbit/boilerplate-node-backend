@@ -6,7 +6,7 @@
  * announces `order.status_overridden` so `delivery` can bring its own records in step — `orders`
  * never touches a shipment itself.
  *
- * See `docs/understand/tactical-ddd.md` §1 "Who writes the status".
+ * @see docs/understand/tactical-ddd.md#who-writes-the-status
  */
 
 import { t } from '@infrastructure/i18n';
@@ -122,7 +122,7 @@ const applyOverride = (
     });
 };
 
-/** The one 409 both refusal points in {@link overrideStatus} answer with — a status that is not a legal override target. */
+/** The 409 for an illegal override target, and for an order that moved since the read. */
 const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
     generateReject(409, [
         {

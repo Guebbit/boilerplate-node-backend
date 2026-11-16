@@ -596,7 +596,9 @@ const findCanceledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: st
         }));
 
 /**
- * The knobs of the claim window, in days. See `docs/understand/data-retention.md#orders-after-the-account`.
+ * The knobs of the claim window, in days.
+ *
+ * @see docs/understand/data-retention.md#orders-after-the-account
  */
 export interface PiiClaimWindow {
     /** Days a delivered order keeps the buyer after its `conformityUntil`. */
@@ -622,7 +624,7 @@ export interface PiiClaimWindow {
  * @returns a Mongo filter
  */
 const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDocument> => ({
-    // The sparse index on the marker is what narrows the scan.
+    /** The sparse index on the marker is what narrows the scan. */
     piiClockStartedAt: { $exists: true },
     $or: [
         { paidAt: { $exists: false } },
