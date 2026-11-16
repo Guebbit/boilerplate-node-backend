@@ -10,7 +10,7 @@
 #   DEPLOY_TIMEOUT        seconds to wait for a healthy stack (default 240)
 #   DEPLOY_KEEP           local `boilerplate-api:<sha>` images kept on the no-registry path (default 5)
 #   DEPLOY_COMPOSE_FILES  the compose files, space-separated, each passed as `-f`
-#                         (default `compose.yaml compose.production.yaml`; add `compose.proxy.yaml` for the Traefik overlay)
+#                         (default `compose.yaml compose.production.yaml`)
 #
 # A deploy is "good" only when `setup` exited 0 and `app` and `cron` are running and healthy and
 # `/readyz` answers from inside `app`. Every good state is appended to `clients/<client>/deploys.log`

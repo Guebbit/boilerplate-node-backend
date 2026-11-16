@@ -32,12 +32,13 @@ rolling deploy.
 
 ### 1 · Putting a reverse proxy in front {#putting-a-reverse-proxy-in-front}
 
-The app itself never terminates TLS; the `compose.proxy.yaml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
+The app itself never terminates TLS. The API is bound to loopback specifically so that publishing
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
-easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
-proxy to `127.0.0.1:${NODE_PORT}`.
+easy path. Put any TLS proxy (nginx, Caddy, a managed load balancer) in front, terminate TLS there,
+proxy to `127.0.0.1:${NODE_PORT}`, **and set `NODE_TRUST_PROXY_HOPS=1`** (below).
 
-Rootless Podman cannot publish ports below 1024 by default, and the Traefik overlay publishes 80 and 443. Lower the limit once per host:
+If your proxy runs in a rootless Podman container, note that rootless Podman cannot publish ports
+below 1024 by default, and a proxy publishes 80 and 443. Lower the limit once per host:
 
 ```bash
 # Let unprivileged users bind 80 and up; the file makes it survive a reboot.
@@ -45,14 +46,19 @@ echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/90-unpriv
 sudo sysctl --system
 ```
 
-Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
-in the compose file sets it to `1` unless the client file sets it, and `.env-example` leaves it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+Set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; `.env-example` leaves
+it commented). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
-Running **several client stacks on one host** is different enough to have its own recipe —
-`compose.proxy.yaml` fronts them all with one shared Traefik that serves each stack from its
-own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).
+Two proxy timeouts must agree with the app's, or a slow request or an idle socket turns into a
+502 or a cut upload with no problem body:
+
+- The proxy's **read** timeout is at least `NODE_HTTP_REQUEST_TIMEOUT_MS` +
+  `NODE_HTTP_HEADERS_TIMEOUT_MS`, so a slow upload ends on the app's side (`applyServerTimeouts` in
+  `src/app/security.ts`).
+- The proxy's **idle-to-app** timeout is below `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`: the proxy closes
+  idle connections first, so it never reuses a socket Node closed.
 
 ### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
 

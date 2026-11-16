@@ -89,13 +89,15 @@ external-endpoints:
 
 endpoints:
     # From the outside: is the app answering, and is the certificate going to renew in time?
+    # This `[CERTIFICATE_EXPIRATION]` condition is the only certificate-expiry check: without Gatus
+    # on the second machine nothing warns (Let's Encrypt stopped expiry emails on 2025-06-04).
     - name: acme-livez
       group: clients
       url: https://app.acme.example/livez
       interval: 1m
       conditions:
           - '[STATUS] == 200'
-          - '[CERTIFICATE_EXPIRATION] > 336h' # two weeks: Traefik renews at 30 days
+          - '[CERTIFICATE_EXPIRATION] > 336h' # two weeks: ACME clients renew at 30 days left
       alerts:
           - type: ntfy
     # Ready to serve: also red when the app has lost its database.

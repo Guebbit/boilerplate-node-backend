@@ -36,7 +36,7 @@ flowchart TD
     Secrets --> Up["docker/deploy.sh acme\n(build, start, check, undo on failure)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
     Setup --> Running(["app, cron, database, cache, limits, queue\npublished to 127.0.0.1 only"])
-    Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe compose.proxy.yaml Traefik overlay does"]
+    Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -255,7 +255,7 @@ Rehearse on a second stack named `staging`: [A staging copy](./first-deploy-stag
 | Rehearse first                                   | [A staging copy](./first-deploy-staging.md)                       |
 | Run the dev stack instead                        | [Getting Started](../build/run-locally.md)                        |
 | Understand every container, dev or production    | [Docker & Podman](../build/docker-and-podman.md)                  |
-| Run two client stacks, or share one proxy        | [Two Client Stacks](./two-client-stacks.md)                       |
+| Run two client stacks on one host                | [Two Client Stacks](./two-client-stacks.md)                       |
 | Pick a host that can run this                    | [Hosting](./hosting.md)                                           |
 | Back up what a stack holds                       | [Backups](./backups.md)                                           |
 | Understand why one stack serves one client       | [Tenancy](../understand/tenancy.md)                               |
