@@ -35,7 +35,7 @@ sequenceDiagram
     D->>I: top the hold up (shelf + owed)
     I-->>D: per product: shelf, owed
     D->>D: owed units: a new fulfillment order on hold
-    D->>O: summary; shipped → processing
+    D->>O: summary#59; shipped → processing
     D-->>B: shipment.lost (mail, inbox row, webhook)
     S->>D: ship again (the ordinary door)
 ```

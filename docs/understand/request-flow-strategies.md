@@ -71,7 +71,7 @@ What a lost rejection costs depends on where it happens:
 flowchart TD
     A[A promise you will not await] --> B{Own .catch, or .then with an onRejected arm?}
     B -- yes --> OK1[Handled: the rule is satisfied]
-    B -- no --> C{Callee documents "Never rejects."?}
+    B -- no --> C{Callee documents #quot;Never rejects.#quot;?}
     C -- yes --> OK2["void + eslint-disable-next-line ... -- why"]
     C -- no --> D[".catch(log with the user or request context)"]
 ```

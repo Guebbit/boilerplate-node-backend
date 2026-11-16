@@ -1,5 +1,6 @@
 import type { EnhanceAppContext } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
+import MermaidDiagram from './MermaidDiagram.vue';
 import './custom.css';
 
 /**
@@ -64,7 +65,9 @@ function attachToUnprocessed(): void {
  */
 export default {
     extends: DefaultTheme,
-    enhanceApp(_ctx: EnhanceAppContext): void {
+    enhanceApp({ app }: EnhanceAppContext): void {
+        // Registered before the SSR early return below: the server render needs the component too.
+        app.component('MermaidDiagram', MermaidDiagram);
         if (globalThis.window === undefined) return;
         const observer = new MutationObserver(attachToUnprocessed);
         observer.observe(document.documentElement, { childList: true, subtree: true });

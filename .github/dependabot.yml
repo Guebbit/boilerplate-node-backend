@@ -14,7 +14,7 @@ updates:
       # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
       cooldown:
           default-days: 7
-      # mermaid 12 breaks `vitepress-plugin-mermaid` and re-lays-out every diagram; the `katex`
+      # mermaid 12 re-lays-out every diagram (ELK, new look); the `katex`
       # override in package.json stands in for the one fix mermaid 11 will never get.
       ignore:
           - dependency-name: mermaid

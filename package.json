@@ -157,8 +157,7 @@
         "ts-jest": "^29.4.14",
         "typescript": "~6.0.0",
         "typescript-eslint": "^8.70.1",
-        "vitepress": "^1.6.4",
-        "vitepress-plugin-mermaid": "^2.0.17"
+        "vitepress": "^1.6.4"
     },
     "dependencies": {
         "@casl/ability": "^7.0.1",

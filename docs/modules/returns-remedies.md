@@ -27,7 +27,7 @@ sequenceDiagram
         P-->>R: settled — return closed
     else the provider refused
         P-->>R: failed, still open
-        Note over P,R: the payment sweep retries the same refund; payment.refunded closes the return
+        Note over P,R: the payment sweep retries the same refund#59; payment.refunded closes the return
     end
 ```
 
