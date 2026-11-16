@@ -28,7 +28,7 @@ export default {
         {
             section: 'stockAlerts',
             collect: (subject) => stockAlertService.exportRows(subject.userId),
-            // Joins the caller's own hard-delete transaction.
+            /** Joins the caller's own hard-delete transaction. */
             erase: ({ userId }, session) => stockAlertService.removeByUserId(userId, session)
         }
     ],
