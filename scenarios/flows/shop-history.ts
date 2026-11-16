@@ -57,7 +57,9 @@ const OLDEST_DAYS = 80;
 
 /** One filler shopper's order: whose it is, and its lines as `[productIndex, quantity]` pairs. */
 interface FillerOrder {
+    /** Which seeded shopper placed the order. */
     customer: keyof typeof SEED_CUSTOMER_IDS;
+    /** The basket: an index into the filler catalogue, and how many. */
     lines: [productIndex: number, quantity: number][];
 }
 

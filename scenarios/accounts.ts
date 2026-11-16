@@ -102,7 +102,9 @@ export const SEED_IDS: Readonly<Record<PersonaName, string>> = {
 
 /** What a login publishes: the address, the password, and what the account holds beyond them. */
 export interface SeedLogin {
+    /** The address the account logs in with. */
     email: string;
+    /** Its plain-text password, published so a demo visitor can sign in. */
     password: string;
     /** Present when an authenticator app is armed: the secret a journey computes the code from. */
     totpSecret?: string;

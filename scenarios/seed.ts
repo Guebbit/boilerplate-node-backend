@@ -17,7 +17,9 @@ export type SeedOutcome = 'created' | 'skipped';
  * checks the fixture against the repository that will actually store it.
  */
 export interface SeedRepository<TFixture> {
+    /** Looks the row up, to see whether it is already seeded. */
     findById: (id: string) => PromiseLike<unknown>;
+    /** Writes the fixture. */
     create: (data: TFixture) => Promise<unknown>;
 }
 
@@ -25,7 +27,9 @@ export interface SeedRepository<TFixture> {
  * The same slice for a collection addressed by its OWNER — see {@link insertIfAbsentForOwner}.
  */
 export interface OwnedSeedRepository<TFixture> {
+    /** Looks up the row the user owns. */
     findByUserId: (userId: string) => PromiseLike<unknown>;
+    /** Writes the fixture. */
     create: (data: TFixture) => Promise<unknown>;
 }
 

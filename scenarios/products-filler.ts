@@ -27,7 +27,9 @@ export const FILLER_IMAGE_ROLE_KEYS: string[] = Array.from(
 
 /** One species line of the catalogue, and the category slug its products are filed under. */
 interface AnimalLine {
+    /** The species' display name. */
     name: string;
+    /** Its category slug. */
     slug: string;
     /**
      * The Italian catalogue's counterpart — plural, since every template needs "per i
@@ -48,7 +50,9 @@ const ANIMALS: AnimalLine[] = [
 
 /** One product line, generic enough to apply sensibly across every {@link ANIMALS} entry. */
 interface ProductType {
+    /** The product type's display name. */
     name: string;
+    /** Its slug, used in the generated product's own slug. */
     slug: string;
     /** Completes "designed for {animal} owners: {blurb}." */
     blurb: string;
@@ -151,8 +155,11 @@ const PRODUCT_TYPES: ProductType[] = [
 
 /** A quality/price tier, applied on top of a {@link ProductType}'s base price. */
 interface Tier {
+    /** The tier's display name. */
     name: string;
+    /** Its slug, used in the generated product's own slug. */
     slug: string;
+    /** Factor applied to the product type's base price. */
     priceMultiplier: number;
     /** Completes "{qualifier} {animal} owners: ...". */
     qualifier: string;
@@ -204,14 +211,19 @@ const TIERS: Tier[] = [
 
 /** One locale's title/description for a filler row. */
 interface FillerCopy {
+    /** The filler row's title in this locale. */
     title: string;
+    /** Its description in this locale. */
     description: string;
 }
 
 /** One filler row's fields, before `./products` attaches an id and an image. */
 export interface FillerProduct {
+    /** The product's title. */
     title: string;
+    /** The product's description. */
     description: string;
+    /** Price as decimal text. */
     price: string;
     /**
      * What the opening receipt brings in, NOT a seeded column — `./products` writes every row at
@@ -219,7 +231,9 @@ export interface FillerProduct {
      * `POST /inventory/levels/{productId}/receive`, so the shop's stock is stock the app itself received.
      */
     openingStock: number;
+    /** Category slugs it is filed under. */
     categories: string[];
+    /** Tags it carries. */
     tags: string[];
     /** Grams; absent on a digital row, which ships nothing. */
     weight?: number;

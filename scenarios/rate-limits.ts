@@ -9,11 +9,12 @@
  * reads as "login is broken" rather than "out of allowance".
  *
  * EVERY budget, not just the global one: each rung carries its own, and one left at its human
- * default throttles a script exactly as the global one would. `docs/understand/security.md` lists what
- * each bounds.
+ * default throttles a script exactly as the global one would.
  *
  * Never for a deployment. Both callers refuse a deployment — `run-server.ts` binds loopback with
  * throwaway secrets, and `apply.ts`'s first gate is `isRelaxedEnvironment()`.
+ *
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 
 /**

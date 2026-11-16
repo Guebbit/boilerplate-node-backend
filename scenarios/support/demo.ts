@@ -60,7 +60,9 @@ export class UnknownScenarioError extends Error {
 interface ScenarioCopy {
     /** The resolved name — `DEFAULT_SCENARIO` when the caller named none. */
     name: string;
+    /** Every row of the scenario, by collection. */
     database: DatabaseCopy;
+    /** What each guarantee name points at, by name to id. */
     subjects: Readonly<Record<string, string>>;
 }
 

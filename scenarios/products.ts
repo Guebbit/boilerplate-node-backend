@@ -49,7 +49,9 @@ import type { ProductTranslationFields } from '@types';
  * alone is a legitimate state of a real catalogue, and the seeder writes exactly what it finds.
  */
 interface ProductCopy {
+    /** The default-locale copy, which every product has. */
     en: ProductTranslationFields;
+    /** The Italian copy, when the product has one. */
     it?: ProductTranslationFields;
 }
 

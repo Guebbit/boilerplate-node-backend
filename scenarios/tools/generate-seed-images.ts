@@ -34,7 +34,9 @@ const THUMBS_ROOT = path.join(SEED_ROOT, 'thumbs/v1');
 
 /** One role's pair of urls, as the generated manifest stores it. */
 interface ImageEntry {
+    /** The full-size image's public path. */
     imageUrl: string;
+    /** The thumbnail's public path. */
     thumbnailUrl: string;
 }
 

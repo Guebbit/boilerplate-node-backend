@@ -35,7 +35,9 @@ import { logger } from '../../src/infrastructure/adapters/logger';
 
 /** A running Mongo, and the way to stop it. */
 export interface EphemeralMongo {
+    /** Connection string for the running server. */
     uri: string;
+    /** Shuts it down and removes its data. */
     stop: () => Promise<void>;
 }
 

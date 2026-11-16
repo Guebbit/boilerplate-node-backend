@@ -9,6 +9,7 @@
 
 /** One named step: what it does, and which other steps of the SAME set must settle first. */
 export interface WaveEntry<T> {
+    /** What the step does; runs once every step it waits for has settled. */
     run: () => Promise<T>;
     /** Names from the same set this step waits for. A name the set does not carry is ignored. */
     after?: readonly string[];

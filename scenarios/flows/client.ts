@@ -15,6 +15,7 @@ import { generate } from 'otplib';
 
 /** The problem-details members a refusal carries that are read here. */
 interface Problem {
+    /** The refusal's error entries: a machine code and a human message. */
     errors?: { code?: string; message?: string }[];
 }
 
@@ -23,6 +24,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** What a call came back with, before anything decides whether that was acceptable. */
 export interface Attempt {
+    /** The HTTP status the call came back with. */
     status: number;
     /** The success body itself — `undefined` for a 204, for a refusal and for a body that is not JSON. */
     data: unknown;

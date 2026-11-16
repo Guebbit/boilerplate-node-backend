@@ -13,23 +13,29 @@ import type { Caller } from './client';
 
 /** An order line, as both the cart and this file's callers name one. */
 export interface Line {
+    /** The product bought. */
     productId: string;
+    /** How many units. */
     quantity: number;
 }
 
 /** The part of `GET /cart` a checkout needs: the total the screen shows. */
 interface CartSummaryData {
+    /** The total the cart screen shows, which checkout must echo back. */
     summary: { totalPrice: string; currency: string };
 }
 
 /** What `POST /cart/checkout` answers with — the created order itself. Only the id is ever read. */
 interface CheckoutData {
+    /** The created order's id. */
     id: string;
 }
 
 /** What every payment endpoint answers with, down to the two fields the flows branch on. */
 interface PaymentData {
+    /** The payment's id. */
     id: string;
+    /** The payment's state, such as `pending` or `paid`. */
     status: string;
 }
 
@@ -89,12 +95,14 @@ const ensureAddress = (caller: Caller): Promise<void> =>
  * demonstrating a real shipment (`standard`) overrides the method.
  *
  * The shipping method is the cart's own choice now (`PUT /cart/shipping-method`), set here before
- * checkout rather than sent in its body — see `docs/modules/cart-checkout.md`.
+ * checkout rather than sent in its body.
  *
  * @param caller - the shopper
  * @param lines - what they are buying
  * @param options - the checkout body's own optional fields
  * @returns the new order's id
+ *
+ * @see docs/modules/cart-checkout.md#the-sequence
  */
 export const checkout = async (
     caller: Caller,
@@ -209,12 +217,14 @@ export const startProcessing = (owner: Caller, orderId: string): Promise<void> =
 
 /** What the flows read of an order's two fulfillment lists: what can ship and what is out. */
 interface FulfillmentData {
+    /** What can still ship, per fulfillment order. */
     fulfillmentOrders: {
         id: string;
         kind: string;
         status: string;
         lines: { productId: string; remaining: number }[];
     }[];
+    /** What is already out, with its state. */
     shipments: { id: string; status: string }[];
 }
 
