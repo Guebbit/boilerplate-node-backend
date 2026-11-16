@@ -86,7 +86,8 @@ describe('openSseStream', () => {
         expect(fake.headers).toEqual({
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-store, no-transform',
-            Connection: 'keep-alive'
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no'
         });
         expect(fake.flushHeaders).toHaveBeenCalledTimes(1);
     });

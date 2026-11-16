@@ -32,7 +32,8 @@ flowchart TB
 ```
 
 Every container, network and volume is namespaced by `COMPOSE_PROJECT_NAME` — the two stacks share
-nothing, not even a Docker network. Each stack publishes its own loopback port, so each needs its
+nothing, not even a Docker network, except the `monitoring` profile's log shipper:
+[what it can read](first-deploy-monitoring.md#what-the-log-shipper-can-read). Each stack publishes its own loopback port, so each needs its
 own proxy route, which you run yourself.
 
 ::: warning Read this alongside the compose files

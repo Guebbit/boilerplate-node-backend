@@ -1,7 +1,20 @@
 import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import mongoose from 'mongoose';
 import { COMMAND_MONITORING, configureMongoose } from '@infrastructure/runtime/database';
 import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
+
+/**
+ * Driver options every connection opened INSIDE jest needs.
+ * Driver >= 7.6 loads `os` with a dynamic import() that jest's vm sandbox rejects, so the
+ * handshake would go out without its `driver` field; handing it the module skips the import.
+ *
+ * `runtimeAdapters` is `@experimental` in driver 7.8 (`node_modules/mongodb/mongodb.d.ts`, `MongoClientOptions`), so a
+ * driver bump is where this can change. The driver's own fallback, which jest breaks, is
+ * `options.runtimeAdapters?.os ?? (await import('os'))` (`node_modules/mongodb/lib/runtime_adapters.js`).
+ * https://mongodb.github.io/node-mongodb-native/7.8/interfaces/MongoClientOptions.html#runtimeAdapters
+ */
+export const JEST_DRIVER_OPTIONS = { runtimeAdapters: { os } } as const;
 
 /**
  * Connects this test file to the jest instance's shared in-memory Mongo.
@@ -42,6 +55,7 @@ export const connect = async () => {
     // Unique per call, and `connect` is called once per file, so this is effectively per-file.
     await mongoose.connect(uri, {
         dbName: `test-${randomUUID().slice(0, 8)}`,
+        ...JEST_DRIVER_OPTIONS,
         ...COMMAND_MONITORING
     });
     observeDatabaseCommands(mongoose.connection);

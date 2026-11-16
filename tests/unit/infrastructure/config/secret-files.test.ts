@@ -11,6 +11,8 @@ import path from 'node:path';
 import { currentEnvironment } from '@infrastructure/config/store';
 import { setEnvironment } from '@tests/environment';
 import { resolveSecretFiles } from '@infrastructure/config/secret-files';
+import { assertConfigIn } from '@infrastructure/config/define';
+import { antibotConfig, mailConfig } from '@infrastructure/adapters/config';
 import { databaseConfig } from '@infrastructure/runtime/config';
 
 /** Where this file's secret files live, removed whole after each case. */
@@ -214,6 +216,46 @@ describe('through the config store', () => {
             expect(databaseConfig().NODE_DB_URI).toBe('mongodb://api:from-file@database:27017/api');
             expect(process.env.NODE_DB_PASSWORD).toBeUndefined();
             expect(currentEnvironment().NODE_DB_PASSWORD).toBe('from-file');
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    /**
+     * The boot gate's presence and cross-field checks (SMTP companions, the altcha minimum) must
+     * judge the value a file supplied, since production hands those over as files only.
+     */
+    it('lets the production boot gate see values that arrived only as files', () => {
+        directory = mkdtempSync(path.join(tmpdir(), 'secret-files-'));
+        const slices = [mailConfig.slice, antibotConfig.slice];
+        const production = {
+            NODE_ENV: 'production',
+            NODE_SMTP_HOST: 'smtp.example.test',
+            NODE_SMTP_USER: 'mailer@example.test',
+            NODE_SMTP_SENDER: 'Shop <mailer@example.test>',
+            NODE_SUPPORT_EMAIL: 'help@example.test',
+            NODE_ANTIBOT_PROVIDER: 'altcha',
+            NODE_ANTIBOT_ALTCHA_SECRET_FILE: secretFile('altcha', `${'a'.repeat(32)}\n`)
+        };
+        try {
+            expect(() =>
+                assertConfigIn(
+                    slices,
+                    resolveSecretFiles({
+                        ...production,
+                        NODE_SMTP_PASS_FILE: secretFile('smtp', 'from-file\n')
+                    })
+                )
+            ).not.toThrow();
+            expect(() =>
+                assertConfigIn(
+                    slices,
+                    resolveSecretFiles({
+                        ...production,
+                        NODE_SMTP_PASS_FILE: secretFile('smtp-empty', '')
+                    })
+                )
+            ).toThrow(/NODE_SMTP_PASS/);
         } finally {
             rmSync(directory, { recursive: true, force: true });
         }

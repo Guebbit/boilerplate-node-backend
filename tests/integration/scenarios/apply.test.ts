@@ -24,6 +24,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import { seedCredentials } from '@scenarios/accounts';
 import { REPO_ROOT } from '@tests/paths';
+import { JEST_DRIVER_OPTIONS } from '@tests/database';
 
 /** The tsx binary the apply script is run with. */
 const TSX_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
@@ -117,7 +118,9 @@ describe('scenarios/apply.ts', () => {
             expect(result.stdout + result.stderr).toContain('not development or test');
 
             // The gate returns before `bootAppInProcess()` ever connects — nothing to drop.
-            const connection = await mongoose.createConnection(dbUri).asPromise();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
             await expect(connection.db?.listCollections().toArray()).resolves.toEqual([]);
             await connection.close();
         },
@@ -128,7 +131,9 @@ describe('scenarios/apply.ts', () => {
         'seeds an empty database, refuses a non-empty one, then reseeds after --reset',
         async () => {
             const dbUri = freshDbUri();
-            const connection = await mongoose.createConnection(dbUri).asPromise();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
             const userCount = () => connection.collection('users').countDocuments();
 
             const first = await runApply(['blank'], dbUri);
@@ -190,7 +195,9 @@ describe('scenarios/apply.ts', () => {
             expect(result.status).toBe(0);
 
             // Proof the scenario really drove checkouts, not just exited cleanly.
-            const connection = await mongoose.createConnection(dbUri).asPromise();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
             await expect(connection.collection('orders').countDocuments()).resolves.toBeGreaterThan(
                 0
             );

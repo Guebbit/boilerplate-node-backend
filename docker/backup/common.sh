@@ -8,6 +8,7 @@
 #   BACKUP_PRUNE           true | false. false when the repository is append-only (no `forget`).
 #   BACKUP_KEEP_HOURLY / _DAILY / _WEEKLY / _MONTHLY   snapshots to keep.
 #   BACKUP_HEARTBEAT_URL / _TOKEN                      off-host freshness check (Gatus external endpoint).
+#                          BACKUP_HEARTBEAT_TOKEN_FILE names a file with the token and wins over it.
 #   BACKUP_HOST            the restic `--host` label; one stack = one host.
 #   restic_repository_env  secret file of `NAME=value` lines: RESTIC_REST_USERNAME / _PASSWORD, AWS_* keys.
 
@@ -81,9 +82,14 @@ heartbeat() {
     local outcome="$1" reason="${2:-}"
     local url="${BACKUP_HEARTBEAT_URL:-}"
     [ -n "$url" ] || return 0
+    local token="${BACKUP_HEARTBEAT_TOKEN:-}"
+    # An empty or missing file leaves the plain variable standing, the same rule as `secret-files.ts`.
+    if [ -n "${BACKUP_HEARTBEAT_TOKEN_FILE:-}" ] && [ -s "$BACKUP_HEARTBEAT_TOKEN_FILE" ]; then
+        token="$(<"$BACKUP_HEARTBEAT_TOKEN_FILE")"
+    fi
     local args=(--silent --show-error --fail --max-time 20 --retry 3 --request POST)
-    if [ -n "${BACKUP_HEARTBEAT_TOKEN:-}" ]; then
-        args+=(--header "Authorization: Bearer ${BACKUP_HEARTBEAT_TOKEN}")
+    if [ -n "$token" ]; then
+        args+=(--header "Authorization: Bearer ${token}")
     fi
     if [ "$outcome" = fail ]; then
         url="${url/success=true/success=false}"

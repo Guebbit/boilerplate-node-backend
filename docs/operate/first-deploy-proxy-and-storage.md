@@ -60,6 +60,28 @@ Two proxy timeouts must agree with the app's, or a slow request or an idle socke
 - The proxy's **idle-to-app** timeout is below `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`: the proxy closes
   idle connections first, so it never reuses a socket Node closed.
 
+#### What to set on the proxy {#proxy-settings}
+
+The idle-to-app rule above has one home; this is what it means per proxy. The table covers nginx and
+managed load balancers only, and its figures are those proxies' usual defaults, from memory: check
+your version. Any other proxy needs the same two settings under its own names.
+
+| Proxy      | Its idle time on the app side                     | What to set                                                                           |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| nginx      | `keepalive_timeout` in the `upstream` block, 60 s | Lower it under the app's value, or raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above 60 s |
+| Managed LB | Its idle timeout (AWS ALB: 60 s)                  | Raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above it                                      |
+
+Also, on every proxy:
+
+- **Never retry a `POST` at the proxy.** A retried write that the app already ran is a duplicate.
+  Writes that must survive a retry carry an `Idempotency-Key` instead.
+- **Body cap:** the proxy's own limit applies before the app's. nginx's `client_max_body_size`
+  defaults to 1 MB, below an image upload; raise it to the largest upload the app accepts.
+- **Live streams:** the SSE response sends `X-Accel-Buffering: no`, which nginx obeys and turns
+  response buffering off for that stream. Other proxies need it off in their own settings.
+- **Which copy wrote a log line:** every line carries `host.name` and `process.pid`. On Kubernetes
+  the host name is the pod name; on one host, copies differ by pid.
+
 ### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
 
 `imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to disk. The compose
