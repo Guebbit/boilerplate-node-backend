@@ -69,7 +69,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
         currency
     });
 
-    // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
+    // The document's _id is minted before the transaction: the driver may re-run it, and a retry must reuse the id.
     const _id = new Types.ObjectId();
     // One instant for the number's year and the stored date; fixed here so a retry keeps it.
     const issuedAt = new Date();

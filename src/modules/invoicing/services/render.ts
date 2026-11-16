@@ -108,7 +108,7 @@ export const storedDocumentName = (kind: InvoiceDocumentKind, id: unknown): stri
 /**
  * Renders one issued invoice's PDF — every render reads the same frozen row, so two downloads of
  * the same invoice always produce byte-identical copies (barring a provider upgrade), and the
- * second is the stored one.
+ * second is the stored one, unless retention is 0 (`NODE_INVOICE_PDF_RETENTION_DAYS`).
  * @param invoice - the invoice to render
  * @returns the rendered artefact's bytes
  */

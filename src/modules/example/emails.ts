@@ -15,6 +15,7 @@ import { translator } from '@infrastructure/i18n';
  * The mail telling an owner their example is now public.
  * @param locale - the owner's own language
  * @param name - the greeting's name
+ * @param title - shown in the mail's subject and body
  */
 export const examplePublishedEmail = (
     locale: string,

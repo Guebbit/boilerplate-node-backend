@@ -56,7 +56,7 @@ const addressItemSchema = new Schema(
 
 /**
  * An entry serializes as the contract's `Address` — `_id` renamed to `id`, like the product
- * snapshot embedded in an order line. `./services/addresses` maps entries by hand instead, so no
+ * snapshot embedded in an order line. `./service.ts` maps entries by hand instead, so no
  * request path uses this; only `tests/integration/scenarios/shop.test.ts`'s conformance check
  * reads a seeded book's `toJSON()` through it.
  */

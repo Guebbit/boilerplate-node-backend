@@ -9,7 +9,7 @@
 import { Router } from 'express';
 import { getAntibotChallenge } from './controllers/get-antibot-challenge';
 
-/** Express router for antibot endpoints (public provider configuration). */
+/** Express router for antibot endpoints (the self-hosted challenge endpoint). */
 export const router = Router();
 
 // GET /antibot/challenge — the challenge a self-hosted provider issues (404 when the active one issues none).

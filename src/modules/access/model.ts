@@ -28,7 +28,9 @@ import { AUTHORIZATION_SCOPES, type AuthorizationScope } from '@types';
 /**
  * One shop — and this deployment holds exactly one, deliberately, because serving many clients is
  * a deployment concern here rather than an application one. There are no others to notice: a
- * second client gets a second stack and a second database. See docs/understand/tenancy.md.
+ * second client gets a second stack and a second database.
+ *
+ * @see docs/understand/tenancy.md#_6-·-why-the-code-still-has-tenant-columns
  */
 export interface TenantDocument extends Document {
     /** Stable, human-readable, and the thing a deployment names in configuration. */

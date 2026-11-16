@@ -1,7 +1,9 @@
 /**
  * @module
  * Invoicing — domain layer: pure rules only, lint-guaranteed free of Express, Mongoose and every
- * tier. See `docs/understand/domain-layer.md`.
+ * tier.
+ *
+ * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
 export { creditShares } from './credit-shares';

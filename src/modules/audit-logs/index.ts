@@ -1,10 +1,11 @@
 /**
  * @module
- * Audit logs — public barrel; the only surface a sibling may import (see
- * `docs/understand/strategic-ddd.md` §5 for the rule). `module.ts` registers the write path itself at
- * import time.
+ * Audit logs — public barrel; the only surface a sibling may import (the rule
+ * is linked below). `module.ts` registers the write path from
+ * its `onRegistered` hook.
  *
  * @see docs/modules/audit-logs.md#its-neighbourhood
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  */
 
 export * from './service';

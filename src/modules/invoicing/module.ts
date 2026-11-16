@@ -1,16 +1,19 @@
 /**
  * @module
- * Invoicing: the frozen tax invoice and credit-note documents `orders`' receipt never was — see
- * `docs/modules/invoicing.md` for the full design and why it is a module of its own.
+ * Invoicing: the frozen tax invoice and credit-note documents `orders`' receipt never was — the full design and why it is a module
+ * of its own are the linked page's.
  *
  * Owns:        the `Invoice`/`CreditNote` collections and their own numbering series, outright.
- * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts` and
- *              `docs/build/contract-fragmentation.md`'s `account`/`addresses` precedent.
+ * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts`; the `account`/`addresses`
+ *              split is the precedent.
  *
  * No route requests an invoice or a credit note into existence — both are frozen ONLY from this
  * module's own event listeners below, reacting to a fact another module already recorded. Neither
  * document is ever deleted, updated or re-rendered from live config: this module has no delete
  * door, on purpose. The one write after issue is `reap:invoices`, which blanks the buyer block.
+ *
+ * @see docs/modules/invoicing.md#its-neighbourhood
+ * @see docs/build/contract-fragmentation.md#which-fragment-owns-which-operation
  */
 
 import path from 'node:path';

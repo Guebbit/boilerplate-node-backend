@@ -32,8 +32,8 @@ export type TaxCategoryCode = 'S' | 'Z' | 'E';
  * The EN 16931 category code one invoice line prints. `Z` and `E` both mean a 0% rate, for
  * different legal reasons — zero-rated goods vs a genuine exemption — which is exactly what
  * `taxClass: zero` alone cannot say and `rateType` was added to say. A non-zero rate is always
- * `S`: EN 16931 has its own code for a reduced rate too, out of this boilerplate's scope — see
- * docs/modules/invoicing.md.
+ * `S`: EN 16931 has its own code for a reduced rate too, out of this boilerplate's scope
+ * @see docs/modules/invoicing.md#vat-category-codes
  * @param taxRate - the line's frozen decimal VAT rate
  * @param rateType - the line's frozen reason for a 0% rate; absent means `standard`
  * @returns the one-letter EN 16931 category code
@@ -123,8 +123,8 @@ const buildBilling = (document: EInvoicingDocument) => {
 };
 
 /**
- * Builds the document's VAT table and the seller's own legal identity, recomputing nothing: every
- * figure was already reconciled by `orders/domain/tax.ts#orderTaxBreakdown` at issue time and
+ * Builds the document's VAT table and the seller's own legal identity, with the rate totals frozen at issue: every
+ * rate figure was already reconciled by `orders/domain/tax.ts#orderTaxBreakdown` at issue time and
  * frozen onto the document — this only formats what is already there.
  * @param locale - the document's language, for `Intl.NumberFormat` — every
  *   amount below goes through it, in the document's OWN frozen currency

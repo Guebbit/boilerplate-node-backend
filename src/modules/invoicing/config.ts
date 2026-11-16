@@ -12,9 +12,11 @@ import { int, text } from '@infrastructure/config/fields';
 export const invoicingConfig = defineConfig({
     name: 'invoicing',
     shape: {
+        /** The e-invoicing provider the port resolves to. */
         NODE_EINVOICING_PROVIDER: text({ default: 'pdf', case: 'lower' }),
+        /** Days a stored PDF is kept before the reaper removes it; 0 keeps none. */
         NODE_INVOICE_PDF_RETENTION_DAYS: int({ default: 30, min: 0 }),
-        // Years after the end of the issue year that the buyer block stays on a document.
+        /** Years after the end of the issue year that the buyer block stays on a document. */
         NODE_INVOICE_BUYER_RETENTION_YEARS: int({ default: 10, min: 1 })
     }
 });

@@ -213,7 +213,7 @@ export const get = (
 /**
  * Mint a credential. `body.permissions` must be a non-empty subset of what the minter currently
  * holds — enforced here, at mint time; re-checked again on every request the key later makes
- * (`module.ts`'s `CredentialResolver`), so a minter demoted after the fact cannot leave a
+ * (`services/resolver.ts`), so a minter demoted after the fact cannot leave a
  * key behind that still reaches further than they now can.
  *
  * @returns a 422 naming the offending keys when `permissions` asks for anything the minter

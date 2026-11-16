@@ -1,7 +1,10 @@
 /**
  * @module
- * Addresses — public barrel; the only surface a sibling module may import (see
- * `docs/understand/strategic-ddd.md` §5 for the rule). See docs/modules/addresses.md.
+ * Addresses — public barrel; the only surface a sibling module may import (the rule
+ * is linked below).
+ *
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
+ * @see docs/modules/addresses.md#its-neighbourhood
  */
 
 export * from './service';

@@ -2,7 +2,7 @@
  * @module
  * The `CredentialResolver` this module installs into `kernel/authentication.ts`: turns a
  * presented `sk_...` bearer token into the `Caller` it names, re-floored against its minter's
- * CURRENT permissions on every request. `module.ts` only registers the result at import time —
+ * CURRENT permissions on every request. `module.ts` only registers the result, from `onRegistered` —
  * the resolution logic itself lives here, alongside the rest of this module's services.
  *
  * @see docs/understand/security.md#machine-to-machine-credentials

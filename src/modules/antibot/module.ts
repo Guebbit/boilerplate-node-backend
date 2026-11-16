@@ -6,7 +6,7 @@
  * `infrastructure/adapters/antibot-providers` directly rather than on this module — which is why
  * this manifest carries no boot-time checks of its own: `app/config.ts` validates the
  * provider selection and its secrets, since that gate keeps running whether or not this module's
- * two HTTP routes are even mounted.
+ * its HTTP route is even mounted.
  *
  * @see docs/modules/antibot.md#its-neighbourhood
  */
@@ -14,7 +14,7 @@
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
-/** This module's manifest entry: two public routes, no persistence, no locales. */
+/** This module's manifest entry: one public route, no persistence, no locales. */
 export default {
     name: 'antibot',
     mounts: [{ basePath: '/antibot', routes: router }],

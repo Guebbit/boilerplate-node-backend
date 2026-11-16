@@ -1,9 +1,11 @@
 /**
  * @module
  * Express router for the address book, mounted at `/account` alongside `account`'s own router —
- * see `./module.ts` and `docs/modules/account.md` for the split. `getAuth` returns early when a
+ * see `./module.ts` for the split. `getAuth` returns early when a
  * request already carries a resolved auth context, so mounting it here too costs nothing beyond
  * the first router that ran (`kernel/middlewares/authorizations.ts`'s `getAuth`).
+ *
+ * @see docs/modules/account.md#its-neighbourhood
  */
 
 import { Router } from 'express';

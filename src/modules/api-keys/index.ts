@@ -1,11 +1,12 @@
 /**
  * @module
- * Api-keys — public barrel; the only surface a sibling module may import (see
- * `docs/understand/strategic-ddd.md` §5 for the rule). `credentials.ts` stays internal: minting and
+ * Api-keys — public barrel; the only surface a sibling module may import (the rule
+ * is linked below). `credentials.ts` stays internal: minting and
  * verifying a credential is this module's own resource, and nothing else has business doing
- * either. `module.ts` wires the `CredentialResolver` itself at import time.
+ * either. `module.ts` wires the `CredentialResolver` from its `onRegistered` hook.
  *
  * @see docs/modules/api-keys.md#its-neighbourhood
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  */
 
 export * from './services';

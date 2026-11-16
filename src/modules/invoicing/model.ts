@@ -224,7 +224,7 @@ invoiceSchema.plugin(moneyPlugin);
  */
 invoiceSchema.index({ orderId: 1 }, { name: 'invoices_orderId', unique: true });
 
-// The money buckets of the stats read by `issuedAt`, a range scan.
+// Range scan for the stats read by issue date.
 invoiceSchema.index({ issuedAt: 1 }, { name: 'invoices_issuedAt' });
 
 /** Mongoose model for issued invoices. */

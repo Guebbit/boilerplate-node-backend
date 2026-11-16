@@ -51,7 +51,7 @@ export const membershipIn = (
  * @param session - the caller's transaction, when the grant must commit or roll back with other
  *   writes. Given one, only failures are audited here; the caller records the success with
  *   {@link auditRoleAssigned} once it has committed.
- * @throws AccessInvariantError synchronously refused as a REJECTION, never a thrown exception —
+ * @throws {AccessInvariantError} as a REJECTION, never a synchronous throw —
  *   every check below runs inside the promise chain on purpose, so a caller doing
  *   `assignRole(...).catch(...)` (every caller in this codebase does) sees a rejection, not an
  *   uncaught throw. `Promise.resolve().then(...)` is what buys that for code with no `await` of
@@ -183,7 +183,9 @@ export const eraseMemberships = (userId: string, session: ClientSession): Promis
  * No fallback: a role lives in exactly one place, the membership row. `permissions.ts`'s
  * `keysInScope` already treats a `null` role as "no role", not as a guessed default — the anonymous
  * baseline in tenant scope (signing in may only ever widen what a stranger already sees), an empty
- * set in platform scope. See `docs/understand/authorization.md`.
+ * set in platform scope.
+ *
+ * @see docs/understand/authorization.md#the-model
  */
 export const rolesOf = (
     userId: string,

@@ -23,7 +23,7 @@ import { presentIncidentEntry } from './presenter';
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
- * `@modules/audit-logs/module` registers at import time.
+ * `@modules/audit-logs/module` registers from its `onRegistered` hook.
  *
  * Fail-open: fire-and-forget by contract — it returns `void`, and every failure is swallowed into
  *            a log line. Not laziness about errors: these entries are written while answering
