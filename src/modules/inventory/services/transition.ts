@@ -69,9 +69,10 @@ export const refreshStockCacheForProducts = async (
  * exists first — a product with no level yet reads as all-zero, the correct starting point for
  * every transition including the very first `receive` — then the conditional write decides the
  * rest: a refusal is not a movement, so no row is written. Last, this product's synced copy on
- * `products` is brought into step; see `docs/modules/inventory.md#why-products-still-carries-a-copy`
- * for why that sync is a plain call here and never a domain event.
+ * `products` is brought into step; why that sync is a plain call here and never a domain event is
+ * the linked page's.
  *
+ * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  * @param reason - the transition; decides the guard, the write and the deltas recorded
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`

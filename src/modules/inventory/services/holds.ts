@@ -267,9 +267,10 @@ const commitWithin = async (
  * `committed` (or, if the parcel got ahead of a crashed settlement, `shipped`) is a benign
  * replay. A `released` hold is taken again first ({@link retakeReleasedForOrder}); only when the
  * shelf no longer covers it, or no reservation exists at all, is the order paid with nothing set
- * aside. That case is alarmed — see `docs/modules/inventory-reservations.md` — rather than
+ * aside. That case is alarmed rather than
  * swallowed like the replay is.
  *
+ * @see docs/modules/inventory-reservations.md#orphaned-hold
  * @param orderId - the order that was paid for
  * @param session - the payment's transaction. The commit then lands with the order's `paid` move
  *   and the caller owes a `nudgeOutbox` once it has committed. A preorder it serves announces

@@ -13,9 +13,11 @@ import { metricsRegistry } from '@infrastructure/observability/metrics-registry'
 /**
  * Orders that are paid, or shipping, with no hold to settle: the stock side of the sale cannot be
  * completed. Labelled by the step that found it, `commit` (payment) or `ship` (dispatch), because
- * the fix differs (see the runbook in `docs/modules/inventory-reservations.md#orphaned-hold`).
+ * the fix differs (the runbook is the linked page).
  * `ship` fires only when no hold exists at all. `commit` also fires for a released hold the shelf
  * could not cover when the payment landed. Any increase is a human's call.
+ *
+ * @see docs/modules/inventory-reservations.md#orphaned-hold
  */
 export const inventoryCommitOrphanedTotal = new Counter({
     name: 'inventory_commit_orphaned_total',

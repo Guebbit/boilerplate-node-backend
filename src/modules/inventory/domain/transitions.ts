@@ -83,7 +83,7 @@ export const counterDeltaFor = (
             return { onHandDelta: 0, reservedDelta: quantity, backorderedDelta: -quantity };
         }
 
-        // A delivery. The only transition that can create units.
+        // A delivery. Units also arrive through a restock and a positive adjust.
         case StockMovementReason.receive: {
             return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }

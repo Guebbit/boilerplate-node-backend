@@ -47,7 +47,7 @@ const giveBack = (orderId: string): Promise<void> =>
  * One consistent lock order is what keeps two multi-line checkouts from refusing each other: two
  * orders listing the same products oppositely would each take their first line, find the other's
  * unit gone on the second, and both give up. Sorted, they meet on the same product first and one
- * goes on. https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-DEADLOCKS
+ * goes on.
  *
  * @param lines - the lines as the caller listed them
  * @returns a copy sorted by product id

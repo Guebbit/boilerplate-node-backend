@@ -2,7 +2,7 @@
  * @module
  * Inventory — the only place stock changes. A counter never moves without a ledger row, and
  * never the reverse; both halves happen inside `applyTransition`, which every function here goes
- * through. One file per flow, not one big file; see `docs/understand/layers.md`.
+ * through. One file per flow, not one big file.
  *
  * Transactions: only where a half-done write would be wrong — a hold's claim and commit
  *               (`holds.ts`), a delivery with its preorder allocation (`admin.ts`), a hold's
@@ -10,6 +10,7 @@
  *               single-document writes; gaps are noted at the call sites that own them.
  *
  * @see docs/modules/inventory.md#its-neighbourhood
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
  */
 
 import { reserveForOrder } from './reserve';

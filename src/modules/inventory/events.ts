@@ -1,12 +1,11 @@
 /**
  * @module
  * Domain events this module emits — declared by augmenting the kernel's payload map, so the
- * catalogue grows with the modules that own events and no shared file enumerates domains. Two:
- * stock changes aren't events (see `products/events.ts`), since the counter and the row
- * explaining it are one write. A hold timing out is different — `orders` must cancel the order,
- * but already imports this module, so the event avoids importing back and forming a cycle. Stock
- * allocated to a paid preorder is the other: `delivery` must release the fulfillment order that
- * waits for it, and imports this module only for the event's name.
+ * catalogue grows with the modules that own events and no shared file enumerates domains.
+ * Stock changes are not events (see `products/events.ts`): the counter and the row explaining it
+ * are one write. The four below are the ones another module must react to, each documented on its
+ * own key. A hold timing out is why `orders` cancels the order, and it is an event because `orders`
+ * already imports this module and must not be imported back.
  *
  * @see docs/modules/inventory.md#the-pipeline
  */

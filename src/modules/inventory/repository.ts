@@ -263,8 +263,9 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * lets a redelivered `PRODUCT_CREATED` book the opening stock only the first time. Racing twice
      * is safe: `productId`'s unique index makes the upsert a no-op the second time, and an existing
      * level is never overwritten. A product without a row yet genuinely has none, never a cached
-     * count worth adopting — see `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+     * count worth adopting.
      *
+     * @see docs/modules/inventory.md#why-products-still-carries-a-copy
      * @param session - the caller's transaction, so the insert and the stock booked after it commit together
      * @returns `true` when the row was inserted now, `false` when it was already there
      */
@@ -368,10 +369,10 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * `available` then `_id`: the `stocklevels_available__id` index already covers exactly this
      * order, and `_id` is what breaks a tie between two equally scarce products deterministically
      * (not alphabetically — `services/levels.ts`'s `listLevels` reads titles back from `products` AFTER
-     * this page is settled, which is one round trip too late to sort by them). See
-     * `docs/understand/strategic-ddd.md` §5: the board reads the real counters, and
+     * this page is settled, which is one round trip too late to sort by them). The board reads the real counters, and
      * asks `products` for names through its service, never through a database join.
      *
+     * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
      * @param options - `skip`/`limit` for the page, and `maxAvailable` to keep only scarce rows
      * @returns the page (titleless) and the count of everything matching
      */

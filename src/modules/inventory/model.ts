@@ -4,9 +4,10 @@
  *
  * The stock level is the source of truth for `onHand`/`reserved` — `products` keeps a synced copy
  * on its own document purely so a catalogue read needs no join, but never writes it and this
- * module never reads that copy back. See `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+ * module never reads that copy back.
  *
  * @see docs/modules/inventory.md#the-pipeline
+ * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -165,7 +166,7 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
         /**
          * No `min: 0` here — every write to these three moves through `repository.ts#applyDelta`'s
          * `$inc`, which Mongoose never validates against `min`/`max` (it cannot see the pre-update
-         * value). The real floor is `conditionFor`'s `$gte` guard in the same file, checked in the
+         * value). The real floor is `conditionFor`'s `$gte` guard in `repository.ts`, checked in the
          * update's FILTER rather than after the fact.
          */
         onHand: {
