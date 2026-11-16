@@ -19,7 +19,7 @@ import { t } from '@infrastructure/i18n';
 const FIELD_NAME = /^[A-Z][\w-]*$/i;
 
 /** What `t` answers when a label key is absent; no real label can equal it. */
-const NO_LABEL = '\u0000no-label';
+const NO_LABEL = '\0no-label';
 
 /**
  * The human name of the field an issue is about.

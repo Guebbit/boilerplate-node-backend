@@ -56,7 +56,7 @@ const SEED = (() => {
  * path-ish text, a JSON object, an emoji. Raw text: each is encoded before it reaches a URL.
  */
 const NEVER_LEGAL = [
-    '\u0000',
+    '\0',
     'not-a-value',
     "'; DROP TABLE users;--",
     '{"$ne":null}',

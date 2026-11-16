@@ -8,7 +8,7 @@ import { deriveSubkey } from '@infrastructure/security/subkey';
 describe('deriveSubkey()', () => {
     it('matches RFC 5869 Appendix A.3 (empty salt, empty info), first 32 bytes of the OKM', () => {
         // IKM is 22 bytes of 0x0b; as a string, each byte is the ASCII control character U+000B.
-        const root = '\u000B'.repeat(22);
+        const root = '\v'.repeat(22);
 
         expect(deriveSubkey(root, '').export().toString('hex')).toBe(
             '8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d'

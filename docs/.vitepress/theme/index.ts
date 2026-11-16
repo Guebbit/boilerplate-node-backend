@@ -4,6 +4,11 @@ import MermaidDiagram from './MermaidDiagram.vue';
 import './custom.css';
 
 /**
+ * Upper bound, in ms, on the overlay's fade-out before it is removed regardless of `transitionend`.
+ */
+const OVERLAY_FADE_FALLBACK_MS = 400;
+
+/**
  * Show one Mermaid diagram enlarged in a full-screen overlay; a backdrop click or Escape closes it.
  *
  * @param container - the `.mermaid` element whose SVG is cloned into the overlay
@@ -31,9 +36,17 @@ function openOverlay(container: HTMLElement): void {
     overlay.getBoundingClientRect();
     overlay.classList.add('mermaid-zoom-overlay--visible');
 
+    let closing = false;
+
     function close(): void {
+        // A second close (Escape then a click) must not queue a second removal.
+        if (closing) return;
+        closing = true;
         overlay.classList.remove('mermaid-zoom-overlay--visible');
+        // `transitionend` never fires when transitions are off (reduced motion, hidden tab), so a
+        // timer removes the overlay too; `remove()` is idempotent.
         overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+        setTimeout(() => overlay.remove(), OVERLAY_FADE_FALLBACK_MS);
         document.body.classList.remove('mermaid-zoom-active');
         document.removeEventListener('keydown', onKey);
     }
