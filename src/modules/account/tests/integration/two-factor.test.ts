@@ -58,7 +58,10 @@ beforeEach(() => {
     mockOutbox.length = 0;
 });
 
-/** The digits from the most recent two-factor mail — what the recipient would type. */
+/**
+ * The digits from the most recent two-factor mail — what the recipient would type.
+ * @throws {Error} when no two-factor mail was queued
+ */
 const mailedCode = (): string => {
     const mail = mockOutbox.findLast(({ template }) => template === 'account.two-factor-code');
     if (!mail) throw new Error('No two-factor code was mailed');

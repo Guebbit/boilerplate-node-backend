@@ -659,106 +659,28 @@ export default defineConfig(
     },
 
     /**
-     * Exported API carries its own documentation, and the documentation is checked.
+     * Every top-level declaration carries a docblock, and what the docblock says is checked.
      *
-     * Two halves, both of them MUSTs in CLAUDE.md, both checked by this one rule:
+     * Presence:   a function, class, variable, type, interface, enum or class member at the top of
+     *             a file has a docblock. `enableFixer` is off on purpose: `lint:fix` must never
+     *             insert an empty stub that passes this rule and says nothing.
+     * Accuracy:   `@param` names match the signature, tag names are real ones, a thrown error is
+     *             declared, and a description is never just the name it describes.
+     * Scope:      every linted file, tests and scripts included: a top-level declaration has no
+     *             exemption in the comment rules.
+     * Severity:   `error`. `lint` runs with `--max-warnings 0`, so a warning already failed.
      *
-     * Presence:   an exported function, interface, type or enum has a docblock.
-     * Accuracy:   `@param` names match the signature, and tag names are real ones.
-     *
-     * Warnings, not errors, and `publicOnly` — the point is the contract a caller reads, not a
-     * docblock ceremony on every internal helper. Accuracy is the half that pays: a `@param` left
-     * behind by a rename is worse than no comment, and only a rule ever notices.
+     * @see docs/build/code-comments.md#the-form-at-a-glance
      * https://github.com/gajus/eslint-plugin-jsdoc
      */
     {
-        files: ['src/**/*.ts', 'scenarios/**/*.ts'],
-        // Co-located module specs are exempt: their exports are fixtures for one file, not API.
-        ignores: ['src/modules/*/tests/**/*.ts'],
+        files: ['**/*.{ts,mts,cts,js,mjs,cjs}'],
 
         plugins: {
             jsdoc: pluginJsdoc
         },
 
         // TypeScript mode: types live in the signature, so the tags are not asked to repeat them.
-        settings: {
-            jsdoc: { mode: 'typescript' }
-        },
-
-        rules: {
-            'jsdoc/require-jsdoc': [
-                'warn',
-                {
-                    publicOnly: true,
-                    require: {
-                        FunctionDeclaration: true,
-                        ArrowFunctionExpression: true,
-                        FunctionExpression: true,
-                        ClassDeclaration: true
-                    },
-                    contexts: [
-                        'TSInterfaceDeclaration',
-                        'TSTypeAliasDeclaration',
-                        'TSEnumDeclaration'
-                    ]
-                }
-            ],
-            /**
-             * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
-             * checks here are about truth, not presence:
-             *
-             * Not set:                    `require-param`, `require-returns` — they would demand
-             *                             a row per parameter across the codebase, mostly
-             *                             restating a typed signature.
-             * disableMissingParamChecks:  document the one parameter that needs a word, skip the
-             *                             three that do not — but never name one that is not there.
-             * checkDestructured: false:   an options bag is documented on its interface, not one
-             *                             `@param` row per property at every call site.
-             */
-            'jsdoc/check-param-names': [
-                'error',
-                { checkDestructured: false, disableMissingParamChecks: true }
-            ],
-            'jsdoc/check-tag-names': 'error',
-            'jsdoc/require-param-description': 'warn',
-            'jsdoc/require-returns-description': 'warn',
-            'jsdoc/require-throws': 'warn'
-        }
-    },
-
-    /**
-     * Every top-level declaration carries a docblock, and no tag only repeats the name it tags.
-     *
-     * Presence:   a function, class, variable, type, interface, enum or class member at the top of
-     *             a file has a docblock. `enableFixer` is off on purpose: `lint:fix` must never
-     *             insert an empty stub that passes this rule and says nothing.
-     * Accuracy:   `informative-docs` refuses a description that only restates its name.
-     * Scope:      grows one folder per commit, until it is every linted file.
-     *
-     * Later than the block above, so for a listed file this one wins.
-     * @see docs/build/code-comments.md#the-form-at-a-glance
-     */
-    {
-        files: [
-            'src/app/**/*.ts',
-            'src/kernel/**/*.ts',
-            'src/infrastructure/**/*.ts',
-            'src/domain-primitives/**/*.ts',
-            'src/types/**/*.ts',
-            'src/*.ts',
-            'src/modules/*/**/*.ts',
-            'tests/**/*.ts',
-            'scripts/**/*.{ts,mts,cts,js,mjs,cjs}',
-            'scenarios/**/*.ts',
-            '*.{ts,mts,cts,js,mjs,cjs}',
-            'docs/.vitepress/**/*.{ts,mts}'
-        ],
-        ignores: ['src/types/asyncapi.generated.ts'],
-
-        plugins: {
-            jsdoc: pluginJsdoc
-        },
-
         settings: {
             jsdoc: { mode: 'typescript' }
         },
@@ -794,7 +716,27 @@ export default defineConfig(
                     ]
                 }
             ],
-            'jsdoc/informative-docs': 'error'
+            'jsdoc/informative-docs': 'error',
+            /*
+             * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
+             * checks here are about truth, not presence:
+             *
+             * Not set:                    `require-param`, `require-returns` — they would demand
+             *                             a row per parameter across the codebase, mostly
+             *                             restating a typed signature.
+             * disableMissingParamChecks:  document the one parameter that needs a word, skip the
+             *                             three that do not — but never name one that is not there.
+             * checkDestructured: false:   an options bag is documented on its interface, not one
+             *                             `@param` row per property at every call site.
+             */
+            'jsdoc/check-param-names': [
+                'error',
+                { checkDestructured: false, disableMissingParamChecks: true }
+            ],
+            'jsdoc/check-tag-names': 'error',
+            'jsdoc/require-param-description': 'error',
+            'jsdoc/require-returns-description': 'error',
+            'jsdoc/require-throws': 'error'
         }
     },
 

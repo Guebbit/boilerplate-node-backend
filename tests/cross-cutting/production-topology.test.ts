@@ -81,6 +81,7 @@ const wholeDockerfile = readFileSync(path.join(REPO_ROOT, 'docker', 'Dockerfile'
  * The text of one `FROM … AS <name>` stage, up to the next `FROM`.
  *
  * @param name - the stage's alias
+ * @throws {Error} when the Dockerfile has no stage of that name
  */
 const stageOf = (name: string): string => {
     const start = wholeDockerfile.search(new RegExp(`^FROM .* AS ${name}$`, 'm'));

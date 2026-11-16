@@ -33,7 +33,10 @@ afterEach(() => jest.restoreAllMocks());
 /** The staff member behind every export below. */
 const staff = callerContextAs('admin', 'admin-1');
 
-/** The CSV a successful export would write, or a loud failure. */
+/**
+ * The CSV a successful export would write, or a loud failure.
+ * @throws {Error} when the export is refused
+ */
 const csvOf = (
     opened: Awaited<ReturnType<typeof orderService.openOrderExport>>
 ): Promise<string> => {

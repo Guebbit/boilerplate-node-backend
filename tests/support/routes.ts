@@ -443,6 +443,7 @@ export const identityGuardIndex = (guards: readonly string[]): number =>
  * both halves at once, and asking only the per-route half reports `locales`' admin writes as
  * unguarded while reporting `tasks`'s as guarded, when the difference is only where the same
  * guard is written.
+ * @throws {Error} when no route is mounted under that signature
  */
 export const guardsOn = (router: Router, signature: string): string[] => {
     const row = effectiveRouteTable(router).find(

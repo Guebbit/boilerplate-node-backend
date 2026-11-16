@@ -84,8 +84,10 @@ export interface StrykerOutcome {
 /**
  * Runs Stryker once, with this machine's settings applied and the OOM loop watched for.
  *
- * @param args CLI arguments appended verbatim after `run` — a config path, `--mutate`, `--force`
- * @param label printed alongside the settings, so one line of a long log says which piece this is
+ * Takes:   `args`: CLI arguments appended verbatim after `run` — a config path, `--mutate`,
+ *          `--force`. `label`: printed alongside the settings, so one line of a long log says
+ *          which piece this is.
+ *
  * @returns the child's exit code, and whether the OOM guard is what ended it
  */
 export const runStryker = ({

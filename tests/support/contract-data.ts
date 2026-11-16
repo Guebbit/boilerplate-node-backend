@@ -251,7 +251,10 @@ const clampStringLength = (value: string, checks: ZodCheckDef[]): string => {
     return result;
 };
 
-/** One valid value for `schema`, built from its Zod definition. */
+/**
+ * One valid value for `schema`, built from its Zod definition.
+ * @throws {Error} when the schema holds a type the generator cannot build
+ */
 const buildValue = (schema: ZodType): unknown => {
     const def = defOf(schema);
     switch (def.type) {
@@ -433,6 +436,7 @@ const violationsForField = (fieldSchema: ZodType): { violation: string; value: u
  * (for a field carrying a min/max/format constraint). Object schemas are supported, and a union of
  * them (a tagged body, like `POST /account/reauth`'s) is walked branch by branch; every `*Body`
  * export in `api/schemas.zod.ts` is one of the two.
+ * @throws {Error} when the schema is not an object schema
  */
 export const invalidPayloads = (schema: ZodType): InvalidPayloadCase[] => {
     ensureSeeded();

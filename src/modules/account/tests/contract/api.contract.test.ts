@@ -70,6 +70,7 @@ const readVerifyToken = (userId: string) =>
  *
  * Reads `mailerPort.enqueueEmail` directly rather than through `observePort` (`@tests/ports`):
  * that helper CLEARS the mock's history on hand-out, which would erase the very call this reads.
+ * @throws {Error} when no verification mail is queued
  */
 const verifyTokenFromMail = (): string => {
     const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<

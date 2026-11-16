@@ -7,7 +7,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { deadCodeCitations } from '../../../../scripts/docs/code-citations';
+import { anchorlessSeeTags, deadCodeCitations } from '../../../../scripts/docs/code-citations';
 import { gitEnvironment } from '../../../../scripts/docs/repo-references';
 
 /** `execFile` without blocking the event loop. */
@@ -104,5 +104,36 @@ describe('deadCodeCitations', () => {
         });
 
         expect(deadCodeCitations(root, files)).toEqual([]);
+    });
+});
+
+describe('anchorlessSeeTags', () => {
+    /** A scratch repo, so the case controls exactly which files exist. */
+    let root: string;
+
+    beforeEach(async () => {
+        root = await mkdtemp(path.join(os.tmpdir(), 'anchorless-see-'));
+        await mkdir(path.join(root, 'src'), { recursive: true });
+    });
+
+    afterEach(() => rm(root, { recursive: true, force: true }));
+
+    it('names a docblock @see that has no anchor, and leaves an anchored one and a YAML See: alone', async () => {
+        await writeFile(
+            path.join(root, 'src/a.ts'),
+            [
+                '/**',
+                ' * A thing.',
+                ' * @see docs/modules/orders.md',
+                ' * @see docs/modules/orders.md#cancel',
+                ' */',
+                'export const a = 1;'
+            ].join('\n')
+        );
+        await writeFile(path.join(root, 'src/b.yaml'), '# See: docs/modules/orders.md\n');
+
+        expect(anchorlessSeeTags(root, ['src/a.ts', 'src/b.yaml'])).toEqual([
+            'src/a.ts:3: docs/modules/orders.md'
+        ]);
     });
 });

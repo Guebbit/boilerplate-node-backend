@@ -50,7 +50,10 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-/** The backstop job, as declared. */
+/**
+ * The backstop job, as declared.
+ * @throws {Error} when the job is not declared
+ */
 const sweepOutbox = () => {
     const job = appJobs.find(({ name }) => name === 'sweep:outbox');
     if (!job) throw new Error('sweep:outbox is not declared');

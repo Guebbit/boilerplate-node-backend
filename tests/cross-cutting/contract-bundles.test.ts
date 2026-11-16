@@ -49,7 +49,10 @@ import { REPO_ROOT } from '../../scripts/modules-on-disk';
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
     groups.reduce((total, group) => total + (group.items ?? group.children ?? []).length, 0);
 
-/** Finds a bundle by name; a missing one fails loudly. */
+/**
+ * Finds a bundle by name; a missing one fails loudly.
+ * @throws {Error} when no bundle has that name
+ */
 const bundleByName = (name: string): ContractBundle => {
     const bundle = CONTRACT_BUNDLES.find((candidate) => candidate.name === name);
     if (!bundle) throw new Error(`no bundle named ${name}`);

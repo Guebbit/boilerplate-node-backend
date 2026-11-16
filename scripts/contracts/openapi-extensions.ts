@@ -187,7 +187,10 @@ export const checkExtensions =
             }
     };
 
-/** The discriminator value a variant carries: its `<propertyName>.enum[0]`. */
+/**
+ * The discriminator value a variant carries: its `<propertyName>.enum[0]`.
+ * @throws {Error} when the variant declares no enum for the discriminator property
+ */
 const discriminatorValueOf = (variant: unknown, property: string, where: string): string => {
     const field =
         isPlainObject(variant) && isPlainObject(variant.properties)
@@ -240,7 +243,10 @@ export const withExtensionSchemas = (
     return document.toString({ lineWidth: 0, indent: 4 });
 };
 
-/** Appends one fragment's variants to a union, and to its discriminator mapping if it has one. */
+/**
+ * Appends one fragment's variants to a union, and to its discriminator mapping if it has one.
+ * @throws {Error} when a variant reuses a discriminator value already in the union
+ */
 const appendVariants = (
     union: Json,
     names: readonly string[],

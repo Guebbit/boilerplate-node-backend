@@ -24,7 +24,10 @@ const base: RefundInputs = {
     handlingDeduction: '0.00'
 };
 
-/** The refund's total, or a loud failure. */
+/**
+ * The refund's total, or a loud failure.
+ * @throws {Error} when the verdict is not ok
+ */
 const totalOf = (inputs: RefundInputs): string => {
     const verdict = refundAmountFor(inputs);
     if (!verdict.ok) throw new Error('expected a refund');

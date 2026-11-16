@@ -162,7 +162,10 @@ const buyerCancels = (fixture: Fixture) =>
         callerContextAs('customer', fixture.user.id)
     );
 
-/** A created cancellation, or a loud failure. */
+/**
+ * A created cancellation, or a loud failure.
+ * @throws {Error} when the outcome is a refusal
+ */
 const created = (outcome: Awaited<ReturnType<typeof returnService.createReturn>>) => {
     if (!outcome.success)
         throw new Error(`expected a cancellation: ${JSON.stringify(outcome.errors)}`);

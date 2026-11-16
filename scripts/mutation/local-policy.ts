@@ -26,9 +26,9 @@ export interface ShardSelection {
  * `force` is how a full re-measurement is asked for, since a stale report is otherwise indefinitely
  * honoured.
  *
- * @param completed shard names that already have a report on disk
- * @param only shard names the caller asked for explicitly, empty for "whatever is outstanding"
- * @param limit how many shards this evening may run, or `undefined` for all of them
+ * Takes:   `completed`: shard names that already have a report on disk. `only`: shard names the
+ *          caller asked for explicitly, empty for "whatever is outstanding". `limit`: how many
+ *          shards this evening may run, or `undefined` for all of them.
  */
 export const selectShards = (
     shards: readonly Shard[],

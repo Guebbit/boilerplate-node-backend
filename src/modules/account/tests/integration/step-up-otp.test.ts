@@ -52,7 +52,10 @@ const sessionWith = async (userId: string, amr: string[]) => {
     return { bearer: `Bearer ${token}`, cookie: `__Host-session=${refreshToken}` };
 };
 
-/** The token a mailed link carries, read off its `linkUrl`. */
+/**
+ * The token a mailed link carries, read off its `linkUrl`.
+ * @throws {Error} when no link of that template was mailed
+ */
 const tokenOfLastMail = (template: string): string => {
     const mail = mockOutbox.findLast((queued) => queued.template === template);
     const token = /token=([^&]+)/.exec(String(mail?.data.linkUrl))?.[1];

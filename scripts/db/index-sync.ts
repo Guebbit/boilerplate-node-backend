@@ -259,10 +259,10 @@ const storedIndexesOf = (model: RegisteredModel) =>
  * A declared index whose options changed shows up twice in `diffIndexes()`: its old name in
  * `toDrop` and its key in `toCreate`. The stored key is what pairs them.
  *
+ * Takes:   the model, then the diff (`toCreate`: key specs no stored index matches; `toDrop`: stored
+ *          names no declaration matches), then `prune`, which says whether the rest is dropped or kept.
+ *
  * @param model - the registered model
- * @param toCreate - key specs the schema declares that no stored index matches
- * @param toDrop - stored names no declaration matches
- * @param options - whether the rest is pruned or kept
  * @returns the collection's diff
  */
 const classify = async (

@@ -75,7 +75,10 @@ describe('withSpan — success', () => {
  * ---------------------------------------------------------------------------
  */
 
-/** A span callback that throws before it ever returns a promise. */
+/**
+ * A span callback that throws before it ever returns a promise.
+ * @throws {Error} synchronously, before it returns a promise
+ */
 const throwing = (): Promise<never> => {
     throw new Error('sync');
 };

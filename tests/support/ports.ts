@@ -30,6 +30,7 @@
  *
  * @param port - the function off a `jest.mock`-replaced module
  * @returns the same function typed as a mock, with its call history cleared
+ * @throws {Error} when the port is a real function, not a mock: the test file must declare the module replacement itself
  */
 export const observePort = <T extends (...args: never[]) => unknown>(
     port: T

@@ -187,6 +187,7 @@ const KNOWN_GAPS = new Set(['GET /locales/{locale}/messages::app']);
  * Every value that violates `schema`: one for an `enum` or a `pattern`, and one past each numeric
  * bound the field declares (`maximum + 1`, `minimum - 1`). The bound is our own code, a `.max()` in
  * each list controller's schema, so only a walk over the real routes sees one that was never wired.
+ * @throws {Error} when no value can be found that violates the schema
  */
 const invalidQueryValues = (schema: SchemaNode): string[] => {
     if (schema.enum) return ['not-a-declared-enum-value'];

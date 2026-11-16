@@ -37,6 +37,7 @@ import { flagValue } from '../cli';
 /**
  * The `--since` time, or a thrown usage error. An unreadable date must stop the run: guessing one
  * would replay the wrong window of erasures.
+ * @throws {Error} when `--since` is missing or unreadable
  */
 const requiredSince = (): Date => {
     const value = flagValue('since');

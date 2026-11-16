@@ -154,6 +154,7 @@ const read = (file: string): Document =>
  * would otherwise resolve to whichever was merged last — and the loser's channel would silently
  * vanish from a contract the paired frontend generates its client from. Named
  * `audit-actions.test.ts`-style, with both owners in the message.
+ * @throws {Error} when two sections declare the same key
  */
 const mergeInto = (
     target: Document,

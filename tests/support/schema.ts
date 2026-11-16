@@ -179,6 +179,7 @@ export const enumOf = (schema: IntrospectableSchema, path: string): string[] | u
  *
  * `items: [orderItemSchema]` and `shippingAddress: new Schema({...})` both hang a nested schema
  * off the path; this is where `_id: false` and the nested `required` flags live.
+ * @throws {Error} when the path carries no nested schema
  */
 export const subSchema = (schema: IntrospectableSchema, path: string): IntrospectableSchema => {
     const nested = (schema.path(path) as SchemaPath | undefined)?.schema;

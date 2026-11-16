@@ -292,7 +292,10 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
     });
 });
 
-/** The infrastructure budget with this `name`. */
+/**
+ * The infrastructure budget with this `name`.
+ * @throws {Error} when no budget has that name
+ */
 const budgetNamed = (name: string) => {
     const found = INFRASTRUCTURE_RATE_LIMITS.find((budget) => budget.name === name);
     if (!found) throw new Error(`no budget named ${name}`);

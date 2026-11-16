@@ -13,6 +13,7 @@
  * Throws rather than resolving a fake browser: a test that genuinely means to render must say so
  * with its own `jest.mock`, the way `tests/unit/infrastructure/adapters/pdf.test.ts` does. A silent
  * no-op here would let such a test pass while asserting nothing.
+ * @throws {Error} always: the real renderer must never be reached from a test
  */
 const launch = (): never => {
     throw new Error(

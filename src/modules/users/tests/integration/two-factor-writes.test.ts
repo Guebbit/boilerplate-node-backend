@@ -42,7 +42,10 @@ const field = async (
     return user.twoFactorMethods.find((entry) => entry.method === method)?.[key];
 };
 
-/** The entry of one method on a loaded copy; a missing one is a broken fixture. */
+/**
+ * The entry of one method on a loaded copy; a missing one is a broken fixture.
+ * @throws {Error} when the fixture has no entry for that method
+ */
 const entryOf = (user: UserDocument, method: string): TwoFactorMethodRecord => {
     const entry = user.twoFactorMethods.find((candidate) => candidate.method === method);
     if (!entry) throw new Error(`fixture has no ${method} entry`);

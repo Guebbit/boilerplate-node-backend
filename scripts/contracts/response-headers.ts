@@ -151,6 +151,7 @@ const replayableTwinRef = (
  * @param document_ - the bundle
  * @param operation - `METHOD /path`, for the message
  * @param target - the operation
+ * @throws {Error} when a response points outside `components/responses`
  */
 const declareReplay = (document_: OpenApiDocument, operation: string, target: Operation): void => {
     for (const [status, response] of Object.entries(target.responses ?? {})) {

@@ -36,7 +36,10 @@ import {
 import { retireIndexes } from '@infrastructure/persistence/retired-indexes';
 import { enabledModules } from '../../../../src/modules';
 
-/** The native handle, for the states only the driver can construct. */
+/**
+ * The native handle, for the states only the driver can construct.
+ * @throws {Error} when the test connection is not open
+ */
 const nativeDb = () => {
     const { db } = mongoose.connection;
     if (!db) throw new Error('no database handle — the test connection is not open');

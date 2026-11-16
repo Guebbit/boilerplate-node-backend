@@ -218,6 +218,7 @@ describe('userSchema — indexes', () => {
  * middleware layer keeps pre-hooks in `schema.s.hooks._pres`; reaching in avoids a database and
  * keeps this a pure-function test. If Mongoose moves this storage, the failure is a loud
  * `undefined` here rather than a silently skipped assertion.
+ * @throws {Error} when the user schema holds anything but exactly one pre-save password hook
  */
 const preSaveHook = (): ((this: unknown) => Promise<void> | undefined) => {
     const pres = asStub<{

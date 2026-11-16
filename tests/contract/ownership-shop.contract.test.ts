@@ -184,8 +184,8 @@ const watching = (world: ShopWorld) => () => {
  *
  * @param key - the `OWNED_PATH` key; its first word is the verb
  * @param victim - A's value for each `:param`
- * @param body - a minimal valid body for a write; a 422 would mean the lookup was never reached
  * @param attacker - B
+ * @param body - a minimal valid body for a write; a 422 would mean the lookup was never reached
  */
 const pathCase = (
     key: string,

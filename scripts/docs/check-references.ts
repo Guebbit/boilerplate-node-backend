@@ -25,7 +25,7 @@ import {
     gitEnvironment
 } from './repo-references';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
-import { deadCodeCitations, headingSlugs } from './code-citations';
+import { anchorlessSeeTags, deadCodeCitations, headingSlugs } from './code-citations';
 import { missingFrontMatter, missingScripts } from './document-facts';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
@@ -305,6 +305,8 @@ const run = (): number => {
         .filter(Boolean);
     for (const citation of deadCodeCitations(ROOT, tracked))
         findings.push({ page: 'outside docs/', token: citation });
+    for (const tag of anchorlessSeeTags(ROOT, tracked))
+        findings.push({ page: 'outside docs/', token: `@see without an #anchor: ${tag}` });
 
     findings.push(...deadScriptFindings(pages, peerRoot));
 

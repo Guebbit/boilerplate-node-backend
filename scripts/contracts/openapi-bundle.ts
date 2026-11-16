@@ -197,6 +197,7 @@ const withDefaults = (
  * by then and an operation is reachable exactly once.
  *
  * @see docs/build/contract-fragmentation.md#the-flow
+ * @throws {Error} when the root declares no `x-app-level-responses`
  */
 export const withAppLevelResponses: Step = (document_) => {
     const appLevel = document_['x-app-level-responses'];
@@ -233,6 +234,7 @@ interface VersionedPathItem {
 /**
  * Adds the `ETag` header to an operation's inline `200`. A `200` that is a `$ref` cannot take one
  * — a sibling of `$ref` is ignored — so it is refused loudly rather than left silently bare.
+ * @throws {Error} when the operation has no inline 200 to hang the `ETag` on
  */
 const withEtagHeader = (operation: Operation, where: string): void => {
     const ok = operation.responses?.['200'];
@@ -248,6 +250,7 @@ const withEtagHeader = (operation: Operation, where: string): void => {
  * Adds `ETag` and `Content-Location` to every inline 2xx of a create or an action: the answer's tag
  * is the new resource's, and `Content-Location` says which resource (RFC 9110 §6.4.2 rule 7).
  * A 2xx that is a `$ref` is refused, as {@link withEtagHeader} refuses it.
+ * @throws {Error} when the operation has no 2xx, or one that is a `$ref`, to hang the `ETag` on
  */
 const withAnswerHeaders = (operation: Operation, where: string): void => {
     const answered = Object.entries(operation.responses ?? {}).filter(([status]) =>
@@ -649,6 +652,7 @@ let compiled: string | undefined;
  * committed copy is stale, once to write it, and again in the second phase that lets the client
  * collections read a current contract. The sources cannot change mid-run, so the answer cannot
  * either, and bundling three times only makes the log look like something went wrong.
+ * @throws {Error} when redocly cannot bundle; the cause carries its output
  */
 const compile = (): string => {
     if (compiled !== undefined) return compiled;

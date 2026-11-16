@@ -153,7 +153,10 @@ const undeclaredImportError = (specifier: string, file: string): Error =>
             "Add it to package.json's dependencies (or devDependencies for tooling-only code)."
     );
 
-/** Every scanned package name mapped to the set of areas that import it, production code only. */
+/**
+ * Every scanned package name mapped to the set of areas that import it, production code only.
+ * @throws {Error} when a file imports a package its manifest does not declare
+ */
 const readOwnership = (packages: string[]): Map<string, Set<string>> => {
     const files = [
         ...SCAN_DIRECTORIES.flatMap((directory) => walk(path.join(ROOT, directory))),

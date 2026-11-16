@@ -10,7 +10,10 @@ import { accountJobs } from '../../jobs';
 
 setupTestDb();
 
-/** Runs the declared job of this name. */
+/**
+ * Runs the declared job of this name.
+ * @throws {Error} when no job has that name
+ */
 const run = (name: string): Promise<unknown> => {
     const job = accountJobs.find((candidate) => candidate.name === name);
     if (!job) throw new Error(`no such job: ${name}`);

@@ -112,6 +112,7 @@ const sectionsOnDisk = (): string[] => [...modulesWith(MODULES_ROOT, 'authorizat
 /**
  * Assemble the bundle from the root file plus every fragment that exists, in `PREFERRED_ORDER`, extras appended.
  * A module deleted from the tree drops out with its own fragment — nothing lists it by hand.
+ * @throws {Error} when the root file lacks a marker the assembly splices at
  */
 export const assembleAuthorizationKeys = (): string => {
     const root = readFileSync(ROOT_FILE, 'utf8');

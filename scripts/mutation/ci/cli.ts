@@ -129,7 +129,10 @@ const planWave = (): void => {
     output('count', plan.shards.length);
 };
 
-/** Prints one shard's Stryker arguments. */
+/**
+ * Prints one shard's Stryker arguments.
+ * @throws {Error} when the named shard is not in this wave's plan
+ */
 const showShard = (): void => {
     const name = option('name');
     const shard = (readJson(option('plan')) as WavePlan).shards.find((each) => each.name === name);
@@ -168,7 +171,10 @@ const readFinished = (reportsDirectory: string, plans: readonly WavePlan[]): Sha
         });
 };
 
-/** Merges every finished shard into one report, page and summary under `--out`. */
+/**
+ * Merges every finished shard into one report, page and summary under `--out`.
+ * @throws {Error} when no wave plan exists to merge
+ */
 const merge = (): void => {
     const plansDirectory = option('plans');
     const plans = readdirSync(plansDirectory)

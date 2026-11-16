@@ -44,6 +44,7 @@ const queued = (template: string): Promise<void> =>
  * The one-time token from the newest queued mail of a template — what the recipient's link says.
  *
  * @param template - the mail template the flow sends
+ * @throws {Error} when no mail of that template is queued
  */
 const mailedToken = (template: string): string => {
     const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
