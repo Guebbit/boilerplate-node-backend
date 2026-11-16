@@ -408,12 +408,26 @@ describe('the monitoring profile', () => {
     });
 
     /** One credential, one rotation: Prometheus reads the file the app reads its own token from. */
-    it('hands the metrics token to Prometheus and to no other monitoring service', () => {
+    it('hands the metrics token to Prometheus, and the SMTP password to Alertmanager', () => {
         const holders = Object.entries(mountedSecrets())
             .filter(([name, secrets]) => MONITORING.includes(name) && secrets.length > 0)
             .map(([name, secrets]) => [name, secrets]);
 
-        expect(holders).toEqual([['prometheus', ['metrics_token']]]);
+        expect(holders).toEqual([
+            ['prometheus', ['metrics_token']],
+            ['alertmanager', ['smtp_password']]
+        ]);
+    });
+
+    /**
+     * Alloy runs as root over the engine's whole container directory and Loki stores what it ships.
+     * A secret mounted into either would sit inside what the log shipper can read.
+     */
+    it('mounts no secret into the log shipper or the log store', () => {
+        const { alloy, loki } = mountedSecrets();
+
+        expect(alloy ?? []).toEqual([]);
+        expect(loki ?? []).toEqual([]);
     });
 });
 
@@ -481,6 +495,20 @@ describe('each service gets only its own secrets', () => {
         ]);
 
         expect(text.join('\n')).not.toMatch(/--requirepass|redis-cli.* -a |PASSWORD(?!_FILE)/);
+    });
+
+    /**
+     * A variable that carries a secret value shows in `docker inspect`. A `_FILE` name never ends
+     * in these words, so a service that is handed a value rather than a path is caught by its name.
+     */
+    it('hands no secret value to any service through its environment', () => {
+        const valueCarriers = Object.keys(compose.services).flatMap((name) =>
+            Object.keys(environmentOf(name))
+                .filter((variable) => /(?:PASS|PASSWORD|SECRET)$/.test(variable))
+                .map((variable) => `${name}: ${variable}`)
+        );
+
+        expect(valueCarriers).toEqual([]);
     });
 });
 

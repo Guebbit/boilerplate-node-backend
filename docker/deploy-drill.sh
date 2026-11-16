@@ -86,18 +86,26 @@ if curl -fsS "http://127.0.0.1:$PORT/livez" >/dev/null 2>&1; then die "port $POR
 mkdir -p -m 0700 "$DIR/secrets"
 for name in mongo_root_password mongo_app_password mongo_backup_password restic_password \
     redis_password limits_password rabbitmq_password token_access token_refresh totp_encryption_key \
-    pii_encryption_key webhook_secret_encryption_key pseudonym_key metrics_token; do
+    pii_encryption_key webhook_secret_encryption_key pseudonym_key metrics_token device_cookie_secret \
+    smtp_password; do
     openssl rand -hex 32 >"$DIR/secrets/$name"
     chmod 0644 "$DIR/secrets/$name"
 done
 : >"$DIR/secrets/restic_repository_env"
+# The integration secrets are optional: an empty file is unset.
+for name in payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
+    antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key; do
+    : >"$DIR/secrets/$name"
+done
 cat >"$DIR/.env" <<E
 COMPOSE_PROFILES=bundled
 NODE_PORT=$PORT
 NODE_URL=https://api.example.com
 NODE_FRONTEND_URL=https://shop.example.com
 NODE_CORS_ORIGIN=https://shop.example.com
-NODE_DEVICE_COOKIE_SECRET=$(openssl rand -hex 32)
+NODE_SMTP_HOST=smtp.invalid
+NODE_SMTP_USER=drill@example.com
+NODE_SMTP_SENDER="Drill <drill@example.com>"
 NODE_LEGAL_COUNTRY=IT
 NODE_SHOP_TIMEZONE=Europe/Rome
 NODE_LEGAL_NAME=Deploy Drill S.r.l.
@@ -118,6 +126,21 @@ DRILL_TAGS+=("$FIRST_IMAGE")
 assert_log_tail deploy "${FIRST_IMAGE##*:}"
 assert_running "${FIRST_IMAGE##*:}"
 assert_alive
+
+# `app`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
+# beat the file (secret-files.ts) and show in `inspect`. Production refused to boot above without
+# the device-cookie and SMTP files; this proves no value, only the paths, reached the containers.
+step "no secret value in the environment of app, cron or setup"
+for service in app cron setup; do
+    env_dump="$($ENGINE inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$(container_of "$service")")"
+    echo "$env_dump" | grep -qx 'NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie_secret' ||
+        die "$service has no NODE_DEVICE_COOKIE_SECRET_FILE"
+    echo "$env_dump" | grep -qx 'NODE_SMTP_PASS_FILE=/run/secrets/smtp_password' ||
+        die "$service has no NODE_SMTP_PASS_FILE"
+    if echo "$env_dump" | grep -qE '^(NODE_DEVICE_COOKIE_SECRET|NODE_SMTP_PASS)='; then
+        die "$service holds a secret value in its environment"
+    fi
+done
 
 step "deploy 2: an image that exits at once is refused and the first one comes back"
 derive boilerplate-api:drill-broken 'CMD ["node", "-e", "process.exit(1)"]'

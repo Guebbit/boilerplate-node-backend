@@ -152,7 +152,7 @@ Same routing for every client and for dev; only the values differ.
   front of it. ntfy takes any POST, so it is the one service that works directly; anything else needs a small
   bridge that turns the JSON into the service's own format.
 - **Empty knob, route off.** Its alerts go to `null` and nothing warns about it at boot. Email needs
-  `ALERT_EMAIL_TO`, a sender and `NODE_SMTP_HOST`; with `NODE_SMTP_PASS` empty no SMTP login is sent.
+  `ALERT_EMAIL_TO`, a sender and `NODE_SMTP_HOST`; with `NODE_SMTP_PASS` empty (in production, an empty `smtp_password` file) no SMTP login is sent.
 - **Secrets stay out of the config.** The webhook and heartbeat URLs, the token and the SMTP password are
   written to `0600` files at start and read through Alertmanager's `url_file` / `*_file` forms, so they do not
   show in `/api/v2/status`.

@@ -68,6 +68,31 @@ expect null alertname=AlertmanagerNotificationsFailing integration=webhook
 expect null alertname=ApiDown severity=critical
 expect null alertname=HighErrorRate severity=warning
 
+echo "the SMTP password from a file"
+mkdir -p "$work/in"
+printf '%s\n' 'from-a-file' > "$work/in/pass"
+render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test \
+    NODE_SMTP_HOST=smtp.example.test NODE_SMTP_PASS_FILE="$work/in/pass"
+grep -qx 'from-a-file' "$work/secrets/smtp-password" ||
+    {
+        echo "FAIL: the SMTP password file was not read (or kept its newline)" >&2
+        exit 1
+    }
+grep -q 'auth_password_file' "$work/alertmanager.yml" ||
+    {
+        echo "FAIL: a non-empty password file must switch SMTP auth on" >&2
+        exit 1
+    }
+
+echo "an empty password file is unset"
+: > "$work/in/pass"
+render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test \
+    NODE_SMTP_HOST=smtp.example.test NODE_SMTP_PASS_FILE="$work/in/pass"
+if grep -q 'auth_password_file' "$work/alertmanager.yml"; then
+    echo "FAIL: an empty password file must leave SMTP auth off" >&2
+    exit 1
+fi
+
 echo "values with / & and ' survive the render"
 render ALERT_EMAIL_TO="a/b&c@example.test" ALERT_EMAIL_FROM="O'Brien <o@example.test>" NODE_SMTP_HOST=smtp.example.test
 grep -q "to: 'a/b&c@example.test'" "$work/alertmanager.yml" ||

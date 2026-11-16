@@ -182,8 +182,9 @@ x-app-env: &app-env
     # Every service that runs this image dials Mongo, so every one gets this password.
     NODE_DB_PASSWORD_FILE: '/run/secrets/mongo_app_password'
 
-# The app's own keys, as `_FILE` variables — merged into `app`, `cron` and `setup`, which all hold
-# the same set of secret files (see the header). Each file is named in `secrets:` below.
+# The app's own keys and integration secrets, as `_FILE` variables — merged into `app`, `cron` and
+# `setup`, which all hold the same set of secret files (see the header). Each file is named in
+# `secrets:` below. An integration file may be empty: empty means unset (`secret-files.ts`).
 x-app-key-env: &app-key-env
     NODE_TOKEN_ACCESS_FILE: '/run/secrets/token_access'
     NODE_TOKEN_REFRESH_FILE: '/run/secrets/token_refresh'
@@ -192,6 +193,14 @@ x-app-key-env: &app-key-env
     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE: '/run/secrets/webhook_secret_encryption_key'
     NODE_PSEUDONYM_KEY_FILE: '/run/secrets/pseudonym_key'
     NODE_METRICS_TOKEN_FILE: '/run/secrets/metrics_token'
+    NODE_DEVICE_COOKIE_SECRET_FILE: '/run/secrets/device_cookie_secret'
+    NODE_SMTP_PASS_FILE: '/run/secrets/smtp_password'
+    NODE_PAYMENT_WEBHOOK_SECRET_FILE: '/run/secrets/payment_webhook_secret'
+    NODE_OAUTH_GOOGLE_CLIENT_SECRET_FILE: '/run/secrets/oauth_google_client_secret'
+    NODE_OAUTH_GITHUB_CLIENT_SECRET_FILE: '/run/secrets/oauth_github_client_secret'
+    NODE_ANTIBOT_ALTCHA_SECRET_FILE: '/run/secrets/antibot_altcha_secret'
+    NODE_ANTIBOT_TURNSTILE_SECRET_FILE: '/run/secrets/antibot_turnstile_secret'
+    NODE_POSTHOG_PERSONAL_API_KEY_FILE: '/run/secrets/posthog_personal_api_key'
 
 # The queue, cache and limits clients: `app` and `cron` reach both Redis instances and RabbitMQ,
 # `setup` (indexes and the shop row, Mongo only) does not, and so is given no password.
@@ -213,6 +222,14 @@ x-service-secrets: &service-secrets
     - webhook_secret_encryption_key
     - pseudonym_key
     - metrics_token
+    - device_cookie_secret
+    - smtp_password
+    - payment_webhook_secret
+    - oauth_google_client_secret
+    - oauth_github_client_secret
+    - antibot_altcha_secret
+    - antibot_turnstile_secret
+    - posthog_personal_api_key
 
 services:
     app:
@@ -421,7 +438,9 @@ services:
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
-        # Mongo and the app's keys only: it never dials Redis or RabbitMQ.
+        # Mongo, the app's keys and its integration secrets: it never dials Redis or RabbitMQ. The
+        # whole config is checked before any script runs, so the SMTP and antibot cross-checks
+        # need their values here too.
         secrets:
             - mongo_app_password
             - token_access
@@ -431,6 +450,14 @@ services:
             - webhook_secret_encryption_key
             - pseudonym_key
             - metrics_token
+            - device_cookie_secret
+            - smtp_password
+            - payment_webhook_secret
+            - oauth_google_client_secret
+            - oauth_github_client_secret
+            - antibot_altcha_secret
+            - antibot_turnstile_secret
+            - posthog_personal_api_key
         environment:
             <<: [*app-env, *app-key-env]
             # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
@@ -857,7 +884,10 @@ services:
             - '--config.file=/tmp/alertmanager.yml'
             - '--storage.path=/alertmanager'
         # From the client's `.env` through `--env-file`, never `env_file:`: the app's other
-        # secrets stay out of this container. Every knob empty = every route goes to `null`.
+        # secrets stay out of this container, and its SMTP password arrives as a file, never a
+        # value. Every knob empty = every route goes to `null`.
+        secrets:
+            - smtp_password
         environment:
             ALERT_EMAIL_TO: '${ALERT_EMAIL_TO:-}'
             ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM:-}'
@@ -868,7 +898,7 @@ services:
             NODE_SMTP_HOST: '${NODE_SMTP_HOST:-}'
             NODE_SMTP_PORT: '${NODE_SMTP_PORT:-587}'
             NODE_SMTP_USER: '${NODE_SMTP_USER:-}'
-            NODE_SMTP_PASS: '${NODE_SMTP_PASS:-}'
+            NODE_SMTP_PASS_FILE: '/run/secrets/smtp_password'
         volumes:
             - ./docker/observability/alertmanager-render.sh:/etc/alertmanager/render.sh:ro
             - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro
@@ -968,6 +998,22 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/pseudonym_key
     metrics_token:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/metrics_token
+    device_cookie_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/device_cookie_secret
+    smtp_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/smtp_password
+    payment_webhook_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/payment_webhook_secret
+    oauth_google_client_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/oauth_google_client_secret
+    oauth_github_client_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/oauth_github_client_secret
+    antibot_altcha_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/antibot_altcha_secret
+    antibot_turnstile_secret:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/antibot_turnstile_secret
+    posthog_personal_api_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/posthog_personal_api_key
 
 volumes:
     mongo-data:
