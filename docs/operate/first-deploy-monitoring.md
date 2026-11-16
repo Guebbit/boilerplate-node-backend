@@ -78,7 +78,8 @@ Alloy is the one container in the profile that reaches past its own files.
   and it runs as root, because the engine's log files are root-owned.
 - **What it can read:** every container's log on the host, and each container's config file
   (Docker keeps it as config.v2.json, Podman as userdata/config.json). That file holds the container's
-  environment, which here means `_FILE` paths and never a secret value: the secrets are
+  environment, which here means `_FILE` paths and no secret value (bar `OTEL_EXPORTER_OTLP_HEADERS`, if
+  you set it: [OpenTelemetry](opentelemetry.md#configuration)): the secrets are
   [files in `clients/<name>/secrets/`](first-deploy.md#secrets), bind-mounted, and never under that
   directory. `docker/deploy-drill.sh` inspects `app`, `cron` and `setup` for a plain value.
 - **So:** it sits inside the client's trust domain, like the host's root. **One client per machine** is
