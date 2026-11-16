@@ -23,14 +23,13 @@ flowchart LR
     class TSW block;
 ```
 
-| Package                                    | Now       | Latest                           | Verdict                                             | Effort |
-| ------------------------------------------ | --------- | -------------------------------- | --------------------------------------------------- | ------ |
-| `typescript`                               | `6.0.3`   | `7.0.2`                          | **Wait** for 7.1 and the tools below                | M–L    |
-| `minimatch`                                | `10.2.6`  | `11.0.5`                         | **Wait** for Stryker, which pins `~10.2`            | S      |
-| `@babel/plugin-transform-modules-commonjs` | `7.29.7`  | `8.0.1`                          | **Wait**: `babel-jest` 30 needs `@babel/core` 7     | S      |
-| `@stoplight/spectral-rulesets`             | `1.22.7`  | `1.23.1`                         | **Hold** the exact pin: 1.23 fails our ruleset load | S      |
-| `@types/node`                              | `24.19.x` | `26.x`                           | Moves with the Node 26 runtime change               | S      |
-| `prom-client`                              | `15.1.3`  | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                                | S      |
+| Package                                    | Now      | Latest                           | Verdict                                             | Effort |
+| ------------------------------------------ | -------- | -------------------------------- | --------------------------------------------------- | ------ |
+| `typescript`                               | `6.0.3`  | `7.0.2`                          | **Wait** for 7.1 and the tools below                | M–L    |
+| `minimatch`                                | `10.2.6` | `11.0.5`                         | **Wait** for Stryker, which pins `~10.2`            | S      |
+| `@babel/plugin-transform-modules-commonjs` | `7.29.7` | `8.0.1`                          | **Wait**: `babel-jest` 30 needs `@babel/core` 7     | S      |
+| `@stoplight/spectral-rulesets`             | `1.22.7` | `1.23.1`                         | **Hold** the exact pin: 1.23 fails our ruleset load | S      |
+| `prom-client`                              | `15.1.3` | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                                | S      |
 
 `eslint-plugin-unicorn` 80 and `i18next` 27.1.3 were taken less than seven days after release, as the
 owner's explicit one-off exception (`--min-release-age=0`). Until 2026-11-22 a plain

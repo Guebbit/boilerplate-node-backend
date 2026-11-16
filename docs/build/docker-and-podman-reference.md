@@ -11,9 +11,9 @@ Part of [Docker & Podman](./docker-and-podman.md): every container, grouped, and
 
 ### App runtime
 
-| Container | Image                                                                 | Port(s)                      | Role                                                                                                                                | Read next                           |
-| --------- | --------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `app`     | `docker/Dockerfile` (node:24-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `cache`, `limits`, `queue`, `otel-collector`. | [Runtime](../understand/runtime.md) |
+| Container | Image                                                                      | Port(s)                      | Role                                                                                                                                | Read next                           |
+| --------- | -------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `app`     | `docker/Dockerfile` (node:26.13.1-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `cache`, `limits`, `queue`, `otel-collector`. | [Runtime](../understand/runtime.md) |
 
 ### Scheduler
 

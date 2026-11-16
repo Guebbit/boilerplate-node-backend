@@ -160,14 +160,13 @@ async function seed() {
  * returned before the app was imported.
  *
  * Exit:    `process.exit()`, not the bare promise `runScript` usually resolves into. Importing
- *          `../src/app` pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`),
- *          which registers a `module.register()` loader hook on its own worker thread. That hook
- *          lives for the process by design and nothing here can unregister it, so without a forced
- *          exit the event loop never drains and the process hangs after logging completion.
+ *          `../src/app` boots the whole application, and `stop()` closes what `boot()` opened but
+ *          cannot vouch for every handle the import graph leaves behind (the OTel SDK, third-party
+ *          timers), so the exit is forced rather than left to the event loop draining.
  * Safe:    `stop()` has already awaited `shutdownAnalytics()` and `shutdownTracing()`, the two
  *          steps with async transport writes in flight, so nothing is truncated.
  * Others:  every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports
- *          `src/app.ts`, never hits the hook, and so `run-script.ts` stays on `process.exitCode`.
+ *          `src/app.ts`, never boots it, and so `run-script.ts` stays on `process.exitCode`.
  */
 /**
  * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts

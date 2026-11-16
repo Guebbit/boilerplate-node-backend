@@ -65,12 +65,12 @@ flowchart LR
 
 ## What is implemented
 
-| Area                | Current implementation                                                                                                                                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| App image           | `docker/Dockerfile` based on `node:24-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
-| Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                             |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-process and clustered dev commands                                                                                               |
-| Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                        |
+| Area                | Current implementation                                                                                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App image           | `docker/Dockerfile` based on `node:26.13.1-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
+| Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                  |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-process and clustered dev commands                                                                                                    |
+| Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                             |
 
 ### After a new dependency: the container reinstalls by itself
 
