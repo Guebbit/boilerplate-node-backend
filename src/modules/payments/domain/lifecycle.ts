@@ -300,8 +300,8 @@ export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): 
     !isReversed(refund) &&
     (mayBeSettledByHand(payment, refund) ||
         /**
-         * A refund refused as `disputed` whose dispute is decided (the shop won) moved no money
-         * and is owed no more: staff void it. While a chargeback is open it is left alone.
+         * A refund refused as `disputed` whose disputes are all decided moved no money and is
+         * owed no more: staff void it. While any dispute is open, an inquiry too, it is left alone.
          */
         (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
 
