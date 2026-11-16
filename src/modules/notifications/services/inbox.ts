@@ -1,8 +1,8 @@
 /**
  * @module
- * The inbox: writing notifications, reading them, and the three ways they leave — the owner
- * deleting one, the owner emptying the inbox, and the cap pushing the oldest out. Every change is
- * pushed to the owner's open streams, so a second tab stays in step with the first.
+ * The inbox: writing notifications, reading them, and how they leave — the owner deleting one,
+ * the owner emptying the inbox, the cap pushing the oldest out, a cleared summary, and erasure.
+ * Every change is pushed to the owner's open streams, so a second tab stays in step with the first.
  */
 
 import type { ClientSession } from 'mongoose';
@@ -160,9 +160,10 @@ const countOf = (row: { params: object } | null): number =>
     row !== null && 'count' in row.params ? Number(row.params.count) : 0;
 
 /**
- * Write one recipient's summary row for today's count. A row that appears or whose count rose is
- * unread again and pushed to the person's open tabs (as a delete then a create, so a tab holds one
- * copy, not two). A count that fell is quietly updated: good news does not need a ping.
+ * Write one recipient's summary row for today's count (docs/modules/notifications.md#summary-rows).
+ * A row that appears or whose count rose is unread again and pushed to the person's open tabs (as a
+ * delete then a create, so a tab holds one copy, not two). A count that fell is quietly updated:
+ * good news does not need a ping.
  *
  * @param summary - the summary, keyed by its code; the inbox decides how long it lives
  * @param now - the clock the lifetime is measured from

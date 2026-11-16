@@ -1,10 +1,9 @@
 /**
  * @module
  * The notifications inbox: one row per message per user, kept until its owner deletes it, the
- * per-user cap pushes it out, or the account goes. Written by domain events, never by an import
- * in the other direction: nothing imports this module to send a message, which keeps the graph
- * acyclic and the producers ignorant of the inbox. Depends on the producers only for the event
- * names it subscribes to.
+ * per-user cap pushes it out, or the account goes. Domain events write it, so the producers stay
+ * ignorant of the inbox: this module imports only the event names it subscribes to, while a
+ * sibling that writes a notice itself calls `notificationsService`.
  *
  * It also carries work notices for staff (`audience: staff`): `./staff-routing` says who hears
  * what for the notices every project has, `access` and `users` say who that is today. A module
@@ -33,12 +32,12 @@ export default {
             section: 'notifications',
             collect: (subject) =>
                 notificationsService.list(subject.userId).then((view) => view.items),
-            // Joins the caller's own hard-delete transaction — see `notificationsService.removeByUserId`.
+            /** Joins the caller's own hard-delete transaction. */
             erase: ({ userId }, session) => notificationsService.removeByUserId(userId, session)
         },
         {
             section: 'staffNotifications',
-            // Erased with the first section: both are the same rows.
+            /** Erased with the first section: both are the same rows. */
             collect: (subject) => notificationsService.listStaffNotices(subject.userId)
         }
     ],
