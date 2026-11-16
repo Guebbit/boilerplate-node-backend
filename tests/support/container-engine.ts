@@ -14,7 +14,7 @@
 
 import { execFile, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import net from 'node:net';
+import { freePort } from './spawned-app';
 
 /** The container engine's binary: `CONTAINER_ENGINE`, else podman. */
 export const containerEngine = process.env.CONTAINER_ENGINE ?? 'podman';
@@ -39,23 +39,6 @@ export interface RunningContainer {
     stop: () => Promise<void>;
 }
 
-/**
- * A port nobody is listening on.
- *
- * Asked for by binding to `0` and reading back what the OS assigned, rather than picking a number
- * and hoping: a fixed port is how two concurrent runs come to fight over one socket.
- */
-export const freePort = (): Promise<number> =>
-    new Promise((resolve, reject) => {
-        const probe = net.createServer();
-        probe.on('error', reject);
-        probe.listen(0, () => {
-            // `address()` is a string only for a pipe/unix socket; this one is TCP.
-            const { port } = probe.address() as net.AddressInfo;
-            probe.close(() => resolve(port));
-        });
-    });
-
 /** Whether a container engine is on PATH and answering. */
 export const containerEngineAvailable = (): boolean => {
     try {
@@ -70,7 +53,12 @@ export const containerEngineAvailable = (): boolean => {
 const TEST_LABEL = 'node-backend.test';
 
 /** Label holding the pid of the process that started the container. */
-const OWNER_LABEL = 'node-backend.owner-pid';
+export const OWNER_LABEL = 'node-backend.owner-pid';
+
+/** Reads the owner pid out of a `.Labels` string; built from {@link OWNER_LABEL} so they cannot drift. */
+const OWNER_PID_PATTERN = new RegExp(
+    String.raw`${OWNER_LABEL.replaceAll('.', String.raw`\.`)}=(\d+)`
+);
 
 /**
  * Whether a process with this pid is still running.
@@ -105,7 +93,7 @@ export const orphanedContainerIds = (
     rows.flatMap((row) => {
         // Podman and Docker both print `.Labels` as `k=v,k=v`, so the pid is read out by name.
         const id = row.trim().split(/\s+/, 1)[0];
-        const pid = Number(/node-backend\.owner-pid=(\d+)/.exec(row)?.[1]);
+        const pid = Number(OWNER_PID_PATTERN.exec(row)?.[1]);
         return id && Number.isInteger(pid) && pid > 0 && !alive(pid) ? [id] : [];
     });
 
@@ -116,7 +104,7 @@ export const orphanedContainerIds = (
  * exit. Containers whose owner pid is dead are removed; a live owner's (a parallel lane) never.
  * Best effort: a failure here must not fail the run.
  */
-export const reapOrphanedContainers = (): Promise<void> =>
+const reapOrphanedContainers = (): Promise<void> =>
     new Promise<void>((resolve) => {
         // `ps -a`: include stopped ones; `--filter label=…`: only ours; the format prints all labels.
         execFile(

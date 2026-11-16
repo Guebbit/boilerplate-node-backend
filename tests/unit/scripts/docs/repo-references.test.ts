@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * `scripts/docs/repo-references.ts` — the tracked-file set every reference check resolves against.
  *

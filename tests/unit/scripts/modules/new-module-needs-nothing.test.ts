@@ -1,3 +1,4 @@
+// citation-fixture: the docs/… strings in this file are checker inputs, not citations
 /**
  * The genericity claim, asserted: a module folder plus its line in `src/modules.ts` is everything
  * a new module needs. A throwaway `widgets` module is written into a scratch tree, and every

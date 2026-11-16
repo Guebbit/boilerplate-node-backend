@@ -19,7 +19,13 @@ import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
 import { retryUntil } from '@tests/eventually';
 import { REPO_ROOT } from '@tests/paths';
-import { bootableEnvironment, freePort, waitForListening } from '../../cluster/support/cluster';
+import {
+    bootableEnvironment,
+    createMarkerCounter,
+    freePort,
+    stopChild,
+    waitForListening
+} from '@tests/spawned-app';
 import { startRoundRobinProxy, type RoundRobinProxy } from './round-robin';
 
 /** One running copy. */
@@ -82,31 +88,20 @@ const bootCopy = (options: {
         stdio: ['ignore', 'pipe', 'pipe']
     });
     const output: string[] = [];
-    let sawReady = false;
+    // Split-safe: the ready line can arrive across two `data` events.
+    const ready = createMarkerCounter(READY_MARKER);
     const capture = (chunk: Buffer | string): void => {
         const text = String(chunk);
         output.push(text);
         if (output.length > MAX_CAPTURED_CHUNKS)
             output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
-        if (text.includes(READY_MARKER)) sawReady = true;
+        ready.feed(text);
     };
     child.stdout.on('data', capture);
     child.stderr.on('data', capture);
 
-    const stop = (): Promise<void> =>
-        new Promise<void>((resolve) => {
-            if (child.exitCode !== null || child.signalCode !== null) {
-                resolve();
-                return;
-            }
-            child.once('exit', () => resolve());
-            child.kill('SIGTERM');
-            // The app's own deadline is 15 s; past it, stop being polite.
-            setTimeout(() => {
-                child.kill('SIGKILL');
-                resolve();
-            }, 20_000).unref();
-        });
+    // One SIGTERM to this pid, like a kubelet; the app's own deadline is 15 s, `stopChild` waits past it.
+    const stop = (): Promise<void> => stopChild(child, (name) => child.kill(name));
 
     // One deadline for both waits: the second gets what the first left.
     const deadline = Date.now() + BOOT_TIMEOUT_MS;
@@ -114,7 +109,10 @@ const bootCopy = (options: {
     return waitForListening(options.port, BOOT_TIMEOUT_MS)
         .then(() =>
             retryUntil(
-                () => (sawReady ? Promise.resolve() : Promise.reject(new Error('not ready yet'))),
+                () =>
+                    ready.count() > 0
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('not ready yet')),
                 Math.max(deadline - Date.now(), 0),
                 100
             )
@@ -141,8 +139,28 @@ const startInOrder = (copies: Copy[]): Promise<void> =>
         : copies[0].start().then(() => startInOrder(copies.slice(1)));
 
 /**
+ * Resolves once the proxy's own polls have seen every copy ready, so a case never sends its first
+ * request to a rig whose proxy still answers 503 for the last copy.
+ *
+ * @param proxy - the proxy in front of the copies
+ * @param copies - every copy, all booted
+ */
+const proxyKnowsEveryCopy = (proxy: RoundRobinProxy, copies: Copy[]): Promise<void> =>
+    retryUntil(
+        () =>
+            proxy.readyNames().length === copies.length
+                ? Promise.resolve()
+                : Promise.reject(new Error('the proxy has not seen every copy ready yet')),
+        BOOT_TIMEOUT_MS,
+        50
+    );
+
+/**
  * Boots `count` copies behind a round-robin proxy and hands the rig to `use`; stops everything
  * however `use` ends.
+ *
+ * The proxy starts first, on a port the OS chose: the copies name it as their public address, and
+ * no port is chosen and left free for something else to take while they boot.
  *
  * @param options - copy count and environment overrides for every copy
  * @param use - the case
@@ -155,50 +173,57 @@ export const withReplicas = <T>(
     // Own dbPath under tmp/test/, like the cluster harness: never the shared os.tmpdir().
     const dbPath = path.join(REPO_ROOT, 'tmp', 'test', 'replicas-mongo', randomUUID());
     const running: { stop: () => Promise<void> }[] = [];
+    // The copies this rig holds; the proxy reads it on every poll, so it may start empty.
+    const copies: Copy[] = [];
     let mongoStop: () => Promise<void> = () => Promise.resolve();
+    let proxyStop: () => Promise<void> = () => Promise.resolve();
 
-    const stopAll = (proxy?: RoundRobinProxy): Promise<void> =>
-        (proxy ? proxy.stop() : Promise.resolve())
+    const stopAll = (): Promise<void> =>
+        proxyStop()
             .then(() => Promise.all(running.map((one) => one.stop())))
             .then(() => mongoStop())
             .then(() => rm(dbPath, { recursive: true, force: true }));
+
+    /** One copy on its own port; its boot is `start`, its restart the same call again. */
+    const makeCopy = (index: number, mongoUri: string, publicUrl: string): Promise<Copy> =>
+        freePort().then((port) => {
+            let current: { stop: () => Promise<void> } | undefined;
+            return {
+                name: `copy-${String(index)}`,
+                port,
+                start: () =>
+                    bootCopy({ port, dbUri: mongoUri, publicUrl, env }).then((booted) => {
+                        current = booted;
+                        running.push(booted);
+                    }),
+                stop: () => current?.stop() ?? Promise.resolve()
+            };
+        });
 
     return mkdir(dbPath, { recursive: true })
         .then(() => startEphemeralMongo({ dbPath, startInProcess: startInProcessMongod }))
         .then((mongo) => {
             mongoStop = mongo.stop;
-            return Promise.all([
-                freePort(),
-                ...Array.from({ length: count }, () => freePort())
-            ]).then(([proxyPort, ...ports]): Promise<Replicas> => {
-                const copies: Copy[] = ports.map((port, index) => {
-                    let current: { stop: () => Promise<void> } | undefined;
-                    const start = (): Promise<void> =>
-                        bootCopy({
-                            port,
-                            dbUri: mongo.uri,
-                            publicUrl: `http://127.0.0.1:${String(proxyPort)}`,
-                            env
-                        }).then((booted) => {
-                            current = booted;
-                            running.push(booted);
-                        });
-                    return {
-                        name: `copy-${String(index)}`,
-                        port,
-                        start,
-                        stop: () => current?.stop() ?? Promise.resolve()
-                    };
+            return startRoundRobinProxy(() => copies).then((proxy) => {
+                proxyStop = proxy.stop;
+                const publicUrl = `http://127.0.0.1:${String(proxy.port)}`;
+                return Promise.all(
+                    Array.from({ length: count }, (_, index) =>
+                        makeCopy(index, mongo.uri, publicUrl)
+                    )
+                ).then((made) => {
+                    copies.push(...made);
+                    // Sequential: each boot compiles through tsx and the first warms the cache.
+                    return startInOrder(copies)
+                        .then(() => proxyKnowsEveryCopy(proxy, copies))
+                        .then((): Replicas => ({
+                            copies,
+                            proxy,
+                            direct: (index: number) =>
+                                `http://127.0.0.1:${String(copies[index].port)}`,
+                            stop: stopAll
+                        }));
                 });
-                // Sequential: each boot compiles through tsx and the first warms the cache.
-                return startInOrder(copies)
-                    .then(() => startRoundRobinProxy(proxyPort, () => copies))
-                    .then((proxy) => ({
-                        copies,
-                        proxy,
-                        direct: (index: number) => `http://127.0.0.1:${String(copies[index].port)}`,
-                        stop: () => stopAll(proxy)
-                    }));
             });
         })
         .catch((error: unknown) =>

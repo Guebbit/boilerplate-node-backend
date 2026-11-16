@@ -100,6 +100,13 @@ describe('state shared by every copy', () => {
                     headers: { cookie }
                 });
                 expect(refreshed.status).toBe(200);
+                // The token copy 1 minted must be accepted by copy 0, which never saw the refresh.
+                // Narrowing: the refresh contract answers `{ token }` on success.
+                const { token: refreshedToken } = refreshed.body as { token: string };
+                const onOtherCopy = await call(replicas.direct(0), '/account', {
+                    headers: jsonHeaders(refreshedToken)
+                });
+                expect(onOtherCopy.status).toBe(200);
                 const loggedOut = await call(replicas.direct(2), '/account/logout', {
                     method: 'POST',
                     headers: { cookie }
