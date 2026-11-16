@@ -137,7 +137,7 @@ declare module '@kernel/events' {
         'fulfillment_order.canceled': { orderId: string; fulfillmentOrderId: string };
 
         /**
-         * A waiting preorder's buyer was told its date moved or will be missed (PRODUCT_STATES P5). Written
+         * A waiting preorder's buyer was told its date moved or will be missed. Written
          * in the same transaction as the change to the fulfillment order. `notifications` turns it
          * into an inbox row, `fulfillment-delayed`; the email is sent by this module from the same
          * event. The shop only tells: it asks nothing and cancels nothing on its own.

@@ -3,7 +3,8 @@
  * Shipping rates — pure functions over a static table, kept in `domain/` like `evaluateCheckout`
  * so quotes come from exactly one place. `ShippingMethod` is this module's own `openapi.yaml`
  * schema, since `GET /delivery/methods` answers this table verbatim.
- * See `docs/understand/domain-layer.md`.
+ *
+ * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
 import { padDecimal, toDecimalString, toMinorUnits, type Money } from '@domain-primitives/money';
@@ -12,7 +13,7 @@ import type { ShippingMethod } from '@types';
 /**
  * A shipping method as the static rate table declares it — everything `ShippingMethod` has
  * except `currency`, which is live deployment config (`NODE_DEFAULT_CURRENCY`) that
- * `service.ts`'s `listMethods` stamps on per call, never baked into a table built once at import.
+ * `services/process.ts`'s `listMethods` stamps on per call, never baked into a table built once at import.
  */
 export type StaticShippingMethod = Omit<ShippingMethod, 'currency'>;
 

@@ -1,7 +1,8 @@
 /**
  * @module
  * Delivery domain — the rules, importable without the module's HTTP surface.
- * See `docs/understand/domain-layer.md`.
+ *
+ * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
 export { shipmentLifecycle, SHIPMENT_EVENTS } from './lifecycle';

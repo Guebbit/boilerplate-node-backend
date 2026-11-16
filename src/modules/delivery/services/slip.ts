@@ -1,7 +1,7 @@
 /**
  * @module
  * A moved release or restock date, as the buyers who already paid for it are affected
- * (PRODUCT_STATES P5). `products` announces `product.release_date_changed` and
+ *. `products` announces `product.release_date_changed` and
  * `product.restock_date_changed`; this is the listener for both. For every fulfillment
  * order still waiting for that product it works out the date now expected and decides what the buyer
  * is owed — the pure table is `../domain/preorder.ts`:

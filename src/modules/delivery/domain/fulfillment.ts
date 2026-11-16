@@ -2,7 +2,9 @@
  * @module
  * Fulfillment rules — how an order's lines split into fulfillment orders, what remains of each,
  * which status follows from its lines, and the summary `orders` carries. Pure, so every case is
- * testable without a database. See `docs/modules/delivery.md#the-two-records`.
+ * testable without a database.
+ *
+ * @see docs/modules/delivery.md#the-two-records
  */
 
 import { dayInZone } from '@domain-primitives/time';
@@ -159,7 +161,7 @@ const promisedAt = (group: readonly Waiting[]): Date =>
  *
  * Numbered 1.. in that order: the ordinary group that ships now first, then the made-to-order one,
  * then the waiting ones by date. Keeping the made-to-order lines apart is what lets the buyer
- * cancel the ordinary rest on its own (S4 of the Q-W2 decision) while the shop's work on the
+ * cancel the ordinary rest on its own while the shop's work on the
  * bespoke goods stands.
  *
  * @param lines - the order's lines with the facts frozen on them

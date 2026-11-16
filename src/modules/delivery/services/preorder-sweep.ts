@@ -1,14 +1,13 @@
 /**
  * @module
- * The daily sweep over waiting preorders (PRODUCT_STATES P5). One job: a fulfillment order whose
+ * The daily sweep over waiting preorders. One job: a fulfillment order whose
  * CURRENT expected date is a day away or gone with the goods still not here, and no notice for that
  * date yet, tells its buyer once that the date will be missed and there is no new one. The email asks nothing and
  * cancels nothing: silence keeps the buyer waiting, they can cancel any time before it ships, and
  * staff see the late order on the board and decide whom to call.
  *
  * Only fulfillment orders still `on_hold` for stock are looked at. Goods already allocated but not
- * shipped are a short delay, not an indefinite one: they show in the admin's Late view instead
- * (ADMIN_SALES A5.3).
+ * shipped are a short delay, not an indefinite one: they show in the admin's Late view instead.
  *
  * Repeating is harmless: a date that was noticed (`dueNoticeFor`) is not noticed again.
  *

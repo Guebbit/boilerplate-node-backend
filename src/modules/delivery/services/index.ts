@@ -1,13 +1,14 @@
 /**
  * @module
  * Delivery service — every operation a controller may call into, and the narrow reads and doors a
- * sibling may use. One file per flow, not one big file; see
- * `docs/understand/layers.md`.
+ * sibling may use. One file per flow, not one big file.
  *
  * Every act (`ship`, `deliver`, `lost`, `reship`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —
  * `act.ts` — that writes the fulfillment records, the order's summary, any status move and the
  * events together. `read.ts` answers the reads, `ensure.ts` makes the fulfillment orders,
  * `override-sync.ts` keeps them in step with an admin override.
+ *
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
  */
 
 import { listMethods, processOrder } from './process';

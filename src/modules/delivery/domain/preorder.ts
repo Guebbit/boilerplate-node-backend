@@ -1,6 +1,6 @@
 /**
  * @module
- * The rules for a preorder whose date slips (PRODUCT_STATES P5). Pure: a clock comes in as an
+ * The rules for a preorder whose date slips. Pure: a clock comes in as an
  * argument, so every case is testable without waiting.
  *
  * The shop tells, a person decides. It never asks the buyer anything and never cancels on its own:
@@ -213,7 +213,7 @@ export const boardStateOf = (facts: BoardFacts): PreorderFulfillmentState => {
 /**
  * Whether a fulfillment order is late: units remain and the date expected has passed, whether it
  * still waits for stock, has stock set aside and unshipped, or shipped in part. The Late view
- * (ADMIN_SALES A5): it is where goods already on the shelf show, which the sweep deliberately leaves
+ * is where goods already on the shelf show, which the sweep deliberately leaves
  * alone.
  *
  * @param facts - the fulfillment order

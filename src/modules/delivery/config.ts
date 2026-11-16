@@ -19,7 +19,8 @@ export const deliveryConfig = defineConfig({
 
 /**
  * Days a fulfillment order may go unchanged before `reap:delivery` unsets its `holdNote`.
- * See docs/understand/data-retention.md#free-text-on-holds
+ *
+ * @see docs/understand/data-retention.md#free-text-on-holds
  * @returns whole days
  */
 export const holdNoteRetentionDays = (): number => deliveryConfig().NODE_HOLD_NOTE_RETENTION_DAYS;

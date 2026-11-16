@@ -8,7 +8,9 @@
  * admin can still hold the new `open` order to ship everything together).
  *
  * Called by `releaseAllocated` when `inventory` allocates stock to a paid preorder, never by a
- * request: no route reaches it. See `docs/modules/delivery.md#a-short-stock-delivery`.
+ * request: no route reaches it.
+ *
+ * @see docs/modules/delivery.md#a-short-stock-delivery
  */
 
 import type { ClientSession } from 'mongoose';

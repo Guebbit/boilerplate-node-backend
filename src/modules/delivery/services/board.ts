@@ -1,6 +1,6 @@
 /**
  * @module
- * The reads behind the admin's preorder board (ADMIN_SALES 3): the fulfillment orders of preorders
+ * The reads behind the admin's preorder board: the fulfillment orders of preorders
  * with their buyer and payment, and the per-product unit counts. `delivery` owns the dates, the
  * consent state and the hold, so it is the one that can answer; the buyer and `paidAt` come from
  * `orders`, one batched read a page.
