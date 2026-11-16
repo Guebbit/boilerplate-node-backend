@@ -68,7 +68,7 @@ export interface ResponseReject extends ResponseNeutral {
      * instead of erroring as a missing property).
      */
     data: undefined;
-    // structured errors for machines and UIs
+    /** Structured errors for machines and UIs. */
     errors: ResponseErrorItem[];
 }
 

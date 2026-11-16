@@ -137,7 +137,7 @@ let localeDirectories: string[] = [];
  * Declare which directories contribute dictionaries, replacing any previous set.
  *
  * Must run BEFORE `i18next.init()`, because `loadLocaleResources()` is what init reads and it
- * resolves through here. `app.ts` calls it with the enabled modules' `locales` paths.
+ * resolves through here. `bootI18n` calls it with the enabled modules' `locales` paths.
  *
  * @param directories - absolute paths, each expected to hold `<locale>.json` files
  */

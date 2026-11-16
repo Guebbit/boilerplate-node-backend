@@ -26,8 +26,10 @@ export interface RestoreControllerSpec<TRow> {
     /**
      * The service call: 404 when absent, 409 when not soft-deleted, the restored row otherwise.
      * Takes the raw `request` so the module's own wiring can build its `CallerContext` and hand
-     * it down — the service records its own audit row (rule 1,
-     * `docs/build/module-lifecycle.md`), the same way `createUpdateController`'s `update` does.
+     * it down — the service records its own audit row (rule 1),
+     * the same way `createUpdateController`'s `update` does.
+     *
+     * @see docs/build/module-lifecycle.md#adding-a-module
      */
     restore: (id: string, request: Request) => Promise<ServiceResult<TRow>>;
     /**

@@ -1,7 +1,7 @@
 /**
  * @module
  * The database-error interpreter — the single place a driver failure (Mongo, Mongoose, or an
- * unreachable Redis) is mapped to an HTTP status, so all twelve models answer a duplicate key, a
+ * unreachable Redis) is mapped to an HTTP status, so every model answers a duplicate key, a
  * bad ObjectId or an outage the same way.
  *
  * No "throw with a status from anywhere" facility here: a middleware with the `Response` already
@@ -60,7 +60,7 @@ export const isInfrastructureError = (error: unknown): boolean =>
 
 /**
  * Decide what status a driver failure deserves — the request's fault (4xx), a dependency outage
- * (503), or a bug (500) — in the single place that answer is made, so all twelve models agree on
+ * (503), or a bug (500) — in the single place that answer is made, so every model agrees on
  * it. A new branch belongs here, not in a controller.
  *
  * @see docs/understand/request-flow.md#the-database-error-interpreter
@@ -75,7 +75,7 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
      */
     if (error !== null && typeof error === 'object') {
         /**
-         * `kind` exists only on CastError — the discriminator. Checked via `Object.prototype.call`
+         * `kind` exists only on CastError — the discriminator. Checked via `Object.prototype.hasOwnProperty.call`
          * rather than `error.hasOwnProperty()` so it still works on a null-prototype object.
          */
         if (Object.prototype.hasOwnProperty.call(error, 'kind')) return [422, 'Invalid identifier'];

@@ -17,7 +17,9 @@ export const clearedOrValue = <T>(value: T | null): T | undefined => value ?? un
 
 /** The `$set` and `$unset` halves of one Mongo update; a half with nothing in it is absent. */
 export interface SetAndUnset {
+    /** Fields that now hold a value. */
     $set?: Record<string, unknown>;
+    /** Fields to clear; `1` is Mongo's placeholder value. */
     $unset?: Record<string, 1>;
 }
 

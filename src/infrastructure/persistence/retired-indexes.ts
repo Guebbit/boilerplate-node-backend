@@ -2,7 +2,9 @@
  * @module
  * The index names a schema has given up. `db:sync` only ever ADDS indexes, so a name nobody
  * declares any more would stay forever; declaring it here, next to the schema, is how the sync
- * learns it is safe to drop. See `docs/understand/mongodb-mongoose.md`.
+ * learns it is safe to drop.
+ *
+ * @see docs/understand/mongodb-mongoose.md#the-index-rule
  */
 
 /**

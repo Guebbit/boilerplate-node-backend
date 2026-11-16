@@ -6,9 +6,8 @@
  * which Terms are in force (`account`).
  *
  * Here, not in a module: the answer belongs to neither piece's owner, so each module keeps its own
- * part and this composes them. `GET /shop` stays its own call, because the shop is removable and
- * this answer must exist without it,
- * which is why the operator's legal identity is here and not on `/shop`.
+ * part and this composes them. The shop is removable and this answer must exist without it, which
+ * is why the operator's legal identity is here and not on `GET /shop`.
  */
 
 import { Router } from 'express';

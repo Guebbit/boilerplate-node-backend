@@ -54,7 +54,6 @@ export const AUDIT_OUTCOMES = Object.values(AuditEntryItemOutcome);
 export const AUDIT_LEVELS = Object.values(AuditEntryItemLevel);
 
 /**
- * See docs/operate/winston.md for field descriptions and examples.
  * camelCase here, in Mongo and in the API. The logger's `semanticNamesFormat` renames them to
  * OpenTelemetry semantic-convention names in the log line only.
  */
@@ -168,7 +167,7 @@ export const emitAuditEvent = (event: AuditEvent): void => {
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     /**
      * Credentials are scrubbed once here so the log line and the stored row get the same
-     * metadata; personal fields stay raw in the row (docs/understand/data-protection.md) and are
+     * metadata; personal fields stay raw in the row and are
      * handled by the logger's own pipeline for the line.
      */
     const scrubbed: AuditEvent = {

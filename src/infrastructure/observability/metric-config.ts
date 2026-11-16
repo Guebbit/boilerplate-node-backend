@@ -13,8 +13,11 @@ import type { CounterConfiguration, GaugeConfiguration, HistogramConfiguration }
 
 /** What every metric has. */
 interface MetricData<TLabel extends string> {
+    /** The Prometheus metric name. */
     readonly name: string;
+    /** The `# HELP` line shown beside it. */
     readonly help: string;
+    /** Label keys; absent for an unlabelled metric. */
     readonly labelNames?: readonly TLabel[];
 }
 

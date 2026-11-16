@@ -75,10 +75,9 @@ const getTransporter = (): Transporter => {
         disableFileAccess: true,
         disableUrlAccess: true,
         /**
-         * SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
-         * attempts an unauthenticated send and the server rejects it — the failure
-         * surfaces at send time, not at boot, because email is not a hard startup
-         * dependency.
+         * SMTP AUTH credentials. Empty strings when unset. A host without its credentials
+         * is refused at boot (`SMTP_COMPANIONS`, `adapters/config.ts`), so this only applies when no
+         * SMTP host is selected.
          */
         auth: {
             user: smtp.NODE_SMTP_USER ?? '',

@@ -60,7 +60,7 @@ const MAX_CONCURRENT_RENDERS = 2;
  * How many renders may WAIT for one of those slots. Past it a new render is refused at once
  * (`ServiceBusyError`, a 503 with `Retry-After`) instead of queueing without limit: an unbounded
  * queue is memory and latency a burst can grow at will, and every request in it holds a
- * connection. Twenty is about forty seconds of work at the render timeout below.
+ * connection. The queue's depth times the render timeout below bounds how long the last one waits.
  */
 export const MAX_WAITING_RENDERS = 20;
 

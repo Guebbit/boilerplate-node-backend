@@ -4,8 +4,9 @@
  * secrets — an address-book entry's fullName/street/city/zip/country/phone, a user's own phone.
  * Same AES-256-GCM primitive `account/two-factor/totp.ts`'s TOTP secret uses
  * (`versioned-secret.ts`), under a DIFFERENT key (`NODE_PII_ENCRYPTION_KEY`) so rotating one never
- * touches the other. See `docs/understand/security.md`'s "Database credential and key rotation" for
- * the rotation procedure this ring shares with the TOTP/webhook ones.
+ * touches the other. The rotation procedure is shared with the TOTP/webhook rings.
+ *
+ * @see docs/understand/security.md#database-credential-and-key-rotation
  */
 
 import {

@@ -110,7 +110,7 @@ export const configureMongoose = (
 };
 
 /**
- * Connect to MongoDB with exponential-backoff retry, capped at 30s; throws once attempts run out.
+ * Connect to MongoDB with exponential-backoff retry; throws once attempts run out.
  *
  * Exists for orchestrated environments: when the API container starts alongside the database
  * container, the first few connects legitimately fail while Mongo is still initialising.
@@ -245,11 +245,11 @@ export const { connection } = mongoose;
  *          safe to retry (a stepdown, a network blip, a write conflict), for up to 120 s.
  * Inside:  only `{ session }` writes and outbox rows. Anything else runs again on each attempt
  *          and stays done on abort, so a provider call, a mail or a cache write goes AFTER the
- *          transaction resolves. See `docs/modules/payments.md#one-settlement-transaction` and
- *          `rearmPrecondition` (`persistence/versioning.ts`).
+ *          transaction resolves; see `rearmPrecondition` (`persistence/versioning.ts`).
  * Needs:   a replica set; a standalone `mongod` refuses `startTransaction()` outright. Every
  *          entry point runs one: `scenarios/support/ephemeral-mongod.ts`, `compose.override.yaml`.
  *
+ * @see docs/modules/payments.md#one-settlement-transaction
  * @param work - the work to run inside the transaction, given the session to pass to every write
  * @returns whatever `work` resolved with, once the transaction has committed
  */

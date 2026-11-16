@@ -100,10 +100,6 @@ export const applySerialization = (
     schema.set('toJSON', {
         virtuals,
         versionKey: false,
-        /**
-         * One `as`, not `as unknown as`: Mongoose hands the transform `{ _id, __v? }`, a
-         * *narrower* type than the serializer's string-keyed bag — widening it is a single step.
-         */
         transform: (document, serialized) => {
             // `versionKey: false` already removed the counter from `serialized`; the document still has it.
             const revision: unknown = Reflect.get(document, EDIT_REVISION);

@@ -61,7 +61,9 @@ const secondsBetween = (fromMs: number, toMs: number): number =>
 /**
  * How long a shared cache (edge) or this server (origin) may keep serving a stale entry while one
  * rebuild is in flight — RFC 5861's `stale-while-revalidate`, and the same number both layers use
- * so they agree on what "stale" means. See docs/understand/redis-cache.md#refresh-ahead-no-stampede-when-a-hot-key-goes-stale.
+ * so they agree on what "stale" means.
+ *
+ * @see docs/understand/redis-cache.md#refresh-ahead-no-stampede-when-a-hot-key-goes-stale
  */
 const STALE_WHILE_REVALIDATE_SECONDS = 60;
 
@@ -311,7 +313,7 @@ const keySegments = (
  *
  * The parameters are never stored raw: their values are hashed (`sha256`), so the key is a fixed
  * size however long the input was. Locale is in the key because it changes the body (translated
- * copy) — same reasoning as the `Vary: Authorization` note in `setCache` below. The raw query
+ * copy) — same reasoning as the `Vary` header `applyCacheHeaders` sets. The raw query
  * string is deliberately NOT part of the key: query-string order is not stable across clients, and
  * only `keyParameters` can reach the key, so `?anything=else` cannot mint its own entry.
  *
@@ -358,7 +360,7 @@ const getCacheKey = (
  * @param cacheKey - key this response will be stored under, on success
  * @param ttl - soft TTL: how long the new entry counts as a HIT
  * @param graceSeconds - stale-but-servable window past `ttl` — the Redis entry itself lives for
- *   `ttl + graceSeconds`, clamped by the caller to at most `ttl` (see {@link setCache})
+ *   `ttl + graceSeconds`, clamped by `serveOrArm` to at most `ttl`
  * @param tags - invalidation tags to pass to `setCacheValue`
  */
 const armCacheWrite = (
@@ -425,7 +427,7 @@ const replay = (response: Response, cached: CachedResponse): void => {
  * @param response - headers are set on this response; `noStore` is read from it too
  * @param options - the route's declared cache identity — see {@link CacheOptions}
  * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
- * @param cacheable - `options.scopeKey(request)`'s answer, `false` when the response sets a cookie —
+ * @param cacheable - `options.scopeKey(request)`'s answer, `false` when the response sets a cookie or is a draft preview —
  *   see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
  * @throws {Error} on either mounting mistake described above

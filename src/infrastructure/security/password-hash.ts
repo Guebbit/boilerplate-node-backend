@@ -5,8 +5,8 @@
  * file is the small part that is still ours: a salt, the PHC string a hash is stored as, and a
  * constant-time comparison.
  *
- * Cost: `shared/rules/password-hash.yaml` (m = 19 MiB, t = 2, p = 1) — OWASP Password Storage Cheat Sheet's second argon2id profile,
- * the one that keeps a login under ~50 ms on ordinary hardware. A stored hash carries its own
+ * Cost: `shared/rules/password-hash.yaml`, one of OWASP's argon2id profiles, picked so a login
+ * stays fast on ordinary hardware. A stored hash carries its own
  * parameters, so verifying never depends on what these constants are now.
  * https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id
  */
@@ -40,13 +40,21 @@ const derive = promisify(argon2);
 
 /** Parameters one derivation runs with. */
 interface Derivation {
+    /** Memory cost in KiB (argon2's `m`). */
     memory: number;
+    /** Iterations over that memory (argon2's `t`). */
     passes: number;
+    /** Lanes (argon2's `p`). */
     parallelism: number;
+    /** The salt. */
     nonce: Buffer;
 }
 
-/** The argon2 call's own parameter object for a password. */
+/**
+ * The argon2 call's own parameter object for a password: `message` is the secret, `nonce` the
+ * salt, `memory` KiB, `passes` and `parallelism` the t and p costs, `tagLength` the output bytes.
+ * https://nodejs.org/api/crypto.html#cryptoargon2algorithm-parameters-callback
+ */
 const parametersFor = (password: string, { memory, passes, parallelism, nonce }: Derivation) => ({
     message: Buffer.from(password, 'utf8'),
     nonce,

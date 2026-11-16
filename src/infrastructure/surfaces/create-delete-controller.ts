@@ -33,8 +33,10 @@ export interface DeleteControllerSpec {
     /**
      * The service call. `hardDelete` true destroys the row; false stamps `deletedAt`. Takes the
      * raw `request` so the module's own wiring can build its `CallerContext` and hand it down —
-     * the service records its own audit row (rule 1, `docs/build/module-lifecycle.md`), the same
+     * the service records its own audit row (rule 1), the same
      * way `createUpdateController`'s `update` does.
+     *
+     * @see docs/build/module-lifecycle.md#adding-a-module
      */
     remove: (id: string, hardDelete: boolean, request: Request) => Promise<ServiceResult<unknown>>;
     /** The i18n key answered when the id matches nothing, or is not an id at all. */

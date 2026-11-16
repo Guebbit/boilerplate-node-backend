@@ -24,13 +24,12 @@ import { isTestEnvironment, serverConfig } from '@infrastructure/runtime/config'
 import { markServerDraining } from '@infrastructure/runtime/readiness';
 
 /**
- * The teardown budget (`NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`, default 15 s): what the steps below
- * share, counted from the end of the lame-duck delay (`NODE_SHUTDOWN_DELAY_MS`). After it we stop
- * being polite and kill the process.
+ * The teardown budget (`NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`): what the steps below share, counted
+ * from the end of the lame-duck delay (`NODE_SHUTDOWN_DELAY_MS`). After it we stop being polite
+ * and kill the process.
  *
- * Keep delay + this below the orchestrator's own grace period (Kubernetes
- * `terminationGracePeriodSeconds`, default 30 s; Docker `stop_grace_period`, default 10 s),
- * otherwise the platform SIGKILLs the container mid-drain and the timeout never fires.
+ * Keep delay + this below the orchestrator's own grace period, otherwise the platform SIGKILLs
+ * the container mid-drain and the timeout never fires.
  *
  * @see docs/operate/health-checks.md#shutting-down-behind-a-load-balancer
  */
@@ -197,14 +196,10 @@ export const shutdownInfra = (
  * The handler for a shutdown signal: the first one runs the whole sequence, every later one is
  * ignored (a second signal must not start a second teardown on top of the first).
  *
- * ```
- * signal ─▶ /readyz 503 + Connection: close ─▶ stop taking queue jobs ─▶ lame-duck delay
- *        ─▶ stopFunction (end SSE, close server, settle work, close stores) ─▶ exit 0
- * ```
- *
  * A load balancer needs the delay: its poll must see the 503 and stop routing here BEFORE the
  * listener closes, or a request already sent to this copy meets a closed socket.
  *
+ * @see docs/operate/health-checks.md#shutting-down-behind-a-load-balancer
  * @param stopFunction - the teardown to run (normally a closure over `shutdownInfra`)
  * @returns the listener to register on the signals
  */
@@ -229,8 +224,8 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
         /**
          * Deadline: if teardown hangs (a socket that never drains, a broker that never
          * answers) exit anyway with a failure code, so the orchestrator restarts us
-         * instead of leaving a zombie container that answers no traffic. The delay is outside
-         * the teardown budget, so it is outside this count too.
+         * instead of leaving a zombie container that answers no traffic. The timer is armed
+         * before the delay, so it covers the delay plus the teardown budget.
          */
         const forcedExitTimer = setTimeout(() => {
             // Stryker disable next-line all
@@ -251,6 +246,7 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
         stopConsuming().catch(() => undefined);
 
         /**
+         * Node `timers/promises` sleep: resolves after `delayMs` milliseconds (the lame-duck delay).
          * `void` marks the floating promise as intentional (the handler cannot be async:
          * Node ignores a returned promise from a signal listener). The delay is a ref'd timer, so
          * the process stays alive for it.

@@ -36,11 +36,17 @@ import { extractErrorMessage } from '@guebbit/js-toolkit';
  * visible on the probe an operator already looks at.
  */
 export interface LeaseDocument extends Document<string> {
+    /** Who holds the lease now (a process identity). */
     owner: string;
+    /** When the hold lapses and another process may take over. */
     expiresAt: Date;
+    /** When the job last finished successfully. */
     lastSuccessAt?: Date;
+    /** The last failure's message, kept until a success clears it. */
     lastError?: string;
+    /** Mongoose timestamp: first acquisition. */
     createdAt?: Date;
+    /** Mongoose timestamp: last write. */
     updatedAt?: Date;
 }
 
@@ -95,7 +101,7 @@ export interface LeaseSummary {
 /**
  * Every lease document that exists, projected to what health reporting needs.
  *
- * Only jobs that have attempted to acquire their lease at least once appear here — there is no
+ * Only jobs that have acquired a lease or recorded an outcome (`recordJobOutcome`) at least once appear here — there is no
  * separate registry of "expected" job names to compare against, so a job removed from the
  * crontab simply stops updating its row. The row stays (no TTL), so the staleness alerts keep
  * firing until the job runs again or its row is deleted by hand.

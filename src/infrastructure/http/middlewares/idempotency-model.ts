@@ -6,7 +6,7 @@
  *
  * Infrastructure-owned rather than a module's, against the usual "a module owns its collection"
  * rule — the same exception `rate-limit.ts`'s store is under, for the same reason: this
- * collection belongs to no domain, and inventing a module to hold four fields would add a
+ * collection belongs to no domain, and inventing a module to hold a few fields would add a
  * registry entry, a manifest and a folder for nothing.
  */
 
@@ -49,7 +49,7 @@ export type IdempotencyRecordModel = Model<IdempotencyRecordDocument>;
  * How long a record survives, in hours, before Mongo's TTL index removes it. Read at import
  * time, like every other TTL window in this repo — a change needs `npm run db:sync` to take
  * effect, since Mongo will not modify an existing TTL index's `expireAfterSeconds` in place.
- * Default: 24 — long enough to outlast any client's retry backoff, short enough that a ledger
+ * Long enough to outlast any client's retry backoff, short enough that a ledger
  * entry is never mistaken for a durable record of the write itself.
  */
 const retentionHours = idempotencyConfig().NODE_IDEMPOTENCY_RETENTION_HOURS;
@@ -113,7 +113,7 @@ idempotencyRecordSchema.index(
 
 /**
  * TTL index — Mongo deletes attempts older than the retention window on its own. Same caveat as
- * every other TTL index in this repo (see `tasks/model.ts` and `persistence/lease.ts`):
+ * every other TTL index in this repo (see `tasks/model.ts`):
  * raising or lowering `NODE_IDEMPOTENCY_RETENTION_HOURS` and restarting FAILS THE BOOT, because
  * Mongo refuses to change an existing index's `expireAfterSeconds` in place. `npm run db:sync` is
  * what applies it, by dropping the index and rebuilding it.

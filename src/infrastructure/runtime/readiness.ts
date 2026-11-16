@@ -25,7 +25,7 @@ export const markServerListening = (): void => {
 
 /**
  * Marks the process as draining — a shutdown signal has been received. Called once by
- * `registerSignalHandlers` (`server-lifecycle.ts`), before teardown starts. `GET /readyz` answers
+ * `createShutdownHandler` (`server-lifecycle.ts`), before teardown starts. `GET /readyz` answers
  * 503 from here on; the listener stays open for `NODE_SHUTDOWN_DELAY_MS`, so a probe gets to see it.
  */
 export const markServerDraining = (): void => {

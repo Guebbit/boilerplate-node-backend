@@ -62,7 +62,7 @@ const KEEPALIVE_PING_MS = 500;
  *   timer once the command is on the wire (`commands-queue.js#commandsToWrite`), so a half-open
  *   connection — the socket reports open, nothing is coming back — would hang on the kernel
  *   with no ceiling at all.
- * - `socket.timeout` (node-redis' own name for `net.Socket#setTimeout`): closes the SOCKET after
+ * - `socketTimeout` (node-redis' own name for `net.Socket#setTimeout`): closes the SOCKET after
  *   1s of no traffic either way, independent of command bookkeeping — the half-open case above.
  *   It is an IDLE timer, so on its own it also closes a healthy connection after 1s without a
  *   request; `pingInterval` below is what keeps a healthy one talking.

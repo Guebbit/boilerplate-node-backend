@@ -7,8 +7,9 @@
  *
  * Rotation is a RING, the same shape `account/session/config.ts`'s `parseKeyRing` gives the JWT
  * secrets: newest first, encrypt always with `ring[0]`, decrypt by looking up the ciphertext's own
- * stamped version among every entry the ring carries. `docs/understand/security.md`'s "Database
- * credential and key rotation" is the operator-facing runbook this exists for.
+ * stamped version among every entry the ring carries.
+ *
+ * @see docs/understand/security.md#database-credential-and-key-rotation
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
@@ -16,7 +17,9 @@ import { deriveSubkey } from './subkey';
 
 /** An operator-configured encryption key, tagged with the version stamped on ciphertext it produces. */
 export interface VersionedKey {
+    /** The label stamped on every ciphertext this key produces; decrypt looks the key up by it. */
     version: string;
+    /** The secret the AES key is derived from. */
     key: string;
 }
 

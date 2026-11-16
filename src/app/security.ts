@@ -61,8 +61,8 @@ const isRawBodyPath = (url: string): boolean => {
  *
  * Slowloris and slow-POST are not floods: one client trickles bytes and holds a connection, and a
  * few hundred such connections exhaust the pool while the rate limiter — which counts REQUESTS —
- * sees almost nothing. Node ships 60s for headers and 300s for a whole request, so the process
- * would hold a half-sent request for five minutes by default.
+ * sees almost nothing. Node's defaults are generous enough to hold a half-sent request for
+ * minutes.
  *
  * Both bound RECEIVING only, never the handler: a slow invoice render is unaffected by
  * `requestTimeout`, which is what makes tightening it safe.
@@ -79,7 +79,7 @@ export const applyServerTimeouts = (server: Server): void => {
 
     /**
      * The whole request, headers and body. Generous rather than tight because it is also the
-     * ceiling on a legitimate upload: `NODE_MAX_UPLOAD_BYTES` (5 MB) over a poor mobile link needs
+     * ceiling on a legitimate upload: `NODE_MAX_UPLOAD_BYTES` over a poor mobile link needs
      * most of this, and the endpoint answering 408 mid-upload is worse than the connection cost.
      */
     server.requestTimeout = appConfig().NODE_HTTP_REQUEST_TIMEOUT_MS;
@@ -90,7 +90,7 @@ export const applyServerTimeouts = (server: Server): void => {
      * has already closed, it sends the next request into a dead connection and answers 502 to a
      * caller who did nothing wrong.
      *
-     * @see docs/understand/security.md#one-environment-switch
+     * @see docs/operate/first-deploy-proxy-and-storage.md#proxy-settings
      */
     server.keepAliveTimeout = appConfig().NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS;
 };

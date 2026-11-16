@@ -48,7 +48,7 @@ import { uploadConfig } from '@infrastructure/http/config';
  * two separate moments, which is what lets the second one be a remote bucket. Override with
  * `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the cap, or unwritable by the app user.
  *
- * @see docs/understand/security.md#why-search-text-is-escaped-before-it-reaches-regex
+ * @see docs/understand/defences/files-and-uploads.md#the-upload-pipeline
  */
 export const uploadStagingPath = () => uploadConfig().NODE_UPLOAD_STAGING_PATH;
 
@@ -163,7 +163,7 @@ export const fileFilter = (
         : callback(new UnsupportedUploadTypeError());
 
 /**
- * Ceiling on a single upload, in bytes: `NODE_MAX_UPLOAD_BYTES`, 5 MB by default.
+ * Ceiling on a single upload, in bytes: `NODE_MAX_UPLOAD_BYTES`.
  *
  * Multer's own default is UNLIMITED — on a public endpoint that's a DoS with no exploit needed,
  * since every byte is written to disk before any handler runs. Has to live here, not in a
@@ -402,8 +402,7 @@ const digestQuarantinedKeysInline = (
     /**
      * The owner salt is the key's STEM, not the key itself: `resolveUploadFilename` names the
      * quarantined file `<hex>.<ext>`, and `image-store.ts#promote` appends the digested mime's own
-     * extension to `contentStem`'s result — passing the raw key here doubled it, landing files as
-     * `<hex>.png-<hash>.png`. `key` (with its extension) still goes to `digestQuarantinedImage`
+     * extension to `contentStem`'s result — so the extension is not doubled. `key` (with its extension) still goes to `digestQuarantinedImage`
      * itself, which needs it to find the quarantined file on disk.
      */
     Promise.all(
@@ -495,7 +494,7 @@ export const quarantineUploadedImages: RequestHandler = (request, response, next
                  *   process runs. The next upload after it succeeds simply finds `queueState()`
                  *   reading `ready` again.
                  *
-                 * Why the `owner` salt below is the quarantine key's stem:
+                 * Why the `owner` salt (`digestQuarantinedKeysInline`) is the quarantine key's stem:
                  *   no document exists yet at this point in the request, so
                  *   `digestQuarantinedImage`'s `owner` salt is the quarantine key instead — minus
                  *   its extension, which `digestQuarantinedKeysInline` strips before passing it on

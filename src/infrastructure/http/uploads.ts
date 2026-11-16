@@ -12,8 +12,8 @@ import { bodyRecordOf } from '@infrastructure/http/request';
 import { uploadConfig } from '@infrastructure/http/config';
 
 /**
- * Extract the uploaded file's path from a multer-processed request, wrapped in an array so
- * callers get a uniform shape regardless of whether anything was uploaded.
+ * Extract the uploaded file's path from a multer-processed request, wrapped in a one-item array,
+ * or `undefined` when nothing was uploaded.
  *
  * Every route mounts `upload.image()`, which is `multer.single()` under a fixed field name — so
  * `request.file` is the only shape multer ever populates here; `request.files` (`.array()` /

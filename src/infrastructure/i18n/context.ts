@@ -67,7 +67,7 @@ export const createLocaleContext = (locale: string): LocaleContext => {
  * `locale` instead of folding it to the fallback. Its `t` still falls back, since the API has no
  * wording for a switched-off language (see {@link translator}).
  *
- * @param draftTag - a tag {@link isDraftLocale} accepted
+ * @param draftTag - a tag `draftLocaleFor` (`i18n/served.ts`) accepted
  */
 export const createPreviewContext = (draftTag: string): LocaleContext => ({
     locale: draftTag,

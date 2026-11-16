@@ -65,7 +65,8 @@ export interface OrphanSweep {
 
 /**
  * Scan both image directories against the live reference set and delete what nothing names.
- * `images/seed/`, `images/system/` and `images/thumbs/` are left alone unconditionally —
+ * `images/seed/` and `images/system/` are left alone unconditionally; the thumbnails directory is
+ * swept like the main one —
  * `pruneUnreferenced` only ever touches a FILE directly under the directory it is given, the same
  * carve-out `.gitignore`'s own `public/images/*` rule makes. Anything younger than an hour is
  * spared: an upload is promoted a moment before its row is saved. "Does a document still name it"

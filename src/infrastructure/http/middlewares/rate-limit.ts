@@ -32,8 +32,7 @@ import type { CallerContext, RateLimitBudget } from '@types';
 import { infrastructureRateLimitData } from './rate-limits.generated';
 
 /**
- * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: 100 requests per window,
- * sized for browsing rather than for guessing.
+ * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: sized for browsing rather than for guessing.
  */
 export const DEFAULT_RATE_LIMIT_MAX = infrastructureRateLimitData.global.defaultMax;
 
@@ -326,8 +325,9 @@ export const chargeBudget = async (budget: RateLimitBudget, key: string): Promis
 
 /**
  * `keyedBy` label for a budget bucketed on the caller's single address — shared so every such
- * budget's row in the generated table (`docs/understand/security.md#the-rate-limit-budgets`) reads as
- * the same sentence.
+ * budget's row in the generated table reads as the same sentence.
+ *
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 export const KEYED_BY_ADDRESS = 'address (IPv6 /56)';
 
@@ -418,9 +418,9 @@ export const priorHits = (info: RateLimitInfo): number => info.used - 1;
  * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /48 — the
  * coarser partner of the library's own default key, which masks IPv6 to a /56 (so on both families
  * the block is the wider bucket). RIPE-690 hands a business end site a /48 and a residential one a
- * /56. A residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
- * allocated 18 quintillion of them — bucketing on the single address lets either look like an
- * unbounded number of callers.
+ * /56. A residential-proxy pool, or one IPv6 customer's allocation, holds far more addresses than
+ * any budget expects, so bucketing on the single address lets either look like an unbounded number
+ * of callers.
  *
  * `ipKeyGenerator` runs FIRST because Node listens dual-stack, so a plain IPv4 caller arrives as
  * `::ffff:a.b.c.d`. The helper unmaps that form (to the bare IPv4 address) and masks a genuine
