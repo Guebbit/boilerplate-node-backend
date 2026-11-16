@@ -100,11 +100,12 @@ The proxy acts like a real balancer on purpose: per-request round robin over the
 unbuffered, its own 502s and 503s counted. Every copy gets the proxy's address as `NODE_URL`,
 because a token's issuer is that address and real replicas share one.
 
-| Case                                | Asserts                                                                     |
-| ----------------------------------- | --------------------------------------------------------------------------- |
-| one rate-limit budget across copies | exactly `LIMIT` allowed through the proxy; at least two copies answered     |
-| a session across copies             | login anywhere, use on every copy, refresh on B, logout on C kills A        |
-| one write for one `Idempotency-Key` | same key on two copies at once: one 201, the other replayed or 409; one row |
+| Case                                | Asserts                                                                                                                                                                                             |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| one rate-limit budget across copies | exactly `LIMIT` allowed through the proxy; at least two copies answered                                                                                                                             |
+| a session across copies             | login anywhere, use on every copy, refresh on B, logout on C kills A                                                                                                                                |
+| one write for one `Idempotency-Key` | same key on two copies at once: one 201, the other replayed or 409; one row                                                                                                                         |
+| a rolling restart                   | every copy stopped and started in turn under steady load, `NODE_SHUTDOWN_DELAY_MS=1000`: the proxy counts no 502 or 503, every request answers 200, a slow POST open on each stopping copy ends 201 |
 
 Every case ends on a control that breaks when the rig does: the proxy's spread shows at least two
 copies answered, or the assertion is about a second copy by name. A case that only passes when
@@ -116,6 +117,11 @@ Two harness rules that bit:
   group; through `npx` a copy would be told twice).
 - `tests/replicas/` is ignored by `jest.config.js` and `stryker.json`, next to `tests/cluster/`:
   a copy needs its own Mongo and a real port, not the shared in-process setup.
+
+The rolling-restart case is red without the delay: with `NODE_SHUTDOWN_DELAY_MS=0` the proxy counted
+18 `502`s in one run, from requests sent to a copy that had already closed. The delay is at least four of
+the proxy's 250 ms polls, or the case races the poll it proves the copy outlives
+([why](../operate/health-checks.md#shutting-down-behind-a-load-balancer)).
 
 A "scheduled job runs once" case is not here: `tests/integration/persistence/lease.test.ts` already
 proves the Mongo atomicity two callers contend on, and a second process adds nothing to it.
