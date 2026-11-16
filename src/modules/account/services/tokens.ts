@@ -146,7 +146,8 @@ export const spendLiveToken = (
  *
  * Why not "act, then delete the token": two requests would both act (a password reset is unsafe
  * that way). Why not "delete, then act": a crash between the two burns the link for nothing.
- * See docs/modules/account-sessions.md#spending-a-link.
+ *
+ * @see docs/modules/account-sessions.md#spending-a-link
  *
  * @param type - the kind the link must be
  * @param token - the token value from the link

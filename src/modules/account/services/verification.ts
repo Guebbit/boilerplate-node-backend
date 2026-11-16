@@ -3,10 +3,12 @@
  * Email verification — issuing a token and sending the mail, in one place. Two KINDS of
  * verification share this mechanism — proving the address an account already has (signup, the
  * explicit re-send), and proving the address a `POST /account/email-change` request has asked for
- * (docs/modules/account.md#proving-an-address) — and every flow that starts either one calls this
+ * — and every flow that starts either one calls this
  * and nothing else, so they cannot drift. Issuing replaces the SAME kind's previous token
  * atomically — not for security, since spending any of them proves the same mailbox, but so "the
  * newest email is the one that works" and a re-send never confuses the user.
+ *
+ * @see docs/modules/account.md#proving-an-address
  */
 
 import type { ClientSession } from 'mongoose';

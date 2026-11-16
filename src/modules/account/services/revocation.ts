@@ -7,7 +7,7 @@
  * the credential's own write, or {@link revokeFor} moves it in its own transaction. The row and
  * link deletion that follows is housekeeping.
  *
- * See docs/modules/account-sessions.md#revocation.
+ * @see docs/modules/account-sessions.md#revocation
  */
 
 import { accountUserService } from '@modules/users/friends/account';

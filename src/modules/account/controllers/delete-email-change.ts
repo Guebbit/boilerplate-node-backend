@@ -12,8 +12,9 @@ import { accountService } from '../services';
 
 /**
  * DELETE /account/email-change — the explicit action that cancels a pending email change.
- * Requesting the current address is a 409, not an implicit cancel — see
- * docs/modules/account.md#proving-an-address.
+ * Requesting the current address is a 409, not an implicit cancel.
+ *
+ * @see docs/modules/account.md#proving-an-address
  */
 export const cancelPendingEmail = (request: Request, response: Response) => {
     const { id } = request.authContext!;

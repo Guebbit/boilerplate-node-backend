@@ -555,8 +555,8 @@ const findLiveVerificationToken = (
 /**
  * Spend a token: delete its row. Of two simultaneous uses of one link, only one deletes anything.
  * The session is required: the spend and the action it unlocks commit together or not at all
- * (docs/modules/account-sessions.md#spending-a-link).
  *
+ * @see docs/modules/account-sessions.md#spending-a-link
  * @param type - the kind the link must be
  * @param tokenHash - the digest of the presented value
  * @param session - the transaction the action's own writes share

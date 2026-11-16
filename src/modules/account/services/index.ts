@@ -1,7 +1,7 @@
 /**
  * @module
  * Account service — authentication, the profile a person manages, and two-factor. One file per
- * flow, not one big file — see `docs/understand/layers.md`.
+ * flow, not one big file.
  *
  * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
@@ -19,6 +19,8 @@
  * Export data:     no sibling's data is reached. Every module declares its own `personalData`
  *                  section, and `../module.ts` hands the resolved list in.
  * Published:       `./export-rows` (the reaper). It reaches nothing but this module's own store.
+ *
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
  */
 
 import * as signup from './signup';

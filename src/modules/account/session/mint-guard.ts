@@ -6,7 +6,7 @@
  * - {@link assertSecondFactor}: no session without an armed second factor.
  * - {@link assertProofCurrent}: no session on a proof the account's epoch has since passed.
  *
- * See docs/modules/account-sessions.md#the-mint-guard.
+ * @see docs/modules/account-sessions.md#the-mint-guard
  */
 
 import { firstSessionRefused } from '../domain/session-proof';

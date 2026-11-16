@@ -3,11 +3,13 @@
  * The one cookie the OAuth 2FA continuation needs: the login challenge `buildLoginChallenge`
  * mints, carried across the provider's redirect instead of in the URL — a live credential in the
  * query string would land in the browser's history and any `Referer`, which
- * `docs/understand/defences/authentication.md#federated-login` already rules out for the redirect
+ * the federated-login defence already rules out for the redirect
  * itself. `POST /account/login/2fa` and `.../2fa/send` read it whenever their body omits
  * `challenge`, which is how a password-originated login (the challenge is already in the JSON
  * response) and an OAuth-originated one (the challenge is never sent to the client at all) share
  * the same two endpoints.
+ *
+ * @see docs/understand/defences/authentication.md#federated-login
  */
 
 import type { Request, Response } from 'express';

@@ -10,7 +10,9 @@
  *            (`./cookie-strategy.ts`)
  *
  * Chosen once per process from `NODE_SESSION_MODE`; switching it signs everyone out, because a
- * row only ever belongs to the mode that issued it. See docs/understand/sessions.md.
+ * row only ever belongs to the mode that issued it.
+ *
+ * @see docs/understand/sessions.md#which-one-to-pick
  */
 
 import type { RememberTier } from '@types';

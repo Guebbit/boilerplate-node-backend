@@ -1,11 +1,13 @@
 /**
  * @module
  * This module's one door onto `enqueueEmail` — the whole reason it exists is layer, not logic:
- * `docs/understand/layers.md` keeps every `enqueueEmail` call in the service layer (a lint ban in
+ * the layer rule keeps every `enqueueEmail` call in the service layer (a lint ban in
  * controllers, repositories and models), and `../emails.ts` is the copy layer (template + translated
  * strings), not this one. Kept a one-function file rather than folded into an existing service so
  * `two-factor/methods/email.ts` — itself not a service — can reach it without importing a whole
  * service's unrelated surface.
+ *
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
  */
 
 import { enqueueEmail, type EmailContent } from '@infrastructure/adapters/mailer';

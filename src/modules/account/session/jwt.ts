@@ -2,8 +2,9 @@
  * @module
  * JWT creation and verification, on `jose`. Secrets and TTLs come from `./config`, which owns the policy.
  * Issuing and verifying this application's tokens is what `account` IS, and it reaches `users`
- * for the stored refresh tokens, exactly the dependency the manifest already declares. See
- * docs/modules/account-sessions.md.
+ * for the stored refresh tokens, exactly the dependency the manifest already declares.
+ *
+ * @see docs/modules/account-sessions.md#jwt-mode-two-tokens-two-lifetimes-two-homes
  */
 
 import type { RememberTier } from '@types';
@@ -417,8 +418,9 @@ const mintRefreshToken = (
  *
  * This is the choke point of every login path: an account with a second factor armed is refused
  * unless `amr` carries it, so a path that forgot to branch to the challenge cannot hand out a
- * session. See docs/modules/account-sessions.md#the-mint-guard.
+ * session.
  *
+ * @see docs/modules/account-sessions.md#the-mint-guard
  * @param id - user ID
  * @param amr - how `auth_time` was proved, e.g. `[AMR.password]` or `[AMR.password, AMR.otp]`
  * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose
@@ -643,9 +645,9 @@ const resolveLostRotation = (
  * refresh token's value on every exchange — unlike `createAccessToken`, which re-signs off a
  * refresh token that stays valid indefinitely. The full mechanism (why rotation detects theft, the
  * concurrency handling for two requests racing the same token, and what counts as reuse versus an
- * ordinary dead credential) is documented in full at
- * docs/modules/account-sessions.md#refresh-rotation.
+ * ordinary dead credential) is documented in full on the linked page.
  *
+ * @see docs/modules/account-sessions.md#refresh-rotation
  * @param oldToken - the refresh JWT the caller presented
  * @returns the new access/refresh tokens and the refresh cookie's new `maxAge` (`undefined` for a
  *   browser-session login)

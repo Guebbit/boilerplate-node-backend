@@ -6,9 +6,11 @@
  * Password account:    proves the password.
  * OAuth-only account:  has no password, so it proves control of its verified mailbox instead.
  * Why that is enough:  forgot-password already hands that mailbox a way in, so a mailed code adds no
- *                      new trust. See docs/modules/account-sessions.md.
+ *                      new trust.
  *
  * Re-minting the session stays the controller's job (`../session/session.ts`); this only decides.
+ *
+ * @see docs/modules/account-sessions.md#freshness-auth-time-and-amr
  */
 
 import { verifyPassword } from '@infrastructure/security/password-hash';

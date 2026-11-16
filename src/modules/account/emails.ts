@@ -130,8 +130,8 @@ export const verifyRequestEmail = (
  * completes — a warning that arrives before a takeover is a warning, one that arrives after is a
  * receipt. Carries the one-time undo link, valid for 7 days and kept through a password change:
  * the one thing the old mailbox can do about a change it did not ask for
- * (docs/modules/account.md#proving-an-address).
  *
+ * @see docs/modules/account.md#proving-an-address
  * @param undoToken - the plaintext `email-change-undo` token, for the link only
  */
 export const emailChangeNoticeEmail = (

@@ -2,7 +2,9 @@
  * @module
  * The signing-key ring's `kid`: how a secret gets a stable identifier, and how `./jwt` finds the
  * ring member a token's header names. Pure — no signing calls — so the ring math is testable
- * without signing anything. See docs/modules/account-sessions.md.
+ * without signing anything.
+ *
+ * @see docs/modules/account-sessions.md#the-signing-key-is-a-ring-not-a-single-secret
  */
 
 import { createHash } from 'node:crypto';

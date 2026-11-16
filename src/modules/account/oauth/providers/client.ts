@@ -4,7 +4,8 @@
  * goes through (a deadline, a body cap, no redirects) and the way a provider's static server
  * description becomes a client configuration. A provider's endpoints are written down in its own
  * file, never discovered over the network, so a login has no extra request to fail or to spoof.
- * See docs/modules/account-oauth.md.
+ *
+ * @see docs/modules/account-oauth.md#the-port-and-why-several-may-be-live-at-once
  */
 
 import * as client from 'openid-client';

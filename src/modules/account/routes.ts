@@ -5,7 +5,9 @@
  * its own module — see `@modules/addresses/routes`. Destructive and session-eviction routes
  * (`DELETE /`, `DELETE /sessions`, `DELETE /sessions/:sessionId`) and an email change on `PUT /`
  * additionally require a fresh session (`requireFreshAuth`/`requireFreshAuthWhen`).
- * See `./module.ts` for the mount point and `docs/modules/account.md` for the story.
+ * Mount point: `./module.ts`.
+ *
+ * @see docs/modules/account.md#the-story
  */
 
 import type { Request } from 'express';

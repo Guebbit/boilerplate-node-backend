@@ -2,7 +2,9 @@
  * @module
  * The two ways a deployment can keep people signed in — a leaf, so the schema (a row's `mode`),
  * the configuration (`NODE_SESSION_MODE`) and the strategies can all name them without importing
- * each other. See docs/understand/sessions.md.
+ * each other.
+ *
+ * @see docs/understand/sessions.md#which-one-to-pick
  */
 
 /**

@@ -36,7 +36,7 @@ import { t } from '@infrastructure/i18n';
 /**
  * `POST /account/email-change` — parks the requested address as `pendingEmail`, never as `email`.
  * The account keeps its current, PROVEN address until the new one is confirmed through
- * `POST /account/email-change/confirm` — docs/modules/account.md#proving-an-address.
+ * `POST /account/email-change/confirm`.
  *
  * Outcomes, in the order they are judged:
  * - CURRENT address: 409 `EMAIL_ALREADY_CURRENT`, nothing changes.
@@ -51,6 +51,7 @@ import { t } from '@infrastructure/i18n';
  * - Otherwise: saved, then both mails sent. A different address replaces a pending one, and the
  *   newest link is the only live one.
  *
+ * @see docs/modules/account.md#proving-an-address
  * @param userId - the authenticated caller
  * @param requestedEmail - the validated address
  * @param context - the caller

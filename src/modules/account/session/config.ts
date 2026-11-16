@@ -3,7 +3,10 @@
  * Session configuration — which mode keeps people signed in, and how long each tier lives. Named
  * `config.ts` rather than `tokens.ts` because it holds no token and issues none: it reads policy,
  * which `./jwt` signs against, `./cookie-strategy` stores against and `./cookies` sets `maxAge`
- * from. See docs/modules/account-sessions.md and docs/understand/sessions.md.
+ * from.
+ *
+ * @see docs/modules/account-sessions.md#choosing-the-session-mode
+ * @see docs/understand/sessions.md#which-one-to-pick
  */
 
 import { DAY_MS } from '@domain-primitives/time';

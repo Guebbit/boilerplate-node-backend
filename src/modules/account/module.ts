@@ -9,7 +9,7 @@
  *              with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
- *              Credentials stay on it on purpose: docs/modules/account-two-factor.md#what-the-user-document-carries.
+ *              Credentials stay on it on purpose.
  * Reaches far: `POST /account/export`, without an import graph to show for it — every module
  *              declares its own `personalData` section (`@kernel/registry.ts`), this module's own
  *              `onRegistered` hook resolves the list once every module is known and hands it in
@@ -19,6 +19,7 @@
  *              `./asyncapi.internal.yaml`.
  *
  * @see docs/modules/account.md#one-module
+ * @see docs/modules/account-two-factor.md#what-the-user-document-carries
  */
 
 import path from 'node:path';
