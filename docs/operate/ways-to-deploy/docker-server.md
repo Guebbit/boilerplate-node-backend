@@ -112,7 +112,7 @@ Three files make the stack, and the order matters:
 
 Always run production as `-f compose.yaml -f compose.production.yaml`. An explicit `-f` turns the auto-load
 of the override off, so the development stack cannot arrive by accident. `docker/deploy.sh` always passes both
-(`DEPLOY_COMPOSE_FILES` is the space-separated list; add `compose.proxy.yaml` for the Traefik overlay).
+(`DEPLOY_COMPOSE_FILES` is the space-separated list).
 A key lives in exactly one of the three files, so no overlay overrides a value and no `!reset` is needed.
 
 ### One deployment per client

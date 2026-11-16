@@ -17,7 +17,7 @@ does not care whether the two callers share an event loop.
 
 One process cannot observe the class of bug this directory exists for: **state that is correct
 within a worker and absent across the cluster.** A per-process counter is indistinguishable from a
-shared one when there is only one process. Cluster mode (`npm run start:cluster`) forks a worker per CPU, and `--scale app=N` runs several processes, so every such bug is
+shared one when there is only one process. Cluster mode (`npm run start:cluster`) forks a worker per CPU, and orchestrator replicas run several processes, so every such bug is
 real there and unreachable from the rest of the suite.
 
 The first target is the rate limiter, because it is the one where the gap is a security control:

@@ -244,8 +244,8 @@ services:
         environment:
             <<: [*app-env, *app-key-env, *backing-env]
             NODE_PORT: '${NODE_PORT:-3000}'
-            # One process per container (the image runs `src/main.ts`). Scale with `--scale app=N`
-            # or with the orchestrator — see the Dockerfile CMD note.
+            # One process per container (the image runs `src/main.ts`). Several replicas: through an orchestrator, each with its own address;
+            # the loopback port below is one per host. See the Dockerfile CMD note.
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
 

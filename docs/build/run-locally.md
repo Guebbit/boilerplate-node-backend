@@ -214,7 +214,7 @@ never as anything that says why.
 
 | Where                            | Command                                                                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with `--scale app=N`.                                                          |
+| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with orchestrator replicas.                                                    |
 | A bare VM with no PM2 or systemd | `npm run start:cluster`: one worker per CPU, restarts a crash. Needs `NODE_RATE_LIMIT_REDIS_URL`, or `NODE_CLUSTER_WORKERS=1`. |
 | A bare VM with PM2               | `pm2 start "npm start" -i max`                                                                                                 |
 

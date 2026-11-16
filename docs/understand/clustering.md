@@ -13,11 +13,11 @@ HTTP app + its `boot`/`start`/`stop` lifecycle) and `src/serve.ts` (calls `start
 
 ## Two ways to run it
 
-| Where                            | Command                                  | Scale with                                |
-| -------------------------------- | ---------------------------------------- | ----------------------------------------- |
-| Containers, production, dev      | `npm start` (`src/main.ts`, one process) | `--scale app=N`; the platform restarts it |
-| A bare VM without PM2 or systemd | `npm run start:cluster`                  | one worker per CPU, the primary restarts  |
-| A bare VM with PM2               | `pm2 start "npm start" -i max`           | PM2 forks and restarts                    |
+| Where                            | Command                                  | Scale with                                                                 |
+| -------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| Containers, production, dev      | `npm start` (`src/main.ts`, one process) | orchestrator replicas, each with its own address; the platform restarts it |
+| A bare VM without PM2 or systemd | `npm run start:cluster`                  | one worker per CPU, the primary restarts                                   |
+| A bare VM with PM2               | `pm2 start "npm start" -i max`           | PM2 forks and restarts                                                     |
 
 `main.ts` loads `.env`, starts OTel, then imports `serve.ts`. The default is one process because
 the platform already restarts and scales; a second supervisor inside the container is two layers
@@ -28,7 +28,7 @@ of process management.
 - `/metrics` is per copy: each scrape hits a different worker, nothing aggregates them.
 - The `ApiRestarting` alert is unreliable: `process_start_time_seconds` jumps between workers.
 - SSE caps (per-user and global stream limits) are counted per copy, so the real ceiling is cap × workers.
-- Rate-limit budgets are per process without a `limits` Redis, so `start:cluster` refuses to boot with 2+ workers and no `NODE_RATE_LIMIT_REDIS_URL`. PM2 and `--scale app=N` are not detected: set the URL yourself.
+- Rate-limit budgets are per process without a `limits` Redis, so `start:cluster` refuses to boot with 2+ workers and no `NODE_RATE_LIMIT_REDIS_URL`. PM2 and orchestrator replicas are not detected: set the URL yourself.
 
 ## Why a primary + workers (cluster mode)
 

@@ -1,6 +1,6 @@
 /**
  * The cluster entry: `npm run start:cluster`, for a bare VM with no PM2 or systemd. Not the
- * default (`src/main.ts` is); containers scale with `--scale app=N` instead.
+ * default (`src/main.ts` is); containers scale with orchestrator replicas instead.
  *
  * Like `main.ts`, it starts OTel before `serve` loads express and mongoose: `serve` is imported
  * dynamically below, while a static import is hoisted above any statement. Under
