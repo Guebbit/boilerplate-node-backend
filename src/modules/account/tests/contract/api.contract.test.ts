@@ -1040,9 +1040,8 @@ describe('GET /account/export/file', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/json');
-        // RFC 6266 allows a token or a quoted string; Express 5.3 leaves a plain token unquoted.
         expect(response.headers['content-disposition']).toMatch(
-            /^attachment; filename="?account-export-\d{4}-\d{2}-\d{2}\.json"?$/
+            /^attachment; filename=account-export-\d{4}-\d{2}-\d{2}\.json$/
         );
         expect(response.headers['cache-control']).toBe('private, no-store');
     });

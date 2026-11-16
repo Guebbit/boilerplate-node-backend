@@ -211,7 +211,9 @@ module.exports = {
         /**
          * `sitemap` 10's `lib/xmllint.js` reads `import.meta`, which the CJS transform leaves
          * behind. The package itself is transformed (see `transformIgnorePatterns`); only this
-         * file, which nothing calls, is replaced.
+         * file, which nothing calls, is replaced. A mapper matches the specifier, not the
+         * importer, so it would catch `./lib/xmllint.js` from any package: `sitemap` is the only
+         * installed package whose files name it.
          */
         '^\\./lib/xmllint\\.js$': '<rootDir>/tests/support/sitemap-xmllint.stub.ts'
     }

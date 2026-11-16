@@ -33,7 +33,7 @@ const setupTestProvider = () => {
     const provider = new TracerProvider({
         spanProcessors: [new SimpleSpanProcessor({ exporter })]
     });
-    // SDK 3 has no `register()`: the provider and a context manager are installed by hand.
+    // The provider and a context manager are installed by hand, as a provider has no `register()`.
     trace.setGlobalTracerProvider(provider);
     context.setGlobalContextManager(new StackContextManager().enable());
     return { exporter, provider };

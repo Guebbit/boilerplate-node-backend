@@ -4,9 +4,8 @@
  * monkey-patches express/mongoose/redis/http globally and is not safe to call inside a Jest
  * worker shared with other test files.
  *
- * `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter, ... }`)
- * — a real, silent-until-flush break from the deprecated `sdk-trace-base` two-argument form
- * (which `@opentelemetry/sdk-node` used to re-export): passing the exporter positionally leaves
+ * `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter, ... }`):
+ * passing the exporter positionally leaves
  * `options.exporter` `undefined`, so a span queues fine and the failure only surfaces later,
  * inside `_flushAll()`, when it tries `undefined.export(...)`. `ts-check` catches the shape going
  * forward; this pins that a span really does reach a real exporter's `export()` at runtime too.
@@ -39,10 +38,27 @@ import {
     linkInboundTrace,
     publicEndpointPropagator,
     onIncomingRequest,
-    parseOtlpHeaders,
     redactUrlSecrets,
     redisCommandOnly
 } from '@infrastructure/runtime/otel-sdk';
+
+/**
+ * The real exporter, wrapped so the options `buildProcessors()` gives it can be read back: the
+ * class's own module property cannot be spied on, and those options are where the headers show
+ * before any network call. It keeps the real prototype, so the `prototype.export` spies below
+ * still land on what the processors use.
+ */
+jest.mock('@opentelemetry/exporter-trace-otlp-http', () => {
+    const actual = jest.requireActual<typeof import('@opentelemetry/exporter-trace-otlp-http')>(
+        '@opentelemetry/exporter-trace-otlp-http'
+    );
+    const construct = jest.fn(
+        (options?: ConstructorParameters<typeof actual.OTLPTraceExporter>[0]) =>
+            new actual.OTLPTraceExporter(options)
+    );
+    construct.prototype = actual.OTLPTraceExporter.prototype;
+    return { ...actual, OTLPTraceExporter: construct };
+});
 
 /**
  * Enough of a `ReadableSpan` to survive `onEnd`'s sampled check and `_flushOneBatch`'s resource
@@ -99,6 +115,40 @@ describe('otel-sdk — buildProcessors', () => {
         expect(exportSpy).toHaveBeenCalledTimes(1);
         exportSpy.mockRestore();
     });
+
+    it('hands the headers of NODE_OTEL_EXPORTER_OTLP_HEADERS to the exporter', async () => {
+        jest.mocked(OTLPTraceExporter).mockClear();
+
+        await withEnvironmentOverrides(
+            {
+                OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318',
+                NODE_OTEL_EXPORTER_OTLP_HEADERS: 'Authorization=Bearer%20token,X-Tenant=acme'
+            },
+            () => {
+                buildProcessors();
+                return Promise.resolve();
+            }
+        );
+
+        const [options] = jest.mocked(OTLPTraceExporter).mock.calls[0] ?? [];
+        expect(options).toEqual({ headers: { Authorization: 'Bearer token', 'X-Tenant': 'acme' } });
+    });
+
+    it('leaves the exporter to read OTEL_EXPORTER_OTLP_HEADERS itself when no secret is set', async () => {
+        jest.mocked(OTLPTraceExporter).mockClear();
+
+        await withEnvironmentOverrides(
+            { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318' },
+            () => {
+                buildProcessors();
+                return Promise.resolve();
+            }
+        );
+
+        expect(jest.mocked(OTLPTraceExporter)).toHaveBeenCalledTimes(1);
+        const [options] = jest.mocked(OTLPTraceExporter).mock.calls[0] ?? [];
+        expect(options).toBeUndefined();
+    });
 });
 
 /** A sampled span that failed with a message quoting an address. */
@@ -128,26 +178,6 @@ const exportedStatus = async (nodeEnvironment: string) => {
     exportSpy.mockRestore();
     return exportedSpans[0]?.status;
 };
-
-describe('otel-sdk — parseOtlpHeaders', () => {
-    it('splits pairs on commas and each pair on its first equals sign', () => {
-        expect(parseOtlpHeaders('Authorization=Bearer abc==,X-App=default')).toEqual({
-            Authorization: 'Bearer abc==',
-            'X-App': 'default'
-        });
-    });
-
-    it('percent-decodes a value, and leaves a malformed escape as written', () => {
-        expect(parseOtlpHeaders('Authorization=Bearer%20abc,X-Bad=100%')).toEqual({
-            Authorization: 'Bearer abc',
-            'X-Bad': '100%'
-        });
-    });
-
-    it('drops a pair with no key or no equals sign', () => {
-        expect(parseOtlpHeaders('=orphan,novalue,Good=1')).toEqual({ Good: '1' });
-    });
-});
 
 describe('otel-sdk — buildProcessors, error text', () => {
     it('exports the error type, not its message, in production', async () => {

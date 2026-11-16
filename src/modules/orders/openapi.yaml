@@ -263,7 +263,7 @@ paths:
                     description: The orders, as CSV
                     headers:
                         Content-Disposition:
-                            description: '`attachment; filename="orders-<shop date>.csv"`, e.g. `orders-2026-10-27.csv`; the date is the shop''s calendar day.'
+                            description: '`attachment; filename=orders-<shop date>.csv` (the name is a plain token, so it is not quoted), e.g. `orders-2026-10-27.csv`; the date is the shop''s calendar day.'
                             schema: { type: string }
                         Cache-Control:
                             description: '`private, no-store`'

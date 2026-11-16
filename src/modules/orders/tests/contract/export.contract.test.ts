@@ -38,9 +38,8 @@ describe('GET /orders/export', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toMatch(/^text\/csv/);
-        // RFC 6266 allows a token or a quoted string; Express 5.3 leaves a plain token unquoted.
         expect(response.headers['content-disposition']).toMatch(
-            /^attachment; filename="?orders-\d{4}-\d{2}-\d{2}\.csv"?$/
+            /^attachment; filename=orders-\d{4}-\d{2}-\d{2}\.csv$/
         );
         expect(response.headers['cache-control']).toBe('private, no-store');
         expect(response.text.trim().split('\n')).toHaveLength(2);

@@ -1337,7 +1337,7 @@ paths:
                     description: The caller's own data
                     headers:
                         Content-Disposition:
-                            description: '`attachment; filename="account-export-<date>.json"`, e.g. `account-export-2026-10-27.json`; the date is the UTC day the export was requested.'
+                            description: '`attachment; filename=account-export-<date>.json` (the name is a plain token, so it is not quoted), e.g. `account-export-2026-10-27.json`; the date is the UTC day the export was requested.'
                             schema: { type: string }
                     content:
                         # Kept as the document's own schema, not `format: binary`: every module's
