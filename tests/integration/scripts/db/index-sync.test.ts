@@ -170,7 +170,8 @@ describe('db:sync', () => {
             .collection('users')
             .createIndex(
                 { createdAt: -1 },
-                { name: 'users_orphan', expireAfterSeconds: 2_592_000 }
+                { name: 'users_orphan', expireAfterSeconds: 2_592_000 },
+                undefined
             );
 
         const plan = await applyIndexSync();
@@ -189,7 +190,7 @@ describe('db:sync', () => {
         await applyIndexSync();
         await nativeDb()
             .collection('users')
-            .createIndex({ createdAt: -1 }, { name: 'users_orphan' });
+            .createIndex({ createdAt: -1 }, { name: 'users_orphan' }, undefined);
 
         const plan = await planIndexSync({ prune: true });
         expect(plan.find(({ collection }) => collection === 'users')).toMatchObject({
@@ -229,11 +230,15 @@ describe('db:sync', () => {
         const original = built.find((index) => JSON.stringify(index.key) === JSON.stringify(key));
         if (!original?.name) throw new Error('the declared index was not built');
         await collection.dropIndex(original.name);
-        await collection.createIndex(key as Record<string, 1 | -1>, {
-            ...options,
-            name: original.name,
-            sparse: true
-        });
+        await collection.createIndex(
+            key as Record<string, 1 | -1>,
+            {
+                ...options,
+                name: original.name,
+                sparse: true
+            },
+            undefined
+        );
 
         const plan = await planIndexSync();
         expect(
@@ -253,10 +258,12 @@ describe('db:sync', () => {
         const users = models().find(({ collection }) => collection.name === 'users');
         if (!users) throw new Error('no users model registered');
         retireIndexes(users.schema, 'users_gone');
-        await nativeDb().collection('users').createIndex({ createdAt: -1 }, { name: 'users_gone' });
         await nativeDb()
             .collection('users')
-            .createIndex({ updatedAt: -1 }, { name: 'users_stays' });
+            .createIndex({ createdAt: -1 }, { name: 'users_gone' }, undefined);
+        await nativeDb()
+            .collection('users')
+            .createIndex({ updatedAt: -1 }, { name: 'users_stays' }, undefined);
 
         const plan = await planIndexSync();
         expect(plan.find(({ collection }) => collection === 'users')).toMatchObject({
