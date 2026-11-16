@@ -23,7 +23,7 @@ import { decodablePng, publicDirectory } from '@tests/images';
 
 /**
  * `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
- * runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+ * runs, so it is already set when this line reads it.
  */
 const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 

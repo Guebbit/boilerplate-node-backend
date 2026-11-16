@@ -2,7 +2,7 @@
  * @module
  * Controller for `POST /tasks/:id/notes` — a staff note, append-only.
  *
- * @see docs/modules/tasks.md#the-story
+ * @see docs/modules/tasks.md#notes
  */
 
 import type { Request, Response } from 'express';

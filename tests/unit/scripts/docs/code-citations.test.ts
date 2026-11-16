@@ -126,6 +126,7 @@ describe('anchorlessSeeTags', () => {
                 ' * A thing.',
                 ' * @see docs/modules/orders.md',
                 ' * @see docs/modules/orders.md#cancel',
+                ' * @see docs/modules/orders.md and what it says about carts',
                 ' */',
                 'export const a = 1;'
             ].join('\n')
@@ -133,7 +134,8 @@ describe('anchorlessSeeTags', () => {
         await writeFile(path.join(root, 'src/b.yaml'), '# See: docs/modules/orders.md\n');
 
         expect(anchorlessSeeTags(root, ['src/a.ts', 'src/b.yaml'])).toEqual([
-            'src/a.ts:3: docs/modules/orders.md'
+            'src/a.ts:3: docs/modules/orders.md',
+            'src/a.ts:5: docs/modules/orders.md'
         ]);
     });
 });

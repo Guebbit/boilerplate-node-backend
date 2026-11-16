@@ -109,7 +109,7 @@ export const deadCodeCitations = (root: string, files: string[]): string[] => {
 };
 
 /** A docblock `@see` line that names a page and no `#anchor`. */
-const ANCHORLESS_SEE = /^\s*\*\s*@see\s+docs\/\S+\.md\s*$/;
+const ANCHORLESS_SEE = /^\s*\*\s*@see\s+(docs\/\S+?\.md)(?:\s|$)/;
 
 /**
  * Every docblock `@see docs/<page>.md` with no `#anchor`: the link opens the page at its top and
@@ -126,11 +126,8 @@ export const anchorlessSeeTags = (root: string, files: string[]): string[] =>
         .flatMap((file) =>
             readFileSync(path.join(root, file), 'utf8')
                 .split('\n')
-                .flatMap((line, index) =>
-                    ANCHORLESS_SEE.test(line)
-                        ? [
-                              `${file}:${String(index + 1)}: ${line.replace(/^\s*\*\s*@see\s+/, '').trim()}`
-                          ]
-                        : []
-                )
+                .flatMap((line, index) => {
+                    const page = ANCHORLESS_SEE.exec(line)?.[1];
+                    return page ? [`${file}:${String(index + 1)}: ${page}`] : [];
+                })
         );

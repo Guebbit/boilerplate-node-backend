@@ -717,7 +717,7 @@ export default defineConfig(
                 }
             ],
             'jsdoc/informative-docs': 'error',
-            /*
+            /**
              * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
              * checks here are about truth, not presence:
              *
