@@ -15,6 +15,6 @@ export default {
     name: 'sitemap',
     mounts: [{ basePath: '/sitemap', routes: router }],
     config: [sitemapConfig.slice],
-    // Owns no collection: it publishes addresses that are already public.
+    /** Owns no collection: it publishes addresses that are already public. */
     personalData: 'none'
 } satisfies AppModule;
