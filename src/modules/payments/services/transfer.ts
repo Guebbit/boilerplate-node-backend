@@ -20,9 +20,9 @@ import { mailTransferInstructions } from './notify';
  * `order.created`'s listener: open the transfer payment of an order placed with `bank_transfer`.
  * Idempotent under the outbox's at-least-once delivery — the row is inserted only when absent, and
  * the instructions are mailed only by the call that inserted it. An order that is not a transfer,
- * not payable any more, or placed by a deployment that has since stopped offering transfers, opens
- * nothing; a payment that already exists (a card paid first, an operator recorded the money) is
- * left exactly as it is.
+ * not payable any more opens nothing; one placed by a deployment that has since stopped offering
+ * transfers gets its row but no mail; a payment that already exists (a card paid first, an operator
+ * recorded the money) is left exactly as it is.
  *
  * @param orderId - the order just placed
  */

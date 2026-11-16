@@ -5,13 +5,9 @@
  * (`repository.ts`'s `updateStatusIfIn`/`upsertConfirmable`), so membership in one of these sets
  * IS the guard, not a comment beside it.
  *
- * No explicit `from → to` graph the way `orders/domain/lifecycle.ts` walks one: every payment
- * transition already funnels through the one function that decides where it lands
- * (`settlePayment`), so nothing here ever asks "to what" — only "may I still move this payment".
- *
- * Each set below is an ARRAY, not a `Set`: it is read both as a membership test and as the `$in`
- * of the conditional write that re-asserts it while mongod holds the document, and a `Set` would
- * need re-spreading for the second.
+ * Only "may I still move this payment" is asked here, never "to what": `settlePayment` decides
+ * where each transition lands. Each set is an ARRAY so it serves as the `$in` of the conditional
+ * write as well as a membership test.
  *
  * @see docs/understand/tactical-ddd.md#who-writes-the-status
  */
@@ -137,7 +133,7 @@ export const FINAL_REFUND_FAILURES: readonly RefundFailureReason[] = [
     RefundFailureReason.expired_or_canceled_card,
     RefundFailureReason.lost_or_stolen_card,
     RefundFailureReason.provider_removed,
-    // A chargeback: the bank already took the money back. Final, but never settled by hand.
+    // A chargeback: the bank took the money back. Final; settled by hand only once a lost chargeback covers it.
     RefundFailureReason.disputed
 ];
 

@@ -205,8 +205,7 @@ const maySync = (payment: PaymentDocument, authContext?: AuthContext): boolean =
     isPayerWithCheckout(payment, authContext);
 
 /**
- * The refunds an operator may mark as returned: a hand-paid payment's pending ones, and a card
- * refund the provider refused in a way that proves the money did not move.
+ * The refunds an operator may mark returned by hand: exactly those `mayBeSettledByHand` allows.
  *
  * @param payment - the payment being served
  * @param authContext - the caller
@@ -219,8 +218,8 @@ const settleableByHand = (payment: PaymentDocument, authContext?: AuthContext): 
         : [];
 
 /**
- * The refunds an operator may void: the same money-provably-did-not-move set as
- * {@link settleableByHand}, because both rest on that one fact.
+ * The refunds an operator may void: `mayBeCanceled`'s set, which is {@link settleableByHand}'s less
+ * reversed refunds, plus a refund of a decided dispute.
  *
  * @param payment - the payment being served
  * @param authContext - the caller

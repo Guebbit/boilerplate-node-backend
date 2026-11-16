@@ -22,7 +22,7 @@ import { paymentService } from '../services';
 const searchPaymentsQuerySchema = SearchPaymentsBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    // A blank query value (`amountMin=`) is no filter; an amount stays decimal text.
+    /** A blank query value (`amountMin=`) is no filter; an amount stays decimal text. */
     amountMin: z.preprocess(blankToUndefined, SearchPaymentsBody.shape.amountMin),
     amountMax: z.preprocess(blankToUndefined, SearchPaymentsBody.shape.amountMax),
     disputed: optionalBooleanSchema

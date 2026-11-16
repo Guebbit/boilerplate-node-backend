@@ -21,7 +21,7 @@ export const paymentsJobs: readonly JobDeclaration[] = [
         ...paymentsJobData.sweepPaymentEffects,
         run: () => retryOpenRefunds().then(() => reconcileStalePayments()),
         /**
-         * A provider that hangs can keep one pass past its 5-minute interval; the lease stops a
+         * A provider that hangs can keep one pass past its interval; the lease stops a
          * second pass sending the same idempotency keys while the first is still running.
          */
         lease: { ttlMs: 10 * MINUTE_MS }

@@ -2,8 +2,9 @@
  * @module
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
- * total, and a refunding `ORDER_CANCELED` opens the refund — see `docs/modules/payments.md`)
- * Detaches an erased account through its own `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
+ * total, and a refunding `ORDER_CANCELED` opens the refund). Detaches an erased account through its
+ * own `personalData.erase` hook — the payment survives account erasure, same as the order it paid
+ * for.
  *
  * @see docs/modules/payments.md#its-neighbourhood
  */
@@ -20,8 +21,8 @@ import { refundForOrder } from './services/refunds';
 import { paymentsRateLimits } from './rate-limits';
 /**
  * Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
- * PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
- * module-barrel rule.
+ * PAYMENT_REFUNDED). Reached directly, never through this module's own barrel (CLAUDE.md,
+ * "Module barrels").
  */
 import {
     PAYMENT_SUCCEEDED,
@@ -164,7 +165,7 @@ export default {
          * reference and the instructions, opens with it.
          */
         onDomainEvent(ORDER_CREATED, ({ orderId }) => paymentService.openTransferPayment(orderId));
-        // This module's own two mails, from its own facts — see `./services/notify.ts`.
+        // This module's own mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, paymentService.mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, paymentService.mailRefundIssued);
         /**

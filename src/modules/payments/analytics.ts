@@ -2,7 +2,9 @@
  * @module
  * The analytics event names this module emits, declared by augmenting the analytics port's name
  * map — as `./audit.ts` does for audit actions — so controllers import this file directly rather
- * than a published copy. Naming rule: docs/understand/analytics.md#naming.
+ * than a published copy.
+ *
+ * @see docs/understand/analytics.md#naming
  */
 
 /**

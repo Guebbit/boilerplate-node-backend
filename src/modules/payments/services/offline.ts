@@ -46,14 +46,13 @@ export interface OfflinePaymentInput {
  * already been checked at the route, not a customer reading their own order. Recording money on
  * one's own order is allowed and flagged `ownOrder` on the audit row.
  *
+ * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+ * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+ *
  * @param orderId - the order the money arrived for
  * @param input - the method, an optional reference, and when the money actually arrived
  * @param context - the caller context to audit and analyse the attempt against — carries the
  *   admin's own identity, so a second `authContext` parameter would only repeat it
- */
-/**
- * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
- * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
  */
 export const recordOfflinePayment = async (
     orderId: string,

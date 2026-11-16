@@ -94,7 +94,7 @@ export const listPaymentMethods = (): PaymentMethodInfo[] => [
  * likely to paste one with them as without. A misconfigured value would otherwise only throw on
  * the first `GET /payments/methods` call, or worse, silently advertise a beneficiary with no
  * valid account behind it.
- * @returns the offending variable names; empty when nothing is wrong or transfer is unconfigured
+ * @returns the offending variable names; empty when nothing is wrong
  */
 export const validateBankTransferConfig = (): string[] => {
     const beneficiary = bankTransferBeneficiary();
@@ -216,8 +216,8 @@ export const paymentWebhookSecrets = (): string[] => {
 };
 
 /**
- * Days a bank-transfer payment is kept once it was canceled, so a late transfer can still be
- * found by its reference and recorded. A year: banks and buyers are slow, and a reference that
+ * Days a bank-transfer payment is kept once it is unpaid or canceled, so a late transfer can
+ * still be found by its reference and recorded. A year: banks and buyers are slow, and a reference that
  * stops matching would leave money with no order. Every other abandoned attempt goes after
  * {@link abandonedPaymentRetentionDays}.
  */
