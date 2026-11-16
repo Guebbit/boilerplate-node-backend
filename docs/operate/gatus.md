@@ -78,7 +78,7 @@ alerting:
 external-endpoints:
     # One per client. `ALERT_HEARTBEAT_URL` on that client is
     # https://GATUS_HOST/api/v1/endpoints/clients_acme-heartbeat/external?success=true
-    # and `ALERT_HEARTBEAT_TOKEN` is the token below.
+    # and the client's `alert_heartbeat_token` secret file holds the token below.
     - name: acme-heartbeat
       group: clients
       token: A_LONG_RANDOM_TOKEN
@@ -154,7 +154,7 @@ external-endpoints:
 
 The client's `BACKUP_HEARTBEAT_URL` is
 `https://GATUS_HOST/api/v1/endpoints/clients_acme-backup/external?success=true` and
-`BACKUP_HEARTBEAT_TOKEN` is the token above. A finished run pings green; a failed one pings
+the client's `backup_heartbeat_token` secret file holds the token above. A finished run pings green; a failed one pings
 `success=false` with the reason, so a failing job, a dead container and a dead host all end in the same
 alert. The second machine's weekly upkeep can have its own endpoint the same way
 ([Backup server](./backup-server.md#the-upkeep)). See [Backups](./backups.md#the-heartbeat).

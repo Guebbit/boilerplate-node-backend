@@ -84,7 +84,11 @@ flowchart LR
         redis["redis_password"]
         limits_file["limits_password"]
         rabbit["rabbitmq_password"]
-        keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token"]
+        keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token,<br/>device_cookie_secret"]
+        integrations["integration secrets:<br/>payment_webhook_secret, oauth_*,<br/>antibot_*, posthog_personal_api_key"]
+        smtp["smtp_password"]
+        alerts["alert_webhook_url,<br/>alert_heartbeat_token"]
+        beat["backup_heartbeat_token"]
     end
     root --> database
     root --> rsinit["mongo-rs-init"]
@@ -104,6 +108,15 @@ flowchart LR
     keys --> app
     keys --> cron
     keys --> setup
+    integrations --> app
+    integrations --> cron
+    integrations --> setup
+    smtp --> app
+    smtp --> cron
+    smtp --> setup
+    smtp --> alertmanager
+    alerts --> alertmanager
+    beat --> backup
 ```
 
 Create them once, before the first `up`. Hex output, because Redis reads its password from a
@@ -114,8 +127,16 @@ mkdir -p -m 0700 "clients/acme/secrets"
 for name in mongo_root_password mongo_app_password mongo_backup_password restic_password \
             redis_password limits_password rabbitmq_password \
             token_access token_refresh totp_encryption_key pii_encryption_key \
-            webhook_secret_encryption_key pseudonym_key metrics_token; do
+            webhook_secret_encryption_key pseudonym_key metrics_token device_cookie_secret; do
   openssl rand -hex 32 > "clients/acme/secrets/$name"
+  chmod 0644 "clients/acme/secrets/$name"
+done
+# The integrations: fill in the ones you use. An empty file is unset.
+for name in smtp_password payment_webhook_secret oauth_google_client_secret \
+            oauth_github_client_secret antibot_altcha_secret antibot_turnstile_secret \
+            posthog_personal_api_key alert_webhook_url alert_heartbeat_token \
+            backup_heartbeat_token; do
+  : > "clients/acme/secrets/$name"
   chmod 0644 "clients/acme/secrets/$name"
 done
 ```
@@ -132,11 +153,22 @@ done
   set by the compose file. The URLs carry no password; each password file is merged into its URL
   ([Secrets as files](configuration.md#secrets-as-files)).
 - **Managed Mongo, Redis or RabbitMQ:** compose refuses to start a service whose secret file is
-  missing, so leave the file **empty** (an empty file reads as unset, and the password in your
-  `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands), or put the managed password in it
-  and leave it out of the URL.
-- **Optional integrations** (SMTP, payments, OAuth, antibot) stay in `clients/acme/.env`, since a
-  file secret cannot be optional here.
+  missing. Put the managed password **in the file** and leave it out of the URL: a password left
+  inside the URL sits in `.env`, and so in `docker inspect`. Leaving the file **empty** reads as
+  unset, and the password in your `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands.
+- **Integrations** (SMTP, payments, OAuth, antibot, PostHog erasure): one file each, `smtp_password`,
+  `payment_webhook_secret` (it may hold the `new,old` ring), `oauth_google_client_secret`,
+  `oauth_github_client_secret`, `antibot_altcha_secret`, `antibot_turnstile_secret` and
+  `posthog_personal_api_key`. Fill in the ones you use; an **empty file is unset**, which is how
+  an optional secret stays optional. Delete the matching `NODE_*` lines from the client's `.env`: a
+  plain `NODE_X=value` left there is still read, and shows in `docker inspect` ([the empty-file
+  rule](configuration.md#secrets-as-files)). `NODE_SMTP_PASS` also reaches `alertmanager`, as the same file.
+- **Alerts and heartbeats** (monitoring and backup profiles): `alert_webhook_url` and
+  `alert_heartbeat_token` reach `alertmanager`, `backup_heartbeat_token` reaches `backup`; empty
+  is unset. A push channel's URL is a credential, so it is a file too. The heartbeat URLs
+  (`ALERT_HEARTBEAT_URL`, `BACKUP_HEARTBEAT_URL`) stay in `.env`: the token is the credential.
+- **Public values stay in `.env`:** the OAuth client IDs, the Turnstile site key, the bank IBAN
+  printed on invoices and the public `NODE_POSTHOG_API_KEY` ingestion key.
 - **RabbitMQ:** the 4.x image refuses `RABBITMQ_DEFAULT_PASS_FILE`, so the password goes into a
   config file the broker reads; **Redis** gets it the same way, never on a command line.
 - **Rotating** a Mongo or broker password: [security.md](../understand/security.md#database-credential-and-key-rotation);
@@ -184,14 +216,15 @@ what's running is exactly what was built.
 docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml logs -f app
 curl http://127.0.0.1:3000/livez     # liveness probe
 docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml ps
-docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml exec app env | grep -i password
+docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.production.yaml exec app env | grep -iE 'pass|secret|token|key'
+
 ```
 
 - `ps`: every service `healthy`, or `exited (0)` for the one-shot `setup` and `mongo-rs-init`.
-- `env | grep`: at most the optional integrations' secrets (SMTP, payments, OAuth, antibot), which
-  stay in `.env` by design.
-  Never a Mongo, Redis or RabbitMQ password: those reach the app as files. A test checks the compose
-  file, but only this sees a value someone put straight into the client's `.env`.
+- `env | grep`: **only `_FILE` paths** (`NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access`), plus
+  public values such as the OAuth client IDs. A secret value here was put straight into the client's
+  `.env`: move it into its file. The exception is `OTEL_EXPORTER_OTLP_HEADERS`, if you set it
+  ([OpenTelemetry](opentelemetry.md#configuration)). A test checks the compose file, but only this sees the `.env`.
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
 network. That is deliberate, see [Putting a reverse proxy in front](./first-deploy-proxy-and-storage.md#putting-a-reverse-proxy-in-front).

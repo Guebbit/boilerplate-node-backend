@@ -127,19 +127,19 @@ appears in `ps` or in `/proc/*/cmdline`.
 All in the client's `.env` (the block is in `.env-example`, Part D6). The compose file passes them
 to the container; none reaches the app.
 
-| Knob                                                     | Default                     | Meaning                                                                                               |
-| -------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `BACKUP_REPOSITORY`                                      | empty                       | Any restic repository. **Empty = dormant**: the container idles, healthy, runs nothing, no warning    |
-| secret `restic_password`                                 | -                           | Encrypts the repository                                                                               |
-| secret `restic_repository_env`                           | empty file                  | The repository's own login as `NAME=value` lines (`RESTIC_REST_USERNAME`, `AWS_SECRET_ACCESS_KEY`...) |
-| `BACKUP_SCHEDULE`                                        | `0 * * * *`                 | Cron expression (UTC). Hourly: cheap once deduplication works                                         |
-| `BACKUP_KEEP_HOURLY` / `_DAILY` / `_WEEKLY` / `_MONTHLY` | 24 / 7 / 4 / 6              | How many snapshots to keep. The only "size" control restic has; a hard cap is the storage's quota     |
-| `BACKUP_PRUNE`                                           | `true`                      | `false` when the repository is append-only: that side deletes, this one only adds                     |
-| `BACKUP_CHECK_SCHEDULE` / `BACKUP_CHECK_SUBSET`          | `30 3 * * 0` / `5%`         | The [weekly upkeep](#integrity-check)                                                                 |
-| `BACKUP_DATABASE`                                        | `true`                      | `false` when the database is not in this stack (a managed Mongo): the files are still backed up       |
-| `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                       | The [off-host freshness check](#the-heartbeat)                                                        |
-| `MONGO_BACKUP_USER`                                      | `backup`                    | The database account name                                                                             |
-| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag                                                                                         |
+| Knob                                                     | Default                     | Meaning                                                                                                             |
+| -------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `BACKUP_REPOSITORY`                                      | empty                       | Any restic repository. **Empty = dormant**: the container idles, healthy, runs nothing, no warning                  |
+| secret `restic_password`                                 | -                           | Encrypts the repository                                                                                             |
+| secret `restic_repository_env`                           | empty file                  | The repository's own login as `NAME=value` lines (`RESTIC_REST_USERNAME`, `AWS_SECRET_ACCESS_KEY`...)               |
+| `BACKUP_SCHEDULE`                                        | `0 * * * *`                 | Cron expression (UTC). Hourly: cheap once deduplication works                                                       |
+| `BACKUP_KEEP_HOURLY` / `_DAILY` / `_WEEKLY` / `_MONTHLY` | 24 / 7 / 4 / 6              | How many snapshots to keep. The only "size" control restic has; a hard cap is the storage's quota                   |
+| `BACKUP_PRUNE`                                           | `true`                      | `false` when the repository is append-only: that side deletes, this one only adds                                   |
+| `BACKUP_CHECK_SCHEDULE` / `BACKUP_CHECK_SUBSET`          | `30 3 * * 0` / `5%`         | The [weekly upkeep](#integrity-check)                                                                               |
+| `BACKUP_DATABASE`                                        | `true`                      | `false` when the database is not in this stack (a managed Mongo): the files are still backed up                     |
+| `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                       | The [off-host freshness check](#the-heartbeat); the token is the `backup_heartbeat_token` secret file in production |
+| `MONGO_BACKUP_USER`                                      | `backup`                    | The database account name                                                                                           |
+| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag                                                                                                       |
 
 `BACKUP_PRUNE` defaults to `true` on purpose. Forgotten `false` on a plain disk or S3 repository, the
 repository grows forever, silently. Forgotten `true` on an append-only server, `forget` is refused,

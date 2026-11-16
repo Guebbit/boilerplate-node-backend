@@ -26,7 +26,7 @@ trap cleanup EXIT
 
 # One random secret file per `NODE_*_FILE` variable the app reads. World-readable on purpose: the
 # container's `node` user is not the runner's uid, and the files are throwaway.
-for name in token_access token_refresh totp pii webhook pseudonym metrics; do
+for name in token_access token_refresh totp pii webhook pseudonym metrics device_cookie; do
     head -c 48 /dev/urandom | base64 -w0 >"$secrets/$name"
 done
 chmod 755 "$secrets"
@@ -47,7 +47,7 @@ docker run -d --name "$app" --network "$network" \
     -e NODE_URL=https://api.example.com \
     -e NODE_FRONTEND_URL=https://shop.example.com \
     -e NODE_CORS_ORIGIN=https://shop.example.com \
-    -e NODE_DEVICE_COOKIE_SECRET="$(head -c 48 /dev/urandom | base64 -w0)" \
+    -e NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie \
     -e NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access \
     -e NODE_TOKEN_REFRESH_FILE=/run/secrets/token_refresh \
     -e NODE_TOTP_ENCRYPTION_KEY_FILE=/run/secrets/totp \
