@@ -49,7 +49,7 @@ export const statsHandler = <
     namedHandler(name, (request: Request, response: Response) => {
         /**
          * readInput, `list` surface: the query only. Every stats route is a GET, and a GET body is
-         * never parsed (`app/security.ts`).
+         * never parsed (`src/app/security.ts`).
          */
         const query = parseBody(schema, readInput(request, { surface: 'list' }), response);
         if (!query) return undefined;

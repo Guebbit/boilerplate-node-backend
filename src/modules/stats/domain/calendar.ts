@@ -22,7 +22,7 @@ export interface CalendarDay {
 const toUtc = ({ year, month, day }: CalendarDay): number => Date.UTC(year, month - 1, day);
 
 /**
- * The calendar day a UTC timestamp falls on.
+ * Reads a UTC timestamp back as a calendar day: the inverse of `toUtc`.
  * @param timestamp - a UTC timestamp
  */
 const fromUtc = (timestamp: number): CalendarDay => {
@@ -55,7 +55,7 @@ export const parseDay = (text: string): CalendarDay | undefined => {
 };
 
 /**
- * Write a calendar day as `YYYY-MM-DD`.
+ * The `YYYY-MM-DD` spelling that `parseDay` reads back and the API echoes.
  * @param day - the calendar day
  */
 export const formatDay = ({ year, month, day }: CalendarDay): string =>
