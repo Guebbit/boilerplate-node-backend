@@ -42,7 +42,9 @@ flowchart LR
   With no `ALERT_*` knob set, Alertmanager sends every alert to `null`, which notifies no one.
   Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
   `ALERT_WEBHOOK_URL` (ntfy with a templated URL, or a bridge for anything else) and `ALERT_HEARTBEAT_URL` in the
-  client's `.env`. [Alert routing](prometheus.md#alert-routing) has the table.
+  client's `.env`; in production the webhook URL and the heartbeat token are not variables but the
+  `alert_webhook_url` and `alert_heartbeat_token` secret files. [Alert routing](prometheus.md#alert-routing)
+  has the table.
 - **Prove it once, on staging.** `docker compose ... stop app`: within about two minutes
   `[FIRING] ApiDown` reaches your `ALERT_*` receiver, and `start app` sends the resolution. Then stop
   `alertmanager`: Gatus reports the missing heartbeat ([the drill](gatus.md#the-local-drill)).

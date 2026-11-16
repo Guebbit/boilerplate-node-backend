@@ -5,8 +5,9 @@
 # Usage:   alertmanager-render.sh <template> <out-config> <secrets-dir> [exec alertmanager args...]
 # Reads:   ALERT_EMAIL_TO, ALERT_EMAIL_FROM, ALERT_WEBHOOK_URL, ALERT_HEARTBEAT_URL,
 #          ALERT_HEARTBEAT_TOKEN, and the app's NODE_SMTP_HOST / _PORT / _USER / _PASS.
-#          NODE_SMTP_PASS_FILE names a file holding the password and wins over NODE_SMTP_PASS (an
-#          empty file is unset): production hands the password over as a file, dev as a variable.
+#          Each of NODE_SMTP_PASS, ALERT_WEBHOOK_URL and ALERT_HEARTBEAT_TOKEN also has a `_FILE`
+#          form naming a file with the value, which wins over the plain variable (an empty file is
+#          unset): production hands them over as files, dev as variables.
 #          ALERT_SMTP_REQUIRE_TLS (default true) is the one extra: a plain-SMTP sink such as mailpit
 #          needs false.
 # Secrets: URLs, tokens and the SMTP password go to 0600 files in <secrets-dir>, never into the
@@ -49,9 +50,9 @@ smtp_host=${NODE_SMTP_HOST:-}
 smtp_user=${NODE_SMTP_USER:-}
 smtp_pass=$(secret_value "${NODE_SMTP_PASS:-}" "${NODE_SMTP_PASS_FILE:-}")
 from=${ALERT_EMAIL_FROM:-$smtp_user}
-webhook=${ALERT_WEBHOOK_URL:-}
+webhook=$(secret_value "${ALERT_WEBHOOK_URL:-}" "${ALERT_WEBHOOK_URL_FILE:-}")
 heartbeat=${ALERT_HEARTBEAT_URL:-}
-token=${ALERT_HEARTBEAT_TOKEN:-}
+token=$(secret_value "${ALERT_HEARTBEAT_TOKEN:-}" "${ALERT_HEARTBEAT_TOKEN_FILE:-}")
 
 # Which knob groups are on. A group needs everything it cannot work without.
 email=0

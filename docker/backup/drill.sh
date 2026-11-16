@@ -59,6 +59,7 @@ backup_image() {
         --tmpfs /tmp:mode=1777,size=256m \
         -v "$TMP/secrets/restic_password:/run/secrets/restic_password:ro" \
         -v "$TMP/secrets/mongo_backup_password:/run/secrets/mongo_backup_password:ro" \
+        -v "$TMP/secrets/backup_heartbeat_token:/run/secrets/backup_heartbeat_token:ro" \
         -v "$ID-ca:/ca-dir:ro" -v "$ID-uploads:/data/uploads:ro" -v "$ID-storage:/data/storage:ro" \
         -v "$ID-cache:/cache" -v "$ID-repo:/repo" \
         -e BACKUP_HOST=drill -e BACKUP_REPOSITORY="${BACKUP_REPOSITORY:-/repo}" \
@@ -87,6 +88,9 @@ for name in mongo_root_password mongo_app_password mongo_backup_password restic_
     openssl rand -hex 32 >"$TMP/secrets/$name"
     chmod 0644 "$TMP/secrets/$name"
 done
+# The Gatus endpoint below accepts exactly this token (the heartbeat's own secret file).
+printf '%s\n' drill-token >"$TMP/secrets/backup_heartbeat_token"
+chmod 0644 "$TMP/secrets/backup_heartbeat_token"
 chmod 0755 "$TMP" "$TMP/secrets"
 docker network create --internal --label "$ID" "$NET" >/dev/null
 for v in mongo-data keyfile ca repo cache uploads storage; do volume "$ID-$v"; done
@@ -214,7 +218,9 @@ expect_heartbeat() {
 }
 BACKUP_HEARTBEAT_URL='http://gatus:8080/api/v1/endpoints/drill_backup/external?success=true'
 export BACKUP_HEARTBEAT_URL
-EXTRA=(-e BACKUP_HEARTBEAT_TOKEN=drill-token)
+# The good run hands the token over as a file (production's form), the failing one as a variable (the
+# second machine's form, compose.backup-server.yaml): both reach Gatus, which refuses a wrong token.
+EXTRA=(-e BACKUP_HEARTBEAT_TOKEN_FILE=/run/secrets/backup_heartbeat_token)
 backup_image backup-job >/dev/null
 expect_heartbeat true
 echo "after a good run: success=true"

@@ -156,6 +156,10 @@ Same routing for every client and for dev; only the values differ.
 - **Secrets stay out of the config.** The webhook and heartbeat URLs, the token and the SMTP password are
   written to `0600` files at start and read through Alertmanager's `url_file` / `*_file` forms, so they do not
   show in `/api/v2/status`.
+- **In production the secrets are files.** The webhook URL, the heartbeat token and the SMTP password reach
+  the container as `alert_webhook_url`, `alert_heartbeat_token` and `smtp_password`
+  ([secret files](first-deploy.md#secrets)), through `ALERT_WEBHOOK_URL_FILE` and its siblings; an empty
+  file is unset. Dev keeps the plain `ALERT_*` variables.
 - **Values are escaped** (`/`, `&`, `\` and `'`) before they reach the template, so an address or a password can
   contain them.
 - **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and needs no

@@ -87,6 +87,8 @@ flowchart LR
         keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token,<br/>device_cookie_secret"]
         integrations["integration secrets:<br/>payment_webhook_secret, oauth_*,<br/>antibot_*, posthog_personal_api_key"]
         smtp["smtp_password"]
+        alerts["alert_webhook_url,<br/>alert_heartbeat_token"]
+        beat["backup_heartbeat_token"]
     end
     root --> database
     root --> rsinit["mongo-rs-init"]
@@ -113,6 +115,8 @@ flowchart LR
     smtp --> cron
     smtp --> setup
     smtp --> alertmanager
+    alerts --> alertmanager
+    beat --> backup
 ```
 
 Create them once, before the first `up`. Hex output, because Redis reads its password from a
@@ -130,7 +134,8 @@ done
 # The integrations: fill in the ones you use. An empty file is unset.
 for name in smtp_password payment_webhook_secret oauth_google_client_secret \
             oauth_github_client_secret antibot_altcha_secret antibot_turnstile_secret \
-            posthog_personal_api_key; do
+            posthog_personal_api_key alert_webhook_url alert_heartbeat_token \
+            backup_heartbeat_token; do
   : > "clients/acme/secrets/$name"
   chmod 0644 "clients/acme/secrets/$name"
 done
@@ -158,6 +163,10 @@ done
   an optional secret stays optional. Delete the matching `NODE_*` lines from the client's `.env`: a
   plain `NODE_X=value` left there is still read, and shows in `docker inspect` ([the empty-file
   rule](configuration.md#secrets-as-files)). `NODE_SMTP_PASS` also reaches `alertmanager`, as the same file.
+- **Alerts and heartbeats** (monitoring and backup profiles): `alert_webhook_url` and
+  `alert_heartbeat_token` reach `alertmanager`, `backup_heartbeat_token` reaches `backup`; empty
+  is unset. A push channel's URL is a credential, so it is a file too. The heartbeat URLs
+  (`ALERT_HEARTBEAT_URL`, `BACKUP_HEARTBEAT_URL`) stay in `.env`: the token is the credential.
 - **Public values stay in `.env`:** the OAuth client IDs, the Turnstile site key, the bank IBAN
   printed on invoices and the public `NODE_POSTHOG_API_KEY` ingestion key.
 - **RabbitMQ:** the 4.x image refuses `RABBITMQ_DEFAULT_PASS_FILE`, so the password goes into a

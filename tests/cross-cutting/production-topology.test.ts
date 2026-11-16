@@ -408,14 +408,14 @@ describe('the monitoring profile', () => {
     });
 
     /** One credential, one rotation: Prometheus reads the file the app reads its own token from. */
-    it('hands the metrics token to Prometheus, and the SMTP password to Alertmanager', () => {
+    it('hands the metrics token to Prometheus, and its own three secrets to Alertmanager', () => {
         const holders = Object.entries(mountedSecrets())
             .filter(([name, secrets]) => MONITORING.includes(name) && secrets.length > 0)
             .map(([name, secrets]) => [name, secrets]);
 
         expect(holders).toEqual([
             ['prometheus', ['metrics_token']],
-            ['alertmanager', ['smtp_password']]
+            ['alertmanager', ['smtp_password', 'alert_webhook_url', 'alert_heartbeat_token']]
         ]);
     });
 
@@ -504,7 +504,9 @@ describe('each service gets only its own secrets', () => {
     it('hands no secret value to any service through its environment', () => {
         const valueCarriers = Object.keys(compose.services).flatMap((name) =>
             Object.keys(environmentOf(name))
-                .filter((variable) => /(?:PASS|PASSWORD|SECRET)$/.test(variable))
+                .filter((variable) =>
+                    /(?:PASS|PASSWORD|SECRET|TOKEN)$|^ALERT_WEBHOOK_URL$/.test(variable)
+                )
                 .map((variable) => `${name}: ${variable}`)
         );
 

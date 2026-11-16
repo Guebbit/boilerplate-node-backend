@@ -156,7 +156,6 @@ x-backup-env: &backup-env
     BACKUP_CHECK_SCHEDULE: '${BACKUP_CHECK_SCHEDULE:-30 3 * * 0}'
     BACKUP_CHECK_SUBSET: '${BACKUP_CHECK_SUBSET:-5%}'
     BACKUP_HEARTBEAT_URL: '${BACKUP_HEARTBEAT_URL:-}'
-    BACKUP_HEARTBEAT_TOKEN: '${BACKUP_HEARTBEAT_TOKEN:-}'
     MONGO_BACKUP_USER: '${MONGO_BACKUP_USER:-backup}'
 
 x-app-env: &app-env
@@ -773,10 +772,13 @@ services:
             - /tmp:mode=1777,size=256m,noexec,nosuid
         environment:
             <<: *backup-env
+            # The heartbeat's bearer token is a file, not a value; `restore-drill` never pings.
+            BACKUP_HEARTBEAT_TOKEN_FILE: '/run/secrets/backup_heartbeat_token'
         secrets:
             - restic_password
             - restic_repository_env
             - mongo_backup_password
+            - backup_heartbeat_token
         volumes:
             # Read-only: a compromised backup container can read the files, never change them.
             - uploads:/data/uploads:ro
@@ -886,16 +888,19 @@ services:
             - '--config.file=/tmp/alertmanager.yml'
             - '--storage.path=/alertmanager'
         # From the client's `.env` through `--env-file`, never `env_file:`: the app's other
-        # secrets stay out of this container, and its SMTP password arrives as a file, never a
-        # value. Every knob empty = every route goes to `null`.
+        # secrets stay out of this container. The SMTP password, the webhook URL and the heartbeat
+        # token arrive as files, never as values: the URL of a push channel is a credential too.
+        # Every knob empty = every route goes to `null`.
         secrets:
             - smtp_password
+            - alert_webhook_url
+            - alert_heartbeat_token
         environment:
             ALERT_EMAIL_TO: '${ALERT_EMAIL_TO:-}'
             ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM:-}'
-            ALERT_WEBHOOK_URL: '${ALERT_WEBHOOK_URL:-}'
+            ALERT_WEBHOOK_URL_FILE: '/run/secrets/alert_webhook_url'
             ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL:-}'
-            ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN:-}'
+            ALERT_HEARTBEAT_TOKEN_FILE: '/run/secrets/alert_heartbeat_token'
             # The app's own SMTP account, so alerts need no second provider.
             NODE_SMTP_HOST: '${NODE_SMTP_HOST:-}'
             NODE_SMTP_PORT: '${NODE_SMTP_PORT:-587}'
@@ -1018,6 +1023,12 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/antibot_turnstile_secret
     posthog_personal_api_key:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/posthog_personal_api_key
+    alert_webhook_url:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_webhook_url
+    alert_heartbeat_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_heartbeat_token
+    backup_heartbeat_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/backup_heartbeat_token
 
 volumes:
     mongo-data:

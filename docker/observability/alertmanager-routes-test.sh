@@ -84,6 +84,29 @@ grep -q 'auth_password_file' "$work/alertmanager.yml" ||
         exit 1
     }
 
+echo "the webhook URL and heartbeat token from files"
+printf '%s\n' 'https://ntfy.example.test/from-file' > "$work/in/hook"
+printf '%s\n' 'token-from-file' > "$work/in/beat"
+render ALERT_WEBHOOK_URL_FILE="$work/in/hook" ALERT_HEARTBEAT_TOKEN_FILE="$work/in/beat" \
+    ALERT_HEARTBEAT_URL=https://gatus.example.test/api/v1/endpoints/x/external
+expect webhook alertname=ApiDown severity=critical
+expect heartbeat alertname=Watchdog
+grep -qx 'https://ntfy.example.test/from-file' "$work/secrets/webhook-url" ||
+    {
+        echo "FAIL: the webhook URL file was not read" >&2
+        exit 1
+    }
+grep -qx 'token-from-file' "$work/secrets/heartbeat-token" ||
+    {
+        echo "FAIL: the heartbeat token file was not read" >&2
+        exit 1
+    }
+
+echo "an empty webhook file leaves the webhook route off"
+: > "$work/in/hook"
+render ALERT_WEBHOOK_URL_FILE="$work/in/hook"
+expect null alertname=ApiDown severity=critical
+
 echo "an empty password file is unset"
 : > "$work/in/pass"
 render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test \
