@@ -1103,8 +1103,9 @@ const consumerBindings = new Map<string, (ch: ConfirmChannel) => Promise<void>>(
  * time, keeps each binding's three calls adjacent on the wire.
  */
 const replayConsumers = async (ch: ConfirmChannel): Promise<void> => {
-    if (consumingStopped) return;
     for (const bind of consumerBindings.values()) {
+        // Inside the loop: a stop that lands while one binding awaits must keep the rest unbound.
+        if (consumingStopped) return;
         await bind(ch);
     }
 };

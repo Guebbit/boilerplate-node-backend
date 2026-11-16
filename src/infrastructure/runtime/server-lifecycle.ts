@@ -7,6 +7,7 @@
  */
 
 import type { Server } from 'node:http';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Express } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import { shutdownAnalytics } from '@infrastructure/observability/analytics';
@@ -193,16 +194,6 @@ export const shutdownInfra = (
         .then(() => shutdownTracing());
 
 /**
- * Waits `ms` — a timer that, unlike the forced-exit one, keeps the process alive.
- *
- * @param ms - how long to wait; 0 resolves on the next timer tick
- */
-const wait = (ms: number): Promise<void> =>
-    new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-    });
-
-/**
  * The handler for a shutdown signal: the first one runs the whole sequence, every later one is
  * ignored (a second signal must not start a second teardown on top of the first).
  *
@@ -253,11 +244,18 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
         forcedExitTimer.unref();
 
         /**
-         * `void` marks the floating promise as intentional (the handler cannot be async:
-         * Node ignores a returned promise from a signal listener).
+         * Not awaited: the broker's cancel reply can stall for minutes, and the delay and the
+         * teardown must not wait on it. `stopConsuming` swallows its own failure; `stopQueue`
+         * cancels again later, so a consumer this call missed is still cancelled.
          */
-        void stopConsuming()
-            .then(() => wait(delayMs))
+        stopConsuming().catch(() => undefined);
+
+        /**
+         * `void` marks the floating promise as intentional (the handler cannot be async:
+         * Node ignores a returned promise from a signal listener). The delay is a ref'd timer, so
+         * the process stays alive for it.
+         */
+        void sleep(delayMs)
             .then(() => stopFunction())
             .then(() => {
                 // Stryker disable next-line all

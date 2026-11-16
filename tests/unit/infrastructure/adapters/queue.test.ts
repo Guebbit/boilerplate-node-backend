@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { z, type ZodType } from 'zod';
 import { EmailJobPayloadSchema, WORKER_CHANNELS } from '@types';
 import {
@@ -1181,6 +1182,26 @@ describe('stopConsuming()', () => {
         expect(mockConsume).not.toHaveBeenCalled();
     });
 
+    it('binds no further consumer when the stop lands while a replay is part way', async () => {
+        await ensureConnected();
+        await consumeFromQueue({ queue: 'mid-a', handler: jest.fn(), schema: anyPayload });
+        await consumeFromQueue({ queue: 'mid-b', handler: jest.fn(), schema: anyPayload });
+        // The first binding's consume is held open; the stop arrives while it is pending.
+        const gate = new EventTarget();
+        mockConsume.mockClear();
+        mockConsume.mockImplementationOnce(() =>
+            once(gate, 'open').then(() => ({ consumerTag: 'held' }))
+        );
+        const replaying = simulateReconnect();
+        await settle();
+
+        await stopConsuming();
+        gate.dispatchEvent(new Event('open'));
+        await replaying;
+
+        expect(mockConsume).toHaveBeenCalledTimes(1);
+    });
+
     it('binds no consumer registered after the signal', async () => {
         await ensureConnected();
         await stopConsuming();
@@ -1222,19 +1243,28 @@ describe('stopConsuming()', () => {
 });
 
 describe('stopQueue(drainTimeoutMs)', () => {
-    afterEach(disableRabbitMQ);
+    afterEach(() => {
+        jest.useRealTimers();
+        disableRabbitMQ();
+    });
 
-    it('stops waiting for a handler that outlives the budget it was given, then closes', async () => {
+    it('stops waiting for a handler once the budget it was given is spent, and no sooner', async () => {
         const stuck = jest.fn(() => new Promise<boolean>(() => undefined));
         const onMessage = await captureConsumerCallback(stuck);
         // Never settles: the handler is stuck, so the delivery's promise is left pending on purpose.
         Promise.resolve(onMessage(delivery({ jobId: 1 }))).catch(() => undefined);
         await settle();
         mockModelClose.mockClear();
+        jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
 
-        await stopQueue(20);
+        const stopping = stopQueue(20);
+        await jest.advanceTimersByTimeAsync(19);
+        expect(mockModelClose).not.toHaveBeenCalled();
 
-        expect(mockModelClose).toHaveBeenCalled();
+        await jest.advanceTimersByTimeAsync(1);
+        await stopping;
+
+        expect(mockModelClose).toHaveBeenCalledTimes(1);
     });
 });
 

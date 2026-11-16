@@ -13,6 +13,17 @@ jest.mock('@infrastructure/adapters/queue', () => ({
     stopQueue: jest.fn(),
     stopConsuming: jest.fn()
 }));
+/**
+ * Jest's fake timers do not cover `node:timers/promises`; this one waits on the global timer
+ * instead, which they do, so the delay can be advanced exactly.
+ */
+jest.mock('node:timers/promises', () => ({
+    __esModule: true,
+    setTimeout: (ms: number) =>
+        new Promise<void>((resolve) => {
+            setTimeout(resolve, ms);
+        })
+}));
 jest.mock('@infrastructure/runtime/readiness', () => ({
     __esModule: true,
     markServerDraining: jest.fn()
@@ -103,6 +114,16 @@ describe('createShutdownHandler', () => {
 
         await jest.advanceTimersByTimeAsync(1);
         expect(calls).toEqual(['draining', 'consumers cancelled', 'stopped']);
+    });
+
+    it('does not wait on the broker: a cancel that never answers delays nothing', async () => {
+        jest.mocked(stopConsuming).mockReturnValue(new Promise<void>(() => undefined));
+        const stop = recordingStop();
+        createShutdownHandler(stop)('SIGTERM');
+
+        await jest.advanceTimersByTimeAsync(DELAY_MS);
+
+        expect(stop).toHaveBeenCalledTimes(1);
     });
 
     it('exits 0 once the teardown completes', async () => {
