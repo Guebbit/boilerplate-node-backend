@@ -27,8 +27,8 @@ module.exports = {
     // Same on-disk cache as the base config, see its comment.
     cacheDirectory: base.cacheDirectory,
     testEnvironment: base.testEnvironment,
-    roots: ['<rootDir>/tests/cluster'],
-    testMatch: ['**/tests/cluster/**/*.test.ts'],
+    roots: ['<rootDir>/tests/cluster', '<rootDir>/tests/replicas'],
+    testMatch: ['**/tests/cluster/**/*.test.ts', '**/tests/replicas/**/*.test.ts'],
     /**
      * One at a time. Each case boots a cluster of real workers on a real port and fires a burst at
      * it; two of those in parallel are two bursts competing for the same CPUs, and a rate-limit
