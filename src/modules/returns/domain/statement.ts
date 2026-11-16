@@ -59,7 +59,8 @@ const rangeRefusal = (
 
 /**
  * The statement of a staff member's request. A withdrawal needs both fields; any other reason takes
- * no channel, and a remainder cancel takes no date either (there is no asking to date).
+ * no channel; a remainder cancel for any other reason takes no date either (there is no asking to
+ * date).
  * @param input - the request and the order
  */
 const staffStatement = (input: StatementInput): StatementVerdict => {

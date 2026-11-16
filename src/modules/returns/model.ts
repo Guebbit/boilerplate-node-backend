@@ -6,9 +6,10 @@
  * exemption `invoicing` already documents — a return is the same kind of legal/accounting record.
  *
  * Lifecycle: `requested → approved → received → closed`, or `requested → declined`, or
- * `approved → canceled` (the goods never came). A withdrawal
- * (`reason: withdrawal`) is a right, not a request, so it is born `approved`. See
- * `docs/modules/returns.md`.
+ * `approved → canceled` (the goods never came). A withdrawal (`reason: withdrawal`) is a right,
+ * not a request: born `approved` after dispatch, `closed` before (`services/withdraw.ts`).
+ *
+ * @see docs/modules/returns.md#the-lifecycle
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -41,7 +42,7 @@ export interface ReturnLine {
     restocked?: number;
 }
 
-/** Return Document interface. */
+/** The stored Return. `status` moves only through the table in `domain/lifecycle.ts`. */
 export interface ReturnDocument extends Document {
     orderId: Types.ObjectId;
     /** The order's human number, copied so a staff queue reads without a join. */
@@ -208,7 +209,7 @@ returnSchema.index({ status: 1, receivedAt: 1 }, { name: 'returns_status_receive
  * reads.
  */
 export const applyReturnTransform = applySerialization(returnSchema, {
-    // Bookkeeping that keeps delivery from being refunded twice — not part of the `Return` contract.
+    /** Bookkeeping that keeps delivery from being refunded twice; not on the `Return` contract. */
     omit: ['shippingRefund']
 });
 
@@ -227,7 +228,7 @@ export interface ReturnOrderLockDocument extends Document {
     openings: number;
 }
 
-/** Return-order lock model type. */
+/** Model type of the per-order lock row; see {@link ReturnOrderLockDocument}. */
 export type ReturnOrderLockModel = Model<ReturnOrderLockDocument>;
 
 /** Schema of the lock row; `_id` is the order's id, so there is one row per order by construction. */

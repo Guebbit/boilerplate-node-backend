@@ -3,16 +3,14 @@
  * What a received return is owed — pure arithmetic in integer minor units, so the figure a customer
  * is quoted and the figure `payments` sends can never differ by a cent of float drift.
  *
- * Amount = the returned lines + the refundable shipping − the handling deduction.
- *
- * Shipping is refunded by whichever cancel or return takes the LAST unit of the order — never twice,
- * and never split across the partial ones. That is standard practice, and the only reading of Art.
- * 13(2) that does not refund delivery twice across two partial returns. How much depends on what
- * closes the order: a cancel refunds all of it (nothing was delivered for it, as a pre-dispatch
- * cancel always has); a return refunds by its reason — a withdrawal gets back up to the cheapest
- * standard delivery the shop offers (a dearer method's surcharge stays with the shop, Art. 13(2));
- * goods that were faulty or not what was ordered are the seller's own doing, so the whole delivery
- * goes back.
+ * Amount:    the returned lines + the refundable shipping − the handling deduction.
+ * Shipping:  refunded once, by whichever cancel or return takes the LAST unit of the order, never
+ *            split across partial ones (the only reading of Art. 13(2) that does not refund
+ *            delivery twice).
+ * A cancel:  refunds all of it; nothing was delivered for it.
+ * A return:  by its reason. A withdrawal gets back up to the cheapest standard delivery the shop
+ *            offers (a dearer method's surcharge stays with the shop, Art. 13(2)); a faulty or
+ *            wrong item is the seller's doing, so the whole delivery goes back.
  *
  * @see docs/modules/returns.md#what-the-customer-gets-back
  */

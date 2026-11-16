@@ -2,8 +2,9 @@
  * @module
  * What an order can still send back, and what it can still cancel — computed here, once, so no
  * client re-derives a quantity or a refund. `returnable` is what has SHIPPED and is not already
- * coming back, offered only to the buyer and only while a `reasons` deadline is open; `cancelable` is each fulfillment order with a remainder and the exact refund
- * cancelling it would owe, delivery included when it takes the last unit.
+ * coming back, offered only while the caller can name a reason (the buyer's open deadlines, or
+ * every reason for staff acting for them); `cancelable` is each fulfillment order with a remainder
+ * and the exact refund cancelling it would owe, delivery included when it takes the last unit.
  *
  * @see docs/modules/returns.md#the-options-read
  */

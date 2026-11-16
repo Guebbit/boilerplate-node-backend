@@ -232,8 +232,9 @@ const announceCanceled = (
  * What the caller may do here, before anything is written. The rule itself is `cancelRefusalOf`;
  * this adds what only the request knows — the reason it names and what the buyer stated. The buyer
  * names `withdrawal`, their own right. Staff name any reason for their own cancel, or `withdrawal`
- * with the day and channel the buyer stated it, to record theirs. The key is asked first (403), so
- * a caller without it never learns what else is wrong.
+ * with the day and channel the buyer stated it, to record theirs. The key is asked first for
+ * staff (403), so a staff caller without it never learns what else is wrong; a buyer naming
+ * another reason gets 422 first.
  *
  * @param input - the request
  * @param context - the caller, for the audit entry of a refusal
