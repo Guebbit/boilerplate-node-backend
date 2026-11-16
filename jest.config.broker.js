@@ -4,9 +4,11 @@
  * Same reasoning as `jest.config.cluster.js`, for the same reasons: the defaults in
  * `jest.config.js` are wrong here.
  *
- *   `setupFiles`     `tests/support/setup.ts` raises rate-limit budgets and boots i18n, none of which
- *                    the queue adapter touches. It also would not help: these tests build the
- *                    adapter's environment themselves, per case.
+ *   `setupFiles`     only `tests/support/setup-environment.ts`: plain `??=` env defaults, no imports,
+ *                    so it boots nothing. It supplies the secrets the adapter's import chain demands
+ *                    (`NODE_PSEUDONYM_KEY`, which has no built-in value). NOT `tests/support/setup.ts`,
+ *                    which boots i18n and raises budgets the queue adapter never touches; the cases
+ *                    still build the adapter's own environment per case.
  *   `globalSetup`    starts a shared in-memory mongod. Nothing here reads a database.
  *   `testTimeout`    30s. Pulling a RabbitMQ image and waiting out a retry TTL is longer; the files
  *                    set their own.
@@ -23,6 +25,7 @@ module.exports = {
     // Same on-disk cache as the base config, see its comment.
     cacheDirectory: base.cacheDirectory,
     testEnvironment: base.testEnvironment,
+    setupFiles: ['<rootDir>/tests/support/setup-environment.ts'],
     roots: ['<rootDir>/tests/broker'],
     testMatch: ['**/tests/broker/**/*.test.ts'],
     /**
