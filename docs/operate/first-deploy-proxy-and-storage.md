@@ -19,12 +19,12 @@ What differs from dev, how to put TLS in front, where uploads live, and the firs
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
 | API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
 | Full observability stack included                           | Only with the `monitoring` profile — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts)                     |
-| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with `--scale app=N`                                              |
+| `NODE_ENABLE_CLUSTERING=1` (optional, `dev:docker:cluster`) | The image runs `src/main.ts`: one process per container, always; scale with orchestrator replicas                                        |
 | Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
 | Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
 | Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up                    |
 
-Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
+Clustering is off on purpose: scale with an orchestrator's replicas instead, so
 one thing decides how many processes are live, not two layers of process management fighting a
 rolling deploy.
 
