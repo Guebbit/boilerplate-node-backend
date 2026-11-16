@@ -66,11 +66,85 @@ export const containerEngineAvailable = (): boolean => {
     }
 };
 
+/** Label every container {@link startContainer} starts carries, so a sweep can find them. */
+const TEST_LABEL = 'node-backend.test';
+
+/** Label holding the pid of the process that started the container. */
+const OWNER_LABEL = 'node-backend.owner-pid';
+
+/**
+ * Whether a process with this pid is still running.
+ *
+ * Signal 0 only checks existence. `EPERM` means it exists but belongs to another user: alive.
+ *
+ * @param pid - the owner pid read from a container label
+ */
+export const isProcessAlive = (pid: number): boolean => {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        // Narrowed: `process.kill` only throws Node system errors, which carry `code`.
+        return (error as NodeJS.ErrnoException).code === 'EPERM';
+    }
+};
+
+/**
+ * Picks the containers whose owner process is gone, from `ps` rows of `<id> <k=v,k=v labels>`.
+ *
+ * Pure so the "never touch a live owner" rule is testable without an engine. A row it cannot
+ * parse is left alone.
+ *
+ * @param rows - the lines `ps --format "{{.ID}} {{.Labels}}"` printed
+ * @param alive - the owner check, injectable for tests
+ */
+export const orphanedContainerIds = (
+    rows: readonly string[],
+    alive: (pid: number) => boolean = isProcessAlive
+): string[] =>
+    rows.flatMap((row) => {
+        // Podman and Docker both print `.Labels` as `k=v,k=v`, so the pid is read out by name.
+        const id = row.trim().split(/\s+/, 1)[0];
+        const pid = Number(/node-backend\.owner-pid=(\d+)/.exec(row)?.[1]);
+        return id && Number.isInteger(pid) && pid > 0 && !alive(pid) ? [id] : [];
+    });
+
+/**
+ * Removes the test containers a killed run left behind.
+ *
+ * A killed jest never reaches its `afterAll`, and `--rm` never fires because Redis does not
+ * exit. Containers whose owner pid is dead are removed; a live owner's (a parallel lane) never.
+ * Best effort: a failure here must not fail the run.
+ */
+export const reapOrphanedContainers = (): Promise<void> =>
+    new Promise<void>((resolve) => {
+        // `ps -a`: include stopped ones; `--filter label=…`: only ours; the format prints all labels.
+        execFile(
+            containerEngine,
+            ['ps', '-a', '--filter', `label=${TEST_LABEL}`, '--format', '{{.ID}} {{.Labels}}'],
+            (error, stdout) => {
+                const ids = error ? [] : orphanedContainerIds(stdout.split('\n').filter(Boolean));
+                if (ids.length === 0) {
+                    resolve();
+                    return;
+                }
+                // `rm -f`: stops and removes in one go.
+                execFile(containerEngine, ['rm', '-f', ...ids], (rmError) => {
+                    if (rmError) {
+                        // eslint-disable-next-line no-console -- a failed best-effort sweep is reported, never thrown
+                        console.warn(`Could not reap orphaned test containers: ${rmError.message}`);
+                    }
+                    resolve();
+                });
+            }
+        );
+    });
+
 /**
  * Runs one container, detached and removed on exit.
  *
- * `--rm`, so an interrupted run leaves nothing behind for the next one to collide with; the name is
- * random for the same reason.
+ * `--rm` only fires if the container exits, which Redis never does. Instead it first reaps the
+ * containers of dead owners, and the random name keeps two live runs apart.
  *
  * @param spec - the image, name prefix, ports and environment
  * @returns the host ports and a `stop`
@@ -78,38 +152,53 @@ export const containerEngineAvailable = (): boolean => {
 export const startContainer = (spec: ContainerSpec): Promise<RunningContainer> => {
     const name = `${spec.namePrefix}-${randomUUID().slice(0, 8)}`;
 
-    return Promise.all(spec.ports.map(() => freePort())).then(
-        (hostPorts) =>
-            new Promise<RunningContainer>((resolve, reject) => {
-                const publish = spec.ports.flatMap((port, index) => [
-                    '-p',
-                    `${String(hostPorts[index])}:${String(port)}`
-                ]);
-                const env = Object.entries(spec.env ?? {}).flatMap(([key, value]) => [
-                    '-e',
-                    `${key}=${value}`
-                ]);
+    return reapOrphanedContainers()
+        .then(() => Promise.all(spec.ports.map(() => freePort())))
+        .then(
+            (hostPorts) =>
+                new Promise<RunningContainer>((resolve, reject) => {
+                    const publish = spec.ports.flatMap((port, index) => [
+                        '-p',
+                        `${String(hostPorts[index])}:${String(port)}`
+                    ]);
+                    const env = Object.entries(spec.env ?? {}).flatMap(([key, value]) => [
+                        '-e',
+                        `${key}=${value}`
+                    ]);
 
-                // `execFile`: starts the container detached (`-d`) and removed on stop (`--rm`), publishing the ports
-                // and env above; the callback gets the error, if any.
-                execFile(
-                    containerEngine,
-                    ['run', '-d', '--rm', '--name', name, ...publish, ...env, spec.image],
-                    // Typed rather than narrowed: node hands back `Error | null`.
-                    (error: Error | null) => {
-                        if (error) {
-                            reject(error);
-                            return;
+                    // `execFile`: starts the container detached (`-d`) and removed on stop (`--rm`), publishing the ports
+                    // and env above; the callback gets the error, if any.
+                    execFile(
+                        containerEngine,
+                        [
+                            'run',
+                            '-d',
+                            '--rm',
+                            '--name',
+                            name,
+                            '--label',
+                            `${TEST_LABEL}=1`,
+                            '--label',
+                            `${OWNER_LABEL}=${String(process.pid)}`,
+                            ...publish,
+                            ...env,
+                            spec.image
+                        ],
+                        // Typed rather than narrowed: node hands back `Error | null`.
+                        (error: Error | null) => {
+                            if (error) {
+                                reject(error);
+                                return;
+                            }
+                            resolve({
+                                hostPorts,
+                                stop: () =>
+                                    new Promise<void>((done) => {
+                                        execFile(containerEngine, ['rm', '-f', name], () => done());
+                                    })
+                            });
                         }
-                        resolve({
-                            hostPorts,
-                            stop: () =>
-                                new Promise<void>((done) => {
-                                    execFile(containerEngine, ['rm', '-f', name], () => done());
-                                })
-                        });
-                    }
-                );
-            })
-    );
+                    );
+                })
+        );
 };

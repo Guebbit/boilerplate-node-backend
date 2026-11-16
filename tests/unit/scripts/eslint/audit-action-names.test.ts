@@ -22,6 +22,8 @@ const PROBE_RELATIVE = path.relative(REPO_ROOT, path.join(PROBE_DIR, 'audit.ts')
 
 /** Lints `source` as a module's `audit.ts` and returns the `no-restricted-syntax` messages. */
 const lintAuditFile = (source: string): Promise<string[]> => {
+    // A killed earlier run never reached its `afterEach`; its leftover would break a commit.
+    rmSync(PROBE_DIR, { recursive: true, force: true });
     mkdirSync(PROBE_DIR, { recursive: true });
     writeFileSync(path.join(PROBE_DIR, 'audit.ts'), source);
 

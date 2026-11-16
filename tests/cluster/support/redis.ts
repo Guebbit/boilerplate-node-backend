@@ -48,8 +48,8 @@ const waitForPong = (port: number, timeoutMs: number): Promise<void> =>
 /**
  * A Redis to count in, and the way to stop it.
  *
- * The container is named per run and started with `--rm`, so an interrupted run leaves nothing
- * behind for the next one to collide with.
+ * The container is named per run. A killed run's container is reaped by the next run's start,
+ * once its owner process is gone (see `startContainer`).
  */
 export const startRedis = (): Promise<TestRedis> => {
     const provided = process.env.NODE_TEST_REDIS_URL?.trim();

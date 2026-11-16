@@ -62,6 +62,12 @@ and a second run inside one would start against a budget the first had already s
 `${CONTAINER_ENGINE:-podman}` and stops it afterwards. CI sets the variable, because a service
 container is already listening there.
 
+Each container carries its owner's pid as a label. A killed run (Ctrl+C, a timeout) never reaches
+its `afterAll`, so the next run that starts a container first removes those whose owner is gone;
+a live run's container, in a parallel lane, is never touched. The owner check uses process ids, so
+a run from another pid namespace that shares the engine socket (a flatpak IDE, a devcontainer)
+looks dead to it.
+
 The suite **fails** rather than skips when neither is available. A security control nobody checked
 is the thing it exists for, and a green skip reads exactly like a green pass.
 
