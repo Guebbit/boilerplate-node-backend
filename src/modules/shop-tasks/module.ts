@@ -63,7 +63,7 @@ export default {
     config: [shopTasksConfig.slice],
     jobs: shopTasksJobs,
     onRegistered,
-    // Writes through `tasks` and `notifications`, which export and erase their own rows.
+    /** Writes through `tasks` and `notifications`, which export and erase their own rows. */
     personalData: 'none',
     subscribe: () => {
         // The to-dos: each situation's opening event and the event that ends it.

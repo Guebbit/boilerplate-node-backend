@@ -83,7 +83,7 @@ const SUMMARIES: readonly Summary[] = [
     }
 ];
 
-/** Read every figure the summaries need. */
+/** One read per figure per run, shared by every summary row of that run. */
 const readFigures = (now: Date): Promise<Figures> => {
     const config = shopTasksConfig();
     return Promise.all([

@@ -32,10 +32,7 @@ import { MINUTE_MS, dayInZone } from '@domain-primitives/time';
 /** The payments page, on the tab of what needs a person. */
 const PAYMENTS_ATTENTION_WORK = `${FRONTEND_LINK_RULES.staffPages.salesPayments}?tab=attention`;
 
-/**
- * The staff screen of an order.
- *
- */
+/** The to-do's `work` link: the order's staff screen, filled with its id. */
 const orderWork = (orderId: string): string =>
     fillPath(FRONTEND_LINK_RULES.links.order, { id: orderId });
 
@@ -77,7 +74,7 @@ const guarded = (name: string, work: () => Promise<void>): Promise<void> =>
 const legalDeadlineOf = (due: RefundDue | undefined): LegalDeadline | undefined =>
     due && { rule: due.dueRule, day: dayInZone(due.dueBy, shopTimezone()) };
 
-/** The task handlers `module.ts` subscribes; each is `(payload, meta)`. */
+/** The task handlers `module.ts` subscribes; each takes the event payload, most also its `meta`. */
 export const shopTasks = {
     /** `payment.refund_owed_by_hand`: money to send outside the app. */
     onRefundOwedByHand: (
