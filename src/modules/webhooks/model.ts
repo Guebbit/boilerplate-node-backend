@@ -49,8 +49,8 @@ export interface WebhookSubscriptionDocument extends Document {
     /**
      * When the CURRENT failure streak began — the first failure after a success (or after
      * creation), cleared on the next success. `domain#shouldAutoDisable`'s time floor reads this;
-     * `repository.ts#recordOutcome` is the only writer. Absent whenever the streak is empty:
-     * `consecutiveFailures` is 0.
+     * stamped by `repository.ts#recordOutcome`, cleared there and by `enable`. Absent whenever the
+     * streak is empty: `consecutiveFailures` is 0.
      */
     failingSince?: Date;
     /**
@@ -73,7 +73,11 @@ export const webhookSubscriptionSchema = new Schema<
     WebhookSubscriptionModel
 >(
     {
-        // The organisation this row belongs to. See docs/understand/tenancy.md.
+        /**
+         * The organisation this row belongs to.
+         *
+         * @see docs/understand/tenancy.md#_5-·-how-a-request-finds-its-organisation
+         */
         tenant: {
             type: String,
             required: true,
@@ -136,7 +140,8 @@ export const webhookSubscriptionSchema = new Schema<
 );
 
 /**
- * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ * The edit counter behind this resource's `ETag` and `If-Match` — see
+ * `@infrastructure/persistence/revision-plugin`.
  */
 webhookSubscriptionSchema.plugin(revisionPlugin);
 
@@ -189,9 +194,7 @@ export const webhookSubscriptionModel = model<
  * calls the endpoint. It exists so the sweep (which only publishes, never claims) and a worker
  * racing the same due row cannot both deliver it — never a state a caller sets directly. A failed
  * attempt with retries left goes back to `pending` with a later `nextAttemptAt`; only `exhausted`
- * is terminal. No `failed` state: Stripe, GitHub and Svix all keep per-attempt history instead, so
- * even under that design a failure belongs on an attempt, not on the delivery row — a future
- * per-attempt log would carry its own outcome enum rather than reviving this one.
+ * is terminal.
  */
 export interface WebhookDeliveryDocument extends Document {
     tenant: string;

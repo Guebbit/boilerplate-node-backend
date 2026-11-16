@@ -93,8 +93,8 @@ export interface OrderTaxInput {
     items: readonly TaxableLineItem[];
     /**
      * The shipping cost frozen at checkout. Delivery carries no rate of its own — it is taxed as
-     * ancillary to the goods it delivers — so this is apportioned pro-rata across the lines by
-     * their own gross value, then taxed at each line's own rate. `unknown` because it arrives as
+     * ancillary to the goods it delivers — so this is apportioned pro-rata across the shipped lines
+     * by their own gross value, then taxed at each line's own rate. `unknown` because it arrives as
      * raw aggregate output; absent on an order that chose no delivery method.
      */
     shippingCost?: unknown;
@@ -235,7 +235,7 @@ export const orderTaxBreakdown = ({
 
     const grossAmounts = items.map((item) => lineGross(item, currency));
     /**
-     * Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
+     * Shipping is ancillary to the goods it delivers (see `OrderTaxInput.shippingCost`) — a digital line
      * carries none of it, so its weight in the apportionment is zero rather than its gross value.
      */
     const shippingWeights = items.map((item, index) =>

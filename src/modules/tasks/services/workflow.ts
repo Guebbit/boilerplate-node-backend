@@ -150,6 +150,9 @@ const superseded = (task: TaskDocument): Promise<ResponseReject> =>
  * and either answers the 409 the new state earns or tries the door again from where the task now
  * stands.
  *
+ * After the last lost race the answer is the app-wide 409 `CONFLICT`, not a code about the task's
+ * state: every door can reach it, and `TASK_ALREADY_OPEN` would be false for resolve and mark-spam.
+ *
  * @param door - which door
  * @param id - the task
  * @param context - the caller
@@ -178,10 +181,7 @@ const move = (
                     return attempts > 1
                         ? move(door, id, context, attempts - 1)
                         : generateReject(409, [
-                              {
-                                  code: ERROR_CODES.TASK_ALREADY_OPEN,
-                                  message: t('tasks.already-open')
-                              }
+                              { code: ERROR_CODES.CONFLICT, message: t('tasks.keeps-changing') }
                           ]);
 
                 recordAudit(context, {

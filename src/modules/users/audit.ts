@@ -3,6 +3,7 @@
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
  * why, rather than a shared enum. Most are `admin.` because they are the admin-facing writes
  * to the user record; what a person does to their own account is `account`'s vocabulary.
+ *
  * @see docs/modules/users.md#the-pipeline
  */
 
@@ -13,7 +14,7 @@ export const usersAuditActions = {
     ADMIN_USER_CREATED: 'admin.user.created',
     ADMIN_USER_UPDATED: 'admin.user.updated',
     /**
-     * Split from one `ADMIN_USER_DELETED` so the audit trail can answer "was an
+     * Kept apart from a plain delete so the audit trail can answer "was an
      * erasure request actually discharged" — only the hard path scrubs the record; a soft delete
      * is a restore waiting to happen. `audit-logs/model.ts` types `action` as a widened `string`
      * precisely so a renamed action does not invalidate stored history.
@@ -28,9 +29,9 @@ export const usersAuditActions = {
     /** `ops:reapply-erasures` set or cleared an owner's deletion lock on a restored database. */
     SYSTEM_USER_DELETION_LOCK_RESTORED: 'system.user.deletion_lock_restored',
     /**
-     * A ban is `active: false` on the same PUT every other edit uses — see `users/services/update.ts`'s
-     * `auditActionForUpdate`. Split from `ADMIN_USER_UPDATED` so the history answers "was this
-     * account banned" without a reader having to diff two revisions of the row.
+     * A ban is its own action: `deactivate` (`services/activation.ts`) writes it, not the PUT.
+     * Split from `ADMIN_USER_UPDATED` so the history answers "was this account banned" without a
+     * reader having to diff two revisions of the row.
      */
     ADMIN_USER_BANNED: 'admin.user.banned',
     ADMIN_USER_UNBANNED: 'admin.user.unbanned',

@@ -102,8 +102,8 @@ const searchWithTranslatedText = (
  * stock counters stay for a holder of `read:StockLevel` — see `./stock-view` — and each row's
  * `actions` is the caller's own, or all `false` for a caller answered from the shared cache.
  *
- * Wraps rather than folds into `search()`: every other caller of `search()` — unit tests among them — reads
- * the catalogue without a `CallerContext` to give. A search is NOT reported from here: the
+ * Wraps rather than folds into `search()`: every other caller of `search()` — unit tests among them
+ * — reads the catalogue without a `CallerContext` to give. A search is NOT reported from here: the
  * response cache hides most reads, so the browser reports it (`modules/analytics`).
  */
 export const searchForCaller = (
@@ -127,7 +127,9 @@ export const searchForCaller = (
  *
  * A pass-through today — `facets()` on the repository already scopes to active, non-deleted rows.
  * Kept here anyway since a controller reaching past the service is the one shape this layer stack
- * disallows; see `docs/understand/layers.md`.
+ * disallows.
+ *
+ * @see docs/understand/layers.md#what-each-layer-should-not-do
  */
 export const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();

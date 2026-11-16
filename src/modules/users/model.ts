@@ -43,7 +43,7 @@ export interface UserRecord extends Omit<
      * linked provider, until a future "add a password" flow gives it one.
      */
     password?: string;
-    // soft delete
+    /** When the account was soft-deleted; cleared by a restore. */
     deletedAt?: Date;
 
     /**
@@ -123,8 +123,7 @@ export interface UserRecord extends Omit<
 
     /**
      * Redeclared as `Date`, like `ProductDocument` and `OrderDocument`: the contract carries ISO
-     * strings, `timestamps: true` writes real `Date`s. This model missed that treatment until a
-     * fixture pinning `createdAt: string` surfaced the mismatch.
+     * strings, `timestamps: true` writes real `Date`s.
      */
     createdAt?: Date;
     updatedAt?: Date;
@@ -178,7 +177,9 @@ export interface UserRecord extends Omit<
      * An address requested through `PUT /account` but not yet proven — `select: false`, same
      * reasoning as `password`. The account keeps its current, verified `email` until this is
      * confirmed through the `'email-change'` token (`account/services/verification.ts`); absent
-     * means no change is pending. See `docs/modules/users.md`.
+     * means no change is pending.
+     *
+     * @see docs/modules/account.md#proving-an-address
      */
     pendingEmail?: string;
 
@@ -344,8 +345,8 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             /**
              * Mongoose applies both casters before validation and on every `$set`/`$or`/`$in`
              * built against this path, so login, signup, OAuth and admin writes are all covered
-             * with no call-site change — `normalizeEmail` (re-exported below, from
-             * `@infrastructure/persistence/normalize-email`) covers the in-memory comparisons
+             * with no call-site change — `normalizeEmail`
+             * (`@infrastructure/persistence/normalize-email`) covers the in-memory comparisons
              * Mongoose itself can't reach.
              */
             lowercase: true,
@@ -472,7 +473,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             /**
              * Same casters as `email` above — a pending change must compare and collide the same
              * way the live address does, or a case-only re-send of the current address would look
-             * like a real change (see `normalizeEmail`, re-exported below).
+             * like a real change (see `normalizeEmail`).
              */
             lowercase: true,
             trim: true
@@ -786,7 +787,7 @@ export type UserWire = Omit<UserRecord, (typeof WIRE_OMITTED_FIELDS)[number]>;
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from `_id`, `_id`/`__v`
- * stripped, plus `password` — a credential that must never leave the server. It is
+ * stripped, and `password` omitted too — a credential that must never leave the server. It is
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./repository`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
  * and every route serving a `User` list requires `read:User`.

@@ -68,13 +68,13 @@ const actionsForCaller = (authContext: AuthContext): ((returned: StatusOnly) => 
             approve: mayDecide && returnLifecycle.allows('approve', status),
             decline: mayDecide && returnLifecycle.allows('decline', status),
             receive: mayReceive && returnLifecycle.allows('receive', status),
-            // The proof is recorded once, on a return still waiting for its goods.
+            /** The proof is recorded once, on a return still waiting for its goods. */
             recordProof:
                 mayReceive &&
                 returnLifecycle.allows('receive', status) &&
                 returned.proofOfSendingAt === undefined,
             close: mayReceive && returnLifecycle.allows('close', status),
-            // The same refusal the cancel door makes: a refund the proof opened is owed.
+            /** The same refusal the cancel door makes: a refund the proof opened is owed. */
             cancel:
                 mayDecide &&
                 returnLifecycle.allows('cancel', status) &&

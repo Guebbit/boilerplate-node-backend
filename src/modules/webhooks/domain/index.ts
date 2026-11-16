@@ -1,7 +1,9 @@
 /**
  * @module
- * This module's pure rules — see `docs/understand/domain-layer.md` for what earns a place here.
- * Re-exported flat rather than as namespaces: two files, no risk of a name collision growing one.
+ * This module's pure rules. Re-exported flat rather than as namespaces: two files, no risk of a
+ * name collision growing one.
+ *
+ * @see docs/understand/domain-layer.md#where-does-this-go
  */
 
 export {

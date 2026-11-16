@@ -8,7 +8,7 @@ import { type ReportWindow } from '@infrastructure/persistence/report';
 import type { PaymentMethod } from '@types';
 import { paymentRepository } from '../repository';
 
-/** Payments that took money, grouped. */
+/** One row of the payments mix: money taken for one method, provider and currency. */
 export interface MixRow {
     method: PaymentMethod;
     provider: string;

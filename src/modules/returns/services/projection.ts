@@ -5,6 +5,8 @@
  * — the owner reads its own returns, works out the word, and reports it through `orders`' own door.
  * Idempotent (the same returns write the same word), and a failed report is logged, never thrown:
  * the projection is a report of a fact already decided, and the next move re-stamps it.
+ *
+ * @see docs/modules/returns-statuses-and-cancellation.md#the-statuses-beside-the-order-s-own
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -13,7 +15,7 @@ import { returnRepository } from '../repository';
 import { projectReturnStatus, returnableLinesOf, returnableQuantities, wireLines } from '../domain';
 
 /**
- * Recompute and report one order's `returnStatus`.
+ * Reads the order's returns and reports the one word `orders` shows beside its status.
  * @param orderId - the order whose returns just changed
  * @returns settles once the report is made; never rejects
  */

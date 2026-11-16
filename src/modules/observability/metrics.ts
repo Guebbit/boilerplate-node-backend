@@ -1,9 +1,11 @@
 /**
  * @module
  * `dependency_up`: one gauge per backing service, 1 serving and 0 not, fed by the same memory read
- * `GET /observability/health` folds (`dependencyHealth`). Built for `DependencyUnavailable`
- * (`docs/operate/prometheus.md`): with Mongo down the job and outbox gauges stop reporting, so every
- * rule that reads them goes blind exactly when it matters, and nothing else says a dependency died.
+ * `GET /observability/health` folds (`dependencyHealth`). Built for `DependencyUnavailable`: with
+ * Mongo down the job and outbox gauges stop reporting, so every rule that reads them goes blind
+ * exactly when it matters, and nothing else says a dependency died.
+ *
+ * @see docs/operate/prometheus.md#alert-rules
  */
 
 import { Gauge } from 'prom-client';

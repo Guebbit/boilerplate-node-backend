@@ -50,10 +50,10 @@ export const returnLifecycle = defineLifecycle<ReturnStatus, ReturnEvent>(
 );
 
 /**
- * The status a return is opened in; it is per door (`create.ts`, `cancel-remainder.ts`,
- * `withdraw.ts`), a birth and not a move. A withdrawal is a right the consumer exercises, not a favour
- * staff grant, so there is nothing to decide and it starts `approved`; every other reason waits
- * for an answer — unless staff opened it, when opening it IS the answer.
+ * The birth status of a goods return, set in `create.ts` — a birth, not a move. A withdrawal is a
+ * right the consumer exercises, not a favour staff grant, so there is nothing to decide and it
+ * starts `approved`; every other reason waits for an answer — unless staff opened it, when opening
+ * it IS the answer. A pre-dispatch withdrawal never reaches here: `withdraw.ts` writes it `closed`.
  * @param reason - why the goods come back
  * @param byStaff - whether staff opened it on the buyer's behalf
  */

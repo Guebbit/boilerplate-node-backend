@@ -1,16 +1,17 @@
 /**
  * @module
  * The order rules (withdrawal window, retention, line caps) and this module's one link into the
- * paired frontend. All read per call
- * rather than captured at import, the pattern `inventory/config.ts` sets, so a test can vary any
- * of them per case. A deployment corrects one with a restart.
+ * paired frontend. All read per call rather than captured at import, the pattern
+ * `inventory/config.ts` sets, so a test can vary any of them per case. A deployment corrects one
+ * with a restart.
  *
  * The shop's own identity, currency and return address live in `shop`.
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  * Order link:             owned here, because `infrastructure/http/frontend-link.ts` does not know
- *                         `orders` exists (see `docs/understand/layers.md`).
+ *                         `orders` exists.
  *
  * @see docs/modules/orders.md#configuration
+ * @see docs/understand/layers.md#tier-stack
  */
 
 import { defineConfig } from '@infrastructure/config/define';
@@ -58,20 +59,23 @@ export const maxAdminOrderLineQuantity = (): number =>
  * How many days a consumer has to withdraw. The law's floor is 14 (Consumer Rights Directive
  * Art. 9); the minimum here is 21 so a weekend or holiday roll-over can never matter. Read per
  * call, like every getter here.
- * See docs/modules/orders.md#the-withdrawal-window
+ *
+ * @see docs/modules/orders.md#the-withdrawal-window
  */
 export const withdrawalPeriodDays = (): number => ordersConfig().NODE_WITHDRAWAL_PERIOD_DAYS;
 
 /**
  * Days a delivered order keeps the buyer after its legal-guarantee window (`conformityUntil`).
- * See docs/understand/data-retention.md#orders-after-the-account
+ *
+ * @see docs/understand/data-retention.md#orders-after-the-account
  */
 export const orderPiiDaysAfterGuarantee = (): number =>
     ordersConfig().NODE_ORDER_PII_DAYS_AFTER_GUARANTEE;
 
 /**
  * Days a paid order that ended without delivery keeps the buyer, counted from `paidAt`.
- * See docs/understand/data-retention.md#orders-after-the-account
+ *
+ * @see docs/understand/data-retention.md#orders-after-the-account
  */
 export const orderPiiDaysUndelivered = (): number => ordersConfig().NODE_ORDER_PII_DAYS_UNDELIVERED;
 
@@ -112,7 +116,8 @@ export const orderFrontendLink = (parameters: { locale: string; id: string }): s
 /**
  * How many of a buyer's own cancellations, inside the window, pause their checkout. The minimum is
  * 2: one cancellation is an ordinary change of mind, never a pattern.
- * See docs/modules/orders.md#the-purchase-hold
+ *
+ * @see docs/modules/orders.md#the-purchase-hold
  * @returns the cancellation count that triggers a hold
  */
 export const purchaseHoldCancelCount = (): number => ordersConfig().NODE_PURCHASE_HOLD_CANCEL_COUNT;

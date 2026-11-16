@@ -32,13 +32,14 @@ import { roleRefusalReject } from './role-refusal';
  *   random value nobody is told, and `USER_SETUP_REQUESTED` (on the outbox, in the same
  *   transaction as the account) mails the owner a link to choose
  *   their own (`POST /account/password/reset/confirm`).
- * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
- *   dropped `active` from `update()`.
+ * - Typed off `CreateUserRequest`, so a new contract field reaches the write.
  * - No `role` means a plain customer: the account holds no staff role and is a `customer` because
  *   `verifiedAt` is set, which nothing has to grant.
  * - The account and its role grant (when there is one) are ONE transaction, the grant checked (and
- *   a refusal audited) before any write. See docs/modules/users.md#creating-with-a-role.
+ *   a refusal audited) before any write.
  * - Returns a result envelope, same protocol `update` follows.
+ *
+ * @see docs/modules/users.md#creating-with-a-role
  */
 export const create = (
     data: WithServerImage<CreateUserRequest>,
@@ -82,7 +83,7 @@ export const create = (
                             {
                                 verifiedAt: new Date(),
                                 ...data,
-                                // `null` on a create means no image: the schema default applies to `undefined` only.
+                                /** `null` means no image: mapped to `undefined`, stored as absent. */
                                 imageUrl: data.imageUrl ?? undefined,
                                 password
                             },

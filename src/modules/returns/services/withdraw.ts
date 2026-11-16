@@ -125,8 +125,8 @@ const cancelAndRecord = (
 /**
  * A withdrawal from an order the shop has started on, when some of it is goods Art. 16 excludes
  * (made to order): the eligible shipment groups are canceled, one `kind: cancellation` return
- * each, and the made-to-order group stays — the shop's work on it is not the buyer's to cancel
- * (S4 of the Q-W2 decision). The order itself stays `processing`.
+ * each, and the made-to-order group stays — the shop's work on it is not the buyer's to cancel.
+ * The order itself stays `processing`.
  *
  * @param order - the order being withdrawn from
  * @param input - the request, whose stated date and channel ride along on every cancellation
@@ -185,22 +185,17 @@ const missingKeyOf = (authContext: AuthContext): string | undefined => {
 };
 
 /**
- * A withdrawal before dispatch: cancel the order, refund it in full, record the withdrawal as a
- * return closed at birth, and acknowledge it. The acknowledgement is the one mail about the
- * withdrawal itself, with no postage line since no goods are expected; the refund's own
- * `order-refunded` mail follows when the money settles. `return-closed` is for a return whose
- * goods came back.
+ * A withdrawal before dispatch: cancel and refund the order in full, record a return closed at
+ * birth, and acknowledge it (the one mail about the withdrawal itself, with no postage line; the
+ * refund's own `order-refunded` mail follows when the money settles).
  *
- * Once the shop has started on an order that holds made-to-order goods (`processing`), only the
- * eligible shipment groups are canceled instead: see {@link withdrawEligibleGroups}.
- *
- * A shipment can land between the read that said "before dispatch" and the cancel; the cancel then
- * refuses, and the withdrawal is opened again on what the order now is — a return, not a cancel:
- * the refund waits for the goods.
- *
- * Staff recording the buyer's withdrawal need `create:Refund` (the money goes back) and
- * `update:Order` (the cancel); the cancel runs on the operator's scope, the record names the day
- * the buyer stated it, and the timeline names the staff member.
+ * Cancel:  once the shop has started on made-to-order goods (`processing`), only the eligible
+ *          shipment groups are canceled instead ({@link withdrawEligibleGroups}).
+ * Race:    a shipment can land between the read and the cancel; the cancel then refuses and the
+ *          withdrawal is opened again as a return, whose refund waits for the goods.
+ * Staff:   need `create:Refund` (the money goes back) and `update:Order` (the cancel); the cancel
+ *          runs on the operator's scope, the record names the day the buyer stated it, and the
+ *          timeline names the staff member.
  *
  * @param order - the order being withdrawn from
  * @param input - the request, to open again if the cancel lost a race to a shipment

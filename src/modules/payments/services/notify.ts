@@ -1,8 +1,9 @@
 /**
  * @module
- * The mails this module sends. Two are listeners on its own events — `payment.succeeded` and
- * `payment.refunded` — and two belong to the bank transfer: its instructions, when the transfer
- * payment opens, and "no transfer received", when its order is canceled for lack of one. A listener covers every path that settles money — the webhook, the
+ * The mails this module sends. Three are listeners on its own events — `payment.succeeded`,
+ * `payment.refunded` and the undeliverable-refund pair — and two belong to the bank transfer: its
+ * instructions, when the transfer payment opens, and "no transfer received", when its order is
+ * canceled for lack of one. A listener covers every path that settles money — the webhook, the
  * browser confirm, an offline record and the crash-recovery sweep — where an inline send would
  * miss the ones that only announce. A mail that fails never undoes money that landed: both
  * listeners log and swallow.

@@ -31,7 +31,7 @@ const mayOpen =
     (caller: AuthContext): boolean =>
         holds(callerForSubject(caller, subject), action, subject);
 
-/** One row is enough to learn a list's total: every count here reads `meta.totalItems`. */
+/** One row is enough to learn a list's total: list counts read `meta.totalItems`, payments its list. */
 const ONE_ROW = { pageSize: 1 };
 
 /** The `meta.totalItems` of a page. */

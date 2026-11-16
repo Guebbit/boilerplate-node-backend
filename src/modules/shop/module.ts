@@ -16,6 +16,6 @@ export default {
     name: 'shop',
     mounts: [{ basePath: '/shop', routes: router }],
     config: [shopConfig.slice],
-    // No collection: everything here is the deployer's own configuration.
+    /** No collection: everything here is the deployer's own configuration. */
     personalData: 'none'
 } satisfies AppModule;

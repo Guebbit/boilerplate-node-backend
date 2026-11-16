@@ -14,7 +14,7 @@
  *           derives them from `items` at the single serialization point every response passes
  *           through, letting the contract mark them required.
  *
- * @see docs/modules/orders.md#the-pipeline
+ * @see docs/modules/orders.md#the-story
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -149,8 +149,10 @@ export interface OrderDocument
     /**
      * `{year}-{sequence}`, assigned once by `allocateOrderNumber` at order-creation time — never
      * recomputed, unlike the VAT figures. Not a tax invoice number: this order is a receipt, not
-     * an invoice — see `docs/modules/orders.md`. Every write path sets it; a number minted later
-     * could not honestly claim the order's actual place in the sequence.
+     * an invoice. Every write path sets it; a number minted later could not honestly claim the
+     * order's actual place in the sequence.
+     *
+     * @see docs/modules/orders.md#the-invoice
      */
     orderNumber: string;
     /**
@@ -169,7 +171,9 @@ export interface OrderDocument
     /**
      * When erasure or inactivity minimisation started this order's PII clock. Only its presence
      * matters: `reap:orders` derives the due date from `paidAt`, `status` and `conformityUntil`
-     * on every run. See `docs/understand/data-retention.md#orders-after-the-account`.
+     * on every run.
+     *
+     * @see docs/understand/data-retention.md#orders-after-the-account
      */
     piiClockStartedAt?: Date;
     /**
@@ -331,7 +335,7 @@ const orderItemSchema = new Schema(
             type: Number,
             required: true
         },
-        // Owed units and their promise, frozen with the line — see `OrderDocumentItem`.
+        /** Owed units and their promise, frozen with the line — see `OrderDocumentItem`. */
         backorderedQuantity: { type: Number, min: 1 },
         promisedAt: { type: Date },
         promiseDated: { type: Boolean },
@@ -378,7 +382,7 @@ export const orderSchema = new Schema<OrderDocument>(
             enum: Object.values(OrderStatus),
             default: OrderStatus.pending
         },
-        // Stored encrypted (`./pii`), like both addresses below: never filter or sort on it.
+        /** Stored encrypted (`./pii`), like both addresses below: never filter or sort on it. */
         notes: {
             type: String
         },
@@ -415,7 +419,9 @@ export const orderSchema = new Schema<OrderDocument>(
         /**
          * `{year}-{sequence}`, minted once by `allocateOrderNumber` (`./services/order-numbering`)
          * at order-creation time. Not a tax invoice number — this order is a receipt, not an
-         * invoice, see `docs/modules/orders.md`. Required: every write path allocates one.
+         * invoice. Required: every write path allocates one.
+         *
+         * @see docs/modules/orders.md#the-invoice
          */
         orderNumber: {
             type: String,
@@ -428,23 +434,23 @@ export const orderSchema = new Schema<OrderDocument>(
         paidAt: {
             type: Date
         },
-        // Frozen once, when the withdrawal clock starts — see the interface field's own comment.
+        /** Frozen once, when the withdrawal clock starts; see the interface field. */
         withdrawUntil: {
             type: Date
         },
-        // Stamped by `payments` when money lands on an order that cannot take it — see the field.
+        /** Stamped by `payments` when money lands on an order that cannot take it. */
         moneyReceivedAt: {
             type: Date
         },
-        // Frozen beside `withdrawUntil` — see the interface field's own comment.
+        /** Frozen beside `withdrawUntil` — see the interface field's own comment. */
         conformityUntil: {
             type: Date
         },
-        // Stamped by `returns` when a repair extends the guarantee — see the interface field.
+        /** Stamped by `returns` when a repair extends the guarantee — see the interface field. */
         conformityExtendedAt: {
             type: Date
         },
-        // Reported by `delivery`, never written by `orders` on its own — see the interface field.
+        /** Reported by `delivery`, never written by `orders` on its own. */
         fulfillment: {
             type: new Schema<FulfillmentSummary>(
                 {
@@ -459,7 +465,7 @@ export const orderSchema = new Schema<OrderDocument>(
             ),
             default: undefined
         },
-        // Stamped by the owning module, never by `orders` itself — see the interface fields.
+        /** Stamped by the owning module, never by `orders` itself — see the interface fields. */
         paymentStatus: {
             type: String,
             enum: [...STAMPED_PAYMENT_STATUSES]
@@ -477,7 +483,7 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String,
             required: true
         },
-        // Frozen at checkout from `termsVersion()`; absent on a staff-placed order.
+        /** Frozen at checkout from `termsVersion()`; absent on a staff-placed order. */
         termsVersion: {
             type: String
         },
@@ -553,12 +559,13 @@ orderSchema.index({ piiClockStartedAt: 1 }, { name: 'orders_piiClockStartedAt', 
  * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
  */
 orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
-/**
- * The staff list's date ranges and the stats' `paidAt` window. `paidAt` is sparse: an unpaid order
- * (most abandoned carts) never carries it.
- */
+/** The staff list's date ranges. */
 orderSchema.index({ createdAt: 1 }, { name: 'orders_createdAt' });
 orderSchema.index({ status: 1, createdAt: -1 }, { name: 'orders_status_createdAt' });
+/**
+ * The stats' `paidAt` window. `paidAt` is sparse: an unpaid order (most abandoned carts) never
+ * carries it.
+ */
 orderSchema.index({ paidAt: 1 }, { name: 'orders_paidAt', sparse: true });
 /**
  * Recursively normalizes each line's embedded product snapshot — `_id` → `id`, `__v` dropped.

@@ -64,7 +64,7 @@ const startAndOverrideActions = (
     return {
         process: holds(caller, 'start', 'Shipment') && reachesProcessing,
         correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),
-        // The door's own stock guard, so no target is offered that answers 409.
+        /** The door's own stock guard, so no target is offered that answers 409. */
         overrideStatus: holds(caller, 'override', 'Order')
             ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(
                   (to) => !shipsAwaitedStock(to, order.fulfillment)
@@ -164,7 +164,7 @@ const forStanding = (actions: OrderActions, actor: OrderActor, buyer: boolean): 
     return {
         ...actions,
         cancel: mayMove && actions.cancel,
-        // Paying is the buyer's own step; an operator reading the order is never offered it.
+        /** Paying is the buyer's own step; an operator reading the order is never offered it. */
         pay: buyer && actions.pay
     };
 };

@@ -1,10 +1,10 @@
 /**
  * @module
  * Tasks — domain layer: pure rules only, lint-guaranteed free of Express, Mongoose and every
- * tier. The lifecycle, the jurisdiction table and the ownership rule live here rather than inline
+ * tier. The lifecycle, the route sets and the ownership rule live here rather than inline
  * in the service, so the export, the erasure and the doors all ask the same questions.
  *
- * See `docs/understand/domain-layer.md`.
+ * @see docs/understand/domain-layer.md#_1-the-folder
  */
 
 export {

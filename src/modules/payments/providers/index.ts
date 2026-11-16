@@ -8,7 +8,9 @@
  *
  * The shape is the one every real PSP imposes: the card never reaches this server, an intent is
  * prepared before anything is charged, and the authoritative answer arrives asynchronously by
- * webhook. See `docs/modules/payments.md` for why that is not negotiable.
+ * webhook.
+ *
+ * @see docs/modules/payments-provider-port.md#the-shape-is-not-a-choice
  */
 
 import type { IncomingHttpHeaders } from 'node:http';
@@ -239,22 +241,22 @@ export interface PaymentProvider {
      * runs inside a request, so the same bound applies to the idempotency ledger's five-minute
      * lease (`IN_FLIGHT_LEASE_MS`): a call past it makes a retry read a false "outcome unknown".
      *
-     * Beyond the provider's key window (your provider's key window; Stripe v1: 24 h from first use) a reused key makes a NEW
-     * refund, so the adapter must stay idempotent itself:
-     * docs/modules/payments-provider-port.md#a-key-the-provider-forgot
+     * Beyond the provider's key window (Stripe v1: 24 h from first use) a reused key makes a NEW
+     * refund, so the adapter must stay idempotent itself.
      *
      * A refund the provider accepted but has not settled answers `status: 'pending'`; it is
      * finished later with {@link retrieveRefund}, never sent again.
      *
+     * @see docs/modules/payments-provider-port.md#a-key-the-provider-forgot
      * @param providerRef - the provider's reference of the payment to refund
      * @param charge - the amount and currency to give back
      * @param idempotency - `idempotencyKey`: the provider's dedupe key. `refundId`: stamp it on
-     *   the provider's refund (Stripe `metadata.refund_record`). `createdAt`: past your provider's key window (Stripe v1: 24 h), list the
-     *   payment's refunds and adopt the one carrying `refundId` before creating one.
+     *   the provider's refund (Stripe `metadata.refund_record`). `createdAt`: past the provider's key window, list the payment's
+     *   refunds and adopt the one carrying `refundId` before creating one.
      * @throws {PaymentProviderError} a definite code only when the provider answered about THIS
      *   refund. Network error, timeout, 5xx, 429: `provider_unavailable`; anything else: `unknown`
      *   (both retried, never offered for hand settlement). Blocked by a dispute: `disputed`.
-     *   Full table: docs/modules/payments-provider-port.md#reading-a-refusal
+     * @see docs/modules/payments-provider-port.md#reading-a-refusal
      */
     refund(
         providerRef: string,

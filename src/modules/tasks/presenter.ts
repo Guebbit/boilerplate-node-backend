@@ -2,7 +2,7 @@
  * @module
  * The one place a task becomes the wire shape `openapi.yaml` declares: the stored fields, plus
  * what is computed per reader or per read (`overdue`, `actions`, the assignee's name, the earlier
- * tasks). Shared by the contact form's 201, the staff reads and every door.
+ * tasks). Shared by the staff reads and every door.
  */
 
 import type { Task, TaskListItem, TaskRef } from '@types';

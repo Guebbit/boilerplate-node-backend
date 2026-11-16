@@ -1,7 +1,9 @@
 /**
  * @module
- * Order rules. Pure: data in, verdict out — no status codes, no i18n; `../services/place` maps verdicts.
- * See `docs/understand/domain-layer.md`.
+ * Order rules. Pure: data in, verdict out — no status codes, no i18n; `../services/place` maps
+ * verdicts.
+ *
+ * @see docs/understand/domain-layer.md#_1-the-folder
  */
 
 /** A line as the rules see it. Absent `product` means the reference no longer resolves. */

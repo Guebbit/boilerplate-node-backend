@@ -48,7 +48,7 @@ type FoundationStaffCode = Extract<NotificationCode, `notifications.staff.${stri
 
 /** The six work notices every project has, and their routing. A code missing here does not compile. */
 export const STAFF_ROUTES = {
-    // Fix the endpoint and re-enable it: worth a look, not worth waking anyone.
+    /** Fix the endpoint and re-enable it: worth a look, not worth waking anyone. */
     'notifications.staff.webhook-disabled': {
         sets: ['WebhookManagement'],
         email: 'none',
@@ -83,7 +83,7 @@ export const STAFF_ROUTES = {
         email: 'now',
         severity: NotificationSeverity.info
     },
-    // Told to the one person it was given to: the bell is enough, they are already working.
+    /** Told to the one person it was given to: the bell is enough, they are already working. */
     'notifications.staff.task-assigned': {
         sets: 'per-notice',
         email: 'none',

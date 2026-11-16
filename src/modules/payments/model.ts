@@ -303,7 +303,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
             required: true,
             unique: true
         },
-        // Not `required` — erasure unsets it rather than deleting the payment.
+        /** Not `required`: erasure unsets it rather than deleting the payment. */
         userId: {
             type: Schema.Types.ObjectId,
             ref: 'User'
@@ -339,7 +339,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
             enum: Object.values(PaymentMethod),
             required: true
         },
-        // Offline-only. Not `required`: a card payment has neither.
+        /** Offline-only. Not `required`: a card payment has neither. */
         reference: {
             type: String,
             maxlength: 120

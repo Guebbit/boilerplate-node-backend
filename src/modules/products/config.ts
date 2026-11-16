@@ -1,8 +1,8 @@
 /**
  * @module
- * The two VAT rates a deployment charges and the address of a product page, read per call rather than captured at import — the
- * pattern `inventory/config.ts` sets, so a test can vary a rate per case. A rate change reaches
- * production with a restart, like every environment variable.
+ * The two VAT rates a deployment charges and the address of a product page, read per call rather
+ * than captured at import — the pattern `inventory/config.ts` sets, so a test can vary a rate per
+ * case. A rate change reaches production with a restart, like every environment variable.
  *
  * Owned by `products` because `resolveTaxRate` (`./tax`) is the only reader: a product's tax
  * class resolving to a rate is an invariant of the catalogue. `orders` freezes whatever that
@@ -36,7 +36,7 @@ export const productsConfig = defineConfig({
             lessThan: 1,
             required: { minLength: 1 }
         }),
-        // `{id}` is replaced by the product's id, like every `NODE_FRONTEND_LINK_*` template.
+        /** `{id}` is replaced by the product's id, like every `NODE_FRONTEND_LINK_*` template. */
         NODE_FRONTEND_LINK_PRODUCT: text({ default: FRONTEND_LINK_RULES.links.product })
     }
 });

@@ -138,7 +138,7 @@ export const toUserListItems = (
 
 /**
  * Find a user by email address.
- * Returns the document if found, or undefined if no match.
+ * Returns the document, or `null` when no account has the address.
  */
 export const findByEmail = (email: string): Promise<UserDocument | undefined | null> =>
     /**

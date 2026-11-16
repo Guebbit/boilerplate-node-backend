@@ -112,7 +112,7 @@ export interface MixSums {
     amount: unknown;
 }
 
-/** What {@link paymentRepository.recordDispute} did with a report. */
+/** `recordDispute`'s result; `null` elsewhere means the report was stale or repeated. */
 export interface RecordedDispute {
     /** `opened`: the first report of this dispute. `updated`: a newer report replaced the stored one. */
     outcome: 'opened' | 'updated';
@@ -130,7 +130,7 @@ export interface RefundRow {
     refund: RefundRecord;
 }
 
-/** What {@link paymentRepository.searchRefunds} filters by. */
+/** Refund-list filters; an absent field is not applied. */
 export interface RefundFilters {
     status?: RefundStatus;
     reason?: RefundReason;
@@ -479,8 +479,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .exec(),
 
     /**
-     * The payment a webhook delivery names. UNSCOPED, and the only read here that is: a provider
-     * is not a logged-in caller and has no user whose rows to restrict this to. What authenticates
+     * The payment a webhook delivery names. UNSCOPED: a provider is not a logged-in caller and
+     * has no user whose rows to restrict this to. What authenticates
      * it is the signature over the delivery, checked before this is ever reached.
      *
      * @param providerRef - the provider's own intent id
@@ -617,7 +617,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * `cutoff` — `reap:payments`'s sweep. Only the statuses in `REAPABLE_PAYMENT_STATUSES`
      * go, however old: `succeeded` is an invoice, kept forever like `orders`' own records, and a
      * status added later is kept until someone names it reapable.
-     * See `docs/modules/payments.md`'s retention section for the reasoning.
+     *
+     * @see docs/modules/payments.md#retention
      *
      * @param cutoff - payments last touched at or before this instant are due
      * @param transferCutoff - the same for a bank transfer's row, which is kept longer
@@ -739,9 +740,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .exec(),
 
     /**
-     * Mark one refund `succeeded`, only if it is still open (`pending` or `failed`) — the
-     * conditional write that makes a settled refund settle exactly once, however many callers (the
-     * request, the sweep) race to finish it. A `null` answer means someone else already did.
+     * Mark one refund `succeeded`, only if it is still open (`pending`, or `failed` when an
+     * operator settles it) — the conditional write that makes a settled refund settle exactly once,
+     * however many callers (the request, the sweep) race to finish it. A `null` answer means someone else already did.
      *
      * @param paymentId - the payment holding the refund
      * @param refundId - the refund record inside it
@@ -1076,7 +1077,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
                     ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {}),
                     /**
-                     * A canceled record is closed: it needs nobody, whichever kind is asked for.
                      * A canceled record is closed: it needs nobody, whichever kind is asked for.
                      */
                     'refunds.failureReason': { $ne: RefundFailureReason.canceled },

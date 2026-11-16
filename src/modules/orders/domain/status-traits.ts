@@ -7,7 +7,7 @@
  * Total on purpose: `satisfies Record<OrderStatus, ...>` makes a status added to the contract fail
  * the build here, rather than fall into a wrong category by default.
  *
- * See `docs/modules/orders.md#status-traits`.
+ * @see docs/modules/orders.md#status-traits
  */
 
 import { OrderStatus } from '@types';

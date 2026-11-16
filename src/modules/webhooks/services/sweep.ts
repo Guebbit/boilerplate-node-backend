@@ -11,10 +11,11 @@
  * attempt. It is the mailer's "degrade, don't drop" rule, and it runs here rather than in the
  * request so a slow subscriber never slows the API.
  *
- * Only a worker, an admin replay or this sweep's own inline send claims a row, via `repository.ts`'s
- * lease design. A row published twice (this sweep's own overlapping runs, or the fast path racing a
- * stranded-row republish) is safe: whichever claim lands first does the one real HTTP attempt,
- * and every other delivery of the same message finds the row already under a live lease.
+ * Only a worker, an admin replay or this sweep's own inline send claims a row, via
+ * `repository.ts`'s lease design. A row published twice (this sweep's own overlapping runs, or the
+ * fast path racing a stranded-row republish) is safe: whichever claim lands first does the one real
+ * HTTP attempt, and every other delivery of the same message finds the row already under a live
+ * lease.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -69,7 +70,7 @@ const handleInGroups = (rows: readonly WebhookDeliveryDocument[]): Promise<void>
 };
 
 /**
- * Handle every delivery due for a retry right now, plus every stranded lease — see
+ * Handle up to `SWEEP_BATCH_LIMIT` deliveries due for a retry right now, plus stranded leases — see
  * `repository.ts#findDue`. Idempotent: handling a row that is already being worked costs one
  * wasted message or no-op claim, never a duplicate delivery — the claim in `./attempt.ts` decides.
  */

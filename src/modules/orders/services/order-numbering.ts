@@ -1,9 +1,11 @@
 /**
  * @module
  * Turning the repository's atomic yearly counter into the order number format: `{year}-{sequence}`.
- * Not a tax invoice number — this order is a receipt, not an invoice, see
- * `docs/modules/orders.md`. The atomicity itself lives behind the repository
- * (`orderRepository.incrementOrderNumberCounter`) — this file only decides the string.
+ * Not a tax invoice number — this order is a receipt, not an invoice. The atomicity itself lives
+ * behind the repository (`orderRepository.incrementOrderNumberCounter`) — this file only decides
+ * the string.
+ *
+ * @see docs/modules/orders.md#the-invoice
  */
 
 import { formatYearlySequence } from '@infrastructure/persistence/yearly-counter';

@@ -63,8 +63,9 @@ export type NotificationModel = Model<NotificationDocument>;
 /**
  * Mongoose schema for persisted notifications.
  *
- * `updatedAt` is switched off: a row is written once and its only later change is `readAt`, which
- * says so itself. `params` is `Mixed` because its shape depends on `code`.
+ * `updatedAt` is switched off: a row's later changes are `readAt`, which says so itself, and a
+ * summary row's count, rewritten in place by `writeSummary`. `params` is `Mixed` because its shape
+ * depends on `code`.
  *
  * The type is written out because the code union grew past what TypeScript can serialize for an
  * inferred one (TS7056).

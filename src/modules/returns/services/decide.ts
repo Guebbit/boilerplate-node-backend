@@ -4,7 +4,10 @@
  * conditional write from `requested` (the lifecycle's `approve` and `decline`), so two staff members deciding
  * the same request cannot both win — the loser is told the request was already decided.
  *
- * A withdrawal never reaches here: it is opened already approved, because nobody grants a right.
+ * A withdrawal never reaches here: it is opened already decided (approved after dispatch, closed
+ * before), because nobody grants a right.
+ *
+ * @see docs/modules/returns.md#the-lifecycle
  */
 
 import { t } from '@infrastructure/i18n';

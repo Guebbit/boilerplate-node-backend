@@ -362,7 +362,7 @@ const openReturn = (
             kind: 'return',
             requestedAt: input.requestedAt,
             statedVia: input.statedVia,
-            // A hand-built order may lack the stamp; it then constrains nothing.
+            /** A hand-built order may lack the stamp; it then constrains nothing. */
             orderCreatedAt: order.createdAt ?? new Date(0),
             now: new Date()
         });
@@ -382,7 +382,7 @@ const openReturn = (
  * what has not shipped instead (`./cancel-remainder`).
  *
  * @param input - the customer's request
- * @param authContext - the buyer; only they may exercise the right (staff only cancel)
+ * @param authContext - the buyer, or staff holding `update:Return` acting for them
  * @param context - for audit
  * @returns the outcome: refused, or the return written — open for goods on their way back, closed
  *   at birth for a withdrawal before dispatch or a remainder cancel

@@ -35,20 +35,21 @@ export const router = Router();
  * `contactLimiters` first, same reasoning as the credential budgets: a spent budget should not
  * cost a database write. Three dimensions — address, submitted email, address block — none of
  * them skipping success: this form's abuse is a successful post repeated, not a failed one.
- * See docs/understand/security.md#the-rate-limit-budgets.
  *
  * `getAuth` next, so a stale sign-in is refused (401) before an antibot token — single-use — is
  * spent on a request that then fails.
  *
  * `humanChallengeGate` after — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write
  * it would otherwise refuse just as cheaply after.
+ *
+ * @see docs/understand/security.md#the-rate-limit-budgets
  */
 router.post('/', contactLimiters, getAuth, humanChallengeGate, idempotencyKey, postTask);
 
 /**
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why
- * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
- * catches a misplaced route that also reads the caller.
+ * the one public route sits alone at the top.
+ * `tests/cross-cutting/authenticated-controllers.test.ts` catches a misplaced route that also reads the caller.
  *
  * `isAuthOrCredential`: everything below is the operator's view, gated by the `Task` rules
  * and reading no `authContext`. The public submission route above is unaffected.
@@ -74,8 +75,10 @@ router.get('/summary', requirePermission('read', 'Task'), noStore, getTaskSummar
 router.get('/:id', requirePermission('read', 'Task'), privateNoCache, getTaskById);
 
 /**
- * The status doors: one action per effect, no body (`docs/understand/write-methods.md`). The status field
- * is read-only, so there is no PATCH.
+ * The status doors: one action per effect, no body. The status field is read-only, so there is no
+ * PATCH.
+ *
+ * @see docs/understand/write-methods.md#action-or-field
  */
 router.post('/:id/resolve', requirePermission('update', 'Task'), noStore, postTaskResolve);
 router.post('/:id/mark-spam', requirePermission('update', 'Task'), noStore, postTaskMarkSpam);
@@ -83,7 +86,9 @@ router.post('/:id/reopen', requirePermission('update', 'Task'), noStore, postTas
 
 /**
  * Assignment: a pair of actions, each with its own bell and audit row. Taking a task is assigning
- * yourself; a repeat finds the state reached and answers 409 (`docs/understand/write-methods.md`).
+ * yourself; a repeat finds the state reached and answers 409.
+ *
+ * @see docs/understand/write-methods.md#repeating-an-action-409
  */
 router.post('/:id/assign', requirePermission('update', 'Task'), noStore, postTaskAssign);
 router.post('/:id/unassign', requirePermission('update', 'Task'), noStore, postTaskUnassign);

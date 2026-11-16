@@ -1,6 +1,6 @@
 /**
  * @module
- * The copy of the two mails this module sends, resolved into finished strings — same rule as
+ * The copy of the mails this module sends, resolved into finished strings — same rule as
  * `@modules/account/emails`: the language is an argument, the output is finished text, and the
  * template queued behind it only interpolates. See that file for why.
  *

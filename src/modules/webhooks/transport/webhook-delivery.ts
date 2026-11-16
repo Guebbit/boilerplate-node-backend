@@ -7,11 +7,9 @@
  * error, a non-2xx response — resolves to a {@link WebhookDeliveryResult} with `success: false` and
  * a human-readable `.error`, so a worker can always write a delivery-log row, never crash on one.
  *
- * Built on `node:https` rather than a client library: the two properties this delivery cannot do
- * without — a custom `lookup` (DNS pinning, from `@infrastructure/adapters/ssrf-guard`) and no
- * automatic redirect following — are exactly the two it gives directly. A 3xx response is read as
- * a failed delivery below; it is never followed, which is what makes "refuse redirects entirely"
- * (`ssrf-guard.ts`'s documented split) actually true rather than aspirational.
+ * Built on `node:https` for the two properties it gives directly: a custom `lookup` (DNS pinning,
+ * from `@infrastructure/adapters/ssrf-guard`) and no automatic redirect following. A 3xx response
+ * is a failed delivery, never followed.
  *
  * Always TLS: `ssrf-guard.ts` refuses every non-`https:` URL, the demo host included.
  */

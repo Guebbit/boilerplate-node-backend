@@ -15,7 +15,7 @@ import { formatMoney } from '@domain-primitives/money';
 import { addressLine } from '@modules/shop';
 import type { ReturnPostagePayer, ShopAddress } from '@types';
 
-/** Which notice is being sent. */
+/** The notice kinds; each names a copy block in the locale files. */
 export type ReturnNoticeKind =
     | 'withdrawal-acknowledged'
     | 'withdrawal-recorded'

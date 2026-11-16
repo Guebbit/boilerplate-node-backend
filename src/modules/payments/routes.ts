@@ -10,7 +10,7 @@
  *                self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
- * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
+ * Fresh session: every money route without a stepUp key requires `requireFreshAuth('critical')` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password. Asked AFTER the key it sits beside, so a caller who can never pass is
  *                refused, not challenged.
@@ -108,8 +108,7 @@ router.post(
  * POST /payments/:id/refunds — the operator returns the money, order untouched. The key
  * is REQUIRED: a retried refund would otherwise return the money twice, and a key whose first
  * attempt never reported an outcome answers "outcome unknown" instead of running again.
- */
-/**
+ *
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
  * `shared/authorization-keys.generated.yaml`, so the guard demands the fresh session and audits that it did.
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a

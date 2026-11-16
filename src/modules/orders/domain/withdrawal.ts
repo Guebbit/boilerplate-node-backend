@@ -64,7 +64,8 @@ export const canCorrectAddress = (order: AddressCandidate): boolean =>
  * period's minimum (`orders/config.ts`) always outlasts it. This is the last day the buyer is
  * TOLD, the date every mail, timeline row and screen prints; {@link withdrawalClosesAt} is when the
  * window really closes.
- * See docs/modules/orders.md#the-withdrawal-window
+ *
+ * @see docs/modules/orders.md#the-withdrawal-window
  *
  * @param start - delivery for goods, or the conclusion of the contract for digital content
  * @param days - the withdrawal period (14 by law, 21 at least here, 30 by default)
@@ -77,7 +78,8 @@ export const withdrawUntilFrom = (start: Date, days: number): Date =>
  * When a withdrawal is really refused: one silent UTC day after the announced last day. A buyer
  * whose own count differs from ours by a day (a zone, a delivery marked after midnight) is never
  * turned away, and nobody is told a date later than the real close.
- * See docs/modules/orders.md#the-withdrawal-window
+ *
+ * @see docs/modules/orders.md#the-withdrawal-window
  *
  * @param withdrawUntil - the frozen announced deadline ({@link withdrawUntilFrom})
  * @returns the last instant a withdrawal is accepted

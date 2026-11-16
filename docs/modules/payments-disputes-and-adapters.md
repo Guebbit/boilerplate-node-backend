@@ -49,7 +49,7 @@ flowchart TD
 | Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                       |
 | A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled by hand while the chargeback is open                       |
 | Lost chargeback covers it   | a refund open at that time may be marked returned (the bank paid the buyer); that is the normal path, so a return still gets its credit note |
-| Shop won                    | a refund refused as `disputed` can only be voided (`cancelRefund`)                                                                           |
+| Every dispute decided       | a refund refused as `disputed` can only be voided (`cancelRefund`); not while any dispute is open, an inquiry included                       |
 | Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
 
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).

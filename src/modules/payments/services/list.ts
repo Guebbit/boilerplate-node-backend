@@ -251,9 +251,10 @@ const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
     );
 
 /**
- * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds the
- * provider refused for good (at once), and refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
- * and is not here.
+ * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds
+ * the provider refused for good (at once), refunds the provider took back, refunds over the room
+ * left, disputes awaiting an answer, and refunds owed by hand. A refund owed is always an open
+ * record, so a fixed problem has closed it and is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
     const cutoff = new Date(Date.now() - paymentAttentionMinutes() * MINUTE_MS);

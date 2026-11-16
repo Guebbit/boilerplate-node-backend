@@ -1,8 +1,8 @@
 /**
  * @module
- * The `/stats` router: reads only, all behind `read:Stats`, none of them cached — the answer is
- * the shop's money. A session, not an API key: this is a dashboard, and a credential reaching a
- * sales figure is a decision nobody has made.
+ * The `/stats` router: reads only, all behind `read:Stats`, none of them in a shared cache — the
+ * answer is the shop's money. A session, not an API key: this is a dashboard, and a credential
+ * reaching a sales figure is a decision nobody has made.
  *
  * @see docs/modules/stats.md#access
  */

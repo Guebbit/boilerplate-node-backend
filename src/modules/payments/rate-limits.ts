@@ -118,8 +118,8 @@ const PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY = 'paymentDeclineBlockRateLimit'
  * Declines against `POST /payments/:id/confirm`, keyed on the caller's address BLOCK: what the
  * per-account budget cannot see, a card tester rotating through many accounts from one network.
  * A block, not one address, so a carrier NAT is not locked out by one address and a tester is not
- * given a fresh budget per address. 10 an hour against the account's 3, because a block is shared
- * by many honest people. Spent by a genuine decline only, like {@link CONFIRM_DECLINE_BUDGET}.
+ * given a fresh budget per address. Sized above the account's budget, because a block is shared by
+ * many honest people. Spent by a genuine decline only, like {@link CONFIRM_DECLINE_BUDGET}.
  * Card-number fingerprinting (what Stripe Radar does) waits for a real provider adapter.
  */
 const CONFIRM_DECLINE_BLOCK_BUDGET: RateLimitBudget = {
@@ -138,8 +138,7 @@ export const paymentConfirmDeclineBlockLimiter: RequestHandler = buildRateLimite
 
 /**
  * Fraction of the block's decline budget that must be spent before an otherwise honest confirm
- * starts carrying the human challenge. Same fraction as account's
- * `CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT`.
+ * starts carrying the human challenge.
  */
 const CHALLENGE_AFTER_BLOCK_BUDGET_SPENT = 0.5;
 

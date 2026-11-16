@@ -1,7 +1,7 @@
 /**
  * @module
  * How a user row is built, for the seed accounts in `scenarios/users.ts` and for any test needing
- * a person. States no schema default — `imageUrl`, `locale`, `active` and `verifiedAt`
+ * a person. States no schema default — `locale`, `active` and `verifiedAt`
  * are all filled by `./model` — so a seeded row records what the schema really does, not a
  * factory's guess. The password stays PLAINTEXT through the builder; `userSchema`'s pre-save hook
  * hashes it on the way into Mongo, and a hash written here would drift from that hook. No `role`

@@ -2,8 +2,8 @@
  * @module
  * Task schema — one collection: a visitor's message or a situation the system opened.
  *
- * The dates are overridden from the generated `Task` type (string → Date): Mongoose holds native dates, and serialization is what narrows them back to
- * the wire's ISO strings.
+ * The dates are overridden from the generated `Task` type (string → Date): Mongoose holds native
+ * dates, and serialization is what narrows them back to the wire's ISO strings.
  *
  * @see docs/modules/tasks.md#the-story
  */
@@ -25,10 +25,10 @@ import { CONTACT_ROUTE_SET } from './domain';
 import { DAY_SECONDS } from '@domain-primitives/time';
 
 /**
- * How long a CLOSED task survives, in days, before Mongo's TTL index removes it. Read at import time
- * because a TTL index is created once, at startup, from whatever value is configured then —
- * see the note on the index below. Default: 730 (24 months) — a contact request can be evidence
- * in a commercial dispute, and 24 months sits inside the common limitation periods.
+ * How long a CLOSED task survives, in days, before Mongo's TTL index removes it. Read at import
+ * time because a TTL index is created once, at startup, from whatever value is configured then —
+ * see the note on the index below. Default: 730 (24 months) — a contact request can be evidence in
+ * a commercial dispute, and 24 months sits inside the common limitation periods.
  */
 const retentionDays = tasksConfig().NODE_TASKS_RETENTION_DAYS;
 
@@ -92,10 +92,10 @@ export interface TaskDocument
 /** Mongoose model type for {@link TaskDocument}. */
 export type TaskModel = Model<TaskDocument>;
 
-/** Tasks collection schema. */
+/** The stored shape of a task: source, route set, dedup key, and the TTL windows. */
 export const taskSchema = new Schema<TaskDocument, TaskModel>(
     {
-        // Who opened it: a visitor through the form, or the system for a situation.
+        /** Who opened it: a visitor through the form, or the system for a situation. */
         source: {
             type: String,
             enum: Object.values(TaskSource),
@@ -117,7 +117,7 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
             type: Schema.Types.ObjectId,
             ref: 'User'
         },
-        // Required for a visitor task by the service, not by the schema: a system task has none.
+        /** Required for a visitor task by the service, not the schema: a system task has none. */
         email: {
             type: String
         },
@@ -136,7 +136,7 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         orderNumber: {
             type: String
         },
-        // The record a system task is about.
+        /** The record a system task is about. */
         link: {
             type: new Schema(
                 {
@@ -146,13 +146,13 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
                 { _id: false }
             )
         },
-        // The permission set that works it, frozen when it opens (`./domain/routing`).
+        /** The permission set that works it, frozen when it opens (`./domain/routing`). */
         routeSet: {
             type: String,
             required: true,
             default: () => CONTACT_ROUTE_SET
         },
-        // The staff screen that does the work: handed over by the opener, frozen with the set.
+        /** The staff screen that does the work: handed over by the opener, frozen with the set. */
         work: {
             type: String
         },
@@ -190,7 +190,7 @@ export const taskSchema = new Schema<TaskDocument, TaskModel>(
         overdueNotifiedAt: {
             type: Date
         },
-        // Same idea for the "due soon" reminder: the stamp IS the memory, internal, not on the wire.
+        /** The "due soon" reminder's memory: the stamp IS it; internal, not on the wire. */
         dueSoonNotifiedAt: {
             type: Date
         },
@@ -271,14 +271,12 @@ taskSchema.index({ email: 1 }, { partialFilterExpression: { email: { $exists: tr
  * TTL index — Mongo deletes a CLOSED task once it has been closed for the retention window. On
  * `closedAt`, not `createdAt`: an open task is work owed and must never vanish, and a reopen
  * unsets `closedAt` so the clock stops. Its OWN single-field ascending index, because Mongo only
- * honours `expireAfterSeconds` there. A document without `closedAt` is never expired. Spam is
- * closed at birth, so it ages from creation.
+ * honours `expireAfterSeconds` there. Spam is closed at birth, so it ages from creation.
  *
- * Caveat worth knowing: Mongo will not modify an existing TTL index's `expireAfterSeconds` in
- * place. Raising or lowering `NODE_TASKS_RETENTION_DAYS` and restarting FAILS THE BOOT —
- * `autoIndex` asks for the new window and Mongo refuses the conflicting options. `npm run db:sync`
- * is what applies it, by dropping the index and rebuilding it. See `audit-logs/model.ts` for the
- * identical caveat on that module's own TTL index.
+ * Changing `NODE_TASKS_RETENTION_DAYS` fails the boot until `npm run db:sync` rebuilds the index:
+ * Mongo will not modify an existing TTL index's `expireAfterSeconds` in place.
+ *
+ * @see docs/reference/ops.md#data-retention
  */
 taskSchema.index({ closedAt: 1 }, { expireAfterSeconds: retentionDays * DAY_SECONDS });
 
@@ -297,9 +295,9 @@ taskSchema.index(
 );
 
 /**
- * Normalizes a serialized task: `_id` → `id`, drops `__v`.
- * Exported so lean results (which bypass `toJSON`) can be mapped through the
- * same logic — see `./service` `search()`.
+ * Normalizes a serialized task: `_id` → `id`, drops `__v`, and writes ids and dates as wire
+ * strings. Exported so lean results (which bypass `toJSON`) are mapped through the same logic by
+ * `./repository`.
  */
 export const applyTaskTransform = applySerialization(taskSchema, {
     omit: ['openKey', 'eventIds', 'overdueNotifiedAt', 'dueSoonNotifiedAt', 'noDueSoon', 'work'],
@@ -318,5 +316,5 @@ export const applyTaskTransform = applySerialization(taskSchema, {
     }
 });
 
-/** Tasks model entrypoint. */
+/** The model `./repository` wraps; the barrel never exposes it. */
 export const taskModel = model<TaskDocument, TaskModel>('Task', taskSchema);

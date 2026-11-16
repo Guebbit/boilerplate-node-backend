@@ -53,9 +53,8 @@ const subscriptionBase = createRepository<WebhookSubscriptionDocument, StoredWeb
 
 /**
  * Every ENABLED subscription — the whole small table, read once per published event and matched
- * in memory by `domain/event-filter.ts`. A collection-scan `find` rather than an event-type index:
- * this table is expected to stay small (a cap on subscriptions per tenant is the doc's own fan-out
- * guard), and an index on a field matched by set-membership/wildcard logic can't help Mongo anyway.
+ * in memory by `domain/event-filter.ts`; the `disabledAt` index in `model.ts` serves this read. The
+ * table stays small (a per-tenant cap on subscriptions is its fan-out guard).
  */
 const findEnabled = (): Promise<WebhookSubscriptionDocument[]> =>
     webhookSubscriptionModel.find({ disabledAt: null }).exec();
@@ -170,8 +169,8 @@ const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | 
 /**
  * Explicit annotation, not inferred: Mongoose's `Query` generics are large enough that TypeScript
  * refuses to serialize the inferred shape at this export boundary (TS7056) once the factory result
- * is spread into a repository object — see `create-repository.ts`'s own `Repository<TDocument, TWire>`
- * docblock for why naming the contract is what fixes it.
+ * is spread into a repository object — see `create-repository.ts`'s own `Repository<TDocument,
+ * TWire>` docblock for why naming the contract is what fixes it.
  */
 export const webhookSubscriptionRepository: Repository<
     WebhookSubscriptionDocument,
@@ -238,9 +237,9 @@ const lease = (): { leaseToken: string; leaseExpiresAt: Date } => ({
 
 /**
  * Atomically claim one row for exclusive work: `pending` → `in_flight`, or a STRANDED `in_flight`
- * row whose lease has already expired — a worker that crashed mid-attempt, or a sweep whose own
- * queue publish never arrived. The queued/sweep path's own claim; see {@link claimForReplay} for
- * the admin path, which may also reclaim a row already at a terminal status.
+ * row whose lease has already expired — a worker that crashed mid-attempt. The queued/sweep path's
+ * own claim; see {@link claimForReplay} for the admin path, which may also reclaim a row already at
+ * a terminal status.
  *
  * `findOneAndUpdate` rather than `find` + `updateOne`: the read and the write must be one atomic
  * step, or the race this exists to prevent just moves earlier.
@@ -327,12 +326,14 @@ const applyOutcome = (
  * whose lease already expired — the sweep's own read.
  *
  * Published without claiming: `services/sweep.ts` does not call {@link claimPending} before
- * publishing — the lease design is what makes that safe (see `docs/modules/webhooks.md`'s lease
- * section). A row this read returns may already be mid-attempt by the time the publish lands; the
- * WORKER's own claim is what decides who actually does the one real HTTP attempt, so publishing an
- * already-live row twice is safe, not a race.
+ * publishing — the lease design is what makes that safe. A row this read returns may already be
+ * mid-attempt by the time the publish lands; the WORKER's own claim is what decides who actually
+ * does the one real HTTP attempt, so publishing an already-live row twice is safe, not a race.
  *
- * @param limit - the ceiling per sweep run, so one very late sweep does not enqueue an unbounded burst
+ * @param limit - the ceiling per sweep run, so one very late sweep does not enqueue an unbounded
+ *   burst
+ *
+ * @see docs/modules/webhooks.md#the-delivery-path
  */
 const findDue = (limit: number): Promise<WebhookDeliveryDocument[]> =>
     webhookDeliveryModel

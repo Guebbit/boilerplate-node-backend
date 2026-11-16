@@ -101,7 +101,9 @@ Every move is **one conditional write** filtered on the status that was read, so
 200 and one 409. A repeat answers 409 with `TASK_ALREADY_RESOLVED`, `TASK_ALREADY_SPAM` or
 `TASK_ALREADY_OPEN`; a reopen that finds a newer open task holding the same dedup key answers
 `TASK_SUPERSEDED` with that task's id in `details`. Spam to resolve keeps the time the task
-was first closed. The deadline (`dueAt`) belongs to the situation, not to the reopen, so it is kept.
+was first closed. A move that loses the race three times in a row (the task keeps changing under
+it) answers the app-wide 409 `CONFLICT`, never a code about the task's state: reload and retry.
+The deadline (`dueAt`) belongs to the situation, not to the reopen, so it is kept.
 Every answer is the task, with the caller's `actions` telling a screen which buttons to show.
 
 ## Notes {#notes}

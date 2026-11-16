@@ -14,7 +14,7 @@ import { scrubTimelineText } from './services/timeline';
 export const ordersJobs: readonly JobDeclaration[] = [
     {
         ...ordersJobData.reapOrders,
-        // Resolves how many orders were anonymized — the demo profile's job lever reports it.
+        /** Resolves how many orders were anonymized — the demo profile's job lever reports it. */
         run: () =>
             anonymizeDueOrders().then((anonymized) => scrubTimelineText().then(() => anonymized))
     }

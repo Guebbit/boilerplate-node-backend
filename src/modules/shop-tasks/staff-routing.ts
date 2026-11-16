@@ -4,8 +4,9 @@
  * work, whether it is worth an email, and where the notice points. The routing is data handed to
  * `notificationsService.notifyStaff` with each call; `notifications` keeps no table of these.
  *
- * The mail rule is the one `notifications` states: `now` only where someone must act soon, every
- * other code is the bell's alone. The ten summary rows are counts the daily digest rewrites.
+ * The mail rule is the one `notifications` states: `now` only where someone must act soon;
+ * `digest` where an overdue count is mailed once per run; `none` is the bell's alone. The ten
+ * summary rows are counts the daily digest rewrites.
  *
  * @see docs/modules/shop-tasks.md#who-is-told
  */
@@ -22,13 +23,13 @@ const PAGES = FRONTEND_LINK_RULES.staffPages;
 
 /** Every work notice code this module writes and its routing. A code missing here does not compile. */
 export const SHOP_STAFF_ROUTES = {
-    // Abuse defence: a bot or a loop is placing and cancelling orders, and a person steps in soon.
+    /** Abuse defence: a bot or a loop is placing and cancelling orders; a person steps in soon. */
     'shop-tasks.staff.purchase-hold-placed': {
         sets: ['UserBanning'],
         email: 'now',
         severity: NotificationSeverity.warning
     },
-    // The buyer waits for an answer and the shop owes one: the people who decide returns take it.
+    /** The buyer waits for an answer and the shop owes one: those who decide returns take it. */
     'shop-tasks.staff.return-requested': {
         sets: ['ReturnManagement'],
         email: 'none',
@@ -92,13 +93,13 @@ export const SHOP_STAFF_ROUTES = {
         email: 'none',
         severity: NotificationSeverity.info
     },
-    // Until a parcel is marked arrived, the buyer's withdrawal window and guarantee have not started.
+    /** Until a parcel is marked arrived, the buyer's withdrawal window and guarantee don't start. */
     'shop-tasks.staff.undelivered': {
         sets: ['DeliveryManagement'],
         email: 'digest',
         severity: NotificationSeverity.warning
     },
-    // A refund open past the attention threshold runs against the 14-day refund clock.
+    /** A refund open past the attention threshold runs against the 14-day refund clock. */
     'shop-tasks.staff.stale-refunds': {
         sets: ['PaymentRefunding'],
         email: 'digest',

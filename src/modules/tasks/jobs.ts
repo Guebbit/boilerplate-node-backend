@@ -22,7 +22,7 @@ export const tasksJobs: readonly JobDeclaration[] = [
                     logger.info({ message: 'Task reminder sweep done.', overdue, dueSoon });
                 }
             ),
-        // A sweep that outruns its day would only re-claim nothing, but one at a time is simpler.
+        /** One sweep at a time; a sweep that outruns its day would only re-claim nothing. */
         lease: { ttlMs: 30 * MINUTE_MS }
     }
 ];

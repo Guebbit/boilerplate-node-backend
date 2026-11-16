@@ -3,7 +3,9 @@
  * The copy of every mail this module sends, resolved into finished strings — the language is an
  * argument, the output is finished text, and the template queued behind it only interpolates.
  * Same rule as `@modules/account/emails`; see that file for why. The invoice document's own copy
- * lives in `@modules/invoicing`'s own `emails.ts`, not here — see `docs/modules/invoicing.md`.
+ * lives in `@modules/invoicing`'s own `emails.ts`, not here.
+ *
+ * @see docs/modules/orders.md#cancel-and-refund-mails
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

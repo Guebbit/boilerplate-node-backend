@@ -18,10 +18,7 @@
  *                      a secret generated here verifies against any Standard Webhooks-compatible
  *                      library and vice versa.
  *
- * This file's own unit tests assert against the spec's own published example — the `sign function
- * works` fixture in
- * https://github.com/standard-webhooks/standard-webhooks/blob/main/libraries/javascript/src/webhook.test.ts
- * — byte-for-byte, not just self-consistency.
+ * @see https://github.com/standard-webhooks/standard-webhooks/blob/main/libraries/javascript/src/webhook.test.ts
  */
 
 import { createHmac } from 'node:crypto';
@@ -79,9 +76,9 @@ const decodeSecret = (secret: string): Buffer =>
  * The `v1,<base64>` signature for one secret over one signed payload.
  *
  * Split out as its own step (SOLID: one responsibility) so both {@link signWebhookPayload} (one
- * call per ring secret) and {@link verifyWebhookSignature} (one call per candidate secret) share
- * the exact same signed-content construction — the single place `${id}.${timestamp}.${body}` is
- * written.
+ * call per ring secret) and the test verifier `verifyWebhookSignatureForTest` (one call per
+ * candidate secret) share the exact same signed-content construction — the single place
+ * `${id}.${timestamp}.${body}` is written.
  *
  * @param id - the delivery id
  * @param timestampSeconds - unix seconds

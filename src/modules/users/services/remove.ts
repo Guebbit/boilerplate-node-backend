@@ -130,6 +130,7 @@ export const erase = (
  * transaction as the row. Only the hard path does, since a soft delete is a restore waiting to
  * happen.
  *
+ * @see docs/modules/users.md#soft-delete-vs-erasure
  * @internal The step beneath `removeById` (which refuses a staff account the caller may not
  * manage) and the named doors (`softDeleteInactive`, `eraseInactive`, and `erase` for the purge).
  * Unpublished, a sibling could erase an administrator with no check.

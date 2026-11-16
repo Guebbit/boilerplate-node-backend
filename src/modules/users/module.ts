@@ -57,7 +57,7 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     [USER_PROFILE_CHANGED]: {
         toPublicEvent: (payload: DomainEventMap[typeof USER_PROFILE_CHANGED]) => ({
             eventType: 'user.updated',
-            // Names only: the new values would put a fresh copy of the person's data in the log.
+            /** Names only: values would put a fresh copy of the person's data in the log. */
             data: { userId: payload.userId, changed: payload.changed }
         })
     }
@@ -89,7 +89,7 @@ export default {
     imageTargets: { users: { writeback: userRepository.writebackImage } },
     personalData: [
         /**
-         * `undefined` when the subject's own row is gone — `account`'s assembly answers 404 for
+         * `null` when the subject's own row is gone — `account`'s assembly answers 404 for
          * this section specifically, since nothing else in the export means anything without it.
          */
         {
@@ -102,8 +102,8 @@ export default {
             collect: (subject) => exportSignInMethods(subject.userId)
         }
     ],
-    // The phone is PII-encrypted. The TOTP secrets on this same document are `account`'s walk.
+    /** The phone is PII-encrypted; the TOTP secrets on this document are `account`'s walk. */
     reencrypt: reencryptUserPhones,
-    // The PII encryption key: see `./config`.
+    /** The PII encryption key: see `./config`. */
     config: [usersConfig.slice]
 } satisfies AppModule;

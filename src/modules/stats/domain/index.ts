@@ -1,8 +1,9 @@
 /**
  * @module
- * Stats — domain layer: the pure rules of a reporting range, the shop's calendar and the sales figures.
+ * Stats — domain layer: the pure rules of a reporting range, the shop's calendar and the sales
+ * figures.
  *
- * See `docs/understand/domain-layer.md`.
+ * @see docs/understand/domain-layer.md#_1-the-folder
  */
 
 export * from './range';
