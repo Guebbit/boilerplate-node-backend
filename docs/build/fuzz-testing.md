@@ -168,6 +168,17 @@ repeated keys, a malformed `%`). The operation list comes from the spec walk, so
 covered with no list to update. The sibling sweep for wrong methods is
 `tests/integration/method-not-allowed.test.ts` (405 plus `Allow` on every path).
 
+### Considered and not chosen
+
+- **Schemathesis**, the best-known open-source contract fuzzer: a Python toolchain every derived
+  project would inherit, for the coverage this mode and the 405 sweep already give.
+- **An independent reading of the contract**, a second tool that reads `openapi.yaml` apart from
+  the generated code: the drift it would catch cannot land, because `npm run check` refuses a stale
+  `api/` ([Verifying](regenerating.md#verifying-and-what-each-failure-means)).
+- **A raw-spec validator**, a generic JSON Schema check of sampled answers against `openapi.yaml`:
+  that same independent reading, so a second judge beside `assertResponseMatchesContract` for the
+  same ruled-out drift.
+
 ## Sequences and cross-user access
 
 Neither is fuzzed. Each is covered by a test that builds the state it needs:

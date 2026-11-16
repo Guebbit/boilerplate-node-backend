@@ -88,6 +88,10 @@ contract.bruno.yml
 !/SECURITY.md
 !/INSTALL.md
 
+# The agent crew's working folder: the queue, decision files, analyses and parked ideas.
+# Same lifetime as the root notes above; each feature's files go when the feature is merged.
+/.work/
+
 # 2brain:start — regenerate with: 2brain <repo-path>
 .2brain/graphify-out/cache/
 .2brain/graphify-out/graph.json

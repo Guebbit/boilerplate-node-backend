@@ -71,9 +71,9 @@ The rest:
   to the line instead of the declaration.
 - Never narrate history — no "this used to...", "previously...", "was renamed from...". A comment
   describes the code as it is now; git log is where the past lives.
-- Never reference an untracked `.md` file, by link OR by name — a root plan, audit or report doc is
-  gitignored and deleted when its change lands, so a comment naming one is dangling for everyone
-  but its author. Stable targets: `docs/*` and the tracked root `CLAUDE.md`, `README.md`,
+- Never reference an untracked `.md` file, by link OR by name — a plan, audit or report doc under
+  `.work/` is gitignored and deleted when its change lands, so a comment naming one is dangling
+  for everyone but its author. Stable targets: `docs/*` and the tracked root `CLAUDE.md`, `README.md`,
   `SECURITY.md` and `INSTALL.md`. Nothing enforces this beyond `.gitignore`: `local/comment-links` checks `.ts`
   references only.
 
