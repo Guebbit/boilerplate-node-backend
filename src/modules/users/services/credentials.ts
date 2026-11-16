@@ -261,7 +261,8 @@ export const persistTwoFactorWrite = (
  * @param user - the loaded copy, credentials included, as the request left it
  * @param dropped - the methods the request removed from the copy, or `'all'` for a disable;
  *   the copy no longer holds them, so the write cannot find them by itself
- * @returns `user`, now settled
+ * @returns `user`, settled: nothing a later persist would resend. An empty write leaves only the
+ *   mirrored `lastUsedStep` marked, which no plan ever sends
  * @throws DocumentNotFoundError when the account is gone, which `isLostRace` recognises
  */
 export const persistTwoFactorMethods = (

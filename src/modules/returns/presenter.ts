@@ -11,9 +11,9 @@ import type { ReturnDocument } from './model';
 export type StoredReturn = Omit<Return, 'actions'>;
 
 /**
- * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document itself
- * is typed as stored, not as the wire shape `Return` promises — one cast narrowing what the
- * compiler cannot see through on its own.
+ * `.toJSON()` applies the model's transform: `_id` → `id`, `__v` and `shippingRefund` dropped,
+ * Decimal128 → string. Dates and ObjectIds stay as they are; `JSON.stringify` turns them into
+ * strings on the wire. The document is typed as stored, not as the wire shape `Return` promises.
  */
 export const presentReturn = (document: ReturnDocument): StoredReturn =>
     document.toJSON() as StoredReturn;
