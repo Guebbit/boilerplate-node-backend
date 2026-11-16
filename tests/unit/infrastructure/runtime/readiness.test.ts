@@ -9,6 +9,7 @@
  */
 import { connection } from '@infrastructure/runtime/database';
 import {
+    isServerDraining,
     isServerReady,
     markServerListening,
     markServerDraining
@@ -49,5 +50,16 @@ describe('isServerReady', () => {
         markServerDraining();
 
         expect(isServerReady()).toBe(false);
+    });
+});
+
+describe('isServerDraining', () => {
+    it('is false until a shutdown signal marks the process draining, and true after', () => {
+        markServerListening();
+        expect(isServerDraining()).toBe(false);
+
+        markServerDraining();
+
+        expect(isServerDraining()).toBe(true);
     });
 });

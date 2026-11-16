@@ -85,8 +85,53 @@ With an orchestrator in front of several replicas, point its readiness probe at 
 Kubernetes `readinessProbe`, an ALB target-group health check). Those probes stop sending traffic to
 an unready replica; a plain proxy health check is the same idea, one path to configure.
 
-`/readyz` answers 503 from the moment a shutdown signal arrives, but `server.close()` runs in the
-same tick, so no probe sees it yet. A lame-duck delay between the two belongs with this change.
+`/readyz` answers 503 from the moment a shutdown signal arrives. What happens next is the next
+section.
+
+## Shutting down behind a load balancer
+
+A load balancer learns a copy is leaving only by polling `/readyz`. If the listener closed at the
+signal, a request sent in the meantime would meet a closed socket. So the copy first goes quiet on
+the balancer's side, then stops.
+
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator
+    participant A as app copy
+    participant L as Load balancer
+    O->>A: SIGTERM
+    A->>A: /readyz 503, Connection: close on every response, queue consumers cancelled
+    L->>A: poll sees 503, stops routing here
+    Note over A: NODE_SHUTDOWN_DELAY_MS, still serving
+    A->>A: end SSE streams (retry: 1-5 s), close the listener, drain in-flight work
+    A->>O: exit 0
+```
+
+| Step                      | What it does                                                               | Why                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `/readyz` 503             | The balancer's next poll removes this copy                                 | the copy must leave routing before it stops                                                                                      |
+| `Connection: close`       | Every response tells its client to open a new connection                   | Node keeps a connection alive on a response already in flight when `close()` runs, so a pooled client would reuse a dying socket |
+| Queue consumers cancelled | No new job is taken; running ones finish and ack                           | a job taken now has no time to finish and is redelivered                                                                         |
+| Delay                     | Waits `NODE_SHUTDOWN_DELAY_MS`, still serving                              | the balancer's poll needs time to see the 503                                                                                    |
+| SSE streams ended         | Each stream gets a random `retry:` of 1-5 s, then ends                     | `close()` waits for a stream, which never ends alone; the random delay stops one copy's clients reconnecting together            |
+| Teardown                  | Close the listener, settle renders, marks, queue handlers, then the stores | see [Clustering](../understand/clustering.md#graceful-shutdown)                                                                  |
+
+A second signal while this runs is ignored: one teardown, one deadline.
+
+Two numbers, one timeline:
+
+| Setting                             | Default | Meaning                                                                                                       |
+| ----------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHUTDOWN_DELAY_MS`            | `0`     | The lame-duck delay. `0` closes at once, which is right with one copy and no balancer                         |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | `15000` | The teardown budget, counted after the delay. The steps take shares of it (`SHUTDOWN_SHARES`, always under 1) |
+
+The forced exit fires at delay + budget. Keep the orchestrator's grace period above that sum
+(Kubernetes `terminationGracePeriodSeconds`, Docker `stop_grace_period`), or it kills the copy
+mid-drain.
+
+Set the delay above the balancer's poll interval times its failure threshold. Kubernetes' own
+advice is the same shape: a short pause before the app stops accepting.
+[docs](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)
 
 ## Kubernetes and PaaS
 

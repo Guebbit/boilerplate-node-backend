@@ -366,14 +366,18 @@ export const startQueue = (): Promise<void> => {
  * A connection still dialling has nothing of ours to close yet: it is closed the moment it lands
  * (see {@link connectionGeneration}). A broker that never answers is left to the server's
  * forced-exit deadline (`server-lifecycle.ts`), or, in a job, to {@link boundQueueRetries}.
+ *
+ * @param drainTimeoutMs - the longest to wait for handlers already running; one still running
+ *   after it is redelivered. The shutdown sequence passes its share of the one deadline.
  */
-export const stopQueue = (): Promise<void> => {
+export const stopQueue = (drainTimeoutMs: number = DEFAULT_DRAIN_TIMEOUT_MS): Promise<void> => {
     const connection = recoveringConnection;
     const channel = currentChannel;
     recoveringConnection = undefined;
     connectionStarted = false;
     connectionGeneration += 1;
     unavailabilityLog.clear();
+    consumingStopped = false;
     if (!connection) {
         currentChannel = undefined;
         return Promise.resolve();
@@ -386,7 +390,7 @@ export const stopQueue = (): Promise<void> => {
     return (
         cancelConsumers(channel)
             // A handler that outlives the wait is simply redelivered once the connection closes.
-            .then(() => settleWithin(inFlightHandlers, DRAIN_TIMEOUT_MS))
+            .then(() => settleWithin(inFlightHandlers, drainTimeoutMs))
             .then(() => {
                 currentChannel = undefined;
                 return connection.close();
@@ -395,8 +399,25 @@ export const stopQueue = (): Promise<void> => {
     );
 };
 
-/** How long {@link stopQueue} waits for running handlers — inside the process's own deadline. */
-const DRAIN_TIMEOUT_MS = 5000;
+/** How long {@link stopQueue} waits for running handlers when its caller names no budget. */
+const DEFAULT_DRAIN_TIMEOUT_MS = 5000;
+
+/**
+ * Set by {@link stopConsuming}: no consumer is bound again, even on a channel a reconnect opens
+ * after the shutdown signal. Cleared by {@link stopQueue}.
+ */
+let consumingStopped = false;
+
+/**
+ * Stop taking new deliveries, at once, and keep publishing. Called at the shutdown signal, before
+ * the lame-duck delay: a copy that waited for `stopQueue` would keep pulling jobs it then has no
+ * time to finish, and the broker redelivers each one. Handlers already running keep going and
+ * ack; {@link stopQueue} waits for them.
+ */
+export const stopConsuming = (): Promise<void> => {
+    consumingStopped = true;
+    return cancelConsumers(currentChannel).catch(() => undefined);
+};
 
 /**
  * Cancel every consumer on `channel`, so the broker stops delivering to this process.
@@ -1082,6 +1103,7 @@ const consumerBindings = new Map<string, (ch: ConfirmChannel) => Promise<void>>(
  * time, keeps each binding's three calls adjacent on the wire.
  */
 const replayConsumers = async (ch: ConfirmChannel): Promise<void> => {
+    if (consumingStopped) return;
     for (const bind of consumerBindings.values()) {
         await bind(ch);
     }
@@ -1099,5 +1121,5 @@ export const consumeFromQueue = <TPayload = unknown>(
 ): Promise<void> => {
     consumerBindings.set(options.queue, (ch) => bindConsumer(ch, options));
     const ch = getChannel();
-    return ch ? bindConsumer(ch, options) : Promise.resolve();
+    return ch && !consumingStopped ? bindConsumer(ch, options) : Promise.resolve();
 };

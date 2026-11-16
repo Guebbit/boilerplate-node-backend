@@ -7,6 +7,7 @@
  * @see docs/understand/defences/real-time.md#opening-the-stream
  */
 
+import { randomInt } from 'node:crypto';
 import type { Response } from 'express';
 import { sseConfig } from '@infrastructure/http/config';
 import { rejectServiceUnavailable } from '@infrastructure/http/errors';
@@ -23,6 +24,19 @@ const REVERIFY_INTERVAL_MS = 30_000;
  * 30 s on its own; this is the same ceiling.
  */
 const PER_USER_RETRY_AFTER_SECONDS = 30;
+
+/**
+ * The bottom of the reconnect delay, ms, a draining server hands its streams (`retry:` field).
+ * The delay is random between this and {@link DRAIN_RETRY_MAX_MS}, so the streams of one stopped copy do not all come back in the same second.
+ * https://html.spec.whatwg.org/multipage/server-sent-events.html#concept-event-stream-reconnection-time
+ */
+const DRAIN_RETRY_MIN_MS = 1000;
+
+/** The top of the reconnect-delay range, exclusive; see {@link DRAIN_RETRY_MIN_MS}. */
+const DRAIN_RETRY_MAX_MS = 5000;
+
+/** What ends each open stream for a drain, so `endSseStreams` can reach every one. */
+const drainers = new Set<() => void>();
 
 /** User id to how many streams that user holds open in this process. */
 const openPerUser = new Map<string, number>();
@@ -109,6 +123,7 @@ export const openSseStream = (
         if (closed) return;
         closed = true;
         release(userId);
+        drainers.delete(endForDrain);
         clearInterval(reverifyTimer);
         for (const cleanup of cleanups) cleanup();
     };
@@ -118,6 +133,13 @@ export const openSseStream = (
         response.end();
         teardown();
     };
+
+    // Tells the client when to reconnect (to another copy, behind a load balancer), then ends.
+    const endForDrain = () => {
+        response.write(`retry: ${String(randomInt(DRAIN_RETRY_MIN_MS, DRAIN_RETRY_MAX_MS))}\n\n`);
+        endStream();
+    };
+    drainers.add(endForDrain);
 
     const reverifyTimer = setInterval(() => {
         reverify()
@@ -135,4 +157,17 @@ export const openSseStream = (
             cleanups.push(cleanup);
         }
     };
+};
+
+/**
+ * End every stream open in this process, each with a jittered `retry:` so its client reconnects
+ * elsewhere. A stream never ends on its own, and `server.close()` waits for it; called once the
+ * shutdown delay is over, so a client reconnects to a copy that is still taking traffic.
+ *
+ * @returns how many streams were ended
+ */
+export const endSseStreams = (): number => {
+    const ending = [...drainers];
+    for (const drain of ending) drain();
+    return ending.length;
 };

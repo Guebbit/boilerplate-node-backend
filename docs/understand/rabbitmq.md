@@ -210,9 +210,15 @@ after `stopQueue()` is closed instead of kept, so a job always exits.
 
 ## Graceful shutdown
 
-`stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes).
-It cancels every consumer, waits up to 5 s for handlers still running, then closes the AMQP
-connection. A handler that outlives the wait is redelivered.
+Consumers are cancelled at the shutdown signal (`stopConsuming()`), before the lame-duck delay: a
+copy that kept pulling jobs while it waited would take work it has no time to finish. Publishing
+carries on. A consumer is not re-bound on a channel a reconnect opens after that.
+
+`stopQueue()` runs later in the sequence (after the HTTP server closes). It waits for handlers
+still running, up to its share of the shutdown budget (20 %, so 3 s by default), then closes the
+AMQP connection. A handler that outlives the wait is redelivered.
+
+See [Health checks](../operate/health-checks.md#shutting-down-behind-a-load-balancer).
 
 ## Works with
 

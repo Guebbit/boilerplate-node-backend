@@ -6,6 +6,7 @@ import {
     consumeFromQueue,
     startQueue,
     stopQueue,
+    stopConsuming,
     boundQueueRetries,
     redactedBrokerTarget,
     parkedCounts,
@@ -1152,6 +1153,87 @@ describe('stopQueue() on a live connection', () => {
         await consumed;
 
         expect(mockAck).toHaveBeenCalled();
+        expect(mockModelClose).toHaveBeenCalled();
+    });
+});
+
+describe('stopConsuming()', () => {
+    afterEach(disableRabbitMQ);
+
+    it('cancels the consumers at once and leaves the connection open for publishing', async () => {
+        await captureConsumerCallback(jest.fn());
+        mockCancel.mockClear();
+        mockModelClose.mockClear();
+
+        await stopConsuming();
+
+        expect(mockCancel).toHaveBeenCalledWith('tag-1');
+        expect(mockModelClose).not.toHaveBeenCalled();
+    });
+
+    it('binds no consumer on a channel a reconnect opens afterwards', async () => {
+        await captureConsumerCallback(jest.fn());
+        await stopConsuming();
+        mockConsume.mockClear();
+
+        await simulateReconnect();
+
+        expect(mockConsume).not.toHaveBeenCalled();
+    });
+
+    it('binds no consumer registered after the signal', async () => {
+        await ensureConnected();
+        await stopConsuming();
+        mockConsume.mockClear();
+
+        await consumeFromQueue({ queue: 'late', handler: jest.fn(), schema: anyPayload });
+
+        expect(mockConsume).not.toHaveBeenCalled();
+    });
+
+    it('is undone by stopQueue, so a process that starts again consumes again', async () => {
+        await ensureConnected();
+        await stopConsuming();
+        await stopQueue();
+        await ensureConnected();
+        mockConsume.mockClear();
+
+        await consumeFromQueue({ queue: 'again', handler: jest.fn(), schema: anyPayload });
+
+        expect(mockConsume).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing when there is no channel to cancel on', async () => {
+        disableRabbitMQ();
+        await stopQueue();
+        mockCancel.mockClear();
+
+        await expect(stopConsuming()).resolves.toBeUndefined();
+
+        expect(mockCancel).not.toHaveBeenCalled();
+    });
+
+    it('still resolves when the broker refuses the cancel', async () => {
+        await captureConsumerCallback(jest.fn());
+        mockCancel.mockRejectedValueOnce(new Error('channel closed'));
+
+        await expect(stopConsuming()).resolves.toBeUndefined();
+    });
+});
+
+describe('stopQueue(drainTimeoutMs)', () => {
+    afterEach(disableRabbitMQ);
+
+    it('stops waiting for a handler that outlives the budget it was given, then closes', async () => {
+        const stuck = jest.fn(() => new Promise<boolean>(() => undefined));
+        const onMessage = await captureConsumerCallback(stuck);
+        // Never settles: the handler is stuck, so the delivery's promise is left pending on purpose.
+        Promise.resolve(onMessage(delivery({ jobId: 1 }))).catch(() => undefined);
+        await settle();
+        mockModelClose.mockClear();
+
+        await stopQueue(20);
+
         expect(mockModelClose).toHaveBeenCalled();
     });
 });

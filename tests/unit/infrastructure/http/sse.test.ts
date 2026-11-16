@@ -4,7 +4,7 @@
  */
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
-import { openSseStream } from '@infrastructure/http/sse';
+import { endSseStreams, openSseStream } from '@infrastructure/http/sse';
 import { rejectResponse } from '@infrastructure/http/response';
 import { rejectServiceUnavailable } from '@infrastructure/http/errors';
 import { setEnvironment } from '@tests/environment';
@@ -37,9 +37,11 @@ const makeResponse = () => {
     const end = jest.fn();
     const status = jest.fn();
     const flushHeaders = jest.fn();
+    const write = jest.fn();
     const response = asStub<Response>({
         status,
         flushHeaders,
+        write,
         end,
         setHeader: jest.fn((name: string, value: string) => {
             headers[name] = value;
@@ -52,6 +54,7 @@ const makeResponse = () => {
         response,
         headers,
         end,
+        write,
         status,
         flushHeaders,
         disconnect: () => {
@@ -211,5 +214,76 @@ describe('openSseStream', () => {
             expect(again).toBeDefined();
             expect(over).toBeUndefined();
         });
+    });
+});
+
+describe('endSseStreams', () => {
+    beforeEach(() => {
+        jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+        for (const fake of made) fake.disconnect();
+        made = [];
+        jest.clearAllMocks();
+        jest.useRealTimers();
+    });
+
+    it('tells every open stream when to reconnect, ends it and runs its cleanup', () => {
+        const [a, b] = [makeResponse(), makeResponse()];
+        const cleanup = jest.fn();
+        openSseStream(a.response, 'user-1', () => Promise.resolve(true))?.onClose(cleanup);
+        openSseStream(b.response, 'user-2', () => Promise.resolve(true));
+
+        const ended = endSseStreams();
+
+        expect(ended).toBe(2);
+        for (const fake of [a, b]) {
+            expect(fake.write).toHaveBeenCalledWith(expect.stringMatching(/^retry: \d+\n\n$/));
+            expect(fake.end).toHaveBeenCalledTimes(1);
+        }
+        expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it("jitters the reconnect delay inside its bounds, so one copy's streams do not return together", () => {
+        const delays = new Set<number>();
+        for (let index = 0; index < 40; index += 1) {
+            const fake = makeResponse();
+            openSseStream(fake.response, `user-${String(index)}`, () => Promise.resolve(true));
+            endSseStreams();
+            const frame = fake.write.mock.calls[0]?.[0] as string;
+            delays.add(Number(/retry: (\d+)/.exec(frame)?.[1]));
+        }
+
+        expect(Math.min(...delays)).toBeGreaterThanOrEqual(1000);
+        expect(Math.max(...delays)).toBeLessThan(5000);
+        expect(delays.size).toBeGreaterThan(1);
+    });
+
+    it('frees the slots, and a client closing afterwards runs no cleanup twice', () => {
+        setEnvironment({ NODE_SSE_MAX_STREAMS_PER_USER: '1' });
+        const first = makeResponse();
+        const cleanup = jest.fn();
+        openSseStream(first.response, 'user-1', () => Promise.resolve(true))?.onClose(cleanup);
+
+        endSseStreams();
+        first.disconnect();
+        const again = openSseStream(makeResponse().response, 'user-1', () => Promise.resolve(true));
+
+        expect(again).toBeDefined();
+        expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it('ends nothing, and says so, when no stream is open', () => {
+        expect(endSseStreams()).toBe(0);
+    });
+
+    it('does not reach a stream that already closed on its own', () => {
+        const gone = makeResponse();
+        openSseStream(gone.response, 'user-1', () => Promise.resolve(true));
+        gone.disconnect();
+
+        expect(endSseStreams()).toBe(0);
+        expect(gone.write).not.toHaveBeenCalled();
     });
 });

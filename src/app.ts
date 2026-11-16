@@ -56,6 +56,7 @@ import { installRequestContext, requestIdMiddleware } from '@app/request-context
 import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
+import { closeWhileDraining } from '@infrastructure/http/middlewares/connection-close';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
 
@@ -237,8 +238,9 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
      * The middleware stack, in the order a request travels it.
      *
      * Express applies middleware in registration order, so this sequence IS the behaviour, not a
-     * summary of it. Seven dependencies are load-bearing and none of them is visible from a call site:
+     * summary of it. Eight dependencies are load-bearing and none of them is visible from a call site:
      *
+     * - the draining mark is first, so even a refusal from the layers below tells a client to reconnect;
      * - the request id precedes even security, so a refused request is still correlatable;
      * - security follows, because `trust proxy` decides what `request.ip` means and the
      *   rate limiter keys its buckets on it;
@@ -254,6 +256,8 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
      *
      * Each install owns the ordering *within* its own group and documents it there.
      */
+    // First: every later refusal, the limiter's included, must tell a draining client to reconnect.
+    app.use(closeWhileDraining);
     // Before security: the global limiter's 429 must already carry the request id.
     app.use(requestIdMiddleware);
     installSecurity(app);

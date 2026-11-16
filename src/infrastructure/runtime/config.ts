@@ -46,7 +46,8 @@ export const serverConfig = defineConfig({
     shape: {
         NODE_PORT: int({ default: 3000, min: 1, max: 65_535 }),
         NODE_HOST: text(),
-        NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 })
+        NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
+        NODE_SHUTDOWN_DELAY_MS: int({ default: 0, min: 0 })
     }
 });
 
