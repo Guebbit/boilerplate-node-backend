@@ -8,9 +8,8 @@
  *
  * `attemptDelivery` takes an ALREADY-CLAIMED row — `delivery.leaseToken` must be set, from
  * `repository.ts`'s `claimPending` or `claimForReplay`. Every outcome write goes through
- * `applyOutcome`, which only applies while that token still matches; see `../model.ts`'s
- * `leaseToken` docblock for why. A write that loses the race (`applyOutcome` returns `null`) is
- * dropped, never retried — whatever re-claimed the row in the meantime owns its outcome now.
+ * `applyOutcome`, which only applies while that token still matches (see `../model.ts`'s
+ * `leaseToken`).
  */
 
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -76,7 +75,8 @@ const requireLeaseToken = (delivery: WebhookDeliveryDocument): string => {
 
 /**
  * Finalize a claimed delivery with nothing to attempt it against — its subscription was deleted
- * since the job was queued, is disabled, or no longer names the event. Terminal either way: no subscription is left to retry.
+ * since the job was queued, is disabled, or no longer names the event. Terminal either way: no
+ * subscription is left to retry.
  */
 const finalizeUndeliverable = (
     delivery: WebhookDeliveryDocument,
@@ -84,7 +84,7 @@ const finalizeUndeliverable = (
 ): Promise<WebhookDeliveryDocument | null> =>
     webhookDeliveryRepository.applyOutcome(String(delivery._id), requireLeaseToken(delivery), {
         status: 'exhausted',
-        // No attempt was made, so nothing from an earlier one describes this outcome.
+        /** No attempt was made, so nothing from an earlier one describes this outcome. */
         responseCode: undefined,
         durationMs: undefined,
         error,
@@ -197,7 +197,8 @@ const recordFailure = (
  * Attempt one delivery: sign and POST against `subscription`'s CURRENT url and ring, then record
  * the outcome on `delivery`. Caller-supplied `subscription` (rather than re-fetched here) is what
  * lets `replay` and {@link processDeliveryJob} share this function despite loading it
- * differently — `processDeliveryJob` already fetched it to decide whether there is anything to send.
+ * differently — `processDeliveryJob` already fetched it to decide whether there is anything to
+ * send.
  *
  * @param delivery - an ALREADY-CLAIMED row (`delivery.leaseToken` set) — see the module docblock
  * @returns the row as it stands after the outcome, or `null` if the claim was lost mid-attempt

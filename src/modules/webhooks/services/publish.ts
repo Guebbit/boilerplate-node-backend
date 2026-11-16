@@ -2,18 +2,16 @@
  * @module
  * The domain-event subscriber: reacts to every domain event a registered module's manifest names
  * a {@link PublicEventTarget} for (`kernel/registry.ts`'s `resolvePublicEvents`) — no import from
- * `webhooks` into `orders`/`payments`, the reverse edge is a domain event, exactly as
- * `docs/modules/webhooks.md` describes — matches each projected public event against every enabled
- * subscription's filter, and fans out: one delivery row plus one queue message per match.
- * `subscribeToWebhookEvents` runs once, from `../module.ts`'s `onRegistered` hook, once every
- * module — and therefore its `publicEvents` — is known.
+ * `webhooks` into `orders`/`payments`, the reverse edge is a domain event — matches each projected
+ * public event against every enabled subscription's filter, and fans out: one delivery row plus
+ * one queue message per match. `subscribeToWebhookEvents` runs once, from `../module.ts`'s
+ * `onRegistered` hook, once every module's `publicEvents` is known.
  *
- * The queue publish is fire-and-forget from here on purpose: when it fails (no broker configured,
- * or a publish error), the row it already wrote stays `pending` and `sweep:webhook-retries`
- * picks it up on its next pass. With a broker the sweep re-publishes it; without one the sweep
- * sends it itself (`./sweep.ts`) — never lost, at worst delayed to the sweep interval. That is
- * the same "degrades to queued rather than to lost" story `./attempt.ts`'s `recordFailure` already
- * accepts for a mid-chain retry, just reached one step earlier.
+ * The queue publish is fire-and-forget on purpose: when it fails, the row it already wrote stays
+ * `pending` and `sweep:webhook-retries` picks it up (`./sweep.ts`) — never lost, at worst delayed
+ * to the sweep interval.
+ *
+ * @see docs/modules/webhooks.md#its-neighbourhood
  */
 
 import { randomUUID } from 'node:crypto';
@@ -106,7 +104,7 @@ const fanOut = (event: PublicEventProjection, eventId: string = randomUUID()): P
 /**
  * One domain-event listener for one {@link PublicEventTarget}: project the payload, and fan out
  * only when the projection actually names a public event — `target.toPublicEvent` answers
- * `undefined` for a payload that isn't one, `order.status_changed` outside `to: 'paid'`/`'shipped'`
+ * `undefined` for a payload that isn't one, `order.status_changed` outside `to: 'paid'`
  * being the only case that happens today.
  *
  * Two casts, both narrowing something the compiler genuinely cannot see, not laundering `any`:

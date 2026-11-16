@@ -62,9 +62,9 @@ const subscriptionActions = (
     delete: standing.delete,
     enable: standing.update && !state.enabled,
     disable: standing.update && state.enabled,
-    // A minted secret signs for the stored filter, so the caller must be able to read all of it.
+    /** A minted secret signs for the stored filter, so the caller must be able to read all of it. */
     createSecret: standing.update && standing.reads(state.eventTypes),
-    // A ring never empties (`deleteSecret` 422s it), so a second secret must exist to drop one.
+    /** A ring never empties (`deleteSecret` 422s it), so a second secret must exist to drop one. */
     deleteSecret: standing.update && state.secretCount > 1
 });
 

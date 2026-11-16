@@ -1,7 +1,8 @@
 /**
  * @module
- * Controller for `POST /webhooks/deliveries/:id/replay` — the single most-requested support
- * action, per `docs/modules/webhooks.md`.
+ * Controller for `POST /webhooks/deliveries/:id/replay` — a support action.
+ *
+ * @see docs/modules/webhooks.md#managing-it
  */
 
 import type { Request, Response } from 'express';

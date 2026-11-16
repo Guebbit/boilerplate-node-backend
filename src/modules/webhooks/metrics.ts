@@ -3,9 +3,10 @@
  * Domain metrics this module owns, registered on the shared `metricsRegistry` so one `/metrics`
  * scrape carries these alongside the HTTP metrics — see `modules/account/metrics.ts` for why they
  * live in the module rather than in `infrastructure`. Built for the two alerts
- * `WebhookDeliveriesFailingEverywhere` and `WebhookRetriesStalled` (`docs/operate/prometheus.md`) —
- * the fleet-wide, our-side-outage signals `docs/modules/webhooks.md`'s delivery-path section
- * describes, distinct from the per-subscription auto-disable email.
+ * `WebhookDeliveriesFailingEverywhere` and `WebhookRetriesStalled` — the fleet-wide,
+ * our-side-outage signals, distinct from the per-subscription auto-disable email.
+ *
+ * @see docs/modules/webhooks.md#the-delivery-path
  */
 
 import { Counter, Gauge } from 'prom-client';
