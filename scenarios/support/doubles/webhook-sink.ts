@@ -27,12 +27,16 @@ const SINK_CA_PATH = path.join(__dirname, '../tls/webhook-sink-ca.pem');
  */
 const trustSinkCertificateAuthority = (): void => {
     const pem = readFileSync(SINK_CA_PATH, 'utf8').trim();
-    // Node >= 24.5: lists the roots a TLS client trusts right now.
-    // https://nodejs.org/api/tls.html#tlsgetcacertificatestype
+    /**
+     * Node >= 24.5: lists the roots a TLS client trusts right now.
+     * https://nodejs.org/api/tls.html#tlsgetcacertificatestype
+     */
     const defaults = tls.getCACertificates('default');
     if (defaults.some((root) => root.trim() === pem)) return;
-    // Node >= 24.5: replaces the process-wide default roots, for every later TLS connection
-    // (including `fetch`). https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+    /**
+     * Node >= 24.5: replaces the process-wide default roots, for every later TLS connection
+     * (including `fetch`). https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+     */
     tls.setDefaultCACertificates([...defaults, pem]);
 };
 
@@ -43,8 +47,10 @@ const trustSinkCertificateAuthority = (): void => {
 export const registerWebhookSinkExemption = (): void => {
     const sinkUrl = (currentEnvironment().NODE_WEBHOOK_DEMO_SINK_URL ?? '').trim();
     if (!URL.canParse(sinkUrl)) return;
-    // WHATWG URL: `.origin` is scheme, host and port, with a default port left out.
-    // https://url.spec.whatwg.org/#dom-url-origin
+    /**
+     * WHATWG URL: `.origin` is scheme, host and port, with a default port left out.
+     * https://url.spec.whatwg.org/#dom-url-origin
+     */
     registerSsrfExemptOrigin(new URL(sinkUrl).origin);
     trustSinkCertificateAuthority();
 };

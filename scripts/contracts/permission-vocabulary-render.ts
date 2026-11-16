@@ -5,7 +5,7 @@
  *
  * SHARED SCRIPT — kept identical in both repos of the pair by hand; it is not in
  * `SHARED_FILES` on purpose (docs/build/pairing-and-ports.md, "Convenience is not necessity").
- * @see docs/reference/permission-vocabulary.md
+ * @see docs/reference/permission-vocabulary.md#one-list-generated-twice
  */
 import { parse } from 'yaml';
 import { isPlainObject } from '../../src/infrastructure/object-guards';
@@ -76,8 +76,10 @@ const fieldOfEach = (raw: Raw, key: string, field: string): string[] => {
     if (!Array.isArray(entries) || entries.length === 0)
         throw new Error(`authorization-keys.generated.yaml declares no \`${key}:\` list`);
     return entries.map((entry: unknown) => {
-        // `entry` is parsed YAML (`unknown`); a non-object yields `undefined` on read and fails the
-        // string check below.
+        /**
+         * `entry` is parsed YAML (`unknown`); a non-object yields `undefined` on read and fails the
+         * string check below.
+         */
         const value = (entry as Raw | null)?.[field];
         if (typeof value !== 'string' || value === '')
             throw new Error(
@@ -119,8 +121,10 @@ export const readPermissionVocabulary = (yamlText: string): PermissionVocabulary
     assertUnique(actions, 'actions:');
     assertUnique(setNames, 'sets:');
 
-    // The `rules:` list was read and refused above when empty or not a list, which is what proves
-    // it is an array.
+    /**
+     * The `rules:` list was read and refused above when empty or not a list, which is what proves
+     * it is an array.
+     */
     const rules = raw.rules as Raw[];
     for (const [index, rule] of rules.entries()) {
         const action = ruleActions[index];

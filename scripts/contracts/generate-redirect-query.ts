@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the closed sets a redirect puts in its query string from `openapi.yaml`: every `302`
  * that declares `x-redirect-query` (a map of parameter name to an enum schema) becomes one row,
  * keyed by operation id then parameter. The OAuth callback's `?error=` codes are the case: the

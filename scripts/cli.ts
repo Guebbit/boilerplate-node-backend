@@ -23,8 +23,10 @@ const scriptArguments = (): string[] => process.argv.slice(2);
  * @returns the value, or `undefined` when the flag is absent or has none
  */
 export const flagValue = (flag: string): string | undefined => {
-    // Node: https://nodejs.org/api/util.html#utilparseargsconfig — `strict: false` keeps unknown
-    // flags and positionals from throwing; `args` is the script's own arguments.
+    /**
+     * Node: https://nodejs.org/api/util.html#utilparseargsconfig — `strict: false` keeps unknown
+     * flags and positionals from throwing; `args` is the script's own arguments.
+     */
     const { values } = parseArgs({
         args: scriptArguments(),
         options: { [flag]: { type: 'string' } },
@@ -42,8 +44,10 @@ export const flagValue = (flag: string): string | undefined => {
  * @returns true when the script was started with the flag
  */
 export const hasFlag = (flag: string): boolean => {
-    // Node: https://nodejs.org/api/util.html#utilparseargsconfig — a `boolean` option is true when
-    // present; `strict: false` lets other flags and positionals through, as in {@link flagValue}.
+    /**
+     * Node: https://nodejs.org/api/util.html#utilparseargsconfig — a `boolean` option is true when
+     * present; `strict: false` lets other flags and positionals through, as in {@link flagValue}.
+     */
     const { values } = parseArgs({
         args: scriptArguments(),
         options: { [flag]: { type: 'boolean' } },

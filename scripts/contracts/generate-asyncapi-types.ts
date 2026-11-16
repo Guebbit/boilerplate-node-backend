@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the TypeScript realtime contract types from `asyncapi.yaml`.
  *
  * SHARED SCRIPT — started byte-identical in both repos of the pair, and both write
@@ -95,7 +95,7 @@ const INPUT = path.resolve(REPO_ROOT, 'asyncapi.yaml');
 /** Absolute path of the file to generate, from `--out`. */
 const OUTPUT = requiredPath('out', REPO_ROOT);
 
-/*
+/**
  * Converts source names into `PascalCase`.
  *
  * @param value Source name from the AsyncAPI contract.
@@ -110,7 +110,7 @@ const toPascalCase = (value: string): string =>
         .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
         .join('');
 
-/*
+/**
  * The last path segment of a `$ref` — the raw name, before any casing is applied. Shared by
  * {@link refToTypeName} (which title-cases it for a TS identifier) and the server/message lookups
  * below (which need the exact key `document.servers`/`components.messages` declared it under).
@@ -120,7 +120,7 @@ const toPascalCase = (value: string): string =>
  */
 const lastRefSegment = (reference: string): string => reference.split('/').pop() ?? '';
 
-/*
+/**
  * Resolves `#/components/...` refs to their generated type names.
  *
  * @param reference AsyncAPI `$ref` value.
@@ -128,7 +128,7 @@ const lastRefSegment = (reference: string): string => reference.split('/').pop()
  */
 const refToTypeName = (reference: string): string => toPascalCase(lastRefSegment(reference));
 
-/*
+/**
  * The real payload type a message carries — never the message's own alias name, which
  * `messageTypeBlocks` may have deduped away. Two things in this file need "what type does this
  * message resolve to" (the SSE payload map below, and the alias declarations themselves), and
@@ -142,7 +142,7 @@ const resolveMessagePayloadType = (
     messageName: string,
     messages: Record<string, AsyncApiMessage>
 ): string => {
-    /*
+    /**
      * Asked as "is it declared", not as a nullish check on the value. `Record<string,
      * AsyncApiMessage>` promises a value for every key, so an index access — and any `?.` on what
      * comes back — reads as always-present to TypeScript, and `no-unnecessary-condition` fails the
@@ -156,7 +156,7 @@ const resolveMessagePayloadType = (
     return refToTypeName(payload.$ref);
 };
 
-/*
+/**
  * Builds channel-to-message-type entries for the channels a predicate selects. Every channel here
  * declares exactly one message — direction (SSE push vs. queue publish/consume) lives on the
  * operations bound to the channel, not on which map this reads.
@@ -188,7 +188,7 @@ const collectChannelMessageEntries = (
         })
         .toSorted((a, b) => a.channelName.localeCompare(b.channelName));
 
-/*
+/**
  * Every protocol a channel is reachable on, read off the servers it explicitly binds to — never
  * off its name. AsyncAPI 3.0: a channel omitting `servers` binds to every server the document
  * declares instead, a case none of this contract's channels rely on, so an empty result here
@@ -205,16 +205,18 @@ const channelProtocols = (
     (channel.servers ?? [])
         .map((binding) => {
             if (!binding.$ref) return undefined;
-            // Same `Object.hasOwn` guard as `resolveMessagePayloadType` above, for the same
-            // reason: `Record<string, AsyncApiServer>` promises a value for every key, so a plain
-            // index access reads as always-present to TypeScript even though a document is free to
-            // `$ref` a server name it never declared.
+            /**
+             * Same `Object.hasOwn` guard as `resolveMessagePayloadType` above, for the same
+             * reason: `Record<string, AsyncApiServer>` promises a value for every key, so a plain
+             * index access reads as always-present to TypeScript even though a document is free to
+             * `$ref` a server name it never declared.
+             */
             const name = lastRefSegment(binding.$ref);
             return Object.hasOwn(servers, name) ? servers[name].protocol : undefined;
         })
         .filter((protocol): protocol is string => protocol !== undefined);
 
-/*
+/**
  * The payload schema name(s) a channel's message(s) resolve to.
  *
  * @param channel The channel to resolve.
@@ -231,7 +233,7 @@ const channelPayloadSchemaNames = (
         .map((messageName) => resolveMessagePayloadType(messageName, messages))
         .filter((typeName) => typeName !== 'unknown');
 
-/*
+/**
  * Renders a readonly literal string array declaration.
  *
  * @param exportName Exported constant name.
@@ -243,10 +245,9 @@ const renderLiteralArray = (exportName: string, values: string[]): string => {
     return `export const ${exportName} = [\n${lines}\n] as const;`;
 };
 
-/*
+/**
  * Renders a typed event-name to payload map interface.
  *
- * @param interfaceName Map interface name.
  * @param entries Channel/message entries.
  * @returns TypeScript source for the payload map interface.
  */
@@ -262,7 +263,7 @@ const renderPayloadMap = (
     return `export interface ${interfaceName} {\n${rows}\n}`;
 };
 
-/*
+/**
  * Turns a channel name into the SCREAMING_SNAKE key used inside its namespace constant.
  * `observability.metrics.snapshot` under `observability.` becomes `METRICS_SNAPSHOT`.
  *
@@ -276,7 +277,7 @@ const toConstantKey = (channelName: string, prefix: string): string =>
         .replaceAll(/[.\-_]+/gu, '_')
         .toUpperCase();
 
-/*
+/**
  * Renders one namespace's channel-name constant object plus its union type.
  * Namespaces are discovered from the contract, so a new channel prefix generates its own
  * group with no change to this script.
@@ -305,7 +306,7 @@ const renderChannelNamespace = (namespace: string, channelNames: string[]): stri
     ].join('\n');
 };
 
-/*
+/**
  * Groups channel names by their first dot-segment, preserving contract order.
  *
  * @param channelNames Every channel name in the contract.
@@ -451,7 +452,7 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
     if (schema.enum)
         return `z.enum([${schema.enum.map((value) => JSON.stringify(value)).join(', ')}])`;
 
-    /*
+    /**
      * A union: `oneOf` with a `discriminator` becomes `z.discriminatedUnion`, which picks the member
      * by that property's value instead of trying each one — the same reading the OpenAPI side
      * (`ReauthRequest`, `Notification`) gives the keyword. Without one, a plain `z.union`. Members
@@ -481,9 +482,11 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
             return `z.array(${schema.items ? zodExpression(schema.items, depth, tolerant) : 'z.unknown()'})`;
         }
         case 'object': {
-            // No declared properties means "any object" — `data`/`templateData`, whose whole point
-            // is that the producer decides what the template prints. A typed `additionalProperties`
-            // makes it a map whose every value has that type (locale → title).
+            /**
+             * No declared properties means "any object" — `data`/`templateData`, whose whole point
+             * is that the producer decides what the template prints. A typed `additionalProperties`
+             * makes it a map whose every value has that type (locale → title).
+             */
             if (!schema.properties) {
                 const value =
                     typeof schema.additionalProperties === 'object'
@@ -492,9 +495,11 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
                 return `z.record(z.string(), ${value})`;
             }
 
-            // Indented by hand: this file is in `.prettierignore`, because the freshness check
-            // compares the generator's bytes to the committed ones and a second formatter would
-            // make that check fail on a file nobody edited.
+            /**
+             * Indented by hand: this file is in `.prettierignore`, because the freshness check
+             * compares the generator's bytes to the committed ones and a second formatter would
+             * make that check fail on a file nobody edited.
+             */
             const pad = '    '.repeat(depth + 1);
             const required = new Set(schema.required);
             const fields = Object.entries(schema.properties)
@@ -505,7 +510,7 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
                         }`
                 )
                 .join(',\n');
-            /*
+            /**
              * `additionalProperties: false` becomes `.strict()` EXCEPT inside a queue payload
              * (`tolerant`), where it is left off instead — Zod's default already drops a key the
              * schema doesn't know rather than keeping it, which is the tolerant-reader behaviour
@@ -544,7 +549,7 @@ const renderZodSchemas = (
             `export const ${toPascalCase(name)}Schema = ${zodExpression(schema, 0, tolerant.has(name))};`
     );
 
-/*
+/**
  * Builds the full generated file output content.
  *
  * @param modelBlocks Modelina-generated schema blocks.
@@ -601,7 +606,7 @@ const buildOutput = (modelBlocks: string[], restModels: string[]): string => {
     return sections.join('\n');
 };
 
-/*
+/**
  * Generates contract models, then writes the realtime types file or asserts it is already current.
  */
 generator

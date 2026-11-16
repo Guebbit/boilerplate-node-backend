@@ -3,7 +3,7 @@
  * The `example` module's slice of the demo dataset: a few examples in each status, so its screens
  * open on something. `demo:remove` deletes it with the module (`group: example`).
  *
- * @see docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md#how-a-scenario-is-built
  */
 
 import { Types } from 'mongoose';

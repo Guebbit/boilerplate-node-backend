@@ -5,7 +5,7 @@
  *
  * Checks:  every `npm run <x>` a page names exists; every page opens with a `type` and an
  *          `audience` in its front-matter.
- * @see docs/build/documentation-style.md
+ * @see docs/build/documentation-style.md#what-check-docs-references-sweeps
  */
 
 import { parse } from 'yaml';

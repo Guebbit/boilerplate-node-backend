@@ -121,7 +121,7 @@ Promise.all([
             process.exit(2);
         }
 
-        /*
+        /**
          * @asyncapi/diff refuses to compare across a major version (a `TypeError`, not a result) —
          * and a major bump IS the deliberate, reviewed break this gate exists to catch everything
          * ELSE from being. Nothing to diff structurally; say so and pass.

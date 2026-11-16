@@ -217,8 +217,10 @@ const jobLevers = (jobs: readonly JobDeclaration[]): ReadonlyMap<string, JobDecl
 export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void => {
     const levers = jobLevers(jobs);
 
-    // Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
-    // throwaway loopback listener of its own (`scenarios/flows/loopback.ts`).
+    /**
+     * Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
+     * throwaway loopback listener of its own (`scenarios/flows/loopback.ts`).
+     */
     demoApp = app;
 
     app.post('/__test/restore', (request: Request, response: Response) => {

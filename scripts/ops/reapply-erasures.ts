@@ -92,7 +92,9 @@ const main = (): Promise<void> => {
     });
 };
 
-// Entry point: no job name, because this is run by hand after a restore, never on a schedule.
-// See `scripts/run-script.ts`.
+/**
+ * Entry point: no job name, because this is run by hand after a restore, never on a schedule.
+ * See `scripts/run-script.ts`.
+ */
 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(undefined, main, () => Promise.all([stopDatabase(), stopQueue()]));

@@ -219,7 +219,6 @@ const callArgumentsOf = (identifier: ts.Identifier): number | undefined => {
 /**
  * The program's own files: no declaration files, nothing from `node_modules`.
  *
- * @param program - the program
  * @returns its project source files
  */
 const projectFiles = (program: ts.Program): ts.SourceFile[] =>
@@ -301,7 +300,6 @@ const isObjectSlot = (identifier: ts.Identifier): boolean => {
  * Whether an identifier sits inside the body of a function it names — a recursive call.
  *
  * @param symbol - what the identifier resolved to
- * @param identifier - the identifier
  * @returns `true` for a self-call
  */
 const isSelfCall = (symbol: ts.Symbol, identifier: ts.Identifier): boolean =>
@@ -504,7 +502,6 @@ const linkReExport = (edges: ReExportEdges, from: string, to: string, taken: ReE
 /**
  * Who imports each file, and which files each one re-exports.
  *
- * @param program - the program
  * @param relativeOf - maps an absolute file name to its repo-relative path
  * @returns importers per file, and the re-export edges barrels are followed along
  */
@@ -648,7 +645,6 @@ const isExported = (node: ts.Declaration): boolean =>
  * The functions a published object carries: the ones a barrel's `userService = { fn }` hands out
  * without exporting them one by one.
  *
- * @param program - the program
  * @param relativeOf - maps an absolute file name to its repo-relative path
  * @param published - what the barrels publish
  * @returns the carried function symbols

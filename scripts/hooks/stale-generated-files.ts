@@ -69,22 +69,28 @@ export const staleGeneratedFiles = (options: StaleGeneratedOptions): string[] =>
     const scratch = mkdtempSync(path.join(tmpdir(), 'verify-generated-'));
     const clean = gitEnvironment();
     try {
-        // `checkout-index -a --prefix=<dir>/`: writes every file of the index under `<dir>/`
-        // (the trailing slash is required). https://git-scm.com/docs/git-checkout-index
+        /**
+         * `checkout-index -a --prefix=<dir>/`: writes every file of the index under `<dir>/`
+         * (the trailing slash is required). https://git-scm.com/docs/git-checkout-index
+         */
         git(
             options.repo,
             ['checkout-index', '--all', `--prefix=${scratch}/`],
             options.indexEnvironment ?? process.env
         );
-        // A repository of its own, so the export has an index to compare against and the steps
-        // that ask `git ls-files` (the module graph) work there.
+        /**
+         * A repository of its own, so the export has an index to compare against and the steps
+         * that ask `git ls-files` (the module graph) work there.
+         */
         git(scratch, ['init', '--quiet'], clean);
         git(scratch, ['add', '--all'], clean);
 
         options.regenerate(scratch);
 
-        // `diff --name-only`: files the regeneration rewrote. `ls-files --others`: files it added
-        // that no .gitignore covers, so they should have been committed.
+        /**
+         * `diff --name-only`: files the regeneration rewrote. `ls-files --others`: files it added
+         * that no .gitignore covers, so they should have been committed.
+         */
         return [
             ...paths(git(scratch, ['diff', '--name-only', '-z'], clean)),
             ...paths(git(scratch, ['ls-files', '--others', '--exclude-standard', '-z'], clean))

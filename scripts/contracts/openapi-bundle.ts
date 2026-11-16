@@ -196,7 +196,7 @@ const withDefaults = (
  * Runs on the BUNDLED document rather than on each fragment, because `$ref`s are already resolved
  * by then and an operation is reachable exactly once.
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#the-flow
  */
 export const withAppLevelResponses: Step = (document_) => {
     const appLevel = document_['x-app-level-responses'];
@@ -206,8 +206,10 @@ export const withAppLevelResponses: Step = (document_) => {
     for (const target of operationsOf(document_))
         target.operation.responses = withDefaults(target, appLevel);
 
-    // Deleted once it has been spent: it is an instruction to this script, and a consumer reading
-    // the published contract has no use for a key describing how the contract was assembled.
+    /**
+     * Deleted once it has been spent: it is an instruction to this script, and a consumer reading
+     * the published contract has no use for a key describing how the contract was assembled.
+     */
     delete document_['x-app-level-responses'];
 };
 
@@ -309,8 +311,10 @@ export const withVersionedResources: Step = (document_) => {
                 withAnswerHeaders(operation, `${method} ${route}`);
             else if (VERSIONED_WRITE_METHODS.has(method)) withIfMatch(operation);
             else throw new Error(`[openapi] ${route}: x-versioned cannot name ${method}.`);
-            // Only a PATCH answer carries the new tag: a PUT answer carries no validator
-            // (RFC 9110 §9.3.4, enforced by `dropUnownedValidators`).
+            /**
+             * Only a PATCH answer carries the new tag: a PUT answer carries no validator
+             * (RFC 9110 §9.3.4, enforced by `dropUnownedValidators`).
+             */
             if (method === 'patch') withEtagHeader(operation, `${method} ${route}`);
         }
     }
@@ -509,9 +513,11 @@ export const withModuleStamps = (
     moduleByPath: Record<string, string>
 ): void => {
     for (const { route, operation } of operationsOf(document_)) {
-        // `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
-        // value for every key, so an index access reads as always-present to TypeScript even
-        // though a `system` path is never in this map at all — see `moduleOfPath`.
+        /**
+         * `Object.hasOwn`, not a nullish check on the value: `Record<string, string>` promises a
+         * value for every key, so an index access reads as always-present to TypeScript even
+         * though a `system` path is never in this map at all — see `moduleOfPath`.
+         */
         if (Object.hasOwn(moduleByPath, route)) operation['x-module'] = moduleByPath[route];
     }
 };
@@ -606,8 +612,10 @@ const bundleSteps = (errorCodes: Record<string, ErrorCodeEntry>): readonly Step[
         withVersionedResources,
         // The headers every answer carries.
         withAppLevelHeaders,
-        // `Idempotent-Replayed` on every answer of an idempotent write but a 429, through
-        // `<Name>Replayable` twins of the shared responses.
+        /**
+         * `Idempotent-Replayed` on every answer of an idempotent write but a 429, through
+         * `<Name>Replayable` twins of the shared responses.
+         */
         withIdempotentReplay,
         // The `x-module` each operation's owning fragment names, never hand-written.
         (document_) => {
@@ -665,7 +673,7 @@ const compile = (): string => {
             { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'pipe'] }
         );
     } catch (error) {
-        /*
+        /**
          * Almost always a `$ref` a fragment or the root names and no file answers. Redocly says
          * which line, so let it through verbatim rather than wrapping it in a summary that hides
          * the location.
@@ -679,16 +687,18 @@ const compile = (): string => {
     const document_ = parseOpenApi(readFileSync(temporary, 'utf8'));
     for (const step of bundleSteps(collectErrorCodes())) step(document_);
 
-    /*
+    /**
      * The marker has to be prepended rather than written into a source, because redocly PARSES: a
      * comment at the top of `openapi.root.yaml` would be dropped like every other one. Two lines of
      * YAML comment ahead of `openapi: 3.1.0` are legal, and spectral, orval and the AsyncAPI-style
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */
-    // `lineWidth: 0` turns off folding, so an unrelated edit never rewraps a description.
-    // `aliasDuplicateObjects: false` writes a shared object out in full, never as a YAML anchor.
-    // https://eemeli.org/yaml/#tostring-options
+    /**
+     * `lineWidth: 0` turns off folding, so an unrelated edit never rewraps a description.
+     * `aliasDuplicateObjects: false` writes a shared object out in full, never as a YAML anchor.
+     * https://eemeli.org/yaml/#tostring-options
+     */
     compiled = MARKER + stringifyYaml(document_, { lineWidth: 0, aliasDuplicateObjects: false });
     return compiled;
 };

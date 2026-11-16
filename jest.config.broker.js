@@ -1,4 +1,4 @@
-/*
+/**
  * The broker suite's own runner — `npm run test:broker`.
  *
  * Same reasoning as `jest.config.cluster.js`, for the same reasons: the defaults in
@@ -25,7 +25,7 @@ module.exports = {
     testEnvironment: base.testEnvironment,
     roots: ['<rootDir>/tests/broker'],
     testMatch: ['**/tests/broker/**/*.test.ts'],
-    /*
+    /**
      * One at a time. The cases share one broker and wait on real TTLs; two files racing for it
      * would only make the timings flakier.
      */

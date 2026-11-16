@@ -10,7 +10,7 @@
  * Pure apart from {@link readCatalog}, the one disk read, so a test can drive the rest with a
  * virtual module list.
  *
- * @see docs/modules/start.md
+ * @see docs/modules/start.md#every-module
  * @see docs/understand/strategic-ddd.md#4a-foundation-and-shop
  */
 

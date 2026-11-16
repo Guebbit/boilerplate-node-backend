@@ -1,4 +1,4 @@
-/*
+/**
  * The one rule `.dependency-cruiser.cjs` cannot state: a cycle between two MODULES, not between
  * two files. That file's own `module-coupling-<name>` rules already refuse an undeclared FILE
  * import; they say nothing about two modules each legitimately importing the other through their
@@ -33,9 +33,11 @@ module.exports = {
         }
     ],
     options: {
-        // Same reasoning as the main config: the RUNTIME graph only, so a cycle closed purely by
-        // an `import type` (erased at compile time, and already refused by
-        // `no-restricted-imports` for the tiers that matter) does not report here either.
+        /**
+         * Same reasoning as the main config: the RUNTIME graph only, so a cycle closed purely by
+         * an `import type` (erased at compile time, and already refused by
+         * `no-restricted-imports` for the tiers that matter) does not report here either.
+         */
         tsConfig: { fileName: 'tsconfig.json' },
         doNotFollow: { path: 'node_modules' },
         exclude: {

@@ -28,8 +28,10 @@ export const formatWithRepoConfig: FormatText = async (root, file, content) => {
     });
     if (ignored) return content;
 
-    // Prettier: `format` takes the text plus options; `filepath` picks the parser (ts, yaml, md).
-    // https://prettier.io/docs/api#prettierformatsource-options
+    /**
+     * Prettier: `format` takes the text plus options; `filepath` picks the parser (ts, yaml, md).
+     * https://prettier.io/docs/api#prettierformatsource-options
+     */
     return format(content, {
         // `resolveConfig` reads .prettierrc / .editorconfig for that file.
         ...(await resolveConfig(file, { editorconfig: true })),

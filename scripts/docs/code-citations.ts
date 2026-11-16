@@ -32,8 +32,10 @@ export const headingSlugs = (markdown: string): Set<string> => {
         if (!heading) continue;
 
         const explicit = /\{#([^}\s]+)\}\s*$/.exec(heading)?.[1];
-        // The title VitePress slugs is the heading's text: link targets, code ticks and
-        // emphasis marks are not part of it.
+        /**
+         * The title VitePress slugs is the heading's text: link targets, code ticks and
+         * emphasis marks are not part of it.
+         */
         const text = heading
             .replace(/\{#[^}\s]+\}\s*$/, '')
             .replaceAll(/\[([^\]]*)\]\([^)]*\)/g, '$1')

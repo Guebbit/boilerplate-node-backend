@@ -56,9 +56,11 @@ const COLLECTION_TOOLS = ['bruno'] as const;
 /** The name every collection carries, in the tools that show one. */
 const COLLECTION_NAME = 'Boilerplate API';
 
-/* ────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────
  * 1. Which module owns which path — read from the OpenAPI fragments, never restated
- * ──────────────────────────────────────────────────────────────────────────────────────────── */
+ * ────────────────────────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * The folders of a collection, in order: one per module, with the paths it owns. A components-only
@@ -69,9 +71,11 @@ const sections = (): Section[] =>
         ({ paths }) => paths.length > 0
     );
 
-/* ────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────
  * 2. Where the values come from — the shapes are the contract's, the data is the seed's
- * ──────────────────────────────────────────────────────────────────────────────────────────── */
+ * ────────────────────────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * The foundation's own value table (`ValueSources` from `@guebbit/openapi-runnable-collections`):
@@ -80,7 +84,7 @@ const sections = (): Section[] =>
  * ({@link loadValues}).
  */
 const baseValues: ValueSources = {
-    /*
+    /**
      * By property name, because that is what makes a generated body USABLE: a request that posts
      * `{"userId": ""}` is a request whoever opens the collection has to fix before it does
      * anything. Everything else — title, price, description and the like — falls through to a
@@ -99,7 +103,7 @@ const baseValues: ValueSources = {
         pageSize: 20
     },
 
-    /*
+    /**
      * Bodies a schema cannot produce correctly on its own. Only two, and both for the same reason:
      * the credentials have to be the ADMIN's. A login that returns a narrower token makes every
      * admin-only request in the collection fail with a 403, and the first thing anyone would do
@@ -117,8 +121,10 @@ const baseValues: ValueSources = {
         }
     },
 
-    /** A credential is a real seeded one, never invented: an invented one produces a login that
-     * fails. */
+    /**
+     * A credential is a real seeded one, never invented: an invented one produces a login that
+     * fails.
+     */
     byFormat: { email: SUBJECTS.user.email, password: SUBJECTS.user.password },
 
     /** A path parameter's value: the seeded record of whichever domain the path belongs to. */
@@ -130,7 +136,7 @@ const baseValues: ValueSources = {
         return SUBJECTS.admin.id;
     },
 
-    /*
+    /**
      * The seed facts a probe may refer to, as `{{token}}`. A probe that pasted an id into its URL
      * would be a copy of the fixture, and copies drift — the whole reason these are read from the
      * fixtures rather than retyped.
@@ -205,9 +211,11 @@ const loadValues = (): Promise<ValueSources> =>
         }
     }));
 
-/* ────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────
  * 3. What the contract cannot describe — each module's authored probes
- * ──────────────────────────────────────────────────────────────────────────────────────────── */
+ * ────────────────────────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * Every module folder that has written a `probes.ts`, discovered rather than listed.
@@ -238,8 +246,10 @@ const loadProbes = (() => {
     return (): Promise<Record<string, Probe[]>> => {
         loaded ??= Promise.all(
             modulesDeclaringProbes().map((name) =>
-                // Dynamic `import()` of a computed path: which modules have probes is only known
-                // after the scan. tsx and ts-jest both resolve a bare `.ts` path.
+                /**
+                 * Dynamic `import()` of a computed path: which modules have probes is only known
+                 * after the scan. tsx and ts-jest both resolve a bare `.ts` path.
+                 */
                 import(path.join(REPO_ROOT, 'src', 'modules', name, 'probes')).then(
                     (module_: unknown) => {
                         if (!hasProbes(module_))
@@ -255,9 +265,11 @@ const loadProbes = (() => {
     };
 })();
 
-/* ────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * ────────────────────────────────────────────────────────────────────────────────────────────
  * 4. The four documents
- * ──────────────────────────────────────────────────────────────────────────────────────────── */
+ * ────────────────────────────────────────────────────────────────────────────────────────────
+ */
 
 /**
  * One run of the generator.

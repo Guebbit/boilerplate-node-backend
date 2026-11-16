@@ -97,8 +97,10 @@ const readOutcomes = (directory: string): Map<string, ShardOutcome> =>
             ? readdirSync(directory)
                   .filter((file) => file.endsWith('.json'))
                   .map((file) => {
-                      // Outcome files are written by the shard job in this shape; `readJson`
-                      // answers `unknown`.
+                      /**
+                       * Outcome files are written by the shard job in this shape; `readJson`
+                       * answers `unknown`.
+                       */
                       const { name, status } = readJson(path.join(directory, file)) as {
                           name: string;
                           status: ShardOutcome;

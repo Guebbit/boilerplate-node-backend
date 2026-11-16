@@ -74,8 +74,10 @@ const readFragment = (
 ): ExtensionFragment | undefined => {
     // `yaml`'s YAML 1.2 loader; the guards below narrow its `any`.
     const parsed: unknown = parseYaml(readFileSync(file, 'utf8'));
-    // An empty or comment-only file would otherwise read as "not an extension" and silently drop
-    // everything the module meant to add. A mapping without `x-extends` is another fragment kind.
+    /**
+     * An empty or comment-only file would otherwise read as "not an extension" and silently drop
+     * everything the module meant to add. A mapping without `x-extends` is another fragment kind.
+     */
     if (!isPlainObject(parsed)) throw new Error(`[openapi] ${file}: fragment is empty.`);
     if (parsed['x-extends'] === undefined) return undefined;
     const extendsSchemas = parseExtendsMap(parsed['x-extends'], `[openapi] ${file}`);
@@ -218,8 +220,10 @@ export const withExtensionSchemas = (
     modulesRoot: string = MODULES_ROOT
 ): string => {
     if (fragments.length === 0) return rootText;
-    // `yaml`'s Document API: edited in place, so the root keeps its shape.
-    // https://eemeli.org/yaml/#documents
+    /**
+     * `yaml`'s Document API: edited in place, so the root keeps its shape.
+     * https://eemeli.org/yaml/#documents
+     */
     const document = parseDocument(rootText);
     const schemas = document.getIn(['components', 'schemas']);
     for (const fragment of fragments)

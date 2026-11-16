@@ -1,4 +1,4 @@
-/*
+/**
  * The graph rules — `npm run check`.
  *
  * `eslint.config.ts` already states the tier walls through `eslint-plugin-boundaries`, and that is
@@ -125,7 +125,9 @@ const MODULE_GROUP = Object.fromEntries(
 
 /** Every module in each group, read off `MODULE_GROUP` rather than hand-listed, so relabelling a module in its own `module.yaml` is the only edit this rule ever needs. */
 const FOUNDATION_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'foundation');
+/** Modules in the shop group. */
 const SHOP_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'shop');
+/** Modules in the example group. */
 const EXAMPLE_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'example');
 
 /** Every module that carries a `domain/` folder — read from disk, so a new one needs no edit here. */
@@ -162,7 +164,7 @@ module.exports = {
                 'A cycle resolves to whatever the module system initialises first, so the symptom is an undefined export at boot rather than an error at either file. Break it by moving the shared piece down a tier, or by letting the two talk through a domain event — see kernel/events.ts.',
             severity: 'error',
             from: {},
-            /*
+            /**
              * Runs on the RUNTIME graph, which is why a type-only cycle never shows up here:
              * `import type` is erased by the compiler, so `cache.ts ⇄ dependency-health.ts` has no
              * edge at all once the TypeScript is compiled. `tsPreCompilationDeps` is left off in
@@ -248,10 +250,12 @@ module.exports = {
             severity: 'error',
             from: {
                 path: `^src/modules/(${FOUNDATION_MODULES.join('|')})/`,
-                // A co-located spec legitimately boots the whole app over supertest (every
-                // contract/integration test does — see `src-cannot-reach-scenarios`'s own
-                // reasoning), which reaches every module including the shop's. That is the test
-                // suite exercising the app, not a foundation module coupling itself to the shop.
+                /**
+                 * A co-located spec legitimately boots the whole app over supertest (every
+                 * contract/integration test does — see `src-cannot-reach-scenarios`'s own
+                 * reasoning), which reaches every module including the shop's. That is the test
+                 * suite exercising the app, not a foundation module coupling itself to the shop.
+                 */
                 pathNot: `^src/modules/(${FOUNDATION_MODULES.join('|')})/tests/`
             },
             to: { path: `^src/modules/(${SHOP_MODULES.join('|')})/`, reachable: true }
@@ -304,7 +308,7 @@ module.exports = {
     ],
 
     options: {
-        /*
+        /**
          * The aliases (`@modules`, `@kernel`, `@domain-primitives`, `@infrastructure`, `@app`, `@types`) live in
          * `tsconfig.json`, and without reading it every one of them is an unresolvable
          * specifier — the graph would be a set of disconnected files and every rule above
@@ -312,7 +316,7 @@ module.exports = {
          */
         tsConfig: { fileName: 'tsconfig.json' },
 
-        /*
+        /**
          * `not-to-unresolvable`'s reason to exist: without reading a package's own `exports`
          * field, dependency-cruiser falls back to a plain file-system lookup for every subpath
          * import, which fails for any package that only ships its real files under `dist/` (or
@@ -327,7 +331,7 @@ module.exports = {
             conditionNames: ['import', 'require', 'node', 'default', 'types']
         },
 
-        /*
+        /**
          * The RUNTIME graph, deliberately — `tsPreCompilationDeps` is left off.
          *
          * Turned on, the graph also carries `import type` edges, and every rule here then reports
@@ -343,14 +347,14 @@ module.exports = {
          * a path anything can take at runtime.
          */
 
-        /*
+        /**
          * `node_modules` is recorded but not cruised into. The rules above need the EDGE into
          * mongoose to exist; they do not need mongoose's own 400 files, and following them turns
          * a two-second run into a minute.
          */
         doNotFollow: { path: 'node_modules' },
 
-        /*
+        /**
          * `node_modules` is deliberately NOT excluded, only left unfollowed above. Excluding it
          * drops those modules from the graph, and a rule whose `to` names one then matches
          * nothing — the reachability rules read as passing while checking an empty set.

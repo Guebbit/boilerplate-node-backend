@@ -38,7 +38,9 @@ const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
 /** The page the table lives in, right where the vocabulary is already described in prose. */
 const PAGE = path.join(ROOT, 'docs', 'operate', 'winston.md');
 
+/** Opening marker of the audit actions block the generator rewrites in place. */
 const START = '<!-- audit-actions:start -->';
+/** Closing marker of the audit actions block the generator rewrites in place. */
 const END = '<!-- audit-actions:end -->';
 
 /** One declared action, before its call sites have been read for a target type. */
@@ -83,8 +85,10 @@ const readModuleActions = async (
             value !== null &&
             Object.values(value).every((member) => typeof member === 'string')
     );
-    // The `every(typeof member === 'string')` filter above proves the entry's value is a string
-    // map.
+    /**
+     * The `every(typeof member === 'string')` filter above proves the entry's value is a string
+     * map.
+     */
     return { varName: entry?.[0] ?? '', actions: (entry?.[1] ?? {}) as Record<string, string> };
 };
 

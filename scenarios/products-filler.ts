@@ -15,9 +15,11 @@
 
 import type { RateType, TaxClass } from '@types';
 
-/** The image roles `npm run scenario:images` populated under this key — see
+/**
+ * The image roles `npm run scenario:images` populated under this key — see
  * `./products-images.generated.json`. Fixed at 20 regardless of how large {@link FILLER_PRODUCTS}
- * grows; `./products` cycles through them by index. */
+ * grows; `./products` cycles through them by index.
+ */
 export const FILLER_IMAGE_ROLE_KEYS: string[] = Array.from(
     { length: 20 },
     (_unused, index) => `filler-${String(index).padStart(2, '0')}`
@@ -27,8 +29,10 @@ export const FILLER_IMAGE_ROLE_KEYS: string[] = Array.from(
 interface AnimalLine {
     name: string;
     slug: string;
-    /** The Italian catalogue's counterpart — plural, since every template needs "per i
-     * proprietari di {animali}", never the singular. */
+    /**
+     * The Italian catalogue's counterpart — plural, since every template needs "per i
+     * proprietari di {animali}", never the singular.
+     */
     it: { namePlural: string };
 }
 
@@ -54,8 +58,10 @@ interface ProductType {
     weight: number;
     /** VAT treatment other than the shop's standard rate, when this line has one. */
     tax?: Pick<FillerProduct, 'taxClass' | 'rateType'>;
-    /** The Italian catalogue's counterpart — `name` is gender-neutral in how {@link TIERS}
-     * combines it in a title, `blurb` completes "...proprietari di {animali}: {blurb}.". */
+    /**
+     * The Italian catalogue's counterpart — `name` is gender-neutral in how {@link TIERS}
+     * combines it in a title, `blurb` completes "...proprietari di {animali}: {blurb}.".
+     */
     it: { name: string; blurb: string };
 }
 
@@ -150,8 +156,10 @@ interface Tier {
     priceMultiplier: number;
     /** Completes "{qualifier} {animal} owners: ...". */
     qualifier: string;
-    /** The Italian catalogue's counterpart. `qualifier` ends in "per i proprietari di", so the
-     * template only has to append the animal and the colon — see {@link FILLER_PRODUCTS}. */
+    /**
+     * The Italian catalogue's counterpart. `qualifier` ends in "per i proprietari di", so the
+     * template only has to append the animal and the colon — see {@link FILLER_PRODUCTS}.
+     */
     it: { name: string; qualifier: string };
 }
 
@@ -183,8 +191,10 @@ const TIERS: Tier[] = [
         priceMultiplier: 1.3,
         qualifier: 'Reinforced construction intended for demanding, everyday use by',
         it: {
-            // Invariant across the type nouns' genders (bed/carrier/bowl/... are a mix of
-            // masculine and feminine), unlike an inflected adjective would be.
+            /**
+             * Invariant across the type nouns' genders (bed/carrier/bowl/... are a mix of
+             * masculine and feminine), unlike an inflected adjective would be.
+             */
             name: 'Extra Resistente',
             qualifier:
                 'Una struttura rinforzata, pensata per un uso quotidiano e intenso, per i proprietari di'
@@ -219,9 +229,11 @@ export interface FillerProduct {
     rateType?: Exclude<RateType, 'standard'>;
     /** `false` marks a digital good. Absent means physical. */
     requiresShipping?: false;
-    /** Both locales' copy for the write surface's translation batch (see `./products`). `en` is
+    /**
+     * Both locales' copy for the write surface's translation batch (see `./products`). `en` is
      * built from the same template call as the flat `title`/`description` above, so the two can
-     * never drift apart. */
+     * never drift apart.
+     */
     translations: { en: FillerCopy; it: FillerCopy };
 }
 

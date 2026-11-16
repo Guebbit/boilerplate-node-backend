@@ -1,4 +1,4 @@
-/*
+/**
  * Scenario seeder — `npm run scenario:apply`. Owns DATA; `db:sync` owns SCHEMA.
  *
  * The RUNNER, not the scenario: the gates, the connection, and one call into `buildScenario`.
@@ -42,7 +42,7 @@ import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/inde
 import { seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER } from '@scenarios/rate-limits';
 
-/*
+/**
  * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
  * file invented. Against a deployment with a mail server configured that is thirty real send
  * attempts to fictional recipients, which is both noise and a reputation risk that belongs to
@@ -53,7 +53,7 @@ import { DEMO_BANK_TRANSFER } from '@scenarios/rate-limits';
  */
 installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
 
-/*
+/**
  * The broker off for this process, so an email job runs INLINE through the `log` transport above.
  * With a broker reachable the job is published instead, and whichever consumer is listening —
  * a live backend, with its real SMTP transport — sends the seed's several dozen mails to the
@@ -61,7 +61,7 @@ installEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
  */
 installEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
 
-/*
+/**
  * Applied only where nothing is set, unlike the budgets in `./support/scripted-environment`: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
@@ -118,7 +118,7 @@ async function seed() {
         await emptyDatabase();
         logger.info('Database emptied.');
 
-        /*
+        /**
          * Only Redis-held counters can be reset from here, by SCAN + DEL under the limiter's own
          * prefix, never FLUSHALL. Without the URL in THIS process the counters may live in the
          * running server's memory, which a reseed cannot reach; an unreachable Redis leaves them
@@ -133,7 +133,7 @@ async function seed() {
             logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
         else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
     } else if (!(await isDatabaseEmpty())) {
-        /*
+        /**
          * Warn and succeed, never throw: the compose `app` command is
          * `npm run db:bootstrap && <start the server>`, so a non-zero exit here would stop a
          * container whose database is already seeded from ever starting.
@@ -144,7 +144,7 @@ async function seed() {
         return;
     }
 
-    /*
+    /**
      * `buildScenario` owns the whole scenario — the access model, every module's rows, the flow
      * run against `app`, and the backdating pass after it. This runner names no scenario
      * internals: it only calls whatever the registry maps the name to.
@@ -153,7 +153,7 @@ async function seed() {
      */
     const subjects = await buildScenario(scenarioName, app);
 
-    /*
+    /**
      * The flows wrote through the API, so most of this is already invalidated — but the module
      * fixtures underneath them went straight to Mongo, and those answers are still cached.
      *
@@ -171,8 +171,10 @@ async function seed() {
         );
 
     if (describeTo) {
-        // A checkout that has never run the suite has no `reports/e2e/` yet, and `writeFile` does
-        // not make parents. `recursive` also makes an existing directory a no-op.
+        /**
+         * A checkout that has never run the suite has no `reports/e2e/` yet, and `writeFile` does
+         * not make parents. `recursive` also makes an existing directory a no-op.
+         */
         await mkdir(path.dirname(describeTo), { recursive: true });
         await writeFile(
             describeTo,
@@ -184,7 +186,7 @@ async function seed() {
     logger.info(`Seeding "${scenarioName}" complete.`);
 }
 
-/*
+/**
  * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
  * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process.
  * `stop()` closes everything `boot()` opened, the locale-refresh interval included. Nothing to
@@ -200,7 +202,7 @@ async function seed() {
  * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
-/*
+/**
  * A boot-time seeder that can drop or overwrite a real database is a footgun, and its accounts
  * carry public passwords (`root@root.it` / `Demo-Admin1!` hands out the shop owner and the
  * platform operator to anyone who reads this repo). So it runs only where `NODE_ENV` says

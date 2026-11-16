@@ -80,9 +80,11 @@ export const scoresFromReport = (report: MutationReport): Record<string, number>
 
     for (const [file, { mutants }] of Object.entries(report.files)) {
         const scored = mutants.filter(({ status }) => !NOT_VIABLE.has(status));
-        // A file whose every mutant was non-viable has no score to record. Treated as 100 rather
-        // than 0: there was nothing for the tests to catch, so calling it untested would be a
-        // permanent false alarm on the ratchet.
+        /**
+         * A file whose every mutant was non-viable has no score to record. Treated as 100 rather
+         * than 0: there was nothing for the tests to catch, so calling it untested would be a
+         * permanent false alarm on the ratchet.
+         */
         if (scored.length === 0) {
             scores[file] = 100;
             continue;
@@ -173,8 +175,10 @@ export const compareToBaseline = (
     const files = [...new Set([...Object.keys(previous), ...Object.keys(current)])].toSorted();
 
     return files.map((file) => {
-        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
-        // to the baseline does.
+        /**
+         * `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+         * to the baseline does.
+         */
         const before = previous[file] as number | undefined;
         // Same as `before`: a file may be absent from one side.
         const now = current[file] as number | undefined;
@@ -217,8 +221,10 @@ export const mergeIntoBaseline = (
     const files: Record<string, number> = { ...previous };
 
     for (const [file, score] of Object.entries(current)) {
-        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
-        // to the baseline does.
+        /**
+         * `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+         * to the baseline does.
+         */
         const before = previous[file] as number | undefined;
         files[file] = before === undefined ? score : Math.max(before, score);
     }
@@ -257,8 +263,10 @@ export const nextBaseline = (
     const files: Record<string, number> = {};
 
     for (const file of Object.keys(current).toSorted()) {
-        // `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
-        // to the baseline does.
+        /**
+         * `Record<string, number>` indexing never answers `undefined` to the compiler; a file new
+         * to the baseline does.
+         */
         const before = previous[file] as number | undefined;
         files[file] = before === undefined ? current[file] : Math.max(before, current[file]);
     }

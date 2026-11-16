@@ -1,4 +1,4 @@
-/*
+/**
  * Drop every cached response belonging to this app.
  *
  * The API invalidates its own cache on every write it handles (see `invalidateCache` in
@@ -19,15 +19,17 @@ import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 
-// `undefined`: hand-run, and it never opens Mongo — recording an outcome would need a
-// connection this script has no other reason to hold. See `run-script.ts`.
+/**
+ * `undefined`: hand-run, and it never opens Mongo — recording an outcome would need a
+ * connection this script has no other reason to hold. See `run-script.ts`.
+ */
 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- runScript never rejects (failure is reported via process.exitCode)
 void runScript(
     undefined,
     async () => {
         const { deleted, reachable } = await clearCache();
 
-        /*
+        /**
          * `clearCache` fails open for the seeder's benefit (§9), which for *this* script would
          * mean printing "0 keys removed" and exiting 0 with the cache untouched —
          * indistinguishable from a genuinely empty cache, and precisely the silent failure this

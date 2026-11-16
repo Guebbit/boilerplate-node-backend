@@ -1,4 +1,4 @@
-/*
+/**
  * Entry-point wrapper for the one-shot scripts in `db/` and `ops/`. Four things a bare promise chain does
  * not give them:
  *
@@ -75,7 +75,7 @@ const runChecked = async (
         try {
             await cleanup();
         } catch (error: unknown) {
-            /*
+            /**
              * A cleanup failure is not a job failure: the work either happened or it did not,
              * and that verdict is already recorded above. Log it and leave `exitCode` alone —
              * a failed `quit()` on an already-dead socket must not turn a successful run red.
@@ -109,12 +109,16 @@ export const runScript = (
     main: () => Promise<void>,
     cleanup: () => Promise<unknown>
 ): Promise<void> =>
-    // The development doubles first (a no-op outside `NODE_ENV=development`), so the gate below
-    // judges the environment this process will actually run with: `log` is a valid mail transport
-    // here, and only here.
+    /**
+     * The development doubles first (a no-op outside `NODE_ENV=development`), so the gate below
+     * judges the environment this process will actually run with: `log` is a valid mail transport
+     * here, and only here.
+     */
     loadDevelopmentDoubles()
-        // Judged next, so a typo in the environment names itself here instead of surfacing halfway
-        // through the job. Lazy: a script that fails validation never loads what it would have run.
+        /**
+         * Judged next, so a typo in the environment names itself here instead of surfacing halfway
+         * through the job. Lazy: a script that fails validation never loads what it would have run.
+         */
         .then(() => import('../src/app/config'))
         .then(({ assertProcessConfig }) => assertProcessConfig())
         .then(

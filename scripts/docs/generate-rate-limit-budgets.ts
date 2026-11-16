@@ -29,6 +29,7 @@ const PAGE = path.join(ROOT, 'docs/understand/security.md');
 
 /** Markers bounding the generated block inside the page — everything between them is replaced. */
 const START = '<!-- rate-limit-budgets:start -->';
+/** Closing marker of the rate-limit budget block the generator rewrites in place. */
 const END = '<!-- rate-limit-budgets:end -->';
 
 /** One budget, tagged with the module (or `infrastructure`) that owns it — the table's rows. */

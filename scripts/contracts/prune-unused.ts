@@ -14,7 +14,7 @@
  * Reachability, not names: a component is kept when a `$ref` from outside `components`, or from a
  * kept component, points at it. A security scheme is kept when a `security` requirement names it.
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#the-flow
  */
 
 import { isPlainObject } from '../../src/infrastructure/object-guards';

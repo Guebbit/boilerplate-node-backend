@@ -14,7 +14,7 @@ import { gitEnvironment } from '../git-base';
 export const isLinkedWorktree = (directory: string): boolean | undefined => {
     let output: string;
     try {
-        /*
+        /**
          * git rev-parse: `--git-dir` is this checkout's own git dir, `--git-common-dir` the one
          * shared by every worktree. `--path-format=absolute` makes the two comparable as strings.
          * Stderr is dropped: outside a repository, "not a git repository" is the expected answer.

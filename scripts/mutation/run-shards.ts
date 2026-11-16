@@ -129,8 +129,10 @@ const runShard = async (name: string, mutate: string, index: number): Promise<bo
             CONFIG,
             '--mutate',
             mutate,
-            // One incremental cache per shard: a shared one would have each shard discard the
-            // previous shard's memory, which is why `mutation.yml` keys its cache per matrix job.
+            /**
+             * One incremental cache per shard: a shared one would have each shard discard the
+             * previous shard's memory, which is why `mutation.yml` keys its cache per matrix job.
+             */
             '--incrementalFile',
             path.join(path.relative(REPO_ROOT, reportRoot), name, 'incremental.json'),
             ...(hasFlag('force') ? ['--force'] : [])

@@ -114,7 +114,6 @@ const anyFields = (contracts: unknown[]): Set<string> => {
 /**
  * The fields the modules about to be removed name and no surviving request carries, read while
  * their folders exist.
- * @param repoRoot - repo root
  * @param names - the modules about to be removed
  */
 export const readRemovedFields = (
@@ -151,8 +150,10 @@ export const stripValidationLabels = (
         .filter((file) => file.endsWith('.json'))
         .flatMap((file) => {
             const full = path.join(directory, file);
-            // A locale dictionary of this repo; only the optional `validation.attributes` path is
-            // read.
+            /**
+             * A locale dictionary of this repo; only the optional `validation.attributes` path is
+             * read.
+             */
             const dictionary = JSON.parse(readFileSync(full, 'utf8')) as {
                 validation?: { attributes?: Record<string, string> };
             };

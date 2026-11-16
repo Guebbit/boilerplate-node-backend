@@ -37,6 +37,7 @@ const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
  * make a run pass.
  */
 const MIN_PAGES = 90;
+/** Floor on how many references the sweep must find, so an empty sweep cannot pass. */
 const MIN_REFERENCES = 300;
 
 /** Opt-out for a line that names an absent path deliberately. See the module header. */
@@ -93,8 +94,10 @@ const scanPage = (
 ): Scan => {
     const scan: Scan = { tokens: [], findings: [] };
 
-    // Line by line, so the opt-out marker can scope to the one claim that needs it rather than to
-    // a whole page.
+    /**
+     * Line by line, so the opt-out marker can scope to the one claim that needs it rather than to
+     * a whole page.
+     */
     for (const line of markdown.split('\n')) {
         if (line.includes(IGNORE_LINE)) continue;
 
@@ -152,9 +155,11 @@ const isReal = (
     if (!claim.anchor) return true;
 
     const slugs = anchorsOf(claim.path);
-    // Not a page this repo tracks the heading text of (a non-`.md` file, or one `resolves` only
-    // matched by a spelling other than a bare `.md` file) — the anchor claim goes unchecked, the
-    // same way a peer-repo path already does above.
+    /**
+     * Not a page this repo tracks the heading text of (a non-`.md` file, or one `resolves` only
+     * matched by a spelling other than a bare `.md` file) — the anchor claim goes unchecked, the
+     * same way a peer-repo path already does above.
+     */
     return !slugs || slugs.has(claim.anchor);
 };
 
@@ -237,6 +242,7 @@ const deadScriptFindings = (pages: string[], peerRoot: string): Finding[] => {
     return missingScripts(read, known).map(({ page, problem }) => ({ page, token: problem }));
 };
 
+/** Runs every check and returns the process exit code. */
 const run = (): number => {
     const aliases = readAliases();
     const own = trackedTargets(ROOT);
@@ -257,8 +263,10 @@ const run = (): number => {
         .filter((file) => file.endsWith('.md'));
 
     const anchorPages = anchorPageFor(pages);
-    // One read per cited page, not per citation — a heavily-linked page (the glossary, the module
-    // index) would otherwise reparse its own headings dozens of times over one sweep.
+    /**
+     * One read per cited page, not per citation — a heavily-linked page (the glossary, the module
+     * index) would otherwise reparse its own headings dozens of times over one sweep.
+     */
     const slugsCache = new Map<string, Set<string>>();
     const anchorsOf = (ownPath: string): Set<string> | undefined => {
         const page = anchorPages.get(ownPath) ?? anchorPages.get(`${ownPath}.md`);
@@ -284,8 +292,10 @@ const run = (): number => {
             findings.push({ page, token: `link ${token}` });
     }
 
-    // Citations written in code, contract YAML and `.env-example`: a page that moved or a heading
-    // that was renamed leaves them pointing at nothing, and no build opens them.
+    /**
+     * Citations written in code, contract YAML and `.env-example`: a page that moved or a heading
+     * that was renamed leaves them pointing at nothing, and no build opens them.
+     */
     const tracked = execFileSync('git', ['ls-files'], {
         cwd: ROOT,
         encoding: 'utf8',

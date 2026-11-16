@@ -1,4 +1,4 @@
-/*
+/**
  * Reconcile the database's indexes with the schemas that declare them.
  *
  * This is the whole of "schema migration" in this repo. A module's `model.ts` is the only author
@@ -17,7 +17,7 @@
 
 import mongoose from 'mongoose';
 import type { IndexDefinition, IndexOptions } from 'mongoose';
-/*
+/**
  * THE registry, and the only model registration this file needs: importing it pulls in every
  * enabled module's `module.ts`, which reaches its own `model.ts`. A module removed from that list
  * is never imported, so its models never register and their collections are left alone rather
@@ -174,8 +174,10 @@ const findDuplicates = (collection: string, keys: string[]) =>
                 { $sort: { count: -1 } }
             ],
             {
-                // A raw driver call: Mongoose's global `maxTimeMS` does not reach it, and this scans
-                // a whole collection. The job ceiling, set by hand.
+                /**
+                 * A raw driver call: Mongoose's global `maxTimeMS` does not reach it, and this scans
+                 * a whole collection. The job ceiling, set by hand.
+                 */
                 maxTimeMS: JOB_MAX_TIME_MS
             }
         )
@@ -240,10 +242,12 @@ const isNamespaceNotFound = (error: unknown): boolean =>
  * @returns the stored indexes, `_id_` included
  */
 const storedIndexesOf = (model: RegisteredModel) =>
-    // Mongoose's collection passes this to the driver's `listIndexes` command: every index with its
-    // name and key spec, `_id_` included. A collection that was never created answers
-    // NamespaceNotFound, handled below.
-    // https://www.mongodb.com/docs/manual/reference/command/listIndexes/
+    /**
+     * Mongoose's collection passes this to the driver's `listIndexes` command: every index with its
+     * name and key spec, `_id_` included. A collection that was never created answers
+     * NamespaceNotFound, handled below.
+     * https://www.mongodb.com/docs/manual/reference/command/listIndexes/
+     */
     model.collection.indexes().catch((error: unknown) => {
         if (isNamespaceNotFound(error)) return [];
         throw error;
@@ -313,7 +317,7 @@ export const planIndexSync = async (options: IndexSyncOptions = {}): Promise<Ind
     const plan: IndexDiff[] = [];
 
     for (const model of registeredModels()) {
-        /*
+        /**
          * Mongoose: a dry run of `syncIndexes()` for one model.
          * https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()
          */
@@ -363,7 +367,7 @@ export const applyIndexSync = async (options: IndexSyncOptions = {}): Promise<In
         ];
         for (const name of drops) await model.collection.dropIndex(name);
 
-        /*
+        /**
          * Mongoose: builds every index the schema declares. One that already exists with the same
          * spec is a no-op, so this creates exactly the missing and the just-dropped.
          * https://mongoosejs.com/docs/api/model.html#Model.createIndexes()

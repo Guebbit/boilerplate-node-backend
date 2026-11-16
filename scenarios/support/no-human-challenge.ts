@@ -8,7 +8,7 @@
  * of the build and putting it back afterwards is enough. A process that boots with the provider on (the
  * paired suite's antibot run) still serves it: the build happens before it listens.
  *
- * @see docs/modules/antibot.md
+ * @see docs/modules/antibot.md#choosing-a-provider
  */
 
 import { overrideEnvironment } from '@infrastructure/config/store';
@@ -23,8 +23,10 @@ const PROVIDER_VARIABLE = 'NODE_ANTIBOT_PROVIDER';
  * @returns whatever `work` resolved to; a rejection passes through after the restore
  */
 export const withoutHumanChallenge = <T>(work: () => Promise<T>): Promise<T> => {
-    // An override, not a `process.env` write: the config store reads the process environment once.
-    // The undo it returns puts the override back as it was, an unset variable included.
+    /**
+     * An override, not a `process.env` write: the config store reads the process environment once.
+     * The undo it returns puts the override back as it was, an unset variable included.
+     */
     const restore = overrideEnvironment({ [PROVIDER_VARIABLE]: 'none' });
 
     return work().finally(restore);

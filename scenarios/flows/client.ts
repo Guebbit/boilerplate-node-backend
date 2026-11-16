@@ -7,7 +7,7 @@
  * file runs on a container boot (`npm run db:bootstrap` → `scenario:apply`), where
  * devDependencies may not be installed at all. `fetch` is the runtime's.
  *
- * @see docs/build/demo-profile.md
+ * @see docs/build/demo-profile.md#how-a-scenario-is-built
  */
 
 import { randomUUID } from 'node:crypto';
@@ -103,16 +103,20 @@ const send = (
 ): Promise<Attempt> =>
     fetch(`${baseUrl}${path}`, {
         method,
-        // A `FormData` body is a multipart upload: fetch must set its own boundary header, so the
-        // JSON content type is dropped for it. https://developer.mozilla.org/docs/Web/API/FormData
+        /**
+         * A `FormData` body is a multipart upload: fetch must set its own boundary header, so the
+         * JSON content type is dropped for it. https://developer.mozilla.org/docs/Web/API/FormData
+         */
         headers: {
             ...(body instanceof FormData
                 ? Object.fromEntries(
                       Object.entries(headers).filter(([name]) => name !== 'content-type')
                   )
                 : headers),
-            // A fresh key on every write: a do-not-retry route (refund, ship, stock) refuses one
-            // without, and a route that takes none ignores it.
+            /**
+             * A fresh key on every write: a do-not-retry route (refund, ship, stock) refuses one
+             * without, and a route that takes none ignores it.
+             */
             ...(method !== 'GET' && { 'idempotency-key': randomUUID() })
         },
         body: body === undefined || body instanceof FormData ? body : JSON.stringify(body)
@@ -131,13 +135,17 @@ const answerChallenge = (
     attempt: Attempt,
     totpSecret: string | undefined
 ): Promise<Attempt> => {
-    // `attempt.data` is `unknown` for any endpoint; this one is the login answer, and both MFA
-    // fields are optional so every read goes through `?.`.
+    /**
+     * `attempt.data` is `unknown` for any endpoint; this one is the login answer, and both MFA
+     * fields are optional so every read goes through `?.`.
+     */
     const data = attempt.data as { mfaRequired?: boolean; challenge?: string } | undefined;
     if (!totpSecret || data?.mfaRequired !== true) return Promise.resolve(attempt);
 
-    // otplib: the six digits an authenticator app derives from the secret at this moment.
-    // https://otplib.yeojz.dev/
+    /**
+     * otplib: the six digits an authenticator app derives from the secret at this moment.
+     * https://otplib.yeojz.dev/
+     */
     return generate({ secret: totpSecret }).then((code) =>
         send(baseUrl, { 'content-type': 'application/json' }, 'POST', '/account/login/2fa', {
             challenge: data.challenge,
@@ -194,8 +202,10 @@ export const signIn = (
                     attemptAs(method, path, body).then((outcome) => {
                         if (outcome.status < 200 || outcome.status >= 300)
                             throw new ScenarioFlowError(email, method, path, outcome);
-                        // `T` is the flow's own claim about the endpoint's body; only the 2xx check
-                        // above is verified.
+                        /**
+                         * `T` is the flow's own claim about the endpoint's body; only the 2xx check
+                         * above is verified.
+                         */
                         return outcome.data as T;
                     })
             };

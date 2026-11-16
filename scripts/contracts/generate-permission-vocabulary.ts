@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the permission vocabulary from `authorization-keys.generated.yaml`: actions, subjects, rule ids,
  * set names, scopes, step-up tiers and the subject-to-actions pair map, each a runtime array plus
  * its union type.

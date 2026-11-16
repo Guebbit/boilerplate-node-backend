@@ -103,11 +103,13 @@ const report = (
 /** The whole run — async because a generated bundle (the client collections) loads modules by scan. */
 const run = async (): Promise<void> => {
     if (named.length > 0) {
-        // Narrowed: exactly the bundles asked for, from what is committed. A collection named here is
-        // regenerated from the COMMITTED contract rather than from one this run just assembled.
+        /**
+         * Narrowed: exactly the bundles asked for, from what is committed. A collection named here is
+         * regenerated from the COMMITTED contract rather than from one this run just assembled.
+         */
         const selected = named.map((name) => findBundle(name)!);
 
-        /*
+        /**
          * `--check` asks "is the committed file current". The collections are not committed, so the
          * honest answer is that the question does not apply — and the naive one is "stale", every time,
          * for a file that is absent by design. Refusing is what stops that from reaching CI as a
@@ -134,7 +136,7 @@ const run = async (): Promise<void> => {
         process.exit(0);
     }
 
-    /*
+    /**
      * Full run — the authored bundles and nothing else. The client collections are generated and
      * uncommitted, so producing them here would write four files nobody asked for and that no check
      * ever reads; `-- bruno` is how you get one.

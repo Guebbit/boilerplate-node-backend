@@ -13,7 +13,7 @@
  *                           `src/cluster.ts` (the primary and every worker) and `runScript`.
  *   `demo`, `scenario:apply`  a static import: each forces its own environment.
  *
- * @see docs/build/test-doubles.md
+ * @see docs/build/test-doubles.md#the-door-node-env-development
  */
 
 // First, for its side effect: `.env` into `process.env`, and the config store told it did.
@@ -36,12 +36,16 @@ const DEV_DEFAULTS: Readonly<Record<string, string>> = {
 for (const [name, value] of Object.entries(DEV_DEFAULTS))
     if (!process.env[name]?.trim()) process.env[name] = value;
 
-// The store snapshots `process.env` once and `dotenv` already took one; take it again with the
-// defaults above in it.
+/**
+ * The store snapshots `process.env` once and `dotenv` already took one; take it again with the
+ * defaults above in it.
+ */
 refreshEnvironment();
 
 registerDoubles();
 
-// A factory, not a value: the OAuth registry re-asks "is it configured" on every call, and this
-// one always is.
+/**
+ * A factory, not a value: the OAuth registry re-asks "is it configured" on every call, and this
+ * one always is.
+ */
 registerOAuthProvider('fake', () => fakeOAuthProvider);

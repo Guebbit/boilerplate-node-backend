@@ -80,8 +80,10 @@ export const removeSeedImages = (repoRoot: string): RemovalNote[] => {
         /^import userImages from '\.\/users-images\.generated\.json';\n/m,
         label
     );
-    // `,\n        ...userImages.customer`, or the customer base's `...(index % 2 === 0 ? userImages.root :
-    // userImages.customer)` — the spread is always a user's last property.
+    /**
+     * `,\n        ...userImages.customer`, or the customer base's `...(index % 2 === 0 ? userImages.root :
+     * userImages.customer)` — the spread is always a user's last property.
+     */
     writeFileSync(
         usersFile,
         withoutImport.replaceAll(

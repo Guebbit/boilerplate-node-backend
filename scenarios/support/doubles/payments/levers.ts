@@ -94,8 +94,10 @@ const installDisputeLever = (app: Express): void => {
                     observedAt: new Date(now).toISOString(),
                     dashboardUrl: `https://dashboard.fake-psp.example/disputes/${wanted.disputeId}`
                 });
-                // Signed and delivered through the same door the route uses: the lever gets no
-                // shortcut past the signature check.
+                /**
+                 * Signed and delivered through the same door the route uses: the lever gets no
+                 * shortcut past the signature check.
+                 */
                 const { body: signed, headers } = signFakeDelivery(delivery);
                 return paymentService
                     .receiveWebhook('fake', Buffer.from(signed), headers)

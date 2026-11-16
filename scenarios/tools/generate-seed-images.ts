@@ -17,7 +17,7 @@
  * `scenarios/products.ts` and `scenarios/products-filler.ts`, and `scenarios/users.ts`, read the
  * resulting `*-images.generated.json` files — nothing there is hand-edited.
  *
- * @see docs/understand/image-processing.md
+ * @see docs/understand/image-processing.md#where-the-code-lives
  */
 import '@infrastructure/config/dotenv';
 import { randomBytes } from 'node:crypto';
@@ -38,11 +38,13 @@ interface ImageEntry {
     thumbnailUrl: string;
 }
 
-/** The five named product roles that keep an image — `barebones` deliberately has none, since
+/**
+ * The five named product roles that keep an image — `barebones` deliberately has none, since
  * its whole point is a product with no image field at all. The filler roles are a
  * fixed pool (`FILLER_IMAGE_ROLE_KEYS`), independent of how large the generated catalogue grid
  * is — `scenarios/products.ts` cycles through them, so growing the grid never needs a new
- * download. */
+ * download.
+ */
 const PRODUCT_ROLES = [
     'dogFoodStandard',
     'heaterSoftDeleted',
@@ -73,8 +75,10 @@ const fetchSourcePhoto = async (picsumSeed: string): Promise<Buffer> => {
     return Buffer.from(await response.arrayBuffer());
 };
 
-/** Same naming convention a real upload gets — see `http/middlewares/upload.ts`'s `resolveUploadFilename`: 16
- * random bytes as hex, never a name derived from anything the caller supplied. */
+/**
+ * Same naming convention a real upload gets — see `http/middlewares/upload.ts`'s `resolveUploadFilename`: 16
+ * random bytes as hex, never a name derived from anything the caller supplied.
+ */
 const randomName = (extension: string): string => `${randomBytes(16).toString('hex')}.${extension}`;
 
 /**

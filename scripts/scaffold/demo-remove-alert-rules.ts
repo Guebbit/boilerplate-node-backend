@@ -51,7 +51,6 @@ const metricsIn = (files: readonly string[]): Set<string> =>
 
 /**
  * The metrics only the modules about to be removed register, read while their folders exist.
- * @param repoRoot - repo root
  * @param names - the modules about to be removed
  */
 export const readRemovedMetrics = (

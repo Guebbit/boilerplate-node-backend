@@ -32,7 +32,7 @@ export const moduleManifest = (names: ModuleNames): string => `/**
  * what it deliberately does not reach.
  *
  * @see docs/understand/modules.md#the-module-template
- * @see docs/modules/${names.kebab}.md
+ * @see docs/modules/${names.kebab}.md#its-neighbourhood
  */
 
 import type { AppModule } from '@kernel/registry';
@@ -56,8 +56,8 @@ export const barrel = (names: ModuleNames): string => `/**
  * value, a wiring file or factories.ts.
  * Here: the ${names.entityCamel} service and its domain rules.
  *
- * @see docs/understand/strategic-ddd.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
+ * @see docs/modules/${names.kebab}.md#its-neighbourhood
  */
 
 export * from './services';
@@ -102,7 +102,7 @@ export const rulesSchemaFile = (names: ModuleNames): string => String.raw`/**
  * copies) and what npm run regenerate writes from it.
  * Here: the audit names of a ${names.entityCamel}.
  *
- * @see docs/understand/shared-rules.md
+ * @see docs/understand/shared-rules.md#_5-·-adding-a-rule
  */
 
 import { z } from 'zod';
@@ -139,8 +139,8 @@ export const auditFile = (names: ModuleNames): string => `/**
  * Here: view, create, update and delete of a ${names.entityCamel}, listed in rules.yaml. Reads are
  * audited too: who looked at the records is a question the log should answer.
  *
- * @see docs/operate/winston.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/operate/winston.md#audit-events
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { ${names.pluralCamel}AuditActions } from './rules.generated';
@@ -196,7 +196,7 @@ export const modelFile = (names: ModuleNames): string => `/**
  * row never carries them. createdAt and updatedAt are overridden from the generated ${names.entity} type (string to Date):
  * Mongoose holds native dates, and serialization narrows them back to the wire's ISO strings.
  *
- * @see docs/modules/${names.kebab}.md
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { model, Schema } from 'mongoose';
@@ -256,8 +256,8 @@ export const repositoryFile = (names: ModuleNames): string => `/**
  * what is added here is what this collection alone needs. Nothing outside the module imports it -
  * the service is the door. Here: nothing added, the plain CRUD and a search over name and notes.
  *
- * @see docs/understand/layers.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { ${names.entityCamel}Model, apply${names.entity}Transform } from './model';
@@ -307,8 +307,8 @@ export const servicesIndexFile = (names: ModuleNames): string => `/**
  * barrel publishes: every operation once, on the object, and nowhere by name.
  * Here: CRUD, and the actions a caller is told they have.
  *
- * @see docs/understand/layers.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/layers.md#when-service-ts-becomes-services
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { create, getById, removeById, search, updateById } from './crud';
@@ -355,8 +355,8 @@ export const domainIndexFile = (names: ModuleNames): string => `/**
  * this module grows is written beside it: a state machine as an as const event table through
  * defineLifecycle (see the example module), never as a contract extension.
  *
- * @see docs/understand/domain-layer.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/domain-layer.md#_1-the-folder
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 export { ${names.entityCamel}ActionsFor } from './rules';
@@ -370,8 +370,8 @@ export const domainRulesFile = (names: ModuleNames): string => `/**
  * (an event table built with defineLifecycle, see the example module) would add one flag per
  * event here, so the client never re-derives it.
  *
- * @see docs/understand/domain-layer.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/domain-layer.md#_1-the-folder
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import type { ${names.entity}Actions } from '@types';
@@ -399,8 +399,8 @@ export const crudFile = (names: ModuleNames, options: ScaffoldOptions): string =
      options.audit ? ' Every operation records an audit row, so the controllers stay thin.' : ''
  }
  *
- * @see docs/understand/layers.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import type {
@@ -574,8 +574,8 @@ export const presenterFile = (names: ModuleNames): string => `/**
  * Here: a ${names.entityCamel} gains one field, actions, which is decided per caller by the service
  * and handed in, never asked for here.
  *
- * @see docs/understand/layers.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/layers.md#layer-stack-inside-one-module
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import type { ${names.entity}, ${names.entity}Actions } from '@types';
@@ -616,8 +616,8 @@ export const routesFile = (names: ModuleNames): string => `/**
  * Each mount states the one key its own action needs.
  * Here: nothing is public; everything sits below one router.use(getAuth, isAuthOrCredential) gate.
  *
- * @see docs/understand/request-flow.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { Router } from 'express';
@@ -659,8 +659,8 @@ export const getController = (names: ModuleNames): string => `/**
  * Here: GET ${names.basePath}, one page of ${names.words}, built on the shared list-controller
  * factory.
  *
- * @see docs/understand/request-flow.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { List${names.plural}QueryParams } from '@api/schemas.zod';
@@ -690,8 +690,8 @@ export const getItemController = (names: ModuleNames): string => `/**
  * 404 (an unknown id and a malformed one answer the same).
  * Here: GET ${names.basePath}/:id, behind the same gate and the read key as the list.
  *
- * @see docs/understand/request-flow.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { callerContextOf } from '@infrastructure/http/request';
@@ -713,8 +713,8 @@ export const postController = (names: ModuleNames): string => `/**
  * service, and answers 201 with a Location.
  * Here: POST ${names.basePath}, create one ${names.entityCamel}.
  *
- * @see docs/understand/request-flow.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';
@@ -750,8 +750,8 @@ export const updateController = (names: ModuleNames): string => `/**
  * two schemas and the service call.
  * Here: PUT and PATCH ${names.basePath}/:id.
  *
- * @see docs/understand/write-methods.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/write-methods.md#put-—-replace
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
@@ -775,15 +775,15 @@ export const { replace: replace${names.entity}, update: update${names.entity} } 
     });
 `;
 
-/** The delete controller. */
+/** Source of the generated delete controller: a permanent `DELETE /:id`, admin only. */
 export const deleteController = (names: ModuleNames): string => `/**
  * @module
  * In any module: a delete controller. Hand-written here because the shared delete factory serves
  * the soft/hard delete triplet, and this module has no soft-delete tier to flag.
  * Here: DELETE ${names.basePath}/:id - permanent.
  *
- * @see docs/understand/request-flow.md
- * @see docs/modules/${names.kebab}.md
+ * @see docs/understand/request-flow.md#what-each-layer-does
+ * @see docs/modules/${names.kebab}.md#the-pipeline
  */
 
 import type { Request, Response } from 'express';

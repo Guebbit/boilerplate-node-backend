@@ -35,7 +35,9 @@ export const webhookEventFragments = (): string[] => sectionFragments(WEBHOOKS_S
  */
 export const webhookEventNames = (): string[] =>
     webhookEventFragments().flatMap((file) =>
-        // `yaml`'s `parse`: a plain object back, no custom tags in a fragment.
-        // https://eemeli.org/yaml/#parse-yaml-to-json-value
+        /**
+         * `yaml`'s `parse`: a plain object back, no custom tags in a fragment.
+         * https://eemeli.org/yaml/#parse-yaml-to-json-value
+         */
         Object.keys((parse(readFileSync(file, 'utf8')) as { channels?: object }).channels ?? {})
     );

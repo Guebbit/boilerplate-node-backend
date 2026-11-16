@@ -37,9 +37,13 @@ const checkOnly = hasFlag('check');
 /** The page both generated blocks live in. */
 const PAGE = path.join(ROOT, 'docs', 'reference', 'package-dependencies.md');
 
+/** Opening marker of the runtime dependency block the generator rewrites in place. */
 const RUNTIME_START = '<!-- dependency-map:runtime:start -->';
+/** Closing marker of the runtime dependency block the generator rewrites in place. */
 const RUNTIME_END = '<!-- dependency-map:runtime:end -->';
+/** Opening marker of the dev dependency block the generator rewrites in place. */
 const DEV_START = '<!-- dependency-map:dev:start -->';
+/** Closing marker of the dev dependency block the generator rewrites in place. */
 const DEV_END = '<!-- dependency-map:dev:end -->';
 
 /** Top-level directories holding production code — the only places ownership is read from. */
@@ -74,6 +78,7 @@ interface PackageManifest {
     devDependencies?: Record<string, string>;
 }
 
+/** Reads the repo's package.json. */
 const readManifest = (): PackageManifest =>
     // Our own `package.json`; only the fields `PackageManifest` names are read.
     JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as PackageManifest;
@@ -125,6 +130,7 @@ const packageFor = (specifier: string, packages: string[]): string | undefined =
 
 /** Node's own modules — `node:fs`, and the bare form every one still resolves under too. */
 const BUILTIN_MODULES = new Set(builtinModules);
+/** Whether an import specifier is a Node built-in, not a package. */
 const isBuiltin = (specifier: string): boolean =>
     specifier.startsWith('node:') || BUILTIN_MODULES.has(specifier);
 

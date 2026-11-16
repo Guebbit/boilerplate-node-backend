@@ -53,11 +53,13 @@ export const breakingChanges = (
     after: object,
     acknowledged: readonly AcknowledgedBreak[] = ACKNOWLEDGED_BREAKS
 ): DiffOutputItem[] => {
-    // @asyncapi/diff: compare two documents, classify each change, keep the breaking ones.
-    // `override` (singular: the README says `overrides`, the code reads `override`) replaces
-    // the standard's verdict per JSON pointer.
-    // https://github.com/asyncapi/diff#readme
-    // `.breaking()` is typed as the union of its output formats; the JSON default is an array.
+    /**
+     * @asyncapi/diff: compare two documents, classify each change, keep the breaking ones.
+     * `override` (singular: the README says `overrides`, the code reads `override`) replaces
+     * the standard's verdict per JSON pointer.
+     * https://github.com/asyncapi/diff#readme
+     * `.breaking()` is typed as the union of its output formats; the JSON default is an array.
+     */
     const breaking: unknown = diff(before, after, { override: OVERRIDES }).breaking();
     const found = Array.isArray(breaking) ? (breaking as DiffOutputItem[]) : [];
     return found.filter(({ path }) => acknowledged.every((one) => one.path !== path));

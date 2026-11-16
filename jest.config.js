@@ -1,4 +1,4 @@
-/*
+/**
  * Jest configuration for the unit run, and the base the other jest configs extend. A .js file
  * rather than .json so its settings can carry their explanation — JSON holds no comment, and
  * Jest warns on any key it does not recognise. Coverage is not measured; the mutation score is the
@@ -87,8 +87,10 @@ const DEFAULT_WORKER_MEMORY_MB = 1400;
  * @returns a positive integer
  */
 const fromEnvironment = (name, fallback) => {
-    // A real environment variable wins over the file, so a one-off run can go lower without
-    // editing anything: `JEST_WORKERS=1 npx jest`.
+    /**
+     * A real environment variable wins over the file, so a one-off run can go lower without
+     * editing anything: `JEST_WORKERS=1 npx jest`.
+     */
     const setting = process.env[name] ?? envFileValues[name];
     const configured = Number(setting?.trim());
     return Number.isInteger(configured) && configured > 0 ? configured : fallback;
@@ -99,7 +101,7 @@ const maxWorkers = fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS);
 
 module.exports = {
     preset: 'ts-jest',
-    /*
+    /**
      * Transform cache, on disk under node_modules: no RAM cost, survives reboots.
      * Lane slots share it through the node_modules symlink; entries are keyed by absolute file path,
      * so slots do not collide. `npx jest --clearCache` (or deleting node_modules) resets it.
@@ -107,11 +109,13 @@ module.exports = {
      */
     cacheDirectory: '<rootDir>/node_modules/.cache/jest',
     clearMocks: true,
-    // `node`, plus clearing every timer a file leaves running — without it each file's whole module
-    // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
+    /**
+     * `node`, plus clearing every timer a file leaves running — without it each file's whole module
+     * graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
+     */
     testEnvironment: '<rootDir>/tests/support/test-environment.ts',
     maxWorkers,
-    /*
+    /**
      * Only where there are workers to recycle. Jest takes its implicit in-band path (one worker, or
      * few files) only while this is undefined, so a one-worker run must not carry it — that was a
      * run that reported nothing for 87 minutes. A config that narrows `maxWorkers` after spreading
@@ -123,7 +127,7 @@ module.exports = {
             ? `${fromEnvironment('JEST_WORKER_MEMORY_MB', DEFAULT_WORKER_MEMORY_MB)}MB`
             : undefined,
     testMatch: ['**/tests/**/*.test.ts'],
-    /*
+    /**
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
      * as a child process and boot their own Mongo and Redis, so none of this file's setup applies.
      * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
@@ -153,7 +157,7 @@ module.exports = {
             'ts-jest',
             {
                 tsconfig: 'tsconfig.jest.json',
-                /*
+                /**
                  * Silences ts-jest's `ModernNodeModule` warning (151002), which `module: node16`
                  * triggers to ask for `isolatedModules` — a setting that would break dynamic
                  * import under jest's CJS runtime. The reasoning is in `tsconfig.jest.json`.
@@ -164,7 +168,7 @@ module.exports = {
                 }
             }
         ],
-        /*
+        /**
          * `otplib`'s own packages ship a working CJS build, but two of their transitive deps —
          * `@scure/base`, `@noble/hashes` — do not. Jest's module runtime predates Node 22's
          * synchronous `require(esm)` and still trips on their `export` syntax; downlevelling just
@@ -173,7 +177,7 @@ module.exports = {
          */
         '^.+\\.jsx?$': ['babel-jest', { plugins: ['@babel/plugin-transform-modules-commonjs'] }]
     },
-    /*
+    /**
      * Default is "ignore everything under node_modules", carved open for `@scure`/`@noble` and for
      * the ESM-only OAuth/JWT stack (`jose`, `openid-client` and its `oauth4webapi`) and
      * `@mdit-vue` (the docs checker's heading slugger, which a unit test imports).
@@ -195,7 +199,7 @@ module.exports = {
         '^@domain-primitives/(.*)$': '<rootDir>/src/domain-primitives/$1',
         '^@scenarios/(.*)$': '<rootDir>/scenarios/$1',
 
-        /*
+        /**
          * The one third-party module replaced wholesale: `puppeteer-core` v25 is ESM-only and
          * cannot be parsed here. See the stub for why nothing wanted the real package anyway.
          */

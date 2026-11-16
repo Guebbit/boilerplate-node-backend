@@ -56,7 +56,7 @@ export const siblingRole = (role: RepoRole): RepoRole =>
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself. */
     { backend: 'openapi.yaml', frontend: 'openapi.yaml' },
-    /*
+    /**
      * The async contract, in its SHARED half only. `asyncapi.yaml` here holds every channel this
      * service has, queues included; `asyncapi.public.yaml` is the same document minus the sections
      * an API client cannot reach, and it is that subset the frontend receives as its own
@@ -64,7 +64,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * describe a shared channel differently — see `scripts/contracts/asyncapi-bundles.ts`.
      */
     { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' },
-    /*
+    /**
      * The authorization keys, read here for its closed lists — `gen:api` turns them into
      * `<frontend>/contracts/permission-vocabulary.ts`, so the frontend's `PermissionAction` cannot drift from the
      * vocabulary the backend enforces.
@@ -73,18 +73,18 @@ export const SHARED_FILES: readonly SharedFile[] = [
         backend: 'shared/authorization-keys.generated.yaml',
         frontend: 'contracts/authorization-keys.yaml'
     },
-    /*
+    /**
      * The frontend paths the backend links to in mail and sitemaps. The frontend's tests walk its
      * router against this file, so a renamed route fails there instead of in a reader's inbox.
      */
     { backend: 'shared/rules/frontend-links.yaml', frontend: 'contracts/frontend-links.yaml' },
-    /*
+    /**
      * Every cookie the backend sets. The frontend builds its browser-storage inventory (the privacy
      * page's table, the names its code reads) from this file plus its own, and fails its build when
      * a row here has no place in its display order.
      */
     { backend: 'shared/rules/cookies.yaml', frontend: 'contracts/cookies.yaml' },
-    /*
+    /**
      * The demo webhook sink's TLS pair. The backend trusts the CA (the development doubles), the
      * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
      * delivery at the handshake, and nothing in either suite would say why.
@@ -101,7 +101,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
         backend: 'scenarios/support/tls/webhook-sink-key.pem',
         frontend: 'scripts/e2e/tls/webhook-sink-key.pem'
     }
-    /*
+    /**
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue
      * payloads. It is also gitignored and never committed — postinstall and the pre-commit hook
@@ -109,7 +109,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * check to catch.
      */
 
-    /*
+    /**
      * The `contract.<tool>.*` collections are deliberately absent: generated from `openapi.yaml`,
      * which is compared above, so the frontend holds no copy at all.
      */

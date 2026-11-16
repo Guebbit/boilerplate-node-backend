@@ -38,7 +38,7 @@ const mover =
     <T>(model: Model<T>, find: (orderId: string) => QueryFilter<T>, dates: string[]) =>
     (orderId: string, days: number): Promise<unknown> =>
         model
-            /*
+            /**
              * `updatePipeline: true`: Mongoose 9 refuses an array update unless the caller says it
              * meant an aggregation pipeline, since a plain array is far more often a mistake.
              * https://mongoosejs.com/docs/migrating_to_9.html
@@ -71,9 +71,11 @@ const TRAILS = [
         'withdrawUntil',
         'conformityUntil'
     ]),
-    // Only an order that carries the date: a pipeline `$set` on a dotted path would otherwise
-    // create an empty `fulfillment` object on one that has none, and the next save would fail on
-    // the summary's required fields.
+    /**
+     * Only an order that carries the date: a pipeline `$set` on a dotted path would otherwise
+     * create an empty `fulfillment` object on one that has none, and the next save would fail on
+     * the summary's required fields.
+     */
     mover(
         orderModel,
         (orderId) => ({ _id: orderId, 'fulfillment.lastDeliveredAt': { $exists: true } }),

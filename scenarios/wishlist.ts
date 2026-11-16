@@ -22,7 +22,7 @@ const wishlistFixtures = [
         userId: SEED_ADMIN_ID,
         productIds: [SEED_PRODUCT_IDS.scratchPostOutOfStock]
     }),
-    /*
+    /**
      * customer — two saved products. `dogFoodStandard` is also in no cart of theirs, so moving
      * it to the cart is a state change a demo can actually show happening.
      */

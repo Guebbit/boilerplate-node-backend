@@ -36,8 +36,10 @@ export const prepareJob = (): Promise<void> => {
 export const runJobWork = (job: JobDeclaration): Promise<void> => {
     const run = () => job.run().then(() => settleOutboxNudges());
     if (!job.lease) return run();
-    // `true` marks "it ran": `withLease` answers `undefined` for a skipped run, and a job's own
-    // result is often `undefined` too.
+    /**
+     * `true` marks "it ran": `withLease` answers `undefined` for a skipped run, and a job's own
+     * result is often `undefined` too.
+     */
     return withLease(job.name, job.lease.ttlMs, () => run().then(() => true)).then((ran) => {
         if (ran === undefined)
             logger.info({ message: `${job.name} skipped: another holder already has the lease.` });

@@ -8,7 +8,7 @@
  * Beaten: by an explicit environment variable, always — a number the operator sets is a fact about
  *         their machine that no heuristic here should second-guess.
  *
- * @see docs/build/weak-machines.md
+ * @see docs/build/weak-machines.md#start-here-—-the-two-mechanisms
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -50,8 +50,10 @@ const readEnvironmentFile = (): NodeJS.Dict<string> => {
     return existsSync(environmentFile) ? parseEnv(readFileSync(environmentFile, 'utf8')) : {};
 };
 
-/** `.env`'s contents, read once — every knob below consults it, so re-reading per lookup would
- *  make this module's cost grow with the number of knobs rather than stay flat. */
+/**
+ * `.env`'s contents, read once — every knob below consults it, so re-reading per lookup would
+ *  make this module's cost grow with the number of knobs rather than stay flat.
+ */
 const environmentFileValues = readEnvironmentFile();
 
 /**

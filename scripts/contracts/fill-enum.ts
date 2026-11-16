@@ -24,7 +24,7 @@
  * source is one more entry in the object `openapi-bundle.ts` hands to {@link withFilledEnums};
  * a new use of an existing one is two lines in a fragment. Nothing here knows any source by name.
  *
- * @see docs/build/contract-fragmentation.md
+ * @see docs/build/contract-fragmentation.md#where-the-rest-went
  */
 
 import type { OpenApiDocument } from './openapi-document';
@@ -69,9 +69,11 @@ const enumFor = (node: Placeholder, sources: EnumSources, where: string): string
         throw new Error(
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}); known: ${Object.keys(sources).join(', ')}.`
         );
-    // Written values make the marker mean "append what extenders supply". An unknown source is then
-    // only legitimate as a whole component schema's own name, with no extender; anything else
-    // (a typo, or an inline property that merely shares the name) is refused.
+    /**
+     * Written values make the marker mean "append what extenders supply". An unknown source is then
+     * only legitimate as a whole component schema's own name, with no extender; anything else
+     * (a typo, or an inline property that merely shares the name) is refused.
+     */
     if (!known && written !== undefined && !isOwnName(name, where))
         throw new Error(
             `[openapi] ${where}: x-enum-from names no known source (${String(name)}) and is not this schema's own name.`

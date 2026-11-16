@@ -180,8 +180,10 @@ export const mergeReports = (
     const { testFiles, remap } = mergeTests(finished.map(({ report }) => report));
     const byFile = collectMutants(finished);
 
-    // A mutant every slice skipped cannot happen when every slice finished; if it ever does, the
-    // file's score would come from a subset, so it goes out with the incomplete ones.
+    /**
+     * A mutant every slice skipped cannot happen when every slice finished; if it ever does, the
+     * file's score would come from a subset, so it goes out with the incomplete ones.
+     */
     for (const [file, { ran, seen }] of byFile) if (ran.size < seen.size) incomplete.add(file);
 
     let nextId = 0;
@@ -202,8 +204,10 @@ export const mergeReports = (
             ])
     );
 
-    // The first report's top level (schema version, thresholds, framework), minus its `config`,
-    // which names only that shard's `--mutate` list.
+    /**
+     * The first report's top level (schema version, thresholds, framework), minus its `config`,
+     * which names only that shard's `--mutate` list.
+     */
     const top = Object.fromEntries(
         Object.entries(finished[0]?.report ?? {}).filter(([field]) => field !== 'config')
     );

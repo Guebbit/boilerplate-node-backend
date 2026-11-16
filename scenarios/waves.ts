@@ -27,9 +27,11 @@ export const waveOrder = <T>(entries: Readonly<Record<string, WaveEntry<T>>>): s
     const waves: string[][] = [];
 
     while (remaining.size > 0) {
-        // Ready: every dependency it names is either already done (no longer `remaining`) or was
-        // never one of `entries`' own keys to begin with — the latter is what makes a dangling
-        // `after` inert instead of a crash.
+        /**
+         * Ready: every dependency it names is either already done (no longer `remaining`) or was
+         * never one of `entries`' own keys to begin with — the latter is what makes a dangling
+         * `after` inert instead of a crash.
+         */
         const ready = [...remaining].filter((name) =>
             (entries[name].after ?? []).every((dependency) => !remaining.has(dependency))
         );

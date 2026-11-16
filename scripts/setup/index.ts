@@ -44,8 +44,10 @@ const METRICS_TOKEN_FILE = path.join(ROOT, 'tmp', 'secrets', 'prometheus-metrics
 /** Copies `.env-example` to `.env`, but only when `.env` does not exist yet. */
 const ensureEnvironmentFile = (): boolean => {
     if (existsSync(ENV_FILE)) return false;
-    // COPYFILE_EXCL: fail rather than overwrite if `.env` appeared between the check above and
-    // this call — the one thing this script must never do to a developer's real secrets.
+    /**
+     * COPYFILE_EXCL: fail rather than overwrite if `.env` appeared between the check above and
+     * this call — the one thing this script must never do to a developer's real secrets.
+     */
     copyFileSync(ENV_EXAMPLE, ENV_FILE, fsConstants.COPYFILE_EXCL);
     return true;
 };

@@ -40,4 +40,5 @@ const candidatesConfig: Linter.Config[] = [
     }
 ];
 
+/** The ESLint configuration the audit runs, with only the candidate rules on. */
 export default candidatesConfig;

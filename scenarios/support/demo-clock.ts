@@ -62,7 +62,7 @@ const realNow = (): number => Math.round(performance.timeOrigin + performance.no
  *  `Date` back (a test's cleanup; the server never calls it)
  */
 export const installDemoClock = (): DemoClock & { uninstall: () => void } => {
-    /*
+    /**
      * @sinonjs/fake-timers `install`: replaces the global with a controllable one.
      * - `toFake: ['Date']`: every other timer stays real (see the module header).
      * - `shouldAdvanceTime: true`: the fake keeps ticking with real time between jumps.

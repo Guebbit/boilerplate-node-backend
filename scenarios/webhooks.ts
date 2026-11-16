@@ -62,8 +62,10 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     const sinkBaseUrl = demoSinkConfig().NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
-    // `createdAt` is set here only to satisfy the ring entry's type; the subdocument's own
-    // `{ timestamps: { createdAt: true } }` stamps the same instant on insert.
+    /**
+     * `createdAt` is set here only to satisfy the ring entry's type; the subdocument's own
+     * `{ timestamps: { createdAt: true } }` stamps the same instant on insert.
+     */
     const entry = {
         id: WEBHOOK_DEMO_SECRET_ID,
         ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET, WEBHOOK_DEMO_SECRET_ID),

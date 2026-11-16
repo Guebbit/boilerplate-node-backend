@@ -29,7 +29,7 @@ if (files.length === 0) {
  */
 const parser = new Parser();
 
-/*
+/**
  * Two nominally distinct but structurally identical DiagnosticSeverity enums:
  * @stoplight/spectral-core nests its own copy of @stoplight/types, separate from the hoisted one
  * this file imports through @asyncapi/parser.
@@ -42,7 +42,7 @@ const isInvalid = (diagnostics: readonly Diagnostic[]): boolean =>
             diagnostic.severity === DiagnosticSeverity.Error
     );
 
-/*
+/**
  * Validates every file in parallel, printing each one's diagnostics as it resolves, then exits
  * non-zero if any file failed — the same contract `asyncapi validate` had.
  */
@@ -54,8 +54,10 @@ Promise.all(
                 `\n${file} ${invalid ? 'has governance issues and is INVALID' : 'is valid'}.`
             );
             if (diagnostics.length > 0) {
-                // Spectral's `stylish` formatter: one grouped, human-readable report. `failSeverity` is
-                // the severity at which a diagnostic counts as failing in that report (errors only).
+                /**
+                 * Spectral's `stylish` formatter: one grouped, human-readable report. `failSeverity` is
+                 * the severity at which a diagnostic counts as failing in that report (errors only).
+                 */
                 console.log(stylish(diagnostics, { failSeverity: DiagnosticSeverity.Error }));
             }
             return invalid;

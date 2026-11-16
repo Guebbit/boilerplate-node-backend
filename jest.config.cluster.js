@@ -1,4 +1,4 @@
-/*
+/**
  * The cluster suite's own runner — `npm run test:cluster`.
  *
  * A separate config rather than another directory under the main one, because every default in
@@ -29,7 +29,7 @@ module.exports = {
     testEnvironment: base.testEnvironment,
     roots: ['<rootDir>/tests/cluster'],
     testMatch: ['**/tests/cluster/**/*.test.ts'],
-    /*
+    /**
      * One at a time. Each case boots a cluster of real workers on a real port and fires a burst at
      * it; two of those in parallel are two bursts competing for the same CPUs, and a rate-limit
      * assertion measured under that is a coin toss.

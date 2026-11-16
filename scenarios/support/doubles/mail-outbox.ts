@@ -50,12 +50,16 @@ export const recordDemoEmail = (
     templateName: string,
     data: Data
 ): void => {
-    // A template's data is always a plain object (the mail port's contract); the cast only lets it
-    // be read by key.
+    /**
+     * A template's data is always a plain object (the mail port's contract); the cast only lets it
+     * be read by key.
+     */
     const variables = data as Record<string, unknown>;
-    // The reset/verify templates carry their token inside a link URL rather than as a bare
-    // variable; the suite wants the token itself, so it is lifted out of the link's `#token=`
-    // fragment.
+    /**
+     * The reset/verify templates carry their token inside a link URL rather than as a bare
+     * variable; the suite wants the token itself, so it is lifted out of the link's `#token=`
+     * fragment.
+     */
     const linkUrl = typeof variables.linkUrl === 'string' ? variables.linkUrl : undefined;
     const linkTokenMatch = /#token=([^&]+)/.exec(linkUrl ?? '');
     const linkToken = linkTokenMatch ? decodeURIComponent(linkTokenMatch[1]) : undefined;

@@ -26,8 +26,10 @@ export const runWithTimeout = (
     timeoutMs: number = COMMAND_TIMEOUT_MS
 ): void => {
     try {
-        // `timeout` (ms) kills the child with `killSignal` and throws an error with `code: 'ETIMEDOUT'`.
-        // https://nodejs.org/api/child_process.html#child_processexecfilesynccommand-args-options
+        /**
+         * `timeout` (ms) kills the child with `killSignal` and throws an error with `code: 'ETIMEDOUT'`.
+         * https://nodejs.org/api/child_process.html#child_processexecfilesynccommand-args-options
+         */
         execFileSync(command, arguments_, {
             ...options,
             timeout: timeoutMs,

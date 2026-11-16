@@ -96,8 +96,10 @@ const sendsEnrollment = (name: string): boolean => {
 
             return (
                 staffRoleWithheld(context) &&
-                // Widened to the whole subject union: the rule's own action/subject pair is valid
-                // by construction, but the generic cannot correlate two runtime values.
+                /**
+                 * Widened to the whole subject union: the rule's own action/subject pair is valid
+                 * by construction, but the generic cannot correlate two runtime values.
+                 */
                 holds<PermissionSubject>(callerForSubject(enrolled, subject), action, subject) &&
                 !holds<PermissionSubject>(callerForSubject(context, subject), action, subject)
             );

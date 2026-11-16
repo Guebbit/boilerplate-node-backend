@@ -16,7 +16,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-/*
+/**
  * `process.cwd()`, not `__dirname`: this file is byte-identical in a CommonJS repo and an ESM one,
  * and `__dirname` does not exist in the second. `import.meta.url` is the mirror-image problem. The
  * cwd is the package root for anything started by `npm run`, which is the only way this is
@@ -74,7 +74,7 @@ const bucketOf = (file: string): string => {
     const layer = /^tests\/([^/]+)\//.exec(relative);
     if (layer) return `(${layer[1]})`;
 
-    /*
+    /**
      * Source that belongs to no module — `src/app`, `src/infrastructure`, `src/ui`. Bucketed by
      * its top-level area for the same reason the shared suites are bucketed by layer: it has no
      * module to attribute it to, and one `(other)` row holding a third of the codebase answers
@@ -134,7 +134,7 @@ for (const suite of report.testResults) {
     buckets.set(key, bucket);
 }
 
-/*
+/**
  * Modules first and alphabetically, then the layer buckets. A parenthesised label sorts before a
  * letter in ASCII, which would put `(integration)` above `account` — the opposite of useful, since
  * the modules are what someone is looking for.
@@ -237,7 +237,7 @@ if (failures.length > 0) {
     }
 }
 
-/*
+/**
  * Always zero. This READS a report the runner already gated on; a second non-zero exit here would
  * either duplicate that verdict or, worse, disagree with it.
  */

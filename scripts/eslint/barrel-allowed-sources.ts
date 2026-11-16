@@ -123,8 +123,10 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
         /** local name → source stem, for `import { x } from './y'; export { x };`. */
         const importSourceOf = new Map<string, string>();
 
-        // `tax` (VAT lookup) and `config` (`productPagePath`) are products' own — a named pick is allowed from THIS barrel
-        // only, never from a sibling's, which the module name captured off the file path decides.
+        /**
+         * `tax` (VAT lookup) and `config` (`productPagePath`) are products' own — a named pick is allowed from THIS barrel
+         * only, never from a sibling's, which the module name captured off the file path decides.
+         */
         const isProductsBarrel = MODULE_BARREL_PATH.exec(context.filename)?.[1] === 'products';
 
         const declarationText = (node: TSESTree.Node): string => context.sourceCode.getText(node);
@@ -225,9 +227,11 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                     }
 
                     if (PRESENTER_SOURCES.has(stem)) {
-                        // Unlike a model pick, ANY named export off a presenter is the function
-                        // itself — there is no type worth naming individually when `export type *`
-                        // already publishes the whole output type.
+                        /**
+                         * Unlike a model pick, ANY named export off a presenter is the function
+                         * itself — there is no type worth naming individually when `export type *`
+                         * already publishes the whole output type.
+                         */
                         if (!isTypeOnly)
                             context.report({
                                 node: node.source,
@@ -248,8 +252,10 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                     return;
                 }
 
-                // No source: `export { x }` re-exporting something imported earlier in this
-                // file — `local` is always an `Identifier` on this form.
+                /**
+                 * No source: `export { x }` re-exporting something imported earlier in this
+                 * file — `local` is always an `Identifier` on this form.
+                 */
                 for (const specifier of node.specifiers) {
                     const stem = importSourceOf.get(specifier.local.name);
                     if (stem === undefined) continue;
@@ -263,9 +269,11 @@ export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options,
                                 name: specifier.local.name
                             }
                         });
-                    // An `import { x } from './presenter'` reaching this far is always a value —
-                    // TypeScript resolves `import type` to a distinct AST node this map never
-                    // populates, so anything found here is the function itself.
+                    /**
+                     * An `import { x } from './presenter'` reaching this far is always a value —
+                     * TypeScript resolves `import type` to a distinct AST node this map never
+                     * populates, so anything found here is the function itself.
+                     */
                     if (PRESENTER_SOURCES.has(stem))
                         context.report({
                             node: specifier,

@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-/*
+/**
  * Generates the request media-type table from `openapi.yaml`: for every operation that declares a
  * `requestBody`, the content types it accepts; a write (POST, PUT, PATCH, DELETE) without one is listed with none, so any body is refused. The 415 guard
  * (`src/infrastructure/http/middlewares/content-type.ts`) reads it, so a body in a type the
@@ -44,8 +44,10 @@ const document = parseOpenApi(readFileSync(INPUT, 'utf8'));
  * @returns the literal's source text, and how many `{param}`s the template has
  */
 const compileTemplate = (template: string): { literal: string; parameterCount: number } => {
-    // A `{param}` may sit inside a segment (`products-{page}.xml`): split on it, escape the text
-    // between, and put `[^/]+` where each one was.
+    /**
+     * A `{param}` may sit inside a segment (`products-{page}.xml`): split on it, escape the text
+     * between, and put `[^/]+` where each one was.
+     */
     const parts = template.split(/\{[^/{}]+\}/);
     const source = parts
         .map((part) => part.replaceAll(/[$()*+.?[\\\]^{|}/]/g, String.raw`\$&`))
@@ -56,7 +58,7 @@ const compileTemplate = (template: string): { literal: string; parameterCount: n
     };
 };
 
-/*
+/**
  * One row per operation that declares a body. Fewest parameters first, so a static segment
  * (`/products/search`) is tried before `/products/{id}`; ties by key, so a regeneration is a
  * stable diff.
@@ -70,9 +72,11 @@ const renderRows = (): string[] =>
                 const operation = operations?.[method];
                 const body = operation?.requestBody;
                 const types = Object.keys(body && 'content' in body ? body.content : {});
-                // A write with no declared body refuses any body (`types: []`): a gateway that
-                // strips a body must not turn a body-carrying request into a different one, and a
-                // `{"reason": …}` sent to a button endpoint must not vanish with a 200.
+                /**
+                 * A write with no declared body refuses any body (`types: []`): a gateway that
+                 * strips a body must not turn a body-carrying request into a different one, and a
+                 * `{"reason": …}` sent to a button endpoint must not vanish with a 200.
+                 */
                 if (!operation) return [];
                 const { literal, parameterCount } = compileTemplate(route);
                 return [
@@ -90,7 +94,7 @@ const renderRows = (): string[] =>
         )
         .map((row) => row.text);
 
-/*
+/**
  * One row per path: the methods it declares and the module that owns it. Same order as the
  * content-type rows, for the same reason.
  *
