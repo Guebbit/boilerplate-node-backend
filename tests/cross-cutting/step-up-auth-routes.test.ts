@@ -1,19 +1,17 @@
 /**
- * One app-wide guard: every money or identity route below carries
- * `requireFreshAuth`/`requireFreshAuthWhen`, at the tier assigned to it — critical or
- * sensitive — stated once so a future money or identity route inherits the property instead of
- * needing someone to remember it.
+ * One app-wide guard: every money or identity route below carries `requireFreshAuth` or
+ * `requireFreshAuthWhen`, at its assigned tier (critical or sensitive), stated once so a future
+ * route inherits the property instead of someone remembering it.
  *
- * `STEP_UP_ROUTES` is checked in both directions: every entry must still be a mounted route
- * (no stale table), and every mounted route actually carrying the guard must be IN the table (no
- * silent tier change, and no route quietly gated without anyone documenting why here).
- *
- * THE OTHER HALF LIVES ON THE KEYS. A route mounts this guard when freshness is a property of the
- * ROUTE — checking out, changing your own address, ending every session — and those are about the
- * caller's own record, which no permission key names. Where freshness is a property of the ACTION,
- * `shared/authorization-keys.generated.yaml` says so with `stepUp:` and `requirePermission` enforces it:
- * `delete:User` and `create:Refund` are both there, and neither route mounts anything.
- * `tests/unit/kernel/step-up.test.ts` covers that path; the sweep below covers this one.
+ * Both ways: every `STEP_UP_ROUTES` entry must still be a mounted route (no stale table), and
+ *            every mounted route carrying the guard must be IN the table (no silent tier change,
+ *            no route gated without a documented reason).
+ * Other half: on the keys. A route mounts this guard when freshness belongs to the ROUTE (checking
+ *            out, changing your own address, ending every session): about the caller's own record,
+ *            which no permission key names. Where freshness belongs to the ACTION,
+ *            `shared/authorization-keys.generated.yaml` says `stepUp:` and `requirePermission`
+ *            enforces it: `delete:User` and `create:Refund` are there, and their routes mount
+ *            nothing. `tests/unit/kernel/step-up.test.ts` covers that path; this sweep this one.
  */
 import type { Router } from 'express';
 import { guardsOn, routeSignatures } from '@tests/routes';

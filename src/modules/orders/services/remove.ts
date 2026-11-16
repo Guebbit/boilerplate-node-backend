@@ -71,18 +71,18 @@ const hardDeleteCanceled = (order: OrderDocument): Promise<ResponseReject | unde
     });
 
 /**
- * Remove an order document (soft or hard delete). Soft stamps `deletedAt` once — an order is a
- * financial record, so hiding it isn't destroying it; `restoreById` undoes it — and only on a
- * `canceled` order. Hard is only for an order that is `canceled` and never paid: the cancel owns every end-of-order effect (stock,
- * payment intent, webhook), so a delete of an open order would skip them all.
+ * Remove an order document (soft or hard delete). An order is a financial record, so soft delete
+ * (`deletedAt`, stamped once; `restoreById` undoes it) hides it without destroying it.
  *
- * Both refused (`ORDER_NOT_CANCELED`) while the order is still open; a hard delete also outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
- * transition, and a legal invoice document must survive the order it was issued for — the same
- * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own. Money
- * recorded after the cancel (`moneyReceivedAt`) refuses it too (`ORDER_HAS_MONEY_HISTORY`): a
- * payment and a refund still point at the order.
- * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
- * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
+ * Soft:    only on a `canceled` order.
+ * Hard:    only on a `canceled` order that was never paid. The cancel owns every end-of-order
+ *          effect (stock, payment intent, webhook); deleting an open order would skip them all.
+ * Refused: `ORDER_NOT_CANCELED` while the order is open. A hard delete is also refused once
+ *          `paidAt` is stamped, because `invoicing` freezes an invoice from that transition and a
+ *          legal invoice must outlive its order. `paidAt` alone answers it, with no need to ask
+ *          `invoicing` whether the freeze landed (`services/scope.ts`'s `invoice` flag).
+ *          Money recorded after the cancel (`moneyReceivedAt`) refuses it too
+ *          (`ORDER_HAS_MONEY_HISTORY`): a payment and a refund still point at the order.
  *
  * @internal The raw write beneath `removeById`, which loads the order by id and answers 404. The
  * barrel publishes the door only, the same shape every module gives its delete.
@@ -138,7 +138,7 @@ export const remove = (
 };
 
 /**
- * Undo a soft delete.
+ * Undo a soft delete. Only a soft delete is undone; a hard-deleted order is gone and answers 404.
  *
  * @param id - the order to restore
  * @param context - records `ORDER_RESTORED`; omit for a caller with no request behind it
@@ -168,7 +168,7 @@ export const restoreById = (
     });
 
 /**
- * Remove an order by ID (soft or hard delete). Fetches the document, then delegates to remove().
+ * Loads the order (404 when absent), then delegates to `remove()` for the soft or hard delete.
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  * @param context - forwarded to {@link remove} for the audit row

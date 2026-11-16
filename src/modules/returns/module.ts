@@ -22,7 +22,7 @@ import { returnsConfig } from './config';
 import { collectPersonalData } from './services/personal-data';
 /**
  * Also installs this module's event declarations. Reached directly, never through this module's
- * own barrel — see CLAUDE.md's module-barrel rule.
+ * own barrel (CLAUDE.md, "Module barrels").
  */
 import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED, RETURN_DECIDED } from './events';
 import { closeReturn } from './services/close';

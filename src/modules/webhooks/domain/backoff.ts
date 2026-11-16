@@ -2,20 +2,19 @@
  * @module
  * The retry backoff schedule and the auto-disable threshold — pure rules, so the sweep, the
  * worker and the unit tests share one table instead of three opinions about "how long until the
- * next try". See `docs/modules/webhooks.md`'s delayed-retry section: the granularity is the sweep
- * interval, so these numbers are the SHAPE of the backoff (short, then hours), not a promise of
- * precision.
+ * next try". The granularity is the sweep interval, so these numbers are the SHAPE of the backoff
+ * (short, then hours), not a promise of precision.
+ *
+ * @see docs/modules/webhooks.md#the-delivery-path
  */
 
 import { autoDisableRules, retryRules } from './rules.generated';
 
 /**
  * Delay before each retry, in milliseconds, indexed by the attempt that just failed (1-based —
- * `WEBHOOK_RETRY_DELAYS_MS[0]` is the wait after attempt 1 fails). Reuses the exact tier values
- * the delayed-message-exchange ladder considered and rejected for it: 5s, 5m,
- * 30m, 2h, 10h — a reasonable spread from "the endpoint blipped" to "come back once whatever broke
- * has had most of a day to get fixed", even though this delivers it through `nextAttemptAt`
- * rather than five RabbitMQ queues. The numbers are `rules.yaml`.
+ * `WEBHOOK_RETRY_DELAYS_MS[0]` is the wait after attempt 1 fails). A spread from "the endpoint
+ * blipped" to "come back once whatever broke has had most of a day to get fixed", delivered through
+ * `nextAttemptAt`. The numbers are `rules.yaml`.
  */
 export const WEBHOOK_RETRY_DELAYS_MS: readonly number[] = retryRules.delaysMs;
 
@@ -35,7 +34,7 @@ export const nextRetryDelayMs = (failedAttempt: number): number | undefined =>
 
 /**
  * The wall-clock time of the next attempt after `failedAttempt` fails, or `undefined` once every
- * tier is spent — the value `repository.ts`'s retry-scheduling write stamps onto `nextAttemptAt`.
+ * tier is spent — the value `services/attempt.ts`'s `recordFailure` stamps onto `nextAttemptAt`.
  *
  * @param failedAttempt - the attempt number that just failed (1-based)
  * @param now - injectable for tests; defaults to the real clock
@@ -47,18 +46,18 @@ export const nextAttemptAt = (failedAttempt: number, now: Date = new Date()): Da
 
 /**
  * Consecutive EXHAUSTED events (a whole retry chain giving up, not one failed attempt) before a
- * subscription auto-disables. Reading "sustained failure" as a whole chain giving up, not one blip — five dead chains in
- * a row is long enough that a blip is not what is happening, and short enough that a genuinely
- * dead endpoint stops burning the queue within days rather than indefinitely.
+ * subscription auto-disables. Reading "sustained failure" as a whole chain giving up, not one blip
+ * — enough dead chains in a row that a blip is not what is happening, and few enough that a
+ * genuinely dead endpoint stops burning the queue within days rather than indefinitely.
  */
 export const WEBHOOK_MAX_CONSECUTIVE_FAILURES: number = autoDisableRules.maxConsecutiveFailures;
 
 /**
- * The floor on how long a streak must run before it can auto-disable — 3 days, matching Stripe's
- * own webhook endpoint threshold (Svix uses 5). Time-based on purpose: the retry ladder alone
- * gives up after ~12.5h (`WEBHOOK_RETRY_DELAYS_MS`), so a platform-side outage of that length
- * (egress blocked, DNS broken) would otherwise exhaust every chain in flight and auto-disable
- * every busy subscriber at once, as if each of THEIR endpoints were at fault.
+ * The floor on how long a streak must run before it can auto-disable (`rules.yaml`). Time-based on
+ * purpose: the retry ladder alone gives up long before that (`WEBHOOK_RETRY_DELAYS_MS`), so a
+ * platform-side outage of that length (egress blocked, DNS broken) would otherwise exhaust every
+ * chain in flight and auto-disable every busy subscriber at once, as if each of THEIR endpoints
+ * were at fault.
  */
 export const WEBHOOK_MIN_FAILING_MS: number = autoDisableRules.minFailingMs;
 

@@ -1,7 +1,7 @@
 /**
  * @module
  * Payments — how an order's money moves, behind the provider port. One file per flow, not one
- * big file; see `docs/understand/layers.md`.
+ * big file.
  *
  * Starts:    only a `pending` order's owner can start paying.
  * The gate:   the order's move to `paid`, not the charge. The provider answers first, and a
@@ -11,7 +11,7 @@
  * Authority:  the provider's own word, arriving by webhook. The browser's is a hint that lets the
  *             happy path feel synchronous.
  *
- * Files:      one per flow, listed in docs/modules/payments.md.
+ * @see docs/modules/payments.md#the-story
  */
 
 import { createIntent } from './intent';

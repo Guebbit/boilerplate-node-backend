@@ -4,21 +4,18 @@
  * `generate-role-matrix.ts`: markers in the page, prose around them untouched, `--check` in
  * `complete`.
  *
- * A renamed or added action shows up as a diff in this committed, reviewed page — the doc IS the
- * regression guard, rather than a per-module `<module>/tests/unit/audit.test.ts` restating
- * `audit.ts` by hand. `tests/cross-cutting/audit-actions.test.ts` still checks the STRUCTURE
- * (uniqueness, the dotted convention, every module accounted for); this page is the vocabulary
- * itself.
- *
- * Every action's owner and wire value come from the same source that cross-cutting test trusts:
- * each module's own `audit.ts`, imported for real, plus infrastructure's three `security.*`
- * actions. `targetType` is not declared anywhere near an action — it is a free string passed at
- * each `recordAudit`/`emitAuditEvent`/`buildAuditEvent` call site — so it is read off the call
- * site's own text instead, the same trade-off `generate-module-graph.ts`'s `readEventEdges` makes
- * for event subscriptions: `—` where no call site names a literal one (the three `security.*`
- * actions have no object to attach to; a generic helper like `updateEntityTranslations` takes the
- * target as a runtime parameter instead of a literal), `(varies)` where the same action is fired
- * against more than one distinct literal target.
+ * Guard:    a renamed or added action shows as a diff in this committed, reviewed page, so the doc
+ *           IS the regression guard (no per-module `audit.test.ts` restating `audit.ts`).
+ *           `tests/cross-cutting/audit-actions.test.ts` still checks the STRUCTURE (uniqueness,
+ *           the dotted convention, every module accounted for); this page is the vocabulary.
+ * Source:   owner and wire value come from what that test trusts: each module's `audit.ts`,
+ *           imported for real, plus infrastructure's three `security.*` actions.
+ * Target:   `targetType` is declared nowhere near an action; it is a free string at each
+ *           `recordAudit`/`emitAuditEvent`/`buildAuditEvent` call site, so it is read off the call
+ *           site's text, the trade-off `generate-module-graph.ts`'s `readEventEdges` makes.
+ *           `—` where no call site names a literal (the `security.*` actions have no object; a
+ *           generic helper like `updateEntityTranslations` takes it at runtime), `(varies)` where
+ *           one action fires against more than one literal target.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -57,6 +54,7 @@ interface DeclaredAction {
 
 /** A {@link DeclaredAction} plus what its call sites were found to audit. */
 interface AuditActionRow extends DeclaredAction {
+    /** What the call sites audit the action against (a model name). */
     targetType: string;
 }
 

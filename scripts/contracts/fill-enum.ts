@@ -34,8 +34,11 @@ export type EnumSources = Readonly<Record<string, readonly string[]>>;
 
 /** A schema node carrying the placeholder, as far as this step reads and writes it. */
 interface Placeholder {
+    /** Names the source whose values fill the enum; consumed by this step. */
     'x-enum-from'?: unknown;
+    /** Extra values appended to the filled enum. */
     'x-enum-also'?: unknown;
+    /** The enum this step writes. */
     enum?: unknown;
 }
 

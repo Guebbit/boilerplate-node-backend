@@ -9,6 +9,8 @@
  *
  * Never exported: a second factor's secret, its code in flight or its delivery state, the backup
  * code digests, the password hash.
+ *
+ * @see docs/modules/users.md#what-this-module-adds-to-the-data-export
  */
 
 import type { ExportSignInMethods } from '@types';

@@ -17,6 +17,7 @@ import { REPO_ROOT } from '@tests/paths';
 
 /** The shape of the rule file this test reads: groups of rules with an `expr`. */
 interface RuleFile {
+    /** The rule groups of a Prometheus rules file. */
     groups: { name: string; rules: { alert: string; expr: string }[] }[];
 }
 

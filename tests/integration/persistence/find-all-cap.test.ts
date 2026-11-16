@@ -1,8 +1,9 @@
 /**
- * `findAll` with no `limit` stops at 1000 rows: the backstop against an unbounded collection scan
- * (docs/understand/defences/denial-of-service.md). Paging goes through `search`; this is what a
+ * `findAll` with no `limit` stops at 1000 rows: the backstop against an unbounded collection scan. Paging goes through `search`; this is what a
  * caller that forgot to page still gets. A scratch model, so the property is the factory's, not
  * any one module's.
+ *
+ * @see docs/understand/defences/denial-of-service.md#volume
  */
 import { model, Schema, type Document } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -12,6 +13,7 @@ setupTestDb();
 
 /** One scalar is all a row needs. */
 interface Probe extends Document {
+    /** The row's ordinal, used to count what came back. */
     n: number;
 }
 

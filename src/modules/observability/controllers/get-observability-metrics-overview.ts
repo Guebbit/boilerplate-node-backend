@@ -2,8 +2,7 @@
  * @module
  * Controller for `GET /observability/metrics/overview`. Resolves each domain counter by metric
  * NAME off the shared prom-client registry rather than importing it — see `readCounter` below for
- * why, and `module-coupling-observability` in `.dependency-cruiser.cjs`, which keeps this module
- * from reaching any domain beyond `audit-logs`.
+ * why.
  *
  * @see docs/modules/observability.md#the-pipeline
  */
@@ -29,8 +28,7 @@ interface MetricSample {
  * This is what keeps the dashboard from depending on the domains it reports on. The counters
  * belong to `account`, `cart`, `inventory` and `orders` now; importing them would couple this
  * module to four domains and make deleting any of them a compile error here — in the one place
- * whose whole job is to survive them. `module-coupling-observability` in `.dependency-cruiser.cjs`
- * keeps it that way: this module may reach `audit-logs` and nothing else.
+ * whose whole job is to survive them.
  *
  * An absent metric is a normal state, not an error: it means the module that owns it is not in
  * this build, and the overview reports zero for that row. The one exception is the whole
@@ -74,7 +72,7 @@ const histogramCounts = (values: (MetricSample & { metricName?: string })[]): Me
     values.filter(({ metricName }) => metricName?.endsWith('_count'));
 
 /**
- * Sum values matching every label in `filter` across a prom-client metric result.
+ * Totals only the samples whose labels all equal `filter`.
  */
 const sumByLabels = (values: MetricSample[], filter: Record<string, string>): number =>
     values
@@ -83,7 +81,8 @@ const sumByLabels = (values: MetricSample[], filter: Record<string, string>): nu
 
 /**
  * GET /observability/metrics/overview
- * Structured JSON overview of key operational metrics.
+ * The overview's sections: HTTP request counters and latency percentiles, in-flight requests, and
+ * the domain counters read by name (login, signup and, when present, the shop's `business` block).
  */
 export const getObservabilityMetricsOverview = (_request: Request, response: Response) =>
     Promise.all([

@@ -32,7 +32,9 @@ const PRODUCT_COUNT = 3;
 
 /** One generated order line: which product (by index) and how many. */
 interface Line {
+    /** Index into the generated products. */
     product: number;
+    /** Units to reserve. */
     quantity: number;
 }
 

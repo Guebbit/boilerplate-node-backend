@@ -16,8 +16,11 @@ import { isDeployed, MODULES_ROOT } from '@tests/paths';
 
 /** One schema component's declared property names, keyed by the module fragment it came from. */
 interface SchemaShape {
+    /** The module fragment the schema came from. */
     module: string;
+    /** The schema component's name. */
     name: string;
+    /** Its declared property names. */
     properties: Set<string>;
 }
 

@@ -1,27 +1,21 @@
 /**
  * Does every controller read only the request sources its own contract declares?
  *
- * `readInput(request, { sources: [...] })` is a claim about a route: "a value for this endpoint
- * may arrive from params, and/or query, and/or body". `openapi.yaml` makes the same claim, per
- * operation, as `in: path` / `in: query` / `requestBody`. Nothing has ever compared the two, and
- * `docs/understand/request-input.md` lists five contract bugs found by reading them against each
- * other **by hand** — which is not a thing anyone will remember to do twice.
+ * Claim:     `readInput(request, { sources: [...] })` says a value may arrive from params, query
+ *            and/or body; `openapi.yaml` says the same per operation as `in: path`, `in: query`
+ *            or `requestBody`. The request-input page lists five contract bugs found by comparing
+ *            them **by hand**, which nobody remembers to do twice. This automates it. Whether the
+ *            routes and the spec list the same operations is `route-spec-parity.test.ts`.
+ * Direction: declared sources must be a SUBSET of what the spec allows. A controller reading an
+ *            undeclared source is undocumented input (the "path-form deletes read a body" bug).
+ *            The converse is not asserted: `readInput` merges every key it finds, so a route may
+ *            accept a declared body it names no field of.
+ * Mapping:   recovered statically. `src/modules.ts` and each `module.ts` give modules and base
+ *            paths, `src/app/routes.ts` the system router's prefix, router files each mounted path
+ *            and controller, the controller its `readInput` declarations. No server is booted: the
+ *            point is to compare two written claims, and a probe shows only what one request carried.
  *
- * This is that comparison, automated. Whether the mounted routes and the spec list the same
- * operations is a separate question, asked of the live routers in `route-spec-parity.test.ts`.
- *
- * **Direction of the assertion.** Declared sources must be a SUBSET of what the spec allows. A
- * controller reading a source the contract does not declare is undocumented input — the class of
- * bug behind "the path-form deletes read a body they did not declare". The converse (the spec
- * declaring a source no controller reads) is not asserted here: `readInput` merges every key it
- * finds, so a route can legitimately accept a declared body it never names a field of.
- *
- * **How the mapping is recovered.** Statically, from the source: `src/modules.ts` and each
- * `src/modules/<name>/module.ts` give the enabled modules and their base paths, `src/app/routes.ts`
- * gives the prefix for the system router, the router files give each mounted path and the
- * controller it calls, and the controller module gives its `readInput` declarations. No server is
- * booted — the point is to compare two written claims, and a runtime probe would only reveal what
- * one request happened to carry.
+ * @see docs/understand/request-input.md#known-discrepancies
  */
 
 import { readFileSync } from 'node:fs';
@@ -32,6 +26,7 @@ import { REPO_ROOT } from '@tests/paths';
 
 /** A route as mounted: its verb and path. */
 interface MountedRoute {
+    /** The route's HTTP verb. */
     method: string;
     /** Full express path, e.g. `/products/:id/hard`. */
     expressPath: string;
@@ -44,6 +39,7 @@ interface MountedRoute {
      * count as mounted; they are simply skipped by the sources check.
      */
     controller?: string;
+    /** The controller's source file, when `controller` is set. */
     controllerFile?: string;
 }
 
@@ -268,13 +264,17 @@ const readDeclaredSources = (
  * comparison does not look at.
  */
 interface SpecParameter {
+    /** Where the parameter travels: `path`, `query`, `header` or `cookie`. */
     in?: string;
+    /** A pointer into `components.parameters`. */
     $ref?: string;
 }
 
 /** The slice of an OpenAPI operation these cases read. */
 interface SpecOperation {
+    /** The operation's own parameters. */
     parameters?: SpecParameter[];
+    /** Present when the operation takes a body; its shape is not read. */
     requestBody?: unknown;
 }
 
@@ -285,7 +285,9 @@ type SpecPathItem = Record<string, SpecOperation | undefined> & {
 
 /** The slice of the OpenAPI document these cases read. */
 interface Spec {
+    /** Every documented path. */
     paths: Record<string, SpecPathItem>;
+    /** Shared parameters a `$ref` resolves into. */
     components?: { parameters?: Record<string, SpecParameter> };
 }
 
@@ -366,7 +368,7 @@ describe('request sources agree with openapi.yaml', () => {
          * Pinned, not merely non-empty. `RequestSurface` is a CLOSED set on purpose — precedence
          * is meant to be a property of the route's kind, not an ordering the newest controller
          * picked — so a sixth row should fail here once and be added deliberately, alongside its
-         * row in `docs/understand/request-input.md` and a look at what the spec declares for it.
+         * row in the request-input table and a look at what the spec declares for it.
          */
         expect(Object.keys(SURFACE_SOURCES).toSorted()).toEqual([
             'create',
@@ -394,7 +396,7 @@ describe('request sources agree with openapi.yaml', () => {
      *
      * What survives the union is the real defect: a controller reading a source that NO route it
      * serves declares. That is the shape of every historical case in
-     * `docs/understand/request-input.md` — `hardDelete` read from a `params` no route supplied,
+     * the request-input page — `hardDelete` read from a `params` no route supplied,
      * `DELETE /cart/{productId}` reading a body it could never receive, the list controllers
      * reading a `params.id` only the item routes have.
      *

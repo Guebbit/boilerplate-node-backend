@@ -88,6 +88,7 @@ const EDGE_VALUES = [
 interface Target {
     /** `path` parameters are substituted into the URL; `query` ones are appended to it. */
     kind: 'path' | 'query';
+    /** The parameter's name as the spec writes it. */
     name: string;
     /** True when no value in {@link NEVER_LEGAL} can be a legal one. */
     closed: boolean;

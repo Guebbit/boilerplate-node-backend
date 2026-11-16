@@ -19,8 +19,11 @@ setupTestDb();
 
 /** One audit entry as the logger receives it. */
 interface Entry {
+    /** The audit action recorded, such as `auth.login`. */
     action: string;
+    /** The id of what it was done to. */
     targetId?: string;
+    /** Extra detail attached to the entry. */
     metadata?: Record<string, unknown>;
 }
 

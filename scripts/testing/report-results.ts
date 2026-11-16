@@ -6,11 +6,13 @@
  * The frontend's copy is a declared fork of this file, not kept in step and not checked
  * (`SHARED_FILES` does not list it).
  *
- * Why JSON and not JUnit, why per module: docs/build/testing-quickstart.md#why-the-report-reads-json
+ * Why JSON and not JUnit, and why per module, is on the page below.
  *
  * Usage:
  *   npm run test:report                 # read the default report path
  *   npm run test:report -- <file.json>  # read a specific one
+ *
+ * @see docs/build/testing-quickstart.md#why-the-report-reads-json
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -32,9 +34,13 @@ const SLOWEST = 8;
 
 /** One test file, in the shape both runners emit. */
 interface SuiteResult {
+    /** The test file's path. */
     name: string;
+    /** When it started (ms since epoch). */
     startTime?: number;
+    /** When it ended. */
     endTime?: number;
+    /** One entry per test case in the file. */
     assertionResults: {
         fullName?: string;
         title: string;
@@ -46,10 +52,15 @@ interface SuiteResult {
 
 /** The slice of Jest's `--json` report this script reads. */
 interface Report {
+    /** Tests run in total. */
     numTotalTests?: number;
+    /** Tests that passed. */
     numPassedTests?: number;
+    /** Tests that failed. */
     numFailedTests?: number;
+    /** Tests skipped or todo. */
     numPendingTests?: number;
+    /** One entry per test file. */
     testResults: SuiteResult[];
 }
 
@@ -111,9 +122,13 @@ const report = readReport(reportFile);
 
 /** What one bucket (a module or a layer) adds up to. */
 interface Bucket {
+    /** Test files in the bucket. */
     suites: number;
+    /** Test cases in the bucket. */
     tests: number;
+    /** Cases that failed. */
     failed: number;
+    /** Time the bucket's files took. */
     milliseconds: number;
 }
 

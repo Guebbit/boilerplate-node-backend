@@ -48,6 +48,8 @@ const isInvalid = (diagnostics: readonly Diagnostic[]): boolean =>
  */
 Promise.all(
     files.map((file) =>
+        // @asyncapi/parser: validates the document and returns `diagnostics`; `source` names the file in them.
+        // https://github.com/asyncapi/parser-js
         parser.parse(readFileSync(file, 'utf8'), { source: file }).then(({ diagnostics }) => {
             const invalid = isInvalid(diagnostics);
             console.log(

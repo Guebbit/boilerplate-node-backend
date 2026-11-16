@@ -1,7 +1,7 @@
 /**
  * @module
  * This module's own `Request` augmentation. Infrastructure's `src/globals.d.ts` must not name a
- * module (see `docs/understand/layers.md`), so a field only `payments` sets and reads lives here
+ * module, so a field only `payments` sets and reads lives here
  * instead, merged onto the same interface by declaration merging.
  *
  * The empty `export {}` is required, not decorative: with no top-level import or export this

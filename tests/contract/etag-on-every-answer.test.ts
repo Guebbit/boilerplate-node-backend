@@ -36,7 +36,9 @@ interface Answered {
 
 /** One write: how to make it, and the resource family whose edit proves the tag. */
 interface Door {
+    /** The write's title in the test name. */
     name: string;
+    /** Performs the write and returns what came back. */
     run: () => Promise<Answered>;
 }
 

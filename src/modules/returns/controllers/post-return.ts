@@ -3,7 +3,8 @@
  * POST /returns
  * Open a return — and the EU withdrawal button, which is this same call with `reason:
  * withdrawal`. Always a return written (201, `Location`): open once the goods have shipped, closed
- * at birth when a withdrawal reaches the order before dispatch and cancels it.
+ * at birth when a withdrawal reaches the order before dispatch and cancels it, or when a remainder
+ * cancellation is recorded.
  */
 
 import type { Request, Response } from 'express';

@@ -19,7 +19,9 @@ const IMAGE = process.env.NODE_TEST_REDIS_IMAGE ?? 'docker.io/library/redis:7-al
 
 /** A running throwaway Redis: its url and how to stop it. */
 export interface TestRedis {
+    /** Connection url, with the published host port. */
     url: string;
+    /** Removes the container. */
     stop: () => Promise<void>;
 }
 

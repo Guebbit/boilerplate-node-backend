@@ -1,14 +1,12 @@
 /**
  * @module
- * The product catalogue: public read, admin write, soft delete with restore. Depends on nothing —
- * a leaf module, and everything downstream (cart, orders, stock) is a statement about a product,
- * which is what makes this the one model other contexts conform to. It stays a leaf by emitting
- * `product.deleted` and `product.created` rather than importing a sibling directly.
+ * The product catalogue: public read, admin write, soft delete with restore. Everything
+ * downstream (cart, orders, stock) is a statement about a product, so this is the one model other
+ * contexts conform to; it reads only `shop` and emits `product.deleted` and `product.created`
+ * instead of importing a sibling.
  *
- * Not in the import graph: `onHand` and `reserved` are declared on this document and written ONLY
- *   by `inventory`, including the opening count — `product.created` is how `inventory` (which
- *   already imports this module) gives a new product its stock without this module importing back.
- *   This module never moves either counter itself. See that module's docblock.
+ * Shares:  `onHand` and `reserved` with `inventory`: declared here, written ONLY there, including
+ *          the opening count (`product.created` is how `inventory` gives a new product its stock).
  *
  * @see docs/modules/products.md#its-neighbourhood
  */
@@ -47,19 +45,16 @@ export default {
         }
     },
     /**
-     * The catalogue states the storefront and the repositories actually branch on.
+     * The catalogue states the storefront and the repositories actually branch on: the hidden,
+     * off-sale and empty ones, plus the two ORDINARY rows a screen needs a subject for (anything
+     * buyable, and one with every optional field populated).
      *
-     * Five are the hidden, off-sale or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
-     * needs a subject for — anything buyable, and one with every optional field populated, which
-     * is what a detail page and a product form have to render to be worth auditing. `digital` is
-     * the one row `requiresShipping: false` — the "digital = never shipped" rule needs a real product
-     * to check `orders`/`delivery`'s digital-only branches against.
-     * `lowStock` holds exactly one unit and is on no seeded order: the subject of the last-unit
-     * race, where one checkout's hold leaves nothing for the next shopper.
-     * `noWithdrawal` is a physical, made-to-order row (EU Art. 16(c)): every order line freezes the
-     * flag, and `returns` refuses those lines.
-     * `heavy` is 12 kg: past express's 5 kg ceiling, inside standard's — the subject of the
-     * shipping-weight refusal.
+     * `digital`:      the one row with `requiresShipping: false`.
+     * `lowStock`:     one unit, on no seeded order; the subject of the last-unit race.
+     * `noWithdrawal`: a made-to-order row (EU Art. 16(c)); `returns` refuses its lines.
+     * `heavy`:        past the express weight ceiling, inside standard's; the shipping-weight
+     * refusal.
+     *
      * `scenarios/subjects.ts` pins the row behind each, and
      * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
@@ -78,7 +73,7 @@ export default {
             'product.heavy'
         ]
     },
-    // Reported by the browser through `analytics`' relay; the request shapes are in `openapi.browser-events.yaml`.
+    /** Reported by the browser through `analytics`' relay; shapes: `openapi.browser-events.yaml`. */
     browserEvents: productsBrowserEvents,
     /**
      * The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen

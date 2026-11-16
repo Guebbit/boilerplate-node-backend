@@ -3,7 +3,7 @@
  *
  * Why: a key rotation prepends a new key and keeps the old one so old rows still decrypt. Nothing
  * else moves those rows, so without this the old key can never be dropped. Run it after the
- * rotation deploy, then drop the old entry (see docs/understand/security.md#database-credential-and-key-rotation).
+ * rotation deploy, then drop the old entry.
  *
  * What: every enabled module's `reencrypt` walk (`AppModule.reencrypt`), so this file names no
  * module and a removed module takes its walk with it.
@@ -12,6 +12,8 @@
  * `--dry-run` writes nothing and prints, per field, how many values sit on each key version.
  *
  * Not scheduled: a rotation is an event, not a cadence, so there is no `docker/crontab` line.
+ *
+ * @see docs/understand/security.md#database-credential-and-key-rotation
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

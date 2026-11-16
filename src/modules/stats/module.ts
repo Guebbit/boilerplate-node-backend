@@ -1,7 +1,7 @@
 /**
  * @module
  * Stats: the sales numbers behind the staff dashboard, composed on read from the modules that own
- * them — see `docs/modules/stats.md` for the definitions and why nothing is precomputed.
+ * them. Nothing is precomputed.
  *
  * Owns:        nothing stored. No collection, no cache.
  * Depends on:  `invoicing` (every money figure), `orders`, `payments` and `returns`, each through
@@ -17,7 +17,7 @@ import { router } from './routes';
 export default {
     name: 'stats',
     mounts: [{ basePath: '/stats', routes: router }],
-    // Nothing here is personal data: every figure is an aggregate, and a customer count is by account id.
+    /** Nothing here is personal data: every figure is an aggregate; customers count by id. */
     personalData: [],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

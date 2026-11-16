@@ -16,9 +16,13 @@
 
 /** One family of packages: what they're for, and where to read more. */
 export interface DependencyGroup {
+    /** The group's heading in the generated table. */
     name: string;
+    /** What the packages are for, in one line. */
     purpose: string;
+    /** A docs page with the reasoning. */
     readMore: string;
+    /** Package names, or `prefix*` globs, that belong to the group. */
     match: string[];
 }
 
@@ -214,7 +218,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
             'the docs site, diagrams, and offline search UI; `@mdit-vue/shared` is VitePress’s own ' +
             'heading slugifier, so the anchor checker matches the site',
         readMore: '[Testing & Docs](../build/testing-and-docs.md)',
-        match: ['vitepress', 'vitepress-plugin-mermaid', 'mermaid', '@mdit-vue/shared']
+        match: ['vitepress', 'mermaid', '@mdit-vue/shared']
     },
     {
         name: 'Maintenance',

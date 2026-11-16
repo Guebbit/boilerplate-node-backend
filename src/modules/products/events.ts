@@ -10,25 +10,17 @@ declare module '@kernel/events' {
     interface DomainEventMap {
         /**
          * A product just stopped being reachable — soft-deleted or hard-deleted. The ONLY catalogue
-         * event that pulls cart and wishlist lines: hiding a product (`active: false`) or taking it
-         * off sale (`purchasable: false`) emits nothing, and no placed order is ever canceled by a
-         * catalogue change. Never fires on a restore: what the delete already set in motion (carts and wishlists emptied) stays
-         * done, since a restore puts the product back on sale, not undoes
-         * the past — see `restoreById`'s own docblock.
+         * event that pulls cart and wishlist lines: hiding or taking a product off sale emits
+         * nothing, and a restore does not undo what the delete set in motion.
          *
-         * Goes through the transactional outbox (`aggregateId` = the product), written in the same
-         * transaction as the delete: a past-tense fact exists exactly when the write committed, and
-         * the relay redelivers it until every listener has handled it, so a listener must be
-         * idempotent on `meta.eventId`.
+         * Outbox:      written in the delete's transaction; redelivered until every listener has
+         *              handled it, so a listener is idempotent on `meta.eventId`.
+         * `hardDelete`: tells the destructive half from the reversible one; `inventory` deletes
+         *              the level row ONLY when `true`, since a restore must find it.
+         * `titles`:    the name in every language, read BEFORE a hard delete drops the
+         *              translation rows, so a later message (`notifications`) can quote it.
          *
-         * `hardDelete` is what lets a listener tell the destructive half apart from the reversible
-         * one — `inventory` deletes this product's level row ONLY when it is `true`: a soft delete
-         * must leave the counters exactly where they are, since the row is what a restore has to
-         * come back to.
-         *
-         * `titles` is the product's name in every language it had, read BEFORE a hard delete drops
-         * the translation rows: once the event fires the product is gone, and a message that
-         * outlives it (`notifications`) can only quote what travelled with it. Locale → title.
+         * @see docs/modules/products.md#hiding-taking-off-sale-removing
          */
         'product.deleted': {
             productId: string;
@@ -40,10 +32,9 @@ declare module '@kernel/events' {
          * A product was created. The document is written with `onHand: 0`, and `inventory` (which
          * already imports this module, so an import back here would cycle) is the one and only
          * listener: it opens the product's stock level at zero. Stock never rides this event: units
-         * enter only through `POST /inventory/levels/{productId}/receive`, which moves the counter and writes the
-         * ledger row together. Never repeat this for an UPDATE: a past `product.stock_moved`
-         * event reacted to a counter a separate write had already changed, so a listener failure
-         * left a moved counter with no ledger row explaining it.
+         * enter only through `POST /inventory/levels/{productId}/receive`, which moves the counter
+         * and writes the ledger row together. Never emitted for an UPDATE: counters move only
+         * through inventory's ledger writes.
          */
         'product.created': { productId: string };
 
@@ -53,8 +44,10 @@ declare module '@kernel/events' {
          *
          * Why it exists: buyers who already paid were promised the old date. `delivery` listens
          * and decides, per waiting fulfillment order, whether the buyer needs a notice and
-         * whether silence now means cancel (PRODUCT_STATES P5). Both dates are ISO 8601; `from`
-         * is absent for a first date, `to` for a cleared one.
+         * whether silence now means cancel. Both dates are ISO
+         * 8601; `from` is absent for a first date, `to` for a cleared one.
+         *
+         * @see docs/modules/products.md#preorder
          */
         'product.release_date_changed': { productId: string; from?: string; to?: string };
 
@@ -68,9 +61,9 @@ declare module '@kernel/events' {
 
         /**
          * A product that could not be ordered can be again: shelf units arrived, a backorder opened
-         * or its date moved on, or it was made visible and buyable. Fires once per flip, never while
-         * it stays buyable, in the same transaction as the write that caused it. `stock-alerts`
-         * listens and tells the buyers who asked.
+         * or its date moved on, or it was made visible and buyable. Fires once per flip, never
+         * while it stays buyable, in the same transaction as the write that caused it.
+         * `stock-alerts` listens and tells the buyers who asked.
          */
         'product.buyable_again': { productId: string };
     }
@@ -82,14 +75,14 @@ declare module '@kernel/events' {
  */
 export const PRODUCT_DELETED = 'product.deleted';
 
-/** See {@link DomainEventMap}'s `'product.created'` for why this exists and what it may trigger. */
+/** The event name listeners subscribe to; the payload is in {@link DomainEventMap}. */
 export const PRODUCT_CREATED = 'product.created';
 
-/** See {@link DomainEventMap}'s `'product.release_date_changed'` for what listens and why. */
+/** The event name `delivery` subscribes to for a moved release date. */
 export const PRODUCT_RELEASE_DATE_CHANGED = 'product.release_date_changed';
 
-/** See {@link DomainEventMap}'s `'product.buyable_again'` for what listens and why. */
+/** The event name stock alerts subscribe to when a product is buyable again. */
 export const PRODUCT_BUYABLE_AGAIN = 'product.buyable_again';
 
-/** See {@link DomainEventMap}'s `'product.restock_date_changed'` for what listens and why. */
+/** The event name `delivery` subscribes to for a moved restock date. */
 export const PRODUCT_RESTOCK_DATE_CHANGED = 'product.restock_date_changed';

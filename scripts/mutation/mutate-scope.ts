@@ -19,6 +19,7 @@ import { REPO_ROOT } from '../modules-on-disk';
 
 /** `stryker.json`'s own shape, narrowed to the one field this module reads. */
 interface StrykerConfig {
+    /** The globs and paths Stryker is allowed to mutate. */
     mutate: string[];
 }
 

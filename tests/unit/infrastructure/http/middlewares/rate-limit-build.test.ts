@@ -38,10 +38,15 @@ const budgetOf = (limit: number, overrides: Partial<RateLimitBudget> = {}): Rate
 
 /** What one pass through the limiter did. */
 interface Outcome {
+    /** Whether the request got through the limiter. */
     passed: boolean;
+    /** The status the limiter answered, if it refused. */
     status: number | undefined;
+    /** The headers the limiter set on the response. */
     headers: Record<string, unknown>;
+    /** The request the limiter saw, for checking what it stamped on it. */
     request: Request;
+    /** The response double, for checking what was sent. */
     response: Response;
 }
 

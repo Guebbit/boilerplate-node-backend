@@ -91,11 +91,13 @@ export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[
     findOwnPayments(userId).then((payments) => payments.map((payment) => toExportPayment(payment)));
 
 /**
- * `reap:payments`'s sweep. Deletes payment attempts that never reached `succeeded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
- * an open checkout the customer walked away from (a declined card nobody retried, a challenge
+ * `reap:payments`'s sweep. Deletes payment attempts that never reached `succeeded` and have not been
+ * touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` — an open checkout the customer walked away from (a declined card nobody retried, a challenge
  * nobody answered), not a financial record. A settled payment is never a candidate here or on
- * any other timer; see `docs/modules/payments.md`'s retention section. A bank transfer's row is kept
- * longer ({@link TRANSFER_PAYMENT_RETENTION_DAYS}) so a late transfer can still be matched.
+ * any other timer. A bank transfer's row is kept longer ({@link TRANSFER_PAYMENT_RETENTION_DAYS})
+ * so a late transfer can still be matched.
+ *
+ * @see docs/modules/payments.md#retention
  *
  * @returns how many abandoned payment attempts were deleted
  */

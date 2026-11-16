@@ -1,22 +1,16 @@
 /**
- * Property-based tests — `src/infrastructure/persistence/serialize.ts`.
+ * Property-based tests for `src/infrastructure/persistence/serialize.ts`: the one place a stored
+ * document becomes a wire payload. Its guarantees are universal: `_id` → `id`, `__v` gone, every
+ * `omit` key gone, for ANY input shape, not the five the models have today.
  *
- * This is the one place a stored document becomes a wire payload, and its guarantees are
- * universal by nature: `_id` → `id`, `__v` gone, every `omit` key gone — for ANY input shape, not
- * for the five shapes the models happen to have today.
- *
- * That universality is load-bearing rather than aesthetic. 95 of `openapi.yaml`'s schemas are
- * `additionalProperties: false`, so a single leaked `_id` or `__v` is a contract violation the
- * suite in `tests/contract/` fails on. And the transform runs on TWO very different inputs: the
- * `toJSON` path, where Mongoose has already supplied `id` and dropped `__v`, and the
- * `.lean()`/`.aggregate()` path, which hands over raw BSON with neither done. Generation over
- * arbitrary objects is what covers the second case, which is the one with no help from Mongoose.
- *
- * The `omit` list is where a property earns its keep most directly: it is how `password` and
- * `tokens` are kept off a user response, and "the omitted keys are absent" is a statement about
- * every possible document, including ones with keys nobody anticipated.
- *
- * Seeded. Any counterexample gets written back as an example with its seed in a comment.
+ * Why it matters: most of `openapi.yaml`'s schemas are `additionalProperties: false`, so one leaked
+ *           `_id` or `__v` is a contract violation `tests/contract/` fails on. The transform runs
+ *           on TWO inputs: the `toJSON` path, where Mongoose already supplied `id` and dropped
+ *           `__v`, and the `.lean()`/`.aggregate()` path, raw BSON with neither done. Generation
+ *           over arbitrary objects covers the second, which has no help from Mongoose.
+ * `omit`:   how `password` and `tokens` stay off a user response; "the omitted keys are absent" is
+ *           a claim about every possible document, including keys nobody anticipated.
+ * Seeding:  seeded; a counterexample is written back as an example with its seed in a comment.
  */
 import fc from 'fast-check';
 import { applySerialization, type SerializeTransform } from '@infrastructure/persistence/serialize';

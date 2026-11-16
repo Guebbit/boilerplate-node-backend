@@ -2,7 +2,9 @@
  * @module
  * The test-side door into `inventory`'s storage, for a sibling module's own tests.
  * A sibling reads and forces stock rows here instead of reaching `../repository` or `../model`,
- * which its import boundary refuses — see `docs/reference/tests.md`.
+ * which its import boundary refuses.
+ *
+ * @see docs/reference/tests.md#the-suites
  */
 
 import type { Types } from 'mongoose';

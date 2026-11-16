@@ -45,8 +45,8 @@ needs no conversion. Nothing above the persistence layer sees one.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart LR
-    W["decimal string<br/><i>"19.99"</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
-    D -->|"path getter · lean hook · serializer"| R["string at the currency's scale<br/><i>"19.99", the wire</i>"]
+    W["decimal string<br/><i>#quot;19.99#quot;</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
+    D -->|"path getter · lean hook · serializer"| R["string at the currency's scale<br/><i>#quot;19.99#quot;, the wire</i>"]
     D -->|"$sum"| S["Decimal128<br/><i>exact sum</i>"]
     S -->|"toMinorUnits, read as text"| M["Money<br/><i>integer cents</i>"]
 

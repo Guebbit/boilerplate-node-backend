@@ -43,8 +43,11 @@ export const listen = (): Promise<{ server: Server; port: number }> =>
 
 /** What every `authenticateAs*` helper resolves to — the account and its bearer token. */
 interface AuthenticatedTestUser {
+    /** The stored account the token was issued for. */
     user: UserDocument;
+    /** The bare access token. */
     token: string;
+    /** The token as an `Authorization` header value, ready to pass to `.set()`. */
     bearer: `Bearer ${string}`;
 }
 

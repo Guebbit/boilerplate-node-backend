@@ -33,7 +33,7 @@ describe('mintApiKey', () => {
     });
 
     it('verifies against the SHA-256 of the token, not any other digest', () => {
-        // The NIST FIPS 180-2 test vector for SHA-256("abc"): docs/modules/api-keys.md.
+        // The NIST FIPS 180-2 test vector for SHA-256("abc").
         expect(
             verifyApiKey('abc', 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
         ).toBe(true);

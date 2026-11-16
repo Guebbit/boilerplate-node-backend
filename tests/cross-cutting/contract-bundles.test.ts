@@ -1,32 +1,18 @@
 /**
- * Every document is exactly what it says it is built from.
+ * Every document is exactly what it says it is built from. Two kinds, asked different things.
  *
- * The documents come in two kinds, and what each kind can be asked differs.
- *
- * COMPILED — built from authored sources in this repo. `openapi.yaml` from standalone OpenAPI
- * documents, one per module plus the root, joined by `redocly bundle` resolving `$ref` the way the
- * rest of the ecosystem does; the two AsyncAPI bundles merged through the YAML AST from one
- * document per section.
- *
- * None of the three is COMMITTED — all are `.gitignore`d, rebuilt by `postinstall` on every
- * install. Whether the file on disk equals a fresh build is `npm run check`'s question, so it is
- * not repeated here as a second Jest case over the same two function calls.
- *
- * GENERATED — the API client collections (Bruno only today), produced whole from `openapi.yaml`
- * and the demo dataset. They have no fragments: nothing on disk stands between the contract and the
- * document.
- * They are also `.gitignore`d, so there is no committed copy to compare against and the
- * byte-for-byte question does not apply. What is asserted instead is the GENERATOR: every case
- * below builds a collection in memory and checks the document it produced. That is the property
- * that mattered anyway — a stale committed copy was only ever a proxy for a generator that had
- * stopped covering the contract.
- *
- * WHERE THE COMMENTS LIVE. A parse drops them, and every compiled bundle here is parsed — so none
- * of them carries one. The REST contract stopped needing that guarantee once its sources became
- * whole documents: the explanations now sit in the module files where the thing they explain is
- * written, and nobody reads the bundle by hand. That placement is a design choice rather than a
- * property this file checks — a comment count is a floor nothing can tell apart from noise, so
- * unlike everything else below it was never a guard against a real fork.
+ * COMPILED:   built from authored sources here. `openapi.yaml` from one OpenAPI document per module
+ *             plus the root, joined by `redocly bundle`; the two AsyncAPI bundles merged through
+ *             the YAML AST from one document per section. All are `.gitignore`d and rebuilt by
+ *             `postinstall`, so "does the file equal a fresh build" is `npm run check`'s question,
+ *             not a second Jest case over the same two calls.
+ * GENERATED:  the API client collections (Bruno only today), produced whole from `openapi.yaml`
+ *             and the demo dataset, with no fragments and no committed copy. What is asserted is
+ *             the GENERATOR: each case builds a collection in memory and checks it, because a
+ *             generator that stopped covering the contract is the real failure.
+ * Comments:   a parse drops them, and every compiled bundle is parsed, so none carries one. The
+ *             explanations sit in the module files beside what they explain. That is a placement,
+ *             not a property checked here: a comment count cannot be told from noise.
  */
 
 import { existsSync, readFileSync } from 'node:fs';

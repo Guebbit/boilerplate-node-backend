@@ -1,34 +1,24 @@
 /**
  * @module
- * Contract-derived authorization sweep: every route that mounts an identity guard must answer 401
- * to a callerless request, and every route behind `requirePermission` must agree with
- * `shared/rules/authorization-roles.yaml` for EACH tenant persona a person can log in as: the two
- * audiences with no stored role (`unverified`, `customer` — an account with no membership IS the
- * customer), and every preset tenant role, the administrator included. One table-driven case per
- * route, rather than one hand-written 401/403 case per module's own contract file: the guard
- * wiring per route is one fact per route, asserted here instead of 40-odd times over.
+ * Contract-derived authorization sweep. Every route that mounts an identity guard answers 401 to
+ * a callerless request, and every route behind `requirePermission` agrees with
+ * `shared/rules/authorization-roles.yaml` for EACH tenant persona: the two audiences with no
+ * stored role (`unverified`, `customer`; no membership IS the customer) and every preset tenant
+ * role, the administrator included. One table-driven case per route, instead of a 401/403 case in
+ * each module's contract file.
  *
- * This file proves a mounted guard answers right over HTTP. That no route is MISSING its guard is
- * `tests/cross-cutting/identity-guards-follow-the-spec.test.ts`'s: it picks routes by the spec,
- * where this file picks them by the guard, so a route that lost its guard would drop out of the
- * list here instead of failing. A module's contract file asserts a 401 or a 403 only when it
- * checks more than the status (an error `code`, a row left untouched).
- *
- * `ownership-contract.test.ts` sweeps the other half of the same question: a role that DOES reach
- * a route, aimed at another customer's row.
- *
- * `request-contract.test.ts` is this file's mirror image, sweeping request BODIES against the
- * contract instead of AUTHORIZATION.
- *
- * Path parameters are filled with a syntactically valid, nonexistent id. The guard always runs
- * before any per-field validation (`@tests/routes`' `applies`-then-`chain` order), so what the id
- * resolves to cannot change a 401/403 outcome — a route where it did would be the defect this
- * sweep exists to catch.
- *
- * WHY THIS MATTERS: a route guarded by the wrong key (`update:User` where the role file only
- * grants `read:User`) makes an ALLOWED role 403 where it should not be. Asking `holds` the same
- * question the guard itself asks is what makes "should this role reach this route" a fact the
- * test derives from the model, rather than one somebody has to keep in sync by hand.
+ * Picks routes:   by the guard. That no route is MISSING its guard is
+ *                 `tests/cross-cutting/identity-guards-follow-the-spec.test.ts`, which picks by the
+ *                 spec; a route that lost its guard drops out of this list instead of failing.
+ * Siblings:       `ownership-contract.test.ts` aims a role that DOES reach a route at another
+ *                 customer's row; `request-contract.test.ts` sweeps request BODIES.
+ * Module files:   assert a 401 or 403 only when they check more than the status.
+ * Path params:    a valid, nonexistent id. The guard runs before per-field validation (`@tests/routes`'
+ *                 `applies`-then-`chain` order), so the id cannot change a 401/403; a route where
+ *                 it did is the defect this sweep exists to catch.
+ * Why:            a route guarded by the wrong key (`update:User` where the file grants only
+ *                 `read:User`) 403s an ALLOWED role. Asking `holds` what the guard asks makes the
+ *                 answer derived from the model, not kept in sync by hand.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';

@@ -22,8 +22,8 @@ import {
 export const WISHLIST_LIMIT_REACHED = 'wishlist-limit-reached';
 
 /**
- * Every one of them is keyed by `userId` — `unique` on the schema makes that a complete address —
- * so no caller ever fetches a wishlist before changing it. Unlike the cart there is no retry
+ * Every per-list write is keyed by `userId` — `unique` on the schema makes that a complete address
+ * — so no caller ever fetches a wishlist before changing it. Unlike the cart there is no retry
  * loop, and two independent facts are what excuse it — see {@link wishlistRepository.addLine},
  * which is the write both of them are about.
  *

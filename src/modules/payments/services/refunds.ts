@@ -83,7 +83,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { paymentNotFound, RefundLeftOpenError } from './errors';
 import { MINUTE_MS } from '@domain-primitives/time';
 
-/** What one refund is asked to do. */
+/** A refund request: amount (absent means all still refundable), reason, and the cancel event it answers. */
 export interface RefundRequest {
     /** A decimal in the payment's currency; absent means everything still refundable. */
     amount?: string;
@@ -128,7 +128,7 @@ export interface OpenedRefund {
     refund: RefundRecord;
 }
 
-/** What a refund attempt ended in. */
+/** Result of one refund call; `leftOpen` means money waits on a provider answer or an operator. */
 export interface RefundOutcome {
     /** The payment as it now stands. */
     payment: PaymentDocument;
@@ -1190,13 +1190,11 @@ const cancellationRequestOf = (canceled: CanceledOrder | undefined): RefundReque
  * The `order.canceled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
  *
- * Idempotent: the payment remembers every event id it handled, even one with nothing to return,
- * so a redelivery skips it before any write — also after staff voided the refund it opened. A
- * redelivery does not finish an open record: {@link retryOpenRefunds} does, forever and with the
- * same idempotency key, so a provider refusal ({@link RefundLeftOpenError}) is logged and not
- * rethrown. A throw BEFORE the event is marked (the database is down) still rejects, and the
- * outbox delivers the event again. With no `eventId` (an in-process emit) nothing is remembered:
- * a repeat finds nothing left to return.
+ * Idempotent: the payment remembers every event id it handled, even one with nothing to return, so
+ * a redelivery skips it before any write. {@link retryOpenRefunds} finishes an open record, with
+ * the same idempotency key; a provider refusal ({@link RefundLeftOpenError}) is logged, not
+ * rethrown. A throw BEFORE the event is marked (database down) still rejects, and the outbox
+ * delivers the event again. With no `eventId` (an in-process emit) nothing is remembered.
  *
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
@@ -1266,7 +1264,7 @@ const mayReturnMoney = (
         payment.userId !== undefined &&
         context.caller.id === String(payment.userId));
 
-/** What {@link openReturnRefund} opened. */
+/** The record a return's refund opened: its id for {@link sendOpenedRefund}, and whether it is hand-paid. */
 export interface OpenedReturnRefund {
     /** The record's id, for {@link sendOpenedRefund}. */
     refundId: string;

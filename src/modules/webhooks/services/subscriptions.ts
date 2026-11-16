@@ -2,10 +2,8 @@
  * @module
  * Subscription CRUD: list, get, create (mints the ring's first secret), update (url, description
  * and event filter only), the two on/off actions (`enable`/`disable`), the two secret-ring
- * actions (`createSecret`/`removeSecret`), remove. Tenant-scoped throughout —
- * every read and write narrows to `context.caller.tenantId`, which any `webhooks.*` caller always
- * carries (every key in the family is `scope: tenant` in `shared/authorization-keys.generated.yaml`, and
- * `Caller.tenantId` is null only in platform scope — see its own doc comment).
+ * actions (`createSecret`/`removeSecret`), remove. Tenant-scoped throughout:
+ * every read and write narrows to `context.caller.tenantId`.
  */
 
 import type { ClientSession } from 'mongoose';
@@ -65,7 +63,8 @@ const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
         .catch((error: unknown) => {
             /**
              * The caller learns only that the URL was refused: a reason or a resolved address
-             * would map the internal network for whoever is probing it. The operator reads both here.
+             * would map the internal network for whoever is probing it. The operator reads both
+             * here.
              */
             logger.warn({
                 message: 'A webhook URL was refused.',
@@ -182,10 +181,10 @@ const rejectLimitReached = (): ResponseReject =>
 
 /**
  * This subscription's position among its tenant's rows, oldest first. `_id` is total-ordered
- * across the collection (Mongo's ObjectId embeds an insertion-time-ish counter), so counting every
- * row at-or-before this one's `_id` gives a rank that is stable even for two creates that raced
- * past the same pre-check below — whichever insert lands with the higher rank is the one over cap,
- * regardless of which caller's request reached this line first.
+ * across the collection (Mongo's ObjectId embeds an insertion-time-ish counter), so counting this
+ * tenant's rows at-or-before this one's `_id` gives a rank that is stable even for two creates that
+ * raced past the same pre-check below — whichever insert lands with the higher rank is the one over
+ * cap, regardless of which caller's request reached this line first.
  */
 const insertionRank = (
     subscriptionId: WebhookSubscriptionDocument['_id'],

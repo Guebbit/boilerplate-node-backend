@@ -9,6 +9,7 @@ import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 
 /** The slice of an Express router layer this walk reads (undocumented internals, pinned by `router-internals.test.ts`). */
 interface Layer {
+    /** Set on a route layer, absent on middleware layers (those are skipped). */
     route?: {
         path: string;
         methods: Record<string, boolean>;

@@ -218,17 +218,25 @@ const KEY_WINDOW_MS = DAY_MS;
 
 /** What a key first produced: the refund it made (and how far it had got), or the definite error it got. */
 interface KeyedAnswer {
+    /** When the key first produced its answer. */
     at: number;
+    /** The refund it made, when it made one. */
     refundRef?: string;
+    /** How far that refund had got. */
     status?: 'pending' | 'succeeded';
+    /** The definite error it got instead. */
     failure?: RefundFailureReason;
 }
 
 /** One refund the fake holds, the way a provider keeps it as an object of its own. */
 interface FakeRefund extends ProviderRefundState {
+    /** The refund's id on the provider's side. */
     providerRef: string;
+    /** The refunded amount as decimal text. */
     amount: string;
+    /** ISO 4217 code of that amount. */
     currency: string;
+    /** When the provider created it. */
     createdAt: Date;
 }
 

@@ -48,7 +48,8 @@ export const withReloadedRateLimits = <TModule, TPicked>(
  *
  * @param trustProxyHop - whether `X-Forwarded-For` should become `request.ip`, the way
  *   `NODE_TRUST_PROXY_HOPS` configures it in the real app — only the address-BLOCK dimension
- *   needs it. See docs/understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong.
+ *   needs it.
+ * @see docs/understand/security-decisions.md#trust-proxy-and-the-two-ways-to-get-it-wrong
  */
 export const appAnswering = (
     status: number,

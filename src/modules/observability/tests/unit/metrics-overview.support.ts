@@ -12,8 +12,11 @@ import { metricsRegistry } from '@infrastructure/observability/metrics-registry'
 
 /** Shape of the payload the controller hands to `successResponse` — the subset this suite asserts on. */
 export interface Overview {
+    /** The sign-in counters. */
     auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
+    /** The shop counters; absent when no shop module is mounted. */
     business?: { checkoutSuccess: number; ordersCreated: number };
+    /** The query counters. */
     database: { queriesTotal: number; errorsTotal: number };
 }
 

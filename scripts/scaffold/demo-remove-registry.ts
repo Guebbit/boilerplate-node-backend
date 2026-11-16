@@ -17,7 +17,9 @@ import { entryKey, importKey, memberKey } from './registry';
 
 /** A line this script deleted, and why — printed in `demo-remove.ts`'s final report. */
 export interface RemovalNote {
+    /** The file the line was deleted from. */
     file: string;
+    /** The deleted line and why it went. */
     detail: string;
 }
 

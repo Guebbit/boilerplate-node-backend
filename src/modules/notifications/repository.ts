@@ -1,9 +1,10 @@
 /**
  * @module
  * Notification repository — the repository factory's standard CRUD, plus the writes an inbox
- * actually takes. Every one is keyed by `userId`: no caller reads or removes a row without naming
- * whose it is, which is what makes "another user's id is a 404" a property of the query rather
- * than of a check someone has to remember.
+ * actually takes. Every one but `deleteSummaries` (keyed by `dedupeKey`, across recipients) is
+ * keyed by `userId`: no caller reads or removes a row without naming whose it is, which is what
+ * makes "another user's id is a 404" a property of the query rather than of a check someone has to
+ * remember.
  *
  * @see docs/modules/notifications.md#the-pipeline
  */
@@ -33,8 +34,9 @@ export type NewStaffNotification = NewNotification &
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  *
- * Every method is `async` because each assembles its filter with `toObjectId`, which throws on a
- * malformed id — see `create-repository.ts` for why that decides between a 4xx and a 500.
+ * Every method written here is `async`, so a synchronous throw (`toObjectId` on a malformed id)
+ * reaches the caller as a rejection; see `create-repository.ts` for why that decides between a 4xx
+ * and a 500.
  */
 export const notificationRepository: Repository<
     NotificationDocument,
@@ -164,7 +166,7 @@ export const notificationRepository: Repository<
      * Empty a user's inbox: what a hard account deletion owes it (inside that deletion's own
      * transaction), and what "clear everything" does.
      */
-    deleteByUserId: (userId: string, session?: ClientSession) =>
+    deleteByUserId: async (userId: string, session?: ClientSession) =>
         notificationModel
             .deleteMany({ userId: toObjectId(userId) }, session ? { session } : undefined)
             .exec()
@@ -176,7 +178,7 @@ export const notificationRepository: Repository<
      * Delete one audience of a user's inbox, answering the ids removed so the stream can tell an
      * open tab exactly which rows left (the other audience stays on screen).
      */
-    deleteByAudience: (userId: string, audience: NotificationDocument['audience']) => {
+    deleteByAudience: async (userId: string, audience: NotificationDocument['audience']) => {
         const owner = { userId: toObjectId(userId), audience };
         return notificationModel
             .find(owner)
@@ -209,8 +211,8 @@ export const notificationRepository: Repository<
     /**
      * Delete everything older than a user's newest `keep` rows of one audience, answering the ids
      * it removed. Each audience has its own cap, so a flood of work notices cannot push a person's
-     * own messages out. The cap and the TTL are the things besides the owner and account deletion
-     * that remove a row; the ids go back so the stream can tell an open tab.
+     * own messages out. The cap, the TTL and a cleared summary are the things besides the owner and
+     * account deletion that remove a row; the ids go back so the stream can tell an open tab.
      */
     trimToNewest: async (
         userId: string,

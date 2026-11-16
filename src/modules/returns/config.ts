@@ -19,7 +19,8 @@ export const returnsConfig = defineConfig({
 
 /**
  * Days a return may go unchanged before `reap:returns` unsets its `note` and `declineMessage`.
- * See docs/understand/data-retention.md#free-text-on-returns
+ *
+ * @see docs/understand/data-retention.md#free-text-on-returns
  */
 export const returnTextRetentionDays = (): number =>
     returnsConfig().NODE_RETURN_TEXT_RETENTION_DAYS;

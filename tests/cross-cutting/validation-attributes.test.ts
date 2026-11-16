@@ -8,7 +8,9 @@
  * dictionary.
  *
  * Path params are deliberately outside it: a bad id 404s before validation, so they use the
- * fallback phrase. See `docs/understand/i18n.md#validation-messages`.
+ * fallback phrase.
+ *
+ * @see docs/understand/i18n.md#validation-messages
  */
 
 import { z } from 'zod';
@@ -21,11 +23,17 @@ const SHARED_QUERY_FIELDS = ['page', 'pageSize', 'text', 'since'];
 
 /** A JSON-Schema node, as `z.toJSONSchema` emits it. */
 interface SchemaNode {
+    /** The object's fields, by name. */
     properties?: Record<string, SchemaNode>;
+    /** Schema of each array element. */
     items?: SchemaNode;
+    /** What an unknown key must satisfy; `false` refuses it. */
     additionalProperties?: SchemaNode | boolean;
+    /** At least one branch matches. */
     anyOf?: SchemaNode[];
+    /** Exactly one branch matches. */
     oneOf?: SchemaNode[];
+    /** Every branch matches. */
     allOf?: SchemaNode[];
 }
 

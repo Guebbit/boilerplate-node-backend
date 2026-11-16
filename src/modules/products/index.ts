@@ -1,11 +1,11 @@
 /**
  * @module
- * Products — public barrel; the only surface a sibling module may import (see
- * `docs/understand/strategic-ddd.md` §5 for the rule). `productRepository` and the model's runtime
- * (`productSchema`, `applyProductTransform`, `productModel`) stay inside — a sibling reads the
- * `onHand`/`reserved` mirror through `productService`, never the collection directly; only
- * `@modules/inventory` ever writes it.
+ * Products — public barrel; the only surface a sibling module may import. `productRepository` and
+ * the model's runtime (`productSchema`, `applyProductTransform`, `productModel`) stay inside — a
+ * sibling reads the `onHand`/`reserved` mirror through `productService`, never the collection
+ * directly; only `@modules/inventory` ever writes it.
  *
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  * @see docs/modules/products.md#its-neighbourhood
  */
 
@@ -18,7 +18,8 @@ export { productPagePath } from './config';
 
 /**
  * Resolves a product's `taxClass` into the decimal VAT rate it is charged. Published so `orders`
- * can freeze the resolved rate onto an order line at checkout time — see `services/snapshot.ts`.
+ * can freeze the resolved rate onto an order line at checkout time — see
+ * `orders/services/snapshot.ts`.
  */
 export { resolveTaxRate } from './tax';
 export type { TaxClass, RateType } from './tax';

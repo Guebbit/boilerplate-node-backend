@@ -1,27 +1,24 @@
 /**
  * @module
- * The demo profile's control surface — mounted only by `scenarios/run-server.ts`, which hands
- * {@link installDemo} and {@link restoreScenario} to `createApp` as its extension (`npm run
- * demo`). Nothing under `src/` knows it exists: production has no such routes to mount.
+ * The demo profile's control surface, mounted only by `scenarios/run-server.ts`, which hands
+ * {@link installDemo} and {@link restoreScenario} to `createApp` (`npm run demo`). Nothing under
+ * `src/` knows it exists: production has no such routes.
  *
  * Seven routes for the paired frontend's e2e suite, all under `/__test/*`:
+ *   `POST /__test/restore`    empty the database, put a named scenario back, clear the outbox and
+ *                             return the clock to real time
+ *   `GET /__test/scenario`    what is restored: the logins, and a row id per guarantee name
+ *   `GET /__test/emails`      what the app "sent" since the last restore
+ *   `GET /__test/clock`       the demo clock: what `Date.now()` answers, and its lead on real time
+ *   `POST /__test/clock`      move it FORWARD by `advanceMs`, never back; then trigger a job that
+ *                             should react through its own door (e.g. the reservation sweep)
+ *   `POST /__test/jobs/:name` run one declared job now; the colon becomes a dash (`reap-orders`)
+ *   `GET /__test/jobs`        the lever names of every declared job
+ * Plus each shop module's own levers (`./doubles/<module>/levers.ts`), e.g. `POST
+ * /__test/payments/refund-failure` and `POST /__test/payments/dispute`.
  *
- * `POST /__test/restore`   empty the database and put a named scenario back, clearing the outbox
- *                          and putting the clock back to real time
- * `GET /__test/scenario`   what is currently restored: the logins, and a row id per guarantee name
- * `GET /__test/emails`     what the app "sent" since the last restore
- * `GET /__test/clock`      the demo clock: what `Date.now()` answers, and how far ahead of real time
- * `POST /__test/clock`     move it FORWARD by `advanceMs` (never back); a job that should react
- *                          is then triggered through its own door, e.g. the reservation sweep
- * `POST /__test/jobs/:name` run one declared background job now, under its name with
- *                          the colon as a dash — `reap:orders` is `reap-orders`
- * `GET /__test/jobs`       the lever names of every declared job
- * plus each shop module's own levers, e.g. `POST /__test/payments/refund-failure`, which makes an
- * order's refunds fail (or stop failing), and `POST /__test/payments/dispute` — see
- * `./doubles/<module>/levers.ts`
- *
- * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
- * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.
+ * Built:  a scenario is BUILT once per process and REPLAYED after that ({@link buildOnce}).
+ * Auth:   none, since the profile only binds beside a database `npm run demo` just created.
  */
 
 import type { Express, Request, Response } from 'express';
@@ -60,7 +57,9 @@ export class UnknownScenarioError extends Error {
 interface ScenarioCopy {
     /** The resolved name — `DEFAULT_SCENARIO` when the caller named none. */
     name: string;
+    /** Every row of the scenario, by collection. */
     database: DatabaseCopy;
+    /** What each guarantee name points at, by name to id. */
     subjects: Readonly<Record<string, string>>;
 }
 

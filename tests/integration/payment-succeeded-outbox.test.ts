@@ -1,7 +1,9 @@
 /**
  * The whole path a `payment.succeeded` webhook takes through the outbox, with the real
  * `payments` and `webhooks` modules registered: a settlement ends in exactly one delivery per
- * subscription, and a duplicate publish of the same event does not create a second. See docs/understand/outbox.md.
+ * subscription, and a duplicate publish of the same event does not create a second.
+ *
+ * @see docs/understand/outbox.md#why-payment-succeeded-is-written-in-the-settlement-transaction
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

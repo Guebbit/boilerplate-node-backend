@@ -40,6 +40,7 @@ const list = (userId: string): Promise<StockAlertsResponse> =>
  * mail for something already on sale would be noise. Asking twice is the same request. Refused with
  * 409 `STOCK_ALERT_LIMIT_REACHED` for a NEW product once the account holds `NODE_STOCK_ALERTS_MAX`.
  *
+ * @see docs/modules/stock-alerts.md#the-cap
  * @param userId - the signed-in buyer
  * @param productId - the product they cannot order
  */
@@ -206,6 +207,7 @@ const onBuyableAgain = async (productId: string): Promise<void> => {
  * what answers it. A run that finds nothing to answer is harmless, and a request answered here is
  * gone, so a second run sends nothing.
  *
+ * @see docs/modules/stock-alerts.md#the-signal
  * @param now - the instant of the sweep
  * @returns how many products had their waiting requests answered
  */

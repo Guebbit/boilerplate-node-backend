@@ -1,30 +1,23 @@
 #!/usr/bin/env tsx
 /**
  * The module graph and the grouped module list in `docs/modules/start.md`, plus one neighbourhood
- * diagram per module page,
- * generated from the imports and subscriptions they describe.
+ * diagram per module page, generated from the imports and subscriptions they describe.
  *
- * Generated rather than hand-drawn: a hand-drawn graph of the modules is a published number
- * with no guard behind it — correct on the day it is written and quietly wrong after the next
- * import. `dependency-cruiser` already builds the real graph for `npm run check`, so the
- * page reads it rather than restating it.
- *
- * WHAT IS SWEPT, and why each narrowing matters:
- *   - `--exclude /tests/` — a co-located spec may legitimately reach a sibling's barrel, manifest
- *     or tests (see `eslint.config.ts`). Left in, the sweep reports roughly twice the edges and
- *     describes the test suite rather than the architecture.
- *   - `--collapse` to one node per module — the question is which DOMAIN reaches which, not which
- *     file.
- *   - `src/modules.ts` is dropped: the registry imports every manifest by definition, so its
- *     edges are a fact about the registry and would draw a star over the real shape.
- *
- * The index map stays imports-only, because the prose around it argues about exactly that. The
- * per-module neighbourhoods add the event edges on top, which is the return path an import graph
- * cannot see — see `readEventEdges`.
- *
- * Each generated block sits between markers in its page; the prose around it is written by hand and
- * is never touched. Run `--check` to fail when the two have diverged — that is what runs in
- * `complete`.
+ * Why:     a hand-drawn graph is a published number with no guard: right the day it is written,
+ *          quietly wrong after the next import. `dependency-cruiser` already builds the real graph
+ *          for `npm run check`, so the page reads it.
+ * Swept:   what each narrowing buys:
+ *          - `--exclude /tests/`: a co-located spec may reach a sibling's barrel, manifest or
+ *            tests (see `eslint.config.ts`); left in, the sweep reports about twice the edges and
+ *            describes the suite, not the architecture.
+ *          - `--collapse` to one node per module: the question is which DOMAIN reaches which.
+ *          - `src/modules.ts` dropped: the registry imports every manifest by definition and would
+ *            draw a star over the real shape.
+ * Events:  the index map stays imports-only, because the prose around it argues exactly that. The
+ *          per-module neighbourhoods add event edges, the return path an import graph cannot see
+ *          (`readEventEdges`).
+ * Blocks:  each sits between markers in its page; the prose around it is hand-written and never
+ *          touched. `--check` fails when they diverge, and runs in `complete`.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -57,16 +50,23 @@ const LIST_END = '<!-- module-list:end -->';
 
 /** One module announcing a domain event that another module subscribes to. */
 interface EventEdge {
+    /** The module that announces the event. */
     owner: string;
+    /** The module that listens for it. */
     subscriber: string;
+    /** The event's name. */
     event: string;
 }
 
 /** A generated block and the page it belongs in, resolved before anything is written. */
 interface Target {
+    /** The docs page the block lives in. */
     file: string;
+    /** Marker line that opens the block. */
     start: string;
+    /** Marker line that closes it. */
     end: string;
+    /** What goes between the markers. */
     body: string;
 }
 
@@ -312,8 +312,10 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
 
 /**
  * Whether a module has its own page under `docs/modules/`. The one `group: example` module has
- * none: it exists to be copied, and `docs/understand/modules.md#the-module-template` is where it is
- * explained, so a neighbourhood block has nowhere to go.
+ * none: it exists to be copied, and the page below is where it is explained, so a neighbourhood
+ * block has nowhere to go.
+ *
+ * @see docs/understand/modules.md#the-module-template
  */
 const hasModulePage = (name: string): boolean => DESCRIPTORS[name].group !== 'example';
 

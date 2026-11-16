@@ -3,15 +3,14 @@
  * The user directory's slice of the demo dataset: `root` is the owner every admin-only route
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
  * to be scoped against. Alongside them, one account per newer tenant role, the personas and the
- * staff, so each can be logged into and tried on its own rather than only read about. All 13 are
+ * staff, so each can be logged into and tried on its own rather than only read about. All are in
  * `shared/scenarios/personas.yaml`; ids and credentials come from `@scenarios/accounts`, since
  * other files in this folder seed rows belonging to these people.
  *
- * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so the flow runner has
- * more than one shopper to vary an order history across. None is wired into `@scenarios/accounts`
- * — there is no login promise attached to any of the ten, only to the 13 named accounts above.
- * They log in with `makeUser`'s own default password, which is how
- * `scenarios/flows/shop-history.ts` shops as them.
+ * Further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so the flow runner has more
+ * than one shopper to vary an order history across. None is wired into `@scenarios/accounts`: no
+ * login promise attaches to them, only to the named accounts above. They log in with
+ * `makeUser`'s own default password, which is how `scenarios/flows/shop-history.ts` shops as them.
  */
 
 import {

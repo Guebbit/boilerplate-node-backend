@@ -217,6 +217,30 @@ describe('reopen', () => {
     });
 });
 
+describe('a door whose conditional write keeps losing the race', () => {
+    it.each([
+        ['resolve', TaskStatus.new],
+        ['markSpam', TaskStatus.new],
+        ['reopen', TaskStatus.resolved]
+    ] as const)(
+        'answers the app-wide 409 CONFLICT from %s, never a code about the task state',
+        async (door, startsFrom) => {
+            const task = await fileContact();
+            if (startsFrom === TaskStatus.resolved)
+                await taskService.resolve(String(task._id), admin);
+            const lost = jest.spyOn(taskRepository, 'moveFrom').mockResolvedValue(null);
+
+            const result = asReject(await taskService[door](String(task._id), admin));
+
+            expect(result.status).toBe(409);
+            expect(result.errors[0]?.code).toBe('CONFLICT');
+            // Three tries (the first read and two re-reads), then it stops.
+            expect(lost).toHaveBeenCalledTimes(3);
+            expect(await storedField(task._id, 'status')).toBe(startsFrom);
+        }
+    );
+});
+
 describe('jurisdiction', () => {
     it('hides a system task from a caller who does not hold its set', async () => {
         const task = await openReviewTask();

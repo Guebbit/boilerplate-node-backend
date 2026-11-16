@@ -27,7 +27,7 @@ import { paymentRepository } from '../repository';
  * payment is `declined` already: Stripe sends two events for one decline, and a poll repeats it.
  *
  * @param orderId - the order whose payment the provider declined
- * @param extra - the fields recorded beside the status (the provider's own reference, last error)
+ * @param extra - the card's last four digits, when the provider sent them
  * @param newAttempt - `true` when the caller is the attempt itself (a confirm), so a payment
  *   already `declined` is declined again
  * @returns the payment as it now stands, or `null` when this call did not move it

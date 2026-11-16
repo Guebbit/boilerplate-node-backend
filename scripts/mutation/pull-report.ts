@@ -79,6 +79,8 @@ const install = (artifact: GitHubArtifact): Promise<void> =>
  * @returns the ratchet's exit code: 1 when the sweep measured a file below its baseline
  */
 const foldBaseline = (): number =>
+    // `--merge` folds the pulled report into the committed baseline (never lowers a score); `stdio: 'inherit'`
+    // shows the check's own output. A null status (killed by a signal) counts as 2 below.
     spawnSync(
         'npx',
         ['tsx', 'scripts/mutation/check-baseline.ts', '--merge', `--merge-dir=${REPORT_DIRECTORY}`],

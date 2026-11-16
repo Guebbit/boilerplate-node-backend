@@ -1,7 +1,7 @@
 /**
  * A malformed id has one answer per position, on every route the spec declares.
  *
- * The rule (`docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position`):
+ * The rule:
  *
  *   - an id in the URL path that is not this backend's own is the SAME 404 an unknown id gets;
  *   - an id in a body or a query that is not this backend's own is a 422 `VALIDATION_ERROR` whose
@@ -13,6 +13,8 @@
  *
  * Callers are admin, so a refusal is the controller's own and never a permission gate; the shopping
  * routes are the one exception: they are sent as a customer, whose basket the suite builds.
+ *
+ * @see docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -97,7 +99,9 @@ const validBodyFor = (schema: SchemaNode | undefined): unknown => {
 
 /** What a request answered, reduced to what the rule is about. */
 interface Answer {
+    /** The HTTP status it answered. */
     status: number;
+    /** The parsed answer body. */
     body: unknown;
 }
 

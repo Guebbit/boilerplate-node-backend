@@ -1,20 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Generates the request media-type table from `openapi.yaml`: for every operation that declares a
- * `requestBody`, the content types it accepts; a write (POST, PUT, PATCH, DELETE) without one is listed with none, so any body is refused. The 415 guard
- * (`src/infrastructure/http/middlewares/content-type.ts`) reads it, so a body in a type the
- * contract does not declare is refused instead of arriving as an empty `{}`. Each row carries its
- * path matcher as a regex literal, so the guard compiles nothing at boot.
+ * Generates the request media-type table from `openapi.yaml`.
  *
- * It also writes `api/operation-routes.ts` beside it: for every path, the methods the contract gives
- * it, the module that owns it and which methods take no sign-in (`security: []`). The 405 handler
- * (`src/infrastructure/http/middlewares/method-not-allowed.ts`) reads it, so a known path asked
- * with the wrong method answers 405 + `Allow` instead of the catch-all's 404.
- *
- * Backend-only: the frontend has no server to guard. Written beside the other generated contract
- * files under `api/`, which `npm run gen:api` rebuilds from scratch.
- *
- * `--check` writes nothing and exits 1 on a mismatch (the shared `writeOrCheck` helper).
+ * Table:    for every operation with a `requestBody`, the content types it accepts; a write (POST,
+ *           PUT, PATCH, DELETE) without one is listed with none, so any body is refused. The 415
+ *           guard (`src/infrastructure/http/middlewares/content-type.ts`) reads it, so a body in an
+ *           undeclared type is refused instead of arriving as an empty `{}`. Each row carries its
+ *           path matcher as a regex literal, so the guard compiles nothing at boot.
+ * Routes:   also writes `api/operation-routes.ts` beside it: per path, the methods the contract
+ *           gives it, the owning module, and which methods take no sign-in (`security: []`). The
+ *           405 handler (`src/infrastructure/http/middlewares/method-not-allowed.ts`) reads it, so a known path asked
+ *           with the wrong method answers 405 + `Allow`, not the catch-all's 404.
+ * Backend only: the frontend has no server to guard. Written beside the other generated contract
+ *           files under `api/`, which `npm run gen:api` rebuilds from scratch.
+ * `--check`: writes nothing and exits 1 on a mismatch (the shared `writeOrCheck` helper).
  *
  * Usage: tsx scripts/contracts/generate-request-content-types.ts --out <path> [--check]
  * (`--out` names the content-types file; the routes file lands in the same folder.)

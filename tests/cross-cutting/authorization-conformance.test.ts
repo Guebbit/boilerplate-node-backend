@@ -29,21 +29,33 @@ import { isDeployed } from '@tests/paths';
  * `permissions` stays for cases about the model itself.
  */
 interface CaseCaller {
+    /** The caller's account id; `null` for an anonymous one. */
     id: string | null;
+    /** Whether the caller acts for the platform or a tenant. */
     scope: Caller['scope'];
+    /** The tenant the caller belongs to; `null` outside one. */
     tenantId: string | null;
+    /** Raw permission keys, for a case about the model itself. */
     permissions?: string[];
+    /** A role name from the roles file, expanded to its permissions. */
     role?: string;
+    /** An audience from the roles file, expanded the same way. */
     audience?: AudienceName;
 }
 
 /** One row of the shared cases file. */
 interface ConformanceCase {
+    /** The case's title in the YAML. */
     name: string;
+    /** Who asks. */
     caller: CaseCaller;
+    /** What they ask to do. */
     action: string;
+    /** What they ask to do it to. */
     subject: string;
+    /** The row's fields the rule may look at (owner, tenant, ...). */
     resource: Record<string, unknown>;
+    /** The answer both backends must give. */
     expect: 'allow' | 'deny';
 }
 

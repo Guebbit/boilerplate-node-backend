@@ -92,9 +92,9 @@ export const findOwnTasksForExport = (subject: PersonalDataSubject): Promise<Exp
     findOwnTasks(subject).then((tasks) => tasks.map((task) => toExportTask(task)));
 
 /**
- * {@link ExportSystemTask}: every field the system holds about the situation except the staff
- * behind it (`assigneeId`, the notes' authors) and the dedup key. A task is itself an assessment
- * of the person, so it is the person's to read (CJEU C-434/16, EDPB 01/2022).
+ * {@link ExportSystemTask}: the system-task fields the person may read: no staff ids
+ * (`assigneeId`, the notes' authors), no dedup key, no reminder stamps. A task is itself an
+ * assessment of the person, so it is the person's to read (CJEU C-434/16, EDPB 01/2022).
  */
 const toExportSystemTask = (task: Lean<TaskDocument>): ExportSystemTask => ({
     id: String(task._id),

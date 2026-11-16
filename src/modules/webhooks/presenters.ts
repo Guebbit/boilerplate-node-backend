@@ -1,9 +1,9 @@
 /**
  * @module
  * The two places this module's documents become wire shapes — one per resource, since webhooks
- * serves both a subscription and its delivery log. `create`/`secrets` layer a one-time
- * plaintext secret on top of {@link presentWebhookSubscription}; every other subscription read
- * and the delivery reads answer with these alone.
+ * serves both a subscription and its delivery log. The `create` and `secrets` controllers layer a
+ * one-time plaintext secret on top of {@link presentWebhookSubscription}; every other subscription
+ * read and the delivery reads answer with these alone.
  */
 
 import type {

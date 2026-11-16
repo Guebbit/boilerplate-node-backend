@@ -1,7 +1,9 @@
 /**
  * @module
  * Returns — domain layer: pure rules only, lint-guaranteed free of Express, Mongoose and every
- * tier. See `docs/understand/domain-layer.md`.
+ * tier.
+ *
+ * @see docs/understand/domain-layer.md#_1-the-folder
  */
 
 export {

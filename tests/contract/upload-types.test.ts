@@ -13,6 +13,7 @@ import { ACCEPTED_UPLOAD_TYPES } from '@api/upload-types';
 
 /** As much of the published contract as this file reads. */
 interface Spec {
+    /** Path to verb to operation, reduced to the multipart encodings read here. */
     paths: Record<
         string,
         Record<

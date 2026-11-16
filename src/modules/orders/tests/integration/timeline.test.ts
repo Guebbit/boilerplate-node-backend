@@ -2,7 +2,9 @@
  * @module
  * The order's timeline: each move leaves one row, in the transaction of the move that caused it,
  * and each reader sees the rows its audience allows. Real Mongo, through the service's public
- * door. See docs/modules/orders.md#the-timeline.
+ * door.
+ *
+ * @see docs/modules/orders.md#the-timeline
  */
 import { withTransaction } from '@infrastructure/runtime/database';
 import { setupTestDb } from '@tests/setup-test-db';

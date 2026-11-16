@@ -4,7 +4,7 @@
  * tier. Anything testable without a database belongs here; queries, transactions, HTTP envelopes
  * and translated copy do not.
  *
- * See `docs/understand/domain-layer.md`.
+ * @see docs/understand/domain-layer.md#_1-the-folder
  */
 
 export { sumLineItems, orderTotal } from './totals';

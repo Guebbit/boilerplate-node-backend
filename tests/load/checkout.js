@@ -1,24 +1,18 @@
 /**
- * The write path under load — log in, fill a cart, check out.
+ * The write path under load: log in, fill a cart, check out.
  *
- * THIS is the scenario worth having, the one a single-URL hammer (`hit.js`) cannot be. A GET
- * flood measures how fast a cached read is. This measures the thing that can actually break under
- * concurrency: `reserveForOrder` taking a hold on stock while other virtual users are taking one
- * on the same product. `tests/integration/concurrency/cart-races.test.ts` proves that logic is
- * correct with two racing callers; this asks whether it stays correct, and acceptable, with fifty.
- *
- * ── Why every virtual user shares one account ────────────────────────────────────────────────
- * Deliberate, and it is the interesting part. Every VU signs in as the same seeded customer, so
- * fifty users checking out at once is exactly the contention this is looking for. If you would
- * rather measure throughput than contention, sign each VU in as its own account — but then you are
- * measuring a different question, and the reservation logic stops being under test.
- *
- * ── State ────────────────────────────────────────────────────────────────────────────────────
- * This WRITES. It creates orders and moves stock, so point it at a throwaway database and re-seed
- * afterwards (`npm run scenario:apply:reset`). Never at anything you care about.
- *
- * Thresholds are placeholders — see `tests/load/browse.js` for how to seed real ones. Writes are slower
- * than reads and their ceiling is set higher here for that reason, not because they matter less.
+ * Why:    the scenario a single-URL hammer (`hit.js`) cannot be. A GET flood measures a cached
+ *   read; this measures what can break under concurrency: `reserveForOrder` taking a stock hold
+ *   while other virtual users take one on the same product.
+ *   `tests/integration/concurrency/cart-races.test.ts` proves it correct with two racing callers;
+ *   this asks whether it stays correct, and acceptable, with fifty.
+ * One account: every VU signs in as the same seeded customer, so fifty simultaneous checkouts are
+ *   exactly the contention sought. Signing each VU in as its own account measures throughput, a
+ *   different question, and the reservation logic stops being under test.
+ * State:  this WRITES. It creates orders and moves stock: use a throwaway database and re-seed
+ *   (`npm run scenario:apply:reset`). Never point it at anything you care about.
+ * Thresholds: placeholders, see `tests/load/browse.js` for seeding real ones. The ceiling is
+ *   higher than for reads because writes are slower, not because they matter less.
  *
  * Usage:
  *   BASE_URL=http://localhost:3000 npm run bench:k6 checkout

@@ -2,7 +2,9 @@
  * @module
  * The return events ride the transactional outbox: each row commits with the write it announces
  * or not at all, is keyed on the order so one order's events stay in order, and reaches the bus
- * (and so the webhook fan-out) through the relay. Real Mongo. See docs/understand/outbox.md.
+ * (and so the webhook fan-out) through the relay. Real Mongo.
+ *
+ * @see docs/understand/outbox.md#what-it-guarantees
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

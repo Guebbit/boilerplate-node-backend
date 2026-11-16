@@ -1,18 +1,17 @@
 /**
- * `eslint.config.ts`'s "a module does not import its own barrel" `boundaries/dependencies`
- * policy, checked LIVE against the real flat config. The bug this guards against
- * (`checkInternals` left unset) makes every same-module edge skip evaluation silently — a clean
- * `npm run lint` and a dead policy look identical from the CLI alone, so this needs its own
- * liveness probe rather than trusting a passing lint run to mean the policy ran.
+ * `eslint.config.ts`'s "a module does not import its own barrel" `boundaries/dependencies` policy,
+ * checked LIVE against the real flat config.
  *
- * Spawned as the real `eslint` binary rather than `ESLint#lintFiles`: the Node API's config
- * loader needs `jiti` to read `eslint.config.ts`, which does not resolve inside a jest worker's
- * own module system — the same reason `apply.test.ts` shells out to `scenarios/apply.ts` rather
- * than importing it. A subprocess is also what `npm run lint` itself is.
- *
- * Against a REAL file under `src/modules/users/`, briefly: `parserOptions.project` resolves
- * against the physical TypeScript program, so a virtual path fails to parse before the boundaries
- * rule ever runs. The probe file is written and removed around the one run that needs it.
+ * Guards:   the bug where `checkInternals` was left unset, so every same-module edge skips
+ *           evaluation silently. A clean `npm run lint` and a dead policy look identical from the
+ *           CLI, so this is its own liveness probe.
+ * Process:  the real `eslint` binary, not `ESLint#lintFiles`: the Node API's config loader needs
+ *           `jiti` to read `eslint.config.ts`, which does not resolve inside a jest worker (the
+ *           reason `apply.test.ts` shells out to `scenarios/apply.ts`). `npm run lint` is a
+ *           subprocess too.
+ * Real file: briefly under `src/modules/users/`. `parserOptions.project` resolves against the
+ *           physical TypeScript program, so a virtual path fails to parse before the boundaries
+ *           rule runs. The probe is written and removed around the one run that needs it.
  */
 import { execFile } from 'node:child_process';
 import { writeFileSync, rmSync } from 'node:fs';

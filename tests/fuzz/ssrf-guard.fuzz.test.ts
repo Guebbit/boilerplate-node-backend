@@ -1,22 +1,19 @@
 /**
- * The SSRF guard (`@infrastructure/adapters/ssrf-guard`) against a table of hostile URLs — the
- * property `tests/fuzz` exists for, per `docs/modules/webhooks.md`'s SSRF section: private
+ * The SSRF guard (`@infrastructure/adapters/ssrf-guard`) against a table of hostile URLs: private
  * ranges, loopback, link-local (the cloud metadata endpoint), IPv6-mapped IPv4, decimal/octal/hex
- * encoded IPv4 literals, DNS names resolving to private space, and credentials in the URL.
+ * IPv4 literals, DNS names resolving to private space, and credentials in the URL.
  *
- * Lives here, not under `src/modules/webhooks/tests/fuzz/`, because the guard itself is
- * infrastructure — `webhooks` is its only caller today, not its owner. Deleting that module must
- * not delete the guard's only tests; `src/modules/webhooks/tests/fuzz/webhook-ssrf.fuzz.test.ts`
- * keeps only what genuinely belongs to `deliverWebhook` (the redirect, timeout and plain-HTTP
- * cases), which reaches this same guard along its own delivery path.
+ * Here:     not under `src/modules/webhooks/tests/fuzz/`: the guard is infrastructure and
+ *           `webhooks` is its only caller, not its owner. Deleting that module must not delete the
+ *           guard's only tests. `webhook-ssrf.fuzz.test.ts` there keeps what belongs to
+ *           `deliverWebhook` (redirect, timeout, plain HTTP), which reaches this guard on its own path.
+ * Table:    deterministic, not a `fast-check` arbitrary: every case has one correct answer (refuse
+ *           or don't), and the inputs worth having are the known bypass techniques, not byte soup.
+ * 6to4 and Teredo literals are in it: both embed an IPv4 address `embeddedIPv4()` never unwraps, so
+ *           a 6to4 literal encoding the metadata endpoint reads as an ordinary global address to
+ *           every other check (see `ssrf-guard.ts`'s module docblock).
  *
- * Deterministic, not exploratory: every case here has one correct answer (refuse, or don't), so
- * this is a fixed table rather than a `fast-check` arbitrary — the hostile inputs worth having are
- * the well-known bypass techniques, not random byte soup.
- *
- * 6to4 and Teredo literals are in the table too: both embed an IPv4 address that
- * `embeddedIPv4()` never unwraps, so a 6to4 literal encoding the cloud metadata endpoint reads as
- * an ordinary global address to every other check — see `ssrf-guard.ts`'s module docblock.
+ * @see docs/understand/defences/ssrf.md#ranges-refused-and-why
  */
 
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';

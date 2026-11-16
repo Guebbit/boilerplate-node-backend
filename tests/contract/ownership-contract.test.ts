@@ -1,7 +1,7 @@
 /**
  * @module
  * Ownership sweep, foundation half: another customer's id, in the URL or in the body, answers
- * exactly like an id that does not exist (`docs/understand/defences/authorization.md`, the IDOR row).
+ * exactly like an id that does not exist (the IDOR row).
  *
  * Holds two things:
  *   completeness   every customer-reachable path, body and query id is in exactly one list of
@@ -13,6 +13,8 @@
  * this route). This file sweeps OWNERSHIP: a role that does reach it, aimed at someone else's row.
  * The shop families are `ownership-shop.contract.test.ts`, a separate file so `demo:remove` takes
  * exactly that half with the shop.
+ *
+ * @see docs/understand/defences/authorization.md#object-level-whose-row-is-it
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -38,7 +40,9 @@ const ID_REF = '#/components/schemas/Id';
 
 /** One request property found in the contract. */
 interface Found {
+    /** The request property's name. */
     field: string;
+    /** Whether it is declared by reference to the shared `Id` schema. */
     typedId: boolean;
 }
 

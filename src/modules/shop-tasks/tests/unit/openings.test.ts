@@ -75,8 +75,10 @@ describe('consentDueOpening — a delay the buyer must be asked about', () => {
     });
 
     /**
-     * The six jurisdictions the FTC Rule binds (docs/modules/shop-tasks.md): written out, not read
+     * The six jurisdictions the FTC Rule binds: written out, not read
      * from the constant under test.
+     *
+     * @see docs/modules/shop-tasks.md#the-shop-s-to-dos
      */
     it.each(['US', 'PR', 'GU', 'VI', 'AS', 'MP'])(
         'opens for a shop in %s, whatever the destination',

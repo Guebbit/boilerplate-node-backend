@@ -1,21 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * The EFFECTIVE role matrix in `docs/use-the-shop/start.md`: which rules a role actually holds,
- * per role, per module — and, on every module's own page, the "who can do what" table of that
- * module's rules. Same shape as `generate-module-graph.ts` — markers in the page, prose around
- * them untouched, `--check` in `complete`.
+ * The EFFECTIVE role matrix in `docs/use-the-shop/start.md`: which rules a role actually holds, per
+ * role, per module; and on every module's own page, the "who can do what" table of that module's
+ * rules. Same shape as `generate-module-graph.ts`: markers in the page, prose around them
+ * untouched, `--check` in `complete`.
  *
- * ONE TABLE per page, and only generated ones. What a role DECLARES is prose on the page, written by hand from
- * `shared/rules/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
- * and a generated copy of its set lists said less than the descriptions it ignored.
- *
- * What it answers cannot be written by hand, which is why this survives: `admin` alone holds most
- * of the declared tenant sets, spelled out by name, and every signed-in caller is a customer first
- * (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can derive reliably by
- * eye.
- *
- * Asked through `heldRules` rather than by re-expanding the sets here: a second expander is a
- * second answer to "what may this role do", and the one in the docs would be the one nobody runs.
+ * Tables:  ONE per page, and only generated ones. What a role DECLARES is hand-written prose from
+ *          `shared/rules/authorization-roles.yaml`'s own `title` and `description`; that file
+ *          documents itself, and a generated copy of its set lists said less than the descriptions
+ *          it ignored.
+ * Why:     what it answers cannot be written by hand. `admin` alone holds most declared tenant
+ *          sets, spelled out by name, and every signed-in caller is a customer first (see
+ *          `keysInScope` in `kernel/permissions.ts`): many cells nobody derives reliably by eye.
+ * Asked:   through `heldRules`, not by re-expanding the sets here. A second expander is a second
+ *          answer to "what may this role do", and the one in the docs would be the one nobody runs.
  */
 
 import path from 'node:path';
@@ -49,9 +47,13 @@ const END = '<!-- role-matrix:end -->';
 
 /** One row of the table: a stored staff role (or none) and the audience the request is in. */
 interface Persona {
+    /** The row's label in the table. */
     name: string;
+    /** Whether the persona acts at platform or tenant level. */
     scope: AuthorizationScope;
+    /** The stored staff role it holds; `null` for none. */
     role: string | null;
+    /** The audience the request arrives in. */
     audience: AudienceName;
 }
 

@@ -6,11 +6,13 @@
  * and `regenerate` rewrites the crontab), the seed images, and the demo
  * catalogue's own scenario data — then edits `src/modules.ts` and regenerates the scenario
  * registries (`npm run regenerate`), the only central files that would otherwise stop the
- * repo compiling. See `docs/build/new-project.md` for what this promises and does not.
+ * repo compiling. What this promises and does not is on the page below.
  *
  * RUNS AGAINST THIS CHECKOUT, not a scratch copy.
  * A module-owned test under `src/modules/<name>/tests/` goes with its folder; any other test that
  * imports a removed module goes too (`demo-remove-tests.ts`), and the report lists each one.
+ *
+ * @see docs/build/new-project.md#what-it-does-not-do
  */
 
 import { readDemoModuleNames } from '../testing/demo-module-names';

@@ -4,7 +4,8 @@
  * distinct from `account`'s self-signup `USER_SIGNED_UP`. Both are sent as the acting admin,
  * never as the subject: an event about another person belongs to the actor. Declared by
  * augmenting the analytics port's name map, as `./audit.ts` does for audit actions.
- * Naming rule: docs/understand/analytics.md#naming.
+ *
+ * @see docs/understand/analytics.md#naming
  */
 
 /** The event names this module fires, keyed by intent. */

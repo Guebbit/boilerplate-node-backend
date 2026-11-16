@@ -27,9 +27,11 @@ import type { Response } from 'supertest';
 
 /** One documented operation, reduced to what a captured response is matched against. */
 interface DeclaredRoute {
+    /** Verb of the documented operation. */
     method: HttpMethod;
     /** `{param}` segments accept anything; anchored at both ends so a sibling path can't match. */
     regex: RegExp;
+    /** The spec's operation id, which a failure message names. */
     operationId: string;
     /** How many `{param}` segments the path has — breaks a tie when a literal sibling also matches. */
     paramCount: number;

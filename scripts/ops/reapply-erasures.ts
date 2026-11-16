@@ -6,7 +6,7 @@
  *
  * Run by a person, never on a schedule, on the RESTORED database with the app and cron STOPPED,
  * before the stack starts. The ledger in that database must be the live one or the newest
- * snapshot's, never the restored copy: docs/operate/backups.md#erasures-after-a-restore.
+ * snapshot's, never the restored copy.
  *
  * Flags:
  *   --since <ISO time>   the snapshot's time (required); ledger rows from then on are replayed
@@ -15,6 +15,8 @@
  *
  * Safe to repeat: an account already erased is skipped, and a failure is retried by running again.
  * Exits non-zero when any account could not be erased.
+ *
+ * @see docs/operate/backups.md#restoring
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

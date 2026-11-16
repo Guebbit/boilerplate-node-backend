@@ -1,20 +1,16 @@
 /**
  * One app-wide guard: every write route is authenticated by default, and behind a
- * `requirePermission` key by default too, unless the route is listed in {@link WRITE_EXCEPTIONS}
- * below with a reason.
+ * `requirePermission` key by default, unless it is listed in {@link WRITE_EXCEPTIONS} with a reason.
  *
- * Each routed module's own `routes.test.ts` suite states its own authorization in full, and that
- * stays valuable — mount order, cache tags, and upload fields are genuinely per-module. But "every
- * write demands a permission key" is an app-wide property, and stating it locally, once per
- * module, enforces it globally nowhere: a module with no `routes.test.ts` of its own would be
- * guarded by nothing. This file states the property once, for every routed module at once, so a
- * new module inherits the guarantee instead of needing to opt into it.
- *
- * `WRITE_EXCEPTIONS` is the actual guardrail's shape: MOST writes here are somebody's own resource
- * (a cart, a wishlist, an address book, a session) rather than a staff action, so the exception
- * list is not the short allowlist a fully keyed API would have — it is the list of every write in
- * the app that deliberately needs no key, plus the handful that need no session at all. Every entry is a decision someone made when the route was written; this is the one place
- * they are all listed together.
+ * Why here: a module's own `routes.test.ts` states its authorization in full (mount order, cache
+ *           tags, upload fields are per-module). But "every write demands a key" is app-wide, and
+ *           stating it once per module enforces it nowhere: a module with no `routes.test.ts` would
+ *           be guarded by nothing. Stated once for every routed module, a new module inherits it.
+ * Exceptions: MOST writes are somebody's own resource (a cart, a wishlist, an address book, a
+ *           session), not a staff action, so the list is not the short allowlist of a fully keyed
+ *           API. It holds every write that deliberately needs no key, plus the few that need no
+ *           session at all. Each entry is a decision made when the route was written; this is the
+ *           one place they are all listed.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -48,7 +44,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * deliberately keyless because the write is scoped to the caller's own resource.
  */
 interface WriteException {
+    /** Whether the route still needs a session despite the exemption. */
     requiresAuth: boolean;
+    /** Why the app-wide key gate does not apply, in plain words. */
     reason: string;
 }
 

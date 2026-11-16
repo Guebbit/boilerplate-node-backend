@@ -14,6 +14,7 @@ import { shopModuleFixtures } from './shop-modules.generated';
 
 /** One `shopModules` entry: its fixtures, what it waits for, and whether `blank` also wants it. */
 export interface ShopModuleEntry {
+    /** Seeds the module's fixtures and reports what each did. */
     seed: () => Promise<SeedOutcome[]>;
     /**
      * Other `shopModules` entries this one's write depends on — see `./waves`'s `WaveEntry` for

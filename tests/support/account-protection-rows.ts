@@ -16,6 +16,7 @@ import { DAY_MS } from '@domain-primitives/time';
 
 /** A person the request is aimed at: their account and the staff role they hold, if any. */
 export interface Owner {
+    /** The account the request is aimed at. */
     user: UserDocument;
     /** `null` for a plain customer and for the platform-only account, which holds no shop role. */
     role: string | null;
@@ -23,8 +24,11 @@ export interface Owner {
 
 /** One request, ready to send. */
 export interface ProtectionRequest {
+    /** The write verb; reads never need protecting. */
     method: 'put' | 'patch' | 'post' | 'delete';
+    /** Path with the target's id already filled in. */
     url: string;
+    /** Payload when the route takes one; omitted for a bodiless write. */
     body?: Record<string, unknown>;
 }
 

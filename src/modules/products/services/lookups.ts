@@ -55,10 +55,10 @@ export const findManyByIds = (ids: readonly string[]) => productRepository.findB
 
 /**
  * How many of `ids` are still publicly visible — `@modules/inventory`'s low-stock gauge asks this
- * rather than joining into this module's own collection to answer it itself (see
- * `docs/understand/strategic-ddd.md` §5: "the service is the door"). Reuses the same
- * `publicScope()` a stranger's own reads are narrowed to, so a role editing that rule never has
- * to remember a second, hand-rolled copy of it living in a sibling module's aggregation pipeline.
+ * rather than joining into this module's own collection to answer it itself (the service is the
+ * door). Reuses the same `publicScope()` a stranger's own reads are narrowed to, so a role editing
+ * that rule never has to remember a second, hand-rolled copy of it living in a sibling module's
+ * aggregation pipeline.
  *
  * @param ids - candidate product ids
  * @param options - `excludePreorders` leaves out the products on sale before their release date:
@@ -90,8 +90,9 @@ export const countPublic = (
  * Mirror `@modules/inventory`'s stock level onto this product's own document, purely so a
  * catalogue read still needs no join. `@modules/inventory` is this function's only legitimate
  * caller — it is the sole writer of `onHand`/`reserved`, this is the door, never a place that
- * decides whether a change is legal. See
- * `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+ * decides whether a change is legal.
+ *
+ * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  *
  * @param productId - the product whose cached counters are being brought into step
  * @param counters - the values `@modules/inventory` just committed as the source of truth

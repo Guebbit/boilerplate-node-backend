@@ -21,7 +21,7 @@ import { createSearchController } from '@infrastructure/surfaces/create-search-c
 export const searchOrdersQuerySchema = SearchOrdersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    // A query string carries `true` as text; the body's own boolean passes straight through.
+    /** A query string carries `true` as text; the body's own boolean passes straight through. */
     deleted: optionalBooleanSchema
 });
 

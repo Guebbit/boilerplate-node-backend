@@ -68,6 +68,7 @@ const loginAs = async (email: string) => {
 
 /** What a trigger leaves for the assertions: whose account, the other device, and the cause itself. */
 interface Scenario {
+    /** The account whose sessions are revoked. */
     userId: string;
     /** A bearer from another device, signed in before the cause fires. */
     victim: string;

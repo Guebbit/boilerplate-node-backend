@@ -126,7 +126,9 @@ describe.each([signupPath, changePath, resetPath])(
 
 /** The slice of the bundled contract the canary below reads. */
 interface RawSpec {
+    /** Path to verb to operation, reduced to its request body. */
     paths: Record<string, Record<string, { requestBody?: unknown } | undefined>>;
+    /** The reusable schemas the canary looks properties up in. */
     components: { schemas: Record<string, { properties?: Record<string, { $ref?: string }> }> };
 }
 

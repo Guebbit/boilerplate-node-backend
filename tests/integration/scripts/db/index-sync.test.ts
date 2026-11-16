@@ -1,23 +1,18 @@
 /**
  * `db:sync` is the only thing that shapes the database, so it has to be exactly right.
  *
- * Every other suite runs against a fresh `mongodb-memory-server` where Mongoose's `autoIndex`
- * builds each schema-declared index unopposed — which means no other suite ever observes a
- * database whose stored indexes DISAGREE with the schemas. That state is the normal one on a real
- * deployment: an index was declared and the deploy has not run yet, or one was deleted from a
- * schema and is still sitting in the collection. This file constructs both and asserts the
- * reconciliation resolves them.
- *
- * There is exactly one author of an index: `model.ts` declares it and `db:sync` makes it so.
- * The class of bug where a hand-written migration creates the same key under a different name, and
- * breaks every boot on an already-migrated database, cannot be expressed in this design — so this
- * file does not test two authors agreeing with each other.
- *
- * The one case still worth its own assertion is exact agreement between an EMBEDDED schema and
- * whatever embeds it: Mongoose copies the embedded schema's indexes onto the parent too, so
- * indexing the catalogue can silently index a frozen product snapshot inside every order as well.
- * That is a schema-authoring mistake rather than a migration one, and it still shows up here as an
- * index nobody meant to declare.
+ * Gap:      every other suite runs on a fresh `mongodb-memory-server` where Mongoose's `autoIndex`
+ *           builds each declared index unopposed, so none observes a database whose stored indexes
+ *           DISAGREE with the schemas. That is the normal state of a real deployment: an index
+ *           declared before the deploy ran, or deleted from a schema and still in the collection.
+ *           This file builds both and asserts the reconciliation resolves them.
+ * One author: `model.ts` declares an index and `db:sync` makes it so. A hand-written migration
+ *           creating the same key under another name (breaking every boot on a migrated database)
+ *           cannot be expressed here, so this does not test two authors agreeing.
+ * Embedded: the one case still worth its own assertion. Mongoose copies an embedded schema's
+ *           indexes onto the parent, so indexing the catalogue can silently index a frozen
+ *           product snapshot inside every order. A schema-authoring mistake, shown here as an
+ *           index nobody meant to declare.
  *
  * @see docs/reference/data.md#schema-db-sync
  */
@@ -60,10 +55,12 @@ const dropAllIndexes = async () => {
  * every assertion below.
  */
 interface RegisteredModel {
+    /** The live collection, for reading the indexes it has. */
     collection: {
         name: string;
         indexes: () => Promise<{ name?: string; key: Record<string, unknown> }[]>;
     };
+    /** The indexes the schema declares: key spec, then options. */
     schema: { indexes: () => [Record<string, unknown>, Record<string, unknown>][] };
 }
 

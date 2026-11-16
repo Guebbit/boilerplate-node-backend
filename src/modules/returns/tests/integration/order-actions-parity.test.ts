@@ -12,7 +12,9 @@
  *
  * Known edge, not swept: a mixed `processing` order whose eligible groups are already canceled
  * keeps its button (the order's lines are frozen) and a second withdrawal answers 409
- * `RETURN_NOTHING_TO_CANCEL`. See docs/modules/returns.md#goods-with-no-right-of-withdrawal.
+ * `RETURN_NOTHING_TO_CANCEL`.
+ *
+ * @see docs/modules/returns.md#the-withdrawal-button
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -49,7 +51,9 @@ type OrderKind = 'ordinary' | 'mixed' | 'bespoke-only';
 
 /** A signed-in caller. */
 interface Caller {
+    /** The role the caller holds. */
     role: (typeof ROLES)[number];
+    /** Its access token as an `Authorization` header value. */
     bearer: `Bearer ${string}`;
 }
 
@@ -121,8 +125,11 @@ const whyBlocked = async (caller: Caller, orderId: string) => {
 
 /** One act: which flag it reads, and the request its door answers. */
 interface Act {
+    /** The act's title in the test name. */
     name: string;
+    /** Reads the capability flag the act is gated by. */
     flag: (actions: OrderActions) => boolean;
+    /** Sends the request the flag promises. */
     door: (caller: Caller, orderId: string) => PromiseLike<{ status: number }>;
 }
 

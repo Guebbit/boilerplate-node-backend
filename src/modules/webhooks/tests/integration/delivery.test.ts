@@ -1,7 +1,7 @@
 /**
  * The delivery pipeline end to end, against a real database and a real local HTTPS listener this
  * suite starts and stops itself (`tests/support/https-test-server.ts`) — never the compose
- * `webhook-tester` service. Covers what `docs/modules/webhooks.md`'s integration section promises:
+ * `webhook-tester` service. Covers what the module page's integration section promises:
  * a delivery arrives signed, a 500 produces a retry, sustained failure auto-disables the
  * subscription, replay re-sends, and the delivery log records what happened at every step.
  *
@@ -9,6 +9,8 @@
  * `tests/fuzz/webhook-ssrf.fuzz.test.ts`, and a real local listener is inherently on loopback,
  * which the guard correctly always refuses. Everything else in the pipeline — signing, the actual
  * TLS request, retry scheduling, auto-disable, replay — runs for real.
+ *
+ * @see docs/modules/webhooks.md#seeing-it-work
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -134,10 +136,15 @@ const createSubscription = (
  * only, per `../../asyncapi.internal.yaml`), built fresh at each call site from `.deliveryId`.
  */
 interface PendingDeliveryFixture {
+    /** The delivery's id. */
     deliveryId: string;
+    /** The id of the event being delivered. */
     eventId: string;
+    /** The event's name. */
     eventType: string;
+    /** When it happened, ISO 8601. */
     occurredAt: string;
+    /** The event's payload. */
     data: Record<string, unknown>;
 }
 

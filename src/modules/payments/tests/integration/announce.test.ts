@@ -2,7 +2,9 @@
  * @module
  * `payment.succeeded` rides the transactional outbox: it is written in the settlement's own
  * transaction, so it exists exactly when the payment is `succeeded` and the order `paid`. Real
- * Mongo throughout. See docs/understand/outbox.md.
+ * Mongo throughout.
+ *
+ * @see docs/understand/outbox.md#why-payment-succeeded-is-written-in-the-settlement-transaction
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

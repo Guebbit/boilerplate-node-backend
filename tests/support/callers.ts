@@ -88,7 +88,9 @@ export const asOperator = (id = 'test-operator'): AuthContext => ({
  * caller is, only that the emit does not throw for lack of one.
  */
 export const testCallerContext: CallerContext = {
+    /** Who made the call; anonymous, since the unit under test never reads it. */
     caller: anonymousCaller(),
+    /** Off, so the call emits no analytics event. */
     analyticsConsent: false
 };
 

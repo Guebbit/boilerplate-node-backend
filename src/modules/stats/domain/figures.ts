@@ -3,8 +3,9 @@
  * The sales figures, from the money and counts the owning modules hand back. Pure and in minor
  * units until the last step, so a sum of buckets equals the sum of the whole.
  *
- * Definitions (Shopify's names; the sale date and "paid orders only" are WooCommerce's): see
- * `docs/modules/stats.md#definitions`.
+ * Definitions (Shopify's names; the sale date and "paid orders only" are WooCommerce's).
+ *
+ * @see docs/modules/stats.md#definitions
  */
 
 import {

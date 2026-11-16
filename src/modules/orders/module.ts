@@ -1,8 +1,8 @@
 /**
  * @module
- * Placed orders: admin write and soft delete, plus each account reading back its own. See
- * docs/understand/tactical-ddd.md for the invariants — totals, legal status transitions, what
- * cancelling restores. Depends on products (a line copies the catalogue row's fields at purchase
+ * Placed orders: admin write and soft delete, plus each account reading back its own. The
+ * invariants — totals, legal status transitions, what cancelling restores — are in the
+ * tactical-ddd page. Depends on products (a line copies the catalogue row's fields at purchase
  * time, through `productService`, into this module's OWN `orderLineProductSchema` — not
  * `products`' `productSchema`, so the embedded copy has nowhere to carry a live warehouse counter)
  * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
@@ -13,7 +13,10 @@
  *
  * No queue consumer of its own. `invoicing` depends on this module (for the VAT breakdown and an
  * auth-scoped order read) and reacts to `ORDER_STATUS_CHANGED` on its own — this module has no
- * import of, or wiring for, `invoicing` at all. See `docs/modules/invoicing.md`.
+ * import of, or wiring for, `invoicing` at all.
+ *
+ * @see docs/understand/tactical-ddd.md#_1-the-order-lifecycle
+ * @see docs/modules/invoicing.md#its-neighbourhood
  */
 
 import path from 'node:path';
@@ -25,7 +28,7 @@ import { orderService } from './services';
 /**
  * Also registers this module's event declarations (ORDER_CANCELED, ORDER_CREATED,
  * ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
- * module's own barrel — see CLAUDE.md's module-barrel rule.
+ * module's own barrel (CLAUDE.md, "Module barrels").
  */
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
@@ -75,10 +78,10 @@ export default {
     mounts: [{ basePath: '/orders', routes: router }],
     jobs: ordersJobs,
     publicEvents,
-    // Bank transfer, the order rules and the order link: see `./config`.
+    /** Bank transfer, the order rules and the order link: see `./config`. */
     config: [ordersConfig.slice],
     rateLimits: ordersRateLimits,
-    // The frozen addresses and the notes are PII-encrypted.
+    /** The frozen addresses and the notes are PII-encrypted. */
     reencrypt: orderService.reencryptOrders,
     personalData: [
         {
@@ -90,7 +93,7 @@ export default {
              * See `eraseUserOrders`.
              */
             erase: ({ userId }, session) => orderService.eraseUserOrders(userId, session),
-            // An inactive account keeps its orders and its link to them; only the PII clock starts.
+            /** An inactive account keeps its orders and their link; only the PII clock starts. */
             minimise: orderService.startOrderPiiClock
         },
         {

@@ -1,30 +1,26 @@
 /**
  * @module
- * The webhooks module's slice of the demo dataset — the one `shopModules` entry
- * that seeds nothing by default. A demo subscription pointing at the sink (`webhook-tester`
- * behind `webhook-tester-tls`, `compose.override.yaml`'s `integrations` profile, or the frontend's
- * own Cypress listener) is a FIXTURE, not code, per
- * `docs/modules/webhooks.md`'s "Seeing it work" section: it reads the sink's base url from
- * `NODE_WEBHOOK_DEMO_SINK_URL` and seeds nothing when that is unset, so a developer who never
- * enables the profile never gets a dead subscription auto-disabling in their logs — the same
- * inert-by-default shape as `scenarios/support/doubles/mail-outbox.ts`.
+ * The webhooks module's slice of the demo dataset: the one `shopModules` entry that seeds nothing
+ * by default.
  *
- * The URL is `https://` like every webhook URL, so the edit form can save it. Reachable at all only
- * because the development doubles register the sink's origin with `@infrastructure/adapters/ssrf-guard`
- * (`scenarios/support/doubles/webhook-sink.ts`), which lets THIS ONE origin through without a
- * public address — the sink is on loopback, which the guard refuses for everyone else. The sink's
- * certificate is the test CA's (`scenarios/support/tls/`), trusted by the development doubles
- * (`scenarios/support/doubles/webhook-sink.ts`).
+ * Fixture:  a demo subscription pointing at the sink (`webhook-tester` behind
+ *           `webhook-tester-tls`, `compose.override.yaml`'s `integrations` profile, or the
+ *           frontend's Cypress listener). It reads the base url from `NODE_WEBHOOK_DEMO_SINK_URL`
+ *           and seeds nothing when unset, so a developer who never enables the profile never gets
+ *           a dead subscription auto-disabling in their logs. Same inert-by-default shape as
+ *           `scenarios/support/doubles/mail-outbox.ts`.
+ * URL:      `https://` like every webhook URL, so the edit form can save it. Reachable only
+ *           because the development doubles register the sink's origin with
+ *           `@infrastructure/adapters/ssrf-guard` (`scenarios/support/doubles/webhook-sink.ts`),
+ *           letting THIS ONE origin through although it is on loopback. The sink's certificate is
+ *           the test CA's (`scenarios/support/tls/`), trusted by those doubles.
+ * Session:  a fixed id: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` creates a session on the
+ *           first POST to `/<any-uuid>`, so no human opens the UI first to watch it.
+ * Secret:   a FIXED plaintext (`WEBHOOK_DEMO_SECRET`), not `mintRingSecret()`'s: that plaintext
+ *           exists only in the response that minted it (`secrets.ts`), so this file could never
+ *           hand it to `webhook-tester` for signature checks. Demo-only; never a real ring.
  *
- * A fixed session id, not a generated one: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` means a
- * POST to `/<any-uuid>` creates that session on arrival, so this subscription is watchable without
- * a human opening the UI first to obtain one — `GET /api/session/<uuid>/requests` on the tester
- * answers with what it has captured.
- *
- * The secret ring holds a FIXED plaintext (`WEBHOOK_DEMO_SECRET`), not one `mintRingSecret()`
- * would generate: that mints a secret this file could never read back — `secrets.ts`'s own
- * docblock says the plaintext exists only in the response that minted it — so nothing could ever
- * hand it to `webhook-tester` for signature verification. Demo-only; never used for a real ring.
+ * @see docs/modules/webhooks.md#seeing-it-work
  */
 
 import { Types } from 'mongoose';

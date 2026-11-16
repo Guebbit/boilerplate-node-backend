@@ -24,7 +24,7 @@ export const STATIC_PAGES: readonly string[] = FRONTEND_LINK_RULES.staticPages;
 export const sitemapConfig = defineConfig({
     name: 'sitemap',
     shape: {
-        // Lowered only to make a file split visible; the ceiling is the protocol's own.
+        /** Lowered only to make a file split visible; the ceiling is the protocol's own. */
         NODE_SITEMAP_URL_LIMIT: int({ default: SITEMAP_URL_LIMIT, min: 1, max: SITEMAP_URL_LIMIT })
     }
 });

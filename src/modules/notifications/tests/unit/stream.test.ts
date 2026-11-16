@@ -21,13 +21,21 @@ const REVERIFY_INTERVAL_MS = 30_000;
 
 /** The slice of an Express response the stream writes to, with every write recorded. */
 interface FakeResponse {
+    /** The fake handed to the stream. */
     response: Response;
+    /** Every string written, in order. */
     frames: string[];
+    /** The headers set before the first write. */
     headers: Record<string, string>;
+    /** Ends the stream; asserted directly when a recheck fails. */
     end: jest.Mock;
+    /** Writes one frame. */
     write: jest.Mock;
+    /** Sets the status. */
     status: jest.Mock;
+    /** Sends the headers before any frame. */
     flushHeaders: jest.Mock;
+    /** Simulates the client going away. */
     disconnect: () => void;
 }
 

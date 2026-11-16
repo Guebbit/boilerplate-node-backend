@@ -22,7 +22,9 @@ const mockedLogger = jest.mocked(logger);
 
 /** A handle standing in for a Redis client or an AMQP channel: it only has to be identifiable. */
 interface FakeHandle {
+    /** Tells two handles apart, so a test can see which one a client holds. */
     id: number;
+    /** Whether the handle is still open; the close hook flips it. */
     live: boolean;
 }
 

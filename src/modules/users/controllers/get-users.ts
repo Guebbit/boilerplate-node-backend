@@ -3,7 +3,7 @@
  * Controller for `GET /users` and `POST /users/search` — admin listing/search via query
  * parameters or body.
  *
- * @see docs/modules/users.md#the-pipeline
+ * @see docs/modules/users.md#the-list-row
  */
 
 import { z } from 'zod';
@@ -26,7 +26,7 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
     pageSize: pageSizeSchema,
     active: optionalBooleanSchema,
     deleted: optionalBooleanSchema,
-    // `true` only, as the contract says: there is no "not held" list, and a `false` is a 422, not a quiet no-op.
+    /** `true` only, as the contract says: there is no "not held" list, so `false` is a 422. */
     purchaseHold: optionalBooleanSchema.pipe(z.literal(true).optional()),
     purchaseHoldReview: optionalBooleanSchema.pipe(z.literal(true).optional())
 });

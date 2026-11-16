@@ -38,7 +38,9 @@ const fileExists = (url: string) => existsSync(path.join(PUBLIC_DIRECTORY, url))
 
 /** How a write door is reached, as a table row. */
 interface Door {
+    /** The door's title in the test name. */
     name: string;
+    /** The write verb the door takes. */
     method: 'post' | 'put' | 'patch';
     /** Signs in as the caller and resolves the route for this run. */
     route: (context: { adminBearer: string; userId: string }) => string;

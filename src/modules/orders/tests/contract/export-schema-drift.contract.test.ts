@@ -14,8 +14,11 @@ import { parse } from 'yaml';
 
 /** One object schema, as far as these checks look at it. */
 interface ObjectSchema {
+    /** The declared fields, by name. */
     properties: Record<string, unknown>;
+    /** Field names that must be present. */
     required?: string[];
+    /** `false` refuses unknown keys. */
     additionalProperties?: boolean;
 }
 

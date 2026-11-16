@@ -8,14 +8,14 @@ import {
 } from '@infrastructure/persistence/lease';
 
 /**
- * `withLease` against a real database — see docs/reference/ops.md#scheduled-jobs for why this is a
- * Mongo lease rather than a Redis lock — and the four properties it has to hold for a scaled-up
+ * `withLease` against a real database (a Mongo lease rather than a Redis lock; the reasons are in the `@see`) and the four properties it has to hold for a scaled-up
  * cron container to be safe: one runner at a time, an expired holder is not permanent, a crash (a
  * throw) frees the lease rather than blocking it for the full `ttlMs`, and losing a contested
  * acquisition is a normal outcome rather than a rejected promise.
  *
  * Real Mongo (via `setupTestDb`), not a mock: the property under test is what MongoDB itself does
  * with a concurrent `findOneAndUpdate` upsert, which a mock cannot exercise honestly.
+ * @see docs/reference/ops.md#scheduled-jobs
  */
 
 setupTestDb();

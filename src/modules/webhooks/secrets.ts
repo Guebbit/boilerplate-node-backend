@@ -6,10 +6,8 @@
  * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`, a required `versionedKeyRing` field) — shared with
  * `account/two-factor/totp.ts`'s TOTP secret encryption.
  *
- * A plaintext secret exists here only for the seconds it takes to mint it and hand it back in an
- * HTTP response (see `openapi.yaml`'s `secret`/`newSecret`), and again in memory for as long as one
- * delivery attempt needs it to sign — `./model`'s `WebhookSubscriptionDocument.secrets` never
- * carries it.
+ * A plaintext secret exists only while it is minted and returned, and while one delivery attempt
+ * signs with it; `./model`'s `WebhookSubscriptionDocument.secrets` never carries it.
  */
 
 import { randomBytes, randomUUID } from 'node:crypto';

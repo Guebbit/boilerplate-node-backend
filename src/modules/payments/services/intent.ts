@@ -85,15 +85,14 @@ const rejectStrayIntent = (
  * a different reference back is refused (409 `PAYMENT_IN_FLIGHT`) — a second intent for the same
  * order is a second thing the customer could pay.
  *
+ * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+ * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+ *
  * @param orderId - the order to pay
  * @param authContext - the caller; the order must be theirs — paying is the buyer's step, so an
  *   operator's wider read scope does not reach it
  * @returns the payment on the wire, carrying the `clientSecret` the browser finishes against —
  *   the one response that does, since it is never stored and never read back
- */
-/**
- * Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
- * `crud.ts#create` uses them: each step below depends on the last one's resolved value.
  */
 export const createIntent = async (
     orderId: string,

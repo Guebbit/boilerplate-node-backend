@@ -11,7 +11,7 @@ import { createItemController } from '@infrastructure/surfaces/create-item-contr
 /**
  * GET /products/:id
  * Get a single product by path id.
- * Only admin can see non-active (inactive/deleted) products.
+ * Only a caller whose scope allows it sees non-active or deleted products.
  */
 export const getProductItem = createItemController({
     entity: 'product',

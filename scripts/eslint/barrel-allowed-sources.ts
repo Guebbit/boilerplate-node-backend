@@ -1,8 +1,7 @@
 /**
  * A module's barrel may only `export *` its services, domain rules, events and emails as values,
  * and its model AND its presenter(s) as TYPES ONLY — never a repository, the model's runtime
- * VALUE, a presenter FUNCTION, or a wiring file, in ANY export form. See
- * docs/understand/strategic-ddd.md §5.
+ * VALUE, a presenter FUNCTION, or a wiring file, in ANY export form.
  *
  * Checked forms:
  * - `export * from './x'` / `export type * from './x'` — against the two allowlists below.
@@ -17,6 +16,8 @@
  *   and only its OUTPUT TYPE, via `export type *`, ever leaves.
  * - `import { x } from './y'; export { x };` — resolved through this file's own import map,
  *   since the export itself carries no source.
+ *
+ * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  */
 
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';

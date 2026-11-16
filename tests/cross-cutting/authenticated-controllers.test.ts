@@ -22,24 +22,18 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 /**
  * Guard: a controller that reads `request.authContext!` is mounted behind `isAuth`.
  *
- * `Request.authContext` is optional, correctly — it is absent until the auth middleware resolves
- * it. A controller asserting it with `!` is claiming its route is authenticated; this is the half
- * no type can carry, because whether the ROUTE is authenticated lives in `routes.ts`.
- *
- * That claim is what this file checks. A controller that starts reading the caller and is mounted
- * on a public route fails here rather than answering `undefined.id` at runtime.
- *
- * `isAuth` and NOT `isAuthOrCredential`, deliberately — this is the file that enforces the
- * difference. An `sk_...` credential resolves to `request.caller` with no `authContext` at all,
- * so a `!` read behind the credential guard is the same broken claim as a `!` read behind no
- * guard, and is reported the same way. Widening the filter to accept both guards would delete
- * the only check standing between that split and a 500.
- *
- * The second half of the question — which routes are unauthenticated — is answered from
- * {@link effectiveRouteTable}, not by reading `routes.ts` as text. Regexing the source answers a
- * weaker question: a guard written through a variable, a spread, or a multi-line `router.use`
- * reads as unguarded. By the time this runs, Express has already resolved every spelling of a
- * guard to the same stack.
+ * Claim:    `Request.authContext` is optional, correctly: absent until the auth middleware resolves
+ *           it. A `!` read claims the route is authenticated, the half no type can carry because
+ *           it lives in `routes.ts`. A controller that starts reading the caller on a public route
+ *           fails here, not as `undefined.id` at runtime.
+ * `isAuth`: and NOT `isAuthOrCredential`, deliberately. An `sk_...` credential resolves to
+ *           `request.caller` with no `authContext`, so a `!` read behind the credential guard is
+ *           the same broken claim. Widening the filter to both would delete the only check between
+ *           that split and a 500.
+ * Routes:   "which routes are unauthenticated" comes from {@link effectiveRouteTable}, not
+ *           `routes.ts` as text. Regexing the source answers a weaker question: a guard written
+ *           through a variable, a spread or a multi-line `router.use` reads as unguarded, while
+ *           Express has already resolved every spelling to the same stack.
  */
 
 /** Every module directory under `src/modules/`, router or not. */

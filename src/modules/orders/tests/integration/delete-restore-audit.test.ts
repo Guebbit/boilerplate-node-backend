@@ -1,9 +1,10 @@
 /**
  * @module
- * `removeById`/`restoreById`'s audit rows — moved out of `createDeleteController`/
- * `createRestoreController` into this service, matching every other module's write path
- * (rule 1, `docs/build/module-lifecycle.md`). These pin that `ORDER_DELETED`/`ORDER_RESTORED`
- * still land, from the new layer, with the same fields.
+ * `removeById`/`restoreById`'s audit rows are written by this service, matching every other
+ * module's write path (rule 1 of the page below). These pin that `ORDER_DELETED`/`ORDER_RESTORED`
+ * land with the right fields.
+ *
+ * @see docs/build/module-lifecycle.md#before-you-start
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

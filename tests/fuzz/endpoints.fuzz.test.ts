@@ -1,50 +1,26 @@
 /**
- * Spec-driven fuzzing (L5).
+ * Spec-driven fuzzing (L5): every operation `openapi.yaml` declares gets spec-valid but hostile
+ * requests, against the real app.
  *
- * ── What this asks ───────────────────────────────────────────────────────────────────────────
- * For every operation `openapi.yaml` declares, throw generated **spec-valid but hostile** requests
- * at the real app and assert two things:
+ * Asserts:     it never answers 5xx, and the response matches the spec, status included.
+ * Discovery:   `listOperations()` walks the spec, so a new route is covered on the next run. Built
+ *              on what the repo has (`fast-check`, supertest, `tests/support/response-contract.ts`)
+ *              instead of a Python toolchain (`schemathesis`) every copy would inherit.
+ * Callers:     each operation as admin, as a plain customer and with no credentials: the others
+ *              must get the documented refusal (401 without credentials where a token is needed).
+ * Ids:         path params, and id fields in bodies and queries, name REAL rows where the path says
+ *              which kind, so a handler runs past its 404.
+ * Runs:        in `npm run test` at `TEST_FUZZ_RUNS`' small default; nightly in
+ *              `.github/workflows/fuzz.yml` at a larger one. A failure is usually real.
+ * Not covered: the FILE half of a `multipart/form-data` operation (see
+ *              `tests/integration/upload-security.test.ts`); the skipped count is asserted.
+ * Multipart:   such operations also declare a JSON variant, and `readInput` coerces string
+ *              booleans and arrays ONLY for real multipart. The second `describe.each` sends the
+ *              same arbitrary as `application/x-www-form-urlencoded`, which none declares: the 415
+ *              guard must refuse it before a controller sees a field.
  *
- *   1. it never answers **5xx** — a well-formed request must not crash the server;
- *   2. the response **matches the spec**, including its status code.
- *
- * ── Why it is worth having ───────────────────────────────────────────────────────────────────
- * Every other suite tests endpoints somebody wrote a test for. This one tests endpoints nobody
- * wrote a test for, including ones added after it was written: the list comes from
- * `listOperations()`, which walks the spec. Add a route to `openapi.yaml` and it is covered on the
- * next run, with no list to remember to update.
- *
- * That auto-discovery is the property that made `schemathesis` tempting. It is achieved here in
- * TypeScript instead, by reusing four things this repo already has — the spec itself,
- * `fast-check`, the supertest harness, and the orval-generated, per-status Zod schemas
- * `tests/support/response-contract.ts` judges a response against — rather than adding a Python
- * toolchain that every copy of this boilerplate would inherit.
- *
- * ── Three callers, not one ───────────────────────────────────────────────────────────────────
- * Every operation is fuzzed as an admin, as a plain customer, and with no credentials. The admin
- * pass reaches the deepest code; the other two ask whether a caller the operation is NOT for gets
- * the refusal the spec documents — 401 without credentials where a token is required — rather
- * than a crash or an answer. Path parameters name REAL rows (a product, an order, a user) where
- * the path says which kind, so a handler runs past its 404; id fields in bodies and queries do too
- * (or a fresh well-formed id), and the rest of a query is drawn from the spec like bodies are.
- *
- * ── Where it runs ─────────────────────────────────────────────────────────────────────────────
- * In `npm run test` — so in the merge gate — at `TEST_FUZZ_RUNS`' small default, and nightly in
- * `.github/workflows/fuzz.yml` at a much larger one. A failure is usually a real finding.
- *
- * ── What it deliberately does not cover ──────────────────────────────────────────────────────
- * The FILE half of a `multipart/form-data` operation is skipped: its body is a file, `fast-check`
- * has nothing useful to say about a PNG, and the upload path already has
- * `tests/integration/upload-security.test.ts` driving real magic-byte checks. The count is
- * asserted below so "skipped" cannot quietly become "skipped everything".
- *
- * ── The multipart operations, sent as urlencoded ────────────────────────────────────────
- * Every `multipart/form-data` operation here ALSO declares an `application/json` variant, and
- * `readInput`'s decode rule (`docs/understand/request-input.md`#"Only the string transports are
- * decoded") coerces a string-typed boolean/array ONLY for a real multipart body. The second
- * `describe.each` below sends the same hostile, spec-valid arbitrary as
- * `application/x-www-form-urlencoded`, a type none of them declares: the 415 guard
- * (`docs/understand/write-methods.md`) must refuse it before a controller sees a single field.
+ * @see docs/understand/request-input.md#the-rules-behind-the-table
+ * @see docs/understand/write-methods.md#content-type-415
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -272,9 +248,11 @@ describe.each(
 });
 
 /**
- * The merge-patch variant of every PATCH that declares one (`docs/understand/write-methods.md`). The
+ * The merge-patch variant of every PATCH that declares one. The
  * same field schemas as the JSON body, but a different content type — and a different reading of
  * `null` (clear) — so it is its own route through the body parser and the write.
+ *
+ * @see docs/understand/write-methods.md#patch-—-json-merge-patch
  */
 const MERGE_PATCH_FUZZABLE = OPERATIONS.filter((operation) => operation.mergePatchSchema);
 

@@ -24,11 +24,10 @@ import { tasksRateLimitData } from './rate-limits.generated';
 /**
  * Contact-form submissions allowed per window, per ADDRESS.
  *
- * A person files a contact request once; five a minute from one address is already generous,
- * against a global brake of `DEFAULT_RATE_LIMIT_MAX`. Unlike the credential budgets, a
- * SUCCESSFUL request spends it: the abuse here is a well-formed submission repeated, not a failed
- * one — every abusive contact-form post gets a `201`, so `skipSuccessfulRequests` would change
- * nothing about the amplifier this exists to bound.
+ * A person files a contact request once, so the generated budget is generous for that. Unlike the
+ * credential budgets, a SUCCESSFUL request spends it: the abuse here is a well-formed submission
+ * repeated, not a failed one — every abusive contact-form post gets a `202`, so
+ * `skipSuccessfulRequests` would change nothing about the amplifier this exists to bound.
  */
 const SUBMISSION_ADDRESS_BUDGET: RateLimitBudget = {
     ...tasksRateLimitData.submissions,

@@ -9,10 +9,12 @@
  * sequence: a desired STATE is re-applied on every deploy, not applied once and recorded.
  *
  * Data that cannot be derived from a schema — a rename, a backfill, a dedupe — is a one-off
- * script under `ops/`, run by hand. See `docs/reference/data.md`.
+ * script under `ops/`, run by hand.
  *
  * Split from `sync-indexes.ts` so a test can drive the reconciliation; that file opens a
  * connection and runs on import, which a test cannot do per case.
+ *
+ * @see docs/reference/data.md#data-a-one-off-script-under-scripts-ops
  */
 
 import mongoose from 'mongoose';
@@ -84,13 +86,17 @@ export const hasChanges = (diff: IndexDiff): boolean =>
  * narrows both at the one point they enter.
  */
 interface RegisteredModel {
+    /** The live collection, for listing its indexes. */
     collection: {
         name: string;
         indexes: () => Promise<{ name?: string; key: Record<string, unknown> }[]>;
         dropIndex: (name: string) => Promise<unknown>;
     };
+    /** The indexes the schema declares: key spec, then options. */
     schema: { indexes: () => [IndexDefinition, IndexOptions][] };
+    /** What the database lacks and what it has in excess. */
     diffIndexes: () => Promise<{ toCreate: Record<string, unknown>[]; toDrop: string[] }>;
+    /** Builds the missing indexes. */
     createIndexes: () => Promise<unknown>;
 }
 

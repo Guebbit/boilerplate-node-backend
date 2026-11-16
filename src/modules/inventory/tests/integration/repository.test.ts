@@ -32,7 +32,7 @@ describe('an empty collection', () => {
 });
 
 /**
- * `docs/modules/inventory-reservations.md` §"The threshold, and its two readers": the stock
+ * The threshold and its two readers: the stock
  * board's `lowOnly` filter counts the WHOLE catalogue (an admin restocking needs an inactive
  * product too); `services/levels.ts`'s `lowStockCount` narrows `lowAvailabilityProductIds`' candidates to
  * PUBLICLY VISIBLE products only (a customer can't buy what they can't see, so an alert about it
@@ -40,6 +40,8 @@ describe('an empty collection', () => {
  * all: an inactive product still holds units. Visibility itself is `products`' rule to apply, not
  * this repository's — see `lowAvailabilityProductIds`'s own docblock — so THAT half of the
  * behaviour is asserted in `../../tests/integration/service.test.ts` instead of here.
+ *
+ * @see docs/modules/inventory-reservations.md#the-threshold-and-its-two-readers
  */
 describe('the two stock gauges count different populations', () => {
     /**

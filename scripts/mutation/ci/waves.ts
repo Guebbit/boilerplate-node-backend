@@ -41,6 +41,7 @@ export const MAX_ERROR_RETRIES = 1;
 
 /** One mutable file, as the planner sizes it. */
 export interface ScopeFile {
+    /** Path of the mutable file. */
     file: string;
     /** Non-blank lines — the cost proxy. */
     lines: number;
@@ -50,6 +51,7 @@ export interface ScopeFile {
 
 /** A whole file, or a slice of one. */
 export interface Unit extends ScopeFile {
+    /** The part of the file this unit covers; absent means all of it. */
     slice?: LineSlice;
 }
 
@@ -57,6 +59,7 @@ export interface Unit extends ScopeFile {
 export interface CiShard {
     /** `w<wave>-<index>`, unique across the whole run. */
     name: string;
+    /** The files and slices the job mutates. */
     units: Unit[];
     /** How many times this exact work has already failed for a reason other than time. */
     errors: number;
@@ -67,6 +70,7 @@ export type ShardOutcome = 'reported' | 'timeout' | 'error';
 
 /** Everything the next wave and the merge need, uploaded as each wave's plan artifact. */
 export interface WavePlan {
+    /** Which wave this plan belongs to, from zero. */
     wave: number;
     /** The whole mutate scope, carried forward so the merge can tell a finished file. */
     scope: ScopeFile[];

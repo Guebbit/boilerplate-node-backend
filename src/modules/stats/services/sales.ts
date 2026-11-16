@@ -77,7 +77,7 @@ const totalOf = (row: Map<string, RawFigures> | undefined): RawFigures => {
  * The sales figures of a period: totals, the previous period's totals, and every bucket.
  *
  * The shop's own currency is always present, so an empty period reads as zeros rather than as
- * nothing; any other currency appears only when something was sold in it.
+ * nothing; any other currency appears only when sold in it or in the previous period.
  *
  * @param period - the resolved period
  */

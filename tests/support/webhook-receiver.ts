@@ -20,7 +20,9 @@ import { REPO_ROOT } from './paths';
 
 /** The sink's leaf certificate and key: its SAN names 127.0.0.1, which the listener binds. */
 const SINK_CREDENTIALS = {
+    /** Private key of the sink's certificate. */
     key: readFileSync(path.join(REPO_ROOT, 'scenarios/support/tls/webhook-sink-key.pem')),
+    /** The leaf certificate the sender must trust. */
     cert: readFileSync(path.join(REPO_ROOT, 'scenarios/support/tls/webhook-sink-cert.pem'))
 };
 

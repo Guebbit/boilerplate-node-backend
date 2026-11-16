@@ -1,38 +1,20 @@
 /**
- * A metric name is an identifier three places agree on, and only one of them is type-checked.
+ * A metric name is an identifier three places agree on, and only one is type-checked.
  *
- * A module declares its counters in `metrics.ts` and registers them on the shared registry. Two
- * other places then name them:
- *
- *   - `observability/controllers/get-observability-metrics-overview.ts` reads seven of them by
- *     STRING, deliberately — the overview endpoint may not import a domain, so the name is the
- *     only handle it has;
- *   - Prometheus, Grafana and every alert written against them, which live outside this repo
- *     entirely and cannot be refactored with it.
- *
- * So renaming a counter compiles, lints, and passes every unit test. `getSingleMetric` answers
- * `undefined`, the overview reports the counter as absent — a shape the endpoint handles on
- * purpose, because a DELETED module has to leave exactly that behind — and the dashboard that
- * asked for it goes flat rather than red. The failure is a number that stops moving, noticed weeks
- * later by whoever trusted it.
- *
- * ── Why source text, and what makes that sound ────────────────────────────────────────────────
- * Every fact below is read from `metrics.ts` and from the controller, the way a source-text
- * sweep does: the question is what the code SAYS, and a spec that imported the modules to
- * answer it would boot Mongoose and collect `products_low_stock_total`, which aggregates the
- * products collection. A name check does not get to open a database.
- *
- * Reading text is only sound while the text is the whole story, so one case below holds it there:
- * every declaration must register on the shared registry. A counter registered somewhere else
- * would be invisible here — and is not a thing this repo does.
- *
- * ── What is deliberately NOT asserted ─────────────────────────────────────────────────────────
- * One owner per name. `prom-client` throws `A metric with the name X has already been registered`
- * when a registry sees a duplicate, so a collision cannot reach a running process. A case here
- * would assert a property the library already guarantees.
- *
- * Style: snake_case, the `_total` suffix and a useful `help` string. A reviewer sees them on the
- * line that adds the metric, and a breach is cosmetic — the series still moves.
+ * Declared:   in a module's `metrics.ts`, registered on the shared registry.
+ * Named by:   `observability/controllers/get-observability-metrics-overview.ts`, which reads
+ *             seven by STRING (it may not import a domain), and Prometheus, Grafana and every
+ *             alert, which live outside this repo and cannot be refactored with it.
+ * Failure:    a rename compiles, lints and passes every unit test. `getSingleMetric` answers
+ *             `undefined`, the overview reports the counter as absent (a shape it handles on
+ *             purpose, for a DELETED module), and the dashboard goes flat rather than red.
+ * Source text: every fact is read from `metrics.ts` and the controller; importing the modules
+ *             would boot Mongoose and collect `products_low_stock_total`, which aggregates a
+ *             collection. One case keeps reading text sound: every declaration must register on
+ *             the shared registry.
+ * Not asserted: one owner per name (`prom-client` throws on a duplicate, so a collision cannot
+ *             reach a running process), and style (snake_case, `_total`, a `help` string): a
+ *             reviewer sees those on the line that adds the metric, and a breach is cosmetic.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -64,7 +46,9 @@ const metricFiles = (): { module: string; file: string }[] =>
 
 /** A metric declaration found in the source: its name and where. */
 interface Declaration {
+    /** The module whose source declares the metric. */
     module: string;
+    /** The metric's name. */
     name: string;
 }
 

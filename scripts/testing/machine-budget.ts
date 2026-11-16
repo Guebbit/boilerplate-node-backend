@@ -134,7 +134,9 @@ export const MIN_PROCESS_BUDGET_MB = PROCESS_BASELINE_MB + PER_FILE_RETENTION_MB
  * machine cannot hold the layer, which is the only place it earns its wall-clock cost.
  *
  * A memory-constrained machine does NOT rely on this ceiling — it sets `JEST_PROCESS_BUDGET_MB`
- * below it explicitly. See docs/build/weak-machines.md for measured figures.
+ * below it explicitly. Measured figures are on the page below.
+ *
+ * @see docs/build/weak-machines.md#the-depth-knobs
  */
 export const MAX_SHARD_PEAK_MB = 8192;
 

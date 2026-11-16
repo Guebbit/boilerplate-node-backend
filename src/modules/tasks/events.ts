@@ -1,9 +1,10 @@
 /**
  * @module
  * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. All four are internal:
- * no AsyncAPI channel and no webhook carries them. `notifications` turns them into the staff's
- * work notices, so a task is never alerted twice (once from its producer event, once from here).
+ * `modules/orders/events.ts` for why augmentation rather than a central list. All four are
+ * internal: no AsyncAPI channel and no webhook carries them. `notifications` turns them into the
+ * staff's work notices, so a task is never alerted twice (once from its producer event, once from
+ * here).
  */
 
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -87,14 +88,14 @@ export const taskFactOf = (
     ...(task.work ? { work: task.work } : {})
 });
 
-/** See `DomainEventMap['task.opened']` above. */
+/** The event name listeners subscribe to; the payload is in `DomainEventMap`. */
 export const TASK_OPENED = 'task.opened';
 
-/** See `DomainEventMap['task.overdue']` above. */
+/** The event name for a task passing its due date. */
 export const TASK_OVERDUE = 'task.overdue';
 
-/** See `DomainEventMap['task.due_soon']` above. */
+/** The event name for a task about to pass its due date. */
 export const TASK_DUE_SOON = 'task.due_soon';
 
-/** See `DomainEventMap['task.assigned']` above. */
+/** The event name for a task handed to one person. */
 export const TASK_ASSIGNED = 'task.assigned';

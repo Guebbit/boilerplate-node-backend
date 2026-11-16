@@ -1034,12 +1034,7 @@ describe('a reconnect gets its consumers back', () => {
     });
 });
 
-/**
- * Rule 1 (`queue.ts`'s own doc, from `docs/understand/rabbitmq.md`): don't wait for RabbitMQ at boot.
- * With recovery on, amqplib's own `connect()` promise settles only once the broker actually
- * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
- * merely still starting would stop the app booting at all.
- */
+/** What `parkedCounts` reports per queue, and that it never throws when the broker is away. */
 describe('parkedCounts()', () => {
     afterEach(disableRabbitMQ);
 
@@ -1110,6 +1105,14 @@ describe('parkedCounts()', () => {
     });
 });
 
+/**
+ * Rule 1 (`queue.ts`'s own doc): don't wait for RabbitMQ at boot.
+ * With recovery on, amqplib's own `connect()` promise settles only once the broker actually
+ * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
+ * merely still starting would stop the app booting at all.
+ *
+ * @see docs/understand/rabbitmq.md#recovery
+ */
 describe('startQueue() never waits for the broker', () => {
     afterEach(disableRabbitMQ);
 

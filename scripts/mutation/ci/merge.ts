@@ -19,41 +19,58 @@ import { spanOf } from './waves';
 
 /** A mutant as Stryker's JSON report records it; fields this does not read pass through. */
 interface ReportMutant {
+    /** Stryker's id for the mutant. */
     id: string;
+    /** Which mutator produced it. */
     mutatorName: string;
+    /** The code it swapped in. */
     replacement?: string;
+    /** `Killed`, `Survived`, `NoCoverage`, `Timeout`, ... */
     status: string;
+    /** Why Stryker gave that status, when it says. */
     statusReason?: string;
+    /** Where in the file the mutant sits. */
     location: { start: { line: number; column: number }; end: { line: number; column: number } };
+    /** Ids of the tests that ran the mutated line. */
     coveredBy?: string[];
+    /** Ids of the tests that failed because of it. */
     killedBy?: string[];
     [field: string]: unknown;
 }
 
 /** A test as Stryker's JSON report records it. */
 interface ReportTest {
+    /** Stryker's id for the test. */
     id: string;
+    /** The test's full title. */
     name: string;
+    /** Where the test starts in its file. */
     location?: { start: { line: number; column: number } };
     [field: string]: unknown;
 }
 
 /** The subset of Stryker's `mutation-testing-report-schema` this reads and writes. */
 export interface StrykerReport {
+    /** Mutated files by path, each with its mutants. */
     files: Record<string, { mutants: ReportMutant[]; [field: string]: unknown }>;
+    /** Test files by path, each with its tests. */
     testFiles?: Record<string, { tests: ReportTest[]; [field: string]: unknown }>;
     [field: string]: unknown;
 }
 
 /** One finished shard: its plan entry and what it reported. */
 export interface ShardReport {
+    /** The plan entry this shard ran. */
     shard: CiShard;
+    /** What the shard reported. */
     report: StrykerReport;
 }
 
 /** The merged report, and every scope file it had to leave out. */
 export interface MergeResult {
+    /** The merged report. */
     report: StrykerReport;
+    /** Scope files no shard covered fully, left out of it. */
     incomplete: string[];
 }
 

@@ -56,7 +56,7 @@ export const totpMethod: TwoFactorMethodHandler = {
             /**
              * The replay mark is a conditional write (only a LATER step wins), so two requests
              * carrying one code cannot both pass: the loser is a wrong code. The in-memory
-             * entry follows, so the caller's own save writes the same value.
+             * entry follows, so the rest of this request sees the claimed step.
              */
             return accountUserService
                 .claimTotpStep(user.id, entry.method, timeStep)

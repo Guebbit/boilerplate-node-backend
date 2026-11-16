@@ -11,8 +11,9 @@
  * cover it) and publish-confirm refusal/timeout (a broker cannot be made to refuse on demand
  * without testing RabbitMQ itself; the unit suite covers our branch).
  *
- * Needs a broker and a management plugin: see `./support/rabbitmq.ts`, and
- * `docs/build/broker-testing.md` for the shape of the whole suite.
+ * Needs a broker and a management plugin: see `./support/rabbitmq.ts`.
+ *
+ * @see docs/build/broker-testing.md#shape-of-the-suite
  */
 
 import { z } from 'zod';
@@ -151,8 +152,11 @@ const depth = (name: string): Promise<number> =>
 
 /** One delivery a handler saw. */
 interface Seen {
+    /** The decoded message body the handler received. */
     payload: unknown;
+    /** The broker's message, for checking properties and headers. */
     raw: ConsumeMessage;
+    /** When the handler saw it (ms since epoch), to check ordering and redelivery delay. */
     at: number;
 }
 

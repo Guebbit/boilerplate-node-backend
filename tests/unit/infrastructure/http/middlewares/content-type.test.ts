@@ -35,7 +35,9 @@ const TABLE: readonly RequestContentType[] = [
 
 /** What one call needs to say about the request it stands in for. */
 interface Sent {
+    /** The request's HTTP verb. */
     method: string;
+    /** The request's path, which decides whether the guard applies. */
     path: string;
     /** The `Content-Type` header; absent when the client sent none. */
     type?: string;
@@ -45,9 +47,13 @@ interface Sent {
 
 /** What the guard did: its status and body, the headers it set, and whether it let the request on. */
 interface Outcome {
+    /** The status the guard answered; absent when it let the request on. */
     status?: number;
+    /** The problem body it sent, if any. */
     body?: unknown;
+    /** The headers it set on the answer. */
     headers: Record<string, string>;
+    /** Whether the request reached the next handler. */
     passed: boolean;
 }
 

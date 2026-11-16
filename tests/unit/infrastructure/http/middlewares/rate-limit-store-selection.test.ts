@@ -1,21 +1,17 @@
 /**
- * `rateLimitStore` — which store a limiter counts in, and everything that follows from Redis
- * being lazy, shared, and allowed to fail.
+ * `rateLimitStore`: which store a limiter counts in, and everything that follows from Redis being
+ * lazy, shared and allowed to fail.
  *
- * Sibling to `rate-limit-store.test.ts`, deliberately kept separate: that file lets the real
- * `RedisStore` run against a fake low-level `redis` client to guard the `connecting`-promise
- * handshake race. This one mocks `RedisStore` itself, because what is under test here — which
- * store gets built, URL-resolution priority, lazy construction, and the
- * init-failure regression below — needs to control `RedisStore.init`/`increment` directly rather
- * than drive them through a real Lua-script-loading round trip. One `jest.mock('rate-limit-redis')`
- * per file, so the two approaches cannot live together in one.
- *
- * `client`/`connecting`/`degraded` are module-scope state, so every case re-imports the module
- * fresh via `jest.resetModules()` + `require()` — the same pattern `cache.test.ts` uses for the
- * same reason.
- *
- * The test suite's own `tests/support/setup-environment.ts` blanks `NODE_RATE_LIMIT_REDIS_URL`
- * globally, so every case that means to exercise the Redis path sets one explicitly.
+ * Sibling:  `rate-limit-store.test.ts`, kept apart on purpose. That file runs the real `RedisStore`
+ *           against a fake low-level `redis` client to guard the `connecting`-promise handshake
+ *           race. This one mocks `RedisStore` itself, since which store gets built, URL-resolution
+ *           priority, lazy construction and the init-failure regression need direct control of
+ *           `RedisStore.init`/`increment`. One `jest.mock('rate-limit-redis')` per file, so the
+ *           two approaches cannot share a file.
+ * State:    `client`, `connecting` and `degraded` are module-scope, so every case re-imports the
+ *           module with `jest.resetModules()` + `require()`, as `cache.test.ts` does.
+ * Env:      `tests/support/setup-environment.ts` blanks `NODE_RATE_LIMIT_REDIS_URL` globally, so a
+ *           case exercising the Redis path sets one explicitly.
  */
 /**
  * Also forces module scope for this file — otherwise its top-level `const`s collide, at the type

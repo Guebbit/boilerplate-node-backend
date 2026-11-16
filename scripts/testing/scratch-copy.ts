@@ -31,6 +31,7 @@ export const runIn = (
     command: string,
     commandArguments: readonly string[]
 ): boolean =>
+    // Runs `command` in the scratch copy with a git-safe environment, output shown; true when it exits 0.
     spawnSync(command, commandArguments, { cwd: scratch, stdio: 'inherit', env: gitEnvironment() })
         .status === 0;
 

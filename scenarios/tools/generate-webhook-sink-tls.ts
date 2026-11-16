@@ -72,6 +72,7 @@ subjectAltName = ${LEAF_ALT_NAMES}
  * @param argv - the subcommand and its flags
  */
 const openssl = (directory: string, argv: string[]): void => {
+    // `openssl` run in `directory`; `stdio: 'inherit'` shows its output. Throws on a non-zero exit.
     execFileSync('openssl', argv, { cwd: directory, stdio: 'inherit' });
 };
 

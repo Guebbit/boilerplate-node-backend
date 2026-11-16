@@ -1,6 +1,7 @@
 /**
  * @module
- * The contact form's configuration: how long a closed task is kept, and how soon a contact message is due.
+ * The contact form's configuration: how long a closed task is kept, and how soon a contact message
+ * is due.
  *
  * @see docs/operate/configuration.md#who-owns-what
  */
@@ -8,7 +9,7 @@
 import { defineConfig } from '@infrastructure/config/define';
 import { int } from '@infrastructure/config/fields';
 
-/** Tasks module configuration. */
+/** Retention of closed tasks and the contact-message response SLA. */
 export const tasksConfig = defineConfig({
     name: 'tasks',
     shape: {

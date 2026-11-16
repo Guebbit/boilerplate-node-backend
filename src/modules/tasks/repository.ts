@@ -21,7 +21,7 @@ import type { StoredTask } from './presenter';
 import { DUE_SOON_MS, OPEN_STATUSES, type OwnTasksFilter, type TaskPatch } from './domain';
 
 /**
- * `status`, `category`, `kind` and `source` are deliberately absent from the search spec: each is
+ * `status`, `category`, `kind` and `source` are deliberately absent from the filter spec: each is
  * a closed enum, and mapping a raw string onto it is a domain decision the service makes before
  * handing the result down as a scope.
  */
@@ -59,14 +59,15 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     /**
      * Claim ONE open task due within `DUE_SOON_MS` that was never reminded and had longer than
      * that to live when it opened: stamp `dueSoonNotifiedAt` and return it. A contact message and
-     * a task that opted out are never claimed, except a privacy request (a month's deadline). `null`: nothing is left to claim.
+     * a task that opted out are never claimed, except a privacy request (a month's deadline).
+     * `null`: nothing is left to claim.
      */
     claimDueSoon: (now: Date, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Whether a system event already opened or touched a task (a redelivery). */
     sawEvent: (eventId: string) => Promise<boolean>;
     /** Insert a system task. Rejects with a duplicate-key error when its dedup key is open. */
     insertSystem: (opening: NewSystemTask, session?: ClientSession) => Promise<TaskDocument>;
-    /** A repeat of an open situation: stamp it seen once more. `null`: not open any more. */
+    /** A repeat of an open situation: stamp it seen once more. `false`: nothing open matched. */
     touchOpen: (openKey: string, eventId: string | undefined, now: Date) => Promise<boolean>;
     /** The open system tasks matching a filter, to be cleared one by one. */
     findOpenSystem: (filter: Record<string, unknown>) => Promise<TaskDocument[]>;

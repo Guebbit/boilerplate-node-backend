@@ -1,40 +1,25 @@
 /**
- * Contract-derived request tests: for every write endpoint, does the API accept every payload
- * its own contract declares legal, and reject exactly what it declares illegal?
+ * Contract-derived request tests: for every write endpoint, does the API accept every payload its
+ * own contract declares legal, and reject exactly what it declares illegal? The mirror of the rest
+ * of `tests/contract/*`, which compare a real RESPONSE against `openapi.yaml`.
  *
- * Mirror image of the rest of `tests/contract/*`: those compare a known-good real RESPONSE
- * against `openapi.yaml`; this compares openapi.yaml-derived REQUESTS against the real API.
- * Two bug classes, one per assertion:
+ * `validPayload()`:    expects 2xx. Catches a validator TIGHTER than its contract.
+ * `invalidPayloads()`: each expects 422 and a `Problem` body. Catches one LAXER than its contract.
+ * Data:                additive to a module's `tests/factories.ts`, which keep the deterministic
+ *                      scenarios. This asks "does the API honour its contract for ANY legal input".
  *
- *   - `validPayload()` → expect 2xx. Catches a validator TIGHTER than its own contract — an
- *     endpoint rejecting a payload the spec declares legal.
- *   - `invalidPayloads()` → each entry expects 422 and a `Problem`-shaped body.
- *     Catches a validator LAXER than its contract — the spec promises a constraint that isn't
- *     enforced.
+ * Four live mechanisms produce the drift; the right fix differs per case:
+ *   - A spec format that does not describe the field. `imageUrl` holds a relative upload path, so
+ *     the shared `ImageUrl` is `format: uri-reference`; `format: uri` would make every validator
+ *     override the spec back to `z.string()`. Correct the spec, not the validator.
+ *   - `.extend()` on a generated schema REPLACES a field and drops its constraints. A hand schema
+ *     adds refinements (`zodProductCreateSchema`) and never replaces a field.
+ *   - Coercion before validation hides a wrong type. `!!request.body.active` and
+ *     `coerceStringArray(...)` run only for `multipart/form-data` (see `readInput`).
+ *   - Validating a subset lets an unchecked field reach Mongoose as a CastError (500, not 422).
+ *     A controller parses the whole generated body, never a `.pick()` of it.
  *
- * Four mechanisms produce that drift, all of them still live in this codebase. They are named
- * here because each will do it again, and because the right correction differs per case —
- * "tighten the validator" is not always the answer:
- *
- *   - **A spec format that does not describe the field.** `imageUrl` holds a *relative* upload
- *     path, so it is a shared `ImageUrl` schema with `format: uri-reference`; declaring it
- *     `format: uri` would force every validator to override the spec back to a plain
- *     `z.string()`, and tightening the validators to match instead would reject every upload the
- *     API itself produces. Correct the spec, not the validator.
- *   - **`.extend()` on a generated schema REPLACES a field**, dropping every constraint the
- *     override does not restate. So a hand schema over a generated body adds refinements
- *     (`zodProductCreateSchema`) and never replaces a field.
- *   - **Coercion running before validation** hides a wrong type from the check that would reject
- *     it. `!!request.body.active` and `coerceStringArray(...)` run only for `multipart/form-data`,
- *     the one transport that needs them — see `readInput` and `docs/understand/request-input.md`.
- *   - **Validating a subset of a schema** lets an unchecked field reach Mongoose and throw a
- *     CastError, answering 500 where the contract promises 422. A controller parses the whole
- *     generated body, not a `.pick()` of it.
- *
- * Generated data is additive, same convention as a module's `tests/factories.ts`: deterministic
- * scenario tests keep using the hand-written factories. This file exists specifically for what
- * they can't answer — "does the API honour its own contract for ANY legal input" — never "does
- * this specific scenario behave correctly".
+ * @see docs/understand/request-input.md#the-rules-behind-the-table
  */
 import '@tests/contract';
 import type { Response } from 'supertest';
@@ -88,6 +73,7 @@ const withRealLocale = async (): Promise<string> => {
 
 /** One way to reach an operation with a constrained (enum, pattern or numeric bound) query parameter, over real HTTP. */
 interface QueryFixture {
+    /** Sends the operation with `query` appended, as a real request. */
     request: (query: string) => Promise<Response>;
 }
 
@@ -324,7 +310,9 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
 /**
  * `operationId::field` pairs where a wrong-typed value is accepted on purpose: `readInput`
  * coerces `category` and `tag` to a one-element array because the same schema serves the GET
- * query string, where everything is text (`docs/understand/request-input.md`).
+ * query string, where everything is text.
+ *
+ * @see docs/understand/request-input.md#the-rules-behind-the-table
  */
 const ACCEPTS_ANY_TYPE = new Set(['searchProducts::category', 'searchProducts::tag']);
 

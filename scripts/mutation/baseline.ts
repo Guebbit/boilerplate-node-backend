@@ -39,6 +39,7 @@ export const SCORE_TOLERANCE = 1;
 
 /** The subset of Stryker's JSON report this reads. */
 interface MutationReport {
+    /** Each mutated file with the status of its mutants. */
     files: Record<string, { mutants: { status: string }[] }>;
 }
 
@@ -55,9 +56,13 @@ export type FileVerdict = 'held' | 'improved' | 'regressed' | 'new' | 'removed';
 
 /** One file's baseline, current score and verdict. A side is absent when the file is new or removed. */
 export interface FileComparison {
+    /** The file's path. */
     file: string;
+    /** The committed score; absent for a new file. */
     baseline?: number;
+    /** This run's score; absent for a removed file. */
     current?: number;
+    /** How the two compare. */
     verdict: FileVerdict;
 }
 

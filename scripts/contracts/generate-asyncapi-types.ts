@@ -2,24 +2,19 @@
 /**
  * Generates the TypeScript realtime contract types from `asyncapi.yaml`.
  *
- * SHARED SCRIPT — started byte-identical in both repos of the pair, and both write
- * `src/types/asyncapi.generated.ts`. NOT byte-identical any more: the frontend's copy also emits an
- * inlined-JSON-Schema map for its own runtime SSE-frame validation, which this backend copy has no
- * use for and emits queue-payload Zod validators instead. What both copies still share is the input
- * format and the channel/message-naming machinery — keep a fix to either half in step across both
- * copies by hand until this generator gets its own shared package.
- * What differs at the INPUT is unchanged: the backend generates from the whole contract, the
- * frontend from the public subset, so only the backend's output carries the queue payloads.
- *
- * A schema the bundler copied in from the REST contract (it carries `x-openapi-schema: <Name>`) is
- * imported from the REST models instead of declared again; only that marker decides.
- *
- * From whichever document it is given it emits the payload interfaces, the message aliases, the
- * per-namespace channel constants and unions, and the SSE event name/payload maps. An export a
- * repo happens not to use is harmless — tree-shaken there, type-only here.
- *
- * `--check` writes nothing and exits 1 on a mismatch: the gate that stops a repo shipping types
- * for a contract it no longer has.
+ * SHARED SCRIPT, in two copies that differ. Both repos write `src/types/asyncapi.generated.ts`.
+ * The frontend's also emits an inlined-JSON-Schema map for its runtime SSE-frame validation; this
+ * one emits queue-payload Zod validators instead. They share the input format and the
+ * channel/message-naming machinery: keep a fix to either half in step by hand across both.
+ * Input:   the backend generates from the whole contract, the frontend from the public subset, so
+ *          only the backend's output carries the queue payloads.
+ * Schemas: one the bundler copied in from the REST contract (`x-openapi-schema: <Name>`) is
+ *          imported from the REST models, not declared again; only that marker decides.
+ * Emits:   the payload interfaces, message aliases, per-namespace channel constants and unions, and
+ *          the SSE event name/payload maps. An export a repo does not use is harmless: tree-shaken
+ *          there, type-only here.
+ * `--check`: writes nothing and exits 1 on a mismatch, so a repo cannot ship types for a contract
+ *          it no longer has.
  *
  * Usage: tsx scripts/contracts/generate-asyncapi-types.ts --out <path> [--check]
  *
@@ -54,34 +49,49 @@ interface AsyncApiChannel {
 
 /** The slice of an AsyncAPI message this generator reads: only its payload schema. */
 interface AsyncApiMessage {
+    /** The schema of the message body. */
     payload?: JsonSchema;
 }
 
 /** One of `document.servers` — only the field this generator reads off it. */
 interface AsyncApiServer {
+    /** The transport the server speaks (`amqp`, `http`, ...). */
     protocol?: string;
 }
 
 /** The JSON Schema keywords the contract's payloads use; anything else is ignored. */
 interface JsonSchema {
+    /** A pointer into `components`, resolved before use. */
     $ref?: string;
+    /** The JSON type of the value. */
     type?: string;
+    /** The only values it may take. */
     enum?: unknown[];
+    /** Exactly one branch matches. */
     oneOf?: JsonSchema[];
     /** The property whose value picks the `oneOf` member — AsyncAPI spells it as a bare name, see `zodExpression`. */
     discriminator?: string;
+    /** At least one branch matches. */
     anyOf?: JsonSchema[];
+    /** Every branch matches. */
     allOf?: JsonSchema[];
+    /** Property names that must be present. */
     required?: string[];
+    /** An object's fields, by name. */
     properties?: Record<string, JsonSchema>;
+    /** The schema of each array element. */
     items?: JsonSchema;
+    /** `false` refuses unknown keys; a schema types them. */
     additionalProperties?: boolean | JsonSchema;
 }
 
 /** The slice of the bundled AsyncAPI document this generator reads. */
 interface AsyncApiDocument {
+    /** Every channel, by name. */
     channels?: Record<string, AsyncApiChannel>;
+    /** The servers the document declares, by name. */
     servers?: Record<string, AsyncApiServer>;
+    /** The reusable messages and schemas the `$ref`s point into. */
     components?: {
         messages?: Record<string, AsyncApiMessage>;
         /** Read for the Zod emitter — Modelina builds the TS interfaces from the spec text itself. */

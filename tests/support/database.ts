@@ -19,26 +19,21 @@ export const JEST_DRIVER_OPTIONS = { runtimeAdapters: { os } } as const;
 /**
  * Connects this test file to the jest instance's shared in-memory Mongo.
  *
- * ── ONE SERVER PER JEST INSTANCE, NOT ONE PER FILE ───────────────────────────────────────────────
- * `setupTestDb()` calls this from `beforeAll`, so it runs once per TEST FILE. A `MongoMemoryServer`
- * started here would spawn and kill a real `mongod` once for every suite that touches the database —
- * 37 times per pass, and once per MUTANT under Stryker, which runs the suite in a loop. Each server
- * also costs ~200 MB of `dbpath` that only a clean `stop()` removes, and Stryker kills workers as a
- * matter of course: that combination stranded 88 GB across 212 directories in a single run.
+ * Why one server: `setupTestDb()` calls this from `beforeAll`, once per TEST FILE. A
+ *   `MongoMemoryServer` started here would spawn and kill a real `mongod` for every suite that
+ *   touches the database, and once per MUTANT under Stryker, which loops the suite. Each server
+ *   also costs ~200 MB of `dbpath` that only a clean `stop()` removes, and Stryker kills workers as
+ *   a matter of course: that stranded tens of GB across hundreds of directories in one run.
+ * How:       `globalSetup` starts ONE server and publishes its uri; each file takes its own
+ *   DATABASE on it. `process.env` is the channel: jest gives every file a fresh module registry
+ *   (a module-level singleton would be re-created per file), and the environment crosses that
+ *   boundary and the one into worker processes.
+ * Bounds:    disk cost and process count, not memory. What keeps memory flat across files is
+ *   freeing each file when it ends (`tests/support/test-environment.ts`).
+ * Isolation: a database name per file keeps files apart, `clearAll` empties collections between
+ *   cases, and `disconnect` drops the file's database on the way out.
  *
- * `globalSetup` therefore starts ONE server and publishes its uri; each file takes its own DATABASE
- * on it. `process.env` is the channel because jest gives every test file a fresh module registry, so
- * a module-level singleton here would be re-created per file, while the environment crosses both
- * that boundary and the one into worker processes.
- *
- * This bounds the DISK cost and the process count, not memory: what keeps memory flat across files
- * is freeing each file when it ends — `tests/support/test-environment.ts`, and
- * docs/build/mutation-testing.md#the-bson-warning-sign for what it looks like when that fails.
- *
- * ── ISOLATION IS UNCHANGED ───────────────────────────────────────────────────────────────────────
- * A database name per file keeps files apart, `clearAll` still empties collections between cases,
- * and `disconnect` drops the file's database on the way out. What changed is the cost of the
- * server, not the isolation of the data.
+ * @see docs/build/mutation-testing-memory.md#the-bson-warning-sign
  */
 export const connect = async () => {
     const uri = process.env.NODE_TEST_MONGO_URI;

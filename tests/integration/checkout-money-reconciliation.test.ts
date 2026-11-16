@@ -29,7 +29,9 @@ const RUN = { seed: 20_261_005, numRuns: PROPERTY_RUNS_WITH_DATABASE, endOnFailu
 
 /** One basket line: a catalogue price (any decimal) and a quantity. */
 interface BasketLine {
+    /** Catalogue price as decimal text. */
     price: string;
+    /** Units of it in the basket. */
     quantity: number;
 }
 
@@ -151,8 +153,11 @@ const priceThroughHttp = async (
 
 /** One named basket the table below drives. */
 interface Case {
+    /** The basket's title in the test name. */
     name: string;
+    /** The items in the basket. */
     lines: BasketLine[];
+    /** Which shipping method the basket is sent with. */
     method: keyof typeof SHIPPING;
 }
 

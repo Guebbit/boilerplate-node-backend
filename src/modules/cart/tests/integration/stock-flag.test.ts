@@ -5,7 +5,7 @@
  * ledger and the catalogue.
  *
  * The second invariant matters as much as the first: the value is a name and NEVER the number
- * left. "Reading the shelf" (`docs/understand/defences/authorization.md`) gives exact stock to
+ * left. The authorization defences page ("Reading the shelf") gives exact stock to
  * `read:StockLevel` only, so no field of any cart answer may vary with what is on the shelf
  * beyond that one name.
  */

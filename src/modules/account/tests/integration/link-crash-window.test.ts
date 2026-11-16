@@ -5,8 +5,9 @@
  * retry with the same link succeeds. One case per flow, each failing the flow's own write once.
  *
  * Failing a write AFTER the spend ran (not the spend itself) is what proves the rollback: the
- * token row is back only because the transaction aborted. See
- * docs/modules/account-sessions.md#spending-a-link.
+ * token row is back only because the transaction aborted.
+ *
+ * @see docs/modules/account-sessions.md#spending-a-link
  */
 
 import { MongoServerError } from 'mongodb';

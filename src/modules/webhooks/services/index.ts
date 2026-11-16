@@ -1,10 +1,9 @@
 /**
  * @module
- * This module's `services/` — see `docs/understand/layers.md#when-service-ts-becomes-services` for
- * when a module gets one of these instead of a single `service.ts`. Split by what the operations
- * DO: `subscriptions.ts` and `deliveries.ts` are the admin surface's two resources, `attempt.ts` is
- * the delivery core both `deliveries.ts`'s replay and the queued worker share, `sweep.ts` is the
- * retry sweep `sweep:webhook-retries` runs, and `publish.ts` is the domain-event fan-out.
+ * This module's `services/`, split by what the operations DO: `subscriptions.ts` and
+ * `deliveries.ts` are the admin surface's two resources, `attempt.ts` is the delivery core both
+ * `deliveries.ts`'s replay and the queued worker share, `sweep.ts` is the retry sweep
+ * `sweep:webhook-retries` runs, and `publish.ts` is the domain-event fan-out.
  */
 
 import * as subscriptions from './subscriptions';
@@ -19,7 +18,7 @@ export type { WebhookEventCatalogEntry } from '@types';
 export type { SubscriptionWithMintedSecrets, SubscriptionListFilters } from './subscriptions';
 export type { DeliveryListFilters } from './deliveries';
 
-/** The module's barrel export — controllers call through this, never the bare functions. */
+/** The services barrel — controllers call through this, never the bare functions. */
 export const webhooksService = {
     listSubscriptions: subscriptions.list,
     createSubscription: subscriptions.create,

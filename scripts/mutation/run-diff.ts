@@ -9,12 +9,13 @@
  * Graded on its own files, then laid over the report already on disk (`overlayReport`), so a
  * pulled sweep stays whole with this branch's files refreshed.
  *
- * Why whole files, why it cannot fail you for old debt:
- * docs/build/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
+ * Why whole files, and why it cannot fail you for old debt, is on the page below.
  *
  * Usage:
  *   npm run mutation                 # against origin/main
  *   npm run mutation -- --base=HEAD~3
+ *
+ * @see docs/build/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -34,6 +35,8 @@ const base = flagValue('base') ?? 'origin/main';
 
 /** Every file the diff touched, changed or added or renamed into — unfiltered. */
 const changedFiles = (baseCommit: string): string[] =>
+    // `git diff` over the merge base (`A...HEAD`): names only; `ACMR` keeps added, copied, modified and
+    // renamed files and drops deletions.
     execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${baseCommit}...HEAD`], {
         cwd: REPO_ROOT,
         encoding: 'utf8'
@@ -72,6 +75,7 @@ for (const file of files) console.log(`  ${file}`);
  * @returns the ratchet's exit code
  */
 const grade = (): number => {
+    // Runs the baseline check in this repo, output shown. A null status (killed by a signal) is 2.
     const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts'], {
         cwd: REPO_ROOT,
         stdio: 'inherit'
@@ -114,7 +118,9 @@ const keepReportWhole = (): void => {
 /**
  * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
- * them — docs/build/mutation-testing.md#worker-heap-cap.
+ * them.
+ *
+ * @see docs/build/mutation-testing.md#worker-heap-cap
  */
 runStryker({
     label: `diff (${files.length} files)`,

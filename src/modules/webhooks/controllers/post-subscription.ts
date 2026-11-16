@@ -17,8 +17,9 @@ import { viewSubscription } from '../services/actions';
  * POST /webhooks/subscriptions
  * Create a subscription. `url` is validated as `https://` by the generated schema's own
  * `pattern` (see `openapi.yaml`), and re-validated — against the RESOLVED IP this time — on every
- * delivery, since a subscription's DNS can change after it is created. See
- * `@infrastructure/adapters/ssrf-guard.ts`.
+ * delivery, since a subscription's DNS can change after it is created.
+ *
+ * @see docs/understand/defences/ssrf.md#making-the-server-fetch
  */
 export const createWebhookSubscription = (
     request: Request<unknown, unknown, CreateWebhookSubscriptionRequest>,

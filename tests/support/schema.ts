@@ -1,29 +1,22 @@
 /**
  * Reading a Mongoose schema's contract back out of the schema object.
  *
- * ── WHY A SCHEMA NEEDS ASSERTING AT ALL ─────────────────────────────────────────────────────────
- * A `model.ts` is a declaration, and the things it declares fail quietly and expensively:
+ * Why assert a schema: a `model.ts` is a declaration that fails quietly and expensively:
+ *   - `required: true` dropped: documents persist without the field, and nothing errors until
+ *     something reads `undefined` from a row written weeks earlier;
+ *   - `_id: false` lost on a subdocument: every embedded item grows an ObjectId, changing what is
+ *     stored, serialized and how much;
+ *   - an index deleted, renamed or given the wrong direction: the query still answers, by
+ *     collection scan, surfacing as a production latency incident;
+ *   - `timestamps: true` removed: `createdAt` stops being written and every "recent first" sort
+ *     orders by nothing.
+ * Integration tests assert what a saved row LOOKS like, which any schema accepting the fixture
+ * satisfies. None of the four changes a valid document's shape, so none is visible there: they
+ * survive as mutants.
  *
- *   - `required: true` dropped from a field — documents start persisting without it, and nothing
- *     errors until something downstream reads `undefined` from a row written weeks earlier;
- *   - `_id: false` lost on a subdocument — every embedded item silently grows an ObjectId, which
- *     changes what is stored, what is serialized, and how much;
- *   - an index deleted, renamed or given the wrong direction — the query still returns the right
- *     answer, just by collection scan, so it surfaces as a production latency incident rather
- *     than as a test failure;
- *   - `timestamps: true` removed — `createdAt` stops being written, and every "recent first" sort
- *     in the app quietly orders by nothing.
- *
- * Integration tests exercise these schemas heavily, but through documents: they assert what a
- * saved row LOOKS like, which is satisfied by any schema that happens to accept the fixture. None
- * of the four failures above changes the shape of a valid document, so none of them is visible
- * from that angle — which is why they survive as mutants.
- *
- * ── WHY IT NEEDS NO DATABASE ────────────────────────────────────────────────────────────────────
- * All of it is on the schema object already. `path()` carries `isRequired`, defaults and enums;
- * `indexes()` returns the declared index list as `[keys, options]` pairs before any of them is
- * built; `options` carries `timestamps` and `_id`. Reading it directly makes these unit tests, so
- * they run in milliseconds and belong with the module rather than in the integration tier.
+ * No database: it is all on the schema object. `path()` carries `isRequired`, defaults and enums;
+ * `indexes()` returns `[keys, options]` pairs before any is built; `options` carries `timestamps`
+ * and `_id`. So these are unit tests, in milliseconds, and belong with the module.
  */
 /**
  * ── WHY THESE TAKE A STRUCTURAL TYPE RATHER THAN `Schema` ───────────────────────────────────────
@@ -44,17 +37,25 @@ export interface IntrospectableSchema {
      * narrowing happens once, inside each reader below, where the shape is actually known.
      */
     indexes(): unknown[][];
+    /** The schema's paths, keyed by path name. */
     paths: object;
+    /** The options the schema was created with (`timestamps`, `toJSON`, ...). */
     options: object;
 }
 
 /** Minimal shape of what `Schema.prototype.path()` hands back, for the parts asserted here. */
 interface SchemaPath {
+    /** Mongoose's type name for the path (`String`, `ObjectId`, ...). */
     instance?: string;
+    /** Whether the path is declared required. */
     isRequired?: boolean;
+    /** The options passed when the path was declared. */
     options?: { default?: unknown; ref?: string; enum?: unknown } & Record<string, unknown>;
+    /** The allowed values of an enum string path. */
     enumValues?: string[];
+    /** The sub-schema of an embedded document path. */
     schema?: IntrospectableSchema;
+    /** The default a new document gets for this path. */
     defaultValue?: unknown;
 }
 

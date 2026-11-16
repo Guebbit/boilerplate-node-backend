@@ -27,6 +27,7 @@
         "already-resolved": "This task is already resolved.",
         "already-spam": "This task is already marked as spam.",
         "already-open": "This task is already open.",
+        "keeps-changing": "The task keeps changing. Reload it and try again.",
         "superseded": "A newer open task already covers this situation, so this one cannot be reopened.",
         "not-open": "This task is closed. Reopen it first.",
         "assignee-invalid": "That person cannot work this task.",

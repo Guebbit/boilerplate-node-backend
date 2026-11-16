@@ -1,22 +1,19 @@
 /**
- * The AsyncAPI fragments modules ship for a section they do not own: the webhook events each module
- * owns (`webhooks`), and the notice payloads a module adds to `notifications`.
+ * The AsyncAPI fragments modules ship for a section they do not own: the webhook events each
+ * module owns (`webhooks`), and the notice payloads a module adds to `notifications`.
  *
- * `src/modules/<m>/asyncapi.<section>.yaml` merges into that section's document, and only into it.
- * A fragment may carry `x-extends: { <Schema>: [<SchemaName>, ...] }`: each name is appended as a
- * `$ref` to that schema's `oneOf` (the owner's union opens to extension; it never names the extender).
- * The map is read by `./extends-map`, the same reader the OpenAPI side uses.
- *
- * A payload field with a closed set of values `$ref`s the owning module's `./openapi.yaml` schema
- * instead of copying its enum. The bundle has to stand alone, so the merge copies each referenced
- * schema into the fragment's own `components.schemas`, just before the first schema that uses it
- * (the Zod emitter declares in order), and points the ref at the copy. An OPEN enum (one a module
- * extends, marked `x-enum-from`) is refused: the copy would be the owner's raw file, without the
- * values the extenders add.
- *
- * Its own file so the bundler meets it at one call (`withSectionFragments`) and the discovery rule
- * stays testable on its own. The webhook-event names built on top of it live in
- * `./asyncapi-webhook-events`.
+ * Merge:    `src/modules/<m>/asyncapi.<section>.yaml` merges into that section's document, only.
+ * Extends:  a fragment may carry `x-extends: { <Schema>: [<SchemaName>, ...] }`; each name is
+ *           appended as a `$ref` to that schema's `oneOf`, so the owner's union opens to
+ *           extension and never names the extender. Read by `./extends-map`, as on the OpenAPI side.
+ * Enums:    a payload field with a closed set `$ref`s the owning module's `./openapi.yaml` schema
+ *           instead of copying its enum. The bundle must stand alone, so the merge copies each
+ *           referenced schema into the fragment's `components.schemas` just before the first
+ *           schema using it (the Zod emitter declares in order) and points the ref at the copy.
+ *           An OPEN enum (extended by modules, marked `x-enum-from`) is refused: the copy would
+ *           be the owner's raw file, without the extenders' values.
+ * Own file: the bundler meets it at one call (`withSectionFragments`) and the discovery rule stays
+ *           testable. Webhook-event names built on it live in `./asyncapi-webhook-events`.
  *
  * @see docs/build/contract-fragmentation.md#module-owned-webhook-events
  */
@@ -70,7 +67,9 @@ const OPENAPI_SCHEMA_REF = /^(?:\.\/|\.\.\/([\w-]+)\/)openapi\.yaml#\/components
 
 /** One REST schema a fragment references: its name, and the module folder it lives in when not the fragment's own. */
 interface RestReference {
+    /** The REST schema's name. */
     name: string;
+    /** The module folder it lives in; absent when it is the fragment's own. */
     sibling: string | undefined;
 }
 

@@ -29,25 +29,43 @@ const METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 export interface SchemaNode {
     /** A single type, or the OpenAPI 3.1 array form — `['string', 'null']` is a nullable string. */
     type?: string | string[];
+    /** OpenAPI `format` (`email`, `uuid`, `date-time`, ...); picks a value shape. */
     format?: string;
+    /** The only values the field accepts. */
     enum?: unknown[];
+    /** Lowest accepted number, inclusive. */
     minimum?: number;
     /** OpenAPI 3.1 numeric form: the bound itself, which is not a valid value. */
     exclusiveMinimum?: number;
+    /** Highest accepted number, inclusive. */
     maximum?: number;
+    /** Shortest accepted string. */
     minLength?: number;
+    /** Longest accepted string. */
     maxLength?: number;
+    /** Fewest accepted array items. */
     minItems?: number;
+    /** Most accepted array items. */
     maxItems?: number;
+    /** Whether array items must differ from each other. */
     uniqueItems?: boolean;
+    /** Regex source a string must match. */
     pattern?: string;
+    /** Property names that must be present. */
     required?: string[];
+    /** An object's fields, by name. */
     properties?: Record<string, SchemaNode>;
+    /** Schema of each array element. */
     items?: SchemaNode;
+    /** `false` refuses unknown keys; a schema types them. */
     additionalProperties?: boolean | SchemaNode;
+    /** Exactly one branch matches. */
     oneOf?: SchemaNode[];
+    /** At least one branch matches. */
     anyOf?: SchemaNode[];
+    /** Every branch matches; the walk merges them. */
     allOf?: SchemaNode[];
+    /** A pointer into `components`; resolved before the node is read. */
     $ref?: string;
 }
 
@@ -55,7 +73,9 @@ export interface SchemaNode {
 export interface Operation {
     /** Templated path exactly as the spec declares it, e.g. `/products/{id}`. */
     path: string;
+    /** The verb this operation answers. */
     method: HttpMethod;
+    /** The spec's operation id, which names the case in a failure. */
     operationId?: string;
     /** Path parameter names, in declaration order. */
     pathParameters: string[];
@@ -87,18 +107,25 @@ export interface QueryParameter {
 
 /** A parameter object as the spec writes it, before `$ref` resolution. */
 interface ParameterObject {
+    /** A pointer into `components.parameters`, resolved before use. */
     $ref?: string;
+    /** The parameter's name. */
     name?: string;
+    /** Where it travels: `path`, `query`, `header` or `cookie`. */
     in?: string;
+    /** Whether the request must carry it. */
     required?: boolean;
+    /** The type of its value. */
     schema?: SchemaNode;
 }
 
 /** The slice of the OpenAPI document the walk reads. */
 interface SpecDocument {
+    /** Every documented path, each mapping a verb to its operation. */
     paths: Record<string, Record<string, unknown>>;
     /** The error-code catalogue: every code with its status, description and optional `scope`. */
     'x-error-codes'?: Record<string, { scope?: string }>;
+    /** The reusable parts the `$ref`s point into. */
     components?: {
         schemas?: Record<string, SchemaNode>;
         parameters?: Record<string, ParameterObject>;
@@ -109,7 +136,9 @@ interface SpecDocument {
 
 /** One response as the spec writes it: its own `headers`, or a `$ref` into `components.responses`. */
 interface ResponseObject {
+    /** A pointer into `components.responses`. */
     $ref?: string;
+    /** The response's own headers, by name. */
     headers?: Record<string, HeaderReference>;
 }
 
@@ -269,7 +298,9 @@ const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): Que
 
 /** One response header as an operation writes it: inline, or a `$ref` into `components.headers`. */
 interface HeaderReference {
+    /** A pointer into `components.headers`. */
     $ref?: string;
+    /** Whether the response always carries this header. */
     required?: boolean;
 }
 

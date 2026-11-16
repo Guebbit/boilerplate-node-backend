@@ -4,7 +4,9 @@
  * `available` from the two stock counters. `onHand` and `reserved` are declared here because this
  * module owns the collection but are written only by `@modules/inventory` — see that module's
  * docblock. `available` is never stored: `applyProductTransform` computes it at serialization
- * time so no writer can let it drift. See docs/modules/products.md.
+ * time so no writer can let it drift.
+ *
+ * @see docs/modules/products.md#order-line-snapshots-freeze-the-resolved-words
  */
 
 import { model, Schema } from 'mongoose';
@@ -23,9 +25,10 @@ import { shopCurrency, shopDayOf, startOfShopDay } from '@modules/shop';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
- * `openapi.yaml` with its three dates as real `Date`s. `available`, `inStock`, `lowStock` and `preorder`
- * are omitted: they are derived at serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
- * read, a fixture) can satisfy the shape without also satisfying `Document`.
+ * `openapi.yaml` with its three dates as real `Date`s. the derived fields (`available`, `inStock`,
+ * `lowStock`, `buyable`, `preorder`, `backorder`, `currency`, `actions`) are omitted: they are
+ * computed at serialization, never persisted. Kept separate from `ProductDocument` so a plain
+ * object (a lean read, a fixture) can satisfy the shape without also satisfying `Document`.
  */
 export interface ProductRecord extends Omit<
     Product,
@@ -251,7 +254,7 @@ export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, c
 });
 
 /**
- * Mongoose Schema for the Product model
+ * Stored shape of a product row: defaults, enums, and the fields only a sibling module writes.
  */
 export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
     {
@@ -294,7 +297,8 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          * both at serialization, never stored.
          *
          * NEITHER IS WRITTEN HERE: every change goes through `@modules/inventory`, which owns the
-         * transitions and ledger. This module only declares the columns, since it owns the collection.
+         * transitions and ledger. This module only declares the columns, since it owns the
+         * collection.
          */
         onHand: {
             type: Number,
@@ -448,12 +452,14 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
 );
 
 /**
- * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
+ * Money is stored as Decimal128 and a lean read hands decimal text back — see
+ * `@infrastructure/persistence/money-field`.
  */
 productSchema.plugin(moneyPlugin);
 
 /**
- * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.
+ * The edit counter behind this resource's `ETag` and `If-Match` — see
+ * `@infrastructure/persistence/revision-plugin`.
  */
 productSchema.plugin(revisionPlugin);
 
@@ -474,9 +480,9 @@ productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_delete
 productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: true });
 
 /**
- * Derives `available` and `preorder` and stamps the live `currency`, at the single serialization point every
- * product response passes through — listing, detail, both write paths and an order's embedded
- * snapshots all agree. Neither is stored: `currency` is this deployment's CURRENT
+ * Derives `available` and `preorder` and stamps the live `currency`, at the single serialization
+ * point every product response passes through — listing, detail, both write paths and an order's
+ * embedded snapshots all agree. Neither is stored: `currency` is this deployment's CURRENT
  * `NODE_DEFAULT_CURRENCY`, read fresh rather than frozen onto the catalogue row.
  */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
@@ -530,7 +536,5 @@ export const applyProductTransform = applySerialization(productSchema, {
     currency: shopCurrency
 });
 
-/**
- * Mongoose model for product CRUD operations.
- */
+/** The model the repository wraps; the barrel never exposes it. */
 export const productModel = model<ProductDocument, ProductModel>('Product', productSchema);

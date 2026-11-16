@@ -1,24 +1,20 @@
 /**
  * @module
- * One comment-hygiene check, over every comment in a file:
+ * One comment-hygiene check, over every comment in a file.
  *
- * `stale` — a comment citing a `.ts`/`.tsx` file is checked against the files that actually
- * exist, the same way `scripts/docs/check-references.ts` already checks every `docs/*.md` page —
- * see `scripts/docs/repo-references.ts` for the machinery the two share. A `<placeholder>`
- * segment (`src/modules/<name>/module.ts`, `<paired-frontend>/vitest.config.ts`, a CLI example
- * like `--mutate '<path>.ts:10-40'`) is the author saying "this part varies", not naming a file,
- * and is skipped rather than flagged.
- *
- * External URLs are exempt — a link landing on a `.ts` file over there is the thing the
- * third-party-code rule asks for, and this repo does not control whether it rots.
- *
- * Markdown is NOT checked here. A comment naming a root-level plan doc is still wrong, for the
- * reason CLAUDE.md gives — such a doc is written for one change and deleted when it lands — but
- * `.gitignore` now keeps those out of the repo entirely, which is the guard that actually holds:
- * a pattern matching every way a doc can be named would refuse prose, and one matching a filename
- * missed a bare `OFFLINE_PAYMENTS_3` anyway.
- *
- * Deliberately not type-aware: comments are not in the AST, so this walks the token stream.
+ * `stale`:   a comment citing a `.ts`/`.tsx` file is checked against the files that exist, as
+ *            `scripts/docs/check-references.ts` does for `docs/*.md` (shared machinery in
+ *            `scripts/docs/repo-references.ts`). A `<placeholder>` segment
+ *            (`src/modules/<name>/module.ts`, `--mutate '<path>.ts:10-40'`) says "this part
+ *            varies" and is skipped, not flagged.
+ * Exempt:    external URLs. A link to a `.ts` file elsewhere is what the third-party-code rule
+ *            asks for, and this repo cannot control whether it rots.
+ * Markdown:  NOT checked. A comment naming a root-level plan doc is wrong (CLAUDE.md: such a doc is
+ *            written for one change and deleted when it lands), but `.gitignore` keeps those out
+ *            of the repo, which is the guard that holds: a pattern matching every way a doc can
+ *            be named would refuse prose, and one matching a filename missed a bare
+ *            `OFFLINE_PAYMENTS_3`.
+ * Untyped:   comments are not in the AST, so this walks the token stream.
  */
 
 import { existsSync } from 'node:fs';

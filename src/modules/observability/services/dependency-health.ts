@@ -1,7 +1,7 @@
 /**
  * @module
  * What every backing service this process needs is doing, right now — readiness, not liveness.
- * `GET /` answers liveness and drives the orchestrator's restart decision; this answers
+ * `GET /livez` answers liveness and drives the orchestrator's restart decision; this answers
  * `GET /observability/health` and must never feed that decision, so a degraded Redis stays
  * degraded instead of killing a healthy container. No I/O: each dependency already tracks its
  * own state, so this is a memory read across one shared vocabulary spanning three unlike backends.

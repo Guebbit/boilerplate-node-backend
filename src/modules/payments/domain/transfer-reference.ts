@@ -8,18 +8,17 @@
  * Minted when the transfer payment opens, from the order's id: deterministic, so a redelivered
  * `order.created` can never mint a second, different reference for the one order.
  *
- * Hand-rolled rather than a dependency: `ibantools` (`payments`' own IBAN/BIC library) has no
- * ISO 11649 support, and the arithmetic below has no edge case a library would need to absorb —
- * see `docs/modules/payments.md#libraries`.
+ * Hand-rolled: `ibantools` has no ISO 11649 support.
  *
  * No persistence import on purpose, like every other `domain/` file in this repo.
+ *
+ * @see docs/modules/payments.md#libraries
  */
 
 /**
  * Base-36 digits needed to hold any 96-bit value (a MongoDB ObjectId) without truncation —
  * `36**19 > 2**96 > 36**18`. Fixed rather than left to `toString(36)`'s natural length, so every
- * reference is the same size and so the payload can never collide in SHAPE with the 24-character
- * hex fallback `parseReference` also accepts.
+ * reference is the same size.
  */
 const PAYLOAD_LENGTH = 19;
 
@@ -43,8 +42,7 @@ const numericStringFor = (value: string): string =>
  * digits + payload order the reference is actually written in.
  *
  * `BigInt(97)`, not the `97n` literal `unicorn/prefer-bigint-literals` asks for: this repo's
- * `tsconfig.json` targets ES6, and a bigint literal needs ES2020 — see this file's own `ts-check`
- * failure without the call form.
+ * `tsconfig.json` targets ES6, and a bigint literal needs ES2020.
  */
 // eslint-disable-next-line unicorn/prefer-bigint-literals -- a literal needs ES2020; tsconfig targets ES6
 const MOD97_DIVISOR = BigInt(97);
@@ -53,7 +51,7 @@ const MOD97_DIVISOR = BigInt(97);
 const remainder97 = (payload: string, checkDigits: string): bigint =>
     BigInt(numericStringFor(`${payload}RF${checkDigits}`)) % MOD97_DIVISOR;
 
-/** The two check digits for a payload — `buildReference`'s own arithmetic, kept for reuse below. */
+/** The two check digits for a payload, used by `buildReference`. */
 const computeCheckDigits = (payload: string): string =>
     String(CHECK_DIGIT_BASE - Number(remainder97(payload, '00'))).padStart(2, '0');
 

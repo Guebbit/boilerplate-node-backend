@@ -5,7 +5,7 @@
  * to, on the edge itself so nothing can drift. `updateStatusIfIn` in `../repository.ts` makes one
  * racing writer win — this table only decides which `from` set it is handed.
  *
- * See `docs/understand/tactical-ddd.md` §1.
+ * @see docs/understand/tactical-ddd.md#who-writes-the-status
  */
 
 import { OrderStatus } from '@types';
@@ -76,7 +76,7 @@ export const ORDER_EVENTS = {
     },
     /**
      * The reservation sweep's expiry of an unpaid hold. Deliberately its own event: the sweep
-     * must never cancel an order that landed a payment in the same race, which `cancelBeforeDispatch`
+     * must never cancel an order that landed a payment in the same race, which the `cancel` event
      * legitimately may (an operator's or buyer's own choice, not a stale deadline).
      */
     expire: { from: [OrderStatus.pending], to: OrderStatus.canceled, actors: ['system'] },
@@ -200,9 +200,9 @@ export const paymentSettled = (status: OrderStatus): boolean =>
     ORDER_STATUS_TRAITS[status].stockCommitted;
 
 /**
- * The forward sequence an admin override may move an order along — never `paid` (that destination
- * stays `system`-only in absolute terms, see {@link canTransition}) and never
- * `canceled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
+ * The forward sequence an admin override may move an order along — never TO `paid` (that
+ * destination stays `system`-only in absolute terms, see {@link canTransition}; `paid` appears here
+ * only as a source) and never `canceled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
  * this array IS the "forward" rule: an override may only move to a LATER index than the order's
  * current status sits at within it. `pending` is not in it: leaving `pending` goes only through the
  * offline-payment door, which records the money and issues the invoice.

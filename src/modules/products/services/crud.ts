@@ -75,10 +75,10 @@ type ProductCreateData = Omit<
 /**
  * What `applyUpdate` accepts.
  *
- * `imageUrl`/`weight`/`taxClass`/`rateType`/`sku`/`releaseDate` are widened to accept `null`, since the domain
- * type `Product` states them as a real value or absent-means-zero/standard/unset, never
- * explicitly cleared. `imageUrl: null` unsets the image; `weight`/`taxClass`/`rateType`/`sku: null`
- * genuinely unset them.
+ * `imageUrl`/`weight`/`taxClass`/`rateType`/`sku`/`description`/`releaseDate`/`restockDate` are
+ * widened to accept `null`, since the domain type `Product` states them as a real value or
+ * absent-means-zero/standard/unset, never explicitly cleared. `imageUrl: null` unsets the image;
+ * `weight`/`taxClass`/`rateType`/`sku: null` genuinely unset them.
  */
 type ProductUpdateData = Partial<
     Omit<
@@ -367,7 +367,8 @@ const applyUpdate = (
      * happened, so the ledger would have to guess by subtracting the old value, and two concurrent
      * edits could each overwrite the other's sale. Counters move only through signed, conditional
      * transitions in `@modules/inventory` (`POST /inventory/levels/{productId}/receive`,
-     * `POST /inventory/levels/{productId}/adjust`), each of which says what happened and can't lose a sale.
+     * `POST /inventory/levels/{productId}/adjust`), each of which says what happened and can't lose
+     * a sale.
      */
     // `null` clears the description back to unset — $unset on save, same as weight/taxClass.
     if (data.description !== undefined) product.description = clearedOrValue(data.description);
@@ -392,7 +393,8 @@ const applyUpdate = (
     if (data.rateType !== undefined) product.rateType = clearedOrValue(data.rateType);
     /**
      * `null` clears the SKU back to unset — $unset on save, same as weight/taxClass. The unique
-     * sparse index (`products_sku` on `productSchema`) is what turns a collision into a 409, not this.
+     * sparse index (`products_sku` on `productSchema`) is what turns a collision into a 409, not
+     * this.
      */
     if (data.sku !== undefined) product.sku = clearedOrValue(data.sku);
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;

@@ -17,9 +17,13 @@ setupTestDb();
 
 /** One amount at the top level and one nested, enough to drive every read path. */
 interface Probe {
+    /** The top-level money amount, as decimal text. */
     amount: string;
+    /** Its currency, when the model stores one per document. */
     currency?: string;
+    /** A second top-level amount. */
     refunded?: string;
+    /** Nested amounts, one per line. */
     lines: { price: string }[];
 }
 

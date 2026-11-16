@@ -1,9 +1,9 @@
 /**
  * @module
  * What each domain event becomes in the inbox, for the notices every project has: a webhook
- * switched off, an outbox event parked, a to-do opened, due soon, overdue or handed over. One function per
- * event, each a mapping from a payload to the work notice to write — the module's `subscribe()`
- * wires them to the bus, and the writing itself stays in `./staff`.
+ * switched off, an outbox event parked, a to-do opened, due soon, overdue or handed over. One
+ * function per event, each a mapping from a payload to the work notice to write — the module's
+ * `subscribe()` wires them to the bus, and the writing itself stays in `./staff`.
  *
  * Notices a project adds (the shop's) live in the module that adds them and call
  * `notificationsService.notifyStaff` / `create` with their own routing.
@@ -107,7 +107,8 @@ const notifyTaskStaff = (
 };
 
 /**
- * A task was opened: everyone who works its kind hears of it once, by id and kind alone.
+ * A task was opened: everyone who works its kind hears of it once, by id, kind, category and work
+ * alone.
  *
  * A contact message also goes, with the message in it, to the main mailbox: staff answer from
  * there, so that mailbox is the inbox whoever else was told.

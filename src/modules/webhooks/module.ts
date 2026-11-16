@@ -2,16 +2,11 @@
  * @module
  * Outbound webhooks: subscriptions, the delivery log, and the admin surface over both. Reacts to
  * every domain event a registered module's manifest names a `publicEvents` entry for
- * (`kernel/registry.ts`'s `PublicEventTarget`) via the domain-event bus — the reverse edge
- * described in `docs/modules/webhooks.md`, so this module never imports `orders`/`payments`, nor
- * they it.
- *
- * Declares its own queue consumer below, rather than `app/workers.ts` naming
- * `WORKER_CHANNELS.WEBHOOK_DELIVER` directly — see `ModuleConsumer` (`@kernel/registry.ts`).
- * Deleting this module is then enough to stop the queue meaning anything, with nothing left to
- * also delete in `app/`.
- *
+ * (`kernel/registry.ts`'s `PublicEventTarget`) via the domain-event bus — the reverse edge, so this
+ * module never imports `orders`/`payments`, nor they it.
+ * *
  * @see docs/modules/webhooks.md#its-neighbourhood
+ * @see docs/modules/webhooks.md#the-delivery-path
  */
 
 import path from 'node:path';
@@ -66,9 +61,9 @@ export default {
             prefetch: 5
         }
     ],
-    // The secret-ring key, retention and the demo-sink gate: see `./config`.
+    /** The secret-ring key, the subscription cap and the retention: see `./config`. */
     config: [webhooksConfig.slice],
-    // Every subscription's signing-secret ring is encrypted at rest.
+    /** Every subscription's signing-secret ring is encrypted at rest. */
     reencrypt: webhooksService.reencryptWebhookSecrets,
     /**
      * `ownerUserId` on a subscription points at whoever configured the shop's integration — an

@@ -48,8 +48,11 @@ const TABLE: readonly OperationRoute[] = [
 
 /** What the guard did with one request. */
 interface Outcome {
+    /** The status the guard answered; absent when it passed. */
     status?: number;
+    /** The `Allow` header it set, listing the verbs the path accepts. */
     allow?: string;
+    /** Whether the request reached the next handler. */
     passed: boolean;
 }
 

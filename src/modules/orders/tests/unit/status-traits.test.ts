@@ -1,6 +1,6 @@
 /**
  * @module
- * The status-traits record: one row per status, read by the predicates that used to list statuses.
+ * The status-traits record: one row per status, read by the predicates that ask which statuses carry a trait.
  */
 import { OrderStatus } from '@types';
 import { ORDER_STATUS_TRAITS, statusesWhere } from '../../domain';

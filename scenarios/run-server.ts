@@ -16,8 +16,8 @@
  *   NODE_PORT=3101 npm run demo
  *
  * Point `NODE_TEST_MONGO_URI` at a compose Mongo instead and the shop persists across restarts —
- * see `startEphemeralMongo`. Several instances then share that one database, which several
- * in-memory instances never did; do not combine the two without meaning to.
+ * see `startEphemeralMongo`. Several instances then share that one database, unlike in-memory
+ * instances, which each own theirs; do not combine the two without meaning to.
  *
  * @see docs/build/demo-profile.md#the-control-surface
  */
