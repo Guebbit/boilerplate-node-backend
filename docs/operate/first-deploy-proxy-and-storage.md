@@ -50,6 +50,30 @@ in the compose file sets it to `1` unless the client file sets it, and `.env-exa
 address for every request, so every caller shares one rate-limit bucket and every audit row names
 the proxy. See [trust proxy](../understand/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
+#### Settings every proxy in front must agree on {#proxy-settings}
+
+A proxy that reuses a socket the app already closed answers 502. The app closes an idle socket
+after `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` (5 s by default), so the proxy's idle time must be **below**
+it, or the app's value **above** the proxy's. The figures are the proxies' usual defaults, from
+memory: check your version.
+
+| Proxy      | Its idle time on the app side                         | What to set                                                                           |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| nginx      | `keepalive_timeout` in the `upstream` block, 60 s     | Lower it under the app's value, or raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above 60 s |
+| Traefik    | `respondingTimeouts.idleTimeout`, 180 s (client side) | Raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above the proxy's idle time                   |
+| Managed LB | Its idle timeout (AWS ALB: 60 s)                      | Raise `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS` above it                                      |
+
+Also, on every proxy:
+
+- **Never retry a `POST` at the proxy.** A retried write that the app already ran is a duplicate.
+  Writes that must survive a retry carry an `Idempotency-Key` instead.
+- **Body cap:** the proxy's own limit applies before the app's. nginx's `client_max_body_size`
+  defaults to 1 MB, below an image upload; raise it to the largest upload the app accepts.
+- **Live streams:** the SSE response sends `X-Accel-Buffering: no`, which nginx obeys and turns
+  response buffering off for that stream. Other proxies need it off in their own settings.
+- **Which copy wrote a log line:** every line carries `host.name` and `process.pid`. On Kubernetes
+  the host name is the pod name; on one host, copies differ by pid.
+
 Running **several client stacks on one host** is different enough to have its own recipe —
 `compose.proxy.yaml` fronts them all with one shared Traefik that serves each stack from its
 own route file, with no Docker socket mounted. See [Two Client Stacks](./two-client-stacks.md).

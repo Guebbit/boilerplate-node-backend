@@ -11,6 +11,7 @@
  * built out of those two concepts.
  */
 import winston from 'winston';
+import { hostname } from 'node:os';
 /**
  * Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
  * chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
@@ -500,6 +501,15 @@ export const resolveConsoleFormat = (): winston.Logform.Format =>
     isRelaxedEnvironment() && process.stdout.isTTY ? prettyFormat : baseFormat;
 
 /**
+ * Which copy wrote a line, on both loggers.
+ *   pid:      which process; in cluster mode, which worker.
+ *   hostname: which machine or pod. With N copies behind a load balancer every pod's node shows
+ *             the same low pid, so pid alone cannot name the copy; the hostname is the pod name on
+ *             Kubernetes. Not an instance id: copies on one host share it, hence host + pid.
+ */
+const originFields = { pid: process.pid, hostname: hostname() };
+
+/**
  * Main application logger. Pretty on an interactive terminal, JSON everywhere else.
  *
  * `winston.createLogger()` returns the object every module imports as `logger`.
@@ -519,8 +529,7 @@ export const logger: Logger = winston.createLogger({
      */
     defaultMeta: {
         service: loggingConfig().NODE_SERVICE_NAME,
-        // Which process wrote the line: in cluster mode, which worker.
-        pid: process.pid
+        ...originFields
     },
     transports: [
         /**
@@ -546,7 +555,7 @@ export const auditLogger: Logger = winston.createLogger({
     format: baseFormat,
     defaultMeta: {
         service: loggingConfig().NODE_SERVICE_NAME,
-        pid: process.pid,
+        ...originFields,
         // Discriminator so the collector can route these to a separate index/retention policy.
         log_type: 'audit'
     },
