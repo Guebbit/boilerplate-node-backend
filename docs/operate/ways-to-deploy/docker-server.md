@@ -51,8 +51,9 @@ suite, so it is Debian. Trixie over bookworm: the library maps any Debian 12 or 
 so both resolve, and trixie is newer. The `runtime` image runs no test and never starts `mongod`, so it keeps
 Alpine's smaller footprint. Each image is sized for the job it does.
 
-Node is 24 in both. `dependency-cruiser` (part of `npm run complete`) hard-exits on Node 25, and 24 is the Active LTS
-line. CI's `NODE_VERSION` matches.
+Node is 26 in both, the Active LTS line since 2026-10-28. `.nvmrc` says `26` and CI's setup action reads it.
+`engines` still admits `>=24.15`, because the paired frontend's visual and Lighthouse jobs install inside the
+Cypress image, which is Node 24 for now.
 
 ### Why it ships TypeScript and not compiled JavaScript
 
