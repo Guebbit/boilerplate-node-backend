@@ -17,6 +17,7 @@ const COMPOSE_FILES = ['compose.yaml', 'compose.production.yaml'];
 
 /** The shape read out of a compose file: only each service's image matters here. */
 interface ComposeFile {
+    /** Compose services by name; only the image is read. */
     services: Record<string, { image?: string }>;
 }
 

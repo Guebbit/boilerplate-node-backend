@@ -31,6 +31,7 @@ type Requirement = Record<string, string[]>;
 
 /** The slice of the bundled spec this file reads. */
 interface SpecDocument {
+    /** Path to verb to the operation's security requirements. */
     paths: Record<string, Record<string, { security?: Requirement[] }>>;
 }
 

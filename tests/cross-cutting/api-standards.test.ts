@@ -5,10 +5,13 @@
  * Two rules, each read from the SOURCE (the module fragments and the `.ts` files), never from
  * the generated bundle, so a failure names a file somebody edits:
  *
- * | Rule | Where it is written |
- * | --- | --- |
- * | A resource with a lifecycle `status` publishes a required `actions` | docs/understand/tactical-ddd.md |
- * | A 409 refusal carries a code the contract lists | docs/understand/write-methods.md |
+ * | Rule                                                                | Where it is written |
+ * | ------------------------------------------------------------------- | ------------------- |
+ * | A resource with a lifecycle `status` publishes a required `actions` | the first `@see`    |
+ * | A 409 refusal carries a code the contract lists                     | the second `@see`   |
+ *
+ * @see docs/understand/tactical-ddd.md#_2-capabilities-the-server-answers-what-a-client-may-do
+ * @see docs/understand/write-methods.md#post
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -18,23 +21,33 @@ import { MODULES_ROOT, REPO_ROOT } from '@tests/paths';
 
 /** The slice of a JSON-schema node these checks read. */
 interface SchemaNode {
+    /** A pointer into `components.schemas`. */
     $ref?: string;
+    /** The only values the schema accepts. */
     enum?: unknown[];
+    /** Branches merged into this schema. */
     allOf?: SchemaNode[];
+    /** Property names that must be present. */
     required?: string[];
+    /** The object's fields, by name. */
     properties?: Record<string, SchemaNode>;
 }
 
 /** One operation of a module's contract. */
 interface OperationNode {
+    /** The operation's id, which names a failure. */
     operationId?: string;
+    /** Documented answers, by status. */
     responses?: Record<string, { description?: string }>;
 }
 
 /** A module's contract fragment, as far as these checks read it. */
 interface Fragment {
+    /** The fragment's error-code catalogue. */
     'x-error-codes'?: Record<string, unknown>;
+    /** Path to verb to operation. */
     paths?: Record<string, Record<string, OperationNode>>;
+    /** The fragment's reusable schemas. */
     components?: { schemas?: Record<string, SchemaNode> };
 }
 

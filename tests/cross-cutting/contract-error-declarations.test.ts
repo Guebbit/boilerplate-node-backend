@@ -1,8 +1,7 @@
 /**
  * Every status the id rule can answer is a status the contract describes.
  *
- * A malformed id in a URL path is the same 404 an unknown id gets (`requireId`,
- * `docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position`), so 404 is a property
+ * A malformed id in a URL path is the same 404 an unknown id gets (`requireId`), so 404 is a property
  * of the PARAMETER rather than of the endpoint, and the contract has to say so on every operation
  * that takes an id in its path, not only on the ones whose service happens to answer a miss.
  *
@@ -26,7 +25,7 @@
  * endpoints, and answering it means editing a file that must move in three repositories at once.
  *
  * ── The error codes ───────────────────────────────────────────────────────────────────────────
- * An operation's `x-error-codes` lists what it can send (`docs/reference/errors.md#the-errors-extension`).
+ * An operation's `x-error-codes` lists what it can send.
  * Three things hold that list true:
  *   - every catalogue code that is not `scope: app` is listed on at least one operation;
  *   - every guard-made code is listed on every route that mounts the guard — read off the route
@@ -37,6 +36,9 @@
  *     both ways;
  *   - the runtime check in `tests/support/response-contract.ts` fails any HTTP test whose answer
  *     carries a code its operation does not list (service codes only a test can see).
+ *
+ * @see docs/understand/request-flow.md#a-malformed-id-has-one-answer-per-position
+ * @see docs/reference/errors.md#the-errors-extension
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -73,9 +75,13 @@ const TAKES_AN_ID = /\{[^}]*[Ii]d\}/;
 
 /** An operation: its route and the errors it declares. */
 interface Operation {
+    /** The module whose route this is. */
     module: string;
+    /** The route's path. */
     route: string;
+    /** The route's verb. */
     method: string;
+    /** Error codes its guards can answer. */
     codes: string[];
 }
 
@@ -167,7 +173,9 @@ const sendsEnrollment = (action: never, subject: never): boolean =>
 
 /** A code one route's guards oblige its operation to list, under a status. */
 interface Obligation {
+    /** The HTTP status the code is answered under. */
     status: string;
+    /** The error code the operation must list. */
     code: string;
 }
 

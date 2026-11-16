@@ -30,6 +30,7 @@ type PortMapping = string | { host_ip?: string; published?: number | string };
 
 /** The shape this file reads out of the compose YAML. Compose declares far more; none of it matters here. */
 interface ComposeFile {
+    /** Compose services by name, each reduced to the hardening fields checked here. */
     services: Record<
         string,
         {
@@ -48,6 +49,7 @@ interface ComposeFile {
             logging?: { driver?: string; options?: Record<string, string> };
         }
     >;
+    /** Top-level secrets, each backed by a file. */
     secrets?: Record<string, { file: string }>;
 }
 

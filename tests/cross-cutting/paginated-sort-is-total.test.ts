@@ -69,7 +69,9 @@ const isTotal = (spec: string): boolean => {
 
 /** A sort stage found in a pipeline. */
 interface SortStage {
+    /** Source file holding the `$sort`. */
     file: string;
+    /** The sort's key list as written. */
     spec: string;
 }
 

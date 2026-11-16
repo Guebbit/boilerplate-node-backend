@@ -11,6 +11,7 @@ import { cookieData } from '@infrastructure/http/cookies.generated';
 
 /** The part of the root contract fragment this test reads. */
 interface RootContract {
+    /** The spec's reusable parts; only the cookie auth scheme is read. */
     components: { securitySchemes: { cookieAuth: { name: string } } };
 }
 

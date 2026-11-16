@@ -64,7 +64,9 @@ const metricFiles = (): { module: string; file: string }[] =>
 
 /** A metric declaration found in the source: its name and where. */
 interface Declaration {
+    /** The module whose source declares the metric. */
     module: string;
+    /** The metric's name. */
     name: string;
 }
 

@@ -48,7 +48,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * deliberately keyless because the write is scoped to the caller's own resource.
  */
 interface WriteException {
+    /** Whether the route still needs a session despite the exemption. */
     requiresAuth: boolean;
+    /** Why the app-wide key gate does not apply, in plain words. */
     reason: string;
 }
 
