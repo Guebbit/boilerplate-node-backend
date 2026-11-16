@@ -21,10 +21,11 @@ import cluster from 'node:cluster';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { loadDevelopmentDoubles } from '@app/development-doubles';
-import { clusterConfig } from '@infrastructure/runtime/config';
+import { clusterConfig, serverConfig } from '@infrastructure/runtime/config';
 import {
     assertSharedRateLimitCounters,
     crashVerdict,
+    primaryKillTimeoutMs,
     workerTarget
 } from '@infrastructure/runtime/cluster-policy';
 
@@ -50,9 +51,19 @@ const supervise = (): void => {
         NODE_CLUSTER_CRASH_WINDOW_MS: crashWindowMs,
         NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: crashBackoffBaseMs,
         NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: crashBackoffMaxMs,
-        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: shutdownTimeoutMs,
+        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: configuredShutdownTimeoutMs,
         NODE_CLUSTER_CRASH_LIMIT: crashLimit
     } = clusterConfig();
+    const {
+        NODE_SHUTDOWN_DELAY_MS: workerDelayMs,
+        NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: workerBudgetMs
+    } = serverConfig();
+    // The workers' own deadline is delay + budget; killing them before it cuts a teardown short.
+    const shutdownTimeoutMs = primaryKillTimeoutMs(
+        configuredShutdownTimeoutMs,
+        workerDelayMs,
+        workerBudgetMs
+    );
     const workers = workerTarget(configuredWorkers, os.availableParallelism());
 
     let isShuttingDown = false;
@@ -195,7 +206,6 @@ const refuseUnsharedRateLimits = (): Promise<void> =>
      */
     import('@infrastructure/adapters/limits-redis').then(({ limitsRedisUrl }) => {
         assertSharedRateLimitCounters({
-            clustered: CLUSTER_ENABLED,
             configuredWorkers: clusterConfig().NODE_CLUSTER_WORKERS,
             availableCpus: os.availableParallelism(),
             limitsRedisUrl: limitsRedisUrl()

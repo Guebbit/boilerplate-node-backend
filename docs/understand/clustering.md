@@ -55,17 +55,17 @@ flowchart TD
 
 ## Configuration
 
-| Env var                              | Effect                                                                                                                                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. `npm run start:cluster` sets it. Otherwise `src/cluster.ts` imports `src/serve.ts` in its own process — no fork.            |
-| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                                                          |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                                                    |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                                                             |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                                                  |
-| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                                                 |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                                                                                      |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side teardown budget (default 15 000 ms), read by `registerSignalHandlers`; the drain steps below take shares of it.                                                                 |
-| `NODE_SHUTDOWN_DELAY_MS`             | Lame-duck delay before the teardown (default 0). In cluster mode keep it 0, or raise `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` above delay + budget: the primary's kill timer knows nothing of it. |
+| Env var                              | Effect                                                                                                                                                                                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENABLE_CLUSTERING`             | A flag (`1 true yes on`): true enables the primary/worker mode. `npm run start:cluster` sets it. Otherwise `src/cluster.ts` imports `src/serve.ts` in its own process — no fork.                                                            |
+| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).                                                                                                                                                                          |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                                                                                                                                                                                    |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash).                                                                                                                                                             |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                                                                                                                                  |
+| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                                                                                                                                 |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | A floor for the primary's hard kill during shutdown (default 15 000 ms). The kill never fires before `NODE_SHUTDOWN_DELAY_MS` + `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` + 5 s, so the default alone waits 20 s; raise this only to wait longer. |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side teardown budget (default 15 000 ms), read by `registerSignalHandlers`; the drain steps below take shares of it.                                                                                                                 |
+| `NODE_SHUTDOWN_DELAY_MS`             | Lame-duck delay before the teardown (default 0). The primary's kill timer counts it, so any value is safe in cluster mode.                                                                                                                  |
 
 ## Crash backoff
 

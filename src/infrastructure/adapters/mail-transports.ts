@@ -71,9 +71,10 @@ const smtpTransport: MailTransportAdapter = {
 
 /**
  * The transports that exist only as development doubles (`scenarios/support/doubles/`). Names
- * only: they let a refusal outside `NODE_ENV=development` say why `log` is not available.
+ * only: they let a refusal outside `NODE_ENV=development` say why `log` is not available. A test
+ * keeps this list equal to what `registerDoubles` registers.
  */
-const DEVELOPMENT_TRANSPORTS = { noun: 'transport', names: ['log', 'outbox'] } as const;
+export const DEVELOPMENT_TRANSPORTS: readonly string[] = ['log', 'outbox'];
 
 /**
  * Every transport this process knows, shared across module instances (see
@@ -96,7 +97,7 @@ export const registerMailTransport = (name: string, transport: MailTransportAdap
  * The transport `NODE_MAIL_TRANSPORT` names (`smtp` when unset), resolved per send.
  *
  * @throws {Error} when the variable names a transport this process does not have; falling back to
- *   `smtp` would turn a typo into mail sent for real. A development transport (`log`, `outbox`)
+ *   `smtp` would turn a typo into mail sent for real. A development double (`log`, `outbox`)
  *   gets a message saying it loads only under `NODE_ENV=development`
  */
 export const resolveMailTransport = (): MailTransportAdapter =>

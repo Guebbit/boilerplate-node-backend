@@ -7,7 +7,7 @@
 #          ALERT_HEARTBEAT_TOKEN, and the app's NODE_SMTP_HOST / _PORT / _USER / _PASS.
 #          Each of NODE_SMTP_PASS, ALERT_WEBHOOK_URL and ALERT_HEARTBEAT_TOKEN also has a `_FILE`
 #          form naming a file with the value, which wins over the plain variable (an empty file is
-#          unset): production hands them over as files, dev as variables.
+#          unset; a named file that is missing or unreadable stops the render): production hands them over as files, dev as variables.
 #          ALERT_SMTP_REQUIRE_TLS (default true) is the one extra: a plain-SMTP sink such as mailpit
 #          needs false.
 # Secrets: URLs, tokens and the SMTP password go to 0600 files in <secrets-dir>, never into the
@@ -32,14 +32,31 @@ write_secret() {
     (umask 077 && printf '%s' "$2" > "$secrets/$1")
 }
 
-# The value of a secret: the file `$2` names when it is set and non-empty, else the plain variable
-# `$1`. `$(cat ...)` drops the trailing newline an editor leaves. Same rule as `secret-files.ts`.
-secret_value() {
-    if [ -n "$2" ] && [ -s "$2" ]; then
-        cat "$2"
-    else
-        printf '%s' "$1"
+# Resolves a secret into `$secret`: the file `$2` names when it is set and holds anything, else the
+# plain variable `$1`. Same rule as `secret-files.ts`: ONE trailing newline (an editor's, or
+# `echo`'s) is dropped, an empty file is unset, and a file that is named but missing or unreadable
+# stops the render. Falling back to the variable then would start Alertmanager with no credential
+# and an alert mail would go out unauthenticated. A global rather than `$(secret_value ...)`,
+# because a command substitution strips EVERY trailing newline off what it captures.
+read_secret() {
+    secret=$1
+    [ -n "$2" ] || return 0
+    if [ ! -f "$2" ] || [ ! -r "$2" ]; then
+        echo "alertmanager-render: cannot read the secret file $2" >&2
+        exit 1
     fi
+    # The trailing `x` keeps `$(...)` from stripping newlines; it is removed again straight away.
+    content=$(cat "$2"; printf x)
+    content=${content%x}
+    lf=$(printf '\nx')
+    lf=${lf%x}
+    cr=$(printf '\rx')
+    cr=${cr%x}
+    case $content in
+        *"$cr$lf") content=${content%"$cr$lf"} ;;
+        *"$lf") content=${content%"$lf"} ;;
+    esac
+    if [ -n "$content" ]; then secret=$content; fi
 }
 
 mkdir -p "$secrets"
@@ -48,11 +65,14 @@ chmod 700 "$secrets"
 to=${ALERT_EMAIL_TO:-}
 smtp_host=${NODE_SMTP_HOST:-}
 smtp_user=${NODE_SMTP_USER:-}
-smtp_pass=$(secret_value "${NODE_SMTP_PASS:-}" "${NODE_SMTP_PASS_FILE:-}")
+read_secret "${NODE_SMTP_PASS:-}" "${NODE_SMTP_PASS_FILE:-}"
+smtp_pass=$secret
 from=${ALERT_EMAIL_FROM:-$smtp_user}
-webhook=$(secret_value "${ALERT_WEBHOOK_URL:-}" "${ALERT_WEBHOOK_URL_FILE:-}")
+read_secret "${ALERT_WEBHOOK_URL:-}" "${ALERT_WEBHOOK_URL_FILE:-}"
+webhook=$secret
 heartbeat=${ALERT_HEARTBEAT_URL:-}
-token=$(secret_value "${ALERT_HEARTBEAT_TOKEN:-}" "${ALERT_HEARTBEAT_TOKEN_FILE:-}")
+read_secret "${ALERT_HEARTBEAT_TOKEN:-}" "${ALERT_HEARTBEAT_TOKEN_FILE:-}"
+token=$secret
 
 # Which knob groups are on. A group needs everything it cannot work without.
 email=0

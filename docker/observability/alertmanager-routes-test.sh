@@ -116,6 +116,30 @@ if grep -q 'auth_password_file' "$work/alertmanager.yml"; then
     exit 1
 fi
 
+echo "a named secret file that is missing stops the render, and the plain variable does not stand in"
+if env -i PATH="$PATH" ALERT_WEBHOOK_URL=https://ntfy.example.test/plain \
+    ALERT_WEBHOOK_URL_FILE="$work/in/does-not-exist" \
+    sh "$here/alertmanager-render.sh" "$here/alertmanager.config.template.yaml" \
+    "$work/alertmanager.yml" "$work/secrets" 2> "$work/err"; then
+    echo "FAIL: a missing secret file must fail the render" >&2
+    exit 1
+fi
+grep -q "does-not-exist" "$work/err" ||
+    {
+        echo "FAIL: the failure must name the file" >&2
+        exit 1
+    }
+
+echo "only ONE trailing newline is dropped from a secret file"
+printf '%s\n\n' 'two-newlines' > "$work/in/pass"
+render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test \
+    NODE_SMTP_HOST=smtp.example.test NODE_SMTP_PASS_FILE="$work/in/pass"
+[ "$(wc -l < "$work/secrets/smtp-password")" -eq 1 ] ||
+    {
+        echo "FAIL: the second trailing newline was stripped" >&2
+        exit 1
+    }
+
 echo "values with / & and ' survive the render"
 render ALERT_EMAIL_TO="a/b&c@example.test" ALERT_EMAIL_FROM="O'Brien <o@example.test>" NODE_SMTP_HOST=smtp.example.test
 grep -q "to: 'a/b&c@example.test'" "$work/alertmanager.yml" ||

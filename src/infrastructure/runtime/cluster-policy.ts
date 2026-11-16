@@ -31,31 +31,55 @@ export const workerTarget = (requested: number, availableCpus: number): number =
  *
  * @see docs/understand/clustering.md#cluster-mode-limits
  * @param environment - the primary's resolved settings
- * @param environment.clustered - `NODE_ENABLE_CLUSTERING`
  * @param environment.configuredWorkers - `NODE_CLUSTER_WORKERS`
  * @param environment.availableCpus - `os.availableParallelism()`
  * @param environment.limitsRedisUrl - `NODE_RATE_LIMIT_REDIS_URL`, when set
  * @throws {ConfigError} when clustering would fork 2+ workers with no limits Redis
  */
 export const assertSharedRateLimitCounters = ({
-    clustered,
     configuredWorkers,
     availableCpus,
     limitsRedisUrl
 }: {
-    clustered: boolean;
     configuredWorkers: number;
     availableCpus: number;
     limitsRedisUrl: string | undefined;
 }): void => {
     const workers = workerTarget(configuredWorkers, availableCpus);
-    if (!clustered || limitsRedisUrl || workers < 2) return;
+    if (limitsRedisUrl || workers < 2) return;
     throw new ConfigError(
         `Refusing to start ${String(workers)} cluster workers without NODE_RATE_LIMIT_REDIS_URL: ` +
             'each worker would count rate limits alone, so every NODE_RATE_LIMIT_* budget would be ' +
             'multiplied by the worker count. Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.'
     );
 };
+
+/**
+ * What the primary adds on top of a worker's own forced exit before it stops waiting and SIGKILLs,
+ * ms: the worker's exit, its `exit` event and the primary's own bookkeeping take a moment past the
+ * deadline the worker set itself.
+ */
+export const KILL_MARGIN_MS = 5000;
+
+/**
+ * When the primary stops waiting for its workers and SIGKILLs them, ms from the signal.
+ *
+ * A worker waits `NODE_SHUTDOWN_DELAY_MS`, then tears down for up to
+ * `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`, and exits itself at the end of both. A primary that kills
+ * earlier cuts a worker mid-teardown, so the result is never below that sum plus
+ * {@link KILL_MARGIN_MS}; `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` can only raise it.
+ *
+ * @see docs/understand/clustering.md#configuration
+ * @param configuredMs - `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`
+ * @param delayMs - `NODE_SHUTDOWN_DELAY_MS`, the workers' lame-duck delay
+ * @param teardownBudgetMs - `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`, the workers' teardown budget
+ * @returns the timer length for the primary's forced kill
+ */
+export const primaryKillTimeoutMs = (
+    configuredMs: number,
+    delayMs: number,
+    teardownBudgetMs: number
+): number => Math.max(configuredMs, delayMs + teardownBudgetMs + KILL_MARGIN_MS);
 
 /** What the primary does about one worker crash. */
 export type CrashVerdict =

@@ -27,14 +27,14 @@ flowchart LR
 
 ## What is a double, and what is not
 
-| Setting                   | Production                                                                                 | Dev, demo, jest                           |
-| ------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`   | no provider — card is off                                                                  | `fake`, unless the environment names one  |
-| `NODE_MAIL_TRANSPORT`     | `smtp` only                                                                                | `log` (renders, drops), `outbox` (memory) |
-| OAuth `fake`              | not registered                                                                             | registered by the development doubles     |
-| `NODE_MAIL_TRANSPORT=log` | refused: "`log` is a development transport; it is loaded only when `NODE_ENV=development`" | n/a                                       |
-| analytics `none`          | stays: it is "off"                                                                         | same                                      |
-| antibot `none`            | stays: it is "off"                                                                         | same                                      |
+| Setting                   | Production                                                                              | Dev, demo, jest                           |
+| ------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`   | no provider — card is off                                                               | `fake`, unless the environment names one  |
+| `NODE_MAIL_TRANSPORT`     | `smtp` only                                                                             | `log` (renders, drops), `outbox` (memory) |
+| OAuth `fake`              | not registered                                                                          | registered by the development doubles     |
+| `NODE_MAIL_TRANSPORT=log` | refused: "`log` is a development double; it is loaded only when `NODE_ENV=development`" | n/a                                       |
+| analytics `none`          | stays: it is "off"                                                                      | same                                      |
+| antibot `none`            | stays: it is "off"                                                                      | same                                      |
 
 **"Off" is not a double.** It asks nothing and claims nothing, so it stays.
 

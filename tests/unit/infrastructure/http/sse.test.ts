@@ -7,7 +7,14 @@ import type { Response } from 'express';
 import { endSseStreams, openSseStream } from '@infrastructure/http/sse';
 import { rejectResponse } from '@infrastructure/http/response';
 import { rejectServiceUnavailable } from '@infrastructure/http/errors';
+import { isServerDraining } from '@infrastructure/runtime/readiness';
 import { setEnvironment } from '@tests/environment';
+
+/** The phase is module state with no way back; a stub lets one case drain and the next serve. */
+jest.mock('@infrastructure/runtime/readiness', () => ({
+    __esModule: true,
+    isServerDraining: jest.fn(() => false)
+}));
 
 /**
  * The refusals are built by the real response helpers elsewhere; here only which one is chosen,
@@ -90,6 +97,15 @@ describe('openSseStream', () => {
             'X-Accel-Buffering': 'no'
         });
         expect(fake.flushHeaders).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers no keep-alive once the process is draining', () => {
+        const fake = makeResponse();
+        jest.mocked(isServerDraining).mockReturnValueOnce(true);
+
+        openSseStream(fake.response, 'user-1', () => Promise.resolve(true));
+
+        expect(fake.headers).not.toHaveProperty('Connection');
     });
 
     it('keeps the stream open while the caller still holds the key', async () => {
@@ -236,9 +252,8 @@ describe('endSseStreams', () => {
         openSseStream(a.response, 'user-1', () => Promise.resolve(true))?.onClose(cleanup);
         openSseStream(b.response, 'user-2', () => Promise.resolve(true));
 
-        const ended = endSseStreams();
+        endSseStreams();
 
-        expect(ended).toBe(2);
         for (const fake of [a, b]) {
             expect(fake.write).toHaveBeenCalledWith(expect.stringMatching(/^retry: \d+\n\n$/));
             expect(fake.end).toHaveBeenCalledTimes(1);
@@ -275,16 +290,14 @@ describe('endSseStreams', () => {
         expect(cleanup).toHaveBeenCalledTimes(1);
     });
 
-    it('ends nothing, and says so, when no stream is open', () => {
-        expect(endSseStreams()).toBe(0);
-    });
-
     it('does not reach a stream that already closed on its own', () => {
         const gone = makeResponse();
         openSseStream(gone.response, 'user-1', () => Promise.resolve(true));
         gone.disconnect();
 
-        expect(endSseStreams()).toBe(0);
+        endSseStreams();
+
         expect(gone.write).not.toHaveBeenCalled();
+        expect(gone.end).not.toHaveBeenCalled();
     });
 });

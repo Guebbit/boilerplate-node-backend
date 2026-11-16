@@ -5,15 +5,15 @@
  */
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
 
-/** A registry description with two development-only names. */
-const DEVELOPMENT = { noun: 'transport', names: ['log', 'outbox'] } as const;
+/** Two development-only names. */
+const DEVELOPMENT = ['log', 'outbox'] as const;
 
 describe('requireProvider', () => {
-    it('names a development transport as one when this registry lacks it', () => {
+    it('names a development double as one when this registry lacks it', () => {
         const registry = createProviderRegistry({ smtp: 'real' });
 
         expect(() => requireProvider(registry, 'NODE_MAIL_TRANSPORT', 'log', DEVELOPMENT)).toThrow(
-            'Unknown NODE_MAIL_TRANSPORT: "log" — `log` is a development transport; it is loaded only when NODE_ENV=development.'
+            'Unknown NODE_MAIL_TRANSPORT: "log" — `log` is a development double; it is loaded only when NODE_ENV=development.'
         );
     });
 

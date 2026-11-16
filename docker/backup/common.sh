@@ -8,7 +8,8 @@
 #   BACKUP_PRUNE           true | false. false when the repository is append-only (no `forget`).
 #   BACKUP_KEEP_HOURLY / _DAILY / _WEEKLY / _MONTHLY   snapshots to keep.
 #   BACKUP_HEARTBEAT_URL / _TOKEN                      off-host freshness check (Gatus external endpoint).
-#                          BACKUP_HEARTBEAT_TOKEN_FILE names a file with the token and wins over it.
+#                          BACKUP_HEARTBEAT_TOKEN_FILE names a file with the token and wins over it (an
+#                          empty file is unset; a missing or unreadable one stops the job).
 #   BACKUP_HOST            the restic `--host` label; one stack = one host.
 #   restic_repository_env  secret file of `NAME=value` lines: RESTIC_REST_USERNAME / _PASSWORD, AWS_* keys.
 
@@ -53,6 +54,38 @@ log() {
     printf '%s [backup] %s\n' "$(date -u +%FT%TZ)" "$*"
 }
 
+# Reads the secret file `$2` names, for the variable `$1`, into `$SECRET_FROM_FILE`.
+# Same rule as `secret-files.ts`:
+#   - ONE trailing newline is dropped (what an editor or `echo` leaves). A global, not `$(...)`,
+#     which would strip every trailing newline;
+#   - an empty file gives an empty result, so the caller's plain variable stands;
+#   - a file that is missing or unreadable is a failure, never a silent fallback: the job would
+#     otherwise run with no credential.
+secret_from_file() {
+    local variable="$1" path="$2" content
+    if [ ! -f "$path" ] || [ ! -r "$path" ]; then
+        log "$variable: cannot read the secret file $path"
+        return 1
+    fi
+    # The trailing `x` keeps `$(...)` from stripping newlines; it is removed again straight away.
+    content="$(cat "$path"; printf x)"
+    content="${content%x}"
+    case "$content" in
+        *$'\r\n') content="${content%$'\r\n'}" ;;
+        *$'\n') content="${content%$'\n'}" ;;
+    esac
+    SECRET_FROM_FILE="$content"
+}
+
+# The heartbeat's bearer token: the plain variable, or the file named by BACKUP_HEARTBEAT_TOKEN_FILE
+# when it holds anything. Resolved here, once, so an unreadable file stops the job at its start
+# instead of inside `heartbeat`, whose failures are deliberately never fatal.
+HEARTBEAT_TOKEN="${BACKUP_HEARTBEAT_TOKEN:-}"
+if [ -n "${BACKUP_HEARTBEAT_TOKEN_FILE:-}" ]; then
+    secret_from_file BACKUP_HEARTBEAT_TOKEN_FILE "$BACKUP_HEARTBEAT_TOKEN_FILE" || exit 1
+    if [ -n "$SECRET_FROM_FILE" ]; then HEARTBEAT_TOKEN="$SECRET_FROM_FILE"; fi
+fi
+
 # restic with the repository lock wait applied.
 # https://restic.readthedocs.io/en/stable/manual_rest.html (--retry-lock)
 restic_run() {
@@ -82,11 +115,7 @@ heartbeat() {
     local outcome="$1" reason="${2:-}"
     local url="${BACKUP_HEARTBEAT_URL:-}"
     [ -n "$url" ] || return 0
-    local token="${BACKUP_HEARTBEAT_TOKEN:-}"
-    # An empty or missing file leaves the plain variable standing, the same rule as `secret-files.ts`.
-    if [ -n "${BACKUP_HEARTBEAT_TOKEN_FILE:-}" ] && [ -s "$BACKUP_HEARTBEAT_TOKEN_FILE" ]; then
-        token="$(<"$BACKUP_HEARTBEAT_TOKEN_FILE")"
-    fi
+    local token="$HEARTBEAT_TOKEN"
     local args=(--silent --show-error --fail --max-time 20 --retry 3 --request POST)
     if [ -n "$token" ]; then
         args+=(--header "Authorization: Bearer ${token}")

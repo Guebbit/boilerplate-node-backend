@@ -18,9 +18,13 @@ let phase: ServerPhase = 'booting';
 /**
  * Marks the process as having finished booting and started accepting connections.
  * Called once by `createApp()`'s `start` (`src/app.ts`), right after `listenOn` resolves.
+ *
+ * Moves `booting` only. A shutdown signal can land while boot is still running; if boot then
+ * finished inside `NODE_SHUTDOWN_DELAY_MS`, setting the phase unconditionally would flip a
+ * draining copy back to ready and `GET /readyz` would answer 200 on a process that is closing.
  */
 export const markServerListening = (): void => {
-    phase = 'listening';
+    if (phase === 'booting') phase = 'listening';
 };
 
 /**

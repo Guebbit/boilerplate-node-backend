@@ -6,6 +6,8 @@ import { ConfigError } from '@infrastructure/config/define';
 import {
     assertSharedRateLimitCounters,
     crashVerdict,
+    KILL_MARGIN_MS,
+    primaryKillTimeoutMs,
     workerTarget
 } from '@infrastructure/runtime/cluster-policy';
 
@@ -25,7 +27,6 @@ describe('workerTarget', () => {
 
 describe('assertSharedRateLimitCounters', () => {
     const base = {
-        clustered: true,
         configuredWorkers: 4,
         availableCpus: 8,
         limitsRedisUrl: undefined
@@ -63,11 +64,19 @@ describe('assertSharedRateLimitCounters', () => {
             assertSharedRateLimitCounters({ ...base, configuredWorkers: 0, availableCpus: 1 });
         }).not.toThrow();
     });
+});
 
-    it('passes when clustering is off, whatever the worker setting', () => {
-        expect(() => {
-            assertSharedRateLimitCounters({ ...base, clustered: false });
-        }).not.toThrow();
+describe('primaryKillTimeoutMs', () => {
+    it('waits past the workers own deadline: delay + teardown budget + the margin', () => {
+        expect(primaryKillTimeoutMs(15_000, 10_000, 15_000)).toBe(25_000 + KILL_MARGIN_MS);
+    });
+
+    it('still waits the margin past the budget with no delay, where the old 15 s default cut it short', () => {
+        expect(primaryKillTimeoutMs(15_000, 0, 15_000)).toBe(15_000 + KILL_MARGIN_MS);
+    });
+
+    it('lets the configured timeout raise it, never lower it', () => {
+        expect(primaryKillTimeoutMs(120_000, 1000, 15_000)).toBe(120_000);
     });
 });
 

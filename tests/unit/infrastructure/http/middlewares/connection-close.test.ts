@@ -1,7 +1,7 @@
 /**
  * `closeWhileDraining` over real sockets: whether the connection stays reusable is Node's own
  * decision, made from the header this middleware sets. The process phase is module state with no
- * reset, so the two cases run in order: serving first, draining after.
+ * reset, so the cases run in order: serving first, draining after.
  */
 import http, { type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -16,15 +16,38 @@ let server: Server;
 /** The keep-alive agent every request goes through, so a closed socket would show. */
 let agent: http.Agent;
 
+/** Answers the `/slow` request, once it has arrived and the test says so. */
+let answerSlow: () => void;
+
+/** Resolves when `/slow` has reached its handler, i.e. the request began. */
+let slowArrived: Promise<void>;
+
 beforeAll(async () => {
     const app = express();
     app.use(closeWhileDraining);
     app.get('/', (_request, response) => {
         response.status(200).end();
     });
+    // Holds its answer, so a request can begin before the shutdown signal and end after it.
+    app.get('/slow', (_request, response) => {
+        answerSlow = () => {
+            response.status(200).end();
+        };
+        arrive();
+    });
     server = await listenOn(app, 0, '127.0.0.1');
     agent = new http.Agent({ keepAlive: true });
 });
+
+/** Called by the `/slow` handler; replaced per case by {@link expectSlow}. */
+let arrive: () => void = () => undefined;
+
+/** Arms `slowArrived` for the next `/slow` request. */
+const expectSlow = () => {
+    slowArrived = new Promise<void>((resolve) => {
+        arrive = resolve;
+    });
+};
 
 afterAll(() => {
     agent.destroy();
@@ -32,10 +55,10 @@ afterAll(() => {
 });
 
 /** One request through the keep-alive agent. */
-const get = () =>
+const get = (path = '/') =>
     new Promise<IncomingMessage>((resolve) => {
         http.get(
-            { port: (server.address() as AddressInfo).port, host: '127.0.0.1', agent },
+            { port: (server.address() as AddressInfo).port, host: '127.0.0.1', path, agent },
             (response) => {
                 response.resume();
                 response.on('end', () => {
@@ -52,9 +75,19 @@ describe('closeWhileDraining', () => {
         expect(response.headers.connection).toBe('keep-alive');
     });
 
-    it('answers Connection: close once the process is draining', async () => {
-        markServerDraining();
+    it('answers Connection: close to a request that began before the signal', async () => {
+        expectSlow();
+        const pending = get('/slow');
+        await slowArrived;
 
+        markServerDraining();
+        answerSlow();
+        const response = await pending;
+
+        expect(response.headers.connection).toBe('close');
+    });
+
+    it('answers Connection: close to a request that begins after the signal', async () => {
         const response = await get();
 
         expect(response.headers.connection).toBe('close');

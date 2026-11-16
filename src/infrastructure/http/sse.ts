@@ -12,6 +12,7 @@ import type { Response } from 'express';
 import { sseConfig } from '@infrastructure/http/config';
 import { rejectServiceUnavailable } from '@infrastructure/http/errors';
 import { generateRateLimited, rejectResponse } from '@infrastructure/http/response';
+import { isServerDraining } from '@infrastructure/runtime/readiness';
 
 /**
  * How often an open stream re-proves its caller still holds the key that opened it. Revocation
@@ -112,7 +113,8 @@ export const openSseStream = (
      *               what `X-Accel-Buffering` below is for.
      */
     response.setHeader('Cache-Control', 'no-store, no-transform');
-    response.setHeader('Connection', 'keep-alive');
+    // A draining server never offers keep-alive: the stream ends at the drain and the socket goes with it.
+    if (!isServerDraining()) response.setHeader('Connection', 'keep-alive');
     // nginx buffers a response by default, which would hold every frame back; this header turns it off for this response.
     response.setHeader('X-Accel-Buffering', 'no');
     // Send the headers now, before any body, so the client sees the stream open.
@@ -166,11 +168,8 @@ export const openSseStream = (
  * End every stream open in this process, each with a jittered `retry:` so its client reconnects
  * elsewhere. A stream never ends on its own, and `server.close()` waits for it; called once the
  * shutdown delay is over, so a client reconnects to a copy that is still taking traffic.
- *
- * @returns how many streams were ended
  */
-export const endSseStreams = (): number => {
-    const ending = [...drainers];
-    for (const drain of ending) drain();
-    return ending.length;
+export const endSseStreams = (): void => {
+    // Each drain removes itself from the set; a Set iteration is defined for deleting the entry it is on.
+    for (const drain of drainers) drain();
 };
