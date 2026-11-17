@@ -246,6 +246,24 @@ an error response the client would retry. `invalidateCacheTags` reports instead,
 
 Full detail: [Redis and the workers](./redis-cache-workers.md).
 
+## Live messages between copies
+
+One use of Redis here is not a cache: pub/sub, in `src/infrastructure/adapters/pubsub.ts`. Its only
+user today is the notifications stream, because a held SSE connection belongs to one process and
+the write it must report can happen in another
+([how it works](../modules/notifications.md#more-than-one-process)).
+
+- **The cache instance, not the limits one.** Pub/sub stores no keys, so `allkeys-lru` never evicts a
+  message; the limits instance exists to hold counters nothing else may share its memory with.
+- **Same prefix.** Channels are named `<NODE_REDIS_CACHE_PREFIX>:<name>`, so staging and production on one
+  Redis do not hear each other.
+- **Two connections per process.** A client in subscriber mode can run no other command, so publishing has
+  its own. The subscriber opens with the first stream, not at boot.
+- **Fails open.** No Redis, or an unreachable one, drops the message and keeps the caller working. The
+  subscriber is not reconnected on a timer: the next stream that opens reopens it, and a lost one tells its
+  owner once.
+- **`NODE_REDIS_CACHE_ENABLED=0` does not switch it off.** That flag exists to debug a stale cache.
+
 ## Configuration
 
 | Variable                           | Default                    | Meaning                                                                                                                                |

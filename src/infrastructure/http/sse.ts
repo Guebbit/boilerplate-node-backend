@@ -84,6 +84,13 @@ export interface SseStream {
      * @param cleanup - clears the owner's timers and removes the response from its registry
      */
     onClose: (cleanup: () => void) => void;
+
+    /**
+     * End this stream from the server's side, telling the client when to reconnect (the same
+     * jittered `retry:` a drain gives). For an owner whose source of frames is gone and cannot say
+     * what was missed: the client reconnects and re-reads.
+     */
+    end: () => void;
 }
 
 /**
@@ -160,7 +167,8 @@ export const openSseStream = (
     return {
         onClose: (cleanup) => {
             cleanups.push(cleanup);
-        }
+        },
+        end: endForDrain
     };
 };
 

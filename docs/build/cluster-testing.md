@@ -122,6 +122,8 @@ because a token's issuer is that address and real replicas share one.
 | one rate-limit budget across copies | exactly `LIMIT` allowed through the proxy; at least two copies answered                                                                                                                             |
 | a session across copies             | login anywhere, use on every copy, refresh on B, logout on C kills A                                                                                                                                |
 | one write for one `Idempotency-Key` | same key on two copies at once: one 201, the other replayed or 409; one row                                                                                                                         |
+| a live frame across copies          | a stream held on copy A hears a `notifications.read` frame caused by a request answered on copy B                                                                                                   |
+| a live frame from a plain process   | a stream held on copy A hears a notification a separate `node` process wrote, as a cron sweep does (`tests/replicas/support/write-notification.ts`)                                                 |
 | a rolling restart                   | every copy stopped and started in turn under steady load, `NODE_SHUTDOWN_DELAY_MS=1000`: the proxy counts no 502 or 503, every request answers 200, a slow POST open on each stopping copy ends 201 |
 
 Every case ends on a control that breaks when the rig does: the proxy's spread shows at least two

@@ -18,6 +18,7 @@ import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
 import { parseArgs } from 'node:util';
+import { stopPubSub } from '@infrastructure/adapters/pubsub';
 import { boundQueueRetries, stopQueue } from '@infrastructure/adapters/queue';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { resolveJobs, type JobDeclaration } from '@kernel/registry';
@@ -74,5 +75,5 @@ boundQueueRetries();
 void runScript(
     job.lease ? undefined : job.name,
     () => execute(job),
-    () => Promise.all([stopDatabase(), stopQueue()])
+    () => Promise.all([stopDatabase(), stopQueue(), stopPubSub()])
 );

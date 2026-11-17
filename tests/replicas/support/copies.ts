@@ -48,6 +48,11 @@ export interface Replicas {
     proxy: RoundRobinProxy;
     /** Direct base URL of one copy, bypassing the proxy. */
     direct: (index: number) => string;
+    /**
+     * The environment every copy runs with, for a plain process that must reach the same stores
+     * (a cron container's job, say). It names a port the process never listens on.
+     */
+    environment: Record<string, string | undefined>;
     /** Stops the proxy, every copy and the database. */
     stop: () => Promise<void>;
 }
@@ -60,6 +65,28 @@ const MAX_CAPTURED_CHUNKS = 40;
 
 /** What `src/app.ts` logs once the server accepts connections. */
 const READY_MARKER = 'Server listening on port';
+
+/**
+ * The environment one copy runs with: the defaults a fresh checkout boots on, then what makes it
+ * one of several, then the case's own overrides.
+ *
+ * @param options - the copy's port, database, public address and the case's overrides
+ */
+const copyEnvironment = (options: {
+    port: number;
+    dbUri: string;
+    publicUrl: string;
+    env: Record<string, string>;
+}): Record<string, string | undefined> => ({
+    ...bootableEnvironment({ port: options.port, dbUri: options.dbUri }),
+    // One process per copy: clustering is the other mode and must not fork here.
+    NODE_ENABLE_CLUSTERING: '0',
+    // One public address for every copy, as behind a real balancer: tokens name it as issuer.
+    NODE_URL: options.publicUrl,
+    // The proxy is the one hop in front of every copy.
+    NODE_TRUST_PROXY_HOPS: '1',
+    ...options.env
+});
 
 /**
  * Spawns one copy and resolves once it logged its ready line and accepts connections.
@@ -75,16 +102,7 @@ const bootCopy = (options: {
     // `node --import tsx` (the `start` script's entry), not `npx tsx`: the pid signalled is the app's.
     const child = spawn('node', ['--import', 'tsx', 'src/main.ts'], {
         cwd: REPO_ROOT,
-        env: {
-            ...bootableEnvironment({ port: options.port, dbUri: options.dbUri }),
-            // One process per copy: clustering is the other mode and must not fork here.
-            NODE_ENABLE_CLUSTERING: '0',
-            // One public address for every copy, as behind a real balancer: tokens name it as issuer.
-            NODE_URL: options.publicUrl,
-            // The proxy is the one hop in front of every copy.
-            NODE_TRUST_PROXY_HOPS: '1',
-            ...options.env
-        },
+        env: copyEnvironment(options),
         stdio: ['ignore', 'pipe', 'pipe']
     });
     const output: string[] = [];
@@ -221,6 +239,12 @@ export const withReplicas = <T>(
                             proxy,
                             direct: (index: number) =>
                                 `http://127.0.0.1:${String(copies[index].port)}`,
+                            environment: copyEnvironment({
+                                port: copies[0].port,
+                                dbUri: mongo.uri,
+                                publicUrl,
+                                env
+                            }),
                             stop: stopAll
                         }));
                 });

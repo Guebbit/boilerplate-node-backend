@@ -8,11 +8,18 @@
  */
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
+import { publishMessage, subscribeToChannel } from '@infrastructure/adapters/pubsub';
 import {
     openStreamCount,
     publishToUser,
     streamNotifications
 } from '@modules/notifications/services/stream';
+
+// The channel to the other processes is the adapter's; here it is recorded and driven by hand.
+jest.mock('@infrastructure/adapters/pubsub', () => ({
+    publishMessage: jest.fn(),
+    subscribeToChannel: jest.fn(() => Promise.resolve(true))
+}));
 
 /** The stream's heartbeat period, copied here so a change to it is noticed. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
@@ -77,6 +84,27 @@ const makeResponse = (): FakeResponse => {
             for (const handler of closeHandlers) handler();
         }
     };
+};
+
+/**
+ * What the channel's listener and loss callback were last given by an opening stream.
+ * @throws {Error} when no stream has subscribed yet
+ */
+const channelCallbacks = () => {
+    const call = jest.mocked(subscribeToChannel).mock.calls.at(-1);
+    if (!call) throw new Error('no stream subscribed to the channel');
+    return { onMessage: call[1], onLost: call[2] };
+};
+
+/**
+ * The message the last `publishToUser` put on the channel, parsed.
+ * @throws {Error} when nothing was published
+ */
+const lastPublished = (): Record<string, unknown> => {
+    const call = jest.mocked(publishMessage).mock.calls.at(-1);
+    if (!call) throw new Error('nothing was published');
+    // Narrowing: the hub publishes JSON objects only.
+    return JSON.parse(call[1]) as Record<string, unknown>;
 };
 
 describe('the notifications stream', () => {
@@ -217,6 +245,99 @@ describe('the notifications stream', () => {
             await jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS);
 
             expect(fake.end).toHaveBeenCalledTimes(1);
+            expect(openStreamCount()).toBe(0);
+        });
+    });
+    describe('across processes', () => {
+        /** A message as another process would publish it. */
+        const fromAnotherProcess = (userId: string, event = 'notifications.read') =>
+            JSON.stringify({ origin: 'another-process', userId, event, payload: { readAt: 'x' } });
+
+        beforeEach(() => {
+            jest.mocked(publishMessage).mockClear();
+            jest.mocked(subscribeToChannel).mockClear();
+        });
+
+        it('starts listening for the other processes when a stream opens', () => {
+            open('user-1');
+
+            expect(subscribeToChannel).toHaveBeenCalledWith(
+                'notifications',
+                expect.any(Function),
+                expect.any(Function)
+            );
+        });
+
+        it('delivers to its own streams first, then publishes the frame for the others', () => {
+            const fake = open('user-1');
+
+            publishToUser('user-1', 'notifications.read', { readAt: 'now' });
+
+            expect(fake.frames).toHaveLength(1);
+            expect(lastPublished()).toMatchObject({
+                userId: 'user-1',
+                event: 'notifications.read',
+                payload: { readAt: 'now' }
+            });
+            const written = fake.write.mock.invocationCallOrder[0];
+            const published = jest.mocked(publishMessage).mock.invocationCallOrder[0];
+            expect(written).toBeLessThan(published);
+        });
+
+        it('still publishes when this process has no stream for the user', () => {
+            publishToUser('nobody-here', 'notifications.read', { readAt: 'now' });
+
+            expect(publishMessage).toHaveBeenCalledTimes(1);
+        });
+
+        it('delivers a message another process published, to that user only', () => {
+            const mine = open('user-1');
+            const someoneElse = open('user-2');
+
+            channelCallbacks().onMessage(fromAnotherProcess('user-1'));
+
+            expect(mine.frames).toEqual(['event: notifications.read\ndata: {"readAt":"x"}\n\n']);
+            expect(someoneElse.frames).toEqual([]);
+        });
+
+        it('skips a message that carries its own origin, which it already delivered', () => {
+            const fake = open('user-1');
+            publishToUser('user-1', 'notifications.read', { readAt: 'now' });
+            const own = JSON.stringify(lastPublished());
+
+            channelCallbacks().onMessage(own);
+
+            expect(fake.frames).toHaveLength(1);
+        });
+
+        it.each([
+            ['not JSON', 'definitely not json'],
+            ['a missing user', JSON.stringify({ origin: 'o', event: 'notifications.read' })],
+            [
+                'an event this channel does not carry',
+                JSON.stringify({ origin: 'o', userId: 'user-1', event: 'orders.paid', payload: {} })
+            ]
+        ])('drops a message that is %s', (_title, message) => {
+            const fake = open('user-1');
+
+            expect(() => {
+                channelCallbacks().onMessage(message);
+            }).not.toThrow();
+
+            expect(fake.frames).toEqual([]);
+        });
+
+        it('ends every local stream, each with a reconnect delay, when the link is lost', () => {
+            const first = open('user-1');
+            const second = open('user-2');
+
+            channelCallbacks().onLost();
+
+            for (const fake of [first, second]) {
+                expect(fake.frames).toHaveLength(1);
+                expect(fake.frames[0]).toMatch(/^retry: \d+\n\n$/);
+                expect(fake.end).toHaveBeenCalledTimes(1);
+            }
             expect(openStreamCount()).toBe(0);
         });
     });

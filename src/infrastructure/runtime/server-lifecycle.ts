@@ -14,6 +14,7 @@ import { shutdownAnalytics } from '@infrastructure/observability/analytics';
 import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
 import { stopDatabase } from '@infrastructure/runtime/database';
 import { stopCache } from '@infrastructure/adapters/cache';
+import { stopPubSub } from '@infrastructure/adapters/pubsub';
 import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
 import { stopConsuming, stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
@@ -187,6 +188,7 @@ export const shutdownInfra = (
          */
         .then(() => stopQueue(budgetMs(SHUTDOWN_SHARES.queue)))
         .then(() => stopCache())
+        .then(() => stopPubSub())
         .then(() => stopLimitsRedis())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())

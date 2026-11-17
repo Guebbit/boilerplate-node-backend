@@ -80,6 +80,10 @@ would hold a stale copy only it can see, and only a message could reach it. That
 exist in `cache.ts`; if it is ever added, the pub/sub comes back in the same commit, tested
 against the in-memory eviction it actually serves.
 
+The one pub/sub that exists today carries something else: live notification frames
+([Live messages between copies](./redis-cache.md#live-messages-between-copies)). There the state
+really is process-local, a socket held by one worker, so only a message can reach it.
+
 Two consequences worth keeping in mind:
 
 - **A missed invalidation is bounded by the TTL, and nothing else.** That was already true — the

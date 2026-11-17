@@ -33,6 +33,7 @@ jest.mock('@infrastructure/runtime/database', () => ({
     stopDatabase: jest.fn()
 }));
 jest.mock('@infrastructure/adapters/cache', () => ({ __esModule: true, stopCache: jest.fn() }));
+jest.mock('@infrastructure/adapters/pubsub', () => ({ __esModule: true, stopPubSub: jest.fn() }));
 jest.mock('@infrastructure/adapters/pdf', () => ({ __esModule: true, settleRenders: jest.fn() }));
 jest.mock('@infrastructure/http/middlewares/idempotency', () => ({
     __esModule: true,

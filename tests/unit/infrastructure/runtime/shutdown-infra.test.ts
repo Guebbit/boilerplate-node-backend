@@ -4,6 +4,7 @@
  */
 import { shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
 import { stopQueue } from '@infrastructure/adapters/queue';
+import { stopPubSub } from '@infrastructure/adapters/pubsub';
 import { stopDatabase } from '@infrastructure/runtime/database';
 import { settleIdempotencyMarks } from '@infrastructure/http/middlewares/idempotency';
 
@@ -13,6 +14,7 @@ jest.mock('@infrastructure/runtime/database', () => ({
     stopDatabase: jest.fn()
 }));
 jest.mock('@infrastructure/adapters/cache', () => ({ __esModule: true, stopCache: jest.fn() }));
+jest.mock('@infrastructure/adapters/pubsub', () => ({ __esModule: true, stopPubSub: jest.fn() }));
 jest.mock('@infrastructure/adapters/pdf', () => ({
     __esModule: true,
     settleRenders: jest.fn(() => Promise.resolve())
@@ -47,6 +49,10 @@ beforeEach(() => {
         calls.push('queue stopped');
         return Promise.resolve();
     });
+    jest.mocked(stopPubSub).mockImplementation(() => {
+        calls.push('pub/sub stopped');
+        return Promise.resolve();
+    });
     jest.mocked(stopDatabase).mockImplementation(() => {
         calls.push('database stopped');
         return Promise.resolve();
@@ -67,7 +73,12 @@ describe('shutdownInfra', () => {
 
         await shutdownInfra(undefined, settleInFlight);
 
-        expect(calls).toEqual(['in-flight settled', 'queue stopped', 'database stopped']);
+        expect(calls).toEqual([
+            'in-flight settled',
+            'queue stopped',
+            'pub/sub stopped',
+            'database stopped'
+        ]);
         expect(settleInFlight).toHaveBeenCalledWith(expect.any(Number));
     });
 
@@ -79,12 +90,25 @@ describe('shutdownInfra', () => {
 
         await shutdownInfra();
 
-        expect(calls).toEqual(['marks settled', 'queue stopped', 'database stopped']);
+        expect(calls).toEqual([
+            'marks settled',
+            'queue stopped',
+            'pub/sub stopped',
+            'database stopped'
+        ]);
     });
 
     it('closes the stores as before when there is no in-flight work to settle', async () => {
         await shutdownInfra();
 
-        expect(calls).toEqual(['queue stopped', 'database stopped']);
+        expect(calls).toEqual(['queue stopped', 'pub/sub stopped', 'database stopped']);
+    });
+
+    // A queue job can still publish a notification while it finishes; the publish must find its socket open.
+    it('closes pub/sub after the queue drained and before the database goes', async () => {
+        await shutdownInfra();
+
+        expect(calls.indexOf('pub/sub stopped')).toBeGreaterThan(calls.indexOf('queue stopped'));
+        expect(calls.indexOf('pub/sub stopped')).toBeLessThan(calls.indexOf('database stopped'));
     });
 });

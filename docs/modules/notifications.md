@@ -112,6 +112,43 @@ flowchart LR
     class W,T,S,B peer;
 ```
 
+## More than one process
+
+A tab is held by exactly one process: the copy that accepted its `GET /notifications/stream`. The
+write it must hear about can happen in any other: another copy, another cluster worker, or the cron
+container's sweep, which holds no streams at all. So a frame is published as well as written.
+
+```mermaid
+sequenceDiagram
+    participant W as writing process
+    participant R as Redis pub/sub
+    participant O as every other process
+    participant T as open tab
+    W->>W: write to its own streams first
+    W->>R: publish {origin, userId, event, payload}
+    R->>O: the message
+    O->>O: skip it if origin is its own
+    O->>T: write the frame to that user's streams
+```
+
+| Situation                       | What happens                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| No Redis configured             | Local only, exactly as on one process. A tab on another process sees the change at its next `GET /notifications`. |
+| Redis unreachable on publish    | The write is already done; the frame is dropped for the other processes and one warning is logged.                |
+| A subscriber connection is lost | Every stream of that process ends with a jittered `retry:`; each client reconnects and re-reads its inbox.        |
+| A tab opens while Redis is down | It is served locally. The subscriber is retried by the next stream that opens.                                    |
+
+- **One channel, filtered locally.** Every process receives every frame and keeps only its own users'.
+  A channel per user would cut that traffic, at the price of a subscribe and unsubscribe on every first and last
+  tab; it is the step to take if the volume ever matters.
+- **Not a queue.** Pub/sub keeps nothing: a frame published while a process was disconnected is gone.
+  That is why a lost link ends the streams instead of resuming them.
+- **Which Redis.** The cache one (`NODE_REDIS_URL`), under `NODE_REDIS_CACHE_PREFIX`. Pub/sub stores no
+  keys, so the cache's eviction never touches it. The limits instance is for counters that must be
+  isolated, not for traffic. See [Live messages between copies](../understand/redis-cache.md#live-messages-between-copies).
+- **Job processes.** A job that writes a notification connects to Redis for the publish and closes it
+  with its database connection, so a cron run still exits.
+
 ## Work notices for staff
 
 Some rows are not about the reader as a person but about work that needs doing: `audience: staff`.
@@ -198,8 +235,10 @@ A summary row's params carry `work`, the filtered list path the bell opens.
 - **Live push.** `GET /notifications/stream` is Server-Sent Events, keyed by user, authenticated by
   the refresh cookie because an `EventSource` cannot send a header. A signed-in account is enough:
   the module declares no permission rule, since no signed-in account can lack its own inbox. It carries only what happens
-  while a tab is open; `GET /notifications` is still how a tab starts. Per process, like the
-  observability stream: a message written by another worker arrives at the next fetch.
+  while a tab is open; `GET /notifications` is still how a tab starts. A frame reaches the tabs
+  held by OTHER processes too, over Redis pub/sub
+  ([more than one process](#more-than-one-process)); without Redis it stays in the process that
+  wrote it, as the observability stream always does.
   Held streams are capped per account and per process (`NODE_SSE_MAX_STREAMS_PER_USER`,
   `NODE_SSE_MAX_STREAMS`): the extra tab is refused with 429 (or 503 when the process is full) and
   `Retry-After`, and still sees new items on its next fetch. See
