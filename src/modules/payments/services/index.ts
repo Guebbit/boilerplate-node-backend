@@ -25,6 +25,7 @@ import {
     cancelRefund,
     settledRefundPayloads
 } from './refunds';
+import { syncRefunds } from './external-refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
@@ -84,6 +85,7 @@ export const paymentService = {
     sendOpenedRefund,
     settleRefundByHand,
     cancelRefund,
+    syncRefunds,
     settledRefundPayloads,
     retryOpenRefunds,
     reconcileStalePayments,

@@ -22,6 +22,7 @@ import {
     disputeOpening,
     paidWithoutHoldOpening,
     refundOwedOpening,
+    refundUnrecordedOpening,
     refundRefusedOpening,
     refundReversedOpening,
     type LegalDeadline,
@@ -153,6 +154,23 @@ export const shopTasks = {
             open(
                 amountMismatchOpening(payload, attentionDueAt(new Date())),
                 orderWork(payload.orderId),
+                meta
+            )
+        ),
+
+    /**
+     * `payment.refund_unrecorded`: staff close it themselves, after "Re-sync refunds" or, for
+     * another currency, once the refund is in their books. Nothing closes it by event: a re-sync
+     * that imports the refund raises no event of its own to listen for.
+     */
+    onRefundUnrecorded: (
+        payload: DomainEventMap['payment.refund_unrecorded'],
+        meta: DomainEventMeta
+    ) =>
+        guarded('payment.refund_unrecorded', () =>
+            open(
+                refundUnrecordedOpening(payload, attentionDueAt(new Date())),
+                PAYMENTS_ATTENTION_WORK,
                 meta
             )
         ),

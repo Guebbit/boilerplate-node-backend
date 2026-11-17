@@ -51,6 +51,7 @@ import { getRefund } from './controllers/get-refund';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
 import { postPaymentRefundCancel } from './controllers/post-payment-refund-cancel';
+import { postPaymentRefundsSync } from './controllers/post-payment-refunds-sync';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
 import { getRefunds } from './controllers/get-refunds';
@@ -120,6 +121,15 @@ router.post(
     requireIdempotencyKey({ operation: 'refund', subjectParam: 'id' }),
     postPaymentRefund
 );
+
+/**
+ * POST /payments/:id/refunds/sync — staff re-reading the provider's refunds for one payment, for a
+ * refund made in its dashboard that the webhook import gave up on. Idempotent by construction (a
+ * refund already recorded is carried, never repeated), so no Idempotency-Key. Same `create:Refund`
+ * key (and so the same `stepUp`) as the refund buttons: it writes money records. Declared
+ * before the `/:id/refunds/:refundId/...` POSTs; none shares its shape.
+ */
+router.post('/:id/refunds/sync', requirePermission('create', 'Refund'), postPaymentRefundsSync);
 
 /**
  * GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,

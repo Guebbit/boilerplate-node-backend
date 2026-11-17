@@ -353,6 +353,45 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
+    /payments/{id}/refunds/sync:
+        post:
+            tags: [Payments]
+            summary: Re-read the provider's refunds and record the ones the app missed
+            description: >-
+                Staff running again the import of refunds made in the provider's own dashboard. The
+                provider's refund event does the same walk by itself; this is the instrument for the
+                refund it gave up on (the import lost its race on the running total on every
+                attempt, and staff were told by a `refund_unrecorded` to-do). Every refund the
+                provider lists for the payment is looked at: one of ours is carried onto its
+                record, an outside one that succeeded and is not yet recorded is imported as a
+                settled `external` refund, with its credit note and the buyer's mail, exactly as the
+                webhook would. Idempotent: a refund already recorded is never imported twice, so a
+                second call imports nothing twice. A refund it cannot record (another currency than the
+                payment: never converted) is announced again on each run, with the same to-do, because
+                the books still lack it. A payment that has not
+                succeeded, or has no provider to ask, answers itself unchanged. The payment's
+                `actions.syncRefunds` says whether the control is offered. Needs `create:Refund`,
+                with the same fresh-session requirement as creating one: a valid-but-stale token
+                answers 401 with `errors[].code` `REAUTH_REQUIRED`.
+            operationId: syncRefunds
+            x-error-codes:
+                '401': [REAUTH_REQUIRED]
+            security:
+                - bearerAuth: ['create:Refund']
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The payment whose refunds are re-read
+            responses:
+                '200':
+                    description: The payment as it now stands, with its refunds and actions.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Payment'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
     /payments/{id}/refunds/{refundId}:
         get:
             tags: [Payments]
@@ -1426,7 +1465,7 @@ components:
         PaymentActions:
             type: object
             additionalProperties: false
-            required: [pay, sync, refund, settleRefundByHand, cancelRefund]
+            required: [pay, sync, refund, settleRefundByHand, cancelRefund, syncRefunds]
             description: >-
                 What the requesting caller may do to this payment. Money is this module's to answer
                 for; the order's own moves are on `Order.actions`, and a client that needs both
@@ -1486,6 +1525,13 @@ components:
                         `settleRefundByHand` (money that provably did not move), so a hand-paid `pending`
                         refund or a card refund refused for a clear reason. The server decides.
                         Empty when there is none.
+                syncRefunds:
+                    type: boolean
+                    description: >-
+                        Whether `POST /payments/{id}/refunds/sync` would do something: the caller
+                        holds `create:Refund`, the payment is `succeeded` and went through a
+                        provider that can be asked. It re-reads the provider's refunds, which is
+                        how a refund made in the provider's dashboard that the app missed gets recorded.
 
         PaymentWebhookEvent:
             type: object

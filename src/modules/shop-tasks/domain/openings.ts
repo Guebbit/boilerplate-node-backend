@@ -88,6 +88,42 @@ export const amountMismatchOpening = (
 });
 
 /**
+ * A refund made in the provider's own dashboard that the import could not record. The money
+ * moved and the books do not show it: staff re-sync, or record it themselves.
+ *
+ * @param refund - the refund and what it belongs to
+ * @param refund.paymentId - the payment it was made on
+ * @param refund.orderId - the order of that payment
+ * @param refund.refundRef - the provider's refund id, to find it in the dashboard
+ * @param refund.amount - the refund's amount, a decimal
+ * @param refund.currency - the ISO code the provider refunded in
+ * @param refund.reason - why the import could not record it
+ * @param dueAt - when it is overdue
+ */
+export const refundUnrecordedOpening = (
+    refund: {
+        paymentId: string;
+        orderId: string;
+        refundRef: string;
+        amount: string;
+        currency: string;
+        reason: 'lost_race' | 'other_currency';
+    },
+    dueAt: Date
+): ShopOpening => ({
+    kind: TaskKind.refund_unrecorded,
+    routeSet: 'PaymentRefunding',
+    link: { type: TaskLinkType.payment, id: refund.paymentId },
+    subject: 'Refund made at the provider is not recorded',
+    message:
+        `A refund of ${refund.amount} ${refund.currency} (${refund.refundRef}) was made at the provider on payment ${refund.paymentId} of order ${refund.orderId}, and the shop has not recorded it. ` +
+        (refund.reason === 'lost_race'
+            ? 'Press "Re-sync refunds" on the payment, then close this.'
+            : 'It is in another currency than the payment, so "Re-sync refunds" will not import it: record it outside the app (your accountant), then close this. A later re-sync or refund on this payment reminds you again.'),
+    dueAt
+});
+
+/**
  * An order paid with nothing set aside for it.
  *
  * @param now - the clock
