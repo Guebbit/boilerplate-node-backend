@@ -88,8 +88,7 @@ USER backupjob
 
 ENV RESTIC_CACHE_DIR=/cache
 
-# The scheduler's own liveness: supercronic serves /health while it runs (`entrypoint.sh` turns it on).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:9746/health || exit 1
+# No HEALTHCHECK: Podman's OCI build drops it. The `backup` service's check (supercronic's /health on
+# 127.0.0.1:9746) lives in compose.production.yaml, and `docker/backup/drill.sh` probes the same URL.
 
 ENTRYPOINT ["backup-entrypoint"]

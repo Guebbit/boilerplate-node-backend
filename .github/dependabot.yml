@@ -78,7 +78,7 @@ updates:
       # image to the latest otel tag and run `bash docker/observability/validate-configs.sh`. Drop
       # the ignore when dependabot-core#15718 closes.
       ignore:
-          - dependency-name: otel/opentelemetry-collector-contrib
+          - dependency-name: '*otel/opentelemetry-collector-contrib'
           # Mongo minors are short-lived. On a patch PR, bump `config.mongodbMemoryServer.version`
           # in package.json in the same PR: tests/cross-cutting/mongo-version-pin.test.ts fails until then.
           - dependency-name: '*mongo'

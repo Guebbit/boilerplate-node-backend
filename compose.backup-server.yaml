@@ -53,8 +53,6 @@ services:
         entrypoint: ['sh', '-c', 'mkdir -p /data/repos && chown 1000:1000 /data/repos']
         volumes:
             - backup-data:/data
-        healthcheck:
-            disable: true
 
     # The append-only restic server. https://rclone.org/commands/rclone_serve_restic/
     #   --private-repos  a user reaches only the folder named like itself
@@ -119,6 +117,14 @@ services:
             # Each client's restic password, read-only. The only secret this machine holds besides TLS.
             - ./backup-server/clients:/clients:ro
             - backup-cache:/cache
+        # Supercronic's `/health`, served in server mode too. Declared here: Podman builds OCI images by
+        # default and OCI drops the image's own `HEALTHCHECK`, so the image carries none.
+        healthcheck:
+            test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9746/health']
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             init:
                 condition: service_completed_successfully
