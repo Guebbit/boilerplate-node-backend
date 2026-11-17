@@ -157,20 +157,12 @@ export const padDecimal = (value: unknown, currency: string): string =>
  */
 export const formatMoney = (locale: string, amount: string | number, currency: string): string => {
     const digits = minorUnitExponent(currency);
-    /**
-     * `format` reads a numeric string exactly, with no float in between; the lib typings only
-     * admit `number | bigint` here, hence the one cast.
-     */
     return new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
         minimumFractionDigits: digits,
         maximumFractionDigits: digits
-        /**
-         * `Intl.NumberFormat.format` takes a `number | bigint`; a branded `Money` is a number at
-         * runtime.
-         */
-    }).format(amount as number);
+    }).format(amount as `${number}`); // narrowing: `DecimalAmount`'s pattern (openapi.root.yaml), or `toDecimalString`, made it numeric
 };
 
 /**

@@ -16,6 +16,7 @@ audience: [staff, owner]
 | The buyer was asked how they want their money and has not answered | [The buyer does not answer](#buyer-silent)                     |
 | A refund was also made in the provider's own dashboard             | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
 | Two refunds were opened by mistake                                 | [Two refunds by mistake](#two-refunds)                         |
+| An order was canceled but no refund opened                         | [A canceled order with no refund](#no-refund-opened)           |
 
 ## A refund owed by hand {#refund-owed-by-hand}
 
@@ -235,6 +236,19 @@ There is no such thing as a refund backwards. Cancel the open one, or ask the bu
 
 **Whose job.** The [moderator](./moderator.md) or the admin.
 → [Payments](../modules/payments.md#cancelling-a-refund)
+
+## A canceled order with no refund {#no-refund-opened}
+
+**What you see.** A paid order was canceled, but its payment shows no refund. You were alerted
+twice before this (the **Outbox events dead** alert and the dead-events bell): the message that
+opens the refund failed every retry.
+
+**What to do.** Press **Refund** on the payment for the amount the buyer paid. If a developer
+revives the dead event instead, the refund opens by itself. Either way, the shop checks the amount
+still left to refund, so doing both never pays the buyer twice.
+
+**Whose job.** The [moderator](./moderator.md) or the admin; the dead event itself is a technician's.
+→ [Payments](../modules/payments.md#when-a-card-refund-cannot-go-back)
 
 ## Still stuck
 

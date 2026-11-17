@@ -19,7 +19,7 @@
 import './infrastructure/config/dotenv';
 
 /**
- * OTel must initialize before express/http/mongoose are imported. That only holds when
+ * OTel must initialize before express, http and the models are imported. That only holds when
  * `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
  * imports below are hoisted above this call.
  */

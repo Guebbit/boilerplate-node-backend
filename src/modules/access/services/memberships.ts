@@ -117,8 +117,8 @@ export const revokeRole = (
     session?: ClientSession
 ): Promise<void> => {
     /**
-     * Set once a membership is found, read by BOTH branches below — the failure branch needs it
-     * too, so `role` is never missing from its audit row the way it is from the other three (see
+     * Set once a membership is found, read by BOTH branches below. A caller refused at
+     * `assertCanRevoke` never reaches the lookup, so its audit row carries no `role` (see
      * `auditRoleChange`'s own docblock).
      */
     let revokedRole: string | undefined;

@@ -231,8 +231,17 @@ export const pruneUnreferenced = (
                                 : unlinkIfPresent(filePath, 'Could not delete an orphaned file.', {
                                       file: entry.name
                                   }),
-                        // Gone between the listing and here: nothing left to delete.
-                        () => false
+                        (error: unknown) => {
+                            // Gone between the listing and here: nothing left to delete. Any
+                            // other failure (EACCES, EIO) leaves the file in place, and says so.
+                            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                                logger.warn({
+                                    message: 'Could not read an orphaned file to age-check it.',
+                                    file: entry.name,
+                                    error
+                                });
+                            return false;
+                        }
                     );
                 })
             ).then((deleted) => ({

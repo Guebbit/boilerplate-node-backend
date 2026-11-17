@@ -146,10 +146,9 @@ export const isLostRace = (error: unknown): boolean =>
  * Whether the open precondition (if any) is about this document and still unconsumed. Consumes it:
  * a second save of the same row in one request has, by then, a version the caller never saw.
  *
- * @param document - the row about to be written
  * @param key - what the route calls this row: its `_id`, or another id the path carries
  */
-const takePrecondition = (document: { _id?: unknown }, key: string): Precondition | undefined => {
+const takePrecondition = (key: string): Precondition | undefined => {
     const scope = scopeStorage.getStore();
     if (!scope || scope.consumed || key !== scope.precondition.id) return undefined;
     scope.consumed = true;
@@ -208,7 +207,7 @@ export const fencedSave = <T>(
     write: () => Promise<T>,
     key = String(document._id)
 ): Promise<T> => {
-    const precondition = takePrecondition(document, key);
+    const precondition = takePrecondition(key);
     if (!precondition) return write();
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());
@@ -231,7 +230,7 @@ export const fencedSave = <T>(
  * @returns `{}` when there is no precondition about this row, or it is `*`
  */
 export const preconditionFilter = (key: string, path: string): Record<string, unknown> => {
-    const precondition = takePrecondition({}, key);
+    const precondition = takePrecondition(key);
     if (!precondition || precondition.etags === 'any') return {};
     const versions = precondition.etags
         .map((tag) => versionOfTag(tag))
@@ -260,7 +259,7 @@ export const checkedDelete = (
     document: { _id?: unknown; editRevision?: unknown },
     write: () => Promise<DeleteOutcome>
 ): Promise<void> => {
-    const precondition = takePrecondition(document, String(document._id));
+    const precondition = takePrecondition(String(document._id));
     if (!precondition) return write().then(() => undefined);
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());

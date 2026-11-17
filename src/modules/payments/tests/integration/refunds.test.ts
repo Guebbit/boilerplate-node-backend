@@ -680,7 +680,7 @@ describe('the order payment status', () => {
 });
 
 describe('a succeeded payment with no providerRef', () => {
-    it('audits a failure, not a success, for money that never actually moved', async () => {
+    it('refuses the refund, final: no settlement is audited for money that never moved', async () => {
         // Nothing succeeds before the provider is asked for an intent: this row is corrupted.
         const { orderId } = await paidOrder();
         await paymentModel.updateOne({ orderId }, { $unset: { providerRef: 1 } });
@@ -689,11 +689,15 @@ describe('a succeeded payment with no providerRef', () => {
         const result = await refund(orderId);
 
         expect(result.success).toBe(true);
-        const refunds = auditSpy.mock.calls.filter(
+        const settlements = auditSpy.mock.calls.filter(
             ([event]) => event.action === paymentsAuditActions.ADMIN_PAYMENT_REFUNDED
         );
-        expect(refunds).toHaveLength(1);
-        expect(refunds[0][0]).toMatchObject({ outcome: 'failure' });
+        expect(settlements).toHaveLength(0);
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds[0]).toMatchObject({
+            status: 'failed',
+            failureReason: 'provider_removed'
+        });
     });
 });
 

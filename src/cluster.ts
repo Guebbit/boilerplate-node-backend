@@ -2,18 +2,18 @@
  * The cluster entry: `npm run start:cluster`, for a bare VM with no PM2 or systemd. Not the
  * default (`src/main.ts` is); containers scale with orchestrator replicas instead.
  *
- * Like `main.ts`, it starts OTel before `serve` loads express and mongoose: `serve` is imported
- * dynamically below, while a static import is hoisted above any statement. Under
+ * Like `main.ts`, it starts OTel before `serve` loads express, http and the models: `serve` is
+ * imported dynamically below, while a static import is hoisted above any statement. Under
  * `NODE_ENV=development` the primary and every worker also load the development doubles themselves.
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
-// OTel must initialize before any other module is loaded.
+// OTel starts before `serve` (express, http, the models) loads: it patches them as required.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 
-/** Start the OpenTelemetry SDK before express/http/mongoose are loaded (it patches them). */
+/** Start the OpenTelemetry SDK before `serve` loads express, http and the models (it patches them). */
 startTracing();
 
 import os from 'node:os';

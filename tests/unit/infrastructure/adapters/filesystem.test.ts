@@ -249,6 +249,59 @@ describe('pruneUnreferenced', () => {
         expect(existsSync(old)).toBe(false);
     });
 
+    it('keeps a file whose age cannot be read, and logs why', async () => {
+        // `stat` forced to fail with EACCES: a permission denial is not "gone", and the suite may run as root.
+        jest.doMock('node:fs/promises', () => {
+            const actual =
+                jest.requireActual<typeof import('node:fs/promises')>('node:fs/promises');
+            return {
+                ...actual,
+                stat: jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+                    )
+            };
+        });
+        const { logger } = await import('@infrastructure/adapters/logger');
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        const unreadable = await stage('unreadable.jpg');
+
+        const result = await pruneUnreferenced(root, new Set());
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(existsSync(unreadable)).toBe(true);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({ file: 'unreadable.jpg', error: expect.any(Error) })
+        );
+    });
+
+    it('stays silent about a file that vanished between the listing and the stat', async () => {
+        // `stat` forced to answer ENOENT: another sweep or a delete got there first.
+        jest.doMock('node:fs/promises', () => {
+            const actual =
+                jest.requireActual<typeof import('node:fs/promises')>('node:fs/promises');
+            return {
+                ...actual,
+                stat: jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })
+                    )
+            };
+        });
+        const { logger } = await import('@infrastructure/adapters/logger');
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        await stage('vanished.jpg');
+
+        const result = await pruneUnreferenced(root, new Set());
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('deletes nothing when every file on disk is still referenced', async () => {
         const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
         const kept = await stage('still-used.jpg');

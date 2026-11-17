@@ -52,8 +52,8 @@ export type RemainderCancel =
  * Cancel what has not shipped yet on one fulfillment order, inside the CALLER's transaction. With
  * nothing shipped it only goes while another fulfillment order still has units; the last live one
  * is the whole order, which is canceled as an order. Every
- * refusal is decided before the first write and answered as `ok: false`; a failure after the first
- * write throws, aborting the caller's whole transaction — returning there would commit a claim
+ * refusal is decided before the claim and answered as `ok: false`; a lost claim, or a failure
+ * after it, throws, aborting the caller's whole transaction — returning there would commit a claim
  * with nothing around it.
  *
  * The lines become `canceledQuantity`, the status follows (`closed` when something shipped from it,
@@ -68,7 +68,7 @@ export type RemainderCancel =
  * @param reason - who canceled it, stored on the fulfillment order
  * @param actor - the account that made the cancel (the buyer or a staff member), for the order's
  *   timeline rows; absent when the system did
- * @throws {ActRefusal} when the fulfillment order or the order moved after the first write
+ * @throws {ActRefusal} when the claim is lost, or the fulfillment order or the order moved after it
  */
 export const cancelRemainder = async (
     fulfillmentOrderId: string,
