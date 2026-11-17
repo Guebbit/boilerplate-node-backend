@@ -227,7 +227,7 @@ raises a design choice the rules above don't settle, run this procedure. Don't a
    - re-checks the code on current `main` in both repos (cite `file:line` and the sha);
    - looks the standard up on the web, in the house order: Solidus → Shopify → Stripe → RFCs / Google
      AIP / Zalando → EU law. Every row is marked `verified: <url>` or `from memory`;
-   - writes one **card** (format below).
+   - writes one **card**, in the format of the crew plugin's `decide` skill.
 2. **A skeptic agent per card** tries to break it: wrong facts, a better option, a clash with
    another decision. The card is corrected, never just defended.
 3. **File it by confidence after the skeptic.** FE-only cards sit 10 points lower: the FE is
@@ -247,51 +247,11 @@ raises a design choice the rules above don't settle, run this procedure. Don't a
 4. **Where cards live:** `.work/` (gitignored), one home for both repos, one folder per feature:
    `.work/features/<feature>/` holds `QUESTIONS.md`, `DECIDED.md`, `DECIDED_WITH_DOUBTS.md`.
    - Each file has one writer: the role that decided, or the vicemanager.
-   - `QUESTIONS.md` opens with a quick table (id, what, suggestion, %, lane).
    - A decided card is its lane's build spec; its lane row in `.work/HANDOFF.md` says so.
    - When the feature is merged: fold the why and the rejected alternatives into the owning
      `docs/` page, then delete the feature's folder.
 5. **"Prune" or "refute"**: one refuter agent per decided card. A refuted card goes back to
    QUESTIONS; a surviving one is permanent and gets its amendments appended to its card.
-
-**The card** follows the MADR 4 template (https://adr.github.io/madr/), plus our extras (marked ⁺).
-One card per `###` heading. Short lines, plain words:
-
-```md
-### <ID> · <the question, in plain words>
-
-**Status:** proposed | accepted | rejected | superseded by <ID> · <date> · decision-makers: <user | role>
-**Plain version⁺:** 3-5 lines of plain prose a non-specialist can answer from: what is being
-decided, what changes for whom, and what the suggestion is.
-
-#### Context and Problem Statement
-- Background (from scratch): the terms, one bullet each.
-- Today (main <sha>): at most ~8 bullets, with file:line.
-- Why it matters: who is hurt, and how.
-
-#### Decision Drivers
-The standards and house rules that settle it.
-
-#### Considered Options
-| Option | What changes | Good | Bad | Cost (S/M/L · BE/FE · contract yes/no) |
-
-#### Decision Outcome
-Chosen option: <letter>, because <the one reason>.
-- **Confidence⁺:** <N> % · raises: <…> · lowers: <…>
-- **Skeptic⁺:** held / corrected: <what it changed>
-- **Consequences:** Good, because <…> · Bad, because <…>
-- **Confirmation:** the build list (files, contract, tests, docs), so a lane can build it without coming back.
-
-#### What others do⁺
-| Who | What they do | Source (verified / from memory) |
-
-**Answer with⁺:** "<ID> <letter>" (QUESTIONS only).
-```
-
-- Status by file: `QUESTIONS.md` = proposed · `DECIDED.md` and `DECIDED_WITH_DOUBTS.md` = accepted ·
-  overturned = superseded by the new card · an option dropped on purpose = rejected.
-- MADR keeps one record per file; ours keep several per file, so the status is a line, not a
-  front-matter block.
 
 ## Commits
 
