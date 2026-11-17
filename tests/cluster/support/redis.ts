@@ -14,8 +14,13 @@ import net from 'node:net';
 import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
 import { retryUntil } from '@tests/eventually';
 
-/** Container image the throwaway Redis runs; overridable for an air-gapped host. */
-const IMAGE = process.env.NODE_TEST_REDIS_IMAGE ?? 'docker.io/library/redis:7-alpine';
+/**
+ * Container image the throwaway Redis runs; overridable for an air-gapped host. The one `compose.yaml`
+ * pins for `cache` and `limits`, so the suite runs on the Redis that dev and production run.
+ */
+const IMAGE =
+    process.env.NODE_TEST_REDIS_IMAGE ??
+    'docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0';
 
 /** A running throwaway Redis: its url and how to stop it. */
 export interface TestRedis {

@@ -32,14 +32,21 @@ RUN node /tmp/install-supercronic.mjs && rm /tmp/install-supercronic.mjs
 # Where puppeteer-core looks for the browser. Its own fallback is Alpine's path, which Debian lacks.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# The whole context, not only the manifests: `npm ci`'s postinstall bundles and generates from
-# `scripts/`, `shared/` and `src/modules/*/*.yaml`. The compose bind mount overlays this copy at run
-# time, so what lasts is the populated `/app/node_modules` volume.
+# Manifests first, so the install layer is reused whenever the lockfile did not move. The scripts wait:
+# the root `postinstall` bundles and generates from `scripts/`, `shared/` and `src/modules/*/*.yaml`.
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+# The whole context. The compose bind mount overlays this copy at run time, so what lasts is the
+# populated `/app/node_modules` volume. `.dockerignore` keeps node_modules, `.git`, `.env` and `tmp/` out.
 COPY . .
 
-# `npm ci`, then the lockfile stamp, so a fresh `/app/node_modules` volume is not reinstalled by the
-# compose services' own `docker/ensure-deps.sh`. Lifecycle scripts run on purpose here (postinstall).
-RUN sh docker/ensure-deps.sh
+# What `npm ci` would have run with scripts on: the dependencies' own install scripts (`npm rebuild`:
+# esbuild, swc, the file watcher), then the root `postinstall`. Then the lockfile stamp, in the form
+# `docker/ensure-deps.sh` checks, so a fresh `/app/node_modules` volume is not reinstalled by the compose
+# services' own run of that script.
+RUN npm rebuild && npm run postinstall \
+    && sha256sum package-lock.json | cut -d ' ' -f 1 > node_modules/.package-lock.sha256
 
 # Bakes a `mongod` in, so the suite (mongodb-memory-server) needs no network. `MONGOMS_DOWNLOAD_DIR` is
 # the library's binary cache; set here it persists into the container, so no download at test time.
@@ -182,10 +189,9 @@ USER node
 # Documentation only; the app binds NODE_PORT.
 EXPOSE 3000
 
-# The web process's own check: `GET /livez`, never a dependency. `cron` and `setup` declare their own.
-# Node's fetch, so the image carries no curl. docs/operate/health-checks.md
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.NODE_PORT||3000)+'/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# No HEALTHCHECK here on purpose: Podman builds OCI images by default and OCI drops it, so the one
+# definition lives in `compose.production.yaml` (`app` and `cron`), which both engines read.
+# Outside compose, give the platform the same probe: `GET /livez`. docs/operate/health-checks.md
 
 ENTRYPOINT ["dumb-init", "--"]
 

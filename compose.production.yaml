@@ -323,8 +323,8 @@ services:
 
         # Liveness, never readiness: `/livez` checks only that the process answers, so a Mongo blip
         # cannot mark a healthy container unhealthy (Swarm would replace it). `/readyz` is for a
-        # load balancer's own probe. Kept here although the image declares the same check: Podman
-        # builds OCI images by default, and OCI drops `HEALTHCHECK`. `node -e`, not `curl -f`: the
+        # load balancer's own probe. The one definition of this check: the image declares none, because
+        # Podman builds OCI images by default and OCI drops `HEALTHCHECK`. `node -e`, not `curl -f`: the
         # runtime image is node:*-alpine and ships no curl. See docs/operate/health-checks.md.
         healthcheck:
             test:
@@ -397,8 +397,8 @@ services:
                 '-c',
                 'node --import tsx scripts/ops/check-config.ts && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
             ]
-        # This container's own job is the scheduler, so it checks the scheduler — the image's web
-        # check would never pass here (nothing listens on the app port). See docs/operate/health-checks.md.
+        # This container's own job is the scheduler, so it checks the scheduler: nothing listens on
+        # the app port here. See docs/operate/health-checks.md.
         healthcheck:
             test:
                 [
@@ -478,9 +478,7 @@ services:
                 'node --import tsx scripts/db/sync-indexes.ts && node --import tsx scripts/db/bootstrap-access.ts'
             ]
         # A one-shot job: its exit code is the signal, which `depends_on: service_completed_successfully`
-        # already reads. The image's web check would only mark it unhealthy while it runs.
-        healthcheck:
-            disable: true
+        # already reads. It declares no healthcheck, and the image carries none.
         depends_on:
             database:
                 condition: service_healthy
@@ -604,7 +602,10 @@ services:
     # access:bootstrap both need a set that can take writes.
     mongo-rs-init:
         logging: *logging
-        image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+        # The same image as `database` (compose.yaml). The two production-only Mongo services share this
+        # one spelling (`restore-drill-db` aliases it); they cannot move to the base file, where
+        # development would start them.
+        image: &mongo-image docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
         restart: 'no'
         profiles: [bundled]
         <<: *data-hardening
@@ -790,6 +791,15 @@ services:
             # A repository on a local disk: `BACKUP_REPOSITORY=/repo`. Unused for a remote one.
             # Bind a host path here in an override file to put the repository on another disk.
             - backup-repo:/repo
+        # The scheduler's own liveness: supercronic serves `/health` while it runs (`entrypoint.sh` turns it
+        # on), also when the job is dormant. `curl`, which this image has; the check lives here because
+        # Podman builds OCI images by default and OCI drops `HEALTHCHECK`. `docker/deploy.sh` reads it.
+        healthcheck:
+            test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9746/health']
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
         depends_on:
             database:
                 condition: service_healthy
@@ -799,7 +809,7 @@ services:
     # gone when the drill ends. It shares nothing with the live `database`.
     restore-drill-db:
         logging: *logging
-        image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+        image: *mongo-image
         profiles: [restore-drill]
         <<: *data-hardening
         command: ['mongod', '--bind_ip_all', '--noauth']
@@ -851,7 +861,6 @@ services:
     # Prometheus: scrapes the API with the shared metrics token and evaluates the alert rules.
     prometheus:
         logging: *logging
-        image: docker.io/prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -871,7 +880,6 @@ services:
     # Alertmanager: groups and routes what Prometheus fires, by the `ALERT_*` knobs (empty = `null`).
     alertmanager:
         logging: *logging
-        image: docker.io/prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -916,7 +924,6 @@ services:
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:
         logging: *logging
-        image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -952,7 +959,6 @@ services:
     # docs/operate/first-deploy-monitoring.md#what-the-log-shipper-can-read
     alloy:
         logging: *logging
-        image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening

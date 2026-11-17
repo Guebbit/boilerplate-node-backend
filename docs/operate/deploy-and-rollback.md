@@ -42,13 +42,15 @@ flowchart LR
 A deploy is **good** only when all of these hold:
 
 - `setup` (indexes and the shop's row) exited 0;
-- `app` and `cron` are running, have not restarted, and report `healthy`;
+- `app` and `cron` are running, have not restarted, and report `healthy`, and so is `backup` when the
+  `backup` profile is on (a stack whose backups cannot start is not good);
 - `/readyz` answers from inside `app` (it checks Mongo, not just the process).
 
 Anything else is a failed deploy: a `setup` that exits non-zero, a container that exits or restarts,
 an `unhealthy` check, or no good state within `DEPLOY_TIMEOUT` (240 s). The script then prints the
-last log lines of `setup`, `app` and `cron`, redeploys the previous good image with
-`up -d --no-deps app cron` (**without** `setup`, so a rollback never touches the data) and exits 1.
+last log lines of `setup`, `app`, `cron` and `backup`, redeploys the previous good image with
+`up -d --no-deps app cron` (**without** `setup`, so a rollback never touches the data, and checking
+only those two) and exits 1.
 
 | Exit code | Meaning                                                                                  |
 | --------- | ---------------------------------------------------------------------------------------- |
@@ -62,6 +64,12 @@ last log lines of `setup`, `app` and `cron`, redeploys the previous good image w
 | --------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **No registry** | `docker/deploy.sh acme`       | `build app`, tagged `boilerplate-api:<git short sha>` (`-dirty` when the tree has changes). Old tags are pruned: only the last 5 good ones stay.                           |
 | **A registry**  | `docker/deploy.sh acme <ref>` | `pull` (skipped when the exact ref is already on the host), then run it. Pass the **digest**, which never changes. A registry keeps its own history, so nothing is pruned. |
+
+With the `backup` profile on (`COMPOSE_PROFILES` in the shell, else in `clients/<client>/.env`) the script
+also builds the backup image from this checkout, on either path, and tags it `boilerplate-backup:<git short
+sha>`; it sets `BACKUP_IMAGE`, which `compose.production.yaml` reads, to that tag. The backup image is never in
+a registry, so without this step `up --no-build` had no image to start. Backup tags other than the one in use
+(and `latest`) are removed after a good deploy.
 
 `APP_IMAGE` has no default in `compose.production.yaml` any more. The old `latest` tag was
 overwritten by every build, so there was nothing to go back to. The script sets it; set it by hand
