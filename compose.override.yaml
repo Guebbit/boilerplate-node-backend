@@ -476,7 +476,7 @@ services:
     grafana:
         logging: *container-logging
         profiles: ['observability']
-        image: docker.io/grafana/grafana:11.4.0@sha256:d8ea37798ccc41061a62ab080f2676dda6bf7815558499f901bdb0f533a456fb
+        image: docker.io/grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
         restart: unless-stopped
         environment:
             GF_AUTH_ANONYMOUS_ENABLED: 'true'
