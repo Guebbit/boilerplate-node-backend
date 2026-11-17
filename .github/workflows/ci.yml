@@ -220,7 +220,7 @@ jobs:
     alert-rules:
         # The Prometheus alert rules: valid syntax (`check rules`) and the right answers
         # (`test rules`, cases in prometheus.alert-rules.test.yaml and prometheus.infra-rules.test.yaml). The image is the one
-        # docker-compose runs, pinned by digest. Then the Alertmanager routing, by `amtool`.
+        # the compose stacks run, pinned by digest in `compose.yaml`. Then the Alertmanager routing, by `amtool`.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -233,11 +233,11 @@ jobs:
 
             - name: Check and test the rules
               # promtool ships in the Prometheus image; the folder is mounted read-only. The image
-              # is the one `compose.production.yaml` runs (same extraction as
+              # is the one `compose.yaml` pins for both stacks (same extraction as
               # `validate-configs.sh`), so a bump there cannot leave the rules checked by an older tool.
               run: |
-                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/prometheus:[^ ]+).*#\2#p' compose.production.yaml | head -1)
-                  test -n "$image" || { echo "::error::no prom/prometheus image in compose.production.yaml"; exit 1; }
+                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/prometheus:[^ ]+).*#\2#p' compose.yaml | head -1)
+                  test -n "$image" || { echo "::error::no prom/prometheus image in compose.yaml"; exit 1; }
                   docker run --rm --entrypoint promtool \
                     -v "$PWD/docker/observability:/obs:ro" \
                     "$image" \
@@ -250,10 +250,10 @@ jobs:
             - name: Check and test the alert routing
               # Renders alertmanager.config.template.yaml for each knob combination, then
               # `amtool check-config` and `amtool config routes test` prove where each alert
-              # lands. amtool ships in the Alertmanager image, read from the production compose like the one above.
+              # lands. amtool ships in the Alertmanager image, read from `compose.yaml` like the one above.
               run: |
-                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/alertmanager:[^ ]+).*#\2#p' compose.production.yaml | head -1)
-                  test -n "$image" || { echo "::error::no prom/alertmanager image in compose.production.yaml"; exit 1; }
+                  image=$(sed -n -E 's#^ +image: (docker\.io/)?(prom/alertmanager:[^ ]+).*#\2#p' compose.yaml | head -1)
+                  test -n "$image" || { echo "::error::no prom/alertmanager image in compose.yaml"; exit 1; }
                   docker run --rm --entrypoint sh \
                     -v "$PWD/docker/observability:/obs:ro" \
                     "$image" \
@@ -341,8 +341,9 @@ jobs:
             contents: read
         services:
             redis:
-                # redis:7-alpine
-                image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+                # The image `compose.yaml` pins for `cache` and `limits` (redis:8-alpine): the cluster
+                # suites must run on the Redis that dev and production run. Move both together.
+                image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
                 ports:
                     - 6379:6379
                 options: >-
@@ -1011,6 +1012,7 @@ jobs:
         timeout-minutes: 5
         permissions:
             contents: read
+            issues: write # `notify-failure` opens or updates the tracking issue
         steps:
             - name: Check all jobs succeeded
               run: |
@@ -1018,3 +1020,20 @@ jobs:
                       echo "One or more required jobs failed."
                       exit 1
                   fi
+
+            # A red push to main is the one failure no pull request is open to show. Without this step
+            # it was seen by nobody, and a suite stayed red for weeks. Pull requests do not notify:
+            # their own check is the signal. One issue, updated in place, like the scheduled workflows.
+            - name: Checkout
+              if: failure() && !cancelled() && github.event_name == 'push'
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Open or update the main-is-red issue
+              if: failure() && !cancelled() && github.event_name == 'push'
+              uses: ./.github/actions/notify-failure
+              with:
+                  title: 'CI is failing on main'
+                  label: 'ci-main-red'
+                  workflow-name: 'CI'

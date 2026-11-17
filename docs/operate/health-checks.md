@@ -145,15 +145,18 @@ advice is the same shape: a short pause before the app stops accepting.
 
 ## Podman
 
-Podman builds OCI images by default, and OCI has no `HEALTHCHECK`. So the `app` service repeats the
-check in `compose.production.yaml` instead of leaning on the image. The compose block works
-on both engines.
+Podman builds OCI images by default, and OCI has no `HEALTHCHECK`. So the image declares none, and
+the one definition of the `app` check (and of each other service's) is the `healthcheck:` block in `compose.production.yaml`, which
+works on both engines. Run the image outside compose (Swarm, ECS, `docker run`) and give the platform
+the same probe: `GET /livez` on `NODE_PORT`, by `node -e` since the image has no curl.
 
 ## Supercronic's `/health`
 
 `cron` and `backup` start supercronic with `-prometheus-listen-address 127.0.0.1:9746`. That serves `/health`,
 which answers `OK` while the scheduler runs, and `/metrics` (success and failure counters per job).
-The loopback bind keeps both private to the container. `backup` is a second scheduler in a second container, on purpose: it holds the backup secrets and the app's `cron` does not ([Backups](./backups.md)). Scraping `/metrics` needs a non-loopback
+The loopback bind keeps both private to the container. Each of these services declares its own check in
+its compose file (`cron` by `node -e`, `backup` and the second machine's `maintenance` by `curl`, which the backup
+image has); `docker/deploy.sh` reads `backup`'s, so a hung scheduler fails the deploy. `backup` is a second scheduler in a second container, on purpose: it holds the backup secrets and the app's `cron` does not ([Backups](./backups.md)). Scraping `/metrics` needs a non-loopback
 bind, which is not set up.
 [source](https://github.com/aptible/supercronic/blob/master/prometheus_metrics/prommetrics.go)
 

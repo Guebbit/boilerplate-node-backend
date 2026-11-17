@@ -139,7 +139,7 @@ to the container; none reaches the app.
 | `BACKUP_DATABASE`                                        | `true`                      | `false` when the database is not in this stack (a managed Mongo): the files are still backed up                     |
 | `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                       | The [off-host freshness check](#the-heartbeat); the token is the `backup_heartbeat_token` secret file in production |
 | `MONGO_BACKUP_USER`                                      | `backup`                    | The database account name                                                                                           |
-| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag                                                                                                       |
+| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag. `docker/deploy.sh` builds `boilerplate-backup:<git sha>` and sets this itself                        |
 
 `BACKUP_PRUNE` defaults to `true` on purpose. Forgotten `false` on a plain disk or S3 repository, the
 repository grows forever, silently. Forgotten `true` on an append-only server, `forget` is refused,

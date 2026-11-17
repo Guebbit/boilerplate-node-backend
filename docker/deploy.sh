@@ -9,11 +9,11 @@
 #   CONTAINER_ENGINE      podman (default) or docker; the same switch `npm run compose` uses
 #   DEPLOY_TIMEOUT        seconds to wait for a healthy stack (default 240)
 #   DEPLOY_KEEP           local `boilerplate-api:<sha>` images kept on the no-registry path (default 5)
-#   DEPLOY_COMPOSE_FILES  the compose files, space-separated, each passed as `-f`
-#                         (default `compose.yaml compose.production.yaml`)
+#   COMPOSE_PROFILES      read by compose, from the shell or `clients/<client>/.env`; `backup` among
+#                         them makes the deploy build and check the backup image too
 #
-# A deploy is "good" only when `setup` exited 0 and `app` and `cron` are running and healthy and
-# `/readyz` answers from inside `app`. Every good state is appended to `clients/<client>/deploys.log`
+# A deploy is "good" only when `setup` exited 0 and `app` and `cron` (and `backup`, when its profile is
+# on) are running and healthy and `/readyz` answers from inside `app`. Every good state is appended to `clients/<client>/deploys.log`
 # as `<UTC time> <deploy|auto-rollback|rollback> <image>`; that file is the whole record of what to
 # go back to. Exit codes: 0 good, 1 the new image failed and the previous one is running again,
 # 2 nothing healthy is running (no previous image, or the rollback failed too).
@@ -26,14 +26,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENGINE="${CONTAINER_ENGINE:-podman}"
-# The list goes into an array of `-f` flags. An explicit `-f` turns off the auto-load of
-# `compose.override.yaml`, so the development stack can never be layered onto a server.
-read -r -a COMPOSE_FILES <<< "${DEPLOY_COMPOSE_FILES:-compose.yaml compose.production.yaml}"
-COMPOSE_FLAGS=()
-for file in "${COMPOSE_FILES[@]}"; do COMPOSE_FLAGS+=(-f "$file"); done
+# An explicit `-f` turns off the auto-load of `compose.override.yaml`, so the development stack can
+# never be layered onto a server.
+COMPOSE_FLAGS=(-f compose.yaml -f compose.production.yaml)
 TIMEOUT="${DEPLOY_TIMEOUT:-240}"
 KEEP="${DEPLOY_KEEP:-5}"
 IMAGE_REPO="boilerplate-api"
+BACKUP_REPO="boilerplate-backup"
 
 # Prints the usage and fails.
 usage() {
@@ -58,6 +57,25 @@ esac
 
 log_file="clients/$client/deploys.log"
 export COMPOSE_PROJECT_NAME="$client"
+
+# The services the active profiles carry, one per line. Read once, after `APP_IMAGE` is set (compose
+# refuses to resolve the file without it), by asking compose itself: it knows every way profiles are
+# switched on (the shell, the env file, `export` lines in it) and this script would only guess.
+active_services=""
+
+# True when compose runs service `$1` under the active profiles. `grep` reads a variable, not a pipe, so
+# `pipefail` cannot turn its early exit into a false answer.
+service_active() {
+    grep -qx "$1" <<<"$active_services"
+}
+
+# The tag every image built here carries: the short git sha, `-dirty` when the tree has changes.
+build_sha() {
+    local sha
+    sha="$(git rev-parse --short HEAD)"
+    [ -z "$(git status --porcelain)" ] || sha="$sha-dirty"
+    echo "$sha"
+}
 
 # Compose against this client's env file and the production files, with `APP_IMAGE` as currently set.
 compose() {
@@ -84,10 +102,14 @@ probe_ready() {
     compose exec -T app node -e "fetch('http://127.0.0.1:'+(process.env.NODE_PORT||3000)+'/readyz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1
 }
 
-# Waits until the stack is good. $1 = `full` also requires `setup` to have exited 0.
+# Waits until the stack is good. $1 = `full` also requires `setup` to have exited 0, and `backup` to be
+# up when its profile is on: a deploy whose backups cannot start must fail, not report healthy. A
+# rollback touches only `app` and `cron`, so it checks only those.
 # Returns 1 as soon as anything is clearly broken, or when the timeout runs out.
 wait_healthy() {
     local scope="$1" deadline=$((SECONDS + TIMEOUT)) service status code restarts health pending
+    local services=(app cron)
+    if [ "$scope" = full ] && service_active backup; then services+=(backup); fi
     while [ "$SECONDS" -lt "$deadline" ]; do
         pending=0
         if [ "$scope" = full ]; then
@@ -97,7 +119,7 @@ wait_healthy() {
                 *) pending=1 ;;
             esac
         fi
-        for service in app cron; do
+        for service in "${services[@]}"; do
             read -r status code restarts health <<<"$(state_of "$service")"
             # A restart in the first minutes is a crash loop, whatever the container says next.
             if [ "$restarts" -gt 0 ]; then echo "deploy: $service restarted $restarts time(s)" >&2; return 1; fi
@@ -151,7 +173,7 @@ run_previous() {
 # profiles do not carry (an external database) makes compose refuse the whole call.
 show_logs() {
     local service id
-    for service in database setup app cron; do
+    for service in database setup app cron backup; do
         compose logs --tail 40 "$service" 2>&1 || true
     done
     id="$(container_of database)"
@@ -170,6 +192,17 @@ prune_images() {
         short="${image#localhost/}"
         [ "$short" = "$IMAGE_REPO:latest" ] && continue
         grep -qxF "$short" <<<"$keep" || $ENGINE rmi "$image" >/dev/null 2>&1 || true
+    done
+}
+
+# Removes local backup images other than the one this deploy runs. `latest` stays: it is the tag the
+# docs tell you to build by hand. An image a container still uses cannot be removed, so one that is
+# still in use survives.
+prune_backup_images() {
+    local image short
+    $ENGINE images --format '{{.Repository}}:{{.Tag}}' --filter "reference=$BACKUP_REPO" | while read -r image; do
+        short="${image#localhost/}"
+        [ "$short" = "$BACKUP_REPO:latest" ] || [ "$short" = "${BACKUP_IMAGE:-}" ] || $ENGINE rmi "$image" >/dev/null 2>&1 || true
     done
 }
 
@@ -192,11 +225,23 @@ if [ -n "$requested_image" ]; then
     # A digest never changes, so an image already on the host is the image: pull only when it is missing.
     $ENGINE image inspect "$APP_IMAGE" >/dev/null 2>&1 || $ENGINE pull "$APP_IMAGE"
 else
-    sha="$(git rev-parse --short HEAD)"
-    [ -z "$(git status --porcelain)" ] || sha="$sha-dirty"
-    APP_IMAGE="$IMAGE_REPO:$sha"
+    APP_IMAGE="$IMAGE_REPO:$(build_sha)"
     export APP_IMAGE
     compose build app
+fi
+
+# A failure here (a file compose cannot resolve) stops the deploy before the backup image is built or anything is started.
+active_services="$(compose config --services)"
+
+# The backup image is never in a registry: it is always built here, from this checkout, and tagged with
+# the sha so `BACKUP_IMAGE` (which compose reads) names what this deploy runs. Without this step the
+# service's `latest` tag does not exist on a fresh host, `up --no-build` cannot start it, and the stack
+# still looked healthy.
+if service_active backup; then
+    BACKUP_IMAGE="$BACKUP_REPO:$(build_sha)"
+    export BACKUP_IMAGE
+    echo "deploy: backup image $BACKUP_IMAGE"
+    compose build backup
 fi
 
 echo "deploy: starting $APP_IMAGE"
@@ -208,6 +253,7 @@ compose up -d --no-build || { echo "deploy: compose up failed" >&2; show_logs; }
 if wait_healthy full; then
     record deploy
     [ -n "$requested_image" ] || prune_images
+    if [ -n "${BACKUP_IMAGE:-}" ]; then prune_backup_images; fi
     echo "deploy: $APP_IMAGE is healthy"
     exit 0
 fi
