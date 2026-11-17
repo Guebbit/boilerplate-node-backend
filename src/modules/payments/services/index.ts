@@ -50,6 +50,7 @@ import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 import { refundLegalDue } from './deadline';
+import { disputeStanding } from './disputes';
 
 export { RefundLeftOpenError, WebhookProviderUnknownError } from './errors';
 export type { OfflinePaymentInput } from './offline';
@@ -78,6 +79,7 @@ export const paymentService = {
     getRefund,
     refundOf,
     refundLegalDue,
+    disputeStanding,
     refundPayment,
     openReturnRefund,
     returnRefundState,

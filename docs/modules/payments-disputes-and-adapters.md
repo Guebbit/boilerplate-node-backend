@@ -42,15 +42,17 @@ flowchart TD
   payment's `displayStatus` does not change (Shopify keeps `displayFinancialStatus` separate); the
   staff list filters with `disputed=true`.
 
-| Rule                        | What happens                                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                           |
-| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                |
-| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                       |
-| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled by hand while the chargeback is open                       |
-| Lost chargeback covers it   | a refund open at that time may be marked returned (the bank paid the buyer); that is the normal path, so a return still gets its credit note |
-| Every dispute decided       | a refund refused as `disputed` can only be voided (`cancelRefund`); not while any dispute is open, an inquiry included                       |
-| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
+| Rule                        | What happens                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                               |
+| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                    |
+| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                           |
+| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled or voided by hand while any dispute is open                    |
+| No dispute open any more    | a refund refused as `disputed` may be marked returned or voided (`cancelRefund`), whatever the dispute's outcome or amount, or with none on file |
+| Lost chargeback             | staff pay any small rest outside, then mark it returned once the buyer has it all; a return still gets its credit note                           |
+| Chargeback won              | staff void it, then refund by card; a refund the bank sent back after it had settled is never voided (it has its credit note)                    |
+| Other currency              | a dispute in another currency than the payment is stored like any other, but never subtracted from what is left to refund; staff check it        |
+| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                               |
 
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
