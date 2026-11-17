@@ -120,9 +120,11 @@ services:
         # (demo data) before the server starts, so a fresh `compose up` yields a populated, browsable
         # stack instead of empty lists that read as "not wired". `db:sync` is idempotent; the seeder
         # is not — it builds the shop's order book by driving real checkouts — so it SKIPS a
-        # database that already holds anything and exits 0, which is what keeps a later boot from
-        # either duplicating the history or stopping the container. `scenario:apply:reset` rebuilds
-        # on purpose. The seeder also refuses to run when NODE_ENV=production.
+        # database that holds data and exits 0, which keeps a later boot from either duplicating the
+        # history or stopping the container. The exception is a seed that died halfway: its note
+        # says `running`, so the next boot (`restart: on-failure:5`, set on this service) wipes and
+        # rebuilds, and a seed that always crashes ends as `Exited (1)`. `scenario:apply:reset`
+        # rebuilds on purpose. The seeder also refuses to run when NODE_ENV=production.
         #
         # This container is what seeds the `database` volume, for every process that later reads
         # it — including a host `npm run host -- dev`, which runs no bootstrap of its own.

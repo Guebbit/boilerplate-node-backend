@@ -16,6 +16,25 @@ import type { Document } from 'mongodb';
 import { connection, JOB_MAX_TIME_MS } from '@infrastructure/runtime/database';
 
 /**
+ * The seeder's own note collection: one document, `running` from before the first write until
+ * `done` as the last. Registered on the connection by name, so every walk below sees it and
+ * has to decide what to do with it.
+ */
+export const SEED_MARKER_COLLECTION = 'seed_marker';
+
+/** Where the seeder is in its one job, as the note records it. */
+export type SeedMarkerState = 'running' | 'done';
+
+/** The note's single document id: one note per database. */
+const SEED_MARKER_ID = 'seed';
+
+/**
+ * Collections that never count as data: cron's bookkeeping rows (`leases`, written every minute
+ * by a container that does not wait for the app's first seed) and the note itself.
+ */
+const IGNORED_FOR_EMPTINESS: ReadonlySet<string> = new Set(['leases', SEED_MARKER_COLLECTION]);
+
+/**
  * Empty every collection, never drop the database.
  *
  * `dropDatabase()` looks like the obvious reset, but it clears each model's index build along
@@ -26,24 +45,47 @@ import { connection, JOB_MAX_TIME_MS } from '@infrastructure/runtime/database';
  *
  * Used by `./demo`'s `restoreScenario` and `scenarios/apply.ts --reset` — the same bug,
  * against the same two callers, is why this is one helper rather than two.
+ *
+ * @param keep collection names to leave alone: the seeder passes the note's, so a process dying
+ *             mid-wipe still finds `running` on the next boot.
  */
-export const emptyDatabase = (): Promise<void> =>
+export const emptyDatabase = (keep: readonly string[] = []): Promise<void> =>
     Promise.all(
-        Object.values(connection.collections).map((collection) => collection.deleteMany({}))
+        Object.entries(connection.collections)
+            .filter(([name]) => !keep.includes(name))
+            .map(([, collection]) => collection.deleteMany({}))
     ).then(() => undefined);
 
 /**
- * Whether every collection is empty.
+ * Whether every collection is empty, ignoring `leases` and the seed note.
  *
  * `scenarios/apply.ts`'s guard: the flows it runs are not idempotent — driving a checkout twice
  * makes two orders — so seeding on top of existing data is refused rather than attempted. Stops
  * at the first collection holding anything.
  */
 export const isDatabaseEmpty = async (): Promise<boolean> => {
-    for (const collection of Object.values(connection.collections))
-        if ((await collection.countDocuments({}, { limit: 1 })) > 0) return false;
+    for (const [name, collection] of Object.entries(connection.collections))
+        if (
+            !IGNORED_FOR_EMPTINESS.has(name) &&
+            (await collection.countDocuments({}, { limit: 1 })) > 0
+        )
+            return false;
     return true;
 };
+
+/** The seed note's state, or `undefined` when the seeder never wrote one here. */
+export const readSeedMarker = (): Promise<SeedMarkerState | undefined> =>
+    connection
+        .collection<{ _id: string; state: SeedMarkerState }>(SEED_MARKER_COLLECTION)
+        .findOne({ _id: SEED_MARKER_ID })
+        .then((note) => note?.state);
+
+/** Upsert the seed note: `running` before the first write, `done` as the very last one. */
+export const writeSeedMarker = (state: SeedMarkerState): Promise<void> =>
+    connection
+        .collection<{ _id: string; state: SeedMarkerState }>(SEED_MARKER_COLLECTION)
+        .updateOne({ _id: SEED_MARKER_ID }, { $set: { state } }, { upsert: true })
+        .then(() => undefined);
 
 /**
  * Every document in every collection, as plain BSON — the input {@link restoreDatabaseCopy} takes.

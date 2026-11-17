@@ -215,20 +215,30 @@ Why once, and why a copy:
 
 The same `buildScenario` runs behind `npm run scenario:apply` against a real database, which boots
 the application in-process for exactly this reason. It skips a database that already holds
-anything unless `--reset` is given: seeding on top of a shop that already has a past would give it
-a second one. What it does with each starting state:
+data unless `--reset` is given: seeding on top of a shop that already has a past would give it a
+second one. A `running` note is the exception (it rebuilds), and `leases` rows and the note itself
+do not count as data. What it does with each starting state is in the table below, and the seed note's rules follow it.
 
 | The database holds                            | `scenario:apply`     | `scenario:apply:reset`  |
 | --------------------------------------------- | -------------------- | ----------------------- |
 | nothing                                       | seeds the scenario   | seeds the scenario      |
-| rows from an earlier seed                     | skips, logs, exits 0 | empties it, seeds again |
+| rows from a finished seed (note `done`)       | skips, logs, exits 0 | empties it, seeds again |
+| a seed that died (note `running`)             | empties it, seeds    | empties it, seeds again |
 | other rows, even one stray document           | skips, logs, exits 0 | empties it, seeds again |
 | `NODE_ENV` other than `development` or `test` | refuses, exits 1     | refuses, exits 1        |
 
-There is no seed marker: "not empty" is the whole test, and a stray row in any collection a model
-owns counts. A skip exits 0 on purpose: the compose `app` command runs the seed before the server,
-so a non-zero exit would keep a container with an already seeded database from starting. Your own
-data is never wiped without `--reset`; the cost of a skip is one reset.
+The seeder keeps a note in its own collection, `seed_marker`: `running` before its first write,
+`done` as its very last. That is how it tells its own crashed seed from a real database. Emptiness
+ignores the note and cron's `leases` rows (cron writes one every minute and does not wait for the
+app), so neither blocks the first seed.
+
+`running` at boot means the last seed died: one seeder runs per database and the container restarts
+seconds after a crash. The rebuild is the whole `--reset` branch, rate-limit counters included, and
+it keeps the note, so a death mid-wipe is recognised next boot. A seed that always crashes ends the
+container as `Exited (1)` after `on-failure:5`, with the error in its log. A skip exits 0 on
+purpose: the compose `app` command runs the seed before the server. Your own data is never wiped
+without the note proving the seeder started that database, or `--reset`. After pulling seed
+changes, run `npm run scenario:apply:reset`.
 
 `blank` is the other named scenario — harness infrastructure only (the access model, the named
 accounts, the fallback locale), no catalogue and no history to drive. It is for a behaviour e2e
