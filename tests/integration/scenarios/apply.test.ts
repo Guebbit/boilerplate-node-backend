@@ -157,6 +157,31 @@ describe('scenarios/apply.ts', () => {
     );
 
     it(
+        'skips a database that holds one stray document, and leaves that document untouched',
+        async () => {
+            const dbUri = freshDbUri();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
+            // A row in a collection a model owns: the emptiness check walks the registered models.
+            const stray = { email: 'stray@example.test', createdBy: 'a hand, not a scenario' };
+            await connection.collection('users').insertOne({ ...stray });
+
+            const result = await runApply(['blank'], dbUri);
+
+            // Skip and log, never throw and never wipe: a container boot must still start.
+            expect(result.status).toBe(0);
+            expect(result.stdout + result.stderr).toContain('already holds data');
+            await expect(connection.collection('users').find({}).toArray()).resolves.toEqual([
+                expect.objectContaining(stray)
+            ]);
+
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS
+    );
+
+    it(
         'writes --describe-to into a directory that does not exist yet, with every login in it',
         async () => {
             const scratch = await mkdtemp(path.join(os.tmpdir(), 'apply-describe-'));

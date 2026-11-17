@@ -56,8 +56,7 @@ const exceptionAttributes = (error: unknown): LogRecord => {
  * The record with its field names replaced; values are untouched.
  *
  * Top level only: nested objects (`metadata`, `error.cause`) are the call site's own shape. A
- * field is left alone when its target name is already taken, so an explicit `'user.id'` set by a
- * caller is never overwritten by a mapped one.
+ * field is left alone when its target name is already taken.
  *
  * @param record - the record after redaction
  * @returns a new record carrying the semantic-convention names

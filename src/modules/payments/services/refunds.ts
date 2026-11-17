@@ -557,7 +557,7 @@ const held = (refund: RefundRecord): null => {
 };
 
 /**
- * Carry one open refund to its end: log the impossible row, or ask the provider. A hand-paid
+ * Carry one open refund to its end: send the record to the provider. A hand-paid
  * refund is never carried here: only `settleRefundByHand` may say the cash went back.
  *
  * @param payment - the payment the refund belongs to

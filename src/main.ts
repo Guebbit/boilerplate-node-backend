@@ -3,8 +3,10 @@
  * The default process entry: one process, one app. What `npm start`, `npm run dev`, `e2e:serve`,
  * `debug`, `dev:docker` and the production image's CMD run.
  *
- * Why this order: OTel must start BEFORE express and mongoose load (it patches them), and `serve`
- * is imported dynamically below because a static import would be hoisted above `startTracing()`.
+ * Why this order: OTel starts BEFORE `serve` loads express, http and the models (it patches them as
+ * they are first required). `dotenv` and `mongoose-boot` come first because they only read the
+ * environment and set Mongoose defaults. `serve` is imported dynamically below because a static
+ * import would be hoisted above `startTracing()`.
  * Under `NODE_ENV=development` the development doubles load after tracing and before `serve`, so
  * they are registered before the config gate and any request.
  * `src/cluster.ts` is the other entry (`npm run start:cluster`, a bare VM with no process manager).
@@ -15,13 +17,13 @@
 import './infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
-// OTel must initialize before any other module is loaded.
+// OTel starts before `serve` (express, http, the models) loads: it patches them as required.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 import { logger } from '@infrastructure/adapters/logger';
 import { loadDevelopmentDoubles } from '@app/development-doubles';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 
-/** Start the OpenTelemetry SDK before express/http/mongoose are loaded (it patches them). */
+/** Start the OpenTelemetry SDK before `serve` loads express, http and the models (it patches them). */
 startTracing();
 
 /**

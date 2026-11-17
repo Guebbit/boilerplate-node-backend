@@ -214,9 +214,21 @@ Why once, and why a copy:
   the build is over before it listens.
 
 The same `buildScenario` runs behind `npm run scenario:apply` against a real database, which boots
-the application in-process for exactly this reason. It refuses a database that already holds
+the application in-process for exactly this reason. It skips a database that already holds
 anything unless `--reset` is given: seeding on top of a shop that already has a past would give it
-a second one.
+a second one. What it does with each starting state:
+
+| The database holds                            | `scenario:apply`     | `scenario:apply:reset`  |
+| --------------------------------------------- | -------------------- | ----------------------- |
+| nothing                                       | seeds the scenario   | seeds the scenario      |
+| rows from an earlier seed                     | skips, logs, exits 0 | empties it, seeds again |
+| other rows, even one stray document           | skips, logs, exits 0 | empties it, seeds again |
+| `NODE_ENV` other than `development` or `test` | refuses, exits 1     | refuses, exits 1        |
+
+There is no seed marker: "not empty" is the whole test, and a stray row in any collection a model
+owns counts. A skip exits 0 on purpose: the compose `app` command runs the seed before the server,
+so a non-zero exit would keep a container with an already seeded database from starting. Your own
+data is never wiped without `--reset`; the cost of a skip is one reset.
 
 `blank` is the other named scenario — harness infrastructure only (the access model, the named
 accounts, the fallback locale), no catalogue and no history to drive. It is for a behaviour e2e

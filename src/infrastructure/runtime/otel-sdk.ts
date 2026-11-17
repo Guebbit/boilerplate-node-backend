@@ -2,8 +2,8 @@
  * @module
  * OpenTelemetry SDK bootstrap.
  *
- * This module must be imported *before* any instrumented library (express, mongoose, redis)
- * actually handles traffic: the instrumentation packages patch those modules at `sdk.start()`
+ * This module must be imported *before* `serve` loads the instrumented libraries (express, http,
+ * the models, redis): the instrumentation packages patch those modules at `sdk.start()`
  * time, so anything already running keeps the un-patched code path and produces no spans.
  *
  * @see docs/operate/opentelemetry.md#what-is-instrumented-out-of-the-box

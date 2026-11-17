@@ -277,6 +277,31 @@ describe('pruneUnreferenced', () => {
         );
     });
 
+    it('stays silent about a file that vanished between the listing and the stat', async () => {
+        // `stat` forced to answer ENOENT: another sweep or a delete got there first.
+        jest.doMock('node:fs/promises', () => {
+            const actual =
+                jest.requireActual<typeof import('node:fs/promises')>('node:fs/promises');
+            return {
+                ...actual,
+                stat: jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })
+                    )
+            };
+        });
+        const { logger } = await import('@infrastructure/adapters/logger');
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        await stage('vanished.jpg');
+
+        const result = await pruneUnreferenced(root, new Set());
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('deletes nothing when every file on disk is still referenced', async () => {
         const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
         const kept = await stage('still-used.jpg');

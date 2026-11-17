@@ -52,7 +52,8 @@ router.get('/summary', getCartSummary);
  * place an order and start receiving order mail at an inbox nobody has confirmed it owns.
  * `idempotencyKey` in the same position as `POST /orders`' own (`orders/routes.ts`): a retried
  * checkout after a lost response must replay the order it already placed, never mint a second one.
- * The key is asked before the fresh session: a caller who can never pass is refused, not challenged.
+ * `checkout:Cart` is asked before the fresh session: a caller who can never pass is refused,
+ * not challenged.
  */
 router.post(
     '/checkout',
