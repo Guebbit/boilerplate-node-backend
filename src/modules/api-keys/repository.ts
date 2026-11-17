@@ -97,12 +97,13 @@ const findActiveByMinter = (userId: string): Promise<ApiKeyDocument[]> =>
  *
  * @param ids - the credentials' ids
  * @param at - the revocation time
+ * @returns how many were still live, and so are now revoked by this call
  */
-const revokeMany = (ids: readonly string[], at: Date): Promise<void> =>
+const revokeMany = (ids: readonly string[], at: Date): Promise<number> =>
     apiKeyModel
         .updateMany({ _id: { $in: ids }, revokedAt: null }, { $set: { revokedAt: at } })
         .exec()
-        .then(() => undefined);
+        .then((result) => result.modifiedCount);
 
 /**
  * Who minted each of these credentials. The wire shape leaves `createdByUserId` out, so the list
