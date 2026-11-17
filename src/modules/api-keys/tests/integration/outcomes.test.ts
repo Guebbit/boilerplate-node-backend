@@ -384,6 +384,29 @@ describe('revoking', () => {
     });
 });
 
+/** When the stored key was revoked, if it was. */
+const revokedAtOf = (id: string) => apiKeyRepository.findById(id).then((key) => key?.revokedAt);
+
+describe('two revokes of the same key at the same moment', () => {
+    it('count once: one audit row, and the stamp never moves', async () => {
+        const user = await createRealUser('revoke-race');
+        const context = contextFor(String(user._id));
+        const minted = await mintKey(context);
+        // The copy the losing request read, before the winner's write landed.
+        const staleCopy = await apiKeyRepository.findById(minted.id);
+        await revoke(minted.id, context);
+        const firstStamp = await revokedAtOf(minted.id);
+        mockEmitAuditEvent.mockClear();
+        jest.spyOn(apiKeyRepository, 'findById').mockResolvedValueOnce(staleCopy);
+
+        const loser = await revoke(minted.id, context);
+
+        expect(loser.success).toBe(true);
+        expect(auditedAs(apiKeysAuditActions.ADMIN_API_KEY_REVOKED)).toEqual([]);
+        expect(await revokedAtOf(minted.id)).toEqual(firstStamp);
+    });
+});
+
 describe('revoking everything a person minted', () => {
     it('audits it as the system’s act, with how many and why, and mails the owner in their language', async () => {
         const user = await createRealUser('compromised', 'it');
