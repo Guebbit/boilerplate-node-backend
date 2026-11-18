@@ -19,7 +19,6 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { announceInTransaction } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import type { CallerContext } from '@types';
@@ -27,6 +26,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
+import { RETURN_CLOSED_BY_HAND } from '../events';
 import { returnLifecycle } from '../domain';
 import { returnClosedEvent } from './outcome';
 import { syncReturnStatus } from './projection';
@@ -119,6 +119,7 @@ const notClosable = (id: string): Promise<ResponseReject> =>
  * Close a received return by staff's own hand, for the refund that will not follow the usual way
  * (canceled, or paid outside the application). No money and no stock move, and `return.closed` is
  * NOT announced: its mail tells the customer their money went back, which is not what happened.
+ * `return.closed_by_hand` is, internally, so the to-do that asked for this check clears itself.
  * The note stays in the audit row; the timeline row carries ids and numbers only.
  *
  * @param note - why, optional
@@ -130,7 +131,15 @@ export const closeReturnByHand = (
     note: string | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    withTransaction((session) => claimClosed(id, context.caller.id, session)).then((closed) => {
+    announceInTransaction(
+        (session) => claimClosed(id, context.caller.id, session),
+        // Only a close that landed is announced, so `closed` is never null here.
+        (closed) => ({
+            name: RETURN_CLOSED_BY_HAND,
+            payload: { returnId: id, orderId: String(closed.orderId) },
+            aggregateId: String(closed.orderId)
+        })
+    ).then((closed) => {
         if (!closed) return notClosable(id);
 
         recordAudit(context, {

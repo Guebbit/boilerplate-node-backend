@@ -40,7 +40,8 @@
             "dispute_awaiting_bank": "Contestazione: in attesa della banca",
             "paid_without_hold": "Ordine pagato senza riserva di stock",
             "consent_due": "Consenso dell'acquirente al ritardo da ottenere",
-            "refund_unrecorded": "Rimborso fatto presso il provider, non registrato"
+            "refund_unrecorded": "Rimborso fatto presso il provider, non registrato",
+            "return_refund_short": "Rimborso del reso inferiore al dovuto"
         },
         "task-category": {
             "order": "Ordine",

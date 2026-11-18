@@ -43,6 +43,9 @@ const PAYMENT = new Types.ObjectId().toString();
 /** An order that exists as an id: the system reads it back as an ObjectId to mail its buyer. */
 const ORDER = new Types.ObjectId().toString();
 
+/** A return that exists as an id. */
+const RETURN = new Types.ObjectId().toString();
+
 /** Counter behind the outbox row ids the cases hand out. */
 let eventCounter = 0;
 
@@ -93,6 +96,14 @@ const UNRECORDED: DomainEventMap['payment.refund_unrecorded'] = {
     amount: '30.00',
     currency: 'EUR',
     reason: 'lost_race'
+};
+/** A return whose refund the payment could not give in full, as the cases publish it. */
+const SHORT: DomainEventMap['payment.return_refund_short'] = {
+    returnId: RETURN,
+    orderId: ORDER,
+    asked: '100.00',
+    opened: '70.00',
+    currency: 'EUR'
 };
 /** The dispute-opened event payload the cases publish. */
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
@@ -165,6 +176,13 @@ const OPENERS = [
         TaskKind.refund_unrecorded,
         'PaymentRefunding',
         'sales/payments?tab=attention'
+    ],
+    [
+        'payment.return_refund_short',
+        () => emitDomainEvent('payment.return_refund_short', SHORT, { eventId: nextEventId() }),
+        TaskKind.return_refund_short,
+        'ReturnReceiving',
+        `returns/${RETURN}`
     ],
     [
         'payment.dispute_opened',
@@ -414,6 +432,39 @@ describe('what closes a task', () => {
 
         expect(task.kind).toBe(TaskKind.refund_unrecorded);
         expect(task.status).toBe(TaskStatus.new);
+    });
+
+    it('opens one task per return for a refund smaller than owed, naming both figures', async () => {
+        await emitDomainEvent('payment.return_refund_short', SHORT, { eventId: nextEventId() });
+        await emitDomainEvent('payment.return_refund_short', SHORT, { eventId: nextEventId() });
+        const other = new Types.ObjectId().toString();
+        await emitDomainEvent(
+            'payment.return_refund_short',
+            { ...SHORT, returnId: other },
+            { eventId: nextEventId() }
+        );
+
+        const tasks = await allTasks();
+
+        expect(tasks.map(({ link }) => link?.id).toSorted()).toEqual([RETURN, other].toSorted());
+        const task = tasks.find(({ link }) => link?.id === RETURN);
+        expect(task?.link?.type).toBe('return');
+        expect(task?.message).toContain('100.00 EUR was owed, 70.00 EUR could be sent');
+    });
+
+    it("clears a return's short-refund task when staff close the return by hand", async () => {
+        await emitDomainEvent('payment.return_refund_short', SHORT, { eventId: nextEventId() });
+        await emitDomainEvent(
+            'payment.return_refund_short',
+            { ...SHORT, returnId: ORDER },
+            { eventId: nextEventId() }
+        );
+
+        await emitDomainEvent('return.closed_by_hand', { returnId: RETURN, orderId: ORDER });
+
+        const tasks = await allTasks();
+        const open = tasks.filter(({ status }) => status === TaskStatus.new);
+        expect(open.map(({ link }) => link?.id)).toEqual([ORDER]);
     });
 
     it('leaves an unrecorded refund for staff: no later event closes it', async () => {

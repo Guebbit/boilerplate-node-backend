@@ -12,7 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import {
     asAdmin,
     asCustomer,
@@ -37,7 +37,7 @@ import {
 } from '@modules/orders/tests/factories';
 import { withdrawUntilFrom, withdrawalRefundDueBy } from '@modules/orders';
 import { shopTimezone } from '@modules/shop';
-import { storedRefundStamps } from '@modules/payments/tests/factories';
+import { refundOrderPayment, storedRefundStamps } from '@modules/payments/tests/factories';
 import {
     deliverEverything,
     fulfillmentOrdersOf,
@@ -227,6 +227,28 @@ describe('the buyer cancelling what has not shipped', () => {
             reserved: 0,
             available: 8
         });
+    });
+
+    it('is born closed all the same when the payment has nothing left, and tells staff with the short fact', async () => {
+        const fixture = await partlyShipped();
+        await refundOrderPayment(fixture.orderId, asAdmin(), callerContextAs('admin'), {
+            amount: '75.00'
+        });
+
+        const cancellation = created(await buyerCancels(fixture));
+
+        expect(cancellation.status).toBe('closed');
+        const facts = await outboxEventModel
+            .find({ name: 'payment.return_refund_short' })
+            .lean()
+            .exec();
+        expect(facts.map(({ payload }) => payload)).toEqual([
+            expect.objectContaining({
+                returnId: String(cancellation._id),
+                orderId: fixture.orderId,
+                opened: '0.00'
+            })
+        ]);
     });
 
     it('stamps the refund with the end of the shop day 14 days after the request', async () => {

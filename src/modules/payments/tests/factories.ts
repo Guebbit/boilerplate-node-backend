@@ -27,8 +27,9 @@ import { HOUR_MS } from '@domain-primitives/time';
  */
 export { refundForOrder } from '../services/refunds';
 
-/** What a return hands to {@link refundForReturn}. */
-type ReturnRefundInput = Parameters<typeof paymentService.openReturnRefund>[1];
+/** What a return hands to {@link refundForReturn}; the currency is the test payment's, euro, unless named. */
+type ReturnRefundInput = Omit<Parameters<typeof paymentService.openReturnRefund>[1], 'currency'> &
+    Partial<Pick<Parameters<typeof paymentService.openReturnRefund>[1], 'currency'>>;
 
 /**
  * What `returns` does for a return's money, in two steps: open the record in a transaction, then
@@ -45,7 +46,7 @@ export const refundForReturn = (
     context: CallerContext
 ): Promise<'settled' | 'open' | null> =>
     withTransaction((session) =>
-        paymentService.openReturnRefund(orderId, input, context, session)
+        paymentService.openReturnRefund(orderId, { currency: 'EUR', ...input }, context, session)
     ).then((opened) =>
         opened ? paymentService.sendOpenedRefund(orderId, opened.refundId, context) : null
     );

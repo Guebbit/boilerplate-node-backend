@@ -10,6 +10,7 @@ audience: [staff, owner]
 | Something odd happened                                             | Go to                                                            |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | A return was received but its refund will never come the usual way | [A return that cannot finish](#return-cannot-finish)             |
+| A return was received but the payment had less to give than owed   | [A return whose refund came up short](#refund-short)             |
 | A return was approved but the buyer never sent the goods           | [The buyer never sent it back](#buyer-never-sent-it)             |
 | A return parcel was lost on its way back to the shop               | [The return parcel was lost](#return-parcel-lost)                |
 | A return for a faulty or wrong item needs a decision               | [A faulty item: repair, replace, refund or reduce](#faulty-item) |
@@ -48,6 +49,24 @@ A request is approved or declined. Close is for a return whose goods have arrive
 
 **Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
 → [Returns](../modules/returns.md#closing-a-return-by-hand)
+
+## A return whose refund came up short {#refund-short}
+
+**What you see.** A to-do "Return refund smaller than owed" on a return: _100.00 EUR was owed, 70.00
+EUR could be sent_. Part of the payment had already gone back (a goodwill refund, a refund made in
+the provider's dashboard, a lost chargeback), so the refund could not be the whole amount. If it
+was _0.00_ sent, the return stays **received** and the buyer was **not** emailed that their money is
+back.
+
+**What to do.** Check whether the money that already went back was for this return. If it was, the
+buyer has what they are owed. If not, pay the rest outside the shop (it is not on the payment any
+more). Then press **Close return** on the return: the to-do clears itself. If the return closed on
+its own because the part that could be sent did settle, close the to-do yourself.
+
+A cancelled remainder has no return to close by hand (it is born closed): close its to-do yourself.
+
+**Whose job.** Whoever receives returns: the [warehouse](./warehouse.md) or the manager.
+→ [Shop to-dos](../modules/shop-tasks-todos.md)
 
 ## The buyer never sent it back {#buyer-never-sent-it}
 

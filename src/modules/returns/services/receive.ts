@@ -309,6 +309,7 @@ const claimAndRestock = (
                           {
                               returnId: String(received._id),
                               amount: verdict.breakdown.total,
+                              currency: received.currency,
                               lines: wireLines(received.lines),
                               shipping: verdict.breakdown.shipping,
                               ...(due ? { due } : {})
@@ -344,21 +345,27 @@ const claimAndRestock = (
  * the receipt), so a refusal or any error here only leaves it for the sweep: the return closes
  * when it lands. A hand-paid refund is only on file: the return closes when an operator confirms.
  *
+ * Money asked but no record opened (the payment had nothing left to give) leaves the return
+ * `received`: `payments` wrote a fact that gave staff a to-do, and the buyer is not told "refunded"
+ * for money the app did not move. Staff close it by hand once they have checked.
+ *
  * @param received - the return, just received
- * @param opened - the refund record opened with the receipt, or `null` when nothing is owed
+ * @param opened - the refund record opened with the receipt, or `null` when none was
+ * @param owed - whether the receipt asked for money at all
  * @param context - the staff member, audited on the refund
  * @returns the return as it now stands — `closed` if the money went back, else still `received`
  */
 const refundAndClose = (
     received: ReturnDocument,
     opened: OpenedReturnRefund | null,
+    owed: boolean,
     context: CallerContext
 ): Promise<ReturnDocument> => {
     const finish = (): Promise<ReturnDocument> =>
         closeReturn(String(received._id), context.caller.id).then((closed) => closed ?? received);
 
-    // No record: there is no money to wait for.
-    if (!opened) return finish();
+    // No record and nothing asked: there is no money to wait for.
+    if (!opened) return owed ? Promise.resolve(received) : finish();
 
     return paymentService
         .sendOpenedRefund(String(received.orderId), opened.refundId, context)
@@ -369,10 +376,12 @@ const refundAndClose = (
  * Finish a return whose refund the proof of sending opened: if the money already went back, close
  * it in this step, which is what the `PAYMENT_REFUNDED` listener would have done had the goods
  * come first. While it is still owed the return stays `received` and that listener closes it.
+ * A proof that asked for money and opened no record (nothing left on the payment) left a to-do for
+ * staff: the return stays `received` for their hand close, as {@link refundAndClose} does.
  *
  * @param received - the return, just received
  * @param context - the staff member
- * @returns the return as it now stands: `closed` when the refund settled or none was owed
+ * @returns the return as it now stands: `closed` when the refund settled or none was asked for
  */
 const closeAfterProofRefund = (
     received: ReturnDocument,
@@ -381,7 +390,9 @@ const closeAfterProofRefund = (
     paymentService
         .returnRefundState(String(received.orderId), String(received._id))
         .then((state) =>
-            state === 'open'
+            state === 'open' ||
+            (state === 'none' &&
+                toMinorUnits(received.refundAmount ?? '0', received.currency) > NO_MONEY)
                 ? received
                 : closeReturn(String(received._id), context.caller.id)
                       /**
@@ -512,7 +523,12 @@ const receiveFor = (
                         });
                         return openedOnProof
                             ? closeAfterProofRefund(received, context)
-                            : refundAndClose(received, opened, context);
+                            : refundAndClose(
+                                  received,
+                                  opened,
+                                  toMinorUnits(breakdown.total, received.currency) > NO_MONEY,
+                                  context
+                              );
                     })
                     .then((after) => generateSuccess(after, 200));
             })

@@ -210,6 +210,25 @@ declare module '@kernel/events' {
             currency: string;
             reason: 'lost_race' | 'other_currency';
         };
+
+        /**
+         * A return asked for money and the payment could not give all of it: part of it already went
+         * back another way (goodwill, a dashboard refund, a lost chargeback), or none of it can
+         * (`opened` is `0.00`: no succeeded payment, or nothing left on it). `tasks` opens a staff
+         * to-do on the return; staff check whether the buyer is owed the rest. Internal only.
+         *
+         * Delivered through the transactional outbox, written in the return's own transaction:
+         * at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.return_refund_short': {
+            returnId: string;
+            orderId: string;
+            /** What the return asked for, a decimal in `currency`. */
+            asked: string;
+            /** What the refund record opened for, a decimal; `0.00` when none was opened. */
+            opened: string;
+            currency: string;
+        };
     }
 }
 
@@ -245,3 +264,6 @@ export const PAYMENT_AMOUNT_MISMATCH = 'payment.amount_mismatch';
 
 /** See `DomainEventMap['payment.refund_unrecorded']` above. */
 export const PAYMENT_REFUND_UNRECORDED = 'payment.refund_unrecorded';
+
+/** See `DomainEventMap['payment.return_refund_short']` above. */
+export const PAYMENT_RETURN_REFUND_SHORT = 'payment.return_refund_short';

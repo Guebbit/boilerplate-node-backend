@@ -166,7 +166,9 @@ It also refuses a handling deduction above 0 with a 409 `RETURN_REFUND_OPENED_ON
 no longer withhold the refund, so what the buyer damaged is claimed from them separately. If that
 refund already settled, the receipt closes the return in the same step; if it is still owed, the
 return stays `received` and the `PAYMENT_REFUNDED` listener closes it when it settles. A parcel lost
-after a proof is received with 0 on every line and follows the same path. The order's timeline gets a
+after a proof is received with 0 on every line and follows the same path. A proof that asked for
+money while the payment had nothing left opened no record and raised a `return_refund_short` to-do
+then: the goods arriving leave the return `received`, for staff to close by hand once they have checked. The order's timeline gets a
 `proof_of_sending_recorded` row (the return's id only: the carrier and reference stay on the return).
 
 ## Goods with no right of withdrawal {#goods-with-no-right-of-withdrawal}

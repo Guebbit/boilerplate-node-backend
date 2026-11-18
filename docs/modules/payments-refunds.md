@@ -266,6 +266,12 @@ flowchart TD
   (never converted). `shop-tasks` opens a `refund_unrecorded` to-do for `PaymentRefunding`, closed by
   staff; the open one is touched, not doubled, when it comes again. The webhook still answers 204:
   a provider retry cannot fix either cause.
+- **A return that asks for more than is left tells staff.** `openReturnRefund` clamps a return's
+  refund to what the payment has left. When it opens less than the return asked, or nothing, it
+  writes `payment.return_refund_short` (outbox, in the return's own transaction: asked, opened,
+  currency) and `shop-tasks` opens a `return_refund_short` to-do for the return. A receipt that
+  opened nothing leaves the return `received`. See
+  [A return the payment could not pay in full](./shop-tasks-todos.md).
 - **Re-sync refunds.** `POST /payments/{id}/refunds/sync` (`syncRefunds`) runs the same idempotent
   walk on demand: a refund already recorded is carried, never imported twice, so a second call imports
   nothing twice. It needs `create:Refund`, so it asks the same fresh session as every refund button;

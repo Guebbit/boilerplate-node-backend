@@ -40,7 +40,8 @@
             "dispute_awaiting_bank": "Dispute: waiting for the bank",
             "paid_without_hold": "Paid order without a stock hold",
             "consent_due": "Buyer consent to the delay due",
-            "refund_unrecorded": "Refund made at the provider, not recorded"
+            "refund_unrecorded": "Refund made at the provider, not recorded",
+            "return_refund_short": "Return refund smaller than owed"
         },
         "task-category": {
             "order": "Order",

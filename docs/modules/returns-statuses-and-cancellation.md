@@ -51,6 +51,17 @@ Shopify's `returnClose`.
 | order timeline `return_closed`, audit `admin.return.closed` (the note is only here) | announce `return.closed`: that mail says the money went back |
 | refresh the order's `returnStatus`                                                  | issue a credit note                                          |
 
+It is also the way out of a receipt that opened **no** refund although money was owed: the payment
+had nothing left (an earlier goodwill refund, a dashboard refund, a lost chargeback). Then the return
+stays `received`, the buyer is not mailed "refunded" and `return.closed` does not fire, because the
+shop did not move that money. A `return_refund_short` to-do asks staff to check what the buyer got
+and pay any rest outside the app ([the to-do](./shop-tasks-todos.md)); pressing Close clears it, through
+the internal `return.closed_by_hand` event (outbox, written with the close, nothing public).
+The same holds for the goods arriving after a [proof of sending](./returns-withdrawal.md) that opened
+nothing. A canceled remainder is born closed and only gets the to-do. When the payment gave part of what
+was owed, the refund is sent as usual, the return keeps its full figure and closes when it settles;
+the to-do records the gap. Staff must know whether the earlier money was for this return, so the app does not guess.
+
 `receive:Return` guards it, the key that receives the goods, with the same fresh-session tier. Any
 other status answers 409 `RETURN_NOT_CLOSABLE`: a `requested` return is declined, not closed, and
 an `approved` one whose goods never come is [canceled](#canceling-a-return).

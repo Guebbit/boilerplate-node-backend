@@ -11,6 +11,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, setWithdrawUntil, toOrderItem } from '@modules/orders/tests/factories';
+import { inventoryService } from '@modules/inventory';
+import { payByCard } from '@modules/payments/tests/factories';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { onDomainEvent } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -68,7 +70,18 @@ const returnRows = () =>
 
 /** Opens a defective-goods return on a delivered order, approved and ready to receive. */
 const approvedReturn = async () => {
-    const { user, shirt, orderId } = await orderIn(OrderStatus.delivered);
+    // A card payment stands behind it, so the receipt opens a refund the provider settles.
+    customers += 1;
+    const user = await createUser({ email: `outbox-paid-${customers}@example.com` });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const order = await createOrder(user, [toOrderItem(shirt, 2)]);
+    const orderId = String(order._id);
+    await inventoryService.reserveForOrder(orderId, [
+        { productId: String(shirt._id), quantity: 2 }
+    ]);
+    await payByCard(order, user);
+    await carryOrderTo(orderId, OrderStatus.delivered);
+    await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     const outcome = await returnService.createReturn(
         { orderId, reason: 'defective' },
         asCustomer(user.id),

@@ -68,6 +68,8 @@ flowchart LR
     payments -. "payment.refund_reversed" .-> shop_tasks
     payments -. "payment.refund_unrecorded" .-> shop_tasks
     payments -. "payment.refunded" .-> shop_tasks
+    payments -. "payment.return_refund_short" .-> shop_tasks
+    returns -. "return.closed_by_hand" .-> shop_tasks
     returns -. "return.requested" .-> shop_tasks
     stock_alerts -. "stock_alert.sent" .-> shop_tasks
     wishlist -. "wishlist.items_removed" .-> shop_tasks

@@ -139,6 +139,7 @@ const stampProof = (
                       {
                           returnId: id,
                           amount: quoted.total,
+                          currency: stamped.currency,
                           lines: wireLines(stamped.lines),
                           shipping: quoted.shipping,
                           ...optionalDue(stamped, input.sentAt)

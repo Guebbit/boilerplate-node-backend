@@ -124,6 +124,33 @@ export const refundUnrecordedOpening = (
 });
 
 /**
+ * A return asked for money and the payment could not give all of it. The return keeps what it
+ * owes; staff check whether the earlier money was for this return and pay any rest outside the app.
+ *
+ * @param short - the return and the two figures
+ * @param short.returnId - the return, the record the to-do links to
+ * @param short.orderId - the order it came from
+ * @param short.asked - what the return owes the buyer, a decimal
+ * @param short.opened - what the refund record opened for, a decimal (`0.00` when none was)
+ * @param short.currency - the ISO code of both figures
+ * @param dueAt - when it is overdue
+ */
+export const returnRefundShortOpening = (
+    short: { returnId: string; orderId: string; asked: string; opened: string; currency: string },
+    dueAt: Date
+): ShopOpening => ({
+    kind: TaskKind.return_refund_short,
+    routeSet: 'ReturnReceiving',
+    link: { type: TaskLinkType.return, id: short.returnId },
+    subject: 'Return refund is smaller than owed',
+    message:
+        `Return ${short.returnId} of order ${short.orderId}: ${short.asked} ${short.currency} was owed, ${short.opened} ${short.currency} could be sent; the rest of the payment already went back another way. ` +
+        'Check whether the buyer got what this return is owed and pay any rest outside the app. ' +
+        'A return that is still received stays open until you press "Close return" on it, which clears this; otherwise close this yourself.',
+    dueAt
+});
+
+/**
  * An order paid with nothing set aside for it.
  *
  * @param now - the clock

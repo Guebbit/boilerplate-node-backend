@@ -54,6 +54,7 @@ flowchart LR
     payments -. "payment.refund_reversed" .-> shop_tasks
     payments -. "payment.refund_unrecorded" .-> shop_tasks
     payments -. "payment.refunded" .-> shop_tasks
+    payments -. "payment.return_refund_short" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;

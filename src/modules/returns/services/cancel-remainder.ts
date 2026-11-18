@@ -174,6 +174,7 @@ const cancelUnderLock = (
                       {
                           returnId: String(created._id),
                           amount: owed,
+                          currency: created.currency,
                           lines: canceled.lines,
                           shipping: created.shippingRefund ?? '0',
                           reason: 'cancellation',

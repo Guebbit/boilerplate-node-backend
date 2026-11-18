@@ -49,6 +49,7 @@ flowchart LR
     returns --> payments
     returns --> shop
     payments -. "payment.refunded" .-> returns
+    returns -. "return.closed_by_hand" .-> shop_tasks
     returns -. "return.requested" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -121,7 +122,7 @@ stateDiagram-v2
     approved --> received: goods arrive
     approved --> canceled: staff cancel it, the goods never came
     received --> closed: the money has gone back
-    received --> closed: staff close it by hand
+    received --> closed: staff close it by hand (also when the payment had nothing left to refund)
 ```
 
 Every move is one conditional write from the statuses that may precede it. The moves are one table
@@ -152,6 +153,9 @@ Full detail: [Declining, closing and cancelling a return](./returns-statuses-and
 money will not follow the usual way: the refund was canceled
 ([payments](./payments.md#cancelling-a-refund)), or the customer was paid outside the shop. It is
 Shopify's `returnClose`.
+
+A receipt whose payment had nothing left to give opens no refund and leaves the return `received`:
+staff get a `return_refund_short` to-do, and **Close return** clears it.
 
 Full detail: [Declining, closing and cancelling a return](./returns-statuses-and-cancellation.md#closing-a-return-by-hand).
 

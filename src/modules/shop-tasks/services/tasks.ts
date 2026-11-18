@@ -23,6 +23,7 @@ import {
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundUnrecordedOpening,
+    returnRefundShortOpening,
     refundRefusedOpening,
     refundReversedOpening,
     type LegalDeadline,
@@ -173,6 +174,33 @@ export const shopTasks = {
                 PAYMENTS_ATTENTION_WORK,
                 meta
             )
+        ),
+
+    /**
+     * `payment.return_refund_short`: a return asked for more than its payment could give. Staff
+     * check whether the buyer is owed the rest; a hand close of the return clears it
+     * (`return.closed_by_hand`), else they close it themselves. One open to-do per return, so it
+     * keeps the figures it was opened with.
+     */
+    onReturnRefundShort: (
+        payload: DomainEventMap['payment.return_refund_short'],
+        meta: DomainEventMeta
+    ) =>
+        guarded('payment.return_refund_short', () =>
+            open(
+                returnRefundShortOpening(payload, attentionDueAt(new Date())),
+                fillPath(FRONTEND_LINK_RULES.staffPages.return, { id: payload.returnId }),
+                meta
+            )
+        ),
+
+    /** `return.closed_by_hand`: staff checked the money, so the to-do that asked for it is done. */
+    onReturnClosedByHand: (payload: { returnId: string }) =>
+        guarded('return.closed_by_hand', () =>
+            taskService.clearSystemTasks([TaskKind.return_refund_short], {
+                type: 'return',
+                id: payload.returnId
+            })
         ),
 
     /**

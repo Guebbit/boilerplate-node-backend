@@ -420,7 +420,7 @@ describe('POST /returns/{id}/proof-of-sending', () => {
 });
 
 describe('POST /returns/{id}/receive', () => {
-    it('records the goods arriving: 200, and the return moves on', async () => {
+    it('records the goods arriving: 200, and a return with no refund to wait for stays received', async () => {
         const { warehouse, id } = await withdrawn();
 
         const response = await api()
@@ -429,8 +429,9 @@ describe('POST /returns/{id}/receive', () => {
             .send({});
 
         expect(response.status).toBe(200);
-        // No payment stands behind a hand-built fixture order, so there is nothing to wait for.
-        expect(response.body.status).toBe('closed');
+        // No payment stands behind a hand-built fixture order, so no refund opens: the goods are
+        // in, and staff close the return by hand once they have checked the money.
+        expect(response.body.status).toBe('received');
         expect(response.body.receivedAt).toEqual(expect.any(String));
     });
 

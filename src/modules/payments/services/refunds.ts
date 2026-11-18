@@ -55,7 +55,11 @@ import { PaymentProviderError } from '../providers';
 import { paymentProviderRegistry } from '../providers/registry';
 import { paymentEffectRetryMinutes } from '../config';
 import { paymentRepository } from '../repository';
-import { PAYMENT_REFUND_CANCELED, PAYMENT_REFUND_OWED_BY_HAND } from '../events';
+import {
+    PAYMENT_REFUND_CANCELED,
+    PAYMENT_REFUND_OWED_BY_HAND,
+    PAYMENT_RETURN_REFUND_SHORT
+} from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import {
     exceedsRemaining,
@@ -1275,6 +1279,34 @@ export interface OpenedReturnRefund {
 }
 
 /**
+ * Write the fact that a return asked for more than its payment could give, in the return's own
+ * transaction. Returns `null` so a caller with no record to open can hand it straight back.
+ *
+ * @param orderId - the returned order
+ * @param input - what the return asked for
+ * @param opened - the decimal the record opened for, absent when none was opened
+ * @param session - the return's transaction, the event row joins it
+ */
+const announceShort = (
+    orderId: string,
+    input: { returnId: string; amount: string; currency: string },
+    opened: string | undefined,
+    session: ClientSession
+): Promise<null> =>
+    enqueueOutboxEvent(
+        PAYMENT_RETURN_REFUND_SHORT,
+        {
+            returnId: input.returnId,
+            orderId,
+            asked: padDecimal(input.amount, input.currency),
+            opened: padDecimal(opened ?? '0', input.currency),
+            currency: input.currency
+        },
+        orderId,
+        session
+    ).then(() => null);
+
+/**
  * Record the money owed for goods a customer returned, or for a remainder canceled before it
  * shipped — `returns`' one door into the refund. It runs INSIDE the return's own transaction, so
  * the return and what it owes commit together or not at all: nothing durable is ever missing.
@@ -1285,13 +1317,15 @@ export interface OpenedReturnRefund {
  *
  * @param orderId - the returned order
  * @param input - which return this pays for, whether it is a `return` (the default) or a
- *   remainder `cancellation`, how much (a decimal in the payment's currency), and which goods
+ *   remainder `cancellation`, how much (a decimal in `currency`, the return's own), and which goods
  *   and delivery that amount covers — what the credit note credits at their own rates; and the
  *   legal deadline to stamp on the record, when the law sets one
  * @param context - the staff member who received the goods
  * @param session - the return's transaction
- * @returns the opened record, or `null` when nothing is owed: no succeeded payment, nothing left
- *   of it, or a zero amount. Decided before anything is written.
+ * @returns the opened record, or `null` when none could be opened: a zero amount (nothing was
+ *   asked), or no succeeded payment, or nothing left of it. Decided before anything is written.
+ *   When money was asked and less than all of it was opened, `payment.return_refund_short` is
+ *   written in the same transaction, so a person is told.
  * @throws Error when the caller is not one {@link mayReturnMoney} allows (audited as
  *   `security.forbidden`), or when a racing write moved the payment under this transaction: either
  *   way the transaction aborts rather than close the return with nothing owed.
@@ -1301,6 +1335,7 @@ export const openReturnRefund = (
     input: {
         returnId: string;
         amount: string;
+        currency: string;
         lines: RefundLine[];
         shipping: string;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
@@ -1310,7 +1345,9 @@ export const openReturnRefund = (
     session: ClientSession
 ): Promise<OpenedReturnRefund | null> =>
     paymentRepository.findByOrderId(orderId, undefined, session).then((payment) => {
-        if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
+        if (toMinorUnits(input.amount, input.currency) <= 0) return null;
+        if (payment?.status !== REFUNDABLE_PAYMENT_STATUS)
+            return announceShort(orderId, input, undefined, session);
 
         const reason = input.reason ?? 'return';
         if (!mayReturnMoney(payment, reason, context)) {
@@ -1324,8 +1361,7 @@ export const openReturnRefund = (
             );
         }
 
-        if (toMinorUnits(input.amount, payment.currency) <= 0 || remainingOf(payment) <= 0)
-            return null;
+        if (remainingOf(payment) <= 0) return announceShort(orderId, input, undefined, session);
 
         return openRefund(
             payment,
@@ -1345,7 +1381,15 @@ export const openReturnRefund = (
                 throw new Error(
                     '[payments] openReturnRefund: the payment moved under the return; retry.'
                 );
-            return { refundId: String(opened.refund._id), byHand: isHandRecorded(payment) };
+            const record = opened.refund;
+            const gave = toMinorUnits(record.amount, payment.currency);
+            const asked = toMinorUnits(input.amount, payment.currency);
+            // Less than asked: the rest already went back another way. The record stands, a person is told.
+            return (
+                gave < asked
+                    ? announceShort(orderId, input, record.amount, session)
+                    : Promise.resolve(null)
+            ).then(() => ({ refundId: String(record._id), byHand: isHandRecorded(payment) }));
         });
     });
 

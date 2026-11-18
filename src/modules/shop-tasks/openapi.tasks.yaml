@@ -20,11 +20,13 @@ x-extends:
         - paid_without_hold
         - consent_due
         - refund_unrecorded
+        - return_refund_short
     TaskLinkType:
         - order
         - payment
         - refund
         - fulfillment_order
+        - return
     TaskCategory:
         - order
         - cancellation

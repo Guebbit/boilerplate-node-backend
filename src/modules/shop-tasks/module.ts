@@ -29,6 +29,7 @@ import { ORDER_CANCELED, ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
 import {
     PAYMENT_AMOUNT_MISMATCH,
     PAYMENT_REFUND_UNRECORDED,
+    PAYMENT_RETURN_REFUND_SHORT,
     PAYMENT_DISPUTE_OPENED,
     PAYMENT_DISPUTE_UPDATED,
     PAYMENT_REFUNDED,
@@ -37,7 +38,7 @@ import {
     PAYMENT_REFUND_OWED_BY_HAND,
     PAYMENT_REFUND_REVERSED
 } from '@modules/payments';
-import { RETURN_REQUESTED } from '@modules/returns';
+import { RETURN_CLOSED_BY_HAND, RETURN_REQUESTED } from '@modules/returns';
 import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { shopTasksConfig } from './config';
@@ -75,6 +76,8 @@ export default {
         onDomainEvent(PAYMENT_REFUND_CANCELED, shopTasksService.onRefundClosed);
         onDomainEvent(PAYMENT_AMOUNT_MISMATCH, shopTasksService.onAmountMismatch);
         onDomainEvent(PAYMENT_REFUND_UNRECORDED, shopTasksService.onRefundUnrecorded);
+        onDomainEvent(PAYMENT_RETURN_REFUND_SHORT, shopTasksService.onReturnRefundShort);
+        onDomainEvent(RETURN_CLOSED_BY_HAND, shopTasksService.onReturnClosedByHand);
         onDomainEvent(PAYMENT_DISPUTE_OPENED, shopTasksService.onDispute);
         onDomainEvent(PAYMENT_DISPUTE_UPDATED, shopTasksService.onDispute);
         onDomainEvent(HOLD_ORPHANED, shopTasksService.onHoldOrphaned);

@@ -53,6 +53,14 @@ declare module '@kernel/events' {
             /** What the buyer was given; absent on a return born closed. */
             remedy?: ReturnRemedy;
         };
+
+        /**
+         * Staff closed a received return by hand, once they had checked the money themselves. No
+         * money moved and the buyer is not mailed, so it is NOT `return.closed`; it only lets `tasks`
+         * clear the to-do that asked staff to check. Written with the status move, through the
+         * outbox: at-least-once, so a listener dedupes on `meta.eventId`. Internal only.
+         */
+        'return.closed_by_hand': { returnId: string; orderId: string };
     }
 }
 
@@ -67,3 +75,6 @@ export const RETURN_CLOSED = 'return.closed';
 
 /** See `DomainEventMap['return.decided']` above. */
 export const RETURN_DECIDED = 'return.decided';
+
+/** See `DomainEventMap['return.closed_by_hand']` above. */
+export const RETURN_CLOSED_BY_HAND = 'return.closed_by_hand';

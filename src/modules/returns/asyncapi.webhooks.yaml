@@ -63,12 +63,16 @@ operations:
         action: send
         channel:
             $ref: '#/channels/return.closed'
-        summary: A return finished — the money went back.
+        summary: A return finished.
         description: >-
             One-to-one with the `return.closed` domain event — see `returns/services/close.ts`.
             Fired when the refund settles: straight after the goods were received, or later when
-            the payment sweep completed a refund the provider first refused. A withdrawal before
-            dispatch fires it at birth, right after `return.requested`.
+            the payment sweep completed a refund the provider first refused. A return born closed
+            (a withdrawal before dispatch, a canceled remainder) fires it at birth, right after
+            `return.requested`, while the money may still be owed. A return whose refund could not
+            be opened (the payment had nothing left) stays `received` until staff close it by hand,
+            and that fires nothing. For the money itself follow `payment.refunded` and
+            `payment.refund_failed`, and join them on the refund's `returnId`.
         messages:
             - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
 components:
@@ -141,7 +145,9 @@ components:
                     $ref: '#/components/schemas/Id'
                 refundAmount:
                     $ref: '#/components/schemas/NonNegativeDecimalAmount'
-                    description: What went back to the customer for this return.
+                    description: >-
+                        What the customer gets back for this return in all. The refund on the
+                        payment can be smaller when part of the payment already went back another way.
                 currency:
                     $ref: '#/components/schemas/CurrencyCode'
                     description: ISO-4217, e.g. `EUR`.

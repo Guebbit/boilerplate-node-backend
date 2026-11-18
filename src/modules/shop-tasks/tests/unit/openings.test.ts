@@ -17,7 +17,8 @@ import {
     refundOwedOpening,
     refundRefusedOpening,
     refundReversedOpening,
-    refundUnrecordedOpening
+    refundUnrecordedOpening,
+    returnRefundShortOpening
 } from '../../domain/openings';
 
 /** The instant openings are judged at. */
@@ -120,6 +121,19 @@ describe('the other openings', () => {
         ['refund owed', refundOwedOpening({ refundId: 'r1', orderId: 'o1' }, NOW)],
         ['amount mismatch', amountMismatchOpening({ paymentId: 'p1', orderId: 'o1' }, NOW)],
         ['refund unrecorded', refundUnrecordedOpening(UNRECORDED, NOW)],
+        [
+            'return refund short',
+            returnRefundShortOpening(
+                {
+                    returnId: 'r1',
+                    orderId: 'o1',
+                    asked: '100.00',
+                    opened: '70.00',
+                    currency: 'EUR'
+                },
+                NOW
+            )
+        ],
         ['paid without hold', paidWithoutHoldOpening('o1', NOW)],
         [
             'refund refused',
