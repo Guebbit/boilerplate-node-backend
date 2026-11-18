@@ -41,7 +41,6 @@ import { analyticsProviderProbe } from '@infrastructure/observability/analytics'
 import { analyticsConfig } from '@infrastructure/observability/config';
 import { persistenceConfig } from '@infrastructure/persistence/config';
 import {
-    clusterConfig,
     databaseConfig,
     loggingConfig,
     nodeEnvironmentConfig,
@@ -97,14 +96,12 @@ export const securityTxtSettings = (): SecurityTxtSettings => ({
 
 /**
  * Every infrastructure, kernel and app slice — everything a boot validates that no module owns.
- * Read by `registerModules` (which adds each manifest's own slices), the cluster primary and
- * `runScript`, so the same environment is judged the same way wherever the process starts.
+ * Read by `registerModules` (which adds each manifest's own slices) and `runScript`, so the same environment is judged the same way wherever the process starts.
  */
 export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     nodeEnvironmentConfig,
     loggingConfig,
     serverConfig,
-    clusterConfig,
     stockConfig,
     databaseConfig,
     tracingConfig,
@@ -153,8 +150,7 @@ export const allConfigSlices = (appModules: readonly AppModule[]): readonly Conf
  * Refuse to run on a bad environment: judge every slice of every enabled module, exactly as
  * `registerModules` does at app boot.
  *
- * For the entry points that never go through `createApp()` — the cluster primary (one clean
- * error, instead of every worker crash-looping on it) and `runScript` (every ops script).
+ * For the entry point that never goes through `createApp()`: `runScript` (every ops script).
  *
  * @throws {ConfigError} when anything is wrong
  */

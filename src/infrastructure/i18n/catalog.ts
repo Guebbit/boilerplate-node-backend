@@ -17,7 +17,7 @@ import { baseLanguage, canonicalLocale } from './locale-tag';
 
 /**
  * Where the shared dictionaries live. Resolved from this file rather than from `process.cwd()`, so
- * it is the same directory whether the entry point is `src/cluster.ts`, a Jest worker or a
+ * it is the same directory whether the entry point is `src/main.ts`, a Jest worker or a
  * migration.
  */
 const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', '..', 'shared', 'locales');

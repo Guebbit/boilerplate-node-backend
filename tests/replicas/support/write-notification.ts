@@ -5,7 +5,7 @@
  * a copy can only hear it through the stores. Run as `node --import tsx <this file> <userId>` with
  * the copies' environment.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.

@@ -2,7 +2,7 @@
  * @module
  * What every suite that boots the real app as a child process shares: a free port, a wait for the
  * listener, an environment that boots like a fresh checkout, a marker watch over the child's
- * output and one way to stop it. Used by `tests/cluster/` and `tests/replicas/`.
+ * output and one way to stop it. Used by `tests/replicas/`.
  */
 
 import type { ChildProcess } from 'node:child_process';
@@ -47,7 +47,7 @@ export const waitForListening = (port: number, timeoutMs: number): Promise<void>
 
 /**
  * The environment a child needs to boot the way a fresh checkout does, over the caller's own.
- * Shared by the cluster primary here and by the single-process copies of `tests/replicas`.
+ * Used by the single-process copies of `tests/replicas`.
  *
  * @param options - the port the child listens on and the database it is handed
  */
@@ -130,32 +130,26 @@ export const createMarkerCounter = (marker: string) => {
 };
 
 /**
- * The cluster primary kills its workers at delay + 15 s + 5 s (20 s by default); past 30 s, stop
- * being polite.
+ * A copy tears itself down within `NODE_SHUTDOWN_DELAY_MS` + `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`
+ * (15 s by default); past 30 s, stop being polite.
  */
 const STOP_GRACE_MS = 30_000;
 
 /**
- * Stops a spawned child: sends SIGTERM, waits for it to exit, and SIGKILLs after 30 s.
- *
- * `signal` is how the caller reaches the child: its own pid, or its whole process group.
+ * Stops a spawned child: sends SIGTERM to its own pid, waits for it to exit, and SIGKILLs after 30 s.
  *
  * @param child - the child to stop; one that already exited resolves at once
- * @param signal - delivers a signal the way the caller needs (pid or group)
  */
-export const stopChild = (
-    child: ChildProcess,
-    signal: (name: NodeJS.Signals) => void
-): Promise<void> =>
+export const stopChild = (child: ChildProcess): Promise<void> =>
     new Promise<void>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) {
             resolve();
             return;
         }
         child.once('exit', () => resolve());
-        signal('SIGTERM');
+        child.kill('SIGTERM');
         setTimeout(() => {
-            signal('SIGKILL');
+            child.kill('SIGKILL');
             resolve();
         }, STOP_GRACE_MS).unref();
     });

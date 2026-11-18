@@ -158,7 +158,7 @@ all of it is easier to read once you have one.
 | `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                                |
 | `src/modules/*/openapi.yaml`                                         | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../build/contract-fragmentation.md). |
 | `src/modules/account/*`                                              | It is the biggest and least typical module (JWT, cookies, sessions, tokens, 2FA, OAuth). Read `example` first.               |
-| `src/main.ts`, `src/cluster.ts`                                      | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                           |
+| `src/main.ts`                                                        | You are changing process management. See [Scaling & Shutdown](./scaling.md).                                                 |
 | `eslint.config.ts`, `stryker.json`, `jest.config.js`                 | You are changing the gate itself.                                                                                            |
 
 ---

@@ -218,7 +218,7 @@ A signed-in caller asks to be told once when a product they cannot order can be 
 
 Realtime is server → client only, via Server-Sent Events on `GET /observability/events` (and the per-user `GET /notifications/stream`) — ordinary Express routes, so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`; see [Observability Endpoints](./observability.md).
 
-There is no WebSocket endpoint. SSE covers the push case without upgrade handling and works unchanged under clustering, since each stream is served entirely by the worker that accepted it. The notifications stream has a Redis pub/sub backplane, so a frame written in another process still reaches it ([how](../modules/notifications.md#more-than-one-process)); the observability stream does not. Adding bidirectional messaging means adding `ws` plus an `'upgrade'` listener on the HTTP server in `src/app.ts`, since a connection is pinned to one worker.
+There is no WebSocket endpoint. SSE covers the push case without upgrade handling and works unchanged with several copies, since each stream is served entirely by the copy that accepted it. The notifications stream has a Redis pub/sub backplane, so a frame written in another process still reaches it ([how](../modules/notifications.md#more-than-one-process)); the observability stream does not. Adding bidirectional messaging means adding `ws` plus an `'upgrade'` listener on the HTTP server in `src/app.ts`, since a connection is pinned to one copy.
 
 ## Read next
 

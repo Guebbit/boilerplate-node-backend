@@ -5,7 +5,7 @@
  * faults an edge exposes (a stopping copy still receiving traffic, a reused socket hitting a closed
  * one) show up here the way they would in front of Kubernetes.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 
 import http from 'node:http';

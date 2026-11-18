@@ -15,7 +15,7 @@ flowchart LR
     Store --> Slice["a slice per owner<br/>(config.ts, defineConfig)"]
     Slice -->|"typed getter"| Code["services, adapters,<br/>middleware, scripts"]
     Slice -->|"same slices"| Gate["boot gate<br/>every mistake, once"]
-    Gate -->|"refuses"| Stop["createApp · cluster primary · runScript"]
+    Gate -->|"refuses"| Stop["createApp · runScript"]
 
     classDef layer fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef gate fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -31,7 +31,7 @@ was already a dependency.
 | Rule                                  | Where it is enforced here                                                                          |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`                     |
-| Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary                         |
+| Validate once at boot, list every one | `assertConfig` from `registerModules` and `runScript`                                              |
 | Parse once, expose a frozen object    | The store snapshots `process.env` at the first read; a slice parses once per change                |
 | Everything else reads that object     | A value read from another file has an exported getter; one read in one place reads the slice there |
 | Tests override config through a seam  | `tests/support/environment.ts`; lint refuses a `process.env` write in a test                       |

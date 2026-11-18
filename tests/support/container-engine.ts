@@ -7,7 +7,7 @@
  * for it.
  *
  * Used by the two suites that need a real service the in-process ones cannot fake:
- * `tests/cluster` (Redis) and `tests/broker` (RabbitMQ).
+ * `tests/replicas` (Redis) and `tests/broker` (RabbitMQ).
  *
  * @see docs/build/docker-and-podman-podman.md#the-compose-provider-behind-podman-compose
  */

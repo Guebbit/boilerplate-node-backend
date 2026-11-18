@@ -136,10 +136,10 @@ otherwise the suite starts its own:
 | Variable                 | Unset (default)                                           | Set                                                                                   |
 | ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `NODE_TEST_MONGO_URI`    | an in-process `mongod` per run (`mongodb-memory-server`)  | that Mongo (an external one; no CI job or compose file sets it)                       |
-| `NODE_TEST_REDIS_URL`    | `test:cluster` starts and stops its own Redis container   | that Redis                                                                            |
+| `NODE_TEST_REDIS_URL`    | `test:replicas` starts and stops its own Redis container  | that Redis                                                                            |
 | `NODE_TEST_RABBITMQ_URL` | `test:broker` starts and stops its own RabbitMQ container | that broker (needs the management plugin) — see [Broker Testing](./broker-testing.md) |
 
-See `scenarios/support/ephemeral-mongo.ts` and `tests/cluster/support/redis.ts` for the
+See `scenarios/support/ephemeral-mongo.ts` and `tests/replicas/support/redis.ts` for the
 resolvers — Mongo's fallback shape differs from Redis's because it has an in-process option
 (`mongodb-memory-server`) and Redis does not. The external-URI path
 (`NODE_TEST_MONGO_URI`) is no longer run end to end: CI never sets it. See

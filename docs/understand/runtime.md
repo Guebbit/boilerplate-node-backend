@@ -11,7 +11,7 @@ The runtime tools the backend stands on, and where each one is wired in.
 
 | Tool                                                 | Why it is here          | Repo role                                                                  |
 | ---------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------- |
-| [Node.js](https://nodejs.org/en/docs) (≥ 24.15)      | JavaScript runtime      | language platform; see also [Clustering](clustering.md)                    |
+| [Node.js](https://nodejs.org/en/docs) (≥ 24.15)      | JavaScript runtime      | language platform; see also [Scaling](scaling.md)                          |
 | [Express 5](https://expressjs.com/)                  | REST transport layer    | pipeline assembled in `src/app.ts` from `src/app/*`                        |
 | [Zod](https://zod.dev/)                              | validation and coercion | service and schema helpers                                                 |
 | [Multer](https://github.com/expressjs/multer#readme) | multipart/file uploads  | upload-aware endpoints via `src/infrastructure/http/middlewares/upload.ts` |
@@ -48,13 +48,12 @@ flowchart LR
 
 ## External references
 
-- [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts` (`npm run start:cluster` only); see also [Clustering & Shutdown](clustering.md)
 - [Zod schema basics](https://zod.dev/?id=basic-usage)
 
 ## Read next
 
 - [Layers](layers.md)
-- [Clustering & graceful shutdown](clustering.md)
+- [Scaling & graceful shutdown](scaling.md)
 - [Security](./security.md)
 - [API overview](../build/api-contracts.md#rest-patterns-used-here)
 - [Email & PDF rendering](./email-and-rendering.md)

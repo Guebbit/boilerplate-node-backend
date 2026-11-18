@@ -3,7 +3,7 @@
  * The one runtime door from `src/` to `scenarios/`: a process booted with `NODE_ENV=development`
  * loads the development doubles here, at boot, instead of through a per-script `--import`.
  *
- * Called by: `src/main.ts`, `src/cluster.ts` and `scripts/run-script.ts`. Nowhere else.
+ * Called by: `src/main.ts` and `scripts/run-script.ts`. Nowhere else.
  * Why a runtime `import()`: the production image has no `scenarios/`, and a static import would
  * break both the build and `src-cannot-reach-scenarios`. Only this branch can reach the file.
  *

@@ -5,7 +5,7 @@
  * `not-to-dev-dep` bars `src/` from reaching one.
  *
  * Shared by `scenarios/run-server.ts`, `tests/support/global-setup.ts` and
- * `tests/cluster/support/cluster.ts` — `tests/` may import `scenarios/`, so one copy serves all
+ * `tests/replicas/support/copies.ts` — `tests/` may import `scenarios/`, so one copy serves all
  * three rather than `run-server.ts` keeping its own small one.
  */
 

@@ -164,7 +164,7 @@ const suite = SUITES[suiteName];
  * How many test files this layer currently matches.
  *
  * Asked of jest rather than counted with a glob, so the answer comes from the same resolver that
- * will run them — `testPathIgnorePatterns` included, which is what keeps `tests/cluster` out.
+ * will run them — `testPathIgnorePatterns` included, which is what keeps `tests/replicas` out.
  *
  * @returns the file count, or 0 when jest could not answer
  */

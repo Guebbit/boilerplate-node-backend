@@ -137,7 +137,7 @@ idempotent, and deleted once they have run everywhere. See
 ## A time limit on every query
 
 `configureMongoose()` (`infrastructure/runtime/database.ts`, called by `start()` in every process:
-the server, the cluster workers and every script) sets Mongoose's global `maxTimeMS` to
+the server and every script) sets Mongoose's global `maxTimeMS` to
 `NODE_MONGO_MAX_TIME_MS` (default **5 s**). mongod then kills any query or aggregation that runs
 past it, instead of letting it hold a connection and a core for as long as it likes.
 
@@ -168,7 +168,7 @@ match every document.
 
 - **Set before any model loads.** A `bulkWrite` filter reads the option as it was when the schema
   was built. `infrastructure/runtime/mongoose-boot.ts` is imported for its side effect as the
-  first project import of `serve.ts`, `cluster.ts`, every job under `scripts/` and `scenarios/`,
+  first project import of `serve.ts`, every job under `scripts/` and `scenarios/`,
   and the jest bootstrap (`tests/support/setup.ts`). `configureMongoose()` repeats the call.
 - **What it does not cover.** An operator on a declared path (`{ email: { $ne: null } }`). That is
   a separate hardening, not built.

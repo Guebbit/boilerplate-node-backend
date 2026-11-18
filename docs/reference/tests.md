@@ -82,7 +82,7 @@ What the guard watches, and does not:
 - Node's warnings arrive late (one tick), so the guard waits one real tick before and after each case. A warning from a sync case is credited to that case.
 - Jest's `process` is a copy with no listeners; `tests/support/test-environment.ts` forwards the host process's warnings into it.
 - A Node-core deprecation fires once per worker, so which file fails depends on scheduling. Never declare one; fix the caller.
-- The cluster and broker configs run no guard.
+- The replicas and broker configs run no guard.
 - Why hand-written and not `jest-fail-on-console`: it has no must-fire check and sees the console only, not `process` warnings.
 
 The paired frontend has the same idea for `[Vue warn]`, as a declared fork that is not kept in step.
@@ -264,14 +264,14 @@ flowchart LR
     J -->|received| R
 ```
 
-## `tests/cluster/` — more than one worker
+## `tests/replicas/` — more than one copy
 
-One process is not the deployment. These boot real workers, because the bugs they look for cannot
+One process is not the deployment. These boot real copies of the app behind a proxy, because the bugs they look for cannot
 happen in a single process.
 
-| Folder           | What lives here                                                           | Read next                                            |
-| ---------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `tests/cluster/` | Real workers behind the primary: what only more than one process can show | [Clustering & Shutdown](../understand/clustering.md) |
+| Folder            | What lives here                                                   | Read next                                                                                         |
+| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `tests/replicas/` | N copies behind a proxy: what only more than one process can show | [Replicas testing](../build/replicas-testing.md) · [Scaling & Shutdown](../understand/scaling.md) |
 
 ## `tests/broker/` — a real RabbitMQ
 

@@ -147,7 +147,7 @@ surely as no barrel would, since there is nothing in it to reach for.
 | Follow one request end-to-end                                      | [Request Flow](./request-flow.md)                                           |
 | Know which sources an endpoint reads                               | [Request Input](./request-input.md)                                         |
 | Know which HTTP standards the API follows, and where it differs    | [API Standards](./api-standards.md)                                         |
-| Understand process model & shutdown                                | [Clustering & Shutdown](./clustering.md)                                    |
+| Understand process model & shutdown                                | [Scaling & Shutdown](./scaling.md)                                          |
 | Know how one shop becomes many, and what is deliberately not built | [Tenancy](./tenancy.md)                                                     |
 | Know which rules are shared data and how a backend loads them      | [Shared rules](./shared-rules.md)                                           |
 | Look up what a domain term means in one module                     | [Glossary](../reference/glossary.md)                                        |

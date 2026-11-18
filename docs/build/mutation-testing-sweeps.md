@@ -153,7 +153,7 @@ runs the whole file in every slice and loads a small ignorer plugin
 (`scripts/mutation/ci/slice-ignorer.ts`, via a config written fresh from `stryker.json` each job)
 that skips only subtrees which do not touch the slice. A node crossing an edge touches both
 neighbours, so both test it and the merge keeps one result. Checked 2026-09-30 on
-`src/infrastructure/runtime/cluster-policy.ts`, cut through the middle of a function: the merged
+a runtime file cut through the middle of a function: the merged
 slices matched the whole-file run mutant for mutant, 26 of 26, and the function body that crossed
 the cut ran in both halves.
 

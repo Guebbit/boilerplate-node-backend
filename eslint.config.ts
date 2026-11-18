@@ -1090,8 +1090,7 @@ export default defineConfig(
              */
             'boundaries/files': [
                 { pattern: 'src/app.ts', category: 'composition-root' },
-                { pattern: 'src/main.ts', category: 'process-supervisor' },
-                { pattern: 'src/cluster.ts', category: 'process-supervisor' },
+                { pattern: 'src/main.ts', category: 'process-entry' },
                 { pattern: 'src/serve.ts', category: 'server-entry' },
                 { pattern: 'src/modules.ts', category: 'registry' },
                 { pattern: 'src/globals.d.ts', category: 'ambient' },
@@ -1198,7 +1197,7 @@ export default defineConfig(
                         {
                             /**
                              * The four files that are a tier each — `app.ts` composes,
-                             * `main.ts` and `cluster.ts` supervise, `serve.ts` starts what `app.ts` composed
+                             * `main.ts` is the process entry, `serve.ts` starts what `app.ts` composed
                              * and wires it to the process signals, `modules.ts` IS the
                              * registry and is the one caller allowed to import
                              * `@modules/<name>/module`. They have no element (an element
@@ -1209,7 +1208,7 @@ export default defineConfig(
                                 file: {
                                     categories: [
                                         'composition-root',
-                                        'process-supervisor',
+                                        'process-entry',
                                         'server-entry',
                                         'registry'
                                     ]
@@ -1219,7 +1218,7 @@ export default defineConfig(
                         },
                         {
                             /**
-                             * …including each other: `cluster.ts` imports `serve.ts`, `serve.ts`
+                             * …including each other: `main.ts` imports `serve.ts`, `serve.ts`
                              * imports `app.ts`, and none of them belongs to an element, so each
                              * edge is named by category on both ends.
                              */
@@ -1227,7 +1226,7 @@ export default defineConfig(
                                 file: {
                                     categories: [
                                         'composition-root',
-                                        'process-supervisor',
+                                        'process-entry',
                                         'server-entry',
                                         'registry'
                                     ]
@@ -1238,7 +1237,7 @@ export default defineConfig(
                                     file: {
                                         categories: [
                                             'composition-root',
-                                            'process-supervisor',
+                                            'process-entry',
                                             'server-entry',
                                             'registry'
                                         ]
@@ -1658,7 +1657,7 @@ export default defineConfig(
             '.dependency-cruiser.cjs',
             '.dependency-cruiser.modules.cjs',
             '.dependency-cruiser.bootstrap.cjs',
-            'jest.config.cluster.js',
+            'jest.config.replicas.js',
             'jest.config.broker.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
@@ -1819,7 +1818,7 @@ export default defineConfig(
                     ],
                     patterns: [
                         {
-                            group: ['**/src/app', '**/src/cluster'],
+                            group: ['**/src/app'],
                             message:
                                 'The composition root starts the application. A unit test importing it pays for the whole registry on every mutant Stryker runs.'
                         }

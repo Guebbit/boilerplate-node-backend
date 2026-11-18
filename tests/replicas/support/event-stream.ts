@@ -3,7 +3,7 @@
  * A held Server-Sent Events stream for the multi-copy cases: opened on one copy, read as text, and
  * waited on for a named event. Plain `fetch`, since the point is what a copy puts on the wire.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 import { retryUntil } from '@tests/eventually';
 

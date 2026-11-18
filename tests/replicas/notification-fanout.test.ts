@@ -8,7 +8,7 @@
  * Every case reads a frame the writer's own process could not have delivered, which is the
  * control: a copy that answered alone would never produce it.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  * @see docs/modules/notifications.md#more-than-one-process
  */
 
@@ -16,7 +16,7 @@ import { spawn } from 'node:child_process';
 import { containerEngineAvailable } from '@tests/container-engine';
 import { retryUntil } from '@tests/eventually';
 import { REPO_ROOT } from '@tests/paths';
-import { startRedis, type TestRedis } from '../cluster/support/redis';
+import { startRedis, type TestRedis } from './support/redis';
 import { call, jsonHeaders, signUpAndLogIn } from './support/client';
 import { BOOT_TIMEOUT_MS, withReplicas } from './support/copies';
 import { openNotificationStream, type HeldStream } from './support/event-stream';

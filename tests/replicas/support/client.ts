@@ -3,7 +3,7 @@
  * A small JSON client for the multi-copy cases: plain `fetch` against a base URL, the account
  * flow every case starts with (sign up, log in) and the session cookie's carry-over.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 
 /** What a call answered. */

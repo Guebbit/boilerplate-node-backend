@@ -14,7 +14,6 @@
                 "<rootDir>/src/modules/[^/]+/tests/contract/",
                 "<rootDir>/tests/integration/journeys/",
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
-                "<rootDir>/tests/cluster/",
                 "<rootDir>/tests/replicas/",
                 "<rootDir>/tests/broker/",
                 "<rootDir>/tmp/",

@@ -1,7 +1,7 @@
 /**
  * @module
  * Where a suite (or the demo profile) gets a Mongo to talk to: the branching only. Mirrors
- * `tests/cluster/support/redis.ts`'s `startRedis()` (env var first, local fallback second).
+ * `tests/replicas/support/redis.ts`'s `startRedis()` (env var first, local fallback second).
  *
  * Fallback:  Redis has no in-process option, so it shells out to a container engine; Mongo uses
  *            `mongodb-memory-server`, an in-process binary. There is no container-per-run branch:
@@ -9,7 +9,7 @@
  *            capability neither path lacks, and it would make an engine mandatory to run a test.
  * Starting:  not this module's job. `./ephemeral-mongod.ts` is the one implementation, and every
  *            caller (`scenarios/run-server.ts`, `tests/support/global-setup.ts`,
- *            `tests/cluster/support/cluster.ts`) passes `startInProcessMongod` itself.
+ *            `tests/replicas/support/copies.ts`) passes `startInProcessMongod` itself.
  * Required:  `startInProcess` has no default, so this file never statically imports
  *            `./ephemeral-mongod`: `unit-layer-stays-database-free` (`.dependency-cruiser.cjs`) is
  *            reachability-based, and a default would pull `mongodb-memory-server` into the unit

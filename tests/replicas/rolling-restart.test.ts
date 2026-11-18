@@ -6,7 +6,7 @@
  * lame-duck delay (`NODE_SHUTDOWN_DELAY_MS`) is what the copies are given here; the proxy must
  * count no 502 and no 503, and every request must be answered 200.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  * @see docs/operate/health-checks.md#shutting-down-behind-a-load-balancer
  */
 

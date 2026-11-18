@@ -5,7 +5,7 @@
  * as the observability stream — see `../../observability/services/stream.ts` for the reasoning —
  * with a `Map` keyed by user where that one holds a flat `Set`.
  *
- * Across processes (copies, cluster workers, the cron container) the frame travels over Redis
+ * Across processes (copies, the cron container) the frame travels over Redis
  * pub/sub:
  *
  * Writer:    delivers to its own streams first, then publishes with its origin id.

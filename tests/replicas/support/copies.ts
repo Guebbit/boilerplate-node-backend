@@ -1,14 +1,14 @@
 /**
  * @module
  * N separate single-process copies of the app, one port each, over ONE Mongo (and whatever Redis
- * the case hands them), with a round-robin proxy in front. Unlike `tests/cluster/`, nothing here
- * forks from a primary: every copy is its own `node --import tsx src/main.ts`, which is what an
+ * the case hands them), with a round-robin proxy in front. Nothing here forks from a
+ * primary: every copy is its own `node --import tsx src/main.ts`, which is what an
  * orchestrator's replicas are.
  *
  * Each copy is signalled by its own pid (never a process group): one SIGTERM per copy, the way a
  * kubelet sends it.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -79,8 +79,6 @@ const copyEnvironment = (options: {
     env: Record<string, string>;
 }): Record<string, string | undefined> => ({
     ...bootableEnvironment({ port: options.port, dbUri: options.dbUri }),
-    // One process per copy: clustering is the other mode and must not fork here.
-    NODE_ENABLE_CLUSTERING: '0',
     // One public address for every copy, as behind a real balancer: tokens name it as issuer.
     NODE_URL: options.publicUrl,
     // The proxy is the one hop in front of every copy.
@@ -119,7 +117,7 @@ const bootCopy = (options: {
     child.stderr.on('data', capture);
 
     // One SIGTERM to this pid, like a kubelet; the app's own deadline is 15 s, `stopChild` waits past it.
-    const stop = (): Promise<void> => stopChild(child, (name) => child.kill(name));
+    const stop = (): Promise<void> => stopChild(child);
 
     // One deadline for both waits: the second gets what the first left.
     const deadline = Date.now() + BOOT_TIMEOUT_MS;
@@ -188,7 +186,7 @@ export const withReplicas = <T>(
     use: (replicas: Replicas) => Promise<T>
 ): Promise<T> => {
     const { count, env = {} } = options;
-    // Own dbPath under tmp/test/, like the cluster harness: never the shared os.tmpdir().
+    // Own dbPath under tmp/test/, never the shared os.tmpdir().
     const dbPath = path.join(REPO_ROOT, 'tmp', 'test', 'replicas-mongo', randomUUID());
     const running: { stop: () => Promise<void> }[] = [];
     // The copies this rig holds; the proxy reads it on every poll, so it may start empty.

@@ -9,9 +9,9 @@
  * import would be hoisted above `startTracing()`.
  * Under `NODE_ENV=development` the development doubles load after tracing and before `serve`, so
  * they are registered before the config gate and any request.
- * `src/cluster.ts` is the other entry (`npm run start:cluster`, a bare VM with no process manager).
+ * Scale by running more copies of this entry, not by forking inside it.
  *
- * @see docs/understand/clustering.md#two-ways-to-run-it
+ * @see docs/understand/scaling.md#how-to-run-more-than-one
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';

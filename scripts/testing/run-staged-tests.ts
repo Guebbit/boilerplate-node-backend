@@ -49,7 +49,7 @@ console.log(`[test:staged] ${files.length} file(s):\n  ${files.join('\n  ')}`);
 /**
  * jest, in band: these layers share one in-memory mongod, so their files never run side by side.
  * `--runTestsByPath` takes exact paths, not regexes, and still honours `testPathIgnorePatterns` —
- * a staged `tests/cluster` or `tests/broker` file is dropped, `--passWithNoTests` then lets that
+ * a staged `tests/replicas` or `tests/broker` file is dropped, `--passWithNoTests` then lets that
  * empty run pass; those suites need their own config and real services.
  * https://jestjs.io/docs/cli#--runtestsbypath
  */

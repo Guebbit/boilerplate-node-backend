@@ -114,7 +114,7 @@ sequenceDiagram
 | Queue consumers cancelled | No new job is taken; running ones finish and ack                           | a job taken now has no time to finish and is redelivered                                                                         |
 | Delay                     | Waits `NODE_SHUTDOWN_DELAY_MS`, still serving                              | the balancer's poll needs time to see the 503                                                                                    |
 | SSE streams ended         | Each stream gets a random `retry:` of 1-5 s, then ends                     | `close()` waits for a stream, which never ends alone; the random delay stops one copy's clients reconnecting together            |
-| Teardown                  | Close the listener, settle renders, marks, queue handlers, then the stores | see [Clustering](../understand/clustering.md#graceful-shutdown)                                                                  |
+| Teardown                  | Close the listener, settle renders, marks, queue handlers, then the stores | see [Scaling](../understand/scaling.md#graceful-shutdown)                                                                        |
 
 A second signal while this runs is ignored: one teardown, one deadline.
 

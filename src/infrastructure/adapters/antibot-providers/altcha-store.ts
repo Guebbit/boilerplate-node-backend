@@ -17,8 +17,8 @@ const RECORD_TTL_SECONDS = 600;
 
 /**
  * The floor under the `limits` Redis: with no Redis configured (or one that fails) single-use is
- * still enforced inside ONE process, and Redis widens that across `cluster.ts`'s worker fork when
- * it is reachable. The claims live on the `limits` instance, never the cache's: the cache evicts
+ * still enforced inside ONE process, and Redis widens that across copies when it is
+ * reachable. The claims live on the `limits` instance, never the cache's: the cache evicts
  * under pressure, and an evicted claim is a replayable solution.
  *
  * Insertion order IS expiry order (every record has the same TTL), which {@link sweepExpired}

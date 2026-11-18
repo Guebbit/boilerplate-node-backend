@@ -31,6 +31,10 @@ const config: KnipConfig = {
         'tests/load/*.js',
         // Named by `stryker.json`, which no knip plugin reads.
         'jest.config.mutation.js',
+        // Named by the `--config` flag of `npm run test:replicas`, never imported.
+        'jest.config.replicas.js',
+        // Spawned by file path from `tests/replicas/notification-fanout.test.ts`, never imported.
+        'tests/replicas/support/write-notification.ts',
         // Loaded by VitePress from its own conventional paths.
         'docs/.vitepress/config.mts',
         'docs/.vitepress/theme/index.ts'

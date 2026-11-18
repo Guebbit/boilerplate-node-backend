@@ -8,11 +8,11 @@
  * least two copies answered, or the assertion is about a second copy by name, so "shared" cannot
  * be the answer of a single copy doing all the work.
  *
- * @see docs/build/cluster-testing.md#the-multi-copy-suite
+ * @see docs/build/replicas-testing.md#the-multi-copy-suite
  */
 
 import { containerEngineAvailable } from '@tests/container-engine';
-import { startRedis, type TestRedis } from '../cluster/support/redis';
+import { startRedis, type TestRedis } from './support/redis';
 import { call, jsonHeaders, signUpAndLogIn } from './support/client';
 import { BOOT_TIMEOUT_MS, withReplicas } from './support/copies';
 
