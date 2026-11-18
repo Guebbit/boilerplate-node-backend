@@ -80,6 +80,51 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
+          - series: payment_webhook_dropped_total{reason="unreadable"}
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentWebhookUnreadable
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      reason: unreadable
+                  exp_annotations:
+                      summary: A signed payment webhook could not be read (unreadable)
+                      description: 'payment_webhook_dropped_total rose for unreadable in the last 15 minutes: the provider format changed or the adapter is broken. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
+    - interval: 1m
+      input_series:
+          - series: payment_webhook_dropped_total{reason="unreadable"}
+            values: 0x8
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentWebhookUnreadable
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: http_requests_total{route="/payments/webhook/:provider",status_code="500",method="POST"}
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentWebhookFailing
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                  exp_annotations:
+                      summary: The payment webhook route is answering 5xx
+                      description: 'http_requests_total for /payments/webhook/:provider returned 5xx in the last 30 minutes. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
+    - interval: 1m
+      input_series:
+          - series: http_requests_total{route="/payments/webhook/:provider",status_code="400",method="POST"}
+            values: 0 0 0 1 1 1 1 1
+          - series: http_requests_total{route="/orders",status_code="500",method="POST"}
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentWebhookFailing
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: inventory_commit_orphaned_total{stage="commit"}
             values: 0 0 0 1 1 1 1 1
       alert_rule_test:

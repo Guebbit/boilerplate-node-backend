@@ -417,6 +417,29 @@ groups:
                 summary: 'A payment succeeded for the wrong {{ $labels.field }}'
                 description: 'payment_amount_mismatch_total rose for {{ $labels.field }} in the last 15 minutes: money that does not add up. See the payments log line for the order.'
 
+          # A signed provider message the app could not read (`payments/controllers/post-payment-webhook.ts`):
+          # the adapter or our schema check refused it, and the provider got a 400. A dispute missed
+          # this way is not re-read by any sweep. Fix the adapter; the provider retries for 3 days.
+          - alert: PaymentWebhookUnreadable
+            expr: sum by (reason) (increase(payment_webhook_dropped_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A signed payment webhook could not be read ({{ $labels.reason }})'
+                description: 'payment_webhook_dropped_total rose for {{ $labels.reason }} in the last 15 minutes: the provider format changed or the adapter is broken. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
+
+          # The webhook route answers 5xx: the adapter crashed or the database failed. The provider
+          # retries, but `HighErrorRate` needs 5 % of ALL traffic, so a webhook-only fault never trips it.
+          - alert: PaymentWebhookFailing
+            expr: sum(increase(http_requests_total{route="/payments/webhook/:provider",status_code=~"5.."}[30m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'The payment webhook route is answering 5xx'
+                description: 'http_requests_total for /payments/webhook/:provider returned 5xx in the last 30 minutes. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
+
           # A paid or shipping order has no stock hold to settle (`inventory/services/holds.ts`).
           # `ship` means no hold exists at all: the database was edited or restored. `commit` is the
           # same, or a payment that landed on a given-up hold the shelf could no longer cover. A

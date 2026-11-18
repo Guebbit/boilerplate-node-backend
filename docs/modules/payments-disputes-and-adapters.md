@@ -157,6 +157,22 @@ contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operato
 adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
 yourself, and keep the reason in the `WebhookRejected` message.
 
+### A signed message the app could not read
+
+When the signature is right but the adapter cannot translate the body, or its result fails the
+contract schema, the route answers 400 and `payment_webhook_dropped_total{reason="unreadable"}` goes
+up. `PaymentWebhookUnreadable` pages on it; `PaymentWebhookFailing` pages on any 5xx from the route
+(an adapter that crashes). A bad signature is not counted here: it has its own alert.
+
+1. Fix the adapter (a changed provider format, a dispute code it does not map).
+2. Retries land by themselves: Stripe retries for 3 days. Past that, resend from the provider
+   (Stripe: 15 days from the dashboard, 30 from the CLI).
+3. Press **Re-sync refunds** on payments refunded in that window ([refunds](./payments-refunds.md)).
+4. Check the provider's dispute list for that window: no sweep re-reads disputes.
+
+An adapter that returns an event with no payment id is answered 204 and logged, not counted: that
+looks exactly like an event type the app ignores on purpose.
+
 ### Refund status, and the refund webhooks
 
 `refund` answers `{refundRef, status}`: `pending` for a refund the provider accepted but has not

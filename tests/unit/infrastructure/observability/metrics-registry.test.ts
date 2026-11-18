@@ -135,6 +135,7 @@ describe('labelled alert counters', () => {
         );
         expect(metrics).toMatch(/^auth_one_time_token_rejected_total\{flow="email_change"\} 0$/m);
         expect(metrics).toMatch(/^payment_amount_mismatch_total\{field="amount"\} 0$/m);
+        expect(metrics).toMatch(/^payment_webhook_dropped_total\{reason="unreadable"\} 0$/m);
         expect(metrics).toMatch(/^account_export_failed_total 0$/m);
     });
 });

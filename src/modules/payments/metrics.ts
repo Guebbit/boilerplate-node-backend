@@ -37,3 +37,22 @@ export const paymentAmountMismatchTotal = new Counter({
  */
 for (const field of ['amount', 'currency', 'paymentId'])
     paymentAmountMismatchTotal.inc({ field }, 0);
+
+/**
+ * Provider messages the app refused although they were signed: the adapter could not read the
+ * body, or what it returned failed the contract schema. Labelled by `reason`.
+ * A signature failure is NOT counted here (`security_events_total` owns it).
+ * Any increment means a reader is broken and a dispute or refund message was dropped.
+ */
+export const paymentWebhookDroppedTotal = new Counter({
+    name: 'payment_webhook_dropped_total',
+    help: 'Signed provider webhook deliveries refused because they could not be read.',
+    labelNames: ['reason'],
+    registers: [metricsRegistry]
+});
+
+/**
+ * Zero from startup, so an `increase()` alert sees the first drop after a restart.
+ * https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+ */
+paymentWebhookDroppedTotal.inc({ reason: 'unreadable' }, 0);

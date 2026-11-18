@@ -132,9 +132,17 @@ describe('registerWebhookCatalog — a channel without a usable x-read-rule', ()
         ['an own-rows rule', 'read:Order']
     ])('throws at boot for %s', (_label, rule) => {
         const channel = rule === undefined ? '' : `\n        x-read-rule: ${rule}`;
+        const fragment = `channels:\n    thing.happened:\n        address: thing.happened${channel}\n`;
+        const realRead = fs.readFileSync;
         jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-        jest.spyOn(fs, 'readFileSync').mockReturnValue(
-            `channels:\n    thing.happened:\n        address: thing.happened${channel}\n`
+        /**
+         * Only the catalog's own fragment is faked. Jest reads its transform and source-map cache
+         * through this same function, and must get the real bytes back.
+         */
+        jest.spyOn(fs, 'readFileSync').mockImplementation((...arguments_) =>
+            String(arguments_[0]).endsWith('asyncapi.webhooks.yaml')
+                ? fragment
+                : realRead(...arguments_)
         );
 
         expect(() => {
