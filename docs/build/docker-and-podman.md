@@ -69,7 +69,7 @@ flowchart LR
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App image           | `docker/Dockerfile` based on `node:26.13.1-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
 | Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                  |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-process and clustered dev commands                                                                                                    |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, hot-reload the one-process dev command                                                                                                                      |
 | Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                             |
 
 ### After a new dependency: the container reinstalls by itself
@@ -158,7 +158,7 @@ docker/boot-check.sh boot-check
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
-- **The `app` container owns the seeding**, not you: its startup command is `docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set), so a fresh volume arrives furnished — [Which database am I looking at?](run-locally.md#which-database-am-i-looking-at).
+- **The `app` container owns the seeding**, not you: its startup command is `docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker`, so a fresh volume arrives furnished — [Which database am I looking at?](run-locally.md#which-database-am-i-looking-at).
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 

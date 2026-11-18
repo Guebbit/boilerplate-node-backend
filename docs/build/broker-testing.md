@@ -65,11 +65,11 @@ broker.
 ## Why it is not in `complete`
 
 A container engine and a ~20 second run, on a gate that otherwise needs neither. It sits in
-`complete:manual` beside `test:prism` and `test:cluster`, and runs in CI on every push in its own
+`complete:manual` beside `test:prism` and `test:replicas`, and runs in CI on every push in its own
 `broker` job with a RabbitMQ service container.
 
 ## Read next
 
-- [Cluster testing](./cluster-testing.md)
+- [Replicas testing](./replicas-testing.md)
 - [Integration Testing](./integration-testing.md)
 - [Testing — Quick Start](./testing-quickstart.md)

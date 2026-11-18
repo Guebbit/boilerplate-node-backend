@@ -14,7 +14,7 @@
 
 import { addMoney, subtractMoney, toMinorUnits, type Money } from '@domain-primitives/money';
 import { RefundFailureReason, RefundStatus, type PaymentStatus, type RefundDueRule } from '@types';
-import { hasDecidedDispute, lostChargebackCovers, type DisputablePayment } from './disputes';
+import { hasOpenDispute, type DisputablePayment } from './disputes';
 import { DAY_MS, MINUTE_MS } from '@domain-primitives/time';
 
 /**
@@ -193,6 +193,8 @@ export interface RefundFacts {
     failureReason?: RefundFailureReason | undefined;
     /** Set once when the provider reported the refund failed, settled or not; never cleared. */
     reversedAt?: Date | undefined;
+    /** Set with `reversedAt` when the refund HAD settled first (a bounce), absent on a refusal. */
+    reversedAfterSettling?: true | undefined;
     /** The provider's id for the refund: present once the provider has accepted it. */
     providerRefundRef?: string | undefined;
 }
@@ -265,19 +267,16 @@ export const exceedsRemaining = (payment: RefundablePayment, refund: RefundFacts
  * provider refused in a way that proves the money did not move, one it took back after settling it
  * (the bank sent it back), or one held unsent because it no longer fits the payment. Never an
  * unclear failure, because a settle on it could pay the buyer twice. A refund refused as `disputed`
- * only once a lost chargeback covers its amount (the bank paid the buyer).
+ * only once no dispute on the payment is open: what the bank did with the money is then decided,
+ * and staff know from the dispute's outcome (lost: the bank paid the buyer; won: the shop kept it).
  *
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
 export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFacts): boolean => {
     if (isHandRecorded(payment)) return refund.status === RefundStatus.pending;
-    /**
-     * A refund refused as disputed is the bank's to settle: once a lost chargeback covers it, the
-     * bank paid the buyer, so it is reported returned. Until then (or if the shop won) it is not.
-     */
-    if (refund.failureReason === RefundFailureReason.disputed)
-        return lostChargebackCovers(payment, refund.amount, refund.currency);
+    // A dispute still open means the bank has not decided where the money went.
+    if (refund.failureReason === RefundFailureReason.disputed) return !hasOpenDispute(payment);
     if (exceedsRemaining(payment, refund)) return true;
     // The provider itself reported the failure: a definite answer about this very refund.
     if (isReversed(refund)) return refund.status === RefundStatus.failed;
@@ -290,20 +289,15 @@ export const mayBeSettledByHand = (payment: RefundablePayment, refund: RefundFac
 
 /**
  * Whether staff may void this refund: the refunds an operator may report returned by hand, because
- * both rest on one fact, that the money provably did not move. A reversed refund is the exception:
- * it settled once and has its credit note, so voiding it would unbalance the books.
+ * both rest on one fact, that the money provably did not move. A refund that settled and then came
+ * back is the exception: it has its credit note, so voiding it would unbalance the books. One the
+ * provider refused while still open never settled, so it may be voided.
  *
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
 export const mayBeCanceled = (payment: RefundablePayment, refund: RefundFacts): boolean =>
-    !isReversed(refund) &&
-    (mayBeSettledByHand(payment, refund) ||
-        /**
-         * A refund refused as `disputed` whose disputes are all decided moved no money and is
-         * owed no more: staff void it. While any dispute is open, an inquiry too, it is left alone.
-         */
-        (refund.failureReason === RefundFailureReason.disputed && hasDecidedDispute(payment)));
+    refund.reversedAfterSettling !== true && mayBeSettledByHand(payment, refund);
 
 /** The legal deadline a refund is stamped with when it opens, and the rule behind that date. */
 export interface RefundDue {

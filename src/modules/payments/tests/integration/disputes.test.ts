@@ -200,19 +200,43 @@ describe('a dispute is reported', () => {
         expect(reopened?.actions?.refund).toBe(false);
     });
 
-    it('drops a report for an intent it does not know, another provider, or another currency', async () => {
+    it('drops a report for an intent it does not know, or another provider', async () => {
         const { orderId, providerRef } = await paidOrder();
 
         await deliverReport('fake_pi_unknown');
         // Authentic, but arriving at an endpoint the payment's provider does not own.
         registerPaymentProvider({ ...fakePaymentProvider, name: 'some-other-provider' });
         await deliver(setFakeDispute(providerRef, report()), 'some-other-provider');
-        await deliverReport(providerRef, { currency: 'USD' });
 
         const view = await staffView(orderId);
         expect(view?.disputes).toBeUndefined();
         await settleOutboxNudges();
         expect(await events(PAYMENT_DISPUTE_OPENED)).toBe(0);
+    });
+
+    it('stores a report in another currency than the payment and announces it', async () => {
+        const { orderId, providerRef } = await paidOrder();
+
+        await deliverReport(providerRef, { currency: 'USD' });
+
+        const view = await staffView(orderId);
+        expect(view?.disputes).toEqual([expect.objectContaining({ currency: 'USD' })]);
+        await settleOutboxNudges();
+        expect(await events(PAYMENT_DISPUTE_OPENED)).toBe(1);
+    });
+
+    it('does not take a lost chargeback in another currency off what is left to refund', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef, {
+            currency: 'USD',
+            status: 'lost',
+            amount: '70.00',
+            observedAt: at(5)
+        });
+
+        const all = await refund(orderId, '100.00');
+
+        expect(all.success).toBe(true);
     });
 });
 
@@ -284,7 +308,7 @@ describe('a refund the chargeback blocks', () => {
         });
     });
 
-    it('is reported returned once the chargeback is lost (N10-a), with the normal refund event', async () => {
+    it('is reported returned once the chargeback is lost, with the normal refund event', async () => {
         const { orderId, providerRef } = await paidOrder();
         await deliverReport(providerRef);
         await refundForOrder(orderId).catch(() => undefined);
@@ -294,6 +318,7 @@ describe('a refund the chargeback blocks', () => {
         await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
         const offered = await staffView(orderId);
         expect(offered?.actions?.settleRefundByHand).toEqual([refundId]);
+        expect(offered?.actions?.cancelRefund).toEqual([refundId]);
         const settled = await paymentService.settleRefundByHand(
             String(payment?._id),
             refundId,
@@ -306,7 +331,7 @@ describe('a refund the chargeback blocks', () => {
         expect(await events(PAYMENT_REFUNDED)).toBe(1);
     });
 
-    it('may only be voided once the shop won', async () => {
+    it('may be voided or reported returned once the shop won', async () => {
         const { orderId, providerRef } = await paidOrder();
         await deliverReport(providerRef);
         await refundForOrder(orderId).catch(() => undefined);
@@ -320,7 +345,7 @@ describe('a refund the chargeback blocks', () => {
         });
 
         const view = await staffView(orderId);
-        expect(view?.actions?.settleRefundByHand).toEqual([]);
+        expect(view?.actions?.settleRefundByHand).toEqual([refundId]);
         expect(view?.actions?.cancelRefund).toEqual([refundId]);
     });
 });
@@ -376,5 +401,43 @@ describe('the dispute on the staff reads', () => {
         expect(open.items).toHaveLength(1);
         expect(all.items).toHaveLength(2);
         expect(closed.items).toHaveLength(0);
+    });
+});
+
+/** The payment's id, which the standing is asked by. */
+const paymentIdOf = (orderId: string) =>
+    paymentRepository.findByOrderId(orderId).then((payment) => String(payment?._id));
+
+describe('disputeStanding', () => {
+    it('says a dispute is open, and the payment currency, while one waits on someone', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+
+        const standing = await paymentService.disputeStanding(await paymentIdOf(orderId));
+
+        expect(standing).toEqual({ open: true, currency: 'EUR' });
+    });
+
+    it('says none is open once every dispute is decided, and when none was ever reported', async () => {
+        const decided = await paidOrder();
+        await deliverReport(decided.providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(10)
+        });
+        const never = await paidOrder();
+
+        expect(await paymentService.disputeStanding(await paymentIdOf(decided.orderId))).toEqual({
+            open: false,
+            currency: 'EUR'
+        });
+        expect(await paymentService.disputeStanding(await paymentIdOf(never.orderId))).toEqual({
+            open: false,
+            currency: 'EUR'
+        });
+    });
+
+    it('answers undefined for a payment that does not exist', async () => {
+        expect(await paymentService.disputeStanding('65dc8a99604c307b702b5ccc')).toBeUndefined();
     });
 });

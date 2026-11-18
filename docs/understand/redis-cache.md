@@ -225,8 +225,8 @@ replica set, which this compose file does not run.
 
 ## Redis and the workers
 
-In cluster mode (`npm run start:cluster`) the primary forks one worker per CPU core, and each worker runs
-the whole Express app — see [Clustering](clustering.md). Workers are separate OS
+With more than one copy of the app (orchestrator replicas, or N processes behind a proxy), each copy runs
+the whole Express app — see [Scaling](scaling.md#how-to-run-more-than-one). Copies ("workers" below) are separate OS
 processes: they share no memory, no variables, no in-process cache. What they do share is Redis.
 
 ### Why there is no cross-instance broadcast
@@ -292,7 +292,7 @@ difference shows up as a `warn` on boot in the second case and silence in the fi
 
 ## Read next
 
-- [Clustering & Graceful Shutdown](clustering.md) — where the workers sharing this cache come from
+- [Scaling & Graceful Shutdown](scaling.md) — where the workers sharing this cache come from
 - [Request Flow](request-flow.md)
 - [MongoDB & Mongoose](./mongodb-mongoose.md)
 - [Prometheus](../operate/prometheus.md)

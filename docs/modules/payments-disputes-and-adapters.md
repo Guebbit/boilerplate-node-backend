@@ -42,15 +42,17 @@ flowchart TD
   payment's `displayStatus` does not change (Shopify keeps `displayFinancialStatus` separate); the
   staff list filters with `disputed=true`.
 
-| Rule                        | What happens                                                                                                                                 |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                           |
-| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                |
-| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                       |
-| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled by hand while the chargeback is open                       |
-| Lost chargeback covers it   | a refund open at that time may be marked returned (the bank paid the buyer); that is the normal path, so a return still gets its credit note |
-| Every dispute decided       | a refund refused as `disputed` can only be voided (`cancelRefund`); not while any dispute is open, an inquiry included                       |
-| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                           |
+| Rule                        | What happens                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Open chargeback             | the operator refund door answers 409 `PAYMENT_DISPUTED`; `actions.refund` is false                                                               |
+| Open inquiry                | refunds stay allowed (a full refund ends one)                                                                                                    |
+| Lost or accepted chargeback | what is left to refund shrinks by its amount; a late win gives it back                                                                           |
+| A refund sent meanwhile     | fails final as `disputed` without asking the provider; never retried; not settled or voided by hand while any dispute is open                    |
+| No dispute open any more    | a refund refused as `disputed` may be marked returned or voided (`cancelRefund`), whatever the dispute's outcome or amount, or with none on file |
+| Lost chargeback             | staff pay any small rest outside, then mark it returned once the buyer has it all; a return still gets its credit note                           |
+| Chargeback won              | staff void it, then refund by card; a refund the bank sent back after it had settled is never voided (it has its credit note)                    |
+| Other currency              | a dispute in another currency than the payment is stored like any other, but never subtracted from what is left to refund; staff check it        |
+| Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                               |
 
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
@@ -156,6 +158,22 @@ contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operato
 `{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
 adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
 yourself, and keep the reason in the `WebhookRejected` message.
+
+### A signed message the app could not read
+
+When the signature is right but the adapter cannot translate the body, or its result fails the
+contract schema, the route answers 400 and `payment_webhook_dropped_total{reason="unreadable"}` goes
+up. `PaymentWebhookUnreadable` pages on it; `PaymentWebhookFailing` pages on any 5xx from the route
+(an adapter that crashes). A bad signature is not counted here: it has its own alert.
+
+1. Fix the adapter (a changed provider format, a dispute code it does not map).
+2. Retries land by themselves: Stripe retries for 3 days. Past that, resend from the provider
+   (Stripe: 15 days from the dashboard, 30 from the CLI).
+3. Press **Re-sync refunds** on payments refunded in that window ([refunds](./payments-refunds.md)).
+4. Check the provider's dispute list for that window: no sweep re-reads disputes.
+
+An adapter that returns an event with no payment id is answered 204 and logged, not counted: that
+looks exactly like an event type the app ignores on purpose.
 
 ### Refund status, and the refund webhooks
 

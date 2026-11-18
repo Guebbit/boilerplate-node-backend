@@ -262,11 +262,6 @@ describe('what opens a task', () => {
             { ...REFUND, failureReason: 'provider_unavailable', final: false }
         ],
         [
-            'a final refusal because the bank already took the money back',
-            'payment.refund_failed',
-            { ...REFUND, failureReason: RefundFailureReason.disputed, final: true }
-        ],
-        [
             'a delay shipping outside the rule, from a shop outside it',
             'fulfillment_order.delayed',
             { ...DELAY, shipCountry: 'DE' }
@@ -277,11 +272,6 @@ describe('what opens a task', () => {
             { ...DELAY, promisedAt: undefined }
         ],
         [
-            'a reversal because the bank already took the money back',
-            'payment.refund_reversed',
-            { ...REVERSAL, failureReason: RefundFailureReason.disputed }
-        ],
-        [
             'a dispute decided before any to-do',
             'payment.dispute_opened',
             { ...DISPUTE, status: 'won' }
@@ -290,6 +280,51 @@ describe('what opens a task', () => {
         await emitDomainEvent(name, payload as never, { eventId: nextEventId() });
         expect(await allTasks()).toHaveLength(0);
     });
+});
+
+/** The payment's disputes as the listener reads them, standing in for a stored payment. */
+const standing = (open: boolean) =>
+    jest.spyOn(paymentService, 'disputeStanding').mockResolvedValue({ open, currency: 'EUR' });
+
+describe('a refund the bank’s dispute refused or took back', () => {
+    const DISPUTED = [
+        [
+            'refused for good',
+            'payment.refund_failed',
+            { ...REFUND, failureReason: RefundFailureReason.disputed, final: true },
+            TaskKind.refund_refused
+        ],
+        [
+            'sent back after settling',
+            'payment.refund_reversed',
+            { ...REVERSAL, failureReason: RefundFailureReason.disputed },
+            TaskKind.refund_reversed
+        ]
+    ] as const;
+
+    it.each(DISPUTED)(
+        'is left to the dispute to-do while a dispute is open: %s',
+        async (_name, name, payload) => {
+            standing(true);
+
+            await emitDomainEvent(name, payload as never, { eventId: nextEventId() });
+
+            expect(await allTasks()).toHaveLength(0);
+        }
+    );
+
+    it.each(DISPUTED)(
+        'opens its own to-do when no dispute is open, telling staff to check the dispute: %s',
+        async (_name, name, payload, kind) => {
+            standing(false);
+
+            await emitDomainEvent(name, payload as never, { eventId: nextEventId() });
+
+            const task = await onlyTask();
+            expect(task.kind).toBe(kind);
+            expect(task.message).toContain("check it in the provider's dashboard");
+        }
+    );
 });
 
 describe('the delay rule follows the shop’s country', () => {
@@ -669,6 +704,28 @@ describe('a dispute is two to-dos', () => {
             expect(waiting?.notes.map((note) => note.body)).toEqual([
                 `The dispute ended: ${status}.`
             ]);
+        }
+    );
+
+    it.each([
+        ['a lost chargeback in another currency than the payment', 'lost', 'USD', true],
+        ['an accepted chargeback in another currency than the payment', 'accepted', 'USD', true],
+        ['a lost chargeback in the payment’s currency', 'lost', 'EUR', false],
+        ['a won chargeback in another currency than the payment', 'won', 'USD', false]
+    ] as const)(
+        'tells staff to check the amount for %s: %s',
+        async (_name, status, currency, tellsStaff) => {
+            jest.spyOn(paymentService, 'disputeStanding').mockResolvedValue({
+                open: false,
+                currency: 'EUR'
+            });
+            await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+
+            await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status, currency });
+
+            const [task] = await allTasks();
+            const note = task.notes.map((entry) => entry.body).join(' ');
+            expect(note.includes('check the amount in the provider')).toBe(tellsStaff);
         }
     );
 

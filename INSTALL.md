@@ -8,7 +8,7 @@ If you pair it with the Vue frontend, that repository has its own `INSTALL.md`.
 
 ## Which command starts it
 
-- [ ] Containers or production: `npm start` (the image does), scale with orchestrator replicas. A bare VM with no PM2 or systemd: `npm run start:cluster`: [Which command runs the app](docs/build/run-locally.md#which-command-runs-the-app)
+- [ ] Containers or production: `npm start` (the image does), scale with orchestrator replicas, or N `npm start` processes behind your proxy on one host: [Which command runs the app](docs/build/run-locally.md#which-command-runs-the-app)
 
 ## Required to boot
 

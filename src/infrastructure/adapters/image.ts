@@ -28,8 +28,8 @@ export type ReencodableImageMime = Extract<
 
 /**
  * Sharp: cap libvips to one thread per process.
- * `registerWorkers()` runs in every cluster fork, so without it a multi-core deployment runs
- * N forks × sharp's own thread pool.
+ * `registerWorkers()` runs in every copy, so without it a multi-core host running N copies has
+ * N × sharp's own thread pool.
  * https://sharp.pixelplumbing.com/api-utility#concurrency
  */
 sharp.concurrency(1);

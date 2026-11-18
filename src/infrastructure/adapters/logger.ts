@@ -503,7 +503,7 @@ export const resolveConsoleFormat = (): winston.Logform.Format =>
 
 /**
  * Which copy wrote a line, on both loggers.
- *   pid:      which process; in cluster mode, which worker.
+ *   pid:      which process on the host.
  *   hostname: which machine or pod. With N copies behind a load balancer every pod's node shows
  *             the same low pid, so pid alone cannot name the copy; the hostname is the pod name on
  *             Kubernetes. Not an instance id: copies on one host share it, hence host + pid.

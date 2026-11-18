@@ -53,7 +53,7 @@ const SCAN_FILES = [
     'eslint.config.ts',
     'orval.config.ts',
     'jest.config.js',
-    'jest.config.cluster.js',
+    'jest.config.replicas.js',
     'jest.config.broker.js',
     '.dependency-cruiser.cjs'
 ];

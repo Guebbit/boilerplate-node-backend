@@ -28,6 +28,7 @@ const refundIn = (facts: {
     status: RefundStatus;
     failureReason?: RefundFailureReason;
     reversedAt?: Date;
+    reversedAfterSettling?: true;
     providerRefundRef?: string;
 }) => ({ amount: '30.00', currency: 'EUR', ...facts });
 
@@ -77,24 +78,29 @@ describe('a refund the provider took back', () => {
     const bounced = refundIn({
         status: RefundStatus.failed,
         failureReason: RefundFailureReason.unknown,
-        reversedAt: new Date('2026-03-09T10:00:00.000Z')
+        reversedAt: new Date('2026-03-09T10:00:00.000Z'),
+        reversedAfterSettling: true
     });
 
     it('is owed another way: an operator may report it paid, even for an unclear reason', () => {
         expect(mayBeSettledByHand(card, bounced)).toBe(true);
     });
 
-    it('is not voided: it settled once and has its credit note', () => {
+    it('is not voided when it settled first: it has its credit note', () => {
         expect(mayBeCanceled(card, bounced)).toBe(false);
     });
 
-    it('is never settled by hand when the bank took it back in a dispute', () => {
-        expect(
-            mayBeSettledByHand(card, {
-                ...bounced,
-                failureReason: RefundFailureReason.disputed
-            })
-        ).toBe(false);
+    it('may be voided when the provider reported it failed while it was still open', () => {
+        const { reversedAfterSettling: _settled, ...refused } = bounced;
+        expect(mayBeCanceled(card, refused)).toBe(true);
+    });
+
+    it('follows the dispute rule when the bank took it back in a dispute', () => {
+        const disputed = { ...bounced, failureReason: RefundFailureReason.disputed };
+        const open = { ...card, disputes: [chargeback(DisputeStatus.needs_response)] };
+        expect(mayBeSettledByHand(open, disputed)).toBe(false);
+        expect(mayBeSettledByHand(card, disputed)).toBe(true);
+        expect(mayBeCanceled(card, disputed)).toBe(false);
     });
 });
 
@@ -195,6 +201,14 @@ describe('the dispute rules', () => {
         );
     });
 
+    it('does not subtract a lost chargeback in another currency than the payment', () => {
+        const usd = { ...chargeback(DisputeStatus.lost, '40.00'), currency: 'USD' };
+        expect(lostToChargebacks({ disputes: [usd] }, 'EUR')).toBe(0);
+        expect(
+            lostToChargebacks({ disputes: [usd, chargeback(DisputeStatus.lost, '5.00')] }, 'EUR')
+        ).toBe(500);
+    });
+
     describe('a refund refused as disputed', () => {
         const card = paymentOn('stripe');
         const refused = refundIn({
@@ -202,43 +216,47 @@ describe('the dispute rules', () => {
             failureReason: RefundFailureReason.disputed
         });
 
-        it('is not settled by hand while the chargeback is open', () => {
+        it('is neither settled nor voided while a chargeback is open', () => {
             const open = { ...card, disputes: [chargeback(DisputeStatus.needs_response)] };
             expect(mayBeSettledByHand(open, refused)).toBe(false);
             expect(mayBeCanceled(open, refused)).toBe(false);
         });
 
-        it('is settled by hand once a lost chargeback covers it (the bank paid the buyer)', () => {
-            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, '30.00')] };
-            expect(mayBeSettledByHand(lost, refused)).toBe(true);
+        it('may be settled or voided once a chargeback is lost, whatever the amount it took', () => {
+            const small = { ...card, disputes: [chargeback(DisputeStatus.lost, '1.00')] };
+            expect(mayBeSettledByHand(small, refused)).toBe(true);
+            expect(mayBeCanceled(small, refused)).toBe(true);
         });
 
-        it('is not settled by hand when the lost chargeback is smaller than the refund', () => {
-            const lost = { ...card, disputes: [chargeback(DisputeStatus.lost, '29.99')] };
-            expect(mayBeSettledByHand(lost, refused)).toBe(false);
-        });
-
-        it('may be voided, not settled, once the shop won', () => {
+        it('may be settled or voided once the shop won', () => {
             const won = { ...card, disputes: [chargeback(DisputeStatus.won)] };
-            expect(mayBeSettledByHand(won, refused)).toBe(false);
+            expect(mayBeSettledByHand(won, refused)).toBe(true);
             expect(mayBeCanceled(won, refused)).toBe(true);
         });
 
-        it('is not voided while an inquiry is still open, since nothing is decided yet', () => {
+        it('may be settled or voided when no dispute is on file at all', () => {
+            expect(mayBeSettledByHand(card, refused)).toBe(true);
+            expect(mayBeCanceled(card, refused)).toBe(true);
+        });
+
+        it('is not touched while an inquiry is still open, since nothing is decided yet', () => {
             const asked = { ...card, disputes: [inquiry(DisputeStatus.needs_response)] };
+            expect(mayBeSettledByHand(asked, refused)).toBe(false);
             expect(mayBeCanceled(asked, refused)).toBe(false);
         });
 
-        it('may be voided once the only inquiry is closed, so it is never stranded', () => {
+        it('may be settled or voided once the only inquiry is closed, so it is never stranded', () => {
             const closed = { ...card, disputes: [inquiry(DisputeStatus.closed)] };
+            expect(mayBeSettledByHand(closed, refused)).toBe(true);
             expect(mayBeCanceled(closed, refused)).toBe(true);
         });
 
-        it('is not voided while any one of several disputes is open', () => {
+        it('is not touched while any one of several disputes is open', () => {
             const mixed = {
                 ...card,
                 disputes: [inquiry(DisputeStatus.closed), chargeback(DisputeStatus.under_review)]
             };
+            expect(mayBeSettledByHand(mixed, refused)).toBe(false);
             expect(mayBeCanceled(mixed, refused)).toBe(false);
         });
     });

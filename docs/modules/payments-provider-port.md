@@ -172,14 +172,14 @@ stops touching card data. The service and the contract's shape stay as they are;
 decides what the application does next, so an adapter throws a definite code only when the provider
 answered about THIS refund.
 
-| The provider said                                                                  | Throw                                                         | Then                                                                                 |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| A 4xx on the create, or a refund object `failed`/`canceled`, naming a card problem | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | final: never retried, the shop pays back another way                                 |
-| A refund `failed` because the shop's balance is short                              | `insufficient_funds`                                          | retried with a growing delay; money did not move                                     |
-| Stripe's own `failure_reason: unknown` (a definite answer)                         | `declined` (not `unknown`, which means unclear here)          | final                                                                                |
-| A network error, a timeout, a 5xx, a 429, Adyen `transient-error`                  | `provider_unavailable`                                        | retried; never offered for hand settlement                                           |
-| A dispute blocks it (Stripe `charge_disputed`, `refund_disputed_payment`)          | `disputed`                                                    | final; never settled by hand while the chargeback is open, see [Disputes](#disputes) |
-| Anything else                                                                      | `unknown`, or throw any other error                           | retried; never offered for hand settlement                                           |
+| The provider said                                                                  | Throw                                                         | Then                                                                            |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| A 4xx on the create, or a refund object `failed`/`canceled`, naming a card problem | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | final: never retried, the shop pays back another way                            |
+| A refund `failed` because the shop's balance is short                              | `insufficient_funds`                                          | retried with a growing delay; money did not move                                |
+| Stripe's own `failure_reason: unknown` (a definite answer)                         | `declined` (not `unknown`, which means unclear here)          | final                                                                           |
+| A network error, a timeout, a 5xx, a 429, Adyen `transient-error`                  | `provider_unavailable`                                        | retried; never offered for hand settlement                                      |
+| A dispute blocks it (Stripe `charge_disputed`, `refund_disputed_payment`)          | `disputed`                                                    | final; never settled by hand while a dispute is open, see [Disputes](#disputes) |
+| Anything else                                                                      | `unknown`, or throw any other error                           | retried; never offered for hand settlement                                      |
 
 The two retried-and-unclear codes are never offered for hand settlement because the refund may have
 gone through: the sweep resends under the same key, and a timeout then gets the real answer.
@@ -193,17 +193,17 @@ fills the report from the answer instead of from the body. Return it as `Provide
 bank blocks because of a dispute (Stripe `charge_disputed`, `refund_disputed_payment`) is thrown as
 `disputed`.
 
-| Field                | Meaning                                                                                      |
-| -------------------- | -------------------------------------------------------------------------------------------- |
-| `disputeRef`         | the provider's dispute id; one per payment                                                   |
-| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)             |
-| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                        |
-| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it  |
-| `amount`, `currency` | decimal text, in the payment's currency (`"19.90"`); a report in another currency is dropped |
-| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                           |
-| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                               |
-| `observedAt`         | the provider's own event time: every write is conditional on it being newer                  |
-| `dashboardUrl`       | where staff answer it                                                                        |
+| Field                | Meaning                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `disputeRef`         | the provider's dispute id; a payment may have several                                       |
+| `kind`               | `inquiry` (information asked, no money taken) or `chargeback` (money taken back)            |
+| `status`             | `needs_response`, `under_review`, `won`, `lost`, `accepted`, `closed`                       |
+| `reason`             | Stripe's closed list (`fraudulent`, `product_not_received`, ...); map your provider onto it |
+| `amount`, `currency` | decimal text (`"19.90"`); another currency than the payment's is stored, never subtracted   |
+| `evidenceDueBy`      | the evidence deadline, when the provider gives one                                          |
+| `fundsWithdrawn`     | whether the bank has taken the money out of the shop's balance                              |
+| `observedAt`         | the provider's own event time: every write is conditional on it being newer                 |
+| `dashboardUrl`       | where staff answer it                                                                       |
 
 Send every report you get, repeated and out of order: the application keeps only the newest per
 `disputeRef`. Dates are ISO strings, as the contract's schema parses them. Behaviour:

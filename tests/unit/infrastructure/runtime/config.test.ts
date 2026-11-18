@@ -6,7 +6,6 @@
  * close is silent: an unset or misspelt `NODE_ENV` that left every safety switch off.
  */
 import {
-    clusterConfig,
     databaseConfig,
     isRelaxedEnvironment,
     isTestEnvironment,
@@ -22,8 +21,6 @@ withoutEnvironmentInThisFile([
     'NODE_HOST',
     'NODE_DB_URI',
     'NODE_MONGODB_PORT',
-    'NODE_ENABLE_CLUSTERING',
-    'NODE_CLUSTER_CRASH_LIMIT',
     'NODE_LOG_LEVEL',
     'NODE_LOG_PERSONAL_FIELDS'
 ]);
@@ -98,29 +95,6 @@ describe('the database slice', () => {
         setEnvironment({ NODE_MONGODB_PORT: 'mongo' });
 
         expect(() => databaseConfig()).toThrow(/NODE_MONGODB_PORT/);
-    });
-});
-
-describe('the cluster slice', () => {
-    it('is off by default, with the documented crash limit', () => {
-        expect(clusterConfig()).toMatchObject({
-            NODE_ENABLE_CLUSTERING: false,
-            NODE_CLUSTER_CRASH_LIMIT: 10
-        });
-    });
-
-    it('accepts both switch vocabularies', () => {
-        setEnvironment({ NODE_ENABLE_CLUSTERING: '1' });
-        expect(clusterConfig().NODE_ENABLE_CLUSTERING).toBe(true);
-
-        setEnvironment({ NODE_ENABLE_CLUSTERING: 'off' });
-        expect(clusterConfig().NODE_ENABLE_CLUSTERING).toBe(false);
-    });
-
-    it('refuses a crash limit of zero: it would give up before the first respawn', () => {
-        setEnvironment({ NODE_CLUSTER_CRASH_LIMIT: '0' });
-
-        expect(() => clusterConfig()).toThrow(/NODE_CLUSTER_CRASH_LIMIT/);
     });
 });
 

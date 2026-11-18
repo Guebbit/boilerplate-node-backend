@@ -1,19 +1,19 @@
 /**
  * One connection needs one `connect()`.
  *
- * Bug:      the fast guard on what `tests/cluster/rate-limit.test.ts` found. With a `connect()` per
+ * Bug:      the fast guard on what the first multi-process rate-limit suite found. With a `connect()` per
  *           command, two commands issued before the handshake ends both open the same socket:
  *           `isReady` is false throughout, node-redis rejects the second with `Socket already
  *           opened`, and that failure path discards the client the FIRST is still using (`The
  *           client is closed`).
  * Certain:  not a rare interleaving. `RedisStore.init()` loads two Lua scripts back to back, so the
- *           pair raced on every worker's first request; every request after passed unbudgeted
+ *           pair raced on every process's first request; every request after passed unbudgeted
  *           while the log said Redis was unreachable. A rate limiter that is off is a security
  *           control that is off.
- * Why both: the cluster suite proves the whole property (one budget across real forked workers) but
- *           needs a container and two boots, so it runs in `complete:manual` and CI, not `npm test`.
- *           This file guards the fix in the gate a contributor runs: no cluster, Redis or
- *           container, and it fails on the same regression.
+ * Why both: `tests/replicas/shared-state.test.ts` proves the whole property (one budget across real
+ *           copies) but needs a container and several boots, so it runs in `complete:manual` and CI,
+ *           not `npm test`. This file guards the fix in the gate a contributor runs: no copies,
+ *           Redis or container, and it fails on the same regression.
  */
 
 import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';

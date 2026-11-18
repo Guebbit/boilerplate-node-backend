@@ -17,7 +17,7 @@ groups:
 
           # A crash loop: the app restarts faster than `ApiDown`'s one-minute wait can complete, so
           # that alert never fires. More than two process starts in 15 minutes is not a deploy.
-          # Unreliable in cluster mode (`npm run start:cluster`): per-copy metrics, each scrape hits a different worker
+          # Scrape every copy as its own target: through a balancer each scrape hits a different copy
           # and `process_start_time_seconds` jumps between them. `ApiDown` mutes this one.
           - alert: ApiRestarting
             expr: changes(process_start_time_seconds{job="api"}[15m]) > 2
@@ -26,7 +26,7 @@ groups:
                 severity: critical
             annotations:
                 summary: 'The API is restarting repeatedly'
-                description: 'The API process started more than twice in 15 minutes: a crash loop. Unreliable in cluster mode (`npm run start:cluster`): per-copy metrics, each scrape hits a different worker.'
+                description: 'The API process started more than twice in 15 minutes: a crash loop. Scrape every copy as its own target: through a balancer each scrape hits a different copy.'
 
           # A backing service that is not serving. `dependency_up` is the app's own reading of each
           # (`modules/observability/metrics.ts`). With Mongo down the job and outbox gauges stop
@@ -416,6 +416,29 @@ groups:
             annotations:
                 summary: 'A payment succeeded for the wrong {{ $labels.field }}'
                 description: 'payment_amount_mismatch_total rose for {{ $labels.field }} in the last 15 minutes: money that does not add up. See the payments log line for the order.'
+
+          # A signed provider message the app could not read (`payments/controllers/post-payment-webhook.ts`):
+          # the adapter or our schema check refused it, and the provider got a 400. A dispute missed
+          # this way is not re-read by any sweep. Fix the adapter; the provider retries for 3 days.
+          - alert: PaymentWebhookUnreadable
+            expr: sum by (reason) (increase(payment_webhook_dropped_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A signed payment webhook could not be read ({{ $labels.reason }})'
+                description: 'payment_webhook_dropped_total rose for {{ $labels.reason }} in the last 15 minutes: the provider format changed or the adapter is broken. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
+
+          # The webhook route answers 5xx: the adapter crashed or the database failed. The provider
+          # retries, but `HighErrorRate` needs 5 % of ALL traffic, so a webhook-only fault never trips it.
+          - alert: PaymentWebhookFailing
+            expr: sum(increase(http_requests_total{route="/payments/webhook/:provider",status_code=~"5.."}[30m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'The payment webhook route is answering 5xx'
+                description: 'http_requests_total for /payments/webhook/:provider returned 5xx in the last 30 minutes. See docs/modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read.'
 
           # A paid or shipping order has no stock hold to settle (`inventory/services/holds.ts`).
           # `ship` means no hold exists at all: the database was edited or restored. `commit` is the

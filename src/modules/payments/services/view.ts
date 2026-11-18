@@ -232,7 +232,7 @@ const settleableByHand = (payment: PaymentDocument, authContext?: AuthContext): 
 
 /**
  * The refunds an operator may void: `mayBeCanceled`'s set, which is {@link settleableByHand}'s less
- * reversed refunds, plus a refund of a decided dispute.
+ * the refunds that settled and then came back.
  *
  * @param payment - the payment being served
  * @param authContext - the caller

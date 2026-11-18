@@ -29,6 +29,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { paymentsAuditActions } from '../audit';
+import { paymentWebhookDroppedTotal } from '../metrics';
 import { WebhookRejected } from '../providers';
 import { paymentService, WebhookProviderUnknownError } from '../services';
 
@@ -88,6 +89,11 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                         paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
                         { reason: error.message }
                     );
+                /**
+                 * Signed but unreadable: a real message was dropped. Counted so staff are alerted
+                 * (`PaymentWebhookUnreadable`), since a missed dispute is not re-read by any sweep.
+                 */
+                else paymentWebhookDroppedTotal.inc({ reason: 'unreadable' });
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);
                 return;
             }

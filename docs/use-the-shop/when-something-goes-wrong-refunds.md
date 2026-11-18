@@ -146,9 +146,23 @@ If you had already refunded part of the payment, the row says how much: that ref
    and a quiet "waiting for the bank" one takes its place, closed when the bank decides.
 
 If the shop **wins**, the money comes back to you and the refund button returns. If it **loses**, the
-bank keeps the money: what you can still refund is reduced by that amount. A refund that was waiting
-on the payment can then be pressed **Mark returned**, because the bank paid the buyer. If the goods
-came back, the credit note follows as usual.
+bank keeps the money: what you can still refund is reduced by that amount. If the goods came back,
+the credit note follows as usual.
+
+A refund that was refused because of the dispute stays untouched while any dispute is open. Once none
+is, you have two buttons on it (**Mark returned** and **Cancel refund**), and the dispute's outcome tells you which:
+
+- **Lost:** the bank paid the buyer. If the buyer has it all, press **Mark returned**. If the bank
+  took less than the refund, pay the small rest outside the app first, then press it.
+- **Won:** the shop kept the money. Press **Cancel refund**, then refund by card.
+
+The same holds when the refusal came with no dispute on file: the to-do says so; check the dispute in
+the provider's dashboard first, then choose as above. A refund the bank sent back after it had
+settled can only be marked returned, never voided.
+
+A dispute in **another currency** than the payment is shown like any other, but the shop does not
+subtract it from what you can refund. When it ends lost, its to-do closes with "check the amount":
+look at it in the provider's dashboard before any refund or return.
 
 ::: warning Do not refund a payment under a chargeback
 The bank already took the money back. A refund on top pays the buyer twice, and the shop cannot get

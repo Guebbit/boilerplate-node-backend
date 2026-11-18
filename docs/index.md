@@ -85,7 +85,7 @@ flowchart TD
 - **Database**: [MongoDB + Mongoose](./understand/mongodb-mongoose.md).
 - **Observability**: [Observability Reference](./operate/observability-reference.md), [Prometheus](./operate/prometheus.md), [OpenTelemetry](./operate/opentelemetry.md), and [Grafana](./operate/grafana.md).
 - **Real-time / outbound**: [SSE metrics stream](./reference/observability.md) and [email + PDF rendering](./understand/email-and-rendering.md).
-- **Process model**: [Clustering & graceful shutdown](./understand/clustering.md).
+- **Process model**: [Scaling & graceful shutdown](./understand/scaling.md).
 - **Contracts**: [`openapi.yaml`](./build/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./build/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./understand/start.md) and the dedicated [Layers](./understand/layers.md) page.
 

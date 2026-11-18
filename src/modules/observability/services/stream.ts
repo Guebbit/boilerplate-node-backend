@@ -24,7 +24,7 @@ import { processSnapshot } from './process-snapshot';
 /**
  * In-memory set of active SSE response objects — one entry per connected client. A `Set` so
  * `delete(response)` on disconnect is O(1) and a response can never be added twice. Per-process:
- * under clustering each worker tracks only its own clients.
+ * with several copies each tracks only its own clients.
  */
 const sseClients = new Set<Response>();
 

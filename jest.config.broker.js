@@ -1,7 +1,7 @@
 /**
  * The broker suite's own runner — `npm run test:broker`.
  *
- * Same reasoning as `jest.config.cluster.js`, for the same reasons: the defaults in
+ * Same reasoning as `jest.config.replicas.js`, for the same reasons: the defaults in
  * `jest.config.js` are wrong here.
  *
  *   `setupFiles`     only `tests/support/setup-environment.ts`: plain `??=` env defaults, no imports,

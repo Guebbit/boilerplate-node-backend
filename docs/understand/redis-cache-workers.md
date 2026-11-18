@@ -9,20 +9,16 @@ Redis as the workers see it.
 
 ## Redis and the workers
 
-In cluster mode (`npm run start:cluster`) the primary forks one worker per CPU core, and each worker runs
-the whole Express app — see [Clustering](clustering.md). Workers are separate OS
+With more than one copy of the app (orchestrator replicas, or N processes behind a proxy), each copy runs
+the whole Express app — see [Scaling](scaling.md#how-to-run-more-than-one). Copies ("workers" below) are separate OS
 processes: they share no memory, no variables, no in-process cache. What they do share is Redis.
 
 ```mermaid
 flowchart TD
-    subgraph proc["Node cluster (one host or container)"]
-        P["Primary<br/>src/cluster.ts"]
-        W1["Worker 1<br/>src/app.ts"]
-        W2["Worker 2<br/>src/app.ts"]
-        WN["Worker N<br/>src/app.ts"]
-        P -. fork .-> W1
-        P -. fork .-> W2
-        P -. fork .-> WN
+    subgraph proc["N copies behind a proxy or an orchestrator"]
+        W1["Worker 1<br/>src/main.ts"]
+        W2["Worker 2<br/>src/main.ts"]
+        WN["Worker N<br/>src/main.ts"]
     end
     W1 -->|own TCP connection| R
     W2 --> R
@@ -38,8 +34,7 @@ response, so there is no such thing as "worker 2's cache" to fall out of date. T
 and four processes reading it.
 
 The same holds beyond one host: replicas in separate containers, pods or machines behave
-identically as long as they point at the same Redis with the same prefix. "Worker" below means
-any of them.
+identically as long as they point at the same Redis with the same prefix.
 
 ### Why there is no cross-instance broadcast
 
@@ -94,12 +89,12 @@ Two consequences worth keeping in mind:
 ### Queue workers
 
 `src/infrastructure/adapters/` (email, image digest) plus the module-owned consumers (webhook delivery, account export) are a different meaning of the word:
-those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every cluster worker**,
+those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every copy**,
 so N processes consume from the same queues.
 
 ```mermaid
 flowchart LR
-    subgraph W["Each cluster worker process"]
+    subgraph W["Each copy"]
         E["Express routes"] --> Cache[("Redis cache")]
         Q["Mail + module consumers"] --> Rabbit[("RabbitMQ")]
         I["Image digest consumer"] --> Rabbit

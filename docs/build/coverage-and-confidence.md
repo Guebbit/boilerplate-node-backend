@@ -119,7 +119,7 @@ This is a decision, recorded so it is not re-litigated by accident.
 
 `npm run mutation` / `npm run mutation:full` and their per-file scores in `mutation-baseline.json`
 are **the** judgement of whether this suite is any good. Everything else asks a different question
-entirely (contract, fuzz, cluster).
+entirely (contract, fuzz, replicas).
 
 Consequences worth stating:
 

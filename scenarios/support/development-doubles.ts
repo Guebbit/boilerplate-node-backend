@@ -9,8 +9,8 @@
  *   3. registers the doubles in the registries the application resolves from.
  *
  * Who loads it:
- *   `NODE_ENV=development`  `src/app/development-doubles.ts`, at boot, in `src/main.ts`,
- *                           `src/cluster.ts` (the primary and every worker) and `runScript`.
+ *   `NODE_ENV=development`  `src/app/development-doubles.ts`, at boot, in `src/main.ts` and
+ *                           `runScript`.
  *   `demo`, `scenario:apply`  a static import: each forces its own environment.
  *
  * @see docs/build/test-doubles.md#the-door-node-env-development

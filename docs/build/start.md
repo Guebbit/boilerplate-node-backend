@@ -52,7 +52,7 @@ flowchart LR
 - [Property-Based Testing](./property-testing.md)
 - [Concurrency Testing](./concurrency-testing.md)
 - [Broker testing](./broker-testing.md)
-- [Cluster testing](./cluster-testing.md)
+- [Replicas testing](./replicas-testing.md)
 - [Load testing](./load-testing.md)
 - [Mutation Testing](./mutation-testing.md)
 - [Coverage & Confidence](./coverage-and-confidence.md)
