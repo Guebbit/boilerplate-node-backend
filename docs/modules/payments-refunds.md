@@ -243,7 +243,8 @@ flowchart TD
     W -->|ours: our record id echoed, or its stored id| A[apply its status to the record]
     W -->|unknown, succeeded, same currency| I[import: settled record, reason external]
     W -->|unknown, pending or failed| S[skip until a later event says succeeded]
-    W -->|unknown, other currency| X[log an error, skip]
+    W -->|unknown, other currency| X[payment.refund_unrecorded: staff to-do, never converted]
+    I -->|lost the race on the running total 4 times| X2[payment.refund_unrecorded: staff to-do]
     I --> F[timeline rows, order stamp, payment.refunded: credit note, buyer mail, webhook]
 ```
 
@@ -259,6 +260,20 @@ flowchart TD
   shows as `refund_exceeds_remaining` with `exceedsBy`, and staff cancel it or mark it returned.
   Nothing closes by itself.
 - **The order is not cancelled.** An outside refund moves `paymentStatus`; the order keeps its status.
+- **A refund the import cannot record tells staff.** Two cases, one event, `payment.refund_unrecorded`
+  (through the outbox, in a transaction of its own): the import lost its race on the running total on
+  every attempt (the first and three re-reads), or the refund is in another currency than the payment
+  (never converted). `shop-tasks` opens a `refund_unrecorded` to-do for `PaymentRefunding`, closed by
+  staff; the open one is touched, not doubled, when it comes again. The webhook still answers 204:
+  a provider retry cannot fix either cause.
+- **Re-sync refunds.** `POST /payments/{id}/refunds/sync` (`syncRefunds`) runs the same idempotent
+  walk on demand: a refund already recorded is carried, never imported twice, so a second call imports
+  nothing twice. It needs `create:Refund`, so it asks the same fresh session as every refund button;
+  `display:Payment` alone is refused, because it writes money records. It answers the payment with its
+  `actions`, where `syncRefunds` says whether the button is offered (a card payment that succeeded,
+  for a holder of `create:Refund`). A refund it cannot record (another currency) stays unrecorded and is
+  announced again on each run: staff record it themselves and close the to-do, and a later re-sync or
+  refund on that payment reminds them again, because the books still lack it.
 
 ### Cancelling a refund {#cancelling-a-refund}
 

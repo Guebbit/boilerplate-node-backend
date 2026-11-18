@@ -206,6 +206,13 @@ EU law lets you change the way the money goes back only when the buyer expressly
 notices by itself: the refund appears on the payment as **Refunded in the provider's dashboard**,
 with the credit note and the buyer's email like any other refund. Nothing to do for that one.
 
+If it does not appear, and you get a to-do **Refund made at the provider, not recorded**, the shop
+could not record it: two refunds were being written at the same moment and it gave up. Open the
+payment and press **Re-sync refunds**. The shop reads the provider's refunds again and records the
+missing one; pressing it twice records nothing twice. Then close the to-do. A refund in **another
+currency** than the payment is never converted: **Re-sync refunds** will not record it. Record it
+outside the app (your accountant), then close the to-do. A later re-sync or refund on that payment reminds you again, because the shop's books still lack it.
+
 If the shop also held its own refund for the same money, the payment may now be refunded for more
 than was paid. The shop records the dashboard refund anyway (the money really left), keeps its own
 refund **unsent**, and puts the order on the **Needs attention** list as **A refund made elsewhere left

@@ -18,6 +18,7 @@ import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import {
+    addFakeExternalRefund,
     fakePaymentProvider,
     setFakeOutcome,
     setFakeRefundFailure
@@ -184,7 +185,8 @@ describe('POST /payments', () => {
             sync: false,
             refund: false,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: false
         });
     });
 
@@ -268,7 +270,8 @@ describe('POST /payments/{id}/confirm', () => {
             sync: false,
             refund: false,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: false
         });
     });
 
@@ -816,7 +819,8 @@ describe('POST /payments/{id}/refunds — the operator', () => {
             sync: false,
             refund: false,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: true
         });
     });
 
@@ -1198,6 +1202,113 @@ describe('POST /payments/{id}/refunds/{refundId}/cancel', () => {
     });
 });
 
+/** A paid card order whose provider holds one more refund, made in its dashboard. */
+const dashboardRefund = async () => {
+    const { paymentId } = await paidOrder();
+    const payment = await paymentRepository.findById(paymentId);
+    addFakeExternalRefund(String(payment?.providerRef), {
+        amount: '5.00',
+        currency: 'EUR',
+        status: 'succeeded'
+    });
+    return { paymentId };
+};
+
+describe('POST /payments/{id}/refunds/sync', () => {
+    it('imports the refund the app missed once, and a second call changes nothing', async () => {
+        const { paymentId } = await dashboardRefund();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const path = `/payments/${paymentId}/refunds/sync`;
+
+        const first = await api().post(path).set('Authorization', adminBearer);
+        const second = await api().post(path).set('Authorization', adminBearer);
+
+        expect(first.status).toBe(200);
+        expect(first.body.refunds).toHaveLength(1);
+        expect(first.body.refunds[0]).toMatchObject({ amount: '5.00', status: 'succeeded' });
+        expect(second.status).toBe(200);
+        expect(second.body.refunds).toHaveLength(1);
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.amountRefunded).toBe('5.00');
+    });
+
+    it('offers the control to a holder of create:Refund on a card payment, and not to a support agent who can only read', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const { bearer: supportBearer } = await authenticateAsRole('support');
+
+        const staff = await api().get(`/payments/${paymentId}`).set('Authorization', adminBearer);
+        const reader = await api()
+            .get(`/payments/${paymentId}`)
+            .set('Authorization', supportBearer);
+
+        expect(staff.body.actions.syncRefunds).toBe(true);
+        expect(reader.body.actions.syncRefunds).toBe(false);
+    });
+
+    it('answers a payment that has not succeeded unchanged, asking the provider for nothing', async () => {
+        const { bearer, order } = await authenticateWithOrder();
+        const intent = await api()
+            .post('/payments')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+        const stored = await paymentRepository.findById(intent.body.id);
+        addFakeExternalRefund(String(stored?.providerRef), {
+            amount: '5.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${String(intent.body.id)}/refunds/sync`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('requires_confirmation');
+        expect(response.body.refunds).toEqual([]);
+        expect((await paymentRepository.findById(intent.body.id))!.refunds).toHaveLength(0);
+    });
+
+    it('refuses a caller who can only read payments (display:Payment), and imports nothing', async () => {
+        const { paymentId } = await dashboardRefund();
+        const { bearer } = await authenticateAsRole('support');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
+    });
+
+    it('answers 404 for a payment that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${MISSING_ID}/refunds/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers a stale session 401 REAUTH_REQUIRED and imports nothing', async () => {
+        const { paymentId } = await dashboardRefund();
+        const bearer = await staleBearerFor(
+            await createAdminUser({ verifiedAt: new Date() }),
+            'critical'
+        );
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
+    });
+});
+
 describe('the money doors ask a fresh session of an operator', () => {
     afterEach(() => jest.useRealTimers());
 
@@ -1258,7 +1369,8 @@ describe('POST /orders/{id}/payments', () => {
             sync: false,
             refund: true,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: false
         });
     });
 

@@ -280,6 +280,7 @@ export const mint = (
 
 /**
  * Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404.
+ * A concurrent revoke is a no-op too, audited once: only the request that stamped the key writes the row.
  *
  * Not protected like a staff account: revoking only takes access away, so an administrator may
  * revoke a fellow administrator's leaked key. Stripe and GitHub let any org admin do the same.
@@ -294,15 +295,16 @@ export const revoke = (
             return generateReject(404, [t('generic.error-item-gone')]);
         if (apiKey.revokedAt) return generateSuccess(undefined);
 
-        apiKey.revokedAt = new Date();
-        return apiKeyRepository.save(apiKey).then(() => {
-            recordAudit(context, {
-                action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
-                outcome: 'success',
-                targetType: 'api_key',
-                targetId: id,
-                metadata: { credential: displayIdOf(apiKey.publicPrefix) }
-            });
+        // Guarded update: stamps only a still-live key, so a request that lost the race changes 0.
+        return apiKeyRepository.revokeMany([id], new Date()).then((changed) => {
+            if (changed > 0)
+                recordAudit(context, {
+                    action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
+                    outcome: 'success',
+                    targetType: 'api_key',
+                    targetId: id,
+                    metadata: { credential: displayIdOf(apiKey.publicPrefix) }
+                });
             return generateSuccess(undefined);
         });
     });

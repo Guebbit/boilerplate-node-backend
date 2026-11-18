@@ -85,6 +85,15 @@ const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
     ...REFUND,
     failureReason: RefundFailureReason.declined
 };
+/** The refund-unrecorded event payload the cases publish. */
+const UNRECORDED: DomainEventMap['payment.refund_unrecorded'] = {
+    paymentId: PAYMENT,
+    orderId: ORDER,
+    refundRef: 're_dashboard_1',
+    amount: '30.00',
+    currency: 'EUR',
+    reason: 'lost_race'
+};
 /** The dispute-opened event payload the cases publish. */
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     paymentId: PAYMENT,
@@ -149,6 +158,13 @@ const OPENERS = [
         TaskKind.amount_mismatch,
         'AuditDisplay',
         `orders/${ORDER}`
+    ],
+    [
+        'payment.refund_unrecorded',
+        () => emitDomainEvent('payment.refund_unrecorded', UNRECORDED, { eventId: nextEventId() }),
+        TaskKind.refund_unrecorded,
+        'PaymentRefunding',
+        'sales/payments?tab=attention'
     ],
     [
         'payment.dispute_opened',
@@ -419,6 +435,29 @@ describe('what closes a task', () => {
         expect(task.resolution).toBe(TaskResolution.cleared);
         expect(task.closedAt).toBeInstanceOf(Date);
         expect(task.openKey).toBeUndefined();
+    });
+
+    it('opens one task for a refund the import gave up on, however often it is announced', async () => {
+        await emitDomainEvent('payment.refund_unrecorded', UNRECORDED, { eventId: nextEventId() });
+        await emitDomainEvent(
+            'payment.refund_unrecorded',
+            { ...UNRECORDED, refundRef: 're_dashboard_2', reason: 'other_currency' },
+            { eventId: nextEventId() }
+        );
+
+        const task = await onlyTask();
+
+        expect(task.kind).toBe(TaskKind.refund_unrecorded);
+        expect(task.status).toBe(TaskStatus.new);
+    });
+
+    it('leaves an unrecorded refund for staff: no later event closes it', async () => {
+        await emitDomainEvent('payment.refund_unrecorded', UNRECORDED, { eventId: nextEventId() });
+        await emitDomainEvent('payment.refunded', { ...REFUND, full: true });
+
+        const task = await onlyTask();
+
+        expect(task.status).toBe(TaskStatus.new);
     });
 
     it('leaves a mismatch for staff: no later event closes it', async () => {

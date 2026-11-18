@@ -19,6 +19,7 @@ x-extends:
         - refund_reversed
         - paid_without_hold
         - consent_due
+        - refund_unrecorded
     TaskLinkType:
         - order
         - payment

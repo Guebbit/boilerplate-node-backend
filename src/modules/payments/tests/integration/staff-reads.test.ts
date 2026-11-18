@@ -175,21 +175,24 @@ describe('listPayments rows carry the actions of the caller', () => {
             sync: false,
             refund: true,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: true
         });
         expect(actionsOf(declined)).toEqual({
             pay: false,
             sync: false,
             refund: false,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: false
         });
         expect(actionsOf(returned)).toEqual({
             pay: false,
             sync: false,
             refund: false,
             settleRefundByHand: [],
-            cancelRefund: []
+            cancelRefund: [],
+            syncRefunds: true
         });
         // Only the pending record of a hand-paid payment is the operator's to mark returned.
         const storedPayment = await paymentModel.findById(idOf(byHand));
@@ -199,7 +202,8 @@ describe('listPayments rows carry the actions of the caller', () => {
             sync: false,
             refund: true,
             settleRefundByHand: [String(stored._id)],
-            cancelRefund: [String(stored._id)]
+            cancelRefund: [String(stored._id)],
+            syncRefunds: false
         });
     });
 });

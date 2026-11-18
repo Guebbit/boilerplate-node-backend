@@ -13,6 +13,11 @@
  * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
  * Refuses a public password: outside development/test, where a fixed demo login is the point.
  * Refuses a non-empty one:   unless `--reset`. Driving a checkout twice makes two orders.
+ * Seed note:                `running` before the first write, `done` as the last. A boot that finds
+ *                            `running` knows its own seed died (one seeder per database, restarted
+ *                            seconds after a crash) and rebuilds, as `--reset` does. The wipe keeps
+ *                            the note, so a death mid-wipe is still recognised next boot.
+ *                            Empty ignores the note and cron's `leases` rows.
  * `--reset` also:             deletes the rate-limit counters, so spent budgets do not outlive the data.
  * Plain-text passwords:      the model's pre-save hook hashes them; a hash written by hand here
  *                            would drift from that hook, its plaintext unrecoverable.
@@ -32,7 +37,13 @@ import '@infrastructure/runtime/mongoose-boot';
 import './support/development-doubles';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { emptyDatabase, isDatabaseEmpty } from './support/database-snapshot';
+import {
+    SEED_MARKER_COLLECTION,
+    emptyDatabase,
+    isDatabaseEmpty,
+    readSeedMarker,
+    writeSeedMarker
+} from './support/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { clearRateLimitCounters } from '@infrastructure/http/middlewares/rate-limit-store';
@@ -81,8 +92,15 @@ async function seed() {
 
     const app = await bootAppInProcess();
 
-    if (reset) {
-        await emptyDatabase();
+    const marker = await readSeedMarker();
+    const rebuild = reset || marker === 'running';
+
+    if (rebuild) {
+        if (marker === 'running' && !reset)
+            logger.warn('The last seed died before it finished: rebuilding.');
+        // Before the wipe, so a death mid-wipe leaves `running` behind rather than "other data".
+        await writeSeedMarker('running');
+        await emptyDatabase([SEED_MARKER_COLLECTION]);
         logger.info('Database emptied.');
 
         /**
@@ -99,7 +117,7 @@ async function seed() {
         else if (counters.status === 'cleared')
             logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
         else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
-    } else if (!(await isDatabaseEmpty())) {
+    } else if (marker === 'done' || !(await isDatabaseEmpty())) {
         /**
          * Warn and succeed, never throw: the compose `app` command is
          * `npm run db:bootstrap && <start the server>`, so a non-zero exit here would stop a
@@ -109,7 +127,7 @@ async function seed() {
             `Seeding skipped: the database already holds data. Use "npm run scenario:apply:reset ${scenarioName}" to rebuild it.`
         );
         return;
-    }
+    } else await writeSeedMarker('running');
 
     /**
      * `buildScenario` owns the whole scenario — the access model, every module's rows, the flow
@@ -149,6 +167,9 @@ async function seed() {
         );
         logger.info(`Scenario description written to ${describeTo}.`);
     }
+
+    // The very last write: anything short of it leaves `running` for the next boot to act on.
+    await writeSeedMarker('done');
 
     logger.info(`Seeding "${scenarioName}" complete.`);
 }

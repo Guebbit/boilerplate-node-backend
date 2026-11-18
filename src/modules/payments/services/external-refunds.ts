@@ -8,23 +8,33 @@
  * Always records:  the money really moved, so the import never refuses, even above what was paid.
  * Idempotent:      the provider's refund id is pushed only once (`importRefund`'s condition).
  * Held, not sent:  an open app record that no longer fits is left unsent (`exceedsRemaining`).
+ * Told, not silent: a refund the import cannot record (it lost every race, or it is in another
+ *                currency) opens a staff to-do (`payment.refund_unrecorded`); "Re-sync refunds" runs this again.
  */
 
 import { Types, type ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { RefundStatus } from '@types';
+import { RefundStatus, type AuthContext } from '@types';
+import {
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { announceInTransaction } from '@kernel/outbox';
 import { addMoney, toDecimalString, toMinorUnits } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { paymentProviderRegistry } from '../providers/registry';
 import type { ProviderRefund } from '../providers';
 import { paymentRepository } from '../repository';
-import { PAYMENT_REFUNDED } from '../events';
+import { PAYMENT_REFUNDED, PAYMENT_REFUND_UNRECORDED } from '../events';
 import type { PaymentDocument, RefundRecord } from '../model';
+import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { applyRefundState } from './refund-sync';
+import { paymentNotFound } from './errors';
+import { callerScope } from './scope';
 import { refundRow, refundedPayload, stampOrder } from './refund-settlement';
 
-/** How many times a lost race on the running total is re-read before the delivery is left to retry. */
+/** How many times a lost race on the running total is re-read before the import gives up and staff are told. */
 const MAX_IMPORT_ATTEMPTS = 3;
 
 /**
@@ -108,6 +118,37 @@ const writeImport = (
         );
 
 /**
+ * Tell staff an outside refund is not in the books: the `payment.refund_unrecorded` event, in a
+ * transaction of its own because the import itself wrote nothing. The webhook still answers 204:
+ * a provider retry cannot fix either cause.
+ *
+ * @param payment - the payment the refund belongs to
+ * @param providerRefund - the outside refund that could not be recorded
+ * @param reason - why: the import lost every race, or the refund is in another currency
+ */
+const announceUnrecorded = (
+    payment: PaymentDocument,
+    providerRefund: ProviderRefund,
+    reason: 'lost_race' | 'other_currency'
+): Promise<void> =>
+    announceInTransaction(
+        // Nothing to write: the payment is handed through so the event row is the whole transaction.
+        () => Promise.resolve(payment),
+        (written) => ({
+            name: PAYMENT_REFUND_UNRECORDED,
+            payload: {
+                paymentId: String(written._id),
+                orderId: String(written.orderId),
+                refundRef: providerRefund.refundRef,
+                amount: providerRefund.amount,
+                currency: providerRefund.currency,
+                reason
+            },
+            aggregateId: String(written.orderId)
+        })
+    ).then(() => undefined);
+
+/**
  * Import one outside refund, re-reading the payment when a racing write moved the running total.
  *
  * @param payment - the payment as the caller read it
@@ -143,35 +184,19 @@ const importRefund = (
             const done = fresh.refunds.some(
                 (existing) => existing.providerRefundRef === providerRefund.refundRef
             );
-            return done || attemptsLeft <= 0
-                ? fresh
-                : importRefund(fresh, providerRefund, attemptsLeft - 1);
+            if (done) return fresh;
+            // Every attempt lost its race: nobody else will record it, so staff are told.
+            if (attemptsLeft <= 0)
+                return announceUnrecorded(fresh, providerRefund, 'lost_race').then(() => fresh);
+            return importRefund(fresh, providerRefund, attemptsLeft - 1);
         });
     });
 };
 
 /**
- * Whether an outside refund can be imported: it succeeded, and it is in the payment's own currency
- * (another currency is logged and skipped, never converted).
- *
- */
-const isImportable = (payment: PaymentDocument, providerRefund: ProviderRefund): boolean => {
-    if (providerRefund.status !== 'succeeded') return false;
-    if (providerRefund.currency === payment.currency) return true;
-    // Stryker disable all
-    logger.error({
-        message: 'A refund made outside the application is in another currency; not imported.',
-        refundRef: providerRefund.refundRef,
-        orderId: String(payment.orderId)
-    });
-    // Stryker restore all
-    return false;
-};
-
-/**
  * Walk the provider's refunds for one payment: carry each of ours onto its record, import each
  * outside one that succeeded. A pending or failed outside refund is skipped; a later event that
- * says it succeeded imports it. Sequential, each step on the payment the previous one left.
+ * says it succeeded imports it. One in another currency is announced, not imported. Sequential, each step on the payment the previous one left.
  *
  * @param payment - a `succeeded` payment holding a provider intent
  * @returns once every refund has been looked at
@@ -204,7 +229,31 @@ const syncOne = (
         return applyRefundState(payment, record, providerRefund, providerRefund.refundRef).then(
             (after) => after ?? payment
         );
-    return isImportable(payment, providerRefund)
-        ? importRefund(payment, providerRefund)
-        : Promise.resolve(payment);
+    if (providerRefund.status !== 'succeeded') return Promise.resolve(payment);
+    // Another currency is never converted: staff record it themselves.
+    if (providerRefund.currency !== payment.currency)
+        return announceUnrecorded(payment, providerRefund, 'other_currency').then(() => payment);
+    return importRefund(payment, providerRefund);
 };
+
+/**
+ * `POST /payments/:id/refunds/sync` — staff running the import again for one payment, for the
+ * refund the webhook gave up on. The same idempotent walk the webhook runs: a refund already
+ * recorded is carried, never repeated, so a second call records nothing twice. A payment that has not
+ * succeeded has no refund to read, and answers itself.
+ *
+ * @param paymentId - the payment to re-read at the provider
+ * @param authContext - the caller, for the read that distinguishes 404 from a payment they may see
+ * @returns the payment as it now stands, or the 404 of an unknown one
+ */
+export const syncRefunds = (
+    paymentId: string,
+    authContext: AuthContext | undefined
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
+        if (!payment) return paymentNotFound();
+        if (payment.status !== REFUNDABLE_PAYMENT_STATUS) return generateSuccess(payment, 200);
+        return syncProviderRefunds(payment)
+            .then(() => paymentRepository.findById(paymentId))
+            .then((fresh) => generateSuccess(fresh ?? payment, 200));
+    });
