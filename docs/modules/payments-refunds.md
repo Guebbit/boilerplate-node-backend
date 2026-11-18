@@ -131,14 +131,14 @@ A refused card refund is the shop's to settle: the money has to reach the buyer 
 operator then presses **Mark returned** (`POST /payments/{id}/refunds/{refundId}/settle`). That is
 only offered when the refusal PROVES the money did not move.
 
-| The refusal                                                   | Money moved? | Retried?           | Hand settle                                                                                          | Attention kind                      |
-| ------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                                                                                  | `refused_refund`, at once           |
-| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                                                                                  | `refused_refund`, at once           |
-| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | only after a lost chargeback covers it, see [Disputes](./payments-disputes-and-adapters.md#disputes) | `refused_refund`, at once           |
-| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                                                                                  | `stale_refund`, after the threshold |
-| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                                   | `stale_refund`, after the threshold |
-| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                                   | `stale_refund`                      |
+| The refusal                                                   | Money moved? | Retried?           | Hand settle                                                                                       | Attention kind                      |
+| ------------------------------------------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                                                                               | `refused_refund`, at once           |
+| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                                                                               | `refused_refund`, at once           |
+| `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | once no dispute is open (also void), see [Disputes](./payments-disputes-and-adapters.md#disputes) | `refused_refund`, at once           |
+| `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                                                                               | `stale_refund`, after the threshold |
+| `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                                | `stale_refund`, after the threshold |
+| a `pending` record (an attempt is running)                    | maybe        | claimed when stale | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                                | `stale_refund`                      |
 
 ```mermaid
 flowchart TD
@@ -197,7 +197,7 @@ stateDiagram-v2
 - **Needs a person.** `reversed_refund` is on `GET /payments/attention` at once, with `since` = when
   it bounced. It is only for a refund that HAD settled (`reversedAfterSettling` on the record); the
   provider refusing an open one shows as `refused_refund`, with `reversedAt` as the once-guard.
-  A reversed refund cannot be cancelled (it settled once): only paid by hand.
+  A refund that settled and came back cannot be cancelled (it has its credit note): only paid by hand.
   `payment.refund_reversed` also opens a `refund_reversed` to-do for `PaymentRefunding`, closed when
   the refund is marked returned (see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos)).
 
@@ -300,6 +300,7 @@ that the money provably did not move. `PaymentActions.cancelRefund` lists exactl
 | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | a hand-paid payment's `pending` one                                                                                              | yes                                |
 | a card refund refused as `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed` | yes                                |
+| a card refund refused as `disputed`, once no dispute is open                                                                     | yes                                |
 | `succeeded` (the money moved), or already canceled                                                                               | no: 409 `PAYMENT_REFUND_NOT_OPEN`  |
 | a card refund `pending` (an attempt runs) or failed as `provider_unavailable` / `unknown`                                        | no: 409 `PAYMENT_REFUND_IN_FLIGHT` |
 

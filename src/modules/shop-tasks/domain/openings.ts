@@ -9,7 +9,7 @@
  * every staff member who holds the set, and the linked record has the rest.
  */
 
-import { RefundDueRule, TaskKind, TaskLinkType } from '@types';
+import { RefundDueRule, RefundFailureReason, TaskKind, TaskLinkType } from '@types';
 import type { PermissionSetName } from '@api/permission-vocabulary';
 import { DAY_MS, HOUR_MS } from '@domain-primitives/time';
 
@@ -160,6 +160,23 @@ const legalDeadlineNote = (legal: LegalDeadline | undefined): string => {
 };
 
 /**
+ * The extra advice for a refund a dispute refused or took back while no dispute is open: the
+ * dispute's outcome decides what staff do, and only the provider's dashboard shows it.
+ *
+ * @param failureReason - the closed code the provider gave
+ * @param advice - what to do once the outcome is known
+ * @returns the sentence with its leading space, or an empty string for any other reason
+ */
+const disputeAdvice = (failureReason: string, advice: string): string =>
+    failureReason === RefundFailureReason.disputed
+        ? ` A dispute caused this and none is open: check it in the provider's dashboard first. ${advice}`
+        : '';
+
+/** What staff do with a refused refund once they know how the dispute ended. */
+const REFUSED_DISPUTE_ADVICE =
+    'If the bank kept the money, pay any small rest outside the app, then mark the refund returned; if the shop won, void the refund and refund by card.';
+
+/**
  * A refund the provider refused for good: the money has to go back another way.
  *
  * @param refund - the refund and what it belongs to
@@ -178,7 +195,7 @@ export const refundRefusedOpening = (
     routeSet: 'PaymentRefunding',
     link: { type: TaskLinkType.refund, id: refund.refundId },
     subject: 'Refund refused by the provider',
-    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned.${legalDeadlineNote(legal)}`,
+    message: `Refund ${refund.refundId} on order ${refund.orderId} was refused for good (${refund.failureReason}). Return the money another way, then mark the refund returned.${disputeAdvice(refund.failureReason, REFUSED_DISPUTE_ADVICE)}${legalDeadlineNote(legal)}`,
     dueAt
 });
 
@@ -201,7 +218,7 @@ export const refundReversedOpening = (
     routeSet: 'PaymentRefunding',
     link: { type: TaskLinkType.refund, id: refund.refundId },
     subject: 'Refund sent back by the bank',
-    message: `Refund ${refund.refundId} on order ${refund.orderId} settled, but the bank returned it (${refund.failureReason}). Agree a way with the buyer, pay, then mark the refund returned.${legalDeadlineNote(legal)}`,
+    message: `Refund ${refund.refundId} on order ${refund.orderId} settled, but the bank returned it (${refund.failureReason}). Agree a way with the buyer, pay, then mark the refund returned.${disputeAdvice(refund.failureReason, 'Do not pay twice: if the bank kept the money, the buyer already has it.')}${legalDeadlineNote(legal)}`,
     dueAt
 });
 

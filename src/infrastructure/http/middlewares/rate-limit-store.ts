@@ -1,14 +1,14 @@
 /**
  * @module
  * Where the rate limiters keep their counters. `express-rate-limit`'s default store is an
- * in-process `Map`, so each process holds its own budget: with several processes (`start:cluster`
- * workers, or orchestrator replicas) the budget becomes `budget × processes`. The `limits`
+ * in-process `Map`, so each process holds its own budget: with several processes (orchestrator
+ * replicas, or N copies behind a proxy) the budget becomes `budget × processes`. The `limits`
  * Redis (`src/infrastructure/adapters/limits-redis.ts`) makes it one budget again,
  * across processes and instances. It is a separate INSTANCE from the response cache, so a flood of
  * cache keys can never evict a counter.
  *
- * `start:cluster` refuses to boot with 2+ workers and no limits Redis (`src/cluster.ts`); replicas
- * and PM2 cannot be detected from inside a process, so those stay the operator's to configure.
+ * Nothing refuses to boot without the limits Redis: copies cannot be detected from inside a
+ * process, so setting it stays the operator's job.
  */
 
 import {

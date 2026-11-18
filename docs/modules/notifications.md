@@ -115,7 +115,7 @@ flowchart LR
 ## More than one process
 
 A tab is held by exactly one process: the copy that accepted its `GET /notifications/stream`. The
-write it must hear about can happen in any other: another copy, another cluster worker, or the cron
+write it must hear about can happen in any other: another copy, or the cron
 container's sweep, which holds no streams at all. So a frame is published as well as written.
 
 ```mermaid

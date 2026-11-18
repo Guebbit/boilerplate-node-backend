@@ -23,7 +23,7 @@ import {
     PAYMENT_DISPUTE_UPDATED,
     type DisputeEventPayload
 } from '../events';
-import { isOpenDispute } from '../domain';
+import { hasOpenDispute, isOpenDispute } from '../domain';
 import type { DisputeRecord, PaymentDocument } from '../model';
 import type { ProviderDisputeState } from '../providers';
 
@@ -158,8 +158,9 @@ const storeDispute = (
 
 /**
  * Apply a delivery that carries a dispute: find the payment by its intent and store the report.
- * An older or repeated report matches no write and announces nothing; a report in another currency
- * than the payment's is dropped, since the refund arithmetic is in the payment's.
+ * An older or repeated report matches no write and announces nothing. A report in another currency
+ * than the payment's is stored like any other; only the refund arithmetic skips it (see
+ * `lostToChargebacks`), and staff check its amount in the provider's dashboard.
  *
  * @param payment - the payment the delivery's intent names, already checked to be this provider's
  * @param report - the dispute as the delivery carried it
@@ -167,19 +168,8 @@ const storeDispute = (
 export const applyDisputeDelivery = (
     payment: PaymentDocument,
     report: ProviderDisputeState
-): Promise<void> => {
-    if (report.currency !== payment.currency) {
-        // Stryker disable all
-        logger.warn({
-            message:
-                'Payment webhook carried a dispute in another currency than its payment; dropped.',
-            paymentId: String(payment._id),
-            disputeId: report.disputeRef
-        });
-        // Stryker restore all
-        return Promise.resolve();
-    }
-    return storeDispute(payment, recordOf(report)).then((recorded) => {
+): Promise<void> =>
+    storeDispute(payment, recordOf(report)).then((recorded) => {
         // Stryker disable all
         logger.info({
             message: recorded
@@ -191,4 +181,20 @@ export const applyDisputeDelivery = (
         });
         // Stryker restore all
     });
-};
+
+/**
+ * Where a payment's disputes stand, for a reader that must decide without the payment: whether any
+ * dispute is still open (an inquiry included) and the payment's own currency, which a dispute
+ * reported in another currency is compared against.
+ *
+ * @param paymentId - the payment, read with no caller's scope
+ * @returns the standing, or `undefined` for a missing payment
+ */
+export const disputeStanding = (
+    paymentId: string
+): Promise<{ open: boolean; currency: string } | undefined> =>
+    paymentRepository
+        .findByIdScoped(paymentId)
+        .then((payment) =>
+            payment ? { open: hasOpenDispute(payment), currency: payment.currency } : undefined
+        );

@@ -18,7 +18,7 @@ name: CI
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
 #   - observability   alert-rules
-#   - correctness     typecheck, test-unit, test-integration, test-contract, cluster, broker
+#   - correctness     typecheck, test-unit, test-integration, test-contract, replicas, broker
 #   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
@@ -328,11 +328,10 @@ jobs:
             - name: Check for breaking changes to the public event catalogue
               run: npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=origin/${{ github.base_ref }}
 
-    cluster:
-        # The suites that boot the app as several processes: `src/cluster.ts` with real workers,
-        # and N separate copies behind a proxy (`tests/replicas`). They are not in `complete` —
-        # several boots and a Redis, and a container engine — so CI is where they run on every
-        # push. `complete:manual` is the local equivalent.
+    replicas:
+        # The suites that boot the app as N separate copies behind a proxy (`tests/replicas`), plus
+        # the idle-Redis-client check. They are not in `complete` — several boots and a Redis, and
+        # a container engine — so CI is where they run on every push. `complete:manual` is the local equivalent.
         # 45, not 20: the per-case jest budgets (boot 90 s x copies, rolling restart twice that) add
         # up to ~42 min if every case hung, so jest reports each hang by name before the job is cut.
         runs-on: ubuntu-latest
@@ -341,8 +340,8 @@ jobs:
             contents: read
         services:
             redis:
-                # The image `compose.yaml` pins for `cache` and `limits` (redis:8-alpine): the cluster
-                # suites must run on the Redis that dev and production run. Move both together.
+                # The image `compose.yaml` pins for `cache` and `limits` (redis:8-alpine): the replicas
+                # suite must run on the Redis that dev and production run. Move both together.
                 image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
                 ports:
                     - 6379:6379
@@ -360,12 +359,12 @@ jobs:
             - name: Setup
               uses: ./.github/actions/setup
 
-            - name: Shared state holds across workers and copies
+            - name: Shared state holds across copies
               # The service container above is already listening, so the suite uses it instead of
-              # starting its own — see tests/cluster/support/redis.ts.
+              # starting its own — see tests/replicas/support/redis.ts.
               env:
                   NODE_TEST_REDIS_URL: redis://127.0.0.1:6379
-              run: npm run test:cluster
+              run: npm run test:replicas
 
     broker:
         # The queue adapter against a real RabbitMQ — `queue.test.ts` mocks amqplib, so only this
@@ -995,7 +994,7 @@ jobs:
             - lint-asyncapi-modules
             - asyncapi-breaking
             - typecheck
-            - cluster
+            - replicas
             - broker
             - dependency-graph
             - docs

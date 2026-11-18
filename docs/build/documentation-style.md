@@ -252,17 +252,17 @@ list."
 
 **Advisory, not enforced.** No linter checks a page's shape, on purpose: a rule that penalises a
 too-prose paragraph polices the author, not a real defect, and the two pages this site trusts most
-(`understand/clustering.md`, `understand/modules.md`) earn that trust by following these rules well, not by
+(`understand/scaling.md`, `understand/modules.md`) earn that trust by following these rules well, not by
 passing a check. Judgement stays with whoever writes the page.
 
 ## Exemplars to copy
 
-| Page                                                 | Diagrams | Why it works                                                         |
-| ---------------------------------------------------- | -------- | -------------------------------------------------------------------- |
-| [Clustering & Shutdown](../understand/clustering.md) | 3        | The model for a SMALL page: diagram → env table → diagram → sequence |
-| [Modules](../understand/modules.md)                  | 7        | The model for a LONG page                                            |
-| [Tactical DDD](../understand/tactical-ddd.md)        | 11       | Concept-heavy material kept visual throughout                        |
-| [Mutation Testing](mutation-testing.md)              | 9        | The most worked, copy-pasteable examples in the repo                 |
+| Page                                           | Diagrams | Why it works                                                       |
+| ---------------------------------------------- | -------- | ------------------------------------------------------------------ |
+| [Scaling & Shutdown](../understand/scaling.md) | 2        | The model for a SMALL page: table → diagram → env table → sequence |
+| [Modules](../understand/modules.md)            | 7        | The model for a LONG page                                          |
+| [Tactical DDD](../understand/tactical-ddd.md)  | 11       | Concept-heavy material kept visual throughout                      |
+| [Mutation Testing](mutation-testing.md)        | 9        | The most worked, copy-pasteable examples in the repo               |
 
 ## Read next
 

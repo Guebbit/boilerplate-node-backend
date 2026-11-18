@@ -1,5 +1,5 @@
 /**
- * A Redis the cluster suite can count in.
+ * A Redis the replicas suite can count in.
  *
  * ── Why not testcontainers ────────────────────────────────────────────────────────────────────
  * See `tests/support/container-engine.ts`: the engine the repo already names starts the container,
@@ -71,7 +71,7 @@ export const startRedis = (): Promise<TestRedis> => {
 
     return startContainer({
         image: IMAGE,
-        namePrefix: 'node-backend-cluster-redis',
+        namePrefix: 'node-backend-replicas-redis',
         ports: [6379]
     }).then(({ hostPorts, stop }) => {
         const [port] = hostPorts;

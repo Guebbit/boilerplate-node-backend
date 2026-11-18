@@ -293,5 +293,5 @@ Rehearse on a second stack named `staging`: [A staging copy](./first-deploy-stag
 | Back up what a stack holds                       | [Backups](./backups.md)                                           |
 | Understand why one stack serves one client       | [Tenancy](../understand/tenancy.md)                               |
 | See every host port and its env var              | [Pairing & Ports](../build/pairing-and-ports.md)                  |
-| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](../understand/clustering.md)              |
+| Understand graceful shutdown under SIGTERM       | [Scaling & Shutdown](../understand/scaling.md)                    |
 | Look up a file in `docker/` or the compose files | [Ops & Assets](../reference/ops.md)                               |

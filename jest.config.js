@@ -41,7 +41,7 @@ const envFileValues = readEnvFile();
  * changes what a suite ASKS, never what the code under test answers.
  *
  * Promoted here rather than in `globalSetup` because `process.env` is the only channel that
- * crosses into a jest WORKER, and `jest.config.cluster.js` runs no `globalSetup` at all while
+ * crosses into a jest WORKER, and `jest.config.replicas.js` runs no `globalSetup` at all while
  * still extending this file.
  */
 const DEPTH_KNOBS = [
@@ -128,17 +128,15 @@ module.exports = {
             : undefined,
     testMatch: ['**/tests/**/*.test.ts'],
     /**
-     * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
-     * as a child process and boot their own Mongo and Redis, so none of this file's setup applies.
-     * `tests/replicas` runs under the same config, for the same reasons: it boots N separate copies
-     * of the app and a proxy in front of them.
+     * `tests/replicas` runs under `jest.config.replicas.js` instead: it boots N separate copies of
+     * the app as child processes, each with its own Mongo and Redis, and a proxy in front of them,
+     * so none of this file's setup applies.
      * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
      */
     testPathIgnorePatterns: [
         '/node_modules/',
         '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
-        '<rootDir>/tests/cluster/',
         '<rootDir>/tests/replicas/',
         '<rootDir>/tests/broker/'
     ],

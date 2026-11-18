@@ -297,8 +297,8 @@ let sdk: NodeSDK | undefined;
 
 /**
  * Idempotency guard. `sdk.start()` patches global modules, so a second call would
- * double-register instrumentations (duplicated spans). Cluster workers each import this
- * module in their own process, so the flag is per-process — which is what we want.
+ * double-register instrumentations (duplicated spans). Each copy imports this
+ * module in its own process, so the flag is per-process — which is what we want.
  */
 let started = false;
 

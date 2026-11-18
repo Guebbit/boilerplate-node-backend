@@ -197,5 +197,5 @@ ENTRYPOINT ["dumb-init", "--"]
 
 # `npm start`, spelled out (no npm here). `--import tsx` loads tsx inside the one node process, from
 # the working directory, so every command runs from /app. https://tsx.is/node#nodejs-import
-# One process per container: scale with orchestrator replicas, not an in-container cluster.
+# One process per container: scale with orchestrator replicas.
 CMD ["node", "--import", "tsx", "src/main.ts"]

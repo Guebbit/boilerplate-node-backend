@@ -69,7 +69,9 @@ export const hasOpenChargeback = (payment: DisputablePayment): boolean =>
 
 /**
  * What lost chargebacks took, in minor units: the shop cannot refund money the bank kept. A
- * `won` one took nothing (funds reinstated), so a late win gives the room back by itself.
+ * `won` one took nothing (funds reinstated), so a late win gives the room back by itself. A
+ * dispute reported in another currency than the payment's is not subtracted: its amount is not in
+ * the payment's money, and staff check it in the provider's dashboard.
  * @param currency - the payment's currency
  */
 export const lostToChargebacks = (payment: DisputablePayment, currency: string): Money =>
@@ -78,29 +80,8 @@ export const lostToChargebacks = (payment: DisputablePayment, currency: string):
             .filter(
                 (dispute) =>
                     dispute.kind === DisputeKind.chargeback &&
+                    dispute.currency === currency &&
                     LOSS_DISPUTE_STATUSES.has(dispute.status)
             )
             .map((dispute) => toMinorUnits(dispute.amount, currency))
     );
-
-/**
- * Whether the lost chargebacks cover this much: the bank already paid the buyer that money, so an
- * open refund of it may be reported returned (the bank returned it).
- * @param amount - the refund's amount, a decimal
- * @param currency - the payment's currency
- */
-export const lostChargebackCovers = (
-    payment: DisputablePayment,
-    amount: string,
-    currency: string
-): boolean => lostToChargebacks(payment, currency) >= toMinorUnits(amount, currency);
-
-/**
- * Whether the payment has disputes and none is still open, an inquiry included, so a refund
- * refused as `disputed` is no longer waiting on one.
- *
- * An inquiry counts: `disputed` is a final refusal, so a refund that met only an inquiry would
- * stay stuck forever if staff had to wait for a chargeback that never comes.
- */
-export const hasDecidedDispute = (payment: DisputablePayment): boolean =>
-    (payment.disputes ?? []).length > 0 && !hasOpenDispute(payment);

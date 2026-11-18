@@ -17,8 +17,7 @@ one way — `infrastructure` → `kernel` → `modules` → `app` — and `eslin
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart TD
-    Main["src/main.ts<br/><i>the entry point</i>"] --> Serve
-    Cluster["src/cluster.ts<br/><i>optional: start:cluster</i>"] --> Serve["src/serve.ts<br/><i>start + wire signals</i>"]
+    Main["src/main.ts<br/><i>the entry point</i>"] --> Serve["src/serve.ts<br/><i>start + wire signals</i>"]
     Serve --> App["src/app.ts<br/><i>createApp(): builds the app</i>"]
     App --> Install["src/app/*<br/><i>the install steps</i>"]
     App --> Mods["src/modules.ts<br/><i>what is enabled</i>"]
@@ -27,7 +26,7 @@ flowchart TD
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef asm fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef ker fill:#ddd6fe,stroke:#7c3aed,color:#111827;
-    class Cluster,Serve,App boot;
+    class Main,Serve,App boot;
     class Install,Mods asm;
     class Kernel ker;
 ```
@@ -36,10 +35,9 @@ flowchart TD
 
 | File               | What it is                                                                                                                                                                                                                                                                                                                                    | Read next                                                                                        |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `src/main.ts`      | The process entry point named by `package.json`, and what `npm start`, `npm run dev` and the image (`node --import tsx src/main.ts`) run. One process: loads `.env`, starts tracing, loads the [development doubles](../build/test-doubles.md) when `NODE_ENV=development`, then imports `src/serve.ts`.                                      | [Clustering & Shutdown](../understand/clustering.md)                                             |
-| `src/cluster.ts`   | The optional second entry, `npm run start:cluster`, for a bare VM with no PM2 or systemd. Forks one worker per core (each loading the development doubles when `NODE_ENV=development`, then running `src/serve.ts`) and restarts a worker that dies. Containers do not use it: they scale with orchestrator replicas.                         | [Clustering & Shutdown](../understand/clustering.md)                                             |
+| `src/main.ts`      | The process entry point named by `package.json`, and what `npm start`, `npm run dev` and the image (`node --import tsx src/main.ts`) run. One process: loads `.env`, starts tracing, loads the [development doubles](../build/test-doubles.md) when `NODE_ENV=development`, then imports `src/serve.ts`.                                      | [Scaling & Shutdown](../understand/scaling.md)                                                   |
 | `src/app.ts`       | `createApp()`: builds one Express app and hands back `{ app, boot, start, stop }`. Tracing starts before anything instrumented is imported; `boot` brings up database/cache/queue/i18n, `start` adds the demo profile's own data and listens. Calling it is the side effect, not importing it.                                                | [Reading Path](../understand/reading-path.md) · [Request Flow](../understand/request-flow.md)    |
-| `src/serve.ts`     | The only file that calls `createApp().start()` — wires `stop()` to the process signals. What `main.ts`, or a cluster worker, actually runs; `tests/support/http.ts`, `scenarios/apply.ts` and `scenarios/run-server.ts` call `createApp()` themselves instead, for the parts of the lifecycle each one needs.                                 | [Clustering & Shutdown](../understand/clustering.md)                                             |
+| `src/serve.ts`     | The only file that calls `createApp().start()` — wires `stop()` to the process signals. What `main.ts` actually runs; `tests/support/http.ts`, `scenarios/apply.ts` and `scenarios/run-server.ts` call `createApp()` themselves instead, for the parts of the lifecycle each one needs.                                                       | [Scaling & Shutdown](../understand/scaling.md)                                                   |
 | `src/modules.ts`   | The list of domains this build serves: one import and one array entry each, kept alphabetical. There is no filesystem discovery and no auto-registration — `tests/cross-cutting/modules-are-enabled.test.ts` requires every folder under `src/modules/` to have an entry here, so disabling one means deleting its folder, not just its line. | [Modules](../understand/modules.md) · [Adding & Removing a Module](../build/module-lifecycle.md) |
 | `src/globals.d.ts` | The ambient declarations that widen Express's `Request` — the per-request additions (uploaded image URLs, locale, translator, observability handle) that middlewares attach and controllers read. Without it those reads are type errors.                                                                                                     | [Request Input](../understand/request-input.md)                                                  |
 

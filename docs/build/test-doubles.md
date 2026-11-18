@@ -14,7 +14,7 @@ not copy. A process booted with `NODE_ENV=development` loads them at boot.
 ```mermaid
 flowchart LR
     subgraph image["Production: NODE_ENV=production / the image"]
-        entry["src/main.ts · src/cluster.ts"] --> registries["Registries: real adapters only"]
+        entry["src/main.ts"] --> registries["Registries: real adapters only"]
     end
     subgraph dev["NODE_ENV=development: dev / e2e:serve / debug / every script"]
         loader["src/app/development-doubles.ts<br/>(a runtime import())"] --> file["scenarios/support/development-doubles.ts"]
@@ -48,14 +48,13 @@ checkout refuses it with `409 CART_PAYMENT_METHOD_NOT_AVAILABLE`. A deployment w
 is the one runtime door from `src/` to `scenarios/`: under `development` it imports
 `scenarios/support/development-doubles.ts`, and under any other value it does nothing.
 
-| Who loads the doubles                                         | How                                                                                                            |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `dev`, `dev:docker*`, `e2e:serve`, `debug`                    | `src/main.ts` awaits the loader after `startTracing()` and before `serve`                                      |
-| `start:cluster`, `dev:docker:cluster`, the cluster test suite | `src/cluster.ts` awaits it before its primary/worker split, so the primary and every worker load it themselves |
-| every `db:*`, `ops/*`, `job` script, the dev `cron` container | `runScript` awaits it before `assertProcessConfig()`; the cron container needs nothing but `NODE_ENV`          |
-| `demo`                                                        | `scenarios/run-server.ts` imports the file first: it forces `NODE_ENV` itself, after imports                   |
-| `scenario:apply`                                              | `scenarios/apply.ts` imports the file: it forces `NODE_MAIL_TRANSPORT=log` whatever `NODE_ENV` is              |
-| jest                                                          | `tests/support/setup.ts` calls `registerDoubles()`; `NODE_ENV=test` makes the loader a no-op                   |
+| Who loads the doubles                                                  | How                                                                                                   |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `dev`, `dev:docker`, `e2e:serve`, `debug`, the `tests/replicas` copies | `src/main.ts` awaits the loader after `startTracing()` and before `serve`                             |
+| every `db:*`, `ops/*`, `job` script, the dev `cron` container          | `runScript` awaits it before `assertProcessConfig()`; the cron container needs nothing but `NODE_ENV` |
+| `demo`                                                                 | `scenarios/run-server.ts` imports the file first: it forces `NODE_ENV` itself, after imports          |
+| `scenario:apply`                                                       | `scenarios/apply.ts` imports the file: it forces `NODE_MAIL_TRANSPORT=log` whatever `NODE_ENV` is     |
+| jest                                                                   | `tests/support/setup.ts` calls `registerDoubles()`; `NODE_ENV=test` makes the loader a no-op          |
 
 The production image copies no `scenarios/`. `NODE_ENV=development` there refuses to boot, and the
 refusal names the cause: the loader looks for the file under the working directory, the same rule

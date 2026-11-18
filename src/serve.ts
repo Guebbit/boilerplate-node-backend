@@ -3,9 +3,8 @@
 /**
  * @module
  * Serve `createApp()`'s result, wired to the process signals — the one place that actually calls
- * `start()`. `main.ts` and `cluster.ts`'s worker branch import this instead of `./app` directly
- * — both want the same thing: build the app, start listening, and close everything gracefully
- * on a signal.
+ * `start()`. `main.ts` imports this instead of `./app` directly: it wants the app built,
+ * listening, and closed gracefully on a signal.
  *
  * Deliberately thin: `createApp` stays free of any opinion about whether the process that built
  * it wants to serve traffic at all — `tests/support/http.ts` and `scenarios/apply.ts` are the

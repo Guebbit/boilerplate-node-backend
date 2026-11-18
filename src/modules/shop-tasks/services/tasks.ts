@@ -8,7 +8,7 @@
  * @see docs/modules/shop-tasks.md#the-shop-s-to-dos
  */
 
-import { RefundFailureReason, TaskKind } from '@types';
+import { DisputeKind, DisputeStatus, RefundFailureReason, TaskKind } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { fillPath, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
@@ -75,6 +75,43 @@ const guarded = (name: string, work: () => Promise<void>): Promise<void> =>
 const legalDeadlineOf = (due: RefundDue | undefined): LegalDeadline | undefined =>
     due && { rule: due.dueRule, day: dayInZone(due.dueBy, shopTimezone()) };
 
+/**
+ * Whether an open dispute's own to-do already carries a refund the provider refused or took back
+ * as `disputed`. With no dispute open there is no such to-do, so the refund needs its own.
+ *
+ * @param payload - the refund event
+ */
+const disputeTaskCarries = (payload: {
+    paymentId: string;
+    failureReason: RefundFailureReason;
+}): Promise<boolean> =>
+    payload.failureReason === RefundFailureReason.disputed
+        ? paymentService
+              .disputeStanding(payload.paymentId)
+              .then((standing) => standing?.open === true)
+        : Promise.resolve(false);
+
+/**
+ * The closing words of a dispute's to-do. A lost or accepted chargeback in another currency than
+ * the payment's was never subtracted from what may be refunded, so staff must check the amount.
+ *
+ * @param payload - the dispute as the provider last reported it
+ */
+const disputeEndedNote = (payload: DomainEventMap['payment.dispute_opened']): Promise<string> => {
+    const plain = `The dispute ended: ${payload.status}.`;
+    const tookMoney =
+        payload.kind === DisputeKind.chargeback &&
+        (payload.status === DisputeStatus.lost || payload.status === DisputeStatus.accepted);
+    if (!tookMoney) return Promise.resolve(plain);
+    return paymentService
+        .disputeStanding(payload.paymentId)
+        .then((standing) =>
+            standing && standing.currency !== payload.currency
+                ? `${plain} It was in ${payload.currency}, not the payment's ${standing.currency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
+                : plain
+        );
+};
+
 /** The task handlers `module.ts` subscribes; each takes the event payload, most also its `meta`. */
 export const shopTasks = {
     /** `payment.refund_owed_by_hand`: money to send outside the app. */
@@ -92,51 +129,57 @@ export const shopTasks = {
 
     /**
      * `payment.refund_failed`: only a refusal that ends the retrying is work for a person.
-     * A `disputed` one is not: the bank already returned the money, and the dispute task
-     * carries that case.
+     * A `disputed` one is left to the dispute task while a dispute is open; with none open
+     * (nothing on file, or all decided) no such task exists, so the refusal opens its own.
      */
     onRefundFailed: (payload: DomainEventMap['payment.refund_failed'], meta: DomainEventMeta) =>
         guarded('payment.refund_failed', () =>
-            payload.final && payload.failureReason !== RefundFailureReason.disputed
-                ? paymentService
-                      .refundLegalDue(payload.paymentId, payload.refundId)
-                      .then((due) =>
-                          open(
-                              refundRefusedOpening(
-                                  payload,
-                                  due?.dueBy ?? attentionDueAt(new Date()),
-                                  legalDeadlineOf(due)
-                              ),
-                              PAYMENTS_ATTENTION_WORK,
-                              meta
-                          )
-                      )
+            payload.final
+                ? disputeTaskCarries(payload).then((carried) =>
+                      carried
+                          ? undefined
+                          : paymentService
+                                .refundLegalDue(payload.paymentId, payload.refundId)
+                                .then((due) =>
+                                    open(
+                                        refundRefusedOpening(
+                                            payload,
+                                            due?.dueBy ?? attentionDueAt(new Date()),
+                                            legalDeadlineOf(due)
+                                        ),
+                                        PAYMENTS_ATTENTION_WORK,
+                                        meta
+                                    )
+                                )
+                  )
                 : Promise.resolve()
         ),
 
     /**
      * `payment.refund_reversed`: a settled refund came back from the bank, so the money is owed
-     * again. A `disputed` one is not work for a person to start: the dispute to-do carries it.
-     * The date is the legal one when the law sets one (a past date is truthful), else the
-     * attention window from now, never the refund's creation.
+     * again. A `disputed` one is left to the dispute to-do while a dispute is open; with none open
+     * it opens its own. The date is the legal one when the law sets one (a past date is truthful),
+     * else the attention window from now, never the refund's creation.
      */
     onRefundReversed: (payload: DomainEventMap['payment.refund_reversed'], meta: DomainEventMeta) =>
         guarded('payment.refund_reversed', () =>
-            payload.failureReason === RefundFailureReason.disputed
-                ? Promise.resolve()
-                : paymentService
-                      .refundLegalDue(payload.paymentId, payload.refundId)
-                      .then((due) =>
-                          open(
-                              refundReversedOpening(
-                                  payload,
-                                  due?.dueBy ?? attentionDueAt(new Date()),
-                                  legalDeadlineOf(due)
-                              ),
-                              PAYMENTS_ATTENTION_WORK,
-                              meta
+            disputeTaskCarries(payload).then((carried) =>
+                carried
+                    ? undefined
+                    : paymentService
+                          .refundLegalDue(payload.paymentId, payload.refundId)
+                          .then((due) =>
+                              open(
+                                  refundReversedOpening(
+                                      payload,
+                                      due?.dueBy ?? attentionDueAt(new Date()),
+                                      legalDeadlineOf(due)
+                                  ),
+                                  PAYMENTS_ATTENTION_WORK,
+                                  meta
+                              )
                           )
-                      )
+            )
         ),
 
     /** `payment.refunded` and `payment.refund_canceled`: the refund no longer owes anything. */
@@ -199,10 +242,12 @@ export const shopTasks = {
                             meta
                         )
                     );
-            return taskService.clearSystemTasks(
-                [TaskKind.dispute, TaskKind.dispute_awaiting_bank],
-                link,
-                `The dispute ended: ${payload.status}.`
+            return disputeEndedNote(payload).then((note) =>
+                taskService.clearSystemTasks(
+                    [TaskKind.dispute, TaskKind.dispute_awaiting_bank],
+                    link,
+                    note
+                )
             );
         }),
 

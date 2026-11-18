@@ -1,5 +1,5 @@
 /**
- * The cluster suite's own runner — `npm run test:cluster`.
+ * The replicas suite's own runner — `npm run test:replicas`.
  *
  * A separate config rather than another directory under the main one, because every default in
  * `jest.config.js` is wrong here and each for a stated reason:
@@ -11,10 +11,10 @@
  *   `globalSetup`    starts one shared in-memory mongod for the run. These tests boot their own,
  *                    because their workers connect over TCP from another process and cannot be
  *                    handed this one's mongoose connection.
- *   `testTimeout`    30s. Booting a cluster and pulling a Redis image is longer than that; the
+ *   `testTimeout`    30s. Booting several copies and pulling a Redis image is longer than that; the
  *                    files set their own.
  *
- * `jest.config.js` ignores `tests/cluster` for the mirror image of these reasons, so `npm test`
+ * `jest.config.js` ignores `tests/replicas` for the mirror image of these reasons, so `npm test`
  * stays in one process and stays fast.
  */
 
@@ -27,11 +27,11 @@ module.exports = {
     // Same on-disk cache as the base config, see its comment.
     cacheDirectory: base.cacheDirectory,
     testEnvironment: base.testEnvironment,
-    roots: ['<rootDir>/tests/cluster', '<rootDir>/tests/replicas'],
-    testMatch: ['**/tests/cluster/**/*.test.ts', '**/tests/replicas/**/*.test.ts'],
+    roots: ['<rootDir>/tests/replicas'],
+    testMatch: ['**/tests/replicas/**/*.test.ts'],
     /**
-     * One at a time. Each case boots a cluster of real workers on a real port and fires a burst at
-     * it; two of those in parallel are two bursts competing for the same CPUs, and a rate-limit
+     * One at a time. Each case boots several real copies on real ports and fires a burst at them;
+     * two of those in parallel are two bursts competing for the same CPUs, and a rate-limit
      * assertion measured under that is a coin toss.
      */
     maxWorkers: 1,

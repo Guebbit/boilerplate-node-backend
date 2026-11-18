@@ -9,7 +9,7 @@
  * `tests/support/http.ts` calls it once for the `app` object alone, `scenarios/apply.ts` calls
  * `boot()` but never `start()`. Nothing here decides to serve traffic: `src/serve.ts` is the one
  * place that calls `start()` and wires it to the process signals, for whichever entry point
- * (`main.ts`, `cluster.ts`'s worker branch) actually wants a listening server.
+ * (`main.ts`) actually wants a listening server.
  */
 
 /**
@@ -19,9 +19,9 @@
 import './infrastructure/config/dotenv';
 
 /**
- * OTel must initialize before express, http and the models are imported. That only holds when
- * `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
- * imports below are hoisted above this call.
+ * OTel must initialize before express, http and the models are imported. `main.ts` starts it
+ * itself and imports this file dynamically. Imported statically (a test, a script), the imports
+ * below are hoisted above this call, so there it is a safety net, not the ordering guarantee.
  */
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 

@@ -17,7 +17,7 @@ groups:
 
           # A crash loop: the app restarts faster than `ApiDown`'s one-minute wait can complete, so
           # that alert never fires. More than two process starts in 15 minutes is not a deploy.
-          # Unreliable in cluster mode (`npm run start:cluster`): per-copy metrics, each scrape hits a different worker
+          # Scrape every copy as its own target: through a balancer each scrape hits a different copy
           # and `process_start_time_seconds` jumps between them. `ApiDown` mutes this one.
           - alert: ApiRestarting
             expr: changes(process_start_time_seconds{job="api"}[15m]) > 2
@@ -26,7 +26,7 @@ groups:
                 severity: critical
             annotations:
                 summary: 'The API is restarting repeatedly'
-                description: 'The API process started more than twice in 15 minutes: a crash loop. Unreliable in cluster mode (`npm run start:cluster`): per-copy metrics, each scrape hits a different worker.'
+                description: 'The API process started more than twice in 15 minutes: a crash loop. Scrape every copy as its own target: through a balancer each scrape hits a different copy.'
 
           # A backing service that is not serving. `dependency_up` is the app's own reading of each
           # (`modules/observability/metrics.ts`). With Mongo down the job and outbox gauges stop

@@ -1,7 +1,7 @@
 /**
  * @module
  * The process's own configuration: which environment it is, how it names and logs itself, where
- * it listens, how it clusters, where its database is, and its tracing endpoint.
+ * it listens, where its database is, and its tracing endpoint.
  *
  * Relative imports only: `adapters/logger.ts` sits on jest's `globalSetup` import chain, where the
  * `@infrastructure` alias does not resolve, and it reads this file.
@@ -11,7 +11,6 @@
 
 import { defineConfig, isRelaxedIn } from '../config/define';
 import { choice, flag, int, text } from '../config/fields';
-import { MINUTE_MS } from '../../domain-primitives/time';
 
 /** The log levels winston knows, lowest severity last. */
 const LOG_LEVELS = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
@@ -48,20 +47,6 @@ export const serverConfig = defineConfig({
         NODE_HOST: text(),
         NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
         NODE_SHUTDOWN_DELAY_MS: int({ default: 0, min: 0 })
-    }
-});
-
-/** The cluster primary's supervision knobs. */
-export const clusterConfig = defineConfig({
-    name: 'cluster',
-    shape: {
-        NODE_ENABLE_CLUSTERING: flag({ default: false }),
-        NODE_CLUSTER_WORKERS: int({ default: 0, min: 0 }),
-        NODE_CLUSTER_CRASH_WINDOW_MS: int({ default: MINUTE_MS, min: 1 }),
-        NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: int({ default: 500, min: 1 }),
-        NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: int({ default: 30_000, min: 1 }),
-        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
-        NODE_CLUSTER_CRASH_LIMIT: int({ default: 10, min: 1 })
     }
 });
 

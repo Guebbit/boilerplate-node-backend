@@ -146,7 +146,7 @@ flowchart LR
 
 `npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
 `database` container and the `app` container — and `app`'s startup command is
-`docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING=1` is set). The container seeded the fresh volume before it began
+`docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker`. The container seeded the fresh volume before it began
 serving.
 
 Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
@@ -212,13 +212,12 @@ never as anything that says why.
 
 ## Which command runs the app
 
-| Where                            | Command                                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with orchestrator replicas.                                                    |
-| A bare VM with no PM2 or systemd | `npm run start:cluster`: one worker per CPU, restarts a crash. Needs `NODE_RATE_LIMIT_REDIS_URL`, or `NODE_CLUSTER_WORKERS=1`. |
-| A bare VM with PM2               | `pm2 start "npm start" -i max`                                                                                                 |
+| Where                            | Command                                                                                                    |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Containers, production, a laptop | `npm start` / `npm run dev`: one process. Scale with orchestrator replicas.                                |
+| A single host, more cores        | N `npm start` processes, one `NODE_PORT` each, behind your reverse proxy. Set `NODE_RATE_LIMIT_REDIS_URL`. |
 
-The reasons and the limits of cluster mode: [Clustering](../understand/clustering.md).
+How to run more than one copy, and what changes: [Scaling](../understand/scaling.md#how-to-run-more-than-one).
 
 ## The one command before you commit
 

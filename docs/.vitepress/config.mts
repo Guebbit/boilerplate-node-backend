@@ -194,8 +194,8 @@ export default defineConfig({
                             ]
                         },
                         {
-                            text: 'Clustering & Graceful Shutdown',
-                            link: '/understand/clustering'
+                            text: 'Scaling & Graceful Shutdown',
+                            link: '/understand/scaling'
                         },
                         { text: 'Shared rules', link: '/understand/shared-rules' }
                     ]
@@ -480,7 +480,7 @@ export default defineConfig({
                         { text: 'Property-Based Testing', link: '/build/property-testing' },
                         { text: 'Concurrency Testing', link: '/build/concurrency-testing' },
                         { text: 'Broker testing', link: '/build/broker-testing' },
-                        { text: 'Cluster testing', link: '/build/cluster-testing' },
+                        { text: 'Replicas testing', link: '/build/replicas-testing' },
                         { text: 'Load testing', link: '/build/load-testing' },
                         { text: 'Mutation Testing', link: '/build/mutation-testing' },
                         {

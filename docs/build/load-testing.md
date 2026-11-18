@@ -127,4 +127,4 @@ An in-process "generate load" endpoint cannot do this job:
 ## Read next
 
 - [Testing — Quick Start](./testing-quickstart.md)
-- [Cluster testing](./cluster-testing.md)
+- [Replicas testing](./replicas-testing.md)

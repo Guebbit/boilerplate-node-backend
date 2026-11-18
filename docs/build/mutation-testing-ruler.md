@@ -45,7 +45,7 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
             "<rootDir>/src/modules/[^/]+/tests/contract/",
             "<rootDir>/tests/integration/journeys/",
             "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
-            "<rootDir>/tests/cluster/",
+            "<rootDir>/tests/replicas/",
             "<rootDir>/tests/broker/",
             "<rootDir>/tmp/",
             "<rootDir>/.claude/worktrees/"
@@ -64,7 +64,7 @@ produces a score that moves on its own, which is the one thing a ratchet cannot 
 `enableFindRelatedTests` relates it to nearly every file, and a one-line change would drag the
 lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-—-one-user-across-modules).
 
-`tests/cluster/` forks real workers against a Redis and is not part of `npm test` either; neither is
+`tests/replicas/` boots separate copies of the app against a Redis and is not part of `npm test` either; neither is
 `tests/broker/`, which needs a real RabbitMQ. `tmp/` and
 `.claude/worktrees/` are not suites at all: they hold Stryker's own sandboxes and other checkouts'
 copies of the tests, which jest would otherwise discover and run as if they were this tree's.
