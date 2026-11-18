@@ -12,8 +12,9 @@ export type StoredReturn = Omit<Return, 'actions'>;
 
 /**
  * `.toJSON()` applies the model's transform: `_id` → `id`, `__v` and `shippingRefund` dropped,
- * Decimal128 → string. Dates and ObjectIds stay as they are; `JSON.stringify` turns them into
- * strings on the wire. The document is typed as stored, not as the wire shape `Return` promises.
+ * Decimal128 → string, every date and ObjectId → text. The document is typed as stored, not as
+ * the wire shape `Return` promises.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  */
 export const presentReturn = (document: ReturnDocument): StoredReturn =>
     document.toJSON() as StoredReturn;

@@ -16,8 +16,7 @@ import type { ExampleDocument, ExampleRow } from './model';
  * A document as the contract's `Example`.
  *
  * `.toJSON()` applies the model's transform (`_id` to `id`, owner as hex); Mongoose types its
- * result `any`, and the single cast below is what makes it an {@link ExampleRow}. Dates stay
- * `Date` until the response is serialized, which is what turns them into ISO strings.
+ * result `any`, and the single cast below is what makes it an {@link ExampleRow}.
  *
  * @param document - the stored example
  * @param ownerName - the owner's display name, read from `users` by the caller
@@ -32,6 +31,7 @@ export const presentExample = (
         /**
          * The schema's `toJSON` transform produces the row shape `ExampleRow` names; Mongoose types
          * it as a generic object.
+         * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
          */
         ...(document.toJSON() as ExampleRow),
         ownerName,

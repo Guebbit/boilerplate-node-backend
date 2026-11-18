@@ -85,6 +85,7 @@ const nextActionOf = (document: PaymentDocument): PaymentNextAction | undefined 
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document itself
  * is typed as stored, not as the wire shape `Payment` promises — one cast narrowing what the
  * compiler cannot see through on its own.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  *
  * @param document - the stored payment
  * @param staff - when true, add the staff-only provider fields

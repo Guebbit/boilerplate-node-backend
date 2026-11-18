@@ -15,6 +15,7 @@ import { timelineNoteAad } from './pii';
  * `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not this module's
  * `Order` contract — the same reasoning `products/presenter.ts`'s `presentProduct` documents, one
  * cast narrowing what the compiler cannot see through on its own.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  */
 export const presentOrder = (document: OrderDocument): Order => document.toJSON() as Order;
 

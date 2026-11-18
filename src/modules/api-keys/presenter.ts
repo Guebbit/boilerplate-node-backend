@@ -29,6 +29,7 @@ export const apiKeyStatus = (
  * A stored credential, mapped to the contract's `ApiKey` — `model.ts`'s own schema transform
  * already applies the `_id` → `id` rename and drops `hash`; the cast narrows `toJSON()`'s return
  * type, which is the schema's own overload, not this module's wire type.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  */
 export const presentApiKey = (document: ApiKeyDocument): StoredApiKey =>
     document.toJSON() as StoredApiKey;

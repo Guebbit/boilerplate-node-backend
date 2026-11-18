@@ -55,6 +55,46 @@ interface SerializableSchema extends MoneyWalkableSchema {
 }
 
 /**
+ * Whether a value is a BSON `ObjectId`. Read by its `_bsontype` tag rather than `instanceof`, so it
+ * does not depend on which copy of the BSON library built the value.
+ */
+const isObjectId = (value: unknown): value is { toHexString: () => string } =>
+    typeof value === 'object' && value !== null && Reflect.get(value, '_bsontype') === 'ObjectId';
+
+/**
+ * Whether a value is a `Date`, whichever realm built it (a jest sandbox has its own `Date`).
+ */
+const isDate = (value: unknown): value is Date =>
+    Object.prototype.toString.call(value) === '[object Date]';
+
+/**
+ * Turns every `Date` into its ISO text and every `ObjectId` into its hex text, at any depth, in
+ * place. Both calls are the ones `JSON.stringify` makes on the wire (`Date#toJSON`, the id's own
+ * hex), so the bytes sent do not change; what changes is that the value is already text when a
+ * presenter casts it to the API type, not only after sending.
+ *
+ * Runs on the `toJSON` door only, after the model's own step, which still needs to see real dates
+ * (it turns some into a shop-day). The lean/list door keeps its date objects: its readers call
+ * `getTime()` on them (`users/services/purchase-hold.ts`).
+ *
+ * @param value - a serialized document, or any value nested in one
+ * @returns `value` itself, or the text it was when it was a date or an id
+ */
+const textifyDatesAndIds = (value: unknown): unknown => {
+    if (isDate(value)) return value.toJSON();
+    if (isObjectId(value)) return value.toHexString();
+    if (typeof value !== 'object' || value === null) return value;
+    // Only plain objects and arrays hold nested values worth walking; a Buffer does not.
+    if (!Array.isArray(value) && Object.prototype.toString.call(value) !== '[object Object]')
+        return value;
+    for (const [key, nested] of Object.entries(value)) {
+        const text = textifyDatesAndIds(nested);
+        if (text !== nested) Reflect.set(value, key, text);
+    }
+    return value;
+};
+
+/**
  * Build a model's transform and wire it into the schema's `toJSON`, in one call.
  *
  * Deliberately not a `schema.plugin()`: a plugin's return value is discarded, and the transform
@@ -105,7 +145,10 @@ export const applySerialization = (
             const revision: unknown = Reflect.get(document, EDIT_REVISION);
             if (typeof revision === 'number')
                 Object.assign(serialized, { [EDIT_REVISION]: revision });
-            return transform(serialized);
+            // After the model's own step, which may still read real dates (a shop-day is cut from one).
+            const wire = transform(serialized);
+            textifyDatesAndIds(wire);
+            return wire;
         }
     });
 

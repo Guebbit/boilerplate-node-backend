@@ -12,6 +12,7 @@ import type { LocaleEntryDocument } from './model';
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document is
  * typed as stored, not as the wire shape `LocaleEntry` promises.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  */
 export const presentLocaleEntry = (document: LocaleEntryDocument): LocaleEntry =>
     document.toJSON() as LocaleEntry;

@@ -117,8 +117,8 @@ describe('a dispute is reported', () => {
                 status: 'needs_response',
                 amount: '100.00',
                 fundsWithdrawn: true,
-                openedAt: when(0),
-                evidenceDueBy: when(7 * 24 * 60)
+                openedAt: when(0).toISOString(),
+                evidenceDueBy: when(7 * 24 * 60).toISOString()
             })
         ]);
         // Separate from the display label: Shopify keeps `displayFinancialStatus` apart too.
@@ -157,7 +157,10 @@ describe('a dispute is reported', () => {
         await deliverReport(providerRef, { status: 'under_review', observedAt: at(30) });
 
         const view = await staffView(orderId);
-        expect(view?.disputes?.[0]).toMatchObject({ status: 'under_review', observedAt: when(30) });
+        expect(view?.disputes?.[0]).toMatchObject({
+            status: 'under_review',
+            observedAt: when(30).toISOString()
+        });
         await settleOutboxNudges();
         expect(await events(PAYMENT_DISPUTE_OPENED)).toBe(1);
         expect(await events(PAYMENT_DISPUTE_UPDATED)).toBe(0);
@@ -171,7 +174,10 @@ describe('a dispute is reported', () => {
         await deliverReport(providerRef, { status: 'lost', observedAt: at(61) });
 
         const view = await staffView(orderId);
-        expect(view?.disputes?.[0]).toMatchObject({ status: 'lost', closedAt: when(61) });
+        expect(view?.disputes?.[0]).toMatchObject({
+            status: 'lost',
+            closedAt: when(61).toISOString()
+        });
         await settleOutboxNudges();
         expect(await events(PAYMENT_DISPUTE_UPDATED)).toBe(2);
         const rows = await timelineOf(orderId, 'dispute_');
@@ -192,7 +198,10 @@ describe('a dispute is reported', () => {
         });
 
         const won = await staffView(orderId);
-        expect(won?.disputes?.[0]).toMatchObject({ status: 'won', closedAt: when(120) });
+        expect(won?.disputes?.[0]).toMatchObject({
+            status: 'won',
+            closedAt: when(120).toISOString()
+        });
         expect(won?.actions?.refund).toBe(true);
         await deliverReport(providerRef, { status: 'needs_response', observedAt: at(180) });
         const reopened = await staffView(orderId);

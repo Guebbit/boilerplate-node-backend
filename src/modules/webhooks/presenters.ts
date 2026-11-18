@@ -32,6 +32,7 @@ export const presentWebhookSubscription = (
         /**
          * The schema's `toJSON` transform produces the stored shape `StoredWebhookSubscription`
          * names; Mongoose types it as a generic object.
+         * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
          */
         ...(document.toJSON() as StoredWebhookSubscription),
         actions
@@ -40,6 +41,7 @@ export const presentWebhookSubscription = (
 /**
  * `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored, not as
  * the wire shape `WebhookDelivery` promises. The caller's `actions` arrive finished.
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  *
  * @param document - the stored delivery
  * @param actions - what this caller may do to it

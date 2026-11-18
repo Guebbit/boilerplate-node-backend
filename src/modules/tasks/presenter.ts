@@ -22,7 +22,7 @@ export interface TaskView {
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform and drops the dedup
  * key; the document is typed as stored, not as the wire shape, so one cast narrows it.
- *
+ * `toJSON` leaves no date or id object (`serialize.ts`); the contract tests check the rest.
  */
 export const storedTaskOf = (document: TaskDocument): StoredTask => document.toJSON() as StoredTask;
 

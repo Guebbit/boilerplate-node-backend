@@ -585,8 +585,8 @@ import type { ${names.entity}Document, ${names.entity}Row } from './model';
  * A document as the contract's ${names.entity}.
  *
  * toJSON applies the model's transform (_id to id); Mongoose types its result any, and the single
- * cast below is what makes it a ${names.entity}Row. Dates stay Date until the response is
- * serialized, which is what turns them into ISO strings.
+ * cast below is what makes it a ${names.entity}Row. toJSON leaves no date or id object
+ * (serialize.ts); the contract tests check the rest.
  *
  * @param document - the stored ${names.entityCamel}
  * @param actions - what the caller may do to it

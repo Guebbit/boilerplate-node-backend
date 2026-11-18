@@ -122,7 +122,10 @@ version: 1 } })`, never a plain `findByIdAndUpdate` — a version that does not 
    resource agree on how they got there, and a sibling wanting the same shape would find it cheaper
    to copy the cast than to ask. `presenter.ts` is the fix: one pure function per resource
    (`presentProduct(document): Product`), the single place a Mongoose document becomes the wire
-   shape, replacing every ad hoc cast in that module's own controllers. A sibling reaches the
+   shape, replacing every ad hoc cast in that module's own controllers. The cast is a narrowing,
+   not a claim: `toJSON` (`persistence/serialize.ts`) turns every date and ObjectId into text after
+   the model's own step, so a presenter's output already holds the text the API type says. The
+   lean/list path keeps its date objects. A sibling reaches the
    transform through the owning module's SERVICE, the same door it already uses for a repository
    read — never the presenter file directly, never the wire-shape cast, and never the repository,
    which the [barrel rule](./strategic-ddd.md#_5-published-language-—-the-barrel) already refuses.

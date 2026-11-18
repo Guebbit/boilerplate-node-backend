@@ -170,7 +170,9 @@ describe('user credential exposure', () => {
             const deletedAt = new Date('2026-03-04T05:06:07.000Z');
             const user = await createUser({ email: 'gone@example.com', deletedAt });
 
-            expect((user.toJSON() as { deletedAt: Date }).deletedAt).toEqual(deletedAt);
+            expect((user.toJSON() as { deletedAt: string }).deletedAt).toBe(
+                deletedAt.toISOString()
+            );
         });
 
         it('still never emits credentials alongside it', async () => {
