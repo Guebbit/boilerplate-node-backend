@@ -3,8 +3,9 @@
  * The 405 guard: a path the contract knows, asked with a method it does not give it, answers
  * 405 + `Allow` (RFC 9110 §15.5.6) instead of the catch-all's 404.
  *
- * Two mounts: before the routers for a path with no `{param}` (OAS matches a literal path before a
- * templated one, so `DELETE /products/facets` must not reach `/products/{id}`), and right
+ * Two mounts: before the routers for a path a more specific template shadows (OAS matches a literal
+ * path before a templated one, so `DELETE /products/facets` must not reach `/products/{id}`, nor
+ * `GET /payments/1/refunds/sync` reach `/payments/{id}/refunds/{refundId}`), and right
  * before the 404 catch-all for everything else, where it only sees a request no route answered.
  * A path of a module this build does not serve stays a 404: the module is not there to be asked.
  *
@@ -26,25 +27,27 @@ import type { RequestContentType } from '@api/request-content-types';
  * @param routes - the generated path table
  * @param served - the modules this build mounts
  * @param path - the request path, without a trailing slash
- * @param literalOnly - count only templates with no `{param}`
+ * @param shadowedOnly - count only the most specific templates (fewest `{param}`), and only when one shadows another
  * @returns the allowed methods, sorted; empty when no served path matches
  */
 const allowedMethods = (
     routes: readonly OperationRoute[],
     served: ReadonlySet<string>,
     path: string,
-    literalOnly: boolean
+    shadowedOnly: boolean
 ): string[] => {
-    const methods = new Set(
-        routes
-            .filter(
-                (route) =>
-                    (route.module === null || served.has(route.module)) &&
-                    (!literalOnly || route.parameterCount === 0) &&
-                    route.pattern.test(path)
-            )
-            .flatMap((route) => route.methods)
+    const matching = routes.filter(
+        (route) => (route.module === null || served.has(route.module)) && route.pattern.test(path)
     );
+    // OAS: the template with fewer `{param}` wins, so `/a/{id}/sync` shadows `/a/{id}/{other}`.
+    // A lone match has no sibling to shadow, so only a strictly more specific one narrows.
+    const fewest = Math.min(...matching.map((route) => route.parameterCount));
+    const mostParameters = Math.max(...matching.map((route) => route.parameterCount));
+    const shadowed = fewest === 0 || fewest < mostParameters;
+    const counted = shadowedOnly
+        ? matching.filter((route) => shadowed && route.parameterCount === fewest)
+        : matching;
+    const methods = new Set(counted.flatMap((route) => route.methods));
     if (methods.has('GET')) methods.add('HEAD');
     if (methods.size > 0) methods.add('OPTIONS');
     return [...methods].toSorted();
@@ -58,17 +61,17 @@ const allowedMethods = (
  *
  * @param routes - every contract path with its methods and owning module
  * @param served - the names of the modules this build mounts
- * @param literalOnly - judge only paths with no `{param}`: the mount that runs before the routers
+ * @param shadowedOnly - judge only a path a more specific template shadows: the mount that runs before the routers
  * @returns express middleware answering 405 + `Allow`, or passing on to the 404
  */
 export const methodNotAllowed = (
     routes: readonly OperationRoute[],
     served: ReadonlySet<string>,
-    literalOnly = false
+    shadowedOnly = false
 ): RequestHandler => {
     return (request: Request, response: Response, next: NextFunction) => {
         const path = request.path.length > 1 ? request.path.replace(/\/$/, '') : request.path;
-        const allowed = allowedMethods(routes, served, path, literalOnly);
+        const allowed = allowedMethods(routes, served, path, shadowedOnly);
 
         if (
             allowed.length === 0 ||

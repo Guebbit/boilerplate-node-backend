@@ -141,6 +141,8 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .expect(204);
     await api().get('/account').set('Authorization', armedBearer).expect(401);
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
+    // The mail goes out after the response, from a domain-event handler.
+    await waitForMail(ACCOUNT.email, 'api-keys.revoked');
     expect(mailsTo(ACCOUNT.email, 'api-keys.revoked')).toHaveLength(1);
 
     /**

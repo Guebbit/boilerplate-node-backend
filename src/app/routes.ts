@@ -42,9 +42,10 @@ export const installRoutes = (app: Express): void => {
     });
 
     /**
-     * 405 + `Allow` for a literal contract path (no `{param}`) asked with a method it does not
-     * declare. Before the routers: otherwise `DELETE /products/facets` reaches the
-     * `/products/:id` handler and answers 404, where the contract matches the literal path first.
+     * 405 + `Allow` for a contract path that a more specific template shadows (`/products/facets`,
+     * `/payments/{id}/refunds/sync`) asked with a method it does not
+     * declare. Before the routers: otherwise they reach the templated handler and answer 404, where the
+     * contract matches the more specific path first.
      */
     app.use(methodNotAllowed(OPERATION_ROUTES, servedModuleNames, true));
 

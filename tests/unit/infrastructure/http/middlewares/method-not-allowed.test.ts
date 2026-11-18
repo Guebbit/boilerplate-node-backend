@@ -31,6 +31,20 @@ const TABLE: readonly OperationRoute[] = [
         securityOpenMethods: []
     },
     {
+        pattern: /^\/things\/[^/]+\/items\/sync$/,
+        parameterCount: 1,
+        module: 'things',
+        methods: ['POST'],
+        securityOpenMethods: []
+    },
+    {
+        pattern: /^\/things\/[^/]+\/items\/[^/]+$/,
+        parameterCount: 2,
+        module: 'things',
+        methods: ['GET'],
+        securityOpenMethods: []
+    },
+    {
         pattern: /^\/ghosts$/,
         parameterCount: 0,
         module: 'ghosts',
@@ -61,10 +75,10 @@ interface Outcome {
  *
  * @param method - the request method
  * @param path - the request path
- * @param literalOnly - the mount that runs before the routers
+ * @param shadowedOnly - the mount that runs before the routers
  * @returns the status and `Allow` it answered with, or `passed` when it let the request on
  */
-const run = (method: string, path: string, literalOnly = false): Outcome => {
+const run = (method: string, path: string, shadowedOnly = false): Outcome => {
     // `path` is a getter on express's prototype, so it is redefined on the instance, not assigned.
     const request = Object.defineProperties(Object.create(express.request) as Request, {
         method: { value: method },
@@ -84,7 +98,7 @@ const run = (method: string, path: string, literalOnly = false): Outcome => {
         json: () => response
     });
 
-    methodNotAllowed(TABLE, new Set(['things']), literalOnly)(request, response, () => {
+    methodNotAllowed(TABLE, new Set(['things']), shadowedOnly)(request, response, () => {
         outcome.passed = true;
     });
     return outcome;
@@ -142,6 +156,17 @@ describe('methodNotAllowed', () => {
                 status: 405,
                 allow: 'OPTIONS, POST'
             });
+        });
+
+        it('judges a literal segment under a templated path by its own methods', () => {
+            expect(run('GET', '/things/1/items/sync', true)).toMatchObject({
+                status: 405,
+                allow: 'OPTIONS, POST'
+            });
+        });
+
+        it('leaves the templated sibling of that path to the routers', () => {
+            expect(run('DELETE', '/things/1/items/abc', true).passed).toBe(true);
         });
 
         it('leaves a templated path to the routers', () => {
