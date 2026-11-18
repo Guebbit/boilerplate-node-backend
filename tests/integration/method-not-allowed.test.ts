@@ -135,6 +135,12 @@ describe('OPTIONS says what a path accepts', () => {
         expect(response.headers['accept-patch']).toBeUndefined();
     });
 
+    it('lets a literal sub-path win over a templated sibling under the same parent', async () => {
+        const response = await api().options('/payments/abc/refunds/sync');
+
+        expect(response.headers.allow).toBe('OPTIONS, POST');
+    });
+
     it('sends no Content-Length on the 204', async () => {
         const response = await api().options('/shop');
 
