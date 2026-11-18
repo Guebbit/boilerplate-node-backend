@@ -182,6 +182,110 @@ describe('scenarios/apply.ts', () => {
     );
 
     it(
+        'leaves `done` behind after a seed, and skips on it even when the data was since emptied',
+        async () => {
+            const dbUri = freshDbUri();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
+
+            const seeded = await runApply(['blank'], dbUri);
+            expect(seeded.status).toBe(0);
+            await expect(
+                connection.collection('seed_marker').findOne({ _id: 'seed' as never })
+            ).resolves.toMatchObject({ state: 'done' });
+
+            // Every collection but the note: otherwise the leftovers (roles, locales) would
+            // make the skip a plain "not empty" and the `done` check would go unproven.
+            const collections = await connection.db?.listCollections().toArray();
+            await Promise.all(
+                (collections ?? [])
+                    .filter(({ name }) => name !== 'seed_marker')
+                    .map(({ name }) => connection.collection(name).deleteMany({}))
+            );
+            const again = await runApply(['blank'], dbUri);
+            expect(again.stdout + again.stderr).toContain('already holds data');
+            await expect(connection.collection('users').countDocuments()).resolves.toBe(0);
+
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS * 2
+    );
+
+    it(
+        'seeds a database holding only cron `leases` rows',
+        async () => {
+            const dbUri = freshDbUri();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
+            await connection.collection('leases').insertOne({ name: 'sweep:outbox' });
+
+            const result = await runApply(['blank'], dbUri);
+
+            expect(result.status).toBe(0);
+            await expect(connection.collection('users').countDocuments()).resolves.toBe(
+                NAMED_ACCOUNT_COUNT
+            );
+
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS
+    );
+
+    it(
+        'rebuilds from scratch when the note says `running`: the stray row is gone, `done` is back',
+        async () => {
+            const dbUri = freshDbUri();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
+            await connection
+                .collection('seed_marker')
+                .insertOne({ _id: 'seed' as never, state: 'running' });
+            await connection.collection('users').insertOne({ email: 'half-a-shop@example.test' });
+
+            const result = await runApply(['blank'], dbUri);
+
+            expect(result.status).toBe(0);
+            expect(result.stdout + result.stderr).toContain('died before it finished');
+            await expect(connection.collection('users').countDocuments()).resolves.toBe(
+                NAMED_ACCOUNT_COUNT
+            );
+            await expect(
+                connection.collection('users').countDocuments({ email: 'half-a-shop@example.test' })
+            ).resolves.toBe(0);
+            await expect(
+                connection.collection('seed_marker').findOne({ _id: 'seed' as never })
+            ).resolves.toMatchObject({ state: 'done' });
+
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS
+    );
+
+    it(
+        '--reset leaves `done` behind on a database that held other data',
+        async () => {
+            const dbUri = freshDbUri();
+            const connection = await mongoose
+                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                .asPromise();
+            await connection.collection('users').insertOne({ email: 'stray@example.test' });
+
+            const reseeded = await runApply(['--reset', 'blank'], dbUri);
+            expect(reseeded.status).toBe(0);
+
+            await expect(
+                connection.collection('seed_marker').findOne({ _id: 'seed' as never })
+            ).resolves.toMatchObject({ state: 'done' });
+
+            await connection.close();
+        },
+        APPLY_TIMEOUT_MS
+    );
+
+    it(
         'writes --describe-to into a directory that does not exist yet, with every login in it',
         async () => {
             const scratch = await mkdtemp(path.join(os.tmpdir(), 'apply-describe-'));
