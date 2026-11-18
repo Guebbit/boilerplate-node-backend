@@ -18,7 +18,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { paymentService } from '@modules/payments/services';
 import { deliver } from '@modules/payments/tests/deliver';
 import { paymentRepository } from '@modules/payments/repository';
-import { PAYMENT_REFUNDED } from '@modules/payments/events';
+import { PAYMENT_REFUNDED, PAYMENT_REFUND_UNRECORDED } from '@modules/payments/events';
 import paymentsModule from '@modules/payments/module';
 import {
     addFakeExternalRefund,
@@ -91,6 +91,13 @@ const deliverRefund = (providerRef: string, refundRef: string) =>
 
 /** How many `payment.refunded` rows the outbox holds. */
 const refundedEvents = () => outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED });
+
+/** The `payment.refund_unrecorded` rows the outbox holds, as their payloads. */
+const unrecordedEvents = () =>
+    outboxEventModel
+        .find({ name: PAYMENT_REFUND_UNRECORDED })
+        .lean()
+        .then((rows) => rows.map((row) => row.payload));
 
 /** 100.00 paid; our 50.00 refund refused for a transient reason; then 80.00 made in the dashboard. */
 const overtaken = async () => {
@@ -186,22 +193,117 @@ describe('a refund made in the dashboard', () => {
         expect(await refundsOf(orderId)).toHaveLength(1);
     });
 
-    it('skips a failed one and one in another currency', async () => {
+    it('skips a failed one, and says nothing: a refund that did not happen needs no one', async () => {
         const { orderId, providerRef } = await paidOrder();
         const failed = addFakeExternalRefund(providerRef, {
             amount: '30.00',
             currency: 'EUR',
             status: 'failed'
         });
-        addFakeExternalRefund(providerRef, {
+
+        await deliverRefund(providerRef, failed);
+
+        expect(await refundsOf(orderId)).toHaveLength(0);
+        expect(await unrecordedEvents()).toEqual([]);
+    });
+
+    it('does not convert one in another currency: it records nothing and tells staff', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        const refundRef = addFakeExternalRefund(providerRef, {
             amount: '30.00',
             currency: 'USD',
             status: 'succeeded'
         });
 
-        await deliverRefund(providerRef, failed);
+        await deliverRefund(providerRef, refundRef);
 
         expect(await refundsOf(orderId)).toHaveLength(0);
+        const { _id: paymentId } = await paymentOf(orderId);
+        expect(await unrecordedEvents()).toEqual([
+            {
+                paymentId: String(paymentId),
+                orderId,
+                refundRef,
+                amount: '30.00',
+                currency: 'USD',
+                reason: 'other_currency'
+            }
+        ]);
+    });
+
+    it('gives up when every attempt loses its race, and tells staff once', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        const refundRef = addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        const lost = jest.spyOn(paymentRepository, 'importRefund').mockResolvedValue(null);
+
+        await deliverRefund(providerRef, refundRef);
+
+        // The first attempt and three re-reads.
+        expect(lost).toHaveBeenCalledTimes(4);
+        expect(await refundsOf(orderId)).toHaveLength(0);
+        expect(await unrecordedEvents()).toMatchObject([
+            { orderId, refundRef, amount: '30.00', currency: 'EUR', reason: 'lost_race' }
+        ]);
+    });
+
+    it('does not tell staff when a later attempt wins the race', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        const refundRef = addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        jest.spyOn(paymentRepository, 'importRefund').mockResolvedValueOnce(null);
+
+        await deliverRefund(providerRef, refundRef);
+
+        expect(await refundsOf(orderId)).toHaveLength(1);
+        expect(await unrecordedEvents()).toEqual([]);
+    });
+
+    it('re-sync imports a recordable refund once, and announces an unrecordable one on each run', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        addFakeExternalRefund(providerRef, {
+            amount: '10.00',
+            currency: 'USD',
+            status: 'succeeded'
+        });
+        const { _id } = await paymentOf(orderId);
+
+        await paymentService.syncRefunds(String(_id), asAdmin());
+        await paymentService.syncRefunds(String(_id), asAdmin());
+
+        expect(await refundsOf(orderId)).toHaveLength(1);
+        // The books still lack the USD refund, so staff are reminded each time.
+        expect(await unrecordedEvents()).toHaveLength(2);
+    });
+
+    it('is imported by the staff re-sync once the race is no longer lost', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        const refundRef = addFakeExternalRefund(providerRef, {
+            amount: '30.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        jest.spyOn(paymentRepository, 'importRefund').mockResolvedValue(null);
+        await deliverRefund(providerRef, refundRef);
+        jest.restoreAllMocks();
+        const { _id } = await paymentOf(orderId);
+
+        await paymentService.syncRefunds(String(_id), asAdmin());
+        await paymentService.syncRefunds(String(_id), asAdmin());
+
+        expect(await refundsOf(orderId)).toHaveLength(1);
+        expect(await refundedOf(orderId)).toBe('30.00');
     });
 
     it('records one that is bigger than what was paid: the money moved', async () => {

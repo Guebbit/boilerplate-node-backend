@@ -28,6 +28,7 @@ import { HOLD_ORPHANED } from '@modules/inventory';
 import { ORDER_CANCELED, ORDER_PURCHASE_HOLD_PLACED } from '@modules/orders';
 import {
     PAYMENT_AMOUNT_MISMATCH,
+    PAYMENT_REFUND_UNRECORDED,
     PAYMENT_DISPUTE_OPENED,
     PAYMENT_DISPUTE_UPDATED,
     PAYMENT_REFUNDED,
@@ -73,6 +74,7 @@ export default {
         onDomainEvent(PAYMENT_REFUNDED, shopTasksService.onRefundClosed);
         onDomainEvent(PAYMENT_REFUND_CANCELED, shopTasksService.onRefundClosed);
         onDomainEvent(PAYMENT_AMOUNT_MISMATCH, shopTasksService.onAmountMismatch);
+        onDomainEvent(PAYMENT_REFUND_UNRECORDED, shopTasksService.onRefundUnrecorded);
         onDomainEvent(PAYMENT_DISPUTE_OPENED, shopTasksService.onDispute);
         onDomainEvent(PAYMENT_DISPUTE_UPDATED, shopTasksService.onDispute);
         onDomainEvent(HOLD_ORPHANED, shopTasksService.onHoldOrphaned);

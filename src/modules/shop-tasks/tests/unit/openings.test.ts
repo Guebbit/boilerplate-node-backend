@@ -16,7 +16,8 @@ import {
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundRefusedOpening,
-    refundReversedOpening
+    refundReversedOpening,
+    refundUnrecordedOpening
 } from '../../domain/openings';
 
 /** The instant openings are judged at. */
@@ -104,10 +105,21 @@ describe('consentDueOpening — a delay the buyer must be asked about', () => {
     );
 });
 
+/** A refund the import could not record, for the cases below. */
+const UNRECORDED = {
+    paymentId: 'p1',
+    orderId: 'o1',
+    refundRef: 're_1',
+    amount: '30.00',
+    currency: 'EUR',
+    reason: 'lost_race'
+} as const;
+
 describe('the other openings', () => {
     const all: [string, SystemOpening][] = [
         ['refund owed', refundOwedOpening({ refundId: 'r1', orderId: 'o1' }, NOW)],
         ['amount mismatch', amountMismatchOpening({ paymentId: 'p1', orderId: 'o1' }, NOW)],
+        ['refund unrecorded', refundUnrecordedOpening(UNRECORDED, NOW)],
         ['paid without hold', paidWithoutHoldOpening('o1', NOW)],
         [
             'refund refused',
@@ -134,6 +146,19 @@ describe('the other openings', () => {
         expect(amountMismatchOpening({ paymentId: 'p1', orderId: 'o1' }, NOW).routeSet).toBe(
             'AuditDisplay'
         );
+    });
+
+    it('sends staff to Re-sync for a lost race, and to their books for another currency', () => {
+        const lost = refundUnrecordedOpening(UNRECORDED, NOW).message;
+        const other = refundUnrecordedOpening(
+            { ...UNRECORDED, currency: 'USD', reason: 'other_currency' },
+            NOW
+        ).message;
+
+        expect(lost).toContain('Re-sync refunds');
+        expect(lost).toContain('30.00 EUR');
+        expect(other).toContain('30.00 USD');
+        expect(other).toContain('record it outside the app');
     });
 
     it('dates a dispute by the provider deadline, else the fallback', () => {

@@ -42,9 +42,7 @@ export {
     isOpenDispute,
     hasOpenDispute,
     hasOpenChargeback,
-    lostToChargebacks,
-    lostChargebackCovers,
-    hasDecidedDispute
+    lostToChargebacks
 } from './disputes';
 export type { DisputeFacts, DisputablePayment } from './disputes';
 

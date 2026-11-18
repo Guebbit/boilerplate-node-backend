@@ -25,6 +25,7 @@ import {
     cancelRefund,
     settledRefundPayloads
 } from './refunds';
+import { syncRefunds } from './external-refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
@@ -50,6 +51,7 @@ import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 import { refundLegalDue } from './deadline';
+import { disputeStanding } from './disputes';
 
 export { RefundLeftOpenError, WebhookProviderUnknownError } from './errors';
 export type { OfflinePaymentInput } from './offline';
@@ -78,12 +80,14 @@ export const paymentService = {
     getRefund,
     refundOf,
     refundLegalDue,
+    disputeStanding,
     refundPayment,
     openReturnRefund,
     returnRefundState,
     sendOpenedRefund,
     settleRefundByHand,
     cancelRefund,
+    syncRefunds,
     settledRefundPayloads,
     retryOpenRefunds,
     reconcileStalePayments,

@@ -205,6 +205,19 @@ const maySync = (payment: PaymentDocument, authContext?: AuthContext): boolean =
     isPayerWithCheckout(payment, authContext);
 
 /**
+ * Whether an operator may re-read the provider's refunds: they hold `create:Refund`, and the
+ * payment succeeded through a provider that can be asked (a hand-recorded one has none).
+ *
+ * @param payment - the payment being served
+ * @param authContext - the caller
+ */
+const maySyncRefunds = (payment: PaymentDocument, authContext?: AuthContext): boolean =>
+    mayRefund(authContext) &&
+    payment.status === REFUNDABLE_PAYMENT_STATUS &&
+    !isHandRecorded(payment) &&
+    Boolean(payment.providerRef);
+
+/**
  * The refunds an operator may mark returned by hand: exactly those `mayBeSettledByHand` allows.
  *
  * @param payment - the payment being served
@@ -219,7 +232,7 @@ const settleableByHand = (payment: PaymentDocument, authContext?: AuthContext): 
 
 /**
  * The refunds an operator may void: `mayBeCanceled`'s set, which is {@link settleableByHand}'s less
- * reversed refunds, plus a refund of a decided dispute.
+ * the refunds that settled and then came back.
  *
  * @param payment - the payment being served
  * @param authContext - the caller
@@ -258,7 +271,8 @@ export const withActions = (
             remainingOf(payment) > 0 &&
             !hasOpenChargeback(payment),
         settleRefundByHand: settleableByHand(payment, authContext),
-        cancelRefund: cancelableRefunds(payment, authContext)
+        cancelRefund: cancelableRefunds(payment, authContext),
+        syncRefunds: maySyncRefunds(payment, authContext)
     }
 });
 

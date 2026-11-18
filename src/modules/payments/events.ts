@@ -190,6 +190,26 @@ declare module '@kernel/events' {
          * `meta.eventId`.
          */
         'payment.amount_mismatch': { paymentId: string; orderId: string };
+
+        /**
+         * A refund made in the provider's own dashboard that the import could not record: it lost
+         * the race on the running total on every attempt (`lost_race`), or it is in another
+         * currency than the payment and is never converted (`other_currency`). Money moved at the
+         * provider and the books do not show it; `tasks` opens a staff to-do, and "Re-sync refunds"
+         * (`POST /payments/{id}/refunds/sync`) runs the import again. Internal only.
+         *
+         * Delivered through the transactional outbox, written in a transaction of its own:
+         * at-least-once, so a listener dedupes on `meta.eventId`.
+         */
+        'payment.refund_unrecorded': {
+            paymentId: string;
+            orderId: string;
+            /** The provider's refund id, to find it in the dashboard. */
+            refundRef: string;
+            amount: string;
+            currency: string;
+            reason: 'lost_race' | 'other_currency';
+        };
     }
 }
 
@@ -222,3 +242,6 @@ export const PAYMENT_REFUND_OWED_BY_HAND = 'payment.refund_owed_by_hand';
 
 /** See `DomainEventMap['payment.amount_mismatch']` above. */
 export const PAYMENT_AMOUNT_MISMATCH = 'payment.amount_mismatch';
+
+/** See `DomainEventMap['payment.refund_unrecorded']` above. */
+export const PAYMENT_REFUND_UNRECORDED = 'payment.refund_unrecorded';

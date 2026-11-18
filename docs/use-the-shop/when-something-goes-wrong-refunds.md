@@ -146,9 +146,23 @@ If you had already refunded part of the payment, the row says how much: that ref
    and a quiet "waiting for the bank" one takes its place, closed when the bank decides.
 
 If the shop **wins**, the money comes back to you and the refund button returns. If it **loses**, the
-bank keeps the money: what you can still refund is reduced by that amount. A refund that was waiting
-on the payment can then be pressed **Mark returned**, because the bank paid the buyer. If the goods
-came back, the credit note follows as usual.
+bank keeps the money: what you can still refund is reduced by that amount. If the goods came back,
+the credit note follows as usual.
+
+A refund that was refused because of the dispute stays untouched while any dispute is open. Once none
+is, you have two buttons on it (**Mark returned** and **Cancel refund**), and the dispute's outcome tells you which:
+
+- **Lost:** the bank paid the buyer. If the buyer has it all, press **Mark returned**. If the bank
+  took less than the refund, pay the small rest outside the app first, then press it.
+- **Won:** the shop kept the money. Press **Cancel refund**, then refund by card.
+
+The same holds when the refusal came with no dispute on file: the to-do says so; check the dispute in
+the provider's dashboard first, then choose as above. A refund the bank sent back after it had
+settled can only be marked returned, never voided.
+
+A dispute in **another currency** than the payment is shown like any other, but the shop does not
+subtract it from what you can refund. When it ends lost, its to-do closes with "check the amount":
+look at it in the provider's dashboard before any refund or return.
 
 ::: warning Do not refund a payment under a chargeback
 The bank already took the money back. A refund on top pays the buyer twice, and the shop cannot get
@@ -191,6 +205,13 @@ EU law lets you change the way the money goes back only when the buyer expressly
 **What you see.** Somebody refunded the buyer straight from the card provider's dashboard. The shop
 notices by itself: the refund appears on the payment as **Refunded in the provider's dashboard**,
 with the credit note and the buyer's email like any other refund. Nothing to do for that one.
+
+If it does not appear, and you get a to-do **Refund made at the provider, not recorded**, the shop
+could not record it: two refunds were being written at the same moment and it gave up. Open the
+payment and press **Re-sync refunds**. The shop reads the provider's refunds again and records the
+missing one; pressing it twice records nothing twice. Then close the to-do. A refund in **another
+currency** than the payment is never converted: **Re-sync refunds** will not record it. Record it
+outside the app (your accountant), then close the to-do. A later re-sync or refund on that payment reminds you again, because the shop's books still lack it.
 
 If the shop also held its own refund for the same money, the payment may now be refunded for more
 than was paid. The shop records the dashboard refund anyway (the money really left), keeps its own

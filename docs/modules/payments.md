@@ -52,6 +52,7 @@ flowchart LR
     payments -. "payment.refund_failed" .-> shop_tasks
     payments -. "payment.refund_owed_by_hand" .-> shop_tasks
     payments -. "payment.refund_reversed" .-> shop_tasks
+    payments -. "payment.refund_unrecorded" .-> shop_tasks
     payments -. "payment.refunded" .-> shop_tasks
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -112,7 +113,8 @@ it shows on the needs-attention list as `manual_refund_owed`, and `settleRefundB
 operator confirming the money went back) is what settles it. Opening that record announces
 `payment.refund_owed_by_hand` in the same transaction, and [tasks](./tasks.md#system-tasks) opens a
 `manual_refund_owed` task from it; a refusal that ends the retrying (`payment.refund_failed` with
-`final: true`), an amount mismatch and a dispute open theirs the same way.
+`final: true`), an amount mismatch, a dispute and a dashboard refund the import could not record
+(`payment.refund_unrecorded`) open theirs the same way.
 
 **`settlePayment` is the one place where the money and the goods agree.** It moves the order to
 `paid` in the same transaction, and `markPaid` commits the order's held units there rather than

@@ -41,6 +41,7 @@ describe('payment routes', () => {
             'GET /attention',
             'POST /',
             'POST /:id/refunds',
+            'POST /:id/refunds/sync',
             'GET /:id',
             'GET /:id/refunds/:refundId',
             'POST /:id/refunds/:refundId/settle',
@@ -85,7 +86,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the staff reads, the refund, its hand settlement and its void, and nothing else', () => {
+    it('admin-guards the staff reads, the refund, its re-sync, its hand settlement and its void, and nothing else', () => {
         /**
          * The three routes an operator drives instead of a customer's own checkout — money moving
          * back out, a claim that money moved in some way the provider never saw, or finding the
@@ -106,6 +107,7 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'POST /:id/refunds',
+            'POST /:id/refunds/sync',
             'POST /:id/refunds/:refundId/settle',
             'POST /:id/refunds/:refundId/cancel'
         ]);
