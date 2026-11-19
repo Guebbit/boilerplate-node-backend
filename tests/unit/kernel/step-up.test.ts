@@ -25,6 +25,9 @@ import { withEnvironmentOverrides } from '@tests/environment';
 /** Stands in for the audit emitter; the cases assert how it was called. */
 const emitAuditEvent = jest.fn();
 
+/** Stands in for the log-only emitter: a line with no stored row. */
+const logAuditLine = jest.fn();
+
 jest.mock('@infrastructure/observability/audit', () => {
     const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
         '@infrastructure/observability/audit'
@@ -43,6 +46,14 @@ jest.mock('@infrastructure/observability/audit', () => {
         ) => {
             if (!context) return;
             emitAuditEvent(actual.buildAuditEvent(context, fields));
+        },
+        // The log-only twin, rerouted for the same reason, into its own spy.
+        recordAuditLine: (
+            context: Parameters<typeof actual.recordAuditLine>[0],
+            fields: Parameters<typeof actual.recordAuditLine>[1]
+        ) => {
+            if (!context) return;
+            logAuditLine(actual.buildAuditEvent(context, fields));
         }
     };
 });
@@ -229,7 +240,7 @@ describe('requireFreshAuth with no session on the request', () => {
         expect(next).not.toHaveBeenCalled();
     });
 
-    it('answers a request with no caller at all 401 and audits it as unauthenticated', () => {
+    it('answers a request with no caller at all 401 and logs it as unauthenticated, without a row', () => {
         const response = makeResponse();
         const next = jest.fn();
 
@@ -240,7 +251,8 @@ describe('requireFreshAuth with no session on the request', () => {
         );
 
         expect(response.status).toHaveBeenCalledWith(401);
-        expect(emitAuditEvent).toHaveBeenCalledTimes(1);
+        expect(emitAuditEvent).not.toHaveBeenCalled();
+        expect(logAuditLine).toHaveBeenCalledTimes(1);
         expect(next).not.toHaveBeenCalled();
     });
 });

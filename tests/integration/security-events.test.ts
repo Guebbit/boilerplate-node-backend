@@ -1,8 +1,9 @@
 /**
  * @module
  * The credential refusals the guards audit and count, driven over HTTP through the real app. A
- * forged value is an attack (`security.*`); an expired session is only a metric. One test per
- * event, and the failed-login identity is checked here too since it travels the same audit door.
+ * forged value is an attack (`security.*`, a stored row); an expired session, or no credential at
+ * all, is a log line and a counter. One test per event, and the failed-login identity is checked
+ * here too since it travels the same audit door.
  */
 
 import { api, authenticateAs } from '@tests/http';
@@ -11,6 +12,7 @@ import { credentialHolding } from '@tests/credentials';
 import { advanceDate, freezeDate } from '@tests/clock';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { apiKeyRepository } from '@modules/api-keys/repository';
+import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { coreAuditActions } from '@infrastructure/observability/audit';
@@ -25,6 +27,36 @@ const audited = (spy: jest.SpyInstance): { action: string; metadata?: Record<str
     spy.mock.calls.map(
         (call: unknown[]) => call[2] as { action: string; metadata?: Record<string, unknown> }
     );
+
+/**
+ * Polls until the sink has stored a row for `action`: the write is fire-and-forget, so the request
+ * that caused it has already been answered.
+ */
+const waitForStored = async (action: string): Promise<void> => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+        const stored = await auditLogRepository.search({ action }, {}, AUDIT_SORT);
+        if (stored.items.length > 0) return;
+        await new Promise((resolve) => {
+            setTimeout(resolve, 20);
+        });
+    }
+    throw new Error(`no ${action} row was ever stored`);
+};
+
+/**
+ * Every stored `security.*` action once the sink has caught up. Absence cannot be polled for, so a
+ * forged token is sent as a flush: a row that is known to be written, issued after anything the
+ * case did, whose arrival says the earlier writes have had their turn.
+ */
+const storedSecurityActionsAfterFlush = (): Promise<string[]> =>
+    api()
+        .get('/account')
+        .set('Authorization', 'Bearer not-a-jwt')
+        .then(() => waitForStored(coreAuditActions.SECURITY_TOKEN_MALFORMED))
+        .then(() =>
+            auditLogRepository.search({}, { action: { $regex: /^security\./ } }, AUDIT_SORT)
+        )
+        .then((page) => page.items.map((item) => item.action));
 
 /** Spy on the audit emitter; each case reads what the flow recorded. */
 let auditSpy: jest.SpyInstance;
@@ -63,7 +95,35 @@ describe('a refused bearer JWT', () => {
         );
     });
 
-    it('only counts an expired token, since a customer is behind it', async () => {
+    it('logs a request with no credential as a line, and stores no row', async () => {
+        const response = await api().get('/account');
+
+        expect(response.status).toBe(401);
+        expect(audited(auditSpy)).toContainEqual(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                metadata: expect.objectContaining({ reason: 'not_authenticated', method: 'GET' })
+            })
+        );
+        expect(await storedSecurityActionsAfterFlush()).not.toContain(
+            coreAuditActions.SECURITY_UNAUTHORIZED
+        );
+    });
+
+    it('stores a forged token as a row, which a request with no credential never is', async () => {
+        await api().get('/account').set('Authorization', 'Bearer not-a-jwt');
+        await waitForStored(coreAuditActions.SECURITY_TOKEN_MALFORMED);
+
+        expect(
+            await auditLogRepository.search(
+                { action: coreAuditActions.SECURITY_TOKEN_MALFORMED },
+                {},
+                AUDIT_SORT
+            )
+        ).toMatchObject({ items: [expect.objectContaining({ outcome: 'failure' })] });
+    });
+
+    it('counts and logs an expired token, since a customer is behind it', async () => {
         freezeDate();
         const { bearer } = await authenticateAs('user');
         auditSpy.mockClear();
@@ -75,6 +135,16 @@ describe('a refused bearer JWT', () => {
         expect(response.status).toBe(401);
         expect(audited(auditSpy).map((entry) => entry.action)).not.toContain(
             coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE
+        );
+        expect(audited(auditSpy)).toContainEqual(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                metadata: expect.objectContaining({ kind: 'session', reason: 'expired' })
+            })
+        );
+        expect(JSON.stringify(auditSpy.mock.calls)).not.toContain(bearer.replace('Bearer ', ''));
+        expect(await storedSecurityActionsAfterFlush()).not.toContain(
+            coreAuditActions.SECURITY_UNAUTHORIZED
         );
         const counted = await staleCredentialsTotal.get();
         expect(counted.values).toContainEqual(
