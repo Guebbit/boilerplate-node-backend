@@ -151,7 +151,7 @@
         "knip": "^6.44.2",
         "lint-staged": "^17.6.0",
         "mermaid": "^12.3.0",
-        "minimatch": "^10.2.6",
+        "minimatch": "^11.0.1",
         "mongodb-memory-server": "^11.3.0",
         "nodemon": "^3.1.14",
         "openapi-types": "^12.1.3",
