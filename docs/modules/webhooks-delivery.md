@@ -25,7 +25,7 @@ flowchart LR
     DIS -->|yes| OFF["subscription disabled<br/>+ staff told"]
     DIS -->|no| DONE["status: exhausted"]
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
-    BACK -.->|sweep, no broker<br/>claims and sends itself| CLAIM
+    BACK -.->|sweep with no broker,<br/>or worker while it is down<br/>claims and sends itself| CLAIM
 ```
 
 **An event that came through the [outbox](../understand/outbox.md) is fanned out idempotently.** The
@@ -82,11 +82,17 @@ carries when a failed row is due again; `npm run job sweep:webhook-retries` (`sw
 row (and every stranded one, below) to the queue. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
-**No broker: the sweep sends.** With no RabbitMQ configured (or a broker that refuses the message),
-the sweep takes the claim itself and makes the one HTTP attempt a worker would, five rows at a time —
-the mailer's "degrade, don't drop" rule, run out of band so a slow subscriber never slows the API.
-A first attempt then waits for the next sweep, up to a minute, instead of going out at once.
-`webhooks` logs a warning at boot when no broker is configured.
+**No broker: the sweep sends.** With no RabbitMQ configured, the cron sweep takes the claim itself and
+makes the one HTTP attempt a worker would, five rows at a time — the mailer's "degrade, don't drop"
+rule, run out of band so a slow subscriber never slows the API. A first attempt then waits for the next
+sweep, up to a minute, instead of going out at once. `webhooks` logs a warning at boot when no broker is
+configured.
+
+**A broker that is configured but down: the worker sends.** The delivery row is the durable store, so
+webhooks never write a `jobs` row. While the broker is down the worker runs the module's
+`fallbackSweep` (`sendDueWebhookDeliveries`) on its drain loop and makes the same one attempt per due
+row. The cron sweep leaves those rows alone, or every delivery would go out twice. See
+[When the broker is down](../understand/rabbitmq.md#when-the-broker-is-down).
 
 **The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
 The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the

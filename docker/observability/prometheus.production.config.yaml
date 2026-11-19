@@ -46,12 +46,14 @@ scrape_configs:
       authorization:
           type: Bearer
           credentials_file: /run/secrets/metrics_token
+      # Both worker roles under one job: `QueueJobsParked` and `WorkerDown` cover either.
       static_configs:
           - targets: ['worker:3010']
-      relabel_configs:
-          - source_labels: [__address__]
-            target_label: instance
-            replacement: worker
+            labels:
+                instance: worker
+          - targets: ['worker-heavy:3010']
+            labels:
+                instance: worker-heavy
 
     # Prometheus and Alertmanager themselves: the `alerting.rules` in prometheus.infra-rules.yaml
     # read these (failed notifications, rule evaluation errors). Nothing else would notice either

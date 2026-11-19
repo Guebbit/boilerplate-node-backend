@@ -26,7 +26,7 @@ import { generateSuccess } from '@infrastructure/http/response';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { openExport, removeExport } from '@infrastructure/adapters/export-store';
-import { publishToQueue } from '@infrastructure/adapters/queue';
+import { dispatchJob } from '@infrastructure/adapters/job-dispatch';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -107,16 +107,17 @@ const insertRow = (userId: string): Promise<ExportRowChoice> => {
 };
 
 /**
- * Hand a job to the broker, or run it here after the response when none takes it.
+ * Hand a job to the broker (or, with the broker down, to the durable fallback queue), or run it
+ * here after the response when no broker is configured at all.
  *
  * @param job - the queue message
  */
 const dispatch = (job: AccountExportJobPayload): Promise<void> =>
-    publishToQueue<AccountExportJobPayload>({
+    dispatchJob<AccountExportJobPayload>({
         queue: WORKER_CHANNELS.ACCOUNT_EXPORT,
         payload: job
-    }).then((published) => {
-        if (published) return;
+    }).then((outcome) => {
+        if (outcome !== 'inline') return;
 
         /**
          * Not awaited: the caller is told "queued" now, and the build outlives the response. Tracked

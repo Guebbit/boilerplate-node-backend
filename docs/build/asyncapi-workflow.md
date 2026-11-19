@@ -189,10 +189,11 @@ npm run gen:asyncapi          # regenerate src/types/asyncapi.generated.ts from 
 
 ## RabbitMQ queue channels
 
-Worker queues use AMQP (RabbitMQ) for reliable async job processing. Two live in the shared,
+Worker queues use AMQP (RabbitMQ) for reliable async job processing. Three live in the shared,
 domainless contract (`shared/contracts/asyncapi.workers.yaml`):
 
 - **`worker.email.send`** — email delivery jobs consumed by `src/infrastructure/adapters/email.worker.ts`
+- **`worker.email.urgent`** — the same message and handler, on its own queue and consumer, for the few mails a person is waiting on (verification, password-reset, two-factor code, export-ready, account-deletion links)
 - **`worker.image.digest`** — image digest jobs consumed by `src/infrastructure/adapters/image.worker.ts`
 
 Everything else is module-owned, declared in that module's own private `asyncapi.internal.yaml`

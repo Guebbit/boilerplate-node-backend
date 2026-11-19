@@ -27,6 +27,19 @@ groups:
                 summary: 'Queue worker instance is down'
                 description: 'Prometheus cannot reach the /observability/metrics endpoint of the queue worker for > 1 min; queued jobs are not being taken.'
 
+          # A job held in the database while the broker was down, and nobody draining it. A held job
+          # has no TTL, so this is the one thing that says a worker role is gone or stuck: `WorkerDown`
+          # only sees a target that stops answering, not one that answers and takes nothing. Both
+          # processes report the same database row, so `max by (channel)`.
+          - alert: HeldJobsStuck
+            expr: max by (channel) (queue_held_jobs_oldest_age_seconds) > 900
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'Jobs held for {{ $labels.channel }} are not being drained'
+                description: 'The oldest job held in the fallback queue for {{ $labels.channel }} has waited more than 15 minutes: no worker of the role that takes that channel is draining it.'
+
           # A crash loop: the app restarts faster than `ApiDown`'s one-minute wait can complete, so
           # that alert never fires. More than two process starts in 15 minutes is not a deploy.
           # Scrape every copy as its own target: through a balancer each scrape hits a different copy

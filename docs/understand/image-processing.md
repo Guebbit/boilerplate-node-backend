@@ -43,7 +43,9 @@ path's name.
 flowchart LR
     Upload[Multipart upload] -->|validate + quarantine| Quarantine[(Quarantine dir)]
     Quarantine -->|broker reachable| RMQ[(worker.image.digest)]
-    Quarantine -->|no broker, or unreachable| Inline[Digest inline, in the request]
+    Quarantine -->|broker configured but down| Held[(jobs collection)]
+    Held --> Worker
+    Quarantine -->|no broker configured| Inline[Digest inline, in the request]
     RMQ --> Worker[image.worker.ts]
     Inline --> Digest
     Worker --> Digest[digestImage + thumbnailImage]
@@ -122,8 +124,9 @@ configuration, for the reason above.
 `pendingImageKey` can still end up set even though the broker is down: `queueState()` is a cached
 signal, not a probe on every request, so the very first request after a broker dies (before
 anything has failed against it yet) still takes the queue path. When `enqueueImageDigest`'s
-`publishToQueue` call then fails, it falls back to running the digest inline — same code as the
-no-broker path, but reached from the shared `enqueueIfImagePending` helper that `users`'/`products`'
+`dispatchJob` call then finds the broker down, the job is held in the durable fallback queue and the
+heavy worker digests it (`worker-heavy`; see [When the broker is down](./rabbitmq.md#when-the-broker-is-down)).
+Only with no broker configured at all does it run the digest inline — same code, but reached from the shared `enqueueIfImagePending` helper that `users`'/`products`'
 `enqueueIfPending` both call, instead of the middleware. That fallback is **awaited**, not
 fire-and-forget: without it, the response can return
 before the file is on disk, and if the document changes before the inline run's writeback

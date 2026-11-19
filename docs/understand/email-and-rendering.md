@@ -169,6 +169,8 @@ A producer may also name `messageId` and `inReplyTo` on the job (the `EmailReque
 The contact mail uses it: the first is `<task-<id>@<support domain>>`, the overdue reminder names it
 as its parent. Both are optional, and a value that is not a bracketed address is refused by the schema.
 
+Every SMTP step (dialling the server, its greeting, silence on an open socket) times out after 10 seconds, so a hung mail server frees its worker slot and the job is retried like any other transient failure (`smtp-transport.ts`).
+
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](../operate/tempo.md) alongside the request that triggered them.
 
 ### Templates interpolate, they do not translate
@@ -226,7 +228,7 @@ email's attachment, an invoice download is a synchronous HTTP response, never a 
 
 ## Works with
 
-- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. An attachment rides along as a `{ filename, key }` pair, never bytes: the message stays small and JSON-serializable, and the consumer resolves the key against the mail spool. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
+- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. An attachment rides along as a `{ filename, key }` pair, never bytes: the message stays small and JSON-serializable, and the consumer resolves the key against the mail spool. The few mails a person is waiting on (the verification, reset, two-factor, export-ready and deletion links) go to their own `worker.email.urgent` queue. With the broker configured but down the job is held in the database and a worker sends it; direct Nodemailer is only the no-broker path. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
 
 ## External references
 

@@ -67,8 +67,7 @@ export const notifyChange = (
             greetableName(user, user.email),
             change,
             method
-        ),
-        'normal'
+        )
     ).catch((error: unknown) => {
         logger.warn({ message: 'Could not queue a two-factor change notice.', error });
     });
@@ -149,8 +148,7 @@ export const notifyLocked = (user: UserDocument, context: CallerContext): void =
             recipientLocale(user.locale, context),
             greetableName(user, user.email),
             MFA_LOCK_MINUTES
-        ),
-        'normal'
+        )
     ).catch((error: unknown) => {
         logger.warn({ message: 'Could not queue a two-factor lock notice.', error });
     });

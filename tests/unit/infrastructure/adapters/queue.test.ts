@@ -266,11 +266,7 @@ describe('publishToQueue()', () => {
         expect(mockSendToQueue).toHaveBeenCalledWith(
             'emails',
             expect.any(Buffer),
-            /**
-             * 4, not 0: a quorum queue has no `x-max-priority` opt-in and treats an unmarked
-             * message as priority 4 — 'normal' has to sit at 4 too, or it would rank BELOW one.
-             */
-            { persistent: true, priority: 4 },
+            { persistent: true },
             expect.any(Function)
         );
     });
@@ -752,7 +748,7 @@ describe('consumeFromQueue acknowledgement policy', () => {
         const onMessage = await captureConsumerCallback(handler);
         const incoming = {
             content: Buffer.from(JSON.stringify({ jobId: 3 })),
-            properties: { priority: 8, headers: { 'x-trace': 'abc' } }
+            properties: { headers: { 'x-trace': 'abc' } }
         };
 
         await onMessage(incoming);
@@ -763,7 +759,6 @@ describe('consumeFromQueue acknowledgement policy', () => {
             incoming.content,
             {
                 persistent: true,
-                priority: 8,
                 headers: { 'x-trace': 'abc', [RETRY_ATTEMPT_HEADER]: 1 }
             },
             expect.any(Function)

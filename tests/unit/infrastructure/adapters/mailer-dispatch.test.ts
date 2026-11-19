@@ -6,18 +6,14 @@
  * queued job from a lost one. It is also agnostic boilerplate — "publish to a broker, fall back to
  * doing it inline" is the pattern every project built on this repo inherits, whatever it sends.
  *
- * The two paths, from `enqueueEmail`'s own point of view:
+ * What `dispatchJob` answers, from `enqueueEmail`'s own point of view:
  *
- *   1. publish resolves true  → enqueue, log at debug, do NOT send inline
- *   2. publish resolves false → send inline
+ *   1. `published` or `held` → log at debug, do NOT send inline (a worker sends it)
+ *   2. `inline`              → no broker is configured: send here
  *
- * There is no `isQueueEnabled()` pre-check here any more — `publishToQueue` already resolves
- * `false` with no I/O when the broker is unconfigured, so "no broker" and "broker configured but
- * refused/timed out" both land on path 2, indistinguishably. That collapse is deliberate: which of
- * the two happened is `queue.test.ts`'s claim to prove, not this file's.
- *
- * Path 2 is the one worth the most: the broker-down half of it only happens when something else is
- * already broken.
+ * There is no `isQueueEnabled()` pre-check here: `dispatchJob` decides between the three, and
+ * `tests/unit/infrastructure/adapters/job-dispatch.test.ts` is where each is proven. This file proves only what the mailer does with
+ * the answer, and which queue it names.
  */
 import type { EmailJobPayload } from '@types';
 import type { Data } from 'ejs';
@@ -32,10 +28,14 @@ jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
-/** Stands in for the queue publisher; the cases assert how it was called. */
-const publishToQueueMock = jest.fn();
+/** Stands in for the dispatcher; the cases assert how it was called. */
+const dispatchJobMock = jest.fn();
+jest.mock('@infrastructure/adapters/job-dispatch', () => ({
+    dispatchJob: (job: unknown) => dispatchJobMock(job)
+}));
 jest.mock('@infrastructure/adapters/queue', () => ({
-    publishToQueue: (job: unknown) => publishToQueueMock(job)
+    EMAIL_QUEUE: 'worker.email.send',
+    EMAIL_URGENT_QUEUE: 'worker.email.urgent'
 }));
 
 /** The logger, mocked so cases can assert what was logged. */
@@ -105,15 +105,15 @@ afterEach(async () => {
     await rm(spoolRoot, { recursive: true, force: true });
 });
 
-describe('enqueueEmail — path 1: publish resolves true', () => {
+describe('enqueueEmail — path 1: the job was published', () => {
     beforeEach(() => {
-        publishToQueueMock.mockResolvedValue(true);
+        dispatchJobMock.mockResolvedValue('published');
     });
 
     it('publishes the job', async () => {
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        expect(publishToQueueMock).toHaveBeenCalledTimes(1);
+        expect(dispatchJobMock).toHaveBeenCalledTimes(1);
     });
 
     it('does NOT also send the email inline', async () => {
@@ -126,22 +126,30 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
         expect(sendMailMock).not.toHaveBeenCalled();
     });
 
-    it('defaults to normal priority', async () => {
+    it('names the ordinary mail queue by default', async () => {
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        const { priority } = publishToQueueMock.mock.calls[0][0] as { priority: string };
-        expect(priority).toBe('normal');
+        const { queue } = dispatchJobMock.mock.calls[0][0] as { queue: string };
+        expect(queue).toBe('worker.email.send');
     });
 
-    it('passes an explicit priority through to the queue', async () => {
+    it('names the urgent queue for a mail a person is waiting on', async () => {
         /**
-         * Auth flows (password reset, account deletion/setup, email verification) pass 'high' —
-         * a person is actively waiting on a short-TTL link, not an FYI.
+         * Auth flows (password reset, verification, a two-factor code) are urgent: a person is
+         * actively waiting on a short-TTL link or code, not reading an FYI.
          */
-        await enqueueEmail(REQUEST, TEMPLATE, DATA, 'high');
+        await enqueueEmail(REQUEST, TEMPLATE, DATA, { urgent: true });
 
-        const { priority } = publishToQueueMock.mock.calls[0][0] as { priority: string };
-        expect(priority).toBe('high');
+        const { queue } = dispatchJobMock.mock.calls[0][0] as { queue: string };
+        expect(queue).toBe('worker.email.urgent');
+    });
+
+    it('does not send inline when the job was held for a worker', async () => {
+        dispatchJobMock.mockResolvedValue('held');
+
+        await enqueueEmail(REQUEST, TEMPLATE, DATA);
+
+        expect(sendMailMock).not.toHaveBeenCalled();
     });
 
     it('carries the template NAME and data, not rendered HTML', async () => {
@@ -151,7 +159,7 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
          */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        const { payload } = publishToQueueMock.mock.calls[0][0] as {
+        const { payload } = dispatchJobMock.mock.calls[0][0] as {
             payload: Record<string, unknown>;
         };
         expect(payload.templateName).toBe(TEMPLATE);
@@ -176,20 +184,20 @@ describe('enqueueEmail — path 1: publish resolves true', () => {
     });
 });
 
-describe('enqueueEmail — path 2: publish resolves false (no broker, or one that refused)', () => {
+describe('enqueueEmail — path 2: no broker is configured, so the answer is inline', () => {
     beforeEach(() => {
-        publishToQueueMock.mockResolvedValue(false);
+        dispatchJobMock.mockResolvedValue('inline');
     });
 
-    it('still attempts the publish — publishToQueue itself is the no-op when unconfigured', async () => {
+    it('still asks the dispatcher — it is the dispatcher that knows no broker is configured', async () => {
         /**
-         * No `isQueueEnabled()` pre-check any more: this call always reaches `publishToQueue`,
+         * No `isQueueEnabled()` pre-check: this call always reaches `dispatchJob`,
          * which resolves `false` with no I/O of its own when nothing is configured — see
          * `queue.test.ts` for that half of the contract.
          */
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        expect(publishToQueueMock).toHaveBeenCalledTimes(1);
+        expect(dispatchJobMock).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to sending inline, so the email is not lost', async () => {
@@ -214,14 +222,14 @@ describe('enqueueEmail — path 2: publish resolves false (no broker, or one tha
 });
 
 /**
- * `publishToQueue` promises a boolean — `queue.test.ts` pins the adapter to `false`, never a
- * rejection, so this is the adapter breaking its own contract, not a path `enqueueEmail` designs
+ * `dispatchJob` promises one of three answers, never a rejection, so this is the dispatcher
+ * breaking its own contract, not a path `enqueueEmail` designs
  * for. Every producer writes `void enqueueEmail(...)`, so without a catch here this would surface
  * as an `unhandledRejection` with no request id rather than as a logged, attributable failure.
  */
-describe('enqueueEmail — a publish that rejects instead of answering false', () => {
+describe('enqueueEmail — a dispatch that rejects instead of answering', () => {
     beforeEach(() => {
-        publishToQueueMock.mockRejectedValue(new Error('Channel closed'));
+        dispatchJobMock.mockRejectedValue(new Error('Channel closed'));
     });
 
     it('logs the failure and resolves instead of rejecting, with no inline fallback attempt', async () => {
@@ -240,14 +248,15 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
      * the broker behaves. This is what fails when the `published` branch is inverted.
      */
     it.each([
-        ['publish succeeds', true],
-        ['publish resolves false', false]
-    ])('%s → exactly one delivery path is taken', async (_label, published) => {
-        publishToQueueMock.mockResolvedValue(published);
+        ['published', 'published', 1],
+        ['held', 'held', 1],
+        ['inline', 'inline', 0]
+    ])('%s → exactly one delivery path is taken', async (_label, outcome, enqueuedCount) => {
+        dispatchJobMock.mockResolvedValue(outcome);
 
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        const enqueued = published ? 1 : 0;
+        const enqueued = enqueuedCount;
         const sentInline = sendMailMock.mock.calls.length;
 
         expect(enqueued + sentInline).toBe(1);
@@ -261,8 +270,8 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
  * the queued path, which has one.
  */
 describe('enqueueEmail — the inline paths discard their own attachment', () => {
-    it('discards it once the publish-resolves-false fallback settles', async () => {
-        publishToQueueMock.mockResolvedValue(false);
+    it('discards it once the inline fallback settles', async () => {
+        dispatchJobMock.mockResolvedValue('inline');
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
         await enqueueEmail(
@@ -275,7 +284,7 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
     });
 
     it('discards it, logs, and still resolves when the inline send itself rejects', async () => {
-        publishToQueueMock.mockResolvedValue(false);
+        dispatchJobMock.mockResolvedValue('inline');
         sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
@@ -290,7 +299,7 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
     });
 
     it('never touches it on the queued path, which has a retry chain ahead of it', async () => {
-        publishToQueueMock.mockResolvedValue(true);
+        dispatchJobMock.mockResolvedValue('published');
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
         await enqueueEmail(

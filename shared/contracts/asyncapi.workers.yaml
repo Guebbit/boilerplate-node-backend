@@ -37,6 +37,18 @@ channels:
         messages:
             EmailJobMessage:
                 $ref: '#/components/messages/EmailJobMessage'
+    worker.email.urgent:
+        address: worker.email.urgent
+        description: >-
+            Urgent email queue — the few mails a person is sitting on a screen waiting for (a
+            verification link, a password-reset link, a two-factor code, an export-ready link, an
+            account-deletion link). Same message as `worker.email.send`, its own consumer, so a
+            backlog of ordinary mail never delays one.
+        servers:
+            - $ref: '#/servers/rabbitmqLocal'
+        messages:
+            EmailJobMessage:
+                $ref: '#/components/messages/EmailJobMessage'
     worker.image.digest:
         address: worker.image.digest
         description: >-
@@ -56,11 +68,31 @@ operations:
         description: >-
             `enqueueEmail` publishes here instead of calling the SMTP transport inline, so a
             slow or unreachable mail server cannot add its latency to the request that
-            triggered the mail. When the broker itself is unavailable the adapter falls back to
-            sending inline rather than dropping the message — the queue is an optimisation on
-            this path, never the system of record.
+            triggered the mail. When the broker itself is unavailable the message is never
+            dropped: sent inline or held in a durable fallback queue — the broker is an
+            optimisation on this path, never the system of record.
         messages:
             - $ref: '#/channels/worker.email.send/messages/EmailJobMessage'
+    workerEmailUrgentPublish:
+        action: receive
+        channel:
+            $ref: '#/channels/worker.email.urgent'
+        summary: Enqueue an urgent email for async delivery.
+        description: >-
+            Same contract as `workerEmailPublish`, for a mail a person is waiting on. The
+            producer chooses the channel; nothing else about the job changes.
+        messages:
+            - $ref: '#/channels/worker.email.urgent/messages/EmailJobMessage'
+    workerEmailUrgentConsume:
+        action: send
+        channel:
+            $ref: '#/channels/worker.email.urgent'
+        summary: Email worker picks up and sends the urgent email.
+        description: >-
+            Consumed by the same handler as `workerEmailConsume`, on its own queue and its own
+            consumer.
+        messages:
+            - $ref: '#/channels/worker.email.urgent/messages/EmailJobMessage'
     workerEmailConsume:
         action: send
         channel:

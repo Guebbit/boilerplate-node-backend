@@ -42,14 +42,14 @@ flowchart LR
 A deploy is **good** only when all of these hold:
 
 - `setup` (indexes and the shop's row) exited 0;
-- `app`, `worker` and `cron` are running, have not restarted, and report `healthy`, and so is `backup` when the
+- `app`, `worker`, `worker-heavy` and `cron` are running, have not restarted, and report `healthy`, and so is `backup` when the
   `backup` profile is on (a stack whose backups cannot start is not good);
 - `/readyz` answers from inside `app` (it checks Mongo, not just the process).
 
 Anything else is a failed deploy: a `setup` that exits non-zero, a container that exits or restarts,
 an `unhealthy` check, or no good state within `DEPLOY_TIMEOUT` (240 s). The script then prints the
-last log lines of `setup`, `app`, `worker`, `cron` and `backup`, redeploys the previous good image with
-`up -d --no-deps app worker cron` (**without** `setup`, so a rollback never touches the data, and checking
+last log lines of `setup`, `app`, `worker`, `worker-heavy`, `cron` and `backup`, redeploys the previous good image with
+`up -d --no-deps app worker worker-heavy cron` (**without** `setup`, so a rollback never touches the data, and checking
 only those two) and exits 1.
 
 | Exit code | Meaning                                                                                  |

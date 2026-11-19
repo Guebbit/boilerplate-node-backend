@@ -284,6 +284,53 @@ services:
             queue:
                 condition: service_started
 
+    # The heavy half of the consumers: image digests and account exports. `worker` above takes the
+    # light and external jobs. Without this service an uploaded image would sit in the queue and never
+    # be digested. Same image and bind mount as `worker`. See docs/understand/rabbitmq.md#job-kinds.
+    worker-heavy:
+        logging: *container-logging
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+            target: dev
+        # Same as `app`: a refusal ends as `Exited (1)` instead of looping.
+        restart: 'on-failure:5'
+        environment:
+            NODE_ENV: 'development'
+            NODE_REDIS_URL: 'redis://cache:6379'
+            NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@queue:5672'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+            NODE_SERVICE_NAME: 'worker-heavy'
+            # The heavy jobs only (image digest, account export); `worker` takes the rest.
+            NODE_WORKER_ROLE: 'heavy'
+        volumes:
+            - .:/app:Z
+            # Kept fresh by `docker/ensure-deps.sh` (see the `app` service).
+            - /app/node_modules
+        command: ['sh', '-c', 'sh /app/docker/ensure-deps.sh && npm run dev:worker:docker']
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:${NODE_WORKER_PORT:-3010}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        depends_on:
+            database:
+                condition: service_healthy
+            cache:
+                condition: service_started
+            limits:
+                condition: service_started
+            queue:
+                condition: service_started
+
     # Another container
     database:
         logging: *container-logging
@@ -392,7 +439,7 @@ services:
             - '127.0.0.1:${NODE_LIMITS_REDIS_PORT:-6380}:6379'
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
-    # (compose.production.yaml) — quorum-queue message priority is a 4.x feature, and dev
+    # (compose.production.yaml) — quorum queues behave differently across major versions, and dev
     # must run what prod runs. See docs/understand/rabbitmq.md#queue-type-quorum.
     queue:
         logging: *container-logging

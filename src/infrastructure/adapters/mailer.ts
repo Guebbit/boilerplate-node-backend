@@ -33,7 +33,8 @@ import { withSpan } from '@infrastructure/observability/tracer';
  * The queue name comes from the adapter, not from the worker that drains it: producer and
  * consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
  */
-import { publishToQueue, EMAIL_QUEUE, type JobPriority } from '@infrastructure/adapters/queue';
+import { EMAIL_QUEUE, EMAIL_URGENT_QUEUE } from '@infrastructure/adapters/queue';
+import { dispatchJob } from '@infrastructure/adapters/job-dispatch';
 /**
  * Split into its own leaf module, with no `ejs`/`nodemailer` import of its own — see that
  * file's own header for why `tests/support/setup.ts` needs it kept that way. Re-exported below so
@@ -261,10 +262,10 @@ const sendInline = (
         );
 
 /**
- * Queue-aware email dispatch — the function controllers should call. When RabbitMQ is reachable
- * the job is published for async processing; when it's unconfigured, or momentarily unreachable,
- * this falls back to sending inline, at the cost of request latency. Never rejects: a failure is
- * logged and resolved, so a caller may fire and forget.
+ * Queue-aware email dispatch — the function controllers should call. The job goes to the broker;
+ * with the broker configured but down it is held in the durable fallback queue, and a worker sends
+ * it; with no broker configured at all it is sent inline, at the cost of request latency. Never
+ * rejects: a failure is logged and resolved, so a caller may fire and forget.
  *
  * The queue carries template *name* + data, not rendered HTML — rendering happens on the consumer
  * side. Adds nothing to `data`: every string the template prints was already produced by the
@@ -276,44 +277,44 @@ const sendInline = (
  *   arrives as `{"type":"Buffer","data":[…]}`, so a wider type would work in dev (broker off) and
  *   silently corrupt in production. `request.attachments` carries a storage key instead —
  *   `{ filename, key }`, resolved against the mail spool by `resolveAttachments()`, never bytes.
- * @param priority - `'high'` for a mail someone is actively blocked on (a token-bearing link with
- *   a TTL); left at the `'normal'` default for everything informational. See `queue.ts`'s
- *   `JobPriority` for why there are only two levels. Meaningless on the inline fallback — priority
- *   only affects ordering among messages waiting on the broker.
+ * @param templateName - the mail's name, without an extension
+ * @param data - everything the template prints, already translated
+ * @param options - `urgent`: the mail a person is sitting on a screen waiting for (a link or code
+ *   with a short life) goes to `worker.email.urgent`, its own queue and consumer, so ordinary mail
+ *   never waits ahead of it. Meaningless on the inline path.
  */
 export const enqueueEmail = (
     request: EmailJobPayload['request'],
     templateName: string,
     data: Data,
-    priority: JobPriority = 'normal'
+    options: { urgent?: boolean } = {}
 ): Promise<void> => {
+    const { urgent = false } = options;
     /**
-     * No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
-     * the broker is unconfigured, which the `!published` branch below sends inline exactly as a
-     * configured-but-unreachable broker would — one fallback covers both, not two copies of it.
+     * No `isQueueEnabled()` pre-check: `dispatchJob` answers `inline` with no I/O when the broker is
+     * unconfigured, which the branch below sends inline.
      *
      * The type argument is the point: this literal is checked against the very type the worker
      * declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
      * type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
      * local widening would permit a field the contract forbids.
      */
-    const dispatch = publishToQueue<EmailJobPayload>({
-        queue: EMAIL_QUEUE,
+    const dispatch = dispatchJob<EmailJobPayload>({
+        queue: urgent ? EMAIL_URGENT_QUEUE : EMAIL_QUEUE,
         /**
-         * Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
+         * Must be JSON-serializable — `dispatchJob` stringifies it. Anything non-plain
          * (streams, Buffers, functions) in `request` would not survive the round trip.
          */
-        payload: { request, templateName, data },
-        priority
-    }).then((published) => {
-        if (!published) {
-            // Fallback: no broker configured, or the queue publish failed — send directly.
+        payload: { request, templateName, data }
+    }).then((outcome) => {
+        if (outcome === 'inline') {
+            // No broker configured: send directly.
             return sendInline(request, templateName, data);
         }
         // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
         // Stryker disable all
         logger.debug({
-            message: 'Email job enqueued.',
+            message: outcome === 'held' ? 'Email job held for a worker.' : 'Email job enqueued.',
             // Under `email`, the key the logger's personal-field mode hashes or redacts.
             email: request.to,
             template: templateName

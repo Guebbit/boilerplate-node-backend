@@ -5,7 +5,7 @@
 #      is running again ("auto-rollback" in the log, exit 1)
 #   3. deploy a second good image, then `--rollback`: the first image runs again ("rollback")
 # In 1 and 3 the `worker` is also healthy, is the broker's one consumer of the mail queue and serves
-# its Prometheus scrape behind the token.
+# its Prometheus scrape behind the token, and the `worker-heavy` is the one consumer of the image queue.
 # The client has generated secrets and lives under `clients/` (gitignored); the stack, its volumes,
 # the drill images and the client directory are all removed at the end, whatever happened.
 # Run it: `npm run deploy:drill`. Docs: docs/operate/deploy-and-rollback.md#the-drill
@@ -90,6 +90,18 @@ assert_worker_consuming() {
     die "worker.email.send has '${consumers:-no}' consumers, expected exactly 1 (the worker)"
 }
 
+# Fails unless exactly one consumer is bound to the image-digest queue: the `worker-heavy`, and only it
+# (the `worker` takes the light and external kinds). The same polling as above, for the same reason.
+assert_heavy_worker_consuming() {
+    local consumers="" attempt
+    for attempt in $(seq 1 15); do
+        consumers="$($ENGINE exec "$(container_of queue)" rabbitmqctl list_queues name consumers 2>/dev/null | awk '$1 == "worker.image.digest" { print $2 }')"
+        [ "$consumers" = 1 ] && { echo "worker.image.digest has 1 consumer (the worker-heavy)"; return; }
+        sleep 2
+    done
+    die "worker.image.digest has '${consumers:-no}' consumers, expected exactly 1 (the worker-heavy)"
+}
+
 # Fails unless the worker serves its Prometheus scrape behind the same bearer token as the API: two
 # alert counters move only in the worker, and nothing else would notice a scrape that went missing.
 # Run inside the container, where the token file is mounted and the port is the worker's own.
@@ -159,13 +171,14 @@ assert_log_tail deploy "${FIRST_IMAGE##*:}"
 assert_running "${FIRST_IMAGE##*:}"
 assert_alive
 assert_worker_consuming
+assert_heavy_worker_consuming
 assert_worker_scrape
 
-# `app`, `worker`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
+# `app`, `worker`, `worker-heavy`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
 # beat the file (secret-files.ts) and show in `inspect`. Production refused to boot above without
 # the device-cookie and SMTP files; this proves no value, only the paths, reached the containers.
-step "no secret value in the environment of app, worker, cron or setup"
-for service in app worker cron setup; do
+step "no secret value in the environment of app, worker, worker-heavy, cron or setup"
+for service in app worker worker-heavy cron setup; do
     env_dump="$($ENGINE inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$(container_of "$service")")"
     echo "$env_dump" | grep -qx 'NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie_secret' ||
         die "$service has no NODE_DEVICE_COOKIE_SECRET_FILE"

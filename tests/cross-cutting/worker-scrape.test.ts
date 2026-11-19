@@ -60,6 +60,12 @@ describe.each([
         expect(worker?.metrics_path).toBe(api?.metrics_path);
         expect(worker?.authorization).toEqual(api?.authorization);
     });
+
+    it('scrapes the heavy worker under the same job, so one alert covers both', () => {
+        const worker = jobOf(file, 'worker');
+
+        expect(worker?.static_configs?.[1]?.targets).toEqual([`worker-heavy:${workerPort}`]);
+    });
 });
 
 /** The alert rules, by alert name: only what the mirror below compares. */
@@ -92,6 +98,15 @@ describe('the worker port in the places that spell it out', () => {
 
     it('is the one the Kubernetes worker declares', () => {
         const documents = text('k8s/base/worker.yaml').split('\n---\n');
+        const ports = documents.flatMap((document) =>
+            [...document.matchAll(/(?:containerPort|port): (\d+)/g)].map(([, port]) => port)
+        );
+
+        expect(new Set(ports)).toEqual(new Set([workerPort]));
+    });
+
+    it('is the one the Kubernetes heavy worker declares', () => {
+        const documents = text('k8s/base/worker-heavy.yaml').split('\n---\n');
         const ports = documents.flatMap((document) =>
             [...document.matchAll(/(?:containerPort|port): (\d+)/g)].map(([, port]) => port)
         );

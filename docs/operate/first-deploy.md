@@ -8,7 +8,7 @@ audience: [operator]
 The deployment shape of this stack, not the development one. `compose.override.yaml` (loaded with `compose.yaml` when you run no `-f`) bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
 of a dev box. `compose.production.yaml` is the other half, always run as `-f compose.yaml -f compose.production.yaml`: it runs the **built** image, binds
-the API port to loopback only, and keeps to what a host needs: `app`, `worker`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), with `database`, `cache`, `limits` and `queue` in the `bundled` profile, on by default (`COMPOSE_PROFILES=bundled` in `.env-example`), and three opt-in profiles: `backup` (the backup job), `restore-drill` (the restore drill) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
+the API port to loopback only, and keeps to what a host needs: `app`, `worker`, `worker-heavy`, `cron`, the one-shot `setup`, the datastores (`database`, `cache`, `limits`, `queue`), with `database`, `cache`, `limits` and `queue` in the `bundled` profile, on by default (`COMPOSE_PROFILES=bundled` in `.env-example`), and three opt-in profiles: `backup` (the backup job), `restore-drill` (the restore drill) and `monitoring` (`prometheus`, `alertmanager`, `loki`, `node-exporter`, `alloy`) — see [Monitoring and alerts](./first-deploy-monitoring.md#monitoring-and-alerts).
 
 ## Before you start
 
@@ -193,8 +193,8 @@ index builds included.
 docker/deploy.sh acme
 ```
 
-One command: it builds the `app` image (`setup`, `worker` and `cron` run that image rather than building their
-own) and, with the `backup` profile on, the backup image, starts the stack, waits until `setup` exited 0 and `app`, `worker` and `cron` (and `backup`, when on) are healthy, and records
+One command: it builds the `app` image (`setup`, `worker`, `worker-heavy` and `cron` run that image rather than building their
+own) and, with the `backup` profile on, the backup image, starts the stack, waits until `setup` exited 0 and `app`, `worker`, `worker-heavy` and `cron` (and `backup`, when on) are healthy, and records
 the release in `clients/acme/deploys.log`. A release that does not come up healthy is replaced by
 the previous one on the spot; `docker/deploy.sh acme --rollback` does the same on demand. See
 [Deploy and rollback](deploy-and-rollback.md).

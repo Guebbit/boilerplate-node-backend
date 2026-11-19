@@ -78,9 +78,9 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
                 greetableName(user, user.email),
                 token
             );
-            // High priority: a token-bearing link the user is actively waiting on.
+            // Urgent: a token-bearing link the user is actively waiting on.
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-            void sendAccountMail(user.email, mail);
+            void sendAccountMail(user.email, mail, { urgent: true });
             return true;
         });
     });
@@ -152,7 +152,7 @@ export const requestAccountSetup = (user: UserDocument): Promise<void> =>
             greetableName(user, user.email),
             token
         );
-        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        // Urgent: a token-bearing link the user is actively waiting on, not a notification.
         // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-        void sendAccountMail(user.email, mail);
+        void sendAccountMail(user.email, mail, { urgent: true });
     });

@@ -20,7 +20,6 @@ case in `tests/broker/queue-broker.test.ts` is one only a broker can answer:
 | retry                                  | a throwing handler gets the job back after the TTL, with the attempt counted in `x-retry-attempt`, which `attemptsOf` reads               |
 | parking                                | spent attempts land in `<queue>.dead` and `parkedCounts()` sees them; a `false` handler parks without a retry                             |
 | a consumer that dies without answering | the job comes back with a higher `x-delivery-count` while under the limit; past it, it is parked in `<queue>.dead` (`delivery_limit`)     |
-| priority                               | `high` is delivered before `normal`, with no `x-max-priority` opt-in                                                                      |
 | prefetch                               | a consumer holds at most `prefetch` unacknowledged jobs                                                                                   |
 | reconnect                              | a connection closed from the broker's side is recovered and the consumer is re-bound                                                      |
 

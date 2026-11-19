@@ -163,11 +163,7 @@ export const afterPasswordWrite = (
 const notifyPasswordChanged = (user: UserDocument, context: CallerContext): void => {
     void sendAccountMail(
         user.email,
-        passwordChangedEmail(
-            recipientLocale(user.locale, context),
-            greetableName(user, user.email)
-        ),
-        'normal'
+        passwordChangedEmail(recipientLocale(user.locale, context), greetableName(user, user.email))
     ).catch((error: unknown) => {
         logger.warn({ message: 'Could not queue a password-change notice.', error });
     });

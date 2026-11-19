@@ -16,6 +16,15 @@ import { createTransport, type SentMessageInfo, type Transporter } from 'nodemai
 import { mailConfig } from './config';
 import type { OutgoingMail } from './mail-transports';
 
+/**
+ * How long any one SMTP step may wait: dialling the server, its greeting, and silence on an open
+ * socket. nodemailer's own defaults are 2 minutes, 30 seconds and 10 minutes, so a hung server held
+ * a worker slot (and a held job's 60 s claim) for far longer than a send is worth. A timeout is a
+ * thrown error, so the job is retried like any other transient failure.
+ * https://nodemailer.com/smtp/#general-options
+ */
+const SMTP_TIMEOUT_MS = 10_000;
+
 /** The memoised transporter. See {@link getTransporter}. */
 let transport: Transporter | undefined;
 
@@ -67,6 +76,9 @@ const getTransporter = (): Transporter => {
          * https://nodemailer.com/smtp/#tls-options
          */
         requireTLS: port === 587,
+        connectionTimeout: SMTP_TIMEOUT_MS,
+        greetingTimeout: SMTP_TIMEOUT_MS,
+        socketTimeout: SMTP_TIMEOUT_MS,
         /**
          * Transport-level switches: message data can never turn them off. A `path` or `href` in
          * any attachment or part is refused, so a forged job cannot read a local file or fetch a URL.

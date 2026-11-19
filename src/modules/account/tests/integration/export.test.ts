@@ -47,15 +47,25 @@ import { reapExpiredExports } from '@modules/account/services/export-rows';
 import '@tests/http';
 
 /** Every mail the app queued, newest last. `mock*` so the hoisted `jest.mock` may close over it. */
-const mockOutbox: { to: string; template: string; data: Record<string, unknown> }[] = [];
+const mockOutbox: {
+    to: string;
+    template: string;
+    data: Record<string, unknown>;
+    urgent: boolean;
+}[] = [];
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     ...jest.requireActual<typeof import('@infrastructure/adapters/mailer')>(
         '@infrastructure/adapters/mailer'
     ),
     enqueueEmail: jest.fn(
-        (envelope: { to: string }, template: string, data: Record<string, unknown>) => {
-            mockOutbox.push({ to: envelope.to, template, data });
+        (
+            envelope: { to: string },
+            template: string,
+            data: Record<string, unknown>,
+            options?: { urgent?: boolean }
+        ) => {
+            mockOutbox.push({ to: envelope.to, template, data, urgent: options?.urgent === true });
             return Promise.resolve();
         }
     )
@@ -94,7 +104,9 @@ beforeAll(() => {
 
 beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'account-export-'));
-    setEnvironment({ NODE_ACCOUNT_EXPORT_STORE_PATH: root });
+    // No broker: the build runs inline after the response, as `settleInlineExports` expects. A
+    // reachable (or merely configured) local broker would send it to the queue or the held store.
+    setEnvironment({ NODE_ACCOUNT_EXPORT_STORE_PATH: root, NODE_RABBITMQ_ENABLED: '0' });
     mockOutbox.length = 0;
     mockAudit.length = 0;
 });
@@ -353,6 +365,8 @@ describe('requestExport', () => {
         const [mail] = mockOutbox;
         expect(mail.to).toBe(user.email);
         expect(mail.template).toBe('account.export-ready');
+        // The requester is waiting on this link, so it rides the urgent queue.
+        expect(mail.urgent).toBe(true);
         expect(String(mail.data.linkUrl)).toContain('/account-export');
         // The mail names the link and the retention, and carries nothing of the export.
         expect(JSON.stringify(mail.data)).not.toContain('productId');
@@ -545,8 +559,13 @@ describe('a build that fails', () => {
             { userId: user.id, exportId: result.data.id }
         ]);
         expect(await readdir(root)).toEqual([]);
+        // A failure notice is not something the requester is waiting on: the ordinary queue.
         expect(mockOutbox).toEqual([
-            expect.objectContaining({ to: user.email, template: 'account.export-failed' })
+            expect.objectContaining({
+                to: user.email,
+                template: 'account.export-failed',
+                urgent: false
+            })
         ]);
         expect(error).toHaveBeenCalledWith(
             expect.objectContaining({ exportId: result.data.id, message: 'account export failed' })

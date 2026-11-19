@@ -494,6 +494,70 @@ services:
             setup:
                 condition: service_completed_successfully
 
+    # The heavy half of the queue consumers: `worker` takes the light and external jobs (mail,
+    # webhook deliveries), this takes the CPU- and memory-bound ones (an image digest, a whole-account
+    # export), one at a time, under a memory cap. A burst of uploads therefore queues here instead of
+    # starving a reset mail. Same image, secrets, volumes and hardening as `worker`; `NODE_WORKER_ROLE`
+    # is the only difference. Scale with `docker compose up --scale worker-heavy=2`.
+    # See docs/understand/rabbitmq.md#job-kinds.
+    worker-heavy:
+        logging: *logging
+        image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
+        restart: unless-stopped
+        stop_grace_period: 30s
+        # The memory cap: the container's, and the V8 heap's below it. Sharp's native buffers live
+        # outside the heap, so the heap cap alone would not hold. A cap that bites kills one worker,
+        # not the API.
+        mem_limit: 1g
+        memswap_limit: 1g
+        command: ['node', '--import', 'tsx', 'src/worker.ts']
+        env_file:
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        secrets: *service-secrets
+        environment:
+            <<: [*app-env, *app-key-env, *backing-env]
+            # See `cron`'s own comment: a dedicated variable sidesteps podman-compose 1.6's suffix bug.
+            NODE_SERVICE_NAME: '${NODE_WORKER_HEAVY_SERVICE_NAME:-api-worker-heavy}'
+            # Takes the heavy jobs only (image digest, account export). One at a time: prefetch 1.
+            NODE_WORKER_ROLE: heavy
+            NODE_OPTIONS: '--max-old-space-size=640'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+        <<: *hardening
+
+        volumes:
+            - storage:/app/tmp/storage
+            - quarantine:/app/tmp/quarantine
+            - uploads:/app/public/images
+            - mongo-ca-dir:/ca-dir:ro
+        # Liveness, like `app`'s: the process answers, never a dependency.
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:${NODE_WORKER_PORT:-3010}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        depends_on:
+            database:
+                condition: service_healthy
+                required: false
+            cache:
+                condition: service_healthy
+                required: false
+            limits:
+                condition: service_healthy
+                required: false
+            queue:
+                condition: service_healthy
+                required: false
+            setup:
+                condition: service_completed_successfully
+
     # Runs once, then exits: `db:sync` reconciles the index set, `access:bootstrap` upserts the one
     # shop and the preset roles. `app`/`cron` both wait on this finishing successfully before they
     # start — the Compose-native form of an orchestrator's initContainer/one-off Job, a shape that

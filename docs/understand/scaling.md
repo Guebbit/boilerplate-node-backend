@@ -80,6 +80,7 @@ broadcast to the others. → [Redis and the workers](redis-cache.md#redis-and-th
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_PORT`                         | The port a copy listens on. One per copy when several share a host.                                                                                                     |
 | `NODE_WORKER_PORT`                  | The port a worker copy listens on (default 3010): `GET /livez` and the Prometheus scrape. One per worker when several share a host.                                     |
+| `NODE_WORKER_ROLE`                  | `standard` (default) takes mail and webhook deliveries, `heavy` takes image digests and account exports. One `worker` and one `worker-heavy` service run side by side.  |
 | `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | Teardown budget (default 15 000 ms), read by `registerSignalHandlers`; the drain steps below take shares of it.                                                         |
 | `NODE_SHUTDOWN_DELAY_MS`            | Lame-duck delay before the teardown (default 0): `/readyz` answers 503 but the server keeps serving, so a balancer's readiness poll notices before the listener closes. |
 

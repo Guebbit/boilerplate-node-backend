@@ -11,19 +11,18 @@
  */
 
 import { enqueueEmail, type EmailContent } from '@infrastructure/adapters/mailer';
-import type { JobPriority } from '@infrastructure/adapters/queue';
 
 /**
  * Queue one of this module's own mails. Never rejects (`enqueueEmail` logs its own failure).
- * Defaults to `'high'`: all but two of this module's sends
- * are a token-bearing link or a code someone is actively waiting on — the two confirmations that
- * are not (`resetConfirmEmail`, `deleteConfirmEmail`) pass `'normal'` explicitly at their call site.
+ * Normal by default; `urgent` is for the few a person is sitting on a screen waiting for — a
+ * verification link, a reset link, a two-factor code, the export-ready link, the deletion link —
+ * which travel on their own queue so ordinary mail never waits ahead of them.
  * @param to - the recipient address
  * @param mail - the finished template + subject + data, from one of `../emails.ts`'s builders
- * @param priority - see `enqueueEmail`'s own doc for what the two levels mean
+ * @param options - `urgent`: send on the urgent queue
  */
 export const sendAccountMail = (
     to: string,
     mail: EmailContent,
-    priority: JobPriority = 'high'
-): Promise<void> => enqueueEmail({ to, subject: mail.subject }, mail.template, mail.data, priority);
+    options: { urgent?: boolean } = {}
+): Promise<void> => enqueueEmail({ to, subject: mail.subject }, mail.template, mail.data, options);

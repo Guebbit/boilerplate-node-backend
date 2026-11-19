@@ -94,7 +94,7 @@ export const scheduleAccountDeletion = (
                 authAccountDeleteTotal.inc({ status: 'scheduled' });
 
                 /**
-                 * The recipient's OWN language, the request's only as fallback; high priority, since a
+                 * The recipient's OWN language, the request's only as fallback; urgent, since a
                  * person is waiting on the link.
                  */
                 const mail = deletionScheduledEmail(
@@ -103,8 +103,9 @@ export const scheduleAccountDeletion = (
                     token,
                     purgeAt
                 );
+                // Urgent: the link that confirms the deletion.
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-                void sendAccountMail(user.email, mail);
+                void sendAccountMail(user.email, mail, { urgent: true });
                 return { requestedAt, purgeAt };
             })
     );

@@ -81,16 +81,19 @@ const appendSections = async (
  *
  * @param job - the job, for the account and the language
  * @param build - the mail's copy for the greeting name
+ * @param options - `urgent`: the requester is waiting on this mail (the ready link), so it goes on
+ *   the urgent queue; the failure notice is not urgent
  */
 const mailRequester = (
     job: AccountExportJobPayload,
-    build: (name: string) => ReturnType<typeof exportReadyEmail>
+    build: (name: string) => ReturnType<typeof exportReadyEmail>,
+    options: { urgent?: boolean } = {}
 ): Promise<void> =>
     accountUserService.getById(job.userId).then((user) => {
         // Erased in the meantime: nobody is left to tell.
         if (!user) return;
 
-        return sendAccountMail(user.email, build(greetableName(user, user.email)), 'high');
+        return sendAccountMail(user.email, build(greetableName(user, user.email)), options);
     });
 
 /**
@@ -100,7 +103,9 @@ const mailRequester = (
  */
 const mailLink = (job: AccountExportJobPayload): Promise<void> => {
     const days = Math.round(exportRetentionMs() / DAY_MS);
-    return mailRequester(job, (name) => exportReadyEmail(job.locale, name, days));
+    return mailRequester(job, (name) => exportReadyEmail(job.locale, name, days), {
+        urgent: true
+    });
 };
 
 /**

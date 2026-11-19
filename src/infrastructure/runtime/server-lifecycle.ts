@@ -16,6 +16,7 @@ import { stopDatabase } from '@infrastructure/runtime/database';
 import { stopCache } from '@infrastructure/adapters/cache';
 import { stopPubSub } from '@infrastructure/adapters/pubsub';
 import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
+import { stopJobDrain } from '@infrastructure/adapters/job-drain';
 import { stopConsuming, stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { settleRenders } from '@infrastructure/adapters/pdf';
@@ -184,8 +185,9 @@ export const shutdownInfra = (
         .then(() => settleInFlight?.(budgetMs(SHUTDOWN_SHARES.inFlight)))
         /**
          * The queue before the cache: a job still running would otherwise reopen the cache
-         * connection that was just closed under it.
+         * connection that was just closed under it. A held job counts the same as a delivered one.
          */
+        .then(() => stopJobDrain(budgetMs(SHUTDOWN_SHARES.queue)))
         .then(() => stopQueue(budgetMs(SHUTDOWN_SHARES.queue)))
         .then(() => stopCache())
         .then(() => stopPubSub())
@@ -246,6 +248,8 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
          * cancels again later, so a consumer this call missed is still cancelled.
          */
         stopConsuming().catch(() => undefined);
+        // The held-job loops stop claiming now too; a job already running is awaited by `shutdownInfra`.
+        stopJobDrain(0).catch(() => undefined);
 
         /**
          * Node `timers/promises` sleep: resolves after `delayMs` milliseconds (the lame-duck

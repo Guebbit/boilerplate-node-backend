@@ -93,6 +93,16 @@ describe('message data can never read a file or fetch a URL', () => {
     });
 });
 
+describe('a hung mail server frees the worker', () => {
+    it('gives every SMTP step ten seconds, where nodemailer defaults to minutes', async () => {
+        const options = await transportOptions(SMTP_ENVIRONMENT);
+
+        expect(options.connectionTimeout).toBe(10_000);
+        expect(options.greetingTimeout).toBe(10_000);
+        expect(options.socketTimeout).toBe(10_000);
+    });
+});
+
 describe('TLS mode follows the port, which is a security decision', () => {
     it('uses implicit TLS on 465', async () => {
         const options = await transportOptions({

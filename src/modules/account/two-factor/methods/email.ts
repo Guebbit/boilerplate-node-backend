@@ -65,8 +65,8 @@ export const deliverEmailCode = (
         Math.round(DELIVERED_CODE_TTL_MS / MINUTE_MS)
     );
 
-    // High priority: someone is sitting on a login screen waiting for this, not reading a digest.
-    return sendAccountMail(user.email, mail).then(() => ({
+    // Urgent: someone is sitting on a login screen waiting for this, not reading a digest.
+    return sendAccountMail(user.email, mail, { urgent: true }).then(() => ({
         method: 'email',
         sentTo: maskEmail(user.email),
         resendAfter: DELIVERED_CODE_RESEND_SECONDS,

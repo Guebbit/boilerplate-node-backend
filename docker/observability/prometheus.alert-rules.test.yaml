@@ -57,6 +57,25 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
+          - series: queue_held_jobs_oldest_age_seconds{job="api",instance="api",channel="worker.email.urgent"}
+            values: 100+60x20
+          - series: queue_held_jobs_oldest_age_seconds{job="worker",instance="worker",channel="worker.email.urgent"}
+            values: 100+60x20
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: HeldJobsStuck
+            exp_alerts: []
+          - eval_time: 20m
+            alertname: HeldJobsStuck
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      channel: worker.email.urgent
+                  exp_annotations:
+                      summary: Jobs held for worker.email.urgent are not being drained
+                      description: 'The oldest job held in the fallback queue for worker.email.urgent has waited more than 15 minutes: no worker of the role that takes that channel is draining it.'
+    - interval: 1m
+      input_series:
           - series: process_start_time_seconds{job="api",instance="api"}
             values: 100 100 200 200 300 300 400 400
       alert_rule_test:

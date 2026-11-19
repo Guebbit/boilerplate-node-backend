@@ -35,8 +35,8 @@ falls back to `false` if it never arrives). `sendToQueue` returning `false` on i
 local write buffer is full, wait for `drain`" — never "failed" — so a caller reading THAT boolean
 directly would run its inline fallback alongside a publish that was going to succeed anyway.
 
-**A late confirm sends the mail twice.** An unconfirmed publish (the 5s timeout) falls back to the
-inline send, and a confirm that arrives after it means the broker has the message as well. This is
+**A late confirm sends the mail twice.** An unconfirmed publish (the 5s timeout) is held in the durable
+fallback queue, and a confirm that arrives after it means the broker has the message as well. This is
 chosen on purpose: delivery is at-least-once, and a duplicate beats a lost mail.
 
 ### Consuming messages
@@ -118,7 +118,7 @@ back onto `<queue>`), not an app endpoint — a parked job is a morning's work t
 something to automate blindly.
 
 **Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
-exists with different arguments — which is what this retry topology, the priority argument, and
+exists with different arguments — which is what this retry topology and
 [the move to quorum queues](./rabbitmq.md#queue-type-quorum) each do in turn to a broker holding queues
 declared without them. The channel dies, is replaced, and fails the same way — and a queue's TYPE
 is the one property that cannot be changed by re-declaring it at all, `PRECONDITION_FAILED`
@@ -159,35 +159,17 @@ See [RabbitMQ: Quorum Queues](https://www.rabbitmq.com/docs/quorum-queues) and
 [Upgrading an existing broker](./rabbitmq.md#retries-and-parking) above — a queue TYPE cannot change in place
 any more than its other arguments can.
 
-### Priority
+### Urgent mail
 
-Quorum queues have no `x-max-priority` opt-in: every queue always offers the full 0-31 range, and
-a message published with no `priority` at all lands at **4**, not 0
-(https://www.rabbitmq.com/docs/quorum-queues#priority). `JobPriority`'s two levels sit above that
-default rather than at the classic-queue `0`/`1`, or `'normal'` would rank BELOW an unmarked
-message:
-
-| `JobPriority` | Number | Meaning                                                                                                        |
-| ------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| `'normal'`    | `4`    | Default — level with what an unmarked message gets, never below it.                                            |
-| `'high'`      | `8`    | A person is actively blocked on this — jumps ahead of `'normal'` messages currently waiting on the same queue. |
-
-`enqueueEmail()` defaults to `'normal'` and takes an optional fourth argument; the account
-module's token-bearing links (password reset, account deletion, account setup, email
-verification — all short-TTL, all a person is staring at an inbox for) pass `'high'`. Order
-confirmations, delivery notices and the rest stay `'normal'`.
-
-Two levels, deliberately: this is "give the few urgent things a preference" — one gap between
-most things and what a person is actively blocked on — not a real-time scheduler. See
-[RabbitMQ: Quorum Queues — Priorities](https://www.rabbitmq.com/docs/quorum-queues#priority).
+There is no message priority: the mails a person is waiting on have their own queue and consumer.
+See [Urgent mail](./rabbitmq.md#urgent-mail).
 
 ### Options
 
-| Publish option | Default    | Description                                                                                                     |
-| -------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
-| `durable`      | `true`     | Queue survives broker restarts.                                                                                 |
-| `persistent`   | `true`     | Message is written to disk.                                                                                     |
-| `priority`     | `'normal'` | `'high'` jumps ahead of `'normal'` messages waiting on the same queue — see [Priority](./rabbitmq.md#priority). |
+| Publish option | Default | Description                     |
+| -------------- | ------- | ------------------------------- |
+| `durable`      | `true`  | Queue survives broker restarts. |
+| `persistent`   | `true`  | Message is written to disk.     |
 
 | Consume option      | Default                          | Description                                                |
 | ------------------- | -------------------------------- | ---------------------------------------------------------- |

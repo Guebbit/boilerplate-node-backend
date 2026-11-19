@@ -378,35 +378,7 @@ describe('a consumer that dies without answering', () => {
         }));
 });
 
-describe('delivery order and flow control', () => {
-    it('delivers a high-priority job before the normal ones waiting ahead of it', () =>
-        inBrokerEnvironment(async () => {
-            const queue = uniqueQueue();
-            const adapter = await bootAdapter();
-            // Published with no consumer, so all four are waiting when the first delivery is chosen.
-            for (const label of ['normal-1', 'normal-2', 'normal-3']) {
-                expect(await adapter.publishToQueue({ queue, payload: { label } })).toBe(true);
-            }
-            expect(
-                await adapter.publishToQueue({
-                    queue,
-                    payload: { label: 'high' },
-                    priority: 'high'
-                })
-            ).toBe(true);
-
-            const { handler, seen } = recorder();
-            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
-            await waitUntil(() => seen.length === 4, 'all four jobs');
-
-            expect(seen.map(({ payload }) => (payload as { label: string }).label)).toEqual([
-                'high',
-                'normal-1',
-                'normal-2',
-                'normal-3'
-            ]);
-        }));
-
+describe('flow control', () => {
     it.each([1, 2])('hands a consumer at most `prefetch` unacknowledged jobs (%d)', (prefetch) =>
         inBrokerEnvironment(async () => {
             const queue = uniqueQueue();

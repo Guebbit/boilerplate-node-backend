@@ -14,7 +14,10 @@ import {
     webhookSubscriptionRepository,
     webhookDeliveryRepository
 } from '@modules/webhooks/repository';
-import { sweepDueWebhookDeliveries } from '@modules/webhooks/services/sweep';
+import {
+    sendDueWebhookDeliveries,
+    sweepDueWebhookDeliveries
+} from '@modules/webhooks/services/sweep';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
@@ -27,14 +30,18 @@ jest.mock('@modules/webhooks/transport/webhook-delivery', () => ({
     ...jest.requireActual('@modules/webhooks/transport/webhook-delivery'),
     deliverWebhook: (options: unknown) => deliverWebhookMock(options)
 }));
+/** Whether a broker is configured at all; a case flips it. */
+const isQueueEnabledMock = jest.fn<boolean, []>().mockReturnValue(true);
 jest.mock('@infrastructure/adapters/queue', () => ({
-    publishToQueue: (options: unknown) => publishToQueueMock(options)
+    publishToQueue: (options: unknown) => publishToQueueMock(options),
+    isQueueEnabled: () => isQueueEnabledMock()
 }));
 
 setupTestDb();
 
 beforeEach(() => {
     publishToQueueMock.mockClear().mockResolvedValue(true);
+    isQueueEnabledMock.mockReturnValue(true);
     deliverWebhookMock.mockReset();
 });
 
@@ -184,8 +191,9 @@ describe('the overdue gauge behind the WebhookRetriesStalled alert', () => {
     });
 });
 
-describe('with no broker to take the message', () => {
+describe('with no broker configured at all', () => {
     beforeEach(() => {
+        isQueueEnabledMock.mockReturnValue(false);
         publishToQueueMock.mockResolvedValue(false);
         deliverWebhookMock.mockResolvedValue({ success: true, statusCode: 200, durationMs: 5 });
     });
@@ -242,5 +250,39 @@ describe('with no broker to take the message', () => {
         await expect(sweepDueWebhookDeliveries()).resolves.toBeUndefined();
 
         expect(deliverWebhookMock).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('with a broker configured but down', () => {
+    beforeEach(() => {
+        publishToQueueMock.mockResolvedValue(false);
+        deliverWebhookMock.mockResolvedValue({ success: true, statusCode: 200, durationMs: 5 });
+    });
+
+    /**
+     * A worker sends the row while the broker is down (`sendDueWebhookDeliveries`). If the cron
+     * sweep sent it too, every delivery would go out twice.
+     */
+    it('leaves the due row alone in the cron sweep, for a worker to send', async () => {
+        const subscription = await createSubscription();
+        const due = await createDue(subscription, 'evt_left');
+
+        await sweepDueWebhookDeliveries();
+
+        expect(deliverWebhookMock).not.toHaveBeenCalled();
+        const stored = await webhookDeliveryRepository.findById(String(due._id));
+        expect(stored?.status).toBe('pending');
+    });
+
+    it("sends the due row from the worker's fallback sweep, without publishing", async () => {
+        const subscription = await createSubscription();
+        const due = await createDue(subscription, 'evt_worker');
+
+        await sendDueWebhookDeliveries();
+
+        expect(publishToQueueMock).not.toHaveBeenCalled();
+        expect(deliverWebhookMock).toHaveBeenCalledTimes(1);
+        const stored = await webhookDeliveryRepository.findById(String(due._id));
+        expect(stored?.status).toBe('succeeded');
     });
 });

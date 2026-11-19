@@ -18,7 +18,8 @@ import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
 import { imageRuleData } from '@infrastructure/adapters/images.generated';
-import { IMAGE_QUEUE, publishToQueue } from '@infrastructure/adapters/queue';
+import { IMAGE_QUEUE } from '@infrastructure/adapters/queue';
+import { dispatchJob } from '@infrastructure/adapters/job-dispatch';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
 /* Queue name for image digest jobs — owned by the adapter, re-exported for the worker registry. */
@@ -46,6 +47,17 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
 export class UnsupportedImageFormatError extends Error {
     /** What logs and `error.name` print; a subclass does not set it by itself. */
     override name = 'UnsupportedImageFormatError';
+}
+
+/**
+ * The quarantined file is not there: `reap:quarantine` removed it, or an earlier run finished and
+ * cleaned up. Thrown ONLY for the read of the quarantined file ({@link digestQuarantinedImage}), so
+ * an `ENOENT` from any later storage step stays an ordinary transient failure.
+ * {@link handleImageDigestJob} acknowledges it: no retry can find bytes that are gone.
+ */
+export class QuarantineGoneError extends Error {
+    /** What logs and `error.name` print; a subclass does not set it by itself. */
+    override name = 'QuarantineGoneError';
 }
 
 /**
@@ -130,45 +142,56 @@ export const registerImageWritebackResolver = (
  *   inline call)
  * @throws {@link UnsupportedImageFormatError} when the bytes will never decode as one of the
  *   three accepted formats, whether the signature is wrong or the body is corrupt (the caller
- *   dead-letters/discards); anything else (a storage failure)
- *   as a plain `Error` (the caller retries).
+ *   dead-letters/discards); {@link QuarantineGoneError} when the quarantined file is missing (the
+ *   caller acknowledges); anything else (a storage failure) as a plain `Error` (the caller
+ *   retries).
  */
 export const digestQuarantinedImage = (key: string, owner: string): Promise<DigestedImageUrls> =>
-    imageStore.readQuarantined(key).then((raw) => {
-        const mime = identifyImage(raw);
-        if (!isReencodableMime(mime))
-            throw new UnsupportedImageFormatError(
-                `Quarantined image ${key} does not match an accepted format.`
-            );
-
-        /**
-         * Digest first, then thumbnail the digested bytes: the original is decoded once, and the
-         * (smaller, metadata-free) re-encode is what the thumbnail decodes.
-         */
-        return digestImage(raw, mime)
-            .then((digested) =>
-                thumbnailImage(digested).then((thumbnail) => [digested, thumbnail] as const)
-            )
-            .catch((error: unknown) => {
-                /**
-                 * Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
-                 * truncated or corrupt body, or past the pixel limit) fail identically on every
-                 * redelivery, so this is permanent, not the transient kind the storage steps below are.
-                 */
+    imageStore
+        .readQuarantined(key)
+        .catch((error: unknown) => {
+            // `code` is read off a caught value: `readFile` rejects a missing file with ENOENT.
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+                throw new QuarantineGoneError(`Quarantined image ${key} is gone.`, {
+                    cause: error
+                });
+            throw error;
+        })
+        .then((raw) => {
+            const mime = identifyImage(raw);
+            if (!isReencodableMime(mime))
                 throw new UnsupportedImageFormatError(
-                    `Quarantined image ${key} could not be decoded.`,
-                    { cause: error }
+                    `Quarantined image ${key} does not match an accepted format.`
                 );
-            })
-            .then(([digested, thumbnail]) => {
-                const stem = contentStem(owner, digested);
-                return Promise.all([
-                    imageStore.promote(stem, digested, mime),
-                    imageStore.putDerivative(stem, thumbnail)
-                ]);
-            })
-            .then(([imageUrl, thumbnailUrl]) => ({ imageUrl, thumbnailUrl }));
-    });
+
+            /**
+             * Digest first, then thumbnail the digested bytes: the original is decoded once, and the
+             * (smaller, metadata-free) re-encode is what the thumbnail decodes.
+             */
+            return digestImage(raw, mime)
+                .then((digested) =>
+                    thumbnailImage(digested).then((thumbnail) => [digested, thumbnail] as const)
+                )
+                .catch((error: unknown) => {
+                    /**
+                     * Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
+                     * truncated or corrupt body, or past the pixel limit) fail identically on every
+                     * redelivery, so this is permanent, not the transient kind the storage steps below are.
+                     */
+                    throw new UnsupportedImageFormatError(
+                        `Quarantined image ${key} could not be decoded.`,
+                        { cause: error }
+                    );
+                })
+                .then(([digested, thumbnail]) => {
+                    const stem = contentStem(owner, digested);
+                    return Promise.all([
+                        imageStore.promote(stem, digested, mime),
+                        imageStore.putDerivative(stem, thumbnail)
+                    ]);
+                })
+                .then(([imageUrl, thumbnailUrl]) => ({ imageUrl, thumbnailUrl }));
+        });
 
 /**
  * Call a module's writeback, and either clean up (nothing matched) or invalidate the cache
@@ -229,7 +252,8 @@ const settleWriteback = (
  *
  * `false` for a malformed payload, an unregistered collection, or an {@link
  * UnsupportedImageFormatError} — all permanent, all dead-lettered (the quarantine file removed
- * with the last of the three, since nothing will ever read it again). Any OTHER throw — a
+ * with the last of the three, since nothing will ever read it again). `true` for a
+ * {@link QuarantineGoneError}: nothing left to digest, so nothing to retry or park. Any OTHER throw — a
  * storage write failing, disk full — is rethrown as-is, so `consumeFromQueue` nacks and retries
  * it, WITHOUT touching the quarantine file the retry still needs to read.
  * `Partial<ImageDigestJobPayload>` because it came off a broker.
@@ -259,6 +283,17 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
             settleWriteback(writeback, documentId, key, urls, collection).then(() => true)
         )
         .catch((error: unknown) => {
+            /**
+             * The quarantine file is gone (see {@link QuarantineGoneError}). A held job outlives the
+             * reaper's window, so this happens after an outage, and it is not a failure: no retry
+             * can find the bytes either. Acked, so it never becomes a parked job and a false alert.
+             */
+            if (error instanceof QuarantineGoneError) {
+                // Stryker disable next-line all
+                logger.warn({ message: 'Image digest job found no quarantined file; done.', key });
+                return true;
+            }
+
             if (error instanceof UnsupportedImageFormatError) {
                 /**
                  * Permanent — every redelivery decodes the same bytes the same way — so the
@@ -312,20 +347,18 @@ export const enqueueImageDigest = (
         );
 
     /**
-     * No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
-     * the broker is unconfigured, which the `!published` branch below runs inline exactly as a
-     * configured-but-unreachable broker would — one fallback covers both.
+     * No `isQueueEnabled()` pre-check: `dispatchJob` answers `inline` with no I/O when the broker
+     * is unconfigured. A broker that is configured but down HOLDS the job for the heavy worker
+     * instead of digesting here: a decode must not land on a request thread because of an outage.
      */
-    return publishToQueue<ImageDigestJobPayload>({
+    return dispatchJob<ImageDigestJobPayload>({
         queue: IMAGE_QUEUE,
         payload
-    }).then((published) => {
-        if (published) {
-            // Stryker disable next-line all
-            logger.debug({ message: 'Image digest job enqueued.', collection: payload.collection });
-            return undefined;
-        }
-        return runInline();
+    }).then((outcome) => {
+        if (outcome === 'inline') return runInline();
+        // Stryker disable next-line all
+        logger.debug({ message: 'Image digest job enqueued.', collection: payload.collection });
+        return undefined;
     });
 };
 

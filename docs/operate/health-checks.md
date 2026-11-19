@@ -25,16 +25,17 @@ A health check tests **this container's own job**. Nothing else.
 - **A container never inherits a check for a job it does not do.** It could never pass. That is a
   permanent false alarm, and under Swarm a restart loop.
 
-| Container  | Its check                                       | Where declared                                       |
-| ---------- | ----------------------------------------------- | ---------------------------------------------------- |
-| `app`      | `GET /livez`                                    | the image, and compose again (see [Podman](#podman)) |
-| `worker`   | its own `GET /livez` on `NODE_WORKER_PORT`      | compose                                              |
-| `cron`     | supercronic's `GET /health` on `127.0.0.1:9746` | compose                                              |
-| `backup`   | the same supercronic `/health`, with `curl`     | `docker/Dockerfile.backup` (the image)               |
-| `setup`    | none: `healthcheck: disable: true`              | `compose.production.yaml`                            |
-| `database` | the database's own ping                         | compose                                              |
-| `cache`    | the cache's own ping                            | compose                                              |
-| `queue`    | the broker's own diagnostics                    | compose                                              |
+| Container      | Its check                                            | Where declared                                       |
+| -------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| `app`          | `GET /livez`                                         | the image, and compose again (see [Podman](#podman)) |
+| `worker`       | its own `GET /livez` on `NODE_WORKER_PORT`           | compose                                              |
+| `worker-heavy` | the same `GET /livez`, the heavy half of the workers | compose                                              |
+| `cron`         | supercronic's `GET /health` on `127.0.0.1:9746`      | compose                                              |
+| `backup`       | the same supercronic `/health`, with `curl`          | `docker/Dockerfile.backup` (the image)               |
+| `setup`        | none: `healthcheck: disable: true`                   | `compose.production.yaml`                            |
+| `database`     | the database's own ping                              | compose                                              |
+| `cache`        | the cache's own ping                                 | compose                                              |
+| `queue`        | the broker's own diagnostics                         | compose                                              |
 
 ## Liveness and readiness
 

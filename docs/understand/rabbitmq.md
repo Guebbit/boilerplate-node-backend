@@ -20,7 +20,9 @@ audience: [developer, architect]
 | Concern                   | File                                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------------------- |
 | Connection & helpers      | `src/infrastructure/adapters/queue.ts`                                                              |
-| Queue-aware dispatch      | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`                                          |
+| Queue-aware dispatch      | `src/infrastructure/adapters/job-dispatch.ts` → `dispatchJob()`; `mailer.ts` → `enqueueEmail()`     |
+| Job kinds                 | `src/infrastructure/adapters/job-kinds.ts`                                                          |
+| Durable fallback queue    | `src/infrastructure/persistence/job-store.ts` (the `jobs` collection), drained by `job-drain.ts`    |
 | Email worker (domainless) | `src/infrastructure/adapters/email.worker.ts`                                                       |
 | Image digest worker       | `src/infrastructure/adapters/image.worker.ts`                                                       |
 | Webhook delivery (module) | `src/modules/webhooks/services/enqueue.ts` (publish), `attempt.ts` (consume)                        |
@@ -34,10 +36,11 @@ audience: [developer, architect]
 
 The web process publishes and answers; a separate **worker** process takes the jobs. Both run the
 same image — `src/main.ts` is the web entry, `src/worker.ts` the worker's (`npm run dev:worker`; the
-`worker` service in `compose.override.yaml` and `compose.production.yaml`; the `worker` Deployment in
-`k8s/base`). With a broker configured and no worker running, jobs wait in their queues: nothing is
-lost, nothing is sent. With no broker configured the web process does the work inline and the
-worker has nothing to do, so the default `npm run dev` needs neither a broker nor a worker.
+`worker` and `worker-heavy` services in `compose.override.yaml` and `compose.production.yaml`; the
+`worker` and `worker-heavy` Deployments in `k8s/base`). With a broker configured and no worker running,
+jobs wait in their queues: nothing is lost, nothing is sent. With no broker configured the web process
+does the work inline and the workers have nothing to do, so the default `npm run dev` needs neither a
+broker nor a worker. The two services differ only in `NODE_WORKER_ROLE`: see [Job kinds](#job-kinds).
 
 The worker boots what a handler needs, as the web process does: every module (its event
 subscriptions and the configuration check), the database, the cache, the queue, then the
@@ -80,8 +83,9 @@ Everything that sends an email calls `enqueueEmail()` from `src/infrastructure/a
 from a module's service (not a controller). A mail to a customer about an order, payment, shipment
 or return is sent from an outbox-event listener — see [outbox.md](outbox.md#customer-mail):
 
-- **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
-- **Queue disabled, or the publish failed** → falls back to calling `sendTemplatedEmail()` directly, at the cost of request latency.
+- **Queue enabled** → the email job is published to the `worker.email.send` queue (or `worker.email.urgent`, see [Urgent mail](#urgent-mail)). The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
+- **Broker configured but down** → the job is held in the durable fallback queue and a worker sends it: see [When the broker is down](#when-the-broker-is-down).
+- **No broker configured** → calls `sendTemplatedEmail()` directly, at the cost of request latency.
 
 Callers include `account/services/mail.ts` (reset, verification, restore links),
 `orders/services/notify.ts` and `cancel-mail.ts`, `payments/services/notify.ts`,
@@ -140,7 +144,7 @@ host and port; the boot log names the broker and its source.
 The `compose.override.yaml` includes a `queue` service with the management plugin, `rabbitmq:4-management-alpine` —
 the same 4.x line as `compose.production.yaml`'s digest-pinned `rabbitmq:4-alpine` image (the
 dev one adds the management UI), which is what makes quorum queues' 4.x
-behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in
+behaviour ([Queue type: quorum](#queue-type-quorum)) the same in dev as in
 production:
 
 - **AMQP port**: `5672`
@@ -174,16 +178,72 @@ Every queue `queue.ts` declares — work, retry and dead-letter alike — carrie
 queues, their predecessor, are gone in 4.x. The reason it matters here specifically: a quorum
 queue tracks its own `delivery-count`, incremented on EVERY redelivery — a consumer that crashes
 
-### Priority
+### Urgent mail
 
-Quorum queues have no `x-max-priority` opt-in: every queue always offers the full 0-31 range, and
-a message published with no `priority` at all lands at **4**, not 0
-(https://www.rabbitmq.com/docs/quorum-queues#priority). `JobPriority`'s two levels sit above that
-default rather than at the classic-queue `0`/`1`, or `'normal'` would rank BELOW an unmarked
+A message has no priority. The few mails a person is sitting on a screen waiting for (the
+verification link, the password-reset link, a two-factor code, the export-ready link, the
+account-deletion link) go to their own queue, `worker.email.urgent`, with its own consumer, so a
+backlog of ordinary mail is never ahead of one. `enqueueEmail(request, template, data, { urgent: true })`
+picks the queue; security notices (a password changed, an email-change undo link) stay on
+`worker.email.send`. The contract is
+[`asyncapi.workers.yaml`](../../shared/contracts/asyncapi.workers.yaml).
 
 ### Options
 
 Full detail: [Usage](./rabbitmq-usage.md).
+
+## Job kinds
+
+Each channel carries one kind of work, set in code (`job-kinds.ts`, keyed by the generated channel
+name, so a new channel does not compile until it has one). The kind decides which worker takes it.
+
+| Kind       | Waits on                           | Channels                                                             | Taken by                                                          |
+| ---------- | ---------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `light`    | a quick database or memory step    | none today                                                           | `worker`                                                          |
+| `external` | SMTP, a subscriber's endpoint      | `worker.email.send`, `worker.email.urgent`, `worker.webhook.deliver` | `worker` (`NODE_WORKER_ROLE=standard`), prefetch 5                |
+| `heavy`    | CPU or memory: a decode, an export | `worker.image.digest`, `worker.account.export`                       | `worker-heavy` (`NODE_WORKER_ROLE=heavy`), prefetch 1, memory cap |
+
+One process cannot be sized for all three: mail wants many in flight and little memory, an image
+decode wants one at a time and room for a native buffer. `worker-heavy` runs under a 1 GiB container
+limit with a 640 MB V8 heap cap (`compose.production.yaml`, `k8s/base/worker-heavy.yaml`).
+
+## When the broker is down
+
+Nothing a producer hands over is dropped, and nothing runs inside the request because the broker
+blew a fuse. `dispatchJob()` answers one of three things:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
+flowchart LR
+    P[producer] --> D{dispatchJob}
+    D -->|broker confirms| Q[(queue)]
+    D -->|configured, but down| J[(jobs collection)]
+    D -->|no broker configured| I[caller runs it inline]
+    Q --> W[worker]
+    J -->|drain loop| W
+```
+
+- **Held.** The broker is configured but unreachable: the job is written to the `jobs` collection
+  (`persistence/job-store.ts`) and the worker that serves its kind drains it (`job-drain.ts`) through
+  the same handler and schema the broker's consumer uses. One atomic claim with a lease, a retry
+  after `NODE_QUEUE_RETRY_DELAY_SECONDS`, parked as `dead` after `NODE_QUEUE_MAX_ATTEMPTS` (counted in
+  `queue_jobs_dead_lettered_total`, so the same alert fires). A held job has no TTL, because "never
+  dropped" would be false the day an outage outlasted one: it stays until drained, then its row is
+  deleted at once, so a reset token or a two-factor code sits in the database only while undelivered.
+  A dead row expires after seven days. What says nobody is draining is `HeldJobsStuck`, an alert on
+  the oldest held job per channel (`queue_held_jobs`, `queue_held_jobs_oldest_age_seconds`) older than
+  15 minutes. The claim's 60 s lease is renewed while a handler runs, so a long export build is not
+  taken over by a second `worker-heavy` copy. The urgent mail channel has its own drain loop.
+- **Inline.** No broker is configured at all (a development box, an integration test): there is no
+  queue to wait on, so the caller does the work as it always did.
+- **Webhooks and the work that has its own row** do not write a `jobs` row. A webhook delivery
+  already is a durable row; while the broker is down the worker runs the module's `fallbackSweep`
+  (`sendDueWebhookDeliveries`) and sends what is due, and the cron sweep leaves those rows alone so
+  nothing is sent twice. An image digest and an account export are the exception to that rule: they
+  are held like any other job, because their pending marker only says "not done", not "queued".
+
+A job that finishes twice (a confirm that arrived after the timeout, a lease that lapsed mid-send)
+is the usual at-least-once case: handlers are idempotent, and a mail may repeat.
 
 ## Recovery
 
@@ -196,7 +256,7 @@ none of its own, whether it is boot's first one or a reconnect's.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
 flowchart LR
-    D["broker down<br/><i>or still starting</i>"] --> S["slow lane<br/><i>publish/consume degrade inline</i>"]
+    D["broker down<br/><i>or still starting</i>"] --> S["slow lane<br/><i>publish holds the job in the database</i>"]
     S -.->|"amqplib retries<br/>with backoff, forever"| R["broker reachable"]
     R --> U["setup() runs<br/><i>open channel, re-bind every consumer</i>"]
     U --> Q["queue path<br/><i>queueState() reads ready again</i>"]

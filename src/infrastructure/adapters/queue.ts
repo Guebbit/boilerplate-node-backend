@@ -3,8 +3,9 @@
  * RabbitMQ (AMQP 0-9-1) adapter.
  *
  * Degrades:   like the cache adapter, every function no-ops when the broker is not configured —
- *             `publishToQueue` returns `false` and callers fall back to doing the work inline
- *             (see `adapters/mailer.ts` → `enqueueEmail`).
+ *             `publishToQueue` returns `false`. Producers go through `src/infrastructure/adapters/job-dispatch.ts`, which holds
+ *             the job in the durable fallback queue (broker down) or tells the caller to run it
+ *             inline (no broker configured).
  * Reconnects: via amqplib's own opt-in `recovery` option (2.0.1+), not
  *             `@infrastructure/adapters/managed-connection`'s lifecycle — recovery retries the
  *             CONNECTION forever with backoff and re-runs `setup` after every successful
@@ -444,6 +445,9 @@ const cancelConsumers = (channel: ConfirmChannel | undefined): Promise<void> => 
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 
+/** Same sourcing as {@link EMAIL_QUEUE} — the urgent mail queue, its own consumer. */
+export const EMAIL_URGENT_QUEUE = WORKER_CHANNELS.EMAIL_URGENT;
+
 /** Same sourcing as {@link EMAIL_QUEUE} — the image-digest queue. */
 export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 
@@ -546,27 +550,6 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
         )
         .catch(() => []);
 };
-
-/**
- * The two job-priority levels every work queue supports, named rather than passed as raw numbers
- * so a publish call reads as intent (`'high'`) instead of a magic number whose meaning lives only
- * here. Kept to two on purpose: the idea is one gap, between "most things" and "the few things a
- * person is actively blocked on," not a fine-grained priority system.
- *
- * @see docs/understand/rabbitmq.md#priority
- */
-export type JobPriority = 'normal' | 'high';
-
-/**
- * `JobPriority` as the number RabbitMQ's `priority` publish option expects.
- *
- * NOT 0/1: a quorum queue has no `x-max-priority` opt-in — it always offers the FULL 0-31 range,
- * and a message with no `priority` property lands at 4, not 0
- * (https://www.rabbitmq.com/docs/quorum-queues#priority). `normal: 0` would rank BELOW every
- * unmarked message reaching this queue from anywhere else; both levels sit at or above that
- * default instead, so "normal" means "ahead of nothing in particular".
- */
-const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 4, high: 8 };
 
 /**
  * Deliveries a QUORUM QUEUE itself attempts before dead-lettering a message.
@@ -679,8 +662,6 @@ export interface PublishOptions<TPayload = unknown> {
     queue: string;
     /** Message payload (will be JSON-serialized). */
     payload: TPayload;
-    /** How eagerly the broker should deliver this ahead of others waiting on the same queue. Default: `'normal'`. */
-    priority?: JobPriority;
 }
 
 /**
@@ -721,7 +702,7 @@ export const publishToQueue = <TPayload = unknown>(
     const ch = getChannel();
     if (!ch) return Promise.resolve(false);
 
-    const { queue, payload, priority = 'normal' } = options;
+    const { queue, payload } = options;
 
     return assertJobQueue(ch, queue)
         .then(
@@ -751,8 +732,7 @@ export const publishToQueue = <TPayload = unknown>(
                              * with transient messages comes back empty. Every job publishes
                              * persistent — no caller has ever asked for a transient one.
                              */
-                            persistent: true,
-                            priority: JOB_PRIORITY_VALUES[priority]
+                            persistent: true
                         },
                         (error: unknown) => {
                             if (settled) return;
@@ -881,7 +861,7 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
  * Confirmed: acks the original only once the broker has accepted the republish, so a failure here
  *            can never lose the job; on that failure this nacks with requeue instead, the
  *            ordinary "try the whole delivery again" path.
- * Copies:    content byte-for-byte, plus `persistent`, `priority` and the headers.
+ * Copies:    content byte-for-byte, plus `persistent` and the headers.
  *
  * @param ch - the channel to publish and ack/nack on
  * @param queue - the work queue this message came from
@@ -900,7 +880,6 @@ const retryLater = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
             incoming.content,
             {
                 persistent: true,
-                priority: incoming.properties.priority as number | undefined, // absent on a foreign publish; amqplib types it `any`
                 headers: {
                     ...incoming.properties.headers,
                     [RETRY_ATTEMPT_HEADER]: attemptsOf(incoming.properties.headers) + 1

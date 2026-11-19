@@ -79,6 +79,16 @@ metrics:
         kind: counter
         help: Jobs parked in a dead-letter queue, by queue name.
         labelNames: [queue]
+    queueHeldJobs:
+        name: queue_held_jobs
+        kind: gauge
+        help: Jobs held in the durable fallback queue while the broker was down, by channel.
+        labelNames: [channel]
+    queueHeldJobsOldestAgeSeconds:
+        name: queue_held_jobs_oldest_age_seconds
+        kind: gauge
+        help: Age in seconds of the oldest held job, by channel; absent when none is held.
+        labelNames: [channel]
     rateLimitStoreFallbackTotal:
         name: rate_limit_store_fallback_total
         kind: counter

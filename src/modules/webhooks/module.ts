@@ -58,7 +58,9 @@ export default {
             queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
             handler: webhooksService.processDeliveryJob,
             schema: WebhookDeliverJobPayloadSchema,
-            prefetch: 5
+            prefetch: 5,
+            // The delivery row is this work's own durable store: no `jobs` row while the broker is down.
+            fallbackSweep: webhooksService.sendDueWebhookDeliveries
         }
     ],
     /** The secret-ring key, the subscription cap and the retention: see `./config`. */

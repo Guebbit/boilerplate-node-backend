@@ -142,8 +142,7 @@ const notifySignInMethod = (
             greetableName(user, user.email),
             change,
             provider
-        ),
-        'normal'
+        )
     ).catch((error: unknown) => {
         logger.warn({ message: 'Could not queue a sign-in method notice.', error });
     });

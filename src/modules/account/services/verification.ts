@@ -107,8 +107,8 @@ export const sendVerificationEmail = (
             token,
             target.route
         );
-        // High priority: a token-bearing link the user is actively waiting on, not a notification.
-        return sendAccountMail(address, mail);
+        // Urgent: a token-bearing link the user is actively waiting on, not a notification.
+        return sendAccountMail(address, mail, { urgent: true });
     });
 };
 

@@ -96,9 +96,8 @@ const afterReset = (
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `oauthAccounts` is always loaded; `select: false` makes that a lie
         (user.oauthAccounts ?? []).map(({ provider }) => provider)
     );
-    // Normal priority: a confirmation, not a link or code anyone is blocked on.
     // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-    void sendAccountMail(user.email, mail, 'normal');
+    void sendAccountMail(user.email, mail);
 
     return Promise.resolve(result);
 };

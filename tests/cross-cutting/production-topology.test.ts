@@ -42,6 +42,8 @@ interface ComposeFile {
             volumes?: string[];
             environment?: Record<string, string> | string[];
             command?: string | string[];
+            /** The container memory ceiling, compose's own spelling (`1g`). */
+            mem_limit?: string;
             entrypoint?: string | string[];
             secrets?: string[];
             healthcheck?: { test?: string[] };
@@ -99,13 +101,13 @@ const stageOf = (name: string): string => {
 const dockerfile = [stageOf('build'), stageOf('runtime')].join('\n');
 
 /**
- * The four services that run this repository's own code.
+ * The five services that run this repository's own code.
  *
- * They share one image and one hardening block, so they must share one verdict: `worker`, `cron`
- * and `setup` reach the same database and the same volumes `app` does, and a write primitive in
- * the application is a write primitive in all four.
+ * They share one image and one hardening block, so they must share one verdict: `worker`,
+ * `worker-heavy`, `cron` and `setup` reach the same database and the same volumes `app` does, and a
+ * write primitive in the application is a write primitive in all five.
  */
-const OWN_CODE_SERVICES = ['app', 'worker', 'cron', 'setup'] as const;
+const OWN_CODE_SERVICES = ['app', 'worker', 'worker-heavy', 'cron', 'setup'] as const;
 
 /**
  * The services that hold data or expose an unauthenticated UI: the bundled stores (`profiles:
@@ -306,6 +308,39 @@ describe('worker is the queue consumer, in its own container', () => {
 
     it('publishes no port: its health listener is loopback-only', () => {
         expect(compose.services.worker?.ports ?? []).toEqual([]);
+    });
+});
+
+describe('worker-heavy is the same entry under the heavy role, with a memory cap', () => {
+    /**
+     * A heavy worker without the role would take mail; one without the cap would let a decode
+     * take the host's memory, which is what the split exists to prevent.
+     */
+    it('runs the worker entry with NODE_WORKER_ROLE=heavy', () => {
+        expect([compose.services['worker-heavy']?.command ?? []].flat().join(' ')).toBe(
+            'node --import tsx src/worker.ts'
+        );
+        expect(compose.services['worker-heavy']?.environment).toMatchObject({
+            NODE_WORKER_ROLE: 'heavy'
+        });
+    });
+
+    it('is capped below the host, in the container and in the V8 heap', () => {
+        expect(compose.services['worker-heavy']?.mem_limit).toBe('1g');
+        expect(compose.services['worker-heavy']?.environment).toMatchObject({
+            NODE_OPTIONS: '--max-old-space-size=640'
+        });
+    });
+
+    it('leaves the standard worker without the role override', () => {
+        expect(compose.services.worker?.environment).not.toHaveProperty('NODE_WORKER_ROLE');
+    });
+
+    it('lists every worker mount verbatim', () => {
+        const workerVolumes = compose.services.worker?.volumes ?? [];
+        const heavyVolumes = compose.services['worker-heavy']?.volumes ?? [];
+
+        expect(workerVolumes.filter((volume) => !heavyVolumes.includes(volume))).toEqual([]);
     });
 });
 
@@ -570,7 +605,7 @@ describe('the cache and the limits are two Redis instances', () => {
             .filter(([, secrets]) => secrets.includes('limits_password'))
             .map(([name]) => name);
 
-        expect(holders.toSorted()).toEqual(['app', 'cron', 'limits', 'worker']);
+        expect(holders.toSorted()).toEqual(['app', 'cron', 'limits', 'worker', 'worker-heavy']);
     });
 
     it('points the limiter at the limits service, never at the cache', () => {

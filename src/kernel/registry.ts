@@ -78,6 +78,14 @@ export interface ModuleConsumer {
 
     /** Number of unacknowledged messages allowed at once. Default: 1 — see `ConsumeOptions.prefetch`. */
     prefetch?: number;
+
+    /**
+     * For work that keeps its OWN durable row (a webhook delivery): sends what the broker would
+     * have carried, straight from those rows. The worker runs it while the broker is down, so the
+     * work is neither held twice nor left waiting for the broker. Work without a row of its own
+     * leaves it out and is held in the `jobs` fallback queue instead.
+     */
+    fallbackSweep?: () => Promise<void>;
 }
 
 /**

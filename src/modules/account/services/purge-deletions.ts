@@ -50,13 +50,8 @@ const purgeOne = (user: UserDocument): Promise<keyof PurgeCounts> => {
                 outcome: 'success'
             });
             authAccountDeleteTotal.inc({ status: 'purged' });
-            // Normal priority: a goodbye nobody is waiting on.
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- sendAccountMail never rejects (enqueueEmail logs its own failure)
-            void sendAccountMail(
-                email,
-                accountDeletedEmail(recipientLocale(locale), name),
-                'normal'
-            );
+            void sendAccountMail(email, accountDeletedEmail(recipientLocale(locale), name));
             return 'purged';
         })
         .catch((error: unknown) => {

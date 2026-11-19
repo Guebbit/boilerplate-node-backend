@@ -15,6 +15,15 @@ import { choice, flag, int, text } from '../config/fields';
 /** The log levels winston knows, lowest severity last. */
 const LOG_LEVELS = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'] as const;
 
+/**
+ * The two worker process roles: `standard` takes the light and external jobs, `heavy` the heavy
+ * ones — see `src/infrastructure/adapters/job-kinds.ts`. The value of `NODE_WORKER_ROLE`.
+ */
+export const WORKER_ROLES = ['standard', 'heavy'] as const;
+
+/** See {@link WORKER_ROLES}. */
+export type WorkerRole = (typeof WORKER_ROLES)[number];
+
 /** How a personal field appears in a log line. See `adapters/logger.ts`. */
 export const PERSONAL_FIELD_MODES = ['hash', 'redact', 'plain'] as const;
 
@@ -39,12 +48,13 @@ export const loggingConfig = defineConfig({
     }
 });
 
-/** Where the HTTP server listens, where the worker's own small listener does, and how both shut down. */
+/** Where the HTTP server listens, where the worker's own small listener does, which jobs a worker takes, and how both shut down. */
 export const serverConfig = defineConfig({
     name: 'server',
     shape: {
         NODE_PORT: int({ default: 3000, min: 1, max: 65_535 }),
         NODE_WORKER_PORT: int({ default: 3010, min: 1, max: 65_535 }),
+        NODE_WORKER_ROLE: choice(WORKER_ROLES, { default: 'standard' }),
         NODE_HOST: text(),
         NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
         NODE_SHUTDOWN_DELAY_MS: int({ default: 0, min: 0 })

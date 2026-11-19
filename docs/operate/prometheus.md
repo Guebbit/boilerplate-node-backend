@@ -27,33 +27,34 @@ Liveness and readiness are separate: `/livez` and `/readyz`, see [Health Checks]
 
 ## What `/observability/metrics` exposes
 
-| Metric                                                    | Why it is here                                                                  |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `http_requests_total`                                     | request rate, split by method/route/status                                      |
-| `http_request_duration_milliseconds`                      | latency histogram for p50/p95/p99                                               |
-| `http_request_errors_total`                               | 4xx/5xx counts                                                                  |
-| `http_requests_in_flight`                                 | concurrency at a glance                                                         |
-| `dependency_up`                                           | each backing service serving (1) or not (0); unconfigured ones are not reported |
-| `cache_invalidation_failures_total`                       | writes whose stale cached response survived                                     |
-| `cache_requests_total`                                    | `setCache` lookups by outcome — hit/miss/stale/refresh                          |
-| `query_timeouts_total`                                    | database queries killed at the time limit (answered 503 `QUERY_TIMEOUT`)        |
-| `rate_limit_store_fallback_total`                         | limiter operations served without the `limits` Redis                            |
-| `rate_limit_refusals_total`                               | requests refused with 429, by budget                                            |
-| `process_unhandled_rejections_total`                      | promise rejections nobody handled (the process keeps running)                   |
-| `queue_jobs_dead_lettered_total`                          | jobs parked in a `<queue>.dead`, by queue name                                  |
-| `webhook_delivery_attempts_total`                         | outbound webhook delivery attempts, by outcome                                  |
-| `webhook_subscriptions_auto_disabled_total`               | subscriptions auto-disabled for sustained failure                               |
-| `webhook_deliveries_overdue`                              | pending deliveries more than 10 min past due                                    |
-| `security_events_total`                                   | forged or guessed credentials, by `security.*` action                           |
-| `auth_stale_credentials_total`                            | expired or revoked credentials presented, by kind                               |
-| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/restore links, by flow                        |
-| `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                                          |
-| `audit_sink_failures_total`                               | audit entries that could not be persisted                                       |
-| `account_export_failed_total`                             | data exports whose build failed                                                 |
-| `outbox_events_published_total` (+ `_retried_`, `_dead_`) | [outbox](../understand/outbox.md) delivery outcomes                             |
-| `db_client_operation_duration_seconds`                    | histogram of every database command, by collection, operation, outcome          |
-| `auth_login_total`, `cart_checkout_total`, …              | business counters                                                               |
-| `process_*` and `nodejs_*`                                | default `prom-client` runtime metrics                                           |
+| Metric                                                    | Why it is here                                                                                  |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `http_requests_total`                                     | request rate, split by method/route/status                                                      |
+| `http_request_duration_milliseconds`                      | latency histogram for p50/p95/p99                                                               |
+| `http_request_errors_total`                               | 4xx/5xx counts                                                                                  |
+| `http_requests_in_flight`                                 | concurrency at a glance                                                                         |
+| `dependency_up`                                           | each backing service serving (1) or not (0); unconfigured ones are not reported                 |
+| `cache_invalidation_failures_total`                       | writes whose stale cached response survived                                                     |
+| `cache_requests_total`                                    | `setCache` lookups by outcome — hit/miss/stale/refresh                                          |
+| `query_timeouts_total`                                    | database queries killed at the time limit (answered 503 `QUERY_TIMEOUT`)                        |
+| `rate_limit_store_fallback_total`                         | limiter operations served without the `limits` Redis                                            |
+| `rate_limit_refusals_total`                               | requests refused with 429, by budget                                                            |
+| `process_unhandled_rejections_total`                      | promise rejections nobody handled (the process keeps running)                                   |
+| `queue_jobs_dead_lettered_total`                          | jobs parked in a `<queue>.dead`, or as `dead` in the fallback queue, by queue name              |
+| `queue_held_jobs`, `queue_held_jobs_oldest_age_seconds`   | jobs held in the database while the broker was down, by channel: how many, and the oldest's age |
+| `webhook_delivery_attempts_total`                         | outbound webhook delivery attempts, by outcome                                                  |
+| `webhook_subscriptions_auto_disabled_total`               | subscriptions auto-disabled for sustained failure                                               |
+| `webhook_deliveries_overdue`                              | pending deliveries more than 10 min past due                                                    |
+| `security_events_total`                                   | forged or guessed credentials, by `security.*` action                                           |
+| `auth_stale_credentials_total`                            | expired or revoked credentials presented, by kind                                               |
+| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/restore links, by flow                                        |
+| `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                                                          |
+| `audit_sink_failures_total`                               | audit entries that could not be persisted                                                       |
+| `account_export_failed_total`                             | data exports whose build failed                                                                 |
+| `outbox_events_published_total` (+ `_retried_`, `_dead_`) | [outbox](../understand/outbox.md) delivery outcomes                                             |
+| `db_client_operation_duration_seconds`                    | histogram of every database command, by collection, operation, outcome                          |
+| `auth_login_total`, `cart_checkout_total`, …              | business counters                                                                               |
+| `process_*` and `nodejs_*`                                | default `prom-client` runtime metrics                                                           |
 
 The `route` label is the template Express matched — `/orders/:id` — read on `finish`, or
 `unmatched` for a request that reached no handler. Never a requested path: prom-client evicts
@@ -66,47 +67,48 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 
 **Certificate expiry is not an alert rule here.** The only certificate-expiry check is Gatus's `[CERTIFICATE_EXPIRATION]` condition on the second machine (see [Gatus](./gatus.md)). Without Gatus, nothing warns: Let's Encrypt stopped sending expiry emails on 2025-06-04.
 
-| Alert                                | What it means                                                                                                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ApiDown`                            | scrape target unreachable > 1 min                                                                                                                             |
-| `WorkerDown`                         | the queue worker's scrape target unreachable > 1 min: queued jobs (mail, image digests, webhooks) are not being taken                                         |
-| `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                                                  |
-| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (scrape every copy as its own target; `ApiDown` mutes it)                                                  |
-| `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                                        |
-| `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                                                                  |
-| `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                                                           |
-| `HighHeapUsage`                      | heap > 90 % for 5 min                                                                                                                                         |
-| `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                                                                                                           |
-| `OutboxEventsDead`                   | any outbox event given up on in the last 15 min                                                                                                               |
-| `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving                                                                                     |
-| `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                                                                                                           |
-| `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h; keeps firing until the job runs again or its `leases` row is deleted                     |
-| `FrequentSweepStale`                 | `sweep:outbox`, `sweep:payment-effects` or `sweep:reservations` has not succeeded in > 30 min                                                                 |
-| `ScheduledJobNeverSucceeded`         | a job has been recorded as run for over an hour and has never recorded a success                                                                              |
-| `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                                                                                                    |
-| `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                                                                                                     |
-| `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                                                                                                       |
-| `TwoFactorDisableFailures`           | any failed attempt to disable 2FA in 15 min                                                                                                                   |
-| `AuditSinkFailing`                   | any audit entry not persisted in 5 min                                                                                                                        |
-| `UnauthorizedForbiddenRate`          | 401 and 403 answers above 2 per second for 10 min                                                                                                             |
-| `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min                                                                                              |
-| `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                                                                                                      |
-| `UnhandledRejections`                | any unhandled promise rejection in 15 min                                                                                                                     |
-| `ForgedBearerTokens`                 | more than 10 bad-signature or malformed bearer tokens in 15 min                                                                                               |
-| `RevokedApiKeyUsed`                  | a revoked `sk_` key presented with its real secret                                                                                                            |
-| `PaymentWebhookSignatureFailures`    | a payment webhook failed its signature check                                                                                                                  |
-| `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                                                              |
-| `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                                                               |
-| `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                                                                   |
-| `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                                                 |
-| `PaymentWebhookUnreadable`           | a signed provider message the adapter or schema could not read: [guide](../modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read) |
-| `PaymentWebhookFailing`              | the payment webhook route answered a 5xx in 30 min                                                                                                            |
-| `PaidOrderWithoutHold`               | a paid or shipping order has no stock hold to settle: [runbook](../modules/inventory-reservations.md#orphaned-hold)                                           |
-| `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                                      |
-| `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                                           |
-| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)                           |
-| `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                                               |
-| `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)                                  |
+| Alert                                | What it means                                                                                                                                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApiDown`                            | scrape target unreachable > 1 min                                                                                                                                                                   |
+| `WorkerDown`                         | the queue worker's scrape target unreachable > 1 min: queued jobs (mail, image digests, webhooks) are not being taken                                                                               |
+| `HeldJobsStuck`                      | the oldest job held in the database fallback queue for a channel has waited > 15 min (`queue_held_jobs_oldest_age_seconds`): no worker of the role that takes it is draining. Held jobs have no TTL |
+| `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                                                                                        |
+| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (scrape every copy as its own target; `ApiDown` mutes it)                                                                                        |
+| `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                                                                              |
+| `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                                                                                                        |
+| `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                                                                                                 |
+| `HighHeapUsage`                      | heap > 90 % for 5 min                                                                                                                                                                               |
+| `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                                                                                                                                                 |
+| `OutboxEventsDead`                   | any outbox event given up on in the last 15 min                                                                                                                                                     |
+| `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving                                                                                                                           |
+| `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                                                                                                                                                 |
+| `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h; keeps firing until the job runs again or its `leases` row is deleted                                                           |
+| `FrequentSweepStale`                 | `sweep:outbox`, `sweep:payment-effects` or `sweep:reservations` has not succeeded in > 30 min                                                                                                       |
+| `ScheduledJobNeverSucceeded`         | a job has been recorded as run for over an hour and has never recorded a success                                                                                                                    |
+| `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                                                                                                                                          |
+| `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                                                                                                                                           |
+| `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                                                                                                                                             |
+| `TwoFactorDisableFailures`           | any failed attempt to disable 2FA in 15 min                                                                                                                                                         |
+| `AuditSinkFailing`                   | any audit entry not persisted in 5 min                                                                                                                                                              |
+| `UnauthorizedForbiddenRate`          | 401 and 403 answers above 2 per second for 10 min                                                                                                                                                   |
+| `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min                                                                                                                                    |
+| `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                                                                                                                                            |
+| `UnhandledRejections`                | any unhandled promise rejection in 15 min                                                                                                                                                           |
+| `ForgedBearerTokens`                 | more than 10 bad-signature or malformed bearer tokens in 15 min                                                                                                                                     |
+| `RevokedApiKeyUsed`                  | a revoked `sk_` key presented with its real secret                                                                                                                                                  |
+| `PaymentWebhookSignatureFailures`    | a payment webhook failed its signature check                                                                                                                                                        |
+| `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                                                                                                    |
+| `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                                                                                                     |
+| `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                                                                                                         |
+| `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                                                                                       |
+| `PaymentWebhookUnreadable`           | a signed provider message the adapter or schema could not read: [guide](../modules/payments-disputes-and-adapters.md#a-signed-message-the-app-could-not-read)                                       |
+| `PaymentWebhookFailing`              | the payment webhook route answered a 5xx in 30 min                                                                                                                                                  |
+| `PaidOrderWithoutHold`               | a paid or shipping order has no stock hold to settle: [runbook](../modules/inventory-reservations.md#orphaned-hold)                                                                                 |
+| `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                                                                            |
+| `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                                                                                 |
+| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)                                                                 |
+| `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                                                                                     |
+| `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)                                                                        |
 
 The expression, the `for` and the severity of each are in the rules file; the conditions above are the meaning, not a copy of the thresholds.
 

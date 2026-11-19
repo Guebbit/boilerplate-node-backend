@@ -1,0 +1,159 @@
+# `worker-heavy`: the CPU- and memory-bound half of the queue consumers (an image digest, a
+# whole-account export), one job at a time under a memory cap. `worker` takes the light and external
+# jobs (mail, webhook deliveries), so a burst of uploads never starves a reset mail. Same image and
+# entry point as `worker`; `NODE_WORKER_ROLE=heavy` is the difference. Compose's `worker-heavy`
+# service says the same thing.
+#
+# Needs a broker to have anything to do: with no `NODE_RABBITMQ_URL` (app.env, the rig's default) the
+# app runs its jobs in its own process, and this pod boots, consumes nothing and stays healthy.
+# A cluster with a broker sets `NODE_RABBITMQ_URL` (and its password file) in app.env.
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: worker-heavy
+    labels:
+        app.kubernetes.io/name: worker-heavy
+        boilerplate/stage: app
+spec:
+    # One copy by default. A second takes jobs off the same queues with no coordination, so scaling
+    # is `kubectl scale deployment worker-heavy --replicas=N`.
+    replicas: 1
+    # Surge one, never take one away first: a job a stopping copy was running is redelivered, not
+    # lost, but there is no reason to leave the queue unattended while the new copy boots.
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: worker-heavy
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: worker-heavy
+                boilerplate/stage: app
+        spec:
+            automountServiceAccountToken: false
+            # SIGTERM -> consumers cancel at once -> lame-duck delay (NODE_SHUTDOWN_DELAY_MS, 5 s) ->
+            # running jobs get the queue's share of the teardown budget (20 % of
+            # NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS, about 3 s) to finish and ack, and one still running
+            # then is redelivered -> exit 0. Keep the grace period above delay + budget, or the
+            # kubelet SIGKILLs a job that was about to ack: an email sent twice on every deploy.
+            # src/infrastructure/runtime/server-lifecycle.ts
+            terminationGracePeriodSeconds: 30
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 1000
+                fsGroup: 1000
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: worker-heavy
+                  image: boilerplate-app
+                  # `args`, not `command`: `command` would replace the image's ENTRYPOINT (dumb-init,
+                  # PID 1) and SIGTERM would stop reaching Node. Only the CMD is replaced.
+                  args:
+                      - node
+                      - --import
+                      - tsx
+                      - src/worker.ts
+                  envFrom:
+                      - configMapRef:
+                            name: app-env
+                      - configMapRef:
+                            name: edge-env
+                  env:
+                      - name: NODE_SERVICE_NAME
+                        value: api-worker-heavy
+                      # Takes the heavy channels only (src/infrastructure/adapters/job-kinds.ts).
+                      - name: NODE_WORKER_ROLE
+                        value: heavy
+                      # The V8 heap cap, under the container limit below: sharp's native buffers sit
+                      # outside the heap, so the limit is the one that holds.
+                      - name: NODE_OPTIONS
+                        value: --max-old-space-size=640
+                  # The same module graph as the app (~560 MB steady, app.yaml) plus one image decode
+                  # or export at a time, hence the 1Gi ceiling. No CPU limit: a throttled event loop
+                  # looks like a hang.
+                  resources:
+                      requests:
+                          cpu: 50m
+                          memory: 640Mi
+                      limits:
+                          memory: 1Gi
+                  securityContext:
+                      readOnlyRootFilesystem: true
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                          drop: [ALL]
+                  # The worker's own port (NODE_WORKER_PORT, default 3010): `GET /livez` for the probes and
+                  # the Prometheus scrape at /observability/metrics (the Service below). Liveness is
+                  # "the process answers", never a dependency (docs/operate/health-checks.md).
+                  ports:
+                      - name: metrics
+                        containerPort: 3010
+                  startupProbe:
+                      httpGet:
+                          path: /livez
+                          port: metrics
+                      periodSeconds: 5
+                      timeoutSeconds: 5
+                      failureThreshold: 36
+                  livenessProbe:
+                      httpGet:
+                          path: /livez
+                          port: metrics
+                      periodSeconds: 30
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  volumeMounts:
+                      - name: tmp
+                        mountPath: /tmp
+                      - name: secrets
+                        mountPath: /run/secrets
+                        readOnly: true
+                      # An image job reads the quarantine and writes the images; an export writes its file
+                      # under storage. Same claim and paths as `app`.
+                      - name: data
+                        mountPath: /app/public/images
+                        subPath: images
+                      - name: data
+                        mountPath: /app/tmp/storage
+                        subPath: storage
+                      - name: data
+                        mountPath: /app/tmp/quarantine
+                        subPath: quarantine
+            volumes:
+                - name: tmp
+                  emptyDir:
+                      sizeLimit: 64Mi
+                - name: secrets
+                  secret:
+                      secretName: app-secrets
+                      defaultMode: 0444
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: data
+---
+# The stable address a scraper (a Prometheus Service discovery, a ServiceMonitor) finds the worker
+# at. Two alert counters (`queue_jobs_dead_lettered_total`, `webhook_delivery_attempts_total`) move
+# only in the worker, so the scrape must reach it: path `/observability/metrics`, bearer token =
+# the `metrics_token` secret, the same as the API's.
+apiVersion: v1
+kind: Service
+metadata:
+    name: worker-heavy
+    labels:
+        app.kubernetes.io/name: worker-heavy
+        boilerplate/stage: app
+spec:
+    type: ClusterIP
+    selector:
+        app.kubernetes.io/name: worker-heavy
+    ports:
+        - name: metrics
+          port: 3010
+          targetPort: metrics

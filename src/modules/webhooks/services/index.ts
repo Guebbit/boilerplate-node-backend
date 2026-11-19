@@ -9,7 +9,7 @@
 import * as subscriptions from './subscriptions';
 import * as deliveries from './deliveries';
 import { subscribeToWebhookEvents } from './publish';
-import { sweepDueWebhookDeliveries } from './sweep';
+import { sendDueWebhookDeliveries, sweepDueWebhookDeliveries } from './sweep';
 import { reencryptWebhookSecrets } from './reencrypt';
 import { processDeliveryJob } from './attempt';
 import { listWebhookEventCatalog, registerWebhookCatalog } from './catalog';
@@ -35,6 +35,7 @@ export const webhooksService = {
     replayDelivery: deliveries.replay,
     subscribeToWebhookEvents,
     sweepDueWebhookDeliveries,
+    sendDueWebhookDeliveries,
     reencryptWebhookSecrets,
     processDeliveryJob,
     listWebhookEventCatalog,
