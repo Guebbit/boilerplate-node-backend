@@ -69,7 +69,8 @@ export interface PlaceOrderShipping {
 
 /** What `placeOrder` needs to write one order and hold its stock. */
 export interface PlaceOrderInput {
-    userId: string;
+    /** Absent for a walk-in order (staff-placed, no account): the order is stamped for retention at once. */
+    userId?: string;
     email: string;
     locale: string;
     lines: readonly PlaceOrderLine[];
@@ -208,7 +209,13 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
 
         const orderDraft = {
             _id: orderId,
-            userId: toObjectId(input.userId),
+            /**
+             * No account means no erasure will ever detach this order, so the retention clock starts
+             * now: the buyer's email is cleaned up like an erased buyer's, never kept forever.
+             */
+            ...(input.userId
+                ? { userId: toObjectId(input.userId) }
+                : { piiClockStartedAt: new Date() }),
             email: input.email,
             items,
             orderNumber,

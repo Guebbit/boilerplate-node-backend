@@ -125,7 +125,7 @@ export const considerPurchaseHold = ({
     return orderRepository
         .findById(orderId)
         .then((order) => {
-            // An order with no buyer left (erased account) has nobody to act on.
+            // An order with no account (a walk-in order, or an erased account) has nobody to act on.
             const userId = order?.userId ? String(order.userId) : undefined;
             if (!order || !userId) return;
 
