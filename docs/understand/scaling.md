@@ -52,6 +52,8 @@ PM2 is a footnote, not a recommendation: it can fork N processes that share one 
 - The `ApiRestarting` alert is unreliable behind a balancer: `process_start_time_seconds` jumps between copies.
 - SSE caps (per-user and global stream limits) are counted per copy, so the real ceiling is cap × copies.
 - Rate-limit budgets are per process without a `limits` Redis, so a budget of 100 a minute becomes `100 × copies`. Nothing refuses to boot without it, because a copy cannot see its siblings: set `NODE_RATE_LIMIT_REDIS_URL` yourself.
+- Without that Redis a solved ALTCHA challenge can be replayed across copies too: each copy remembers only its own spent challenges.
+- A notification stream opened while Redis is down gets no cross-copy messages until a later stream on that copy (its own reconnect included) subscribes again.
 - Queue backlog is a worker question: with a broker and no worker running, jobs wait in their queues until one starts.
 - Copies are stateless: anything kept in memory is invisible to the others and dies on the next deploy or crash. State lives in Mongo or Redis.
 

@@ -20,7 +20,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocumen
     actorUserId: 'user-1',
     actorRole: 'user',
     actorScope: 'tenant',
-    action: coreAuditActions.SECURITY_UNAUTHORIZED,
+    action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
     outcome: 'success',
     timestamp: new Date('2026-08-01T10:00:00.000Z'),
     level: 'info',
@@ -73,7 +73,7 @@ describe('auditLogRepository', () => {
 
         it('rejects an entry missing a required field', async () => {
             const incomplete = asStub<Partial<AuditLogDocument>>({
-                action: coreAuditActions.SECURITY_UNAUTHORIZED
+                action: coreAuditActions.SECURITY_REAUTH_REQUIRED
             });
 
             await expect(auditLogRepository.create(incomplete)).rejects.toThrow();
@@ -112,7 +112,7 @@ describe('auditLogRepository', () => {
             expect(items.map((item) => item.action)).toEqual([
                 coreAuditActions.SECURITY_FORBIDDEN,
                 coreAuditActions.SECURITY_RATE_LIMIT_HIT,
-                coreAuditActions.SECURITY_UNAUTHORIZED
+                coreAuditActions.SECURITY_REAUTH_REQUIRED
             ]);
         });
 

@@ -7,18 +7,19 @@ audience: [staff, owner]
 
 **For staff when a refund or a card dispute does not go the usual way.** Each entry has the same three parts: what you see, what to do, whose job it is.
 
-| Something odd happened                                             | Go to                                                          |
-| ------------------------------------------------------------------ | -------------------------------------------------------------- |
-| A refund is owed and the money must be paid back by hand           | [A refund owed by hand](#refund-owed-by-hand)                  |
-| I already paid the buyer back myself (cash, transfer)              | [Paid the buyer back already](#paid-outside)                   |
-| The provider emailed a dispute the order does not show             | [A card dispute](#card-dispute)                                |
-| The card refused to take a refund back                             | [A card refund the card refused](#card-refund-refused)         |
-| The bank sent a refund back after the shop had marked it paid      | [A refund the bank sent back](#refund-bounced)                 |
-| A buyer asked their bank to take a card payment back (a dispute)   | [A card dispute](#card-dispute)                                |
-| The buyer was asked how they want their money and has not answered | [The buyer does not answer](#buyer-silent)                     |
-| A refund was also made in the provider's own dashboard             | [Refunded in the dashboard as well](#refund-covered-elsewhere) |
-| Two refunds were opened by mistake                                 | [Two refunds by mistake](#two-refunds)                         |
-| An order was canceled but no refund opened                         | [A canceled order with no refund](#no-refund-opened)           |
+| Something odd happened                                              | Go to                                                                                                  |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| A refund is owed and the money must be paid back by hand            | [A refund owed by hand](#refund-owed-by-hand)                                                          |
+| I already paid the buyer back myself (cash, transfer)               | [Paid the buyer back already](#paid-outside)                                                           |
+| The provider emailed a dispute the order does not show              | [A card dispute](#card-dispute)                                                                        |
+| The card refused to take a refund back                              | [A card refund the card refused](#card-refund-refused)                                                 |
+| The bank sent a refund back after the shop had marked it paid       | [A refund the bank sent back](#refund-bounced)                                                         |
+| A buyer asked their bank to take a card payment back (a dispute)    | [A card dispute](#card-dispute)                                                                        |
+| The buyer was asked how they want their money and has not answered  | [The buyer does not answer](#buyer-silent)                                                             |
+| A refund was also made in the provider's own dashboard              | [Refunded in the dashboard as well](#refund-covered-elsewhere)                                         |
+| A card was charged in the provider's dashboard, and needs refunding | [A card charged in the dashboard](./when-something-goes-wrong-orders-and-delivery.md#dashboard-charge) |
+| Two refunds were opened by mistake                                  | [Two refunds by mistake](#two-refunds)                                                                 |
+| An order was canceled but no refund opened                          | [A canceled order with no refund](#no-refund-opened)                                                   |
 
 ## A refund owed by hand {#refund-owed-by-hand}
 

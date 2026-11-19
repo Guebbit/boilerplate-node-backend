@@ -195,7 +195,7 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-the order's claim window has closed (a never-paid order at once, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+the order's claim window has closed (a never-paid order once canceled, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
 ([why](../understand/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:

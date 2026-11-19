@@ -614,7 +614,8 @@ export interface PiiClaimWindow {
  *
  * | Order                                   | Due                                  |
  * | --------------------------------------- | ------------------------------------ |
- * | never paid                              | at once                              |
+ * | never paid, `canceled`                  | at once                              |
+ * | never paid, still open                  | never (its cash is still to come)    |
  * | delivered (`conformityUntil` set)       | `conformityUntil` + guarantee days   |
  * | paid, `canceled` without delivery      | `paidAt` + undelivered days          |
  * | paid and still open                     | never (it is still to be fulfilled)  |
@@ -627,7 +628,8 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
     /** The sparse index on the marker is what narrows the scan. */
     piiClockStartedAt: { $exists: true },
     $or: [
-        { paidAt: { $exists: false } },
+        // Never paid AND ended: a live walk-in order waiting for its cash holds a clock but is no one's to scrub yet.
+        { paidAt: { $exists: false }, status: OrderStatus.canceled },
         {
             conformityUntil: { $exists: true },
             // $dateAdd: https://www.mongodb.com/docs/manual/reference/operator/aggregation/dateAdd/

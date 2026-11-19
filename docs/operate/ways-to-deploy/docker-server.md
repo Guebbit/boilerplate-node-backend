@@ -91,9 +91,9 @@ The compose bind mount overlays the copied source with the live tree, so what la
 ### `runtime` details worth knowing
 
 - **Chromium is off by default** (about 200 MB). Only invoice rendering needs it. Turn it on with
-  `--build-arg INSTALL_CHROMIUM=true`. Without it, `GET /orders/{id}/invoice` answers 500, which is visible. The
-  order-confirmation mail does not fail: the render error is logged and the mail sends with no invoice attached,
-  silently, for every order. A shop that mails invoices needs Chromium.
+  `--build-arg INSTALL_CHROMIUM=true`. Without it, the invoice and credit-note downloads
+  (`GET /orders/{id}/invoice`, `/credit-notes/{creditNoteId}`) answer 500, which is visible. No mail carries an
+  invoice, so nothing else changes. A shop whose buyers download invoices needs Chromium.
 - **`npm ci --omit=dev --ignore-scripts`** is about 200 MB instead of 1.4 GB, and no transitive dependency runs code
   at build time.
 - **npm, npx, corepack and yarn are deleted in the same layer as the install.** A later `RUN` would leave them in the

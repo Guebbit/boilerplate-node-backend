@@ -128,7 +128,7 @@ FROM docker.io/library/node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb
 
 # Chromium is off by default (~200 MB). Only invoice rendering needs it:
 #   docker build -f docker/Dockerfile --target runtime --build-arg INSTALL_CHROMIUM=true .
-# Without it the order-confirmation mail still sends, silently, with no invoice attached.
+# Without it the invoice download (GET /orders/{id}/invoice) answers with an error: nothing else renders a PDF.
 ARG INSTALL_CHROMIUM=false
 
 WORKDIR /app

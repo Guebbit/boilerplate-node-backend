@@ -99,6 +99,7 @@ const resolveItemProducts = (
 /**
  * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
  * full snapshot.
+ * @param userId - the buyer's account, or `undefined` for a walk-in order
  * @param items - `{ productId, quantity }` pairs
  * @param context - caller context for the `order_created` analytics/audit emit
  */
@@ -109,7 +110,7 @@ const resolveItemProducts = (
  * on the last one's resolved value.
  */
 export const create = async (
-    userId: string,
+    userId: string | undefined,
     email: string,
     items: OrderLineInput[],
     context: CallerContext
@@ -118,18 +119,20 @@ export const create = async (
     if (overLimit) return overLimit;
 
     /**
-     * The buyer must exist: an order for nobody is a dangling reference. A failed lookup is a
-     * 500, never an order placed for someone unchecked.
+     * A named buyer must exist: an order for a missing account is a dangling reference. A failed
+     * lookup is a 500, never an order placed for someone unchecked. No `userId` is a walk-in
+     * order, with nobody to look up.
      */
-    const buyer = await userService.getById(userId);
-    if (!buyer) return generateReject(404, [t('users.not-found')]);
+    const buyer = userId ? await userService.getById(userId) : undefined;
+    if (userId && !buyer) return generateReject(404, [t('users.not-found')]);
 
     /**
      * The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
      * endpoint lets an admin place an order for someone else, and `context.locale` there is the
-     * admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
+     * admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout. A
+     * walk-in order has no stored language, so it takes the shop's default.
      */
-    const buyerLocale = buyer.locale ?? getDefaultLocale();
+    const buyerLocale = buyer?.locale ?? getDefaultLocale();
 
     /**
      * `Promise.all([])` settles without a query, so an empty basket still costs no round trip. The

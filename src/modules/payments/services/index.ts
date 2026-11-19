@@ -16,15 +16,8 @@
 
 import { createIntent } from './intent';
 import { confirmPayment, syncPayment, receiveWebhook, applyWebhookSettlement } from './settlement';
-import {
-    refundPayment,
-    openReturnRefund,
-    returnRefundState,
-    sendOpenedRefund,
-    settleRefundByHand,
-    cancelRefund,
-    settledRefundPayloads
-} from './refunds';
+import { refundPayment, settleRefundByHand, cancelRefund, settledRefundPayloads } from './refunds';
+import { openReturnRefund, returnRefundState, sendOpenedRefund } from './return-refunds';
 import { syncRefunds } from './external-refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
@@ -55,7 +48,7 @@ import { disputeStanding } from './disputes';
 
 export { RefundLeftOpenError, WebhookProviderUnknownError } from './errors';
 export type { OfflinePaymentInput } from './offline';
-export type { OpenedReturnRefund } from './refunds';
+export type { OpenedReturnRefund } from './return-refunds';
 export type { MixRow } from './stats';
 export type { PaymentMethodInfo } from '../config';
 

@@ -78,7 +78,7 @@ its delivery.
 The invoice buyer clock (`NODE_INVOICE_BUYER_RETENTION_YEARS`) defaults to the longest common EU
 period, so the boilerplate is safe anywhere in the EU. A single-country shop may lower it.
 
-Full detail: [Orders after the account](./data-retention-orders.md).
+Full detail: [Orders after the account](./data-retention-orders.md#orders-after-the-account).
 
 ## Invoices: the tax clock
 
@@ -87,11 +87,11 @@ the order's own PII clock. What it does not need forever is the buyer. Once the 
 `reap:invoices` blanks the buyer block (name, street, city, zip, country) and keeps the numbered
 document: seller, lines, every amount, the order link, and a credit note's link to its invoice.
 
-Full detail: [Invoices: the tax clock](./data-retention-orders.md).
+Full detail: [Invoices: the tax clock](./data-retention-orders.md#invoices-the-tax-clock).
 
 ## Inactive accounts: minimise, don't delete
 
-Full detail: [Inactive accounts: minimise, don't delete](./data-retention-accounts.md).
+Full detail: [Inactive accounts: minimise, don't delete](./data-retention-accounts.md#inactive-accounts-minimise-don-t-delete).
 
 ## Self-deletion: a grace under one month
 
@@ -100,7 +100,7 @@ Full detail: [Inactive accounts: minimise, don't delete](./data-retention-accoun
 do the same (Microsoft Graph keeps a deleted user restorable for 30 days, Google Workspace 20, Discord
 about 14); a hijacked session or a mistake is undone before anything is lost.
 
-Full detail: [Self-deletion: a grace under one month](./data-retention-accounts.md).
+Full detail: [Self-deletion: a grace under one month](./data-retention-accounts.md#self-deletion-a-grace-under-one-month).
 
 ## The previous email after a change
 
@@ -120,14 +120,14 @@ The states are in [Proving an address](../modules/account.md#proving-an-address)
 An order's [timeline](../modules/orders.md#the-timeline) holds one free-text field, `text`: the
 reason a staff member gave for an override. Everything else on a row is an id, a code or a number.
 
-Full detail: [Free text on the order timeline](./data-retention-holds.md).
+Full detail: [Free text on the order timeline](./data-retention-holds.md#free-text-on-the-order-timeline).
 
 ## Free text on returns
 
 A return carries a required `reason` (`withdrawal`, `defective`, `wrong_item`, `other`) and two
 free-text fields.
 
-Full detail: [Free text on returns](./data-retention-holds.md).
+Full detail: [Free text on returns](./data-retention-holds.md#free-text-on-returns).
 
 ## A shipment's address copy
 
@@ -144,7 +144,7 @@ Staff can put a fulfillment order on hold, with a reason from a closed set and a
 person: "customer rang twice, sounded drunk", "address looks like a reseller". That is the same shape
 of risk as a return's `declineMessage`, so it gets the same treatment: an end date of its own.
 
-Full detail: [Free text on holds](./data-retention-holds.md).
+Full detail: [Free text on holds](./data-retention-holds.md#free-text-on-holds).
 
 ## The purchase hold
 
@@ -152,8 +152,9 @@ A hold is a protective pause on one account's checkout after repeated cancellati
 stores a reason, an end date, an optional note staff wrote for the buyer, who set it and when. The
 mechanics are in [the purchase hold](../modules/orders.md#the-purchase-hold). An automatic hold lasts
 at most 7 days, so a machine's decision stays temporary, and it also flags the account for a person
+to look at (`purchaseHoldFlaggedAt`, a timestamp and nothing else).
 
-Full detail: [The purchase hold](./data-retention-holds.md).
+Full detail: [The purchase hold](./data-retention-holds.md#the-purchase-hold).
 
 ## The support mailbox
 

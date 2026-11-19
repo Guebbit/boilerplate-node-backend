@@ -457,7 +457,7 @@ rules:
           works (mail and an in-app notice on the cart and on the profile); a contact route reaches
           staff who can lift it (POST /users/{id}/lift-purchase-hold, which also restarts the count);
           the processing basis and a legitimate-interest assessment are written down
-          (docs/understand/data-retention.md); the pause is capped at 7 days and flags the account so a
+          (docs/understand/data-retention-holds.md); the pause is capped at 7 days and flags the account so a
           person reviews it (users list filter purchaseHoldReview). Verdict: SATISFIED when the
           Art. 22(3) safeguards hold. The house applies them as a precaution while the Art. 22(1)
           scope is open, so the verdict judges the safeguards, not the prohibition. The mail alone
@@ -467,7 +467,7 @@ rules:
           the effect must be comparable to a legal effect). If the pause is significant it is
           prohibited (C-634/21 ¶52) and no Art. 22(2) exception fits, so the fix is a person before
           the pause. That is the operator's product choice
-          (docs/understand/data-retention.md#the-purchase-hold)." Re-judge the scope question, and report
+          (docs/understand/data-retention-holds.md#the-purchase-hold)." Re-judge the scope question, and report
           VIOLATION if it is then judged significant, when the hold loses its 7-day cap, stops ending
           by itself, stops flagging the account for review, or blocks an order already placed
           (cancelling a contract is a legal effect, WP251 p.21).

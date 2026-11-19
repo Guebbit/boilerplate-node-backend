@@ -800,3 +800,37 @@ describe('POST /orders — Idempotency-Key', () => {
         expect(await orderModel.countDocuments({})).toBe(1);
     });
 });
+
+describe('POST /orders — a walk-in order', () => {
+    /** The contract's `CreateOrderRequest` requires only `email` and `items`; the answer carries no `userId`. */
+    it('answers 201 against the spec when the body names no userId', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/orders')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'walk-in-1')
+            .send({
+                email: 'counter@example.com',
+                items: [{ productId: String(product._id), quantity: 1 }]
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.userId).toBeUndefined();
+        expect(response.body.email).toBe('counter@example.com');
+    });
+
+    it('still answers 422 when the email is missing', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/orders')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'walk-in-2')
+            .send({ items: [{ productId: String(product._id), quantity: 1 }] });
+
+        expect(response.status).toBe(422);
+    });
+});

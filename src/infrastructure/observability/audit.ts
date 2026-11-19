@@ -155,21 +155,20 @@ export const registerAuditSink = (sink: AuditSink): void => {
 };
 
 /**
- * Emit a structured audit event. Failures use 'warn'; successes use 'info'.
- * Writes the durable log line, then hands the entry to the persistence sink if one is registered.
+ * Write an audit event's durable log line and nothing else — no row, no sink. Credentials are
+ * scrubbed here, once, so the line and the stored row ({@link emitAuditEvent}) carry the same
+ * metadata; personal fields stay raw in the row and are handled by the logger's own pipeline for
+ * the line.
+ *
  * @param event - fully populated audit event (normally built by `buildAuditEvent`)
+ * @returns the scrubbed event and the level it was logged at, for a caller that stores it too
  */
-export const emitAuditEvent = (event: AuditEvent): void => {
+const logAuditEvent = (event: AuditEvent): { scrubbed: AuditEvent; level: 'info' | 'warn' } => {
     /**
      * Level mirrors the outcome, so an ops alert on `level: warn` in the audit stream picks up
      * failed logins and permission denials without needing to know the action vocabulary.
      */
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
-    /**
-     * Credentials are scrubbed once here so the log line and the stored row get the same
-     * metadata; personal fields stay raw in the row and are
-     * handled by the logger's own pipeline for the line.
-     */
     const scrubbed: AuditEvent = {
         ...event,
         // A single narrowing cast: the walk returns `unknown`, but it copies a record to a record.
@@ -182,6 +181,16 @@ export const emitAuditEvent = (event: AuditEvent): void => {
      * event object is attached as structured metadata.
      */
     auditLogger.log(level, event.action, scrubbed);
+    return { scrubbed, level };
+};
+
+/**
+ * Emit a structured audit event. Failures use 'warn'; successes use 'info'.
+ * Writes the durable log line, then hands the entry to the persistence sink if one is registered.
+ * @param event - fully populated audit event (normally built by `buildAuditEvent`)
+ */
+export const emitAuditEvent = (event: AuditEvent): void => {
+    const { scrubbed, level } = logAuditEvent(event);
 
     if (!auditSink) return;
 
@@ -326,4 +335,22 @@ export const recordAudit = (
 ): void => {
     if (!context) return;
     emitAuditEvent(buildAuditEvent(context, fields));
+};
+
+/**
+ * Build and log an audit event WITHOUT storing it: the line is the whole record. For a refusal
+ * that is routine and high-volume (a stale tab, a request with no credential), where a database
+ * row per request would be noise and a write amplifier an unauthenticated caller controls. An
+ * attack on a credential is not one of these: it goes through {@link recordAudit}.
+ *
+ * @param context - the caller context of the request, or `undefined` for a path with no request
+ * @param fields - action, outcome, and optional overrides — see `buildAuditEvent`
+ * @see docs/operate/winston.md#audit-events
+ */
+export const recordAuditLine = (
+    context: CallerContext | undefined,
+    fields: Parameters<typeof buildAuditEvent>[1]
+): void => {
+    if (!context) return;
+    logAuditEvent(buildAuditEvent(context, fields));
 };

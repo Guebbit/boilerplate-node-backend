@@ -31,7 +31,7 @@ event ids, and an id already seen is a no-op, so a redelivery after the task clo
 it again. The same situation returning after a close opens a **new** task. A clearing event on a
 task staff closed first does nothing.
 
-**The shop's kinds.** The kinds a payment, stock or delivery situation opens (a refund owed by
+**The shop's kinds.** The kinds a payment, stock or delivery situation opens (for example a refund owed by
 hand, a refused refund, a mismatch, a dispute, a payment with no hold, the delay reminder) belong
 to [`shop-tasks`](./shop-tasks.md#the-shop-s-to-dos), which opens them through this engine. The
 dedup and replay rules above apply to them unchanged.

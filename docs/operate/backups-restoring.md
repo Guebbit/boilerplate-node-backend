@@ -59,6 +59,15 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 
 5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
    and webhooks only ever see the already-erased state.
+6. **Reconcile with the payment provider.** The restored database forgets every payment and refund
+   made after the snapshot, while the provider still holds them. The sweep and the refund sync only
+   reach payments the restored database still has, so compare by hand: open the provider dashboard's
+   payments and disputes since the snapshot and check each against the app. Each one the app lacks is
+   a buyer charged with no order: refund it at the provider, or re-create the order by hand. The
+   payment sweep (`sweep:payment-effects`) runs by itself every 5 minutes once step 5 starts cron.
+   Run `POST /payments/{id}/refunds/sync` on each payment refunded at the provider since the
+   snapshot. The shop assumes it owns its provider account: money
+   moved there by anything else is not reconciled.
 
 #### Erasures after a restore
 

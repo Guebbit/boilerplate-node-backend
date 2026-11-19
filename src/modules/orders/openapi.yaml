@@ -138,6 +138,11 @@ paths:
                 Creates a new order directly from the supplied payload, for the account named in
                 `userId`. Raising one for oneself is allowed.
 
+                An absent `userId` makes a walk-in order, for a buyer with no account (a counter sale,
+                or money taken outside the app): it belongs to nobody's order list, the receipt goes to
+                `email`, and its personal data follows the retention clock from the moment it is made. The
+                line prices and stock hold are the same.
+
                 Staff may sell a hidden (`active: false`) or off-sale (`purchasable: false`) product by
                 hand, as Solidus and Shopify draft orders allow; only a removed (soft-deleted) one is
                 refused, with `409 ORDER_PRODUCT_UNAVAILABLE`. A product the caller may not read
@@ -2088,8 +2093,9 @@ components:
         CreateOrderRequest:
             type: object
             additionalProperties: false
-            required: [userId, email, items]
+            required: [email, items]
             properties:
+                # Absent = a walk-in order: nobody's account, only the receipt `email`.
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
@@ -2616,9 +2622,9 @@ components:
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                # Absent once the account that placed this order has been erased. The order
-                # survives (it is the invoice); the foreign key does not, because the account it
-                # named no longer exists.
+                # Absent on a walk-in order (placed by staff with no account), and once the account
+                # that placed the order has been erased. The order survives (it is the invoice); the
+                # foreign key does not, because the account it named no longer exists.
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
@@ -2828,9 +2834,9 @@ components:
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                # Absent once the account that placed this order has been erased. The order
-                # survives (it is the invoice); the foreign key does not, because the account it
-                # named no longer exists.
+                # Absent on a walk-in order (placed by staff with no account), and once the account
+                # that placed the order has been erased. The order survives (it is the invoice); the
+                # foreign key does not, because the account it named no longer exists.
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
