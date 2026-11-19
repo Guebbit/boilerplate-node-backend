@@ -8,6 +8,8 @@
             "title": "Invoice",
             "credit-note-title": "Credit note",
             "reversal-notice": "This credit note reverses invoice {{number}}.",
+            "reversal-notice-correction": "This credit note cancels invoice {{number}}: the buyer's details were corrected. A new invoice replaces it.",
+            "buyer-vat-number": "Buyer VAT number: {{number}}",
             "buyer-erased": "The buyer's personal data was removed once its legal retention period ended.",
             "number": "No. {{number}}",
             "date": "Date: {{date}}",
@@ -30,7 +32,8 @@
                 "vat-number": "VAT number: {{number}}",
                 "vat-number-missing": "VAT number not configured"
             },
-            "partial-refund-line": "Refund"
+            "partial-refund-line": "Refund",
+            "remainder-line": "Remainder of invoice {{invoice}} (goods as listed there), after credit notes {{creditNotes}}"
         }
     }
 }

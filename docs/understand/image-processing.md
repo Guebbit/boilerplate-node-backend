@@ -216,8 +216,8 @@ claim themselves. The hour of grace in the reaper covers an upload promoted but 
 
 ## Operational notes
 
-- **`sharp.concurrency(1)` and `sharp.cache(false)`** are set once, at import — `registerWorkers()`
-  runs in every copy, so without this a host running N copies has N × sharp's own
+- **`sharp.concurrency(1)` and `sharp.cache(false)`** are set once, at import — a digest runs in every
+  worker copy, so without this a host running N copies has N × sharp's own
   thread pool × libvips's own cache.
 - **Alpine/musl.** The runtime image is `node:26-alpine`. `@img/sharp-linuxmusl-x64`/`-arm64` both
   exist, so `npm install` needs no compiler, but sharp's own docs flag allocator fragmentation

@@ -90,7 +90,7 @@ describe('buildDocumentView', () => {
         const creditNote = buildDocumentView('en', {
             ...DOCUMENT,
             kind: 'creditNote',
-            reversalOf: { number: '2026-000041' }
+            reversalOf: { number: '2026-000041', reason: 'refund' }
         }).reversalNotice as string;
 
         expect(invoice).toBeUndefined();
@@ -113,6 +113,43 @@ describe('buildDocumentView', () => {
         expect(withAddress?.fullName).toBe('Ada Lovelace');
         expect(withAddress?.lines).toContain('1 Analytical Engine Way');
         expect(withoutAddress).toBeUndefined();
+    });
+});
+
+describe('buildDocumentView — a corrected buyer', () => {
+    const BUSINESS = {
+        fullName: 'Rossi Srl',
+        street: 'Via Roma 1',
+        city: 'Milano',
+        zip: '20100',
+        country: 'IT'
+    };
+
+    it('prints the buyer VAT number under its address, in the document language, only when there is one', () => {
+        const business = buildDocumentView('it', {
+            ...DOCUMENT,
+            locale: 'it',
+            billingAddress: { ...BUSINESS, vatNumber: 'IT01234567890' }
+        }).billing as { vatNumberLine?: string };
+        const privateBuyer = buildDocumentView('en', {
+            ...DOCUMENT,
+            billingAddress: BUSINESS
+        }).billing as { vatNumberLine?: string };
+
+        expect(business.vatNumberLine).toContain('IT01234567890');
+        expect(business.vatNumberLine).toContain('Partita IVA');
+        expect(privateBuyer.vatNumberLine).toBeUndefined();
+    });
+
+    it('says a correction credit note cancels the invoice because the buyer details changed, not that it reverses a refund', () => {
+        const correction = buildDocumentView('en', {
+            ...DOCUMENT,
+            kind: 'creditNote',
+            reversalOf: { number: '2026-000041', reason: 'correction' }
+        }).reversalNotice as string;
+
+        expect(correction).toContain('2026-000041');
+        expect(correction).toContain('corrected');
     });
 });
 

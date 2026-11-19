@@ -99,13 +99,13 @@ const stageOf = (name: string): string => {
 const dockerfile = [stageOf('build'), stageOf('runtime')].join('\n');
 
 /**
- * The three services that run this repository's own code.
+ * The four services that run this repository's own code.
  *
- * They share one image and one hardening block, so they must share one verdict: `cron` and `setup`
- * reach the same database and the same volumes `app` does, and a write primitive in the
- * application is a write primitive in all three.
+ * They share one image and one hardening block, so they must share one verdict: `worker`, `cron`
+ * and `setup` reach the same database and the same volumes `app` does, and a write primitive in
+ * the application is a write primitive in all four.
  */
-const OWN_CODE_SERVICES = ['app', 'cron', 'setup'] as const;
+const OWN_CODE_SERVICES = ['app', 'worker', 'cron', 'setup'] as const;
 
 /**
  * The services that hold data or expose an unauthenticated UI: the bundled stores (`profiles:
@@ -283,6 +283,29 @@ describe('cron mounts every volume app mounts', () => {
 
         expect(appVolumes.length).toBeGreaterThan(0);
         expect(appVolumes.filter((volume) => !cronVolumes.includes(volume))).toEqual([]);
+    });
+});
+
+describe('worker is the queue consumer, in its own container', () => {
+    /**
+     * `app` only publishes, so a `worker` that ran the web entry would leave every job unconsumed
+     * and a `worker` missing its volumes would fail every mail attachment and image digest.
+     */
+    it('runs the worker entry, not the web one', () => {
+        expect([compose.services.worker?.command ?? []].flat().join(' ')).toBe(
+            'node --import tsx src/worker.ts'
+        );
+    });
+
+    it('lists every app mount verbatim, like cron', () => {
+        const appVolumes = compose.services.app?.volumes ?? [];
+        const workerVolumes = compose.services.worker?.volumes ?? [];
+
+        expect(appVolumes.filter((volume) => !workerVolumes.includes(volume))).toEqual([]);
+    });
+
+    it('publishes no port: its health listener is loopback-only', () => {
+        expect(compose.services.worker?.ports ?? []).toEqual([]);
     });
 });
 
@@ -547,7 +570,7 @@ describe('the cache and the limits are two Redis instances', () => {
             .filter(([, secrets]) => secrets.includes('limits_password'))
             .map(([name]) => name);
 
-        expect(holders.toSorted()).toEqual(['app', 'cron', 'limits']);
+        expect(holders.toSorted()).toEqual(['app', 'cron', 'limits', 'worker']);
     });
 
     it('points the limiter at the limits service, never at the cache', () => {

@@ -49,7 +49,8 @@ A path the contract declares, asked with a method it does not give it, answers *
 - **A trailing slash is the same path.** `/things/` reads as `/things`.
 - **A literal path wins over a templated one.** `DELETE /products/facets` would otherwise
   read `facets` as the `{id}` of `/products/{id}` and answer 404, so the guard runs a second
-  time before the routers, for paths with no `{param}` only.
+  time before the routers, for any path a more specific route shadows (not only paths with no
+  `{param}`).
 - **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
   mounted to ask.
 - **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
@@ -57,8 +58,8 @@ A path the contract declares, asked with a method it does not give it, answers *
   `x-error-codes`.
 - **Swept over the whole spec.** `tests/integration/method-not-allowed.test.ts` asks every path of
   `openapi.yaml` with every verb it does not declare and expects 405 plus the exact `Allow`. It
-  asks as an admin: a router-level auth guard answers an anonymous caller 401 first, on purpose,
-  so an anonymous caller learns nothing about which routes and methods exist.
+  asks as an admin. The early 405 guard runs before a module's own auth, so an undeclared method
+  on a no-parameter path, or one a more specific template shadows, answers 405 whoever asks; `OPTIONS` already gives `Allow` to anyone.
 
 ## `OPTIONS` says what a path accepts
 

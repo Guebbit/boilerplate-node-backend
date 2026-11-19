@@ -25,3 +25,14 @@ patches:
           - op: replace
             path: /spec/gatewayClassName
             value: eg
+    # The rig has no broker (base/app.env sets no NODE_RABBITMQ_URL): the app runs its jobs in its
+    # own process, so a `worker` would consume nothing. Zero copies save about 0.5 GB on the one node.
+    # A cluster with a broker keeps the base's one copy.
+    - target:
+          group: apps
+          kind: Deployment
+          name: worker
+      patch: |-
+          - op: replace
+            path: /spec/replicas
+            value: 0

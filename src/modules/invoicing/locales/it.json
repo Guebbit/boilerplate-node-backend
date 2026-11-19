@@ -8,6 +8,8 @@
             "title": "Fattura",
             "credit-note-title": "Nota di credito",
             "reversal-notice": "Questa nota di credito storna la fattura {{number}}.",
+            "reversal-notice-correction": "Questa nota di credito annulla la fattura {{number}}: i dati dell'acquirente sono stati corretti. Una nuova fattura la sostituisce.",
+            "buyer-vat-number": "Partita IVA dell'acquirente: {{number}}",
             "buyer-erased": "I dati personali dell'acquirente sono stati rimossi al termine del periodo legale di conservazione.",
             "number": "N. {{number}}",
             "date": "Data: {{date}}",
@@ -30,7 +32,8 @@
                 "vat-number": "Partita IVA: {{number}}",
                 "vat-number-missing": "Partita IVA non configurata"
             },
-            "partial-refund-line": "Rimborso"
+            "partial-refund-line": "Rimborso",
+            "remainder-line": "Residuo della fattura {{invoice}} (beni come elencati), dopo le note di credito {{creditNotes}}"
         }
     }
 }

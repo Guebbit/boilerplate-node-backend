@@ -32,24 +32,16 @@ import express from 'express';
 import type { Express } from 'express';
 import type { Server } from 'node:http';
 import { installEnvironment, type EnvironmentOverrides } from '@infrastructure/config/store';
-import { start as startDatabase } from '@infrastructure/runtime/database';
-import { startCache } from '@infrastructure/adapters/cache';
-import { startQueue } from '@infrastructure/adapters/queue';
-import { registerWorkers } from '@app/workers';
 import { logger } from '@infrastructure/adapters/logger';
 import { serverConfig } from '@infrastructure/runtime/config';
-import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-import { listenOn, shutdownInfra } from '@infrastructure/runtime/server-lifecycle';
+import { listenOn } from '@infrastructure/runtime/server-lifecycle';
 import { markServerListening } from '@infrastructure/runtime/readiness';
-import { isLocaleOverrideAvailable, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { isTranslationAvailable } from '@kernel/translation';
-import { settleOutboxNudges } from '@kernel/outbox';
-import { settleWithin } from '@infrastructure/runtime/settle';
 
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from './modules';
-import { bootRendering } from './app/boot-rendering';
 import { APP_CONFIG_SLICES } from '@app/config';
+import { bootProcess, createStop } from '@app/process-boot';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext, requestIdMiddleware } from '@app/request-context';
@@ -128,8 +120,8 @@ export interface AppOptions {
  * request can arrive, and all before `boot()` or `start()` are ever called, so a caller that
  * only wants `.app` (a supertest agent) needs neither.
  *
- * Callable more than once — each call is an independent instance with its own `activeServer`/
- * `shutdownPromise` closure, so `boot`/`start`/`stop` take no config of their own: the one
+ * Callable more than once — each call is an independent instance with its own `activeServer`
+ * closure, so `boot`/`start`/`stop` take no config of their own: the one
  * parameter is {@link AppOptions}, applied before anything below reads a setting.
  *
  * @param options - the environment to build with, if not the process's own
@@ -142,36 +134,11 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     /** The server this instance is currently listening on, if any. */
     let activeServer: Server | undefined;
 
-    /** In-flight shutdown, so a second call joins it instead of closing twice. */
-    let shutdownPromise: Promise<void> | undefined;
-
-    const boot = (): Promise<void> =>
-        Promise.resolve()
-            .then(() => startDatabase())
-            .then(() => startCache())
-            .then(() => startQueue())
-            .then(() => registerWorkers())
-            // Files, templates, then the admin's edits — the same step every scheduled job runs.
-            .then(() => bootRendering())
-            /**
-             * No provider (`locales` uninstalled) means every refresh would be a no-op forever —
-             * a timer with nothing to poll is a leak of intent, not just of a file descriptor.
-             */
-            .then(() => {
-                if (isLocaleOverrideAvailable()) startLocaleOverrideRefresh();
-            })
-            /**
-             * After i18n, because the map resolves its copy through `t`. Registering it earlier
-             * would install a translator with no dictionary behind it.
-             */
-            .then(() => registerValidationMessages())
-            .then(() => undefined);
-
     const start = (): Promise<Server> => {
         if (activeServer?.listening) return Promise.resolve(activeServer);
 
         return (
-            boot()
+            bootProcess()
                 /**
                  * The extension's own step — for the demo, only ever the initial build:
                  * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
@@ -207,22 +174,12 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
         );
     };
 
-    const stop = (): Promise<void> => {
-        if (shutdownPromise) return shutdownPromise;
-
-        /**
-         * Relay passes already started finish first: a lost one is only published a minute later
-         * by the sweep, but one cut mid-write logs errors at every deploy.
-         */
-        shutdownPromise = shutdownInfra(activeServer, (timeoutMs) =>
-            settleWithin(new Set([settleOutboxNudges()]), timeoutMs)
-        ).finally(() => {
+    const stop = createStop(
+        () => activeServer,
+        () => {
             activeServer = undefined;
-            shutdownPromise = undefined;
-        });
-
-        return shutdownPromise;
-    };
+        }
+    );
 
     registerModules(enabledModules, APP_CONFIG_SLICES);
 
@@ -278,5 +235,5 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     installRoutes(app);
     installErrorHandling(app);
 
-    return { app, boot, start, stop };
+    return { app, boot: bootProcess, start, stop };
 };

@@ -26,7 +26,7 @@ The drill proves the machinery. For a real incident:
 Both read the dump from restic: `restic dump <snapshot> mongodump.archive | mongorestore --archive ...`.
 The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` requires it.
 
-1. **Stop the writers.** `docker compose stop app cron`. They stay stopped until step 5.
+1. **Stop the writers.** `docker compose stop app worker cron`. They stay stopped until step 5.
 2. **Restore the database**, then the files (`restic restore <files snapshot> --target <dir>`, then copy
    into the `uploads` volume and `storage/mail-spool`).
 3. **Put the newest erasure ledger back.** The restored copy only knows erasures from before the snapshot.
@@ -50,8 +50,8 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
     podman (the repo's `npm run compose` picks it).
 
     Run it in `cron`: it mounts `uploads`, so an erased account's avatar is deleted again too, and the
-    production image has no npm. `--no-deps` because step 1 stopped `app` and `cron`, and `run` would
-    otherwise start their dependencies. Step 1 is the guard: it does not check that the app and cron are stopped, and the purge job (which has no
+    production image has no npm. `--no-deps` because step 1 stopped `app`, `worker` and `cron`, and `run` would
+    otherwise start their dependencies. Step 1 is the guard: it does not check that the app, worker and cron are stopped, and the purge job (which has no
     HTTP port to probe) must not run beside it. It erases again each account the ledger names since `--since`,
     keeping the original erasure date, and writes one restoration-log audit row (`auth.erasures.reapplied`: who,
     which snapshot, the counts and ids). Safe to repeat; it exits non-zero while
@@ -59,6 +59,15 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
 
 5. **Start the stack** and look: log in, open an order, fetch an image. Mail, stock alerts, the purge job
    and webhooks only ever see the already-erased state.
+6. **Reconcile with the payment provider.** The restored database forgets every payment and refund
+   made after the snapshot, while the provider still holds them. The sweep and the refund sync only
+   reach payments the restored database still has, so compare by hand: open the provider dashboard's
+   payments and disputes since the snapshot and check each against the app. Each one the app lacks is
+   a buyer charged with no order: refund it at the provider, or re-create the order by hand. The
+   payment sweep (`sweep:payment-effects`) runs by itself every 5 minutes once step 5 starts cron.
+   Run `POST /payments/{id}/refunds/sync` on each payment refunded at the provider since the
+   snapshot. The shop assumes it owns its provider account: money
+   moved there by anything else is not reconciled.
 
 #### Erasures after a restore
 
@@ -69,7 +78,7 @@ exactly that: [Data retention](../understand/data-retention.md#backups-and-erasu
 
 ```mermaid
 flowchart TD
-    Stop["1. stop app and cron"] --> Restore["2. restore database and files"]
+    Stop["1. stop app, worker and cron"] --> Restore["2. restore database and files"]
     Restore --> Ledger["3. put the newest ledger back<br/><i>live DB, or newest snapshot</i>"]
     Ledger --> Reapply["4. ops:reapply-erasures --since"]
     Reapply -->|failed greater than 0| Reapply

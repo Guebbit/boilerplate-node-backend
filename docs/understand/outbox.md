@@ -196,6 +196,9 @@ db.outboxevents.find({ status: 'dead' });
 Fix the consumer, then set the row back with `status: 'pending', attempts: 0, nextAttemptAt: new Date()`.
 Reviving a dead row re-runs every listener of its event. `payments` skips an `order.canceled` it
 already handled; a mail may repeat.
+A redelivered `order.billing_corrected` issues nothing twice: `invoicing` keys the credit note on the
+event id (`correctionKey`, a partial unique index), since a repeat would burn two numbers of a gap-free
+series: see [`invoicing`](../modules/invoicing.md#correcting-the-buyer).
 Reviving a dead invoice event (`order.status_changed` to `paid`) also issues the credit notes of the
 refunds that settled meanwhile and found no invoice: see
 [`invoicing`](../modules/invoicing.md#issuing-a-document). Reviving a dead `paid` event also makes the

@@ -35,6 +35,8 @@ A bearer is a credential the client chose to present, so a bad one is told so, n
 served as a guest (RFC 6750 §3.1; the same rule `sk_` keys already had). `getAuth` answers a
 bearer that names no live session — bad signature, expired, revoked, a user who no longer exists —
 with `401` and `WWW-Authenticate: Bearer error="invalid_token"`, and an idle staff session with
+`401 SESSION_IDLE`. On `invalid_token` the client refreshes and retries as the same person; if the refresh fails
+it falls back to a guest by itself. On `SESSION_IDLE` it tells the user and carries on as a guest.
 
 ### What a refused credential leaves behind
 
@@ -172,7 +174,7 @@ in its own namespace.
 `POST /tasks` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
 FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
-well-formed body, gets a `201`, and an operator gets an email). Mounting `credentialLimiters` on
+well-formed body, gets a `202`, and an operator gets an email). Mounting `credentialLimiters` on
 `POST /tasks` would therefore change nothing at all — it would count zero of the requests that matter.
 `submissionLimiter` spends its budget on every request, success or failure, keyed on the caller's
 address like the global limiter, at a much smaller default (`NODE_SUBMISSION_RATE_LIMIT_MAX=5`) —

@@ -10,6 +10,7 @@ audience: [staff, owner]
 | Something odd happened                                                 | Go to                                                |
 | ---------------------------------------------------------------------- | ---------------------------------------------------- |
 | Money arrived by bank transfer for an order that was already cancelled | [A transfer for a cancelled order](#late-transfer)   |
+| A card was charged in the provider's own dashboard for an order        | [A card charged in the dashboard](#dashboard-charge) |
 | The shelf holds fewer units than the orders promised                   | [Fewer on the shelf than promised](#fewer-on-shelf)  |
 | An order stays in "being prepared" and nothing moves                   | [An order stuck in processing](#stuck-in-processing) |
 | A parcel left a long time ago and nobody recorded its arrival          | [Shipped but not arrived](#shipped-not-arrived)      |
@@ -47,6 +48,31 @@ flowchart LR
     class C auto;
     class E done;
 ```
+
+**Whose job.** The [moderator](./moderator.md) or the admin: both record payments and refunds.
+→ [Payments](../modules/payments.md#offline-payments)
+
+## A card charged in the provider's dashboard {#dashboard-charge}
+
+**What you see.** Somebody charged the buyer's card by typing it into the card provider's own
+website (Stripe's dashboard), instead of the buyer paying in the shop. The money is real; the order
+in the shop is still unpaid, or was already canceled when its 15 minutes ran out.
+
+**What to do.**
+
+1. **Prefer to let the buyer pay in the shop**: the order's **Pay** button while it is open, or a
+   [new order](./manager.md#counter-sale) they pay themselves. The shop then knows the payment and handles
+   its refunds and disputes by itself. (The provider itself advises against typing a card in by hand:
+   it is off until you ask for it, costs more and skips the bank's check.)
+2. If you did charge in the dashboard: open the order. If it was canceled meanwhile, make a
+   [new one](./manager.md#counter-sale) for the buyer first. Then **Record a payment by hand**, method **Other**,
+   reference = the provider's payment id (`pi_...`).
+3. **A refund for it:** press **Refund** in the shop, refund the amount in the provider's dashboard, then
+   press **Mark returned** (see [a refund owed by hand](./when-something-goes-wrong-refunds.md#refund-owed-by-hand)).
+   Refunding only in the dashboard leaves the shop without its credit note and the buyer without the mail.
+4. **A dispute on it:** the shop does not see it. Answer it in the dashboard. While it is open, or after
+   it is lost, **do not refund it in the shop**: the bank already took the money back, and **Mark returned**
+   would issue a credit note for money the shop never paid out.
 
 **Whose job.** The [moderator](./moderator.md) or the admin: both record payments and refunds.
 → [Payments](../modules/payments.md#offline-payments)

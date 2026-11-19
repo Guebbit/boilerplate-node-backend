@@ -47,6 +47,31 @@ describe('orders reencrypt', () => {
         });
     });
 
+    it('moves the billing VAT number with the rest of the billing address', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            billingAddress: {
+                fullName: 'Rossi Srl',
+                street: 'Via Roma 1',
+                city: 'Milano',
+                zip: '20100',
+                country: 'IT',
+                vatNumber: 'IT01234567890'
+            }
+        });
+
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: ROTATED_PII_KEY }, async () => {
+            const report = await ordersModule.reencrypt(false);
+
+            expect(report.rewritten).toBe(6);
+            const raw = await orderModel.collection.findOne({ _id: order._id });
+            expect(keyVersionOf(raw?.billingAddress.vatNumber as string)).toBe('v2');
+            const reloaded = await orderModel.findById(order._id).exec();
+            expect(reloaded?.toJSON().billingAddress?.vatNumber).toBe('IT01234567890');
+        });
+    });
+
     it('moves a staff note on the timeline to v2 and it still reads back', async () => {
         const user = await createUser();
         const product = await createProduct();

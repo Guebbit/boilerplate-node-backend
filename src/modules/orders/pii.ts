@@ -16,7 +16,7 @@
 import type { Types } from 'mongoose';
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
 import { POSTAL_ADDRESS_FIELDS, type PostalAddressField } from '@domain-primitives/postal-address';
-import type { OrderAddress } from '@types';
+import type { OrderAddress, OrderBillingAddress } from '@types';
 
 /**
  * Every address field of the contract's `OrderAddress` that is personal data: the shared list,
@@ -27,6 +27,23 @@ const ORDER_ADDRESS_PII_FIELDS: [Exclude<keyof OrderAddress, PostalAddressField>
     ? readonly (PostalAddressField & keyof OrderAddress)[]
     : never = POSTAL_ADDRESS_FIELDS;
 
+/**
+ * Every field an order's addresses encrypt: the shared postal fields, plus the buyer's VAT number,
+ * which only the billing address carries.
+ */
+export type OrderAddressField = PostalAddressField | 'vatNumber';
+
+/**
+ * The fields walked for one path. The VAT number is the buyer's tax identity, personal data of a
+ * sole trader, and lives on the billing address alone.
+ *
+ * @param path - which of the two addresses
+ */
+export const addressFieldsOf = (path: OrderAddressPath): readonly OrderAddressField[] =>
+    path === 'billingAddress'
+        ? [...ORDER_ADDRESS_PII_FIELDS, 'vatNumber']
+        : ORDER_ADDRESS_PII_FIELDS;
+
 /** The two embedded addresses an order carries. */
 export type OrderAddressPath = 'shippingAddress' | 'billingAddress';
 
@@ -36,14 +53,14 @@ export const ADDRESS_PATHS: readonly OrderAddressPath[] = ['shippingAddress', 'b
 /** What {@link encryptOrderPii} reads and rewrites on an order being created. */
 interface OrderPiiFields {
     shippingAddress?: OrderAddress | undefined;
-    billingAddress?: OrderAddress | undefined;
+    billingAddress?: OrderBillingAddress | undefined;
     notes?: string | undefined;
 }
 
 /** The associated data binding one address field to one order. */
 export const addressAad = (
     path: OrderAddressPath,
-    field: PostalAddressField,
+    field: OrderAddressField,
     orderId: string
 ): string => `orders:${path}.${field}:${orderId}`;
 
@@ -55,14 +72,17 @@ export const timelineNoteAad = (orderId: string): string => `orders:timeline-not
 
 /**
  * Rewrites every present field of one address with `convert`. Absent fields stay absent — the
- * optional `phone` must not become the string `"undefined"`.
+ * optional `phone` and `vatNumber` must not become the string `"undefined"`.
+ *
+ * @param path - which address this is, since only the billing one carries a VAT number
  */
-const mapAddress = <T extends OrderAddress>(
+const mapAddress = <T extends OrderBillingAddress>(
     address: T,
-    convert: (value: string, field: PostalAddressField) => string
+    path: OrderAddressPath,
+    convert: (value: string, field: OrderAddressField) => string
 ): T => {
     const result: T = { ...address };
-    for (const field of ORDER_ADDRESS_PII_FIELDS) {
+    for (const field of addressFieldsOf(path)) {
         const value = address[field];
         if (value !== undefined) result[field] = convert(value, field);
     }
@@ -81,7 +101,7 @@ export const encryptOrderPii = <T extends OrderPiiFields>(data: T, orderId: Type
     for (const path of ADDRESS_PATHS) {
         const address = data[path];
         if (address)
-            result[path] = mapAddress(address, (value, field) =>
+            result[path] = mapAddress(address, path, (value, field) =>
                 encryptPii(value, addressAad(path, field, id))
             );
     }
@@ -94,12 +114,12 @@ export const encryptOrderPii = <T extends OrderPiiFields>(data: T, orderId: Type
  *
  * @param orderId - the order the address was written under
  */
-export const decryptOrderAddress = <T extends OrderAddress>(
+export const decryptOrderAddress = <T extends OrderBillingAddress>(
     address: T,
     path: OrderAddressPath,
     orderId: string
 ): T =>
-    mapAddress(address, (value, field) =>
+    mapAddress(address, path, (value, field) =>
         decryptPii(value, addressAad(path, field, orderId), `order ${path} ${field}`)
     );
 
@@ -112,7 +132,7 @@ export const decryptSerializedOrder = (serialized: Record<string, unknown>): voi
     const id = String(serialized.id);
     for (const path of ADDRESS_PATHS) {
         // Cast: the stored shape, which this module's own writer produced.
-        const address = serialized[path] as OrderAddress | undefined;
+        const address = serialized[path] as OrderBillingAddress | undefined;
         if (address) serialized[path] = decryptOrderAddress(address, path, id);
     }
     if (typeof serialized.notes === 'string')

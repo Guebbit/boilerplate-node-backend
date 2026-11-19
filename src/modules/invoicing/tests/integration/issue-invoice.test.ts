@@ -19,6 +19,9 @@ import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
 import { yearInZone } from '@domain-primitives/time';
 import { markPaid } from '@modules/orders/friends/payments';
+import { orderService } from '@modules/orders';
+import { asSuccess } from '@tests/response';
+import { callerContextAs } from '@tests/callers';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -62,6 +65,23 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         );
         expect(invoice.lines).toHaveLength(1);
         expect(invoice.grandTotal).toBe('39.80');
+    });
+
+    it('invoices a walk-in order that has no account, with no buyer address', async () => {
+        const product = await createProduct({ price: '10.00' });
+        const placed = await orderService.create(
+            undefined,
+            'counter@example.com',
+            [{ productId: String(product._id), quantity: 1 }],
+            callerContextAs('admin')
+        );
+        const orderId = String(asSuccess(placed).data._id);
+
+        await markPaid(orderId);
+        const invoice = await waitForInvoice(orderId);
+
+        expect(invoice.number).toMatch(/^\d{4}-\d{6}$/);
+        expect(invoice.billingAddress).toBeUndefined();
     });
 
     it('bills the billing address, never the ship-to one', async () => {

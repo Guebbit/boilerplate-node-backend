@@ -9,6 +9,7 @@
 
 import { routeSignatures, guardsOn, routeTable } from '@tests/routes';
 import { router } from '@modules/observability/routes';
+import { workerRouter } from '@modules/observability/worker-routes';
 
 describe('observability routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -80,5 +81,15 @@ describe('observability routes — the two guard styles', () => {
         );
 
         expect(unguarded).toEqual([]);
+    });
+});
+
+describe('observability worker routes — the scrape the worker process serves', () => {
+    it('mounts only the scrape', () => {
+        expect(routeSignatures(workerRouter)).toEqual(['GET /metrics']);
+    });
+
+    it('guards it with the same credential and handler as the API scrape, so the two cannot drift', () => {
+        expect(guardsOn(workerRouter, 'GET /metrics')).toEqual(guardsOn(router, 'GET /metrics'));
     });
 });

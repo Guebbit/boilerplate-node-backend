@@ -101,7 +101,7 @@ export const ownOrderIds = (userId: string): Promise<string[]> =>
 export interface OrderBrief {
     id: string;
     orderNumber: string;
-    /** Absent once the account was erased. */
+    /** Absent on a walk-in order, and once the account was erased. */
     userId?: string;
     email: string;
     /** When the payment settled; absent for an order never paid. */

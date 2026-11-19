@@ -125,6 +125,38 @@ describe('create', () => {
         expect(asSuccess(result).data.email).toBe(user.email);
     });
 
+    it('places a walk-in order with no userId: no account on the row, the PII clock running', async () => {
+        const product = await createProduct({ price: '25.00' });
+
+        const result = await orderService.create(
+            undefined,
+            'counter@example.com',
+            [{ productId: String(product._id), quantity: 1 }],
+            callerContextAs('admin')
+        );
+
+        expect(result.status).toBe(201);
+        const stored = await orderRepository.findById(String(asSuccess(result).data._id));
+        expect(stored!.userId).toBeUndefined();
+        expect(stored!.email).toBe('counter@example.com');
+        expect(stored!.piiClockStartedAt).toBeInstanceOf(Date);
+    });
+
+    it('stamps no PII clock on an order for an account: erasure starts it there', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 1 }],
+            callerContextAs('admin')
+        );
+
+        const stored = await orderRepository.findById(String(asSuccess(result).data._id));
+        expect(stored!.piiClockStartedAt).toBeUndefined();
+    });
+
     /**
      * No rank on the buyer in the body: an operator raises orders for a customer, an equal and
      * themselves alike.

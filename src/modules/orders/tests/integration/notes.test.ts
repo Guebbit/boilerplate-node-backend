@@ -18,7 +18,13 @@ import { eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
-import { createOrder, toOrderItem, timelineOf } from '../factories';
+import {
+    createOrder,
+    toOrderItem,
+    timelineOf,
+    markOrderPaidAt,
+    forceOrderStatus
+} from '../factories';
 import { ordersAuditActions } from '../../audit';
 import { orderEventModel } from '../../model';
 import { orderService } from '../../services';
@@ -186,6 +192,9 @@ describe('the note`s life after it is written', () => {
         registerCheckoutModules();
         const { user, orderId, staff } = await seed();
         await leaveNote(orderId, staff);
+        // Paid long ago and ended undelivered: the erasure's clock finds its claim window over.
+        await markOrderPaidAt(orderId, new Date(Date.now() - 3650 * 24 * 60 * 60 * 1000));
+        await forceOrderStatus(orderId, OrderStatus.canceled);
 
         await eraseAsScheduled(user);
         await orderService.anonymizeDueOrders();

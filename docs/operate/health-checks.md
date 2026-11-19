@@ -15,7 +15,9 @@ A health check tests **this container's own job**. Nothing else.
 
 - **A web container** checks that the web process answers: `GET /livez`.
 - **A long-running worker** checks its own loop, not the web port. `cron` asks supercronic's
-  `/health`. Mastodon's `sidekiq` and Sentry's workers do the same.
+  `/health`. Mastodon's `sidekiq` and Sentry's workers do the same. The queue `worker` has no
+  scheduler to ask, so the process listens on its own port, `NODE_WORKER_PORT` (3010), and answers `GET /livez` (`src/app/worker-process.ts`):
+  alive means the process answers, never that the broker or the database does.
   That loop is alive even when every job would refuse a bad environment, so `cron` runs
   `config:check` (`scripts/ops/check-config.ts`) before supercronic starts: a broken `.env` stops the container instead.
 - **A one-shot job** has no check. Its exit code is the signal, and
@@ -26,6 +28,7 @@ A health check tests **this container's own job**. Nothing else.
 | Container  | Its check                                       | Where declared                                       |
 | ---------- | ----------------------------------------------- | ---------------------------------------------------- |
 | `app`      | `GET /livez`                                    | the image, and compose again (see [Podman](#podman)) |
+| `worker`   | its own `GET /livez` on `NODE_WORKER_PORT`      | compose                                              |
 | `cron`     | supercronic's `GET /health` on `127.0.0.1:9746` | compose                                              |
 | `backup`   | the same supercronic `/health`, with `curl`     | `docker/Dockerfile.backup` (the image)               |
 | `setup`    | none: `healthcheck: disable: true`              | `compose.production.yaml`                            |
@@ -140,6 +143,7 @@ advice is the same shape: a short pause before the app stops accepting.
 | `app` `GET /livez`   | `livenessProbe`                                                                   |
 | `app` `GET /readyz`  | `readinessProbe`                                                                  |
 | a startup wait       | `startupProbe` on `/livez`, 3 min budget (`k8s/base/app.yaml`)                    |
+| `worker`             | a Deployment with `httpGet` probes on its own `/livez` (`k8s/base/worker.yaml`)   |
 | `cron` (supercronic) | a one-replica Deployment with an `exec` probe on `/health` (`k8s/base/cron.yaml`) |
 | `setup`              | a `Job`, applied and awaited before the app (`k8s/rig.sh`)                        |
 

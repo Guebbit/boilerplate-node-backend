@@ -29,7 +29,7 @@ Nothing below says a PaaS works. It says what the app needs and where a PaaS sto
 
 | App needs                   | A PaaS usually offers                          | Gap                                                |
 | --------------------------- | ---------------------------------------------- | -------------------------------------------------- |
-| Compose-defined services    | One image per service                          | Each service (app, cron) is set up by hand         |
+| Compose-defined services    | One image per service                          | Each service (app, worker, cron) is set up by hand |
 | MongoDB 9                   | No managed MongoDB among the platforms checked | Run your own container, or use an external MongoDB |
 | Persistent disk for uploads | Sometimes a volume add-on                      | Without one, images vanish on every deploy         |
 | The `scripts/ops/` jobs     | The platform's own scheduler, if any           | Wire each job in by hand                           |

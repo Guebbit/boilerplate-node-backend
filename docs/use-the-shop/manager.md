@@ -69,7 +69,29 @@ not: a replacement is going out, a correction is being made, or the money is bei
 other way. Cancelling and refunding are one action by default and two when you need them to be.
 :::
 
-→ [Orders](../modules/orders.md) · [Payments](../modules/payments.md)
+### A counter sale, or an order for a buyer with no account {#counter-sale}
+
+A buyer stands at the counter, or phones, or paid you outside the shop. Make the order yourself:
+**Sales → Orders → New order**. Pick the products and quantities. The buyer is **No account
+(walk-in)** unless the customer has an account (picking one needs the permission to see users); the
+**email** is where the confirmation goes, so type theirs, or the shop's own address if they would
+rather not give one. The order opens as any other, **waiting for payment**.
+
+1. **Record the money straight away.** A new order holds its stock for about 15 minutes, like a
+   checkout, and is canceled when the time runs out. Whoever may record payments (the
+   [moderator](./moderator.md#recording-a-transfer-and-why-a-paid-order-refuses-it) or the admin)
+   opens the order and records the cash, card-terminal slip or transfer. A manager can make the order but
+   not record the money: hand over to a colleague who can.
+2. **Hand the goods over.** On the order, **Ship** without a tracking code, then **Mark delivered**.
+3. A walk-in order has no account behind it, so the buyer cannot see it online. A return is opened by
+   staff for them.
+
+A walk-in buyer's email is cleaned up by the same retention rule as an erased account's, once the
+order is past its claim window ([why](../understand/data-retention-orders.md#walk-in-orders)).
+The money did not arrive in time and the order was canceled? Make a new one: a canceled order is
+never brought back.
+
+→ [Orders](../modules/orders.md) · [Payments](../modules/payments.md) · [A card charged in the provider's dashboard](./when-something-goes-wrong-orders-and-delivery.md#dashboard-charge)
 
 ## Correcting a mistake
 
@@ -100,6 +122,13 @@ landing is still the one fact only the payment system reports. Every correction 
 with who, when and why, and read back on the order's timeline (an entry visible to staff only) and in the admin-only audit trail — the
 customer's own view of the order never shows it, so a customer support question is answered from
 the timeline, not the customer's order page.
+
+**A wrong name, address or VAT number on an invoice** is not corrected by editing the invoice: an
+invoice is a numbered legal record. Once your accountant agrees, open the order and use **Edit
+billing address**. The shop cancels the old invoice with a credit note and issues a new one to the
+corrected buyer by itself: two new numbers, no money moves, both documents on the order. If part of the
+order was already refunded, only what is still invoiced is reissued. A buyer cannot do this
+themselves: they ask, you check.
 
 ## The catalogue
 

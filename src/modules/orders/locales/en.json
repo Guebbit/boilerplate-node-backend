@@ -8,6 +8,9 @@
             "locked": "Nothing is left to send on this order, or it has no shipping address, so it cannot be redirected.",
             "ship-to-country-not-supported": "We do not ship to that country."
         },
+        "billing": {
+            "locked": "This order's personal data has been erased, so its billing address cannot be corrected."
+        },
         "override": {
             "not-allowed": "This override cannot move the order to that status from where it is now.",
             "awaiting-stock": "This order still has units awaiting stock, so it cannot be moved past dispatch by hand."

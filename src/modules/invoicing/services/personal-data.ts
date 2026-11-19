@@ -23,13 +23,14 @@ export const collectPersonalData = (
         Promise.all(
             orders.map((order) =>
                 Promise.all([
-                    invoicingRepository.findInvoiceByOrderId(order.id),
+                    invoicingRepository.findInvoicesByOrderId(order.id),
                     invoicingRepository.findCreditNotesByOrderId(order.id)
                 ])
             )
         ).then((pairs) => ({
-            invoices: pairs.flatMap(([invoice]) =>
-                invoice ? [presentExportedDocument(invoice)] : []
+            // Every invoice, the ones a correction cancelled included: each was issued to this buyer.
+            invoices: pairs.flatMap(([invoices]) =>
+                invoices.map((invoice) => presentExportedDocument(invoice))
             ),
             creditNotes: pairs.flatMap(([, creditNotes]) =>
                 creditNotes.map((note) => presentExportedDocument(note))

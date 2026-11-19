@@ -25,6 +25,7 @@ import { getOrders } from './controllers/get-orders';
 import { createOrder } from './controllers/post-order';
 import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { putShippingAddress } from './controllers/put-shipping-address';
+import { putBillingAddress } from './controllers/put-billing-address';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/post-order-restore';
 import { getOrderItem } from './controllers/get-order';
@@ -120,6 +121,12 @@ router.post(
  * `incorrect_address` fulfillment order needs it). Before `/:id`, which PUT would otherwise match.
  */
 router.put('/:id/shipping-address', requirePermission('update', 'Order'), putShippingAddress);
+
+/**
+ * PUT /orders/:id/billing-address — staff correcting who an order is invoiced to; an invoice
+ * already issued is cancelled and reissued by `invoicing`. Before `/:id`, like the shipping one.
+ */
+router.put('/:id/billing-address', requirePermission('update', 'Order'), putBillingAddress);
 
 /**
  * GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
