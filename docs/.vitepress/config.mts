@@ -481,6 +481,7 @@ export default defineConfig({
                         { text: 'Concurrency Testing', link: '/build/concurrency-testing' },
                         { text: 'Broker testing', link: '/build/broker-testing' },
                         { text: 'Replicas testing', link: '/build/replicas-testing' },
+                        { text: 'Kubernetes testing', link: '/build/kubernetes-testing' },
                         { text: 'Load testing', link: '/build/load-testing' },
                         { text: 'Mutation Testing', link: '/build/mutation-testing' },
                         {

@@ -36,6 +36,18 @@ served as a guest (RFC 6750 §3.1; the same rule `sk_` keys already had). `getAu
 bearer that names no live session — bad signature, expired, revoked, a user who no longer exists —
 with `401` and `WWW-Authenticate: Bearer error="invalid_token"`, and an idle staff session with
 
+### What a refused credential leaves behind
+
+A bad credential is recorded one of two ways, by whether somebody could have sent it by accident.
+
+- **An attack** — a forged signature, a malformed value, a revoked `sk_` key — is a stored audit row, a log line and a `security_events_total` count.
+- **Everything else** — an expired, revoked or idle session, an expired key, or no credential at all on a protected route — is a structured log line (`security.unauthorized`, with the reason, route, method and address, never the token) and, for a stale one, an `auth_stale_credentials_total` count. No row.
+
+So the operator's incident feed does not list 401s: a customer's expired tab and an anonymous
+`GET` are routine, and a row each would be a write any caller chooses to make. Find them in the
+audit log stream (`log_type: audit`, `event.name: security.unauthorized`).
+See [Audit events](../operate/winston.md#audit-events).
+
 Full detail: [Where token verification happens](./security-auth.md).
 
 ## Signing-key rotation

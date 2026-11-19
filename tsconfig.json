@@ -40,6 +40,7 @@
         "scenarios/**/*.ts",
         "scenarios/**/*.json",
         "scripts/**/*.ts",
+        "k8s/**/*.ts",
         "shared/contracts/*.ts",
         "shared/locales/*.json",
         "package.json"

@@ -3,6 +3,7 @@ import {
     emitAuditEvent,
     extractRequestContext,
     recordAudit,
+    recordAuditLine,
     registerAuditSink,
     coreAuditActions,
     type AuditEvent,
@@ -318,5 +319,51 @@ describe('buildAuditEvent — default actorRole', () => {
         });
 
         expect(event.actorRole).toBe('system');
+    });
+});
+
+describe('recordAuditLine', () => {
+    beforeEach(() => jest.clearAllMocks());
+    afterEach(() => registerAuditSink(() => {}));
+
+    /** The one difference from `recordAudit`: the line is the whole record. */
+    it('writes the log line and never hands the entry to the sink', () => {
+        const sink = jest.fn();
+        registerAuditSink(sink);
+
+        recordAuditLine(testCallerContext, {
+            action: coreAuditActions.SECURITY_UNAUTHORIZED,
+            actorUserId: 'anonymous',
+            actorRole: 'anonymous',
+            outcome: 'failure',
+            metadata: { route: '/orders', method: 'GET', reason: 'not_authenticated' }
+        });
+
+        expect(sink).not.toHaveBeenCalled();
+        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
+        expect(call[0]).toBe('warn');
+        expect(call[1]).toBe('security.unauthorized');
+        expect(call[2].metadata).toEqual({
+            route: '/orders',
+            method: 'GET',
+            reason: 'not_authenticated'
+        });
+    });
+
+    it('scrubs a credential out of the line, as the stored path does', () => {
+        recordAuditLine(testCallerContext, {
+            action: coreAuditActions.SECURITY_UNAUTHORIZED,
+            outcome: 'failure',
+            metadata: { authorization: 'Bearer secret.token.value' }
+        });
+
+        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
+        expect(JSON.stringify(call[2])).not.toContain('secret.token.value');
+    });
+
+    it('emits nothing when there is no caller context', () => {
+        recordAuditLine(undefined, { action: 'auth.login', outcome: 'failure' });
+
+        expect(auditLogger.log).not.toHaveBeenCalled();
     });
 });

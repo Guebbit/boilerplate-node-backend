@@ -135,13 +135,13 @@ advice is the same shape: a short pause before the app stops accepting.
 
 ## Kubernetes and PaaS
 
-| Here                 | There                                   |
-| -------------------- | --------------------------------------- |
-| `app` `GET /livez`   | `livenessProbe`                         |
-| `app` `GET /readyz`  | `readinessProbe`                        |
-| a startup wait       | `startupProbe` (optional; not built)    |
-| `cron` (supercronic) | a `CronJob`, one per schedule. No probe |
-| `setup`              | a `Job`, or a pre-upgrade hook          |
+| Here                 | There                                                                             |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `app` `GET /livez`   | `livenessProbe`                                                                   |
+| `app` `GET /readyz`  | `readinessProbe`                                                                  |
+| a startup wait       | `startupProbe` on `/livez`, 3 min budget (`k8s/base/app.yaml`)                    |
+| `cron` (supercronic) | a one-replica Deployment with an `exec` probe on `/health` (`k8s/base/cron.yaml`) |
+| `setup`              | a `Job`, applied and awaited before the app (`k8s/rig.sh`)                        |
 
 ## Podman
 

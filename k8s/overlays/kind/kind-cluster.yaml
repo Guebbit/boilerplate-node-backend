@@ -1,0 +1,18 @@
+# The one-node cluster k8s/rig.sh creates. Not a Kustomize resource: `kind create cluster --config`
+# reads it. rig.sh swaps the host port when K8S_RIG_PORT is set.
+# https://kind.sigs.k8s.io/docs/user/configuration/
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: boilerplate-rig
+nodes:
+    - role: control-plane
+      # Pinned to the version the cluster was tested on, digest included: kind's default node image
+      # moves with each kind release, and kubectl tolerates only one minor of skew.
+      # https://github.com/kubernetes-sigs/kind/releases (the release notes list the images)
+      image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+      extraPortMappings:
+          # Envoy's NodePort (envoyproxy.yaml) to the host's loopback only.
+          - containerPort: 30080
+            hostPort: 3072
+            listenAddress: 127.0.0.1
+            protocol: TCP
