@@ -202,7 +202,8 @@ npm run host -- db:cache:clear
 `.env-example` ships `NODE_RABBITMQ_URL` commented out, so a host-run API has no broker configured
 and does its jobs inline. To use the containerised broker, set it to `amqp://guest:guest@127.0.0.1:5672`
 and run `npm run host -- dev:worker` as well: the API only publishes, and the worker (its own port,
-`NODE_WORKER_PORT`, 3010) is what takes the jobs. `host` does not redirect the queue host.
+`NODE_WORKER_PORT`, 3010) is what takes the jobs. Image digests and data exports go to the heavy role:
+run `npm run host -- dev:worker:heavy` too (port 3011). `host` does not redirect the queue host.
 
 Only the **hostname** moves. The database name, ports and everything else still come from your
 `.env`, so there is no second env file to keep in sync — see
