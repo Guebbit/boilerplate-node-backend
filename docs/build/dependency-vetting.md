@@ -10,9 +10,27 @@ them at once: ~446 MB transitive across this repo and the paired frontend, a bun
 opt-out telemetry that fired inside the pre-commit gate on every developer machine. See
 [Package Dependencies](../reference/package-dependencies.md) for what actually replaced it.
 
-`CLAUDE.md`'s "Dependencies — look before you build" covers maintenance, licence and "a dependency
-tree that isn't a liability". It says nothing about how to MEASURE that tree, telemetry, or
-configurability — this page fills that gap.
+## Look before you build
+
+Open source first. Before writing anything non-trivial, check whether it already exists:
+
+1. **Already in the repo** — read `package.json` first. Half the "missing" utility is usually a
+   dependency we already pay for.
+2. **A maintained library** — search npm before designing. Judge it on support, not stars:
+   released in the last ~12 months, open issues actually answered, typed (or has `@types/*`),
+   a licence we can use, and a dependency tree that isn't a liability.
+3. **Only then write it ourselves** — and say why in one line: nothing exists, everything that
+   exists is unmaintained, or the fit is genuinely wrong.
+
+Rules of thumb:
+
+- Prefer one well-supported library over three thin ones, and the standard library or the runtime
+  over both — `node:crypto`, `Intl`, `URL`, `AbortSignal` cover more than people expect.
+- A tiny, obvious helper is cheaper to own than a dependency. The line is roughly: if it fits in a
+  well-tested function and has no edge cases we'd get wrong, write it.
+
+The rules below say how to MEASURE a candidate's tree, telemetry and configurability once it has
+passed these.
 
 ## The rules
 

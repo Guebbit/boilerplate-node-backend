@@ -1,6 +1,6 @@
 /**
  * @module
- * `isOutsideLightGate` — which staged files the pre-commit hook runs on top of `complete:light`.
+ * `isOutsideLightGate` — which staged files the pre-commit hook runs on top of `complete:light:gates`.
  * A wrong "false" lets a new integration test skip the commit gate; a wrong "true" reruns a
  * file light already ran. Both directions are asserted.
  *

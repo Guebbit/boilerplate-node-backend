@@ -210,7 +210,7 @@ fully derived — there is no diff to review because there is nothing committed 
 
 ## The pre-commit hook
 
-The hook never stages anything. It regenerates on disk, so the gates after it read current files,
+The hook stages only the lint and formatting fixes lint-staged made to files you staged; never a file `regenerate` rewrote. It regenerates on disk, so the gates after it read current files,
 then **refuses** a commit whose committed generated files are stale. The check builds from what is
 being committed, not from your working tree: `check:generated` exports the index
 (`git checkout-index`, so a partial `git commit -- <paths>` is honoured) to a scratch folder, runs
@@ -219,15 +219,16 @@ being committed, not from your working tree: `check:generated` exports the index
 ```mermaid
 flowchart TD
     A[git commit] --> B["npm run regenerate -- --no-sync<br/>(on disk, for the later gates)"]
-    B --> C["check:generated: export the index to a scratch folder"]
+    B --> L["lint-staged: fix the staged files<br/>and stage the fixes"]
+    L --> C["check:generated: export the index to a scratch folder"]
     C --> D["regenerate --no-sync in the scratch folder"]
     D --> E{"did a committed<br/>file change?"}
     E -- yes --> F["refuse: name the files,<br/>run npm run regenerate and stage"]
-    E -- no --> G["lint-staged, light gate, test:staged"]
+    E -- no --> G["light gate, test:staged"]
 ```
 
 Fixing a refusal is one step: `npm run regenerate`, then stage the files it names. The hook has
-already rewritten them on disk by the time it refuses. Nothing is staged for you — a regenerated
+already rewritten them on disk by the time it refuses. No regenerated file is staged for you — a regenerated
 file you did not stage is not in the commit, and that is the thing the refusal exists to say.
 
 ## Handing the contract to the frontend

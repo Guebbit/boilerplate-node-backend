@@ -21,7 +21,7 @@ including the parts beyond the registration.
 
 ## Before you start
 
-- A clean tree and a green `npm run complete:light` on the base.
+- A clean tree and a green `npm run complete:light:fix` on the base.
 - The shape of a module: [the module registry](./module-registry.md) and [the module template](../understand/modules.md#the-module-template).
 - A name: lower-case letters and single hyphens.
 

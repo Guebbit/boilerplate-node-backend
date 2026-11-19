@@ -188,7 +188,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Commit hygiene',
-        purpose: 'commit message linting, git hooks and staged-file checks',
+        purpose: 'commit message linting, git hooks and staged-file fixes',
         readMore: '—',
         match: ['husky', 'lint-staged', '@commitlint/*']
     },

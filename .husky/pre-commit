@@ -1,11 +1,12 @@
-# The LIGHT gate: eslint + prettier on the STAGED files only (lint-staged), then `complete:light:gates`.
-# Staged-only so a peer session's dirty file cannot fail an unrelated commit; CI lints the whole tree.
-# It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
-# cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
+# The LIGHT gate: lint-staged FIXES eslint and prettier on the STAGED files and stages the fixes into
+# this same commit, then `complete:light:gates`.
+# Staged-only so a peer session's dirty file cannot fail, or be rewritten by, an unrelated commit;
+# CI lints the whole tree. It keeps every static check (type-check, lint, both spec lints, format,
+# the contract-bundle, docs and cross-repo checks) plus the unit and cross-cutting suites — nothing
+# that starts `mongod`.
 #
-# Left out, apart from the staged files `test:staged` runs at the end, so run the full
-# `npm run complete` by hand before merging a lane and once on main after
-# each merge (CI still runs all of it):
+# Left out, apart from the staged files `test:staged` runs at the end (CI still runs all of it).
+# When each gate runs: docs/build/testing-and-docs.md#when-each-gate-runs
 #
 # - `test:integration`, `test:contract` and `test:fuzz` — the database and HTTP layers, fuzz being
 #   most of the full gate's minutes;
@@ -19,15 +20,26 @@
 # (re-executes the unit suite once per mutant — nightly in CI), `complete:manual` (`test:prism`,
 # which binds a real port), and `bench` (needs a running server, and reports numbers
 # rather than a verdict).
-# Write the generated artefacts first, so the gates below read them off disk, then check that what
-# is being COMMITTED is current. The hook never stages anything: a regenerated file you did not
-# stage is not in the commit, and the check below refuses the commit for it instead of papering
-# over it. Costs about thirty seconds for each half.
+# Write the generated artefacts first, so the gates below read them off disk. Costs about thirty
+# seconds.
 #
 # `--no-sync` is not optional. A full `regenerate` ends with `sync:frontend`, which writes into the
 # PAIRED REPO's working tree — a commit here would silently dirty a checkout you are not looking
 # at, and possibly one with its own work in progress. Hand the files over deliberately, with
 # `npm run regenerate` by itself, when you mean to.
+npm run regenerate -- --no-sync
+
+# lint-staged: `eslint --fix` then `prettier --write` on the staged files only, and `git add` of
+# exactly the files those fixers changed. Its own backup stash hides the unstaged hunks of a
+# partially staged file while the fixers run, and puts them back unstaged afterwards; during a
+# merge it touches only the files that differ from both parents. A file `regenerate` rewrote above
+# is not one the fixers changed, so it is never staged here. `.lintstagedrc.json` holds the tasks.
+# https://github.com/lint-staged/lint-staged#how-does-lint-stageds-stashing-work
+npx lint-staged
+
+# Check that what is being COMMITTED — the index, after the fixes above — is current. A regenerated
+# file you did not stage is not in the commit, and this refuses the commit for it instead of
+# papering over it. Costs about thirty seconds.
 #
 # What stays committed and is therefore checked: `shared/rules/schemas/*.json`,
 # `shared/authorization-keys.generated.yaml`, `docker/crontab` and the
@@ -38,10 +50,7 @@
 # `check:generated` exports the index (`git checkout-index`, so a partial `git commit -- <paths>`
 # is honoured) to a scratch folder, regenerates there and fails if anything changed. It names the
 # files; the fix is `npm run regenerate` and staging them.
-npm run regenerate -- --no-sync
 npm run check:generated
-
-npx lint-staged
 npm run complete:light:gates
 
 # Last, because it is the one step that starts `mongod`: every integration, contract or fuzz test

@@ -5,7 +5,7 @@
  * already cover — the integration, contract and fuzz files. `npm run test:staged`, the last step of
  * `.husky/pre-commit`.
  *
- * Why: `complete:light` skips every suite that needs `mongod`, so a new integration test would
+ * Why: `complete:light:gates` skips every suite that needs `mongod`, so a new integration test would
  * otherwise first run at merge time, far from the commit that broke it.
  *
  * @see docs/reference/package-scripts.md#test-scripts
