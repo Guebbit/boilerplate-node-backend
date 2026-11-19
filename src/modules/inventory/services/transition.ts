@@ -13,54 +13,72 @@ import { counterDeltaFor, type HoldKind } from '../domain';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 
 /**
- * Bring the catalogue's synced copy of one product's counters into step with the ledger's.
+ * Bring the catalogue's synced copy of these products' counters into step with the ledger's.
  *
- * Also clears the `products` response-cache tag: `GET /products/:id` and the lists carry
- * `available`, so a stock write that left them cached would keep showing the old count. Every stock
- * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
+ * One `$in` read for all of them, one sync per product, and ONE clear of the `products`
+ * response-cache tag at the end: `GET /products/:id` and the lists carry `available`, so a stock
+ * write that left them cached would keep showing the old count. Every stock write — receipt,
+ * adjustment, hold, release, both sweeps, a return's restock — ends here.
  *
  * Never rejects, the read included: the transition it follows already committed, and the next
- * transition on this product corrects the cache regardless. A failure here must not skip what the
+ * transition on a product corrects its cache regardless. A failure must not skip what the
  * caller still owes (a hold given back, a refund).
  *
- * @param productId - the product whose cached counters are being refreshed
+ * - A failed sync is logged; the other products still sync.
+ * - The tag is cleared only if at least one sync landed.
+ *
+ * @param productIds - the products whose counters just moved; duplicates are read once
  */
-export const refreshStockCache = (productId: string): Promise<void> =>
-    stockLevelRepository
-        .findByProductId(productId)
-        .then((level) =>
-            level
-                ? productService
-                      .syncStockCache(productId, {
-                          onHand: level.onHand,
-                          reserved: level.reserved,
-                          backorderLimit: level.backorderLimit,
-                          backordered: level.backordered,
-                          version: level.version
-                      })
-                      .then(() => invalidateCacheTagsLogged(['products']))
-                : undefined
-        )
+export const refreshStockCacheForProducts = (productIds: readonly string[]): Promise<void> => {
+    const unique = [...new Set(productIds)];
+    if (unique.length === 0) return Promise.resolve();
+
+    return stockLevelRepository
+        .findManyByProductIds(unique)
+        .then(async (levels) => {
+            let synced = 0;
+            for (const level of levels) {
+                const productId = String(level.productId);
+                await productService
+                    .syncStockCache(productId, {
+                        onHand: level.onHand,
+                        reserved: level.reserved,
+                        backorderLimit: level.backorderLimit,
+                        backordered: level.backordered,
+                        version: level.version
+                    })
+                    .then(() => {
+                        synced += 1;
+                    })
+                    .catch((error: unknown) => {
+                        // Stryker disable all
+                        logger.error({
+                            message: `Inventory: could not refresh the catalogue's stock cache for product ${productId}`,
+                            error
+                        });
+                        // Stryker restore all
+                    });
+            }
+            if (synced > 0) await invalidateCacheTagsLogged(['products']);
+        })
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
-                message: `Inventory: could not refresh the catalogue's stock cache for product ${productId}`,
+                message: `Inventory: could not read the stock levels of ${unique.length} product(s) to refresh the catalogue's stock cache`,
                 error
             });
             // Stryker restore all
         });
+};
 
 /**
- * Bring the catalogue's stock cache into step for these products — what a caller of
- * `restockReturnedLines` inside a transaction owes once it has committed.
+ * Bring the catalogue's synced copy of one product's counters into step with the ledger's.
+ * Never rejects; see {@link refreshStockCacheForProducts}.
  *
- * @param productIds - the products whose counters just moved
+ * @param productId - the product whose cached counters are being refreshed
  */
-export const refreshStockCacheForProducts = async (
-    productIds: readonly string[]
-): Promise<void> => {
-    for (const productId of new Set(productIds)) await refreshStockCache(productId);
-};
+export const refreshStockCache = (productId: string): Promise<void> =>
+    refreshStockCacheForProducts([productId]);
 
 /**
  * Move one product's counters and record why, or do neither.
