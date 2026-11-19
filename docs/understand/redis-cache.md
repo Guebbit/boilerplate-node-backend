@@ -176,10 +176,10 @@ flowchart LR
     App -->|NODE_RATE_LIMIT_REDIS_URL| Limits
 ```
 
-| Instance | URL                         | Policy                | What a lost key costs                                                               |
-| -------- | --------------------------- | --------------------- | ----------------------------------------------------------------------------------- |
-| `cache`  | `NODE_REDIS_URL`            | `allkeys-lru`, capped | a miss                                                                              |
-| `limits` | `NODE_RATE_LIMIT_REDIS_URL` | `noeviction`, small   | a budget that resets, or a solved ALTCHA challenge that can be replayed on a worker |
+| Instance | URL                         | Policy                | What a lost key costs                                                                   |
+| -------- | --------------------------- | --------------------- | --------------------------------------------------------------------------------------- |
+| `cache`  | `NODE_REDIS_URL`            | `allkeys-lru`, capped | a miss                                                                                  |
+| `limits` | `NODE_RATE_LIMIT_REDIS_URL` | `noeviction`, small   | a budget that resets, or a solved ALTCHA challenge that can be replayed on another copy |
 
 - **No inheritance.** `NODE_RATE_LIMIT_REDIS_URL` never falls back to `NODE_REDIS_URL`: one unset
   variable must not turn two instances into one. Unset means the in-process stores, and each

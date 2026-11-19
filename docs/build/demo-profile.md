@@ -217,7 +217,7 @@ The same `buildScenario` runs behind `npm run scenario:apply` against a real dat
 the application in-process for exactly this reason. It skips a database that already holds
 data unless `--reset` is given: seeding on top of a shop that already has a past would give it a
 second one. A `running` note is the exception (it rebuilds), and `leases` rows and the note itself
-do not count as data. What it does with each starting state is in the table below, and the seed note's rules follow it.
+do not count as data. A database holding only a `done` note is skipped, never seeded: the note says a seed ran. What it does with each starting state is in the table below, and the seed note's rules follow it.
 
 | The database holds                            | `scenario:apply`     | `scenario:apply:reset`  |
 | --------------------------------------------- | -------------------- | ----------------------- |
