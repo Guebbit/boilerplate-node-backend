@@ -36,5 +36,6 @@ export const presentCreditNoteSummary = (creditNote: CreditNoteDocument): Credit
     issuedAt: creditNote.issuedAt.toISOString(),
     currency: creditNote.currency,
     grandTotal: padDecimal(creditNote.grandTotal, creditNote.currency),
-    refundId: creditNote.refundId
+    reason: creditNote.reason,
+    ...(creditNote.refundId === undefined ? {} : { refundId: creditNote.refundId })
 });

@@ -114,12 +114,16 @@ const buildMeta = (locale: string, t: TFunction, document: EInvoicingDocument) =
 });
 
 /** The frozen billing address block, or `undefined` for a digital-only / pre-address-book order. */
-const buildBilling = (document: EInvoicingDocument) => {
+const buildBilling = (t: TFunction, document: EInvoicingDocument) => {
     const address = document.billingAddress;
     if (!address) return undefined;
     return {
         fullName: address.fullName,
-        lines: [address.street, `${address.zip} ${address.city}`, address.country]
+        lines: [address.street, `${address.zip} ${address.city}`, address.country],
+        // Art. 226(4): a business buyer's VAT number is printed with its name and address.
+        vatNumberLine: address.vatNumber
+            ? t('invoicing.document.buyer-vat-number', { number: address.vatNumber })
+            : undefined
     };
 };
 
@@ -284,10 +288,15 @@ export const buildDocumentView = (
         ),
         reversalNotice:
             isCreditNote && document.reversalOf
-                ? t('invoicing.document.reversal-notice', { number: document.reversalOf.number })
+                ? t(
+                      document.reversalOf.reason === 'correction'
+                          ? 'invoicing.document.reversal-notice-correction'
+                          : 'invoicing.document.reversal-notice',
+                      { number: document.reversalOf.number }
+                  )
                 : undefined,
         meta: buildMeta(locale, t, document),
-        billing: buildBilling(document),
+        billing: buildBilling(t, document),
         buyerErasedNotice:
             document.buyerErasedAt && !document.billingAddress
                 ? t('invoicing.document.buyer-erased')

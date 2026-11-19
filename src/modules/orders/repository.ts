@@ -35,7 +35,7 @@ import { announceInTransaction } from '@kernel/outbox';
 import { ORDER_REDACTED } from './events';
 import { OrderStatus } from '@types';
 import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
-import type { Order, OrderAddress } from '@types';
+import type { Order, OrderAddress, OrderBillingAddress } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -403,6 +403,32 @@ const replaceShippingAddress = (
                 $set: {
                     shippingAddress: encryptOrderPii({ shippingAddress: address }, toObjectId(id))
                         .shippingAddress
+                }
+            },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
+ * Replace who an order is invoiced to, encrypted under the order's own id. Refused for an
+ * anonymised order, so a write never puts back what the retention sweep erased.
+ * @param id - the order
+ * @param address - the corrected address, in the clear
+ * @param session - joins the write to the caller's transaction, so its timeline row and event ride with it
+ * @returns the order as it now stands, or `null` if it was anonymised since the caller read it
+ */
+const replaceBillingAddress = (
+    id: string,
+    address: OrderBillingAddress,
+    session?: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), email: { $ne: ANONYMIZED_EMAIL } },
+            {
+                $set: {
+                    billingAddress: encryptOrderPii({ billingAddress: address }, toObjectId(id))
+                        .billingAddress
                 }
             },
             { returnDocument: 'after', session }
@@ -913,6 +939,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     extendConformity: typeof extendConformity;
     replaceShippingAddress: typeof replaceShippingAddress;
+    replaceBillingAddress: typeof replaceBillingAddress;
     applyStatusOverride: (
         id: string,
         from: OrderStatus,
@@ -950,6 +977,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered,
     extendConformity,
     replaceShippingAddress,
+    replaceBillingAddress,
     setProjection,
     applyStatusOverride,
     findInSession,

@@ -15,6 +15,7 @@ describe('the timeline audience table', () => {
 
         expect(hidden.toSorted()).toEqual([
             'address_corrected',
+            'billing_corrected',
             'dispute_closed',
             'dispute_opened',
             'fulfillment_held',

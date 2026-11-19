@@ -40,7 +40,8 @@ describe('invoicing reencrypt', () => {
                 street: '1 Way',
                 city: 'London',
                 zip: 'W1A 1AA',
-                country: 'GB'
+                country: 'GB',
+                vatNumber: 'GB123456789'
             }
         });
         await markPaid(String(order._id));
@@ -49,7 +50,7 @@ describe('invoicing reencrypt', () => {
 
         await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: rotation }, async () => {
             const first = await invoicingModule.reencrypt(false);
-            expect(first.rewritten).toBe(5);
+            expect(first.rewritten).toBe(6);
             const second = await invoicingModule.reencrypt(false);
             expect(second.rewritten).toBe(0);
 
@@ -57,6 +58,9 @@ describe('invoicing reencrypt', () => {
             expect(keyVersionOf(raw!.billingAddress!.city)).toBe('v2');
             expect(decryptInvoiceParty(raw!.billingAddress!, 'invoice', raw!._id).city).toBe(
                 'London'
+            );
+            expect(decryptInvoiceParty(raw!.billingAddress!, 'invoice', raw!._id).vatNumber).toBe(
+                'GB123456789'
             );
         });
     });

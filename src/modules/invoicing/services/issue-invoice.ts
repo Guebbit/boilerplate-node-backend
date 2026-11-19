@@ -17,7 +17,8 @@ import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
 import { allocateInvoiceNumber, readWinner } from './numbering';
-import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
+import type { OrderBillingAddress } from '@types';
+import type { InvoiceDocument, InvoiceLine, InvoiceParty, InvoiceSeller } from '../model';
 import { shopTimezone } from '@modules/shop';
 import { operatorIdentity } from '@modules/account';
 
@@ -25,10 +26,25 @@ import { operatorIdentity } from '@modules/account';
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.
  * Everything but the VAT number is required at boot, so only that one can be absent.
  */
-const frozenSeller = (): InvoiceSeller => {
+export const frozenSeller = (): InvoiceSeller => {
     const { legalName, vatNumber, street, city, zip, country } = operatorIdentity();
     return { legalName, ...(vatNumber ? { vatNumber } : {}), street, city, zip, country };
 };
+
+/**
+ * The order's billing address as the invoice's buyer block: the five postal fields and, when the
+ * buyer is a business, its VAT number. No phone — an invoice carries none (data minimisation).
+ *
+ * @param address - the order's decrypted billing address
+ */
+export const buyerOf = (address: OrderBillingAddress): InvoiceParty => ({
+    fullName: address.fullName,
+    street: address.street,
+    city: address.city,
+    zip: address.zip,
+    country: address.country,
+    ...(address.vatNumber === undefined ? {} : { vatNumber: address.vatNumber })
+});
 
 /**
  * One order line, frozen onto the invoice — title, quantity, the frozen unit price, VAT rate and
@@ -93,7 +109,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                         ...(billingAddress
                             ? {
                                   billingAddress: encryptInvoiceParty(
-                                      billingAddress,
+                                      buyerOf(billingAddress),
                                       'invoice',
                                       _id
                                   )
@@ -137,7 +153,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
 };
 
 /**
- * The invoice for one order, or `null` if it has none yet — `GET /orders/{id}/invoice`'s own
+ * The LIVE invoice for one order, or `null` if it has none yet — `GET /orders/{id}/invoice`'s own
  * existence check, and `services/issue-credit-note.ts`'s read of what a credit note corrects. The
  * service's own door onto {@link invoicingRepository}'s read, so neither caller reaches the
  * repository directly.

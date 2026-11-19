@@ -60,6 +60,7 @@ import {
 } from './fulfillment';
 import { overrideStatus } from './override';
 import { correctShippingAddress } from './address';
+import { correctBillingAddress } from './billing';
 import { openOrderExport } from './export';
 import {
     appendTimeline,
@@ -160,6 +161,7 @@ export const orderService = {
     refreshShelf,
     overrideStatus,
     correctShippingAddress,
+    correctBillingAddress,
     openOrderExport,
     appendTimeline,
     addNote,

@@ -56,6 +56,7 @@ flowchart LR
     orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
+    orders -. "order.billing_corrected" .-> invoicing
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.canceled" .-> payments
     orders -. "order.created" .-> payments
@@ -367,6 +368,16 @@ Shopify allows it on a partly fulfilled order too, and Solidus keeps the address
 the buyer's own edit is a later, optional step.
 
 Full detail: [Creating an order, exports and mails](./orders-creation-and-exports.md#correcting-the-shipping-address).
+
+## Correcting the billing address {#correcting-the-billing-address}
+
+`PUT /orders/{id}/billing-address` (`update:Order`) replaces who the order is invoiced to, with an
+optional buyer VAT number: the case where the buyer writes in that the name, address or VAT number
+on the invoice is wrong. Unlike the shipping one it is accepted at any status, because an invoice
+may already exist.
+
+Full detail: [Creating an order, exports and mails](./orders-creation-and-exports.md#correcting-the-billing-address);
+what happens to the invoice: [`invoicing`](./invoicing.md#correcting-the-buyer).
 
 ## Cancel and refund mails {#cancel-and-refund-mails}
 

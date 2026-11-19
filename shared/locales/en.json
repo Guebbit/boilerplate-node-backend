@@ -204,6 +204,7 @@
             "userId": "User",
             "username": "Username",
             "value": "Value",
+            "vatNumber": "VAT number",
             "website": "Website",
             "weight": "Weight",
             "zip": "Postal code"

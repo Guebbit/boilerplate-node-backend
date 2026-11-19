@@ -123,6 +123,13 @@ with who, when and why, and read back on the order's timeline (an entry visible 
 customer's own view of the order never shows it, so a customer support question is answered from
 the timeline, not the customer's order page.
 
+**A wrong name, address or VAT number on an invoice** is not corrected by editing the invoice: an
+invoice is a numbered legal record. Once your accountant agrees, open the order and use **Edit
+billing address**. The shop cancels the old invoice with a credit note and issues a new one to the
+corrected buyer by itself: two new numbers, no money moves, both documents on the order. If part of the
+order was already refunded, only what is still invoiced is reissued. A buyer cannot do this
+themselves: they ask, you check.
+
 ## The catalogue
 
 Adding, editing and removing what the shop sells, one product at a time.

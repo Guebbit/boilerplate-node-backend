@@ -43,7 +43,9 @@ paths:
             description: >-
                 The frozen tax invoice for the order identified by `{id}`, as a binary PDF —
                 numbered and issued once, the moment the order moved `pending → paid`, never
-                re-rendered from today's config. Refuses with `404` for an order that has not been
+                re-rendered from today's config. After staff correct the buyer's details
+                (`PUT /orders/{id}/billing-address`) this is the LIVE invoice: the one issued in place of the
+                one a credit note cancelled. Refuses with `404` for an order that has not been
                 invoiced yet (never paid, or paid while its invoice listener failed: such an
                 order is not invoiced yet, and takes no number from the gap-free series). The server names
                 the file: `Content-Disposition` carries `invoice-<invoice number>.pdf`, so a client
@@ -83,7 +85,8 @@ paths:
             summary: List the order's credit notes
             description: >-
                 One entry per refund that has settled on this order's payment, oldest first — a
-                full refund and each part of a partial one each have their own credit note. Empty
+                full refund and each part of a partial one each have their own credit note — plus
+                one per correction of the buyer's details (`reason: correction`, no refund). Empty
                 for an order never refunded, with no invoice to reverse, or whose money the
                 caller may not read: the buyer sees their own, and staff need the payments staff
                 read (`display:Payment`), so the warehouse that packs the order sees none. `id` is
@@ -154,7 +157,7 @@ components:
         CreditNoteSummary:
             type: object
             additionalProperties: false
-            required: [id, number, issuedAt, currency, grandTotal, refundId]
+            required: [id, number, issuedAt, currency, grandTotal, reason]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -170,8 +173,16 @@ components:
                 grandTotal:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: The gross amount this credit note reverses.
+                reason:
+                    type: string
+                    enum: [refund, correction]
+                    description: >-
+                        Why it was issued. `refund`: it reverses a refund that settled. `correction`: staff
+                        corrected the buyer's details on the order, so the old invoice was cancelled and
+                        reissued; no money moved.
                 refundId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: The refund it reverses. Absent on a `correction`.
 
         CreditNotesResponse:
             type: object
