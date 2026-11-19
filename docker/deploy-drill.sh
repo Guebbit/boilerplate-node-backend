@@ -4,6 +4,8 @@
 #   2. deploy a broken image (the same image with a CMD that exits): refused, and the first image
 #      is running again ("auto-rollback" in the log, exit 1)
 #   3. deploy a second good image, then `--rollback`: the first image runs again ("rollback")
+# In 1 and 3 the `worker` is also healthy, is the broker's one consumer of the mail queue and serves
+# its Prometheus scrape behind the token.
 # The client has generated secrets and lives under `clients/` (gitignored); the stack, its volumes,
 # the drill images and the client directory are all removed at the end, whatever happened.
 # Run it: `npm run deploy:drill`. Docs: docs/operate/deploy-and-rollback.md#the-drill
@@ -74,6 +76,35 @@ assert_log_tail() {
 # Fails unless the API answers `/livez` on the published loopback port.
 assert_alive() { curl -fsS "http://127.0.0.1:$PORT/livez" >/dev/null || die "/livez does not answer on port $PORT"; }
 
+# Fails unless exactly one consumer is bound to the mail queue. `app` only publishes, so that one is
+# the `worker`: a job sent now is taken by it, never by the web copy. `deploy.sh` already waited for the
+# worker's own `/livez`; this is the proof it is also attached to the broker. The queue is declared by
+# the consumer that binds it, so a few polls: the bind follows the health listener by a moment.
+assert_worker_consuming() {
+    local consumers="" attempt
+    for attempt in $(seq 1 15); do
+        consumers="$($ENGINE exec "$(container_of queue)" rabbitmqctl list_queues name consumers 2>/dev/null | awk '$1 == "worker.email.send" { print $2 }')"
+        [ "$consumers" = 1 ] && { echo "worker.email.send has 1 consumer (the worker)"; return; }
+        sleep 2
+    done
+    die "worker.email.send has '${consumers:-no}' consumers, expected exactly 1 (the worker)"
+}
+
+# Fails unless the worker serves its Prometheus scrape behind the same bearer token as the API: two
+# alert counters move only in the worker, and nothing else would notice a scrape that went missing.
+# Run inside the container, where the token file is mounted and the port is the worker's own.
+assert_worker_scrape() {
+    $ENGINE exec "$(container_of worker)" node -e "
+        const port = process.env.NODE_WORKER_PORT || 3010;
+        const url = 'http://127.0.0.1:' + port + '/observability/metrics';
+        const token = require('node:fs').readFileSync('/run/secrets/metrics_token', 'utf8').trim();
+        Promise.all([fetch(url), fetch(url, { headers: { Authorization: 'Bearer ' + token } })])
+            .then(([anonymous, scraper]) => process.exit(anonymous.status === 401 && scraper.status === 200 ? 0 : 1))
+            .catch(() => process.exit(1));
+    " || die "the worker's /observability/metrics did not answer 401 without the token and 200 with it"
+    echo "the worker's scrape answers 401 without the token and 200 with it"
+}
+
 # Builds a derived image: the first image plus the Dockerfile lines in $2, tagged $1.
 derive() {
     printf 'FROM %s\n%s\n' "$FIRST_IMAGE" "$2" >"$TMP/Dockerfile"
@@ -127,12 +158,14 @@ DRILL_TAGS+=("$FIRST_IMAGE")
 assert_log_tail deploy "${FIRST_IMAGE##*:}"
 assert_running "${FIRST_IMAGE##*:}"
 assert_alive
+assert_worker_consuming
+assert_worker_scrape
 
-# `app`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
-# beat the file (secret-files.ts) and show in `inspect`. Production refused to boot above without
+# `app`, `worker`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
+# show in `inspect`, even though the file wins over it (secret-files.ts). Production refused to boot above without
 # the device-cookie and SMTP files; this proves no value, only the paths, reached the containers.
-step "no secret value in the environment of app, cron or setup"
-for service in app cron setup; do
+step "no secret value in the environment of app, worker, cron or setup"
+for service in app worker cron setup; do
     env_dump="$($ENGINE inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$(container_of "$service")")"
     echo "$env_dump" | grep -qx 'NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie_secret' ||
         die "$service has no NODE_DEVICE_COOKIE_SECRET_FILE"
@@ -166,6 +199,7 @@ deploy --rollback
 assert_log_tail rollback "${FIRST_IMAGE##*:}"
 assert_running "${FIRST_IMAGE##*:}"
 assert_alive
+assert_worker_consuming
 [ "$(container_of setup)" = "$setup_before" ] || die "--rollback recreated setup"
 
 PASS=1

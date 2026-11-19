@@ -35,9 +35,11 @@ const config: KnipConfig = {
         'jest.config.replicas.js',
         // Spawned by file path from `tests/replicas/notification-fanout.test.ts`, never imported.
         'tests/replicas/support/write-notification.ts',
-        // Loaded by VitePress from its own conventional paths.
+        // Loaded by VitePress from its own conventional paths; knip cannot read the `.vue` file that
+        // imports `mermaid-options.ts`, so that module is named too.
         'docs/.vitepress/config.mts',
-        'docs/.vitepress/theme/index.ts'
+        'docs/.vitepress/theme/index.ts',
+        'docs/.vitepress/theme/mermaid-options.ts'
     ],
     /**
      * A type that only lives inside its own file's exported shape is not unused.
@@ -46,6 +48,8 @@ const config: KnipConfig = {
     ignoreExportsUsedInFile: { interface: true, type: true },
     // Dependencies used in a way an import walk cannot see.
     ignoreDependencies: [
+        // Imported by the VitePress theme's `.vue` files, which knip cannot read.
+        'mermaid',
         // Spawned by file path in `scripts/contracts/openapi-bundle.ts`, never imported.
         '@redocly/cli',
         // `k6/*` are built into the k6 runtime the load scripts run in, not npm packages.

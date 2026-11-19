@@ -87,6 +87,16 @@ declare module '@kernel/events' {
         };
 
         /**
+         * Staff corrected who the order is invoiced to (`./services/billing.ts`). `invoicing` listens
+         * and, when the order already has an invoice, cancels it with a credit note and issues a new
+         * one; it dedupes on `meta.eventId`, since one redelivery would burn two numbers of a
+         * gap-free series. Written to the outbox in the correction's own transaction.
+         *
+         * Internal only — no AsyncAPI channel carries it, and no webhook.
+         */
+        'order.billing_corrected': { orderId: string };
+
+        /**
          * `reap:orders` scrubbed an order's remaining personal data (email, addresses, notes),
          * committed in the same transaction as the scrub. The erasure itself only detaches `userId`,
          * so this is the moment the data actually goes. No in-process subscriber; it exists for the
@@ -122,6 +132,9 @@ export const ORDER_CREATED = 'order.created';
 
 /** See `DomainEventMap['order.status_overridden']` above. */
 export const ORDER_STATUS_OVERRIDDEN = 'order.status_overridden';
+
+/** See `DomainEventMap['order.billing_corrected']` above. */
+export const ORDER_BILLING_CORRECTED = 'order.billing_corrected';
 
 /** See `DomainEventMap['order.redacted']` above. */
 export const ORDER_REDACTED = 'order.redacted';

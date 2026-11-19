@@ -17,15 +17,51 @@ import {
     invoiceNumberCounterModel,
     creditNoteNumberCounterModel
 } from './model';
-import type { FrozenTaxDocument, InvoiceDocument, CreditNoteDocument } from './model';
+import type {
+    FrozenTaxDocument,
+    InvoiceDocument,
+    CreditNoteDocument,
+    CreditNoteReason
+} from './model';
 import type { InvoiceDocumentKind } from './pii';
 
 /**
- * The invoice for an order, if one has been issued.
+ * The order's live invoice, if one has been issued: the one no correction has cancelled.
+ * @param orderId - the order to look up
+ * @param session - the caller's transaction, when the answer must be what that transaction sees
+ */
+const findInvoiceByOrderId = (
+    orderId: string,
+    session?: ClientSession
+): Promise<InvoiceDocument | null> =>
+    invoiceModel
+        .findOne({ orderId: new Types.ObjectId(orderId), status: 'issued' })
+        .session(session ?? null)
+        .exec();
+
+/**
+ * Every invoice ever issued for an order, oldest first: the live one and each one a correction
+ * cancelled. What the buyer's data export lists.
  * @param orderId - the order to look up
  */
-const findInvoiceByOrderId = (orderId: string): Promise<InvoiceDocument | null> =>
-    invoiceModel.findOne({ orderId: new Types.ObjectId(orderId) }).exec();
+const findInvoicesByOrderId = (orderId: string): Promise<InvoiceDocument[]> =>
+    invoiceModel
+        .find({ orderId: new Types.ObjectId(orderId) })
+        .sort({ issuedAt: 1, _id: 1 })
+        .exec();
+
+/**
+ * Mark a live invoice as cancelled by a correction. Conditional on it still being live, so two
+ * corrections reading the same invoice cannot both cancel it.
+ * @param id - the invoice's `_id`
+ * @param session - the correction's transaction, so the flip commits with the new invoice
+ * @returns whether this call cancelled it
+ */
+const markInvoiceCorrected = (id: Types.ObjectId, session: ClientSession): Promise<boolean> =>
+    invoiceModel
+        .updateOne({ _id: id, status: 'issued' }, { $set: { status: 'corrected' } }, { session })
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount === 1);
 
 /** One bucket of one currency, summed. The sums are decimals as Mongo returns them. */
 export interface DocumentBucketRow {
@@ -134,6 +170,28 @@ const findCreditNoteById = (
         .exec();
 
 /**
+ * The credit notes that reverse one invoice, oldest first: what is already taken off it.
+ * @param invoiceId - the invoice's `_id`, which each credit note stores as `invoiceId`
+ * @param session - the caller's transaction, when what it reads must be what that transaction sees
+ */
+const findCreditNotesByInvoiceId = (
+    invoiceId: Types.ObjectId,
+    session?: ClientSession
+): Promise<CreditNoteDocument[]> =>
+    creditNoteModel
+        .find({ invoiceId })
+        .sort({ issuedAt: 1, _id: 1 })
+        .session(session ?? null)
+        .exec();
+
+/**
+ * The credit note a correction event already issued, if any: what a redelivery reads back.
+ * @param correctionKey - the `order.billing_corrected` outbox event's id
+ */
+const findCreditNoteByCorrectionKey = (correctionKey: string): Promise<CreditNoteDocument | null> =>
+    creditNoteModel.findOne({ correctionKey }).exec();
+
+/**
  * The credit note issued for one refund, if any.
  * @param refundId - the `payments` refund record
  */
@@ -154,7 +212,9 @@ const insertCreditNote = (
         WithId & {
             invoiceId: Types.ObjectId;
             invoiceNumber: string;
-            refundId: string;
+            reason: CreditNoteReason;
+            refundId?: string;
+            correctionKey?: string;
         },
     session: ClientSession
 ): Promise<CreditNoteDocument> =>
@@ -225,6 +285,10 @@ export const invoicingRepository = {
     reencryptInvoices: reencryptOf(invoiceModel),
     reencryptCreditNotes: reencryptOf(creditNoteModel),
     findInvoiceByOrderId,
+    findInvoicesByOrderId,
+    markInvoiceCorrected,
+    findCreditNotesByInvoiceId,
+    findCreditNoteByCorrectionKey,
     findBuyerBearingBefore,
     eraseBuyers,
     sumInvoices: (window: ReportWindow) => sumDocuments(invoiceModel, window),

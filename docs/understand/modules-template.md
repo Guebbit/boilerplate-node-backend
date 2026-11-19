@@ -179,6 +179,10 @@ as the enforced allow-list behind `npm run check`, not by the app at runtime —
 [Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
 `scenarios/<module>.ts` reads a module's repository and factories directly.
 
+`workerMounts` is the same pair for the worker process (`src/worker.ts`), on its own port: only
+`observability` fills it, with the Prometheus scrape, because two alert counters move only in the
+worker. A route that needs a session or a rate limit belongs in `mounts`, never there.
+
 `mounts` is optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `access` declares none and `app/routes.ts` mounts only
 what a module lists. A mount is a pair, `{ basePath, routes }`, and a module may list several:

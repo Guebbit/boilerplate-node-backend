@@ -21,6 +21,7 @@ x-error-codes:
     ORDER_NOT_DELETED: { status: 409, description: 'A restore is refused: the order is not soft-deleted.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
     ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: nothing is left to send (every unit has shipped or been canceled), it is over, or it has no shipping address (a pickup, a digital order).' }
+    ORDER_BILLING_LOCKED: { status: 409, description: 'The order''s billing address cannot be corrected: retention already erased the order''s personal data (`reap:orders`), and the route would write it back.' }
     ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The corrected shipping address names a country outside the shop''s ship-to list (`Shop.shipToCountries`), the list checkout refuses by; VAT is charged at the shop''s own rates.' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward to `shipped` or `delivered` would ship goods the stock ledger never counted out.' }
 
@@ -666,6 +667,50 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
 
+    /orders/{id}/billing-address:
+        put:
+            tags: [Orders]
+            summary: Correct who the order is invoiced to (staff)
+            description: >-
+                Replaces the order's billing address, with an optional buyer VAT number, as staff do
+                once the buyer wrote in that the name, address or VAT number on the invoice is wrong
+                and the accountant agreed. Needs `update:Order`. The order already invoiced is not
+                edited: an invoice is a frozen legal record, so `invoicing` cancels it with a credit
+                note for what is still invoiced (`reason: correction`, no refund behind it) and issues a
+                new invoice to the corrected buyer, both in one step and with no money moving (EU VAT
+                Directive Art. 219). That happens a moment after this answers, off an outbox event; an
+                order not invoiced yet has nothing to reissue, and its future invoice freezes the
+                corrected address. An admin-created order that had no billing address gets one. The
+                answer is `409 ORDER_BILLING_LOCKED` once retention has erased the order's personal
+                data. Leaves a staff-only timeline row, `billing_corrected`, and an audit row naming
+                who changed it, never what it says; the reissue leaves `invoice_corrected`.
+                `OrderActions.correctBilling` says whether this would be accepted.
+            operationId: correctOrderBillingAddress
+            x-error-codes:
+                '409': [ORDER_BILLING_LOCKED]
+            security:
+                - bearerAuth: ['update:Order']
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceBillingAddressRequest'
+            responses:
+                '200':
+                    description: The order, with its new billing address
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
     /orders/{id}/override-status:
         # Bundler: adds `ETag` and `Content-Location` to the 2xx answers: they name the resource this answers.
         x-versioned: [post]
@@ -765,6 +810,8 @@ components:
                 - release_date_moved
                 - delay_notice_sent
                 - address_corrected
+                - billing_corrected
+                - invoice_corrected
                 - note_added
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
@@ -773,7 +820,7 @@ components:
                 `shipment_delivered`, `shipment_lost`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_canceled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`, `return_canceled`, `proof_of_sending_recorded`. Documents: `invoice_issued`,
-                `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`. Staff: `note_added`.
+                `credit_note_issued`, `invoice_corrected`. Preorders: `release_date_moved`, `delay_notice_sent`. Staff: `address_corrected`, `billing_corrected`, `note_added`.
                 Which of these a buyer sees is the row's own `audience` (`buyer` or `staff`), set per type by the server.
 
         # ---- The timeline's `data`: one shape per kind of entry, shared by the types that store it. ----
@@ -1112,6 +1159,26 @@ components:
                 refundId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
+        OrderTimelineDataInvoiceCorrected:
+            type: object
+            additionalProperties: false
+            required: [invoiceId, number, creditNoteId, creditNoteNumber]
+            description: >-
+                The invoice was cancelled by a credit note and reissued to a corrected buyer.
+            properties:
+                invoiceId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: string
+                    description: >-
+                        The new invoice's number.
+                creditNoteId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                creditNoteNumber:
+                    type: string
+                    description: >-
+                        The credit note that cancelled the old invoice.
+
         OrderTimelineDataReleaseDateMoved:
             type: object
             additionalProperties: false
@@ -1218,7 +1285,7 @@ components:
                   properties:
                       type:
                           type: string
-                          enum: [created, processing, shipped, address_corrected]
+                          enum: [created, processing, shipped, address_corrected, billing_corrected]
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataNone'
 
@@ -1505,6 +1572,19 @@ components:
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataCreditNoteIssued'
 
+        OrderTimelineEntryInvoiceCorrected:
+            unevaluatedProperties: false
+            allOf:
+                - $ref: '#/components/schemas/OrderTimelineEntryBase'
+                - type: object
+                  required: [type, data]
+                  properties:
+                      type:
+                          type: string
+                          enum: [invoice_corrected]
+                      data:
+                          $ref: '#/components/schemas/OrderTimelineDataInvoiceCorrected'
+
         OrderTimelineEntryReleaseDateMoved:
             unevaluatedProperties: false
             allOf:
@@ -1556,6 +1636,7 @@ components:
                 - $ref: '#/components/schemas/OrderTimelineEntryReturnClosed'
                 - $ref: '#/components/schemas/OrderTimelineEntryInvoiceIssued'
                 - $ref: '#/components/schemas/OrderTimelineEntryCreditNoteIssued'
+                - $ref: '#/components/schemas/OrderTimelineEntryInvoiceCorrected'
                 - $ref: '#/components/schemas/OrderTimelineEntryReleaseDateMoved'
                 - $ref: '#/components/schemas/OrderTimelineEntryDelayNoticeSent'
             discriminator:
@@ -1565,6 +1646,7 @@ components:
                     processing: '#/components/schemas/OrderTimelineEntryPlain'
                     shipped: '#/components/schemas/OrderTimelineEntryPlain'
                     address_corrected: '#/components/schemas/OrderTimelineEntryPlain'
+                    billing_corrected: '#/components/schemas/OrderTimelineEntryPlain'
                     status_overridden: '#/components/schemas/OrderTimelineEntryStatusOverridden'
                     note_added: '#/components/schemas/OrderTimelineEntryNoteAdded'
                     paid: '#/components/schemas/OrderTimelineEntryPaid'
@@ -1593,6 +1675,7 @@ components:
                     return_closed: '#/components/schemas/OrderTimelineEntryReturnClosed'
                     invoice_issued: '#/components/schemas/OrderTimelineEntryInvoiceIssued'
                     credit_note_issued: '#/components/schemas/OrderTimelineEntryCreditNoteIssued'
+                    invoice_corrected: '#/components/schemas/OrderTimelineEntryInvoiceCorrected'
                     release_date_moved: '#/components/schemas/OrderTimelineEntryReleaseDateMoved'
                     delay_notice_sent: '#/components/schemas/OrderTimelineEntryDelayNoticeSent'
 
@@ -1605,7 +1688,7 @@ components:
                   properties:
                       type:
                           type: string
-                          enum: [created, processing, shipped, address_corrected]
+                          enum: [created, processing, shipped, address_corrected, billing_corrected]
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataNone'
 
@@ -1892,6 +1975,19 @@ components:
                       data:
                           $ref: '#/components/schemas/OrderTimelineDataCreditNoteIssued'
 
+        OrderTimelineExportEntryInvoiceCorrected:
+            unevaluatedProperties: false
+            allOf:
+                - $ref: '#/components/schemas/OrderTimelineExportEntryBase'
+                - type: object
+                  required: [type, data]
+                  properties:
+                      type:
+                          type: string
+                          enum: [invoice_corrected]
+                      data:
+                          $ref: '#/components/schemas/OrderTimelineDataInvoiceCorrected'
+
         OrderTimelineExportEntryReleaseDateMoved:
             unevaluatedProperties: false
             allOf:
@@ -1943,6 +2039,7 @@ components:
                 - $ref: '#/components/schemas/OrderTimelineExportEntryReturnClosed'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryInvoiceIssued'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryCreditNoteIssued'
+                - $ref: '#/components/schemas/OrderTimelineExportEntryInvoiceCorrected'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryReleaseDateMoved'
                 - $ref: '#/components/schemas/OrderTimelineExportEntryDelayNoticeSent'
             discriminator:
@@ -1952,6 +2049,7 @@ components:
                     processing: '#/components/schemas/OrderTimelineExportEntryPlain'
                     shipped: '#/components/schemas/OrderTimelineExportEntryPlain'
                     address_corrected: '#/components/schemas/OrderTimelineExportEntryPlain'
+                    billing_corrected: '#/components/schemas/OrderTimelineExportEntryPlain'
                     status_overridden: '#/components/schemas/OrderTimelineExportEntryStatusOverridden'
                     note_added: '#/components/schemas/OrderTimelineExportEntryNoteAdded'
                     paid: '#/components/schemas/OrderTimelineExportEntryPaid'
@@ -1980,6 +2078,7 @@ components:
                     return_closed: '#/components/schemas/OrderTimelineExportEntryReturnClosed'
                     invoice_issued: '#/components/schemas/OrderTimelineExportEntryInvoiceIssued'
                     credit_note_issued: '#/components/schemas/OrderTimelineExportEntryCreditNoteIssued'
+                    invoice_corrected: '#/components/schemas/OrderTimelineExportEntryInvoiceCorrected'
                     release_date_moved: '#/components/schemas/OrderTimelineExportEntryReleaseDateMoved'
                     delay_notice_sent: '#/components/schemas/OrderTimelineExportEntryDelayNoticeSent'
 
@@ -2227,6 +2326,41 @@ components:
                 - $ref: '#/components/schemas/OrderAddress'
             description: The corrected shipping address; the whole of it replaces the old one.
 
+        ReplaceBillingAddressRequest:
+            allOf:
+                - $ref: '#/components/schemas/OrderBillingAddress'
+            description: The corrected billing address; the whole of it replaces the old one, the VAT number included.
+
+        # `OrderAddress` plus the buyer's VAT number: the one address that is invoiced to. Spelled out,
+        # not `allOf`, since `OrderAddress` is `additionalProperties: false`. The shipping address stays
+        # `OrderAddress`: a carrier has no use for a VAT number.
+        OrderBillingAddress:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                fullName:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
+                street:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
+                city:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
+                zip:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
+                country:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
+                phone:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
+                vatNumber:
+                    type: string
+                    minLength: 4
+                    maxLength: 20
+                    pattern: '^[A-Z]{2}[A-Za-z0-9]{2,18}$'
+                    description: >-
+                        The buyer's VAT identification number, country prefix first (`IT01234567890`), printed
+                        on the invoice as the buyer's (Art. 226(4)). Not checked against VIES. Absent for a
+                        private buyer.
+
         OrderAddress:
             type: object
             additionalProperties: false
@@ -2471,6 +2605,7 @@ components:
                     process,
                     overrideStatus,
                     correctAddress,
+                    correctBilling,
                     invoice,
                     withdraw,
                     delete,
@@ -2527,6 +2662,13 @@ components:
                         Whether `PUT /orders/{id}/shipping-address` would be accepted for this caller:
                         they hold `update:Order`, the order has a shipping address, and units remain
                         to send.
+                correctBilling:
+                    type: boolean
+                    description: >-
+                        Whether `PUT /orders/{id}/billing-address` would be accepted for this caller:
+                        they hold `update:Order` and retention has not erased the order's personal data.
+                        Offered at any status: an unpaid order has no invoice yet, a paid one gets it
+                        cancelled and reissued.
                 withdraw:
                     type: boolean
                     description: >-
@@ -2730,7 +2872,7 @@ components:
                 # entry they named, otherwise their default. Absent on an admin-created order
                 # (`POST /orders` runs no checkout), and once the order is anonymised.
                 billingAddress:
-                    $ref: '#/components/schemas/OrderAddress'
+                    $ref: '#/components/schemas/OrderBillingAddress'
                 # Absent on order creation that isn't a checkout (the admin `POST /orders` path
                 # names no method).
                 paymentMethod:
@@ -2942,7 +3084,7 @@ components:
                 # entry they named, otherwise their default. Absent on an admin-created order
                 # (`POST /orders` runs no checkout), and once the order is anonymised.
                 billingAddress:
-                    $ref: '#/components/schemas/OrderAddress'
+                    $ref: '#/components/schemas/OrderBillingAddress'
                 # Absent on order creation that isn't a checkout (the admin `POST /orders` path
                 # names no method).
                 paymentMethod:

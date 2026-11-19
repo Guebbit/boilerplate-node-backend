@@ -36,15 +36,18 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Runtime scripts
 
-| Script       | Job                                                                                                                              | Read more                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `dev`        | watch-mode local runtime, one process, from `src/main.ts` — expects the compose hostnames from `.env`                            | [Runtime](../understand/runtime.md)              |
-| `demo`       | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Demo profile](../build/demo-profile.md)         |
-| `e2e:serve`  | the single-process runtime with `NODE_E2E_RUN=1`, for the frontend's end-to-end runs                                             | [Demo profile](../build/demo-profile.md)         |
-| `host`       | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                             | [Runtime](../understand/runtime.md)              |
-| `start`      | start one process (`src/main.ts`) without watch mode; what the image runs                                                        | [Runtime](../understand/runtime.md)              |
-| `debug`      | start with Node inspector break-on-start                                                                                         | [Runtime](../understand/runtime.md)              |
-| `dev:docker` | hot reload inside Docker/Podman                                                                                                  | [Docker & Podman](../build/docker-and-podman.md) |
+| Script              | Job                                                                                                                              | Read more                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `dev`               | watch-mode local runtime, one process, from `src/main.ts` — expects the compose hostnames from `.env`                            | [Runtime](../understand/runtime.md)                           |
+| `demo`              | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Demo profile](../build/demo-profile.md)                      |
+| `e2e:serve`         | the single-process runtime with `NODE_E2E_RUN=1`, for the frontend's end-to-end runs                                             | [Demo profile](../build/demo-profile.md)                      |
+| `e2e:worker`        | the queue consumers with `NODE_E2E_RUN=1`: a live run that has a broker starts it beside `e2e:serve`                             | [RabbitMQ](../understand/rabbitmq.md#two-processes-one-image) |
+| `host`              | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                             | [Runtime](../understand/runtime.md)                           |
+| `start`             | start one process (`src/main.ts`) without watch mode; what the image runs                                                        | [Runtime](../understand/runtime.md)                           |
+| `debug`             | start with Node inspector break-on-start                                                                                         | [Runtime](../understand/runtime.md)                           |
+| `dev:docker`        | hot reload inside Docker/Podman                                                                                                  | [Docker & Podman](../build/docker-and-podman.md)              |
+| `dev:worker`        | the queue consumers (`src/worker.ts`) with watch mode; needs a broker, and the default `dev` setup has none                      | [RabbitMQ](../understand/rabbitmq.md#two-processes-one-image) |
+| `dev:worker:docker` | the same, hot reloaded inside Docker/Podman: what the dev compose `worker` service runs                                          | [RabbitMQ](../understand/rabbitmq.md#two-processes-one-image) |
 
 ## Validation scripts
 

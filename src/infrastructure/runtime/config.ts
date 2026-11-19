@@ -39,11 +39,12 @@ export const loggingConfig = defineConfig({
     }
 });
 
-/** Where the HTTP server listens, and how it shuts down. */
+/** Where the HTTP server listens, where the worker's own small listener does, and how both shut down. */
 export const serverConfig = defineConfig({
     name: 'server',
     shape: {
         NODE_PORT: int({ default: 3000, min: 1, max: 65_535 }),
+        NODE_WORKER_PORT: int({ default: 3010, min: 1, max: 65_535 }),
         NODE_HOST: text(),
         NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
         NODE_SHUTDOWN_DELAY_MS: int({ default: 0, min: 0 })

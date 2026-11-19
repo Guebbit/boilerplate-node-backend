@@ -34,7 +34,7 @@ export interface Copy {
     name: string;
     /** The port this copy listens on; stable across a restart. */
     port: number;
-    /** SIGTERM this copy and wait for it to exit (SIGKILL after 20 s). */
+    /** SIGTERM this copy and wait for it to exit (SIGKILL after 30 s). */
     stop: () => Promise<void>;
     /** Boots this copy again on the same port and waits until it listens. */
     start: () => Promise<void>;

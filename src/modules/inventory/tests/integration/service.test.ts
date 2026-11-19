@@ -235,30 +235,10 @@ describe('reserveForOrder', () => {
      * the level there must not throw, or the units stay reserved against a hold nobody gave back.
      */
     it('still holds the units when the cache refresh cannot read the level afterwards', async () => {
-        const realFind = stockLevelRepository.findByProductId;
-        // Count the level reads one reserve makes; the LAST of them is the cache refresh's.
-        const probe = await createProduct({ onHand: 10 });
-        let reads = 0;
-        const counting = jest
-            .spyOn(stockLevelRepository, 'findByProductId')
-            .mockImplementation((productId) => {
-                reads += 1;
-                return realFind(productId);
-            });
-        await inventoryService.reserveForOrder(anOrderId(), [
-            { productId: String(probe._id), quantity: 1 }
-        ]);
-        const lastRead = reads;
-        counting.mockRestore();
-
         const product = await createProduct({ onHand: 10 });
-        let call = 0;
-        jest.spyOn(stockLevelRepository, 'findByProductId').mockImplementation((productId) => {
-            call += 1;
-            return call === lastRead
-                ? Promise.reject(new Error('read failed'))
-                : realFind(productId);
-        });
+        jest.spyOn(stockLevelRepository, 'findManyByProductIds').mockRejectedValue(
+            new Error('read failed')
+        );
         const orderId = anOrderId();
         const outcome = await inventoryService.reserveForOrder(orderId, [
             { productId: String(product._id), quantity: 3 }

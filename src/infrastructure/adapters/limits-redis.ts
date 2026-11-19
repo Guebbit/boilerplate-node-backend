@@ -155,7 +155,7 @@ export const stopLimitsRedis = (): Promise<void> =>
 const claimKey = (key: string): string => `${limitsKeyPrefix()}:claim:${key}`;
 
 /**
- * Claim `key` for `seconds`, once, across every worker and replica: `SET NX EX` succeeds for
+ * Claim `key` for `seconds`, once, across every replica: `SET NX EX` succeeds for
  * exactly one caller. https://redis.io/commands/set/
  *
  * @param key - what to claim

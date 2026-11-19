@@ -18,7 +18,7 @@ This stack is **container-first**: the shipped `.env` uses compose service hostn
 
 | Profile (compose) | Containers                                                                   |
 | ----------------- | ---------------------------------------------------------------------------- |
-| default (lean)    | `app`, `cron`, `database`, `cache`, `limits`, `queue`                        |
+| default (lean)    | `app`, `worker`, `cron`, `database`, `cache`, `limits`, `queue`              |
 | `observability`   | tempo, otel-collector, prometheus, alertmanager, gatus, loki, grafana, alloy |
 | `analytics`       | umami, umami-db, umami-init                                                  |
 | `docs`            | this site                                                                    |
@@ -83,7 +83,7 @@ owns `8080–8099`, which is what lets both stacks be up at once.
 
 ### The `app` stopped with `Exited (1)`
 
-`app` and `cron` restart on failure at most five times, so a boot refusal (a bad variable, a
+`app`, `worker` and `cron` restart on failure at most five times, so a boot refusal (a bad variable, a
 development setting in the wrong place) ends as `Exited (1)` in `podman ps -a` instead of looping.
 `npm run compose -- logs app`: the first lines name the refusal.
 
@@ -198,6 +198,11 @@ npm run host -- db:bootstrap     # any script works the same way
 npm run host -- scenario:apply:reset
 npm run host -- db:cache:clear
 ```
+
+`.env-example` ships `NODE_RABBITMQ_URL` commented out, so a host-run API has no broker configured
+and does its jobs inline. To use the containerised broker, set it to `amqp://guest:guest@127.0.0.1:5672`
+and run `npm run host -- dev:worker` as well: the API only publishes, and the worker (its own port,
+`NODE_WORKER_PORT`, 3010) is what takes the jobs. `host` does not redirect the queue host.
 
 Only the **hostname** moves. The database name, ports and everything else still come from your
 `.env`, so there is no second env file to keep in sync — see

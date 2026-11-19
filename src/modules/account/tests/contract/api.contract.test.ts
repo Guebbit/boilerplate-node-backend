@@ -1381,7 +1381,7 @@ describe('POST /account/email-change and /account/email-change/confirm', () => {
     });
 
     it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {
-        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
+        const { user, bearer } = await loginWithCookie();
         await api()
             .post('/account/email-change')
             .set('Authorization', bearer)

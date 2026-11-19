@@ -31,6 +31,7 @@ import paymentsModule from '@modules/payments/module';
 import { paymentService } from '@modules/payments';
 import returnsModule from '../../module';
 import { returnService } from '../../services';
+import { RETURN_CLOSED, RETURN_REQUESTED } from '../../events';
 import { observePort } from '@tests/ports';
 import { nudgeOutbox, outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -303,5 +304,25 @@ describe('returning goods after a loss', () => {
                 [String(parcel.mug._id), 1]
             ].toSorted()
         );
+    });
+});
+
+describe('the events of a canceled remainder', () => {
+    it('writes return.requested then return.closed, both keyed on the order', async () => {
+        const parcel = await shippedParcel();
+        await lose(parcel);
+
+        await cancelRemainder(parcel);
+        await settleOutboxNudges();
+
+        const rows = await outboxEventModel
+            .find({ name: { $in: [RETURN_REQUESTED, RETURN_CLOSED] } })
+            .sort({ _id: 1 })
+            .lean()
+            .exec();
+        expect(rows.map((row) => [row.name, row.aggregateId])).toEqual([
+            [RETURN_REQUESTED, parcel.orderId],
+            [RETURN_CLOSED, parcel.orderId]
+        ]);
     });
 });

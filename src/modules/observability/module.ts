@@ -15,6 +15,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
+import { workerRouter } from './worker-routes';
 import { observabilityConfig } from './config';
 // Registers the `dependency_up` gauge with the metrics registry at module load.
 import './metrics';
@@ -23,6 +24,8 @@ import './metrics';
 export default {
     name: 'observability',
     mounts: [{ basePath: '/observability', routes: router }],
+    /** The scrape again, on the worker's port: the worker moves counters the API never does. */
+    workerMounts: [{ basePath: '/observability', routes: workerRouter }],
     /** The scrape token's placeholder gate and the telemetry sinks: see `./config`. */
     config: [observabilityConfig.slice],
     locales: path.join(__dirname, 'locales'),

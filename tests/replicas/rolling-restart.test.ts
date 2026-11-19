@@ -20,7 +20,7 @@ import { BOOT_TIMEOUT_MS, withReplicas, type Copy, type Replicas } from './suppo
 const COPIES = 3;
 
 /**
- * Each copy boots twice and stops once (up to the harness's 20 s kill), one after another, so the
+ * Each copy boots twice and stops once (up to the harness's 30 s kill), one after another, so the
  * window is the boots plus the stops plus margin.
  */
 jest.setTimeout(COPIES * BOOT_TIMEOUT_MS * 2 + 180_000);

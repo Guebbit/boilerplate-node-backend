@@ -37,6 +37,7 @@ flowchart LR
     invoicing --> orders
     invoicing --> payments
     invoicing --> shop
+    orders -. "order.billing_corrected" .-> invoicing
     orders -. "order.status_changed" .-> invoicing
     payments -. "payment.refunded" .-> invoicing
 
@@ -79,8 +80,9 @@ hard-delete refusal read instead of asking this module whether the freeze actual
 
 ## Issuing a document
 
-Two domain-event listeners, `module.ts`'s whole `subscribe()`, are the ONLY way either document is
-ever created. No route requests one into existence. An order with no lines gets no invoice: there is
+Three domain-event listeners, `module.ts`'s whole `subscribe()`, are the ONLY way either document is
+ever created. No route requests one into existence. The third, `order.billing_corrected`, cancels
+and reissues an invoice: see [Correcting the buyer](#correcting-the-buyer). An order with no lines gets no invoice: there is
 nothing to invoice, and `issueInvoice` answers nothing for it.
 
 ```mermaid
@@ -88,14 +90,17 @@ nothing to invoice, and `issueInvoice` answers nothing for it.
 flowchart LR
     O["orders: pending → paid"] -. "order.status_changed" .-> I["issueInvoice"]
     P["payments: a refund settles"] -. "payment.refunded" .-> C["issueCreditNote"]
+    B["orders: staff correct the buyer"] -. "order.billing_corrected" .-> X["correctInvoice"]
+    X --> ID
+    X --> CD
     I --> ID[("Invoice")]
     C --> CD[("CreditNote")]
     ID -. "reversed by" .-> CD
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    class O,P entry;
-    class I,C,ID,CD own;
+    class O,P,B entry;
+    class I,C,X,ID,CD own;
 ```
 
 **No invoice, no note, on purpose.** Money that never paid for a sale (a late payment on a cancelled
@@ -133,8 +138,8 @@ redelivered event issue nothing twice.
 A refund made in the provider's own dashboard is imported by `payments` as a settled refund of reason
 `external`, so it gets a credit note like any other (no lines: the note splits pro rata).
 
-Both are idempotent the same way: a unique index (`model.ts`: invoices on `orderId`, credit notes on
-`refundId`) is what actually guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
+Both are idempotent the same way: a unique index (`model.ts`: invoices on `orderId` while `status` is
+`issued`, credit notes on `refundId` where there is one) is what actually guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
 writers racing the same order, both attempt the insert. The number is allocated and the document
 inserted in one transaction, so the loser's duplicate-key error aborts it, the number goes back to
 the counter, and the loser reads the row the winner wrote (`services/issue-invoice.ts`). The two
@@ -155,6 +160,60 @@ documents are frozen and dated, and carry the VAT and shipping split a payment's
 A listener failure is logged by `emitDomainEvent` and never rolls back the write that triggered
 it: an order that reached `paid` stays `paid` whether or not its invoice freeze succeeded, so an
 invoice can be missing, but a number is never skipped.
+
+## Correcting the buyer {#correcting-the-buyer}
+
+An invoice is a numbered legal record and is never edited. When staff correct who an order is
+invoiced to (`PUT /orders/{id}/billing-address`, [orders](./orders.md#correcting-the-billing-address)),
+the invoice is cancelled and issued again: the law treats a change to an invoice as a new document that
+points back to the old one (VAT Directive Art. 219), and in Italy that is a credit note for the full
+amount and then a new invoice (DPR 633/72 art. 26). No money moves.
+
+`orders` writes the address and announces `order.billing_corrected` through the outbox, in the same
+transaction. `correctInvoice` (`services/correct-invoice.ts`) reacts, in one transaction:
+
+1. a credit note with `reason: correction`, no `refundId`, carrying the OLD buyer, since it reproduces
+   what it cancels and prints "this credit note cancels invoice N";
+2. the old invoice flips to `status: corrected`;
+3. a new invoice with the same figures, the corrected buyer (and VAT number) and today's seller;
+4. an `invoice_corrected` row on the order's timeline.
+
+| Situation                                 | What happens                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No invoice yet (an unpaid order)          | Nothing. The future invoice freezes the corrected address.                                                                                                                                                                                                                                                        |
+| Nothing credited yet                      | The credit note and the new invoice copy the invoice exactly.                                                                                                                                                                                                                                                     |
+| Partly refunded already                   | Only what is still invoiced is cancelled and reissued: the invoice minus its credit notes, per VAT rate (`domain/remainder.ts`). The new invoice is one line per rate, titled "Remainder of invoice N (goods as listed there), after credit notes M1, M2", since a line must say what was supplied (Art. 226(6)). |
+| Already fully credited                    | Nothing is issued: there is nothing left to cancel. The order's address still changes.                                                                                                                                                                                                                            |
+| A later refund                            | Credits the LIVE invoice (`findInvoiceForOrder` reads `status: issued`).                                                                                                                                                                                                                                          |
+| Two corrections                           | Two pairs of documents; only the last invoice is live.                                                                                                                                                                                                                                                            |
+| Order with no billing address (a walk-in) | The credit note has no buyer block; the new invoice gets one.                                                                                                                                                                                                                                                     |
+
+**One live invoice per order.** The unique index on `orderId` is partial, on `status: 'issued'`. A
+partial index accepts only positive filters, which is why the live invoice is marked `issued` and
+not "not cancelled". The credit notes' `refundId` index is partial on `refundId` existing, so a
+refund-less correction does not collide with another.
+
+**A refund settling at the same moment.** What is still invoiced is read inside the correction's transaction, and
+a refund's credit note re-reads its invoice in its own (`status: issued`). Both write the credit-note counter, so
+the two conflict and the loser runs again: a correction then sees the refund's credit note and cancels only the
+rest, and a refund that finds its invoice already cancelled throws, so the outbox retries it against the new one.
+The same money is never credited twice.
+
+**At-least-once.** The outbox may deliver the event twice, and a second delivery would burn two numbers of a
+gap-free series. The event's id is stored on the credit note as `correctionKey`, behind a partial
+unique index: the repeat aborts its transaction, gives both numbers back, and reads the first one's
+row. A correction that finds its invoice already cancelled by another throws, so the outbox retries
+it against the newer invoice.
+
+The buyer's VAT number lives on the order's billing address and on the invoice's buyer block, both
+encrypted like the rest of the address (`reencrypt` covers it). The shared checkout schema is not
+touched: a business buyer at checkout, with a VIES check and reverse charge, is a separate follow-up.
+
+::: warning Deploy
+The index on `invoices.orderId` changed from unique to partial-unique, and two credit-note indexes
+became partial: run `npm run db:sync` on each database. Invoices issued before this change have no
+`status`: reseed pre-release databases.
+:::
 
 ## Downloading a document
 
@@ -179,9 +238,9 @@ empty and a download answers `404 ORDER_CREDIT_NOTE_NOT_ISSUED` (a stranger gets
 flowchart TD
     D["GET …/invoice or …/credit-notes/{id}"] --> S{"stored copy?"}
     S -- "yes" --> R["stream the file"]
-    S -- "no" --> Q{"render slot free,<br/>or room in the queue (20)?"}
+    S -- "no" --> Q{"render slot free,<br/>or room in the queue (10)?"}
     Q -- "no" --> B["503 + Retry-After<br/>(nothing started)"]
-    Q -- "yes" --> C["Chromium render<br/>(20 s total, then killed)"]
+    Q -- "yes" --> C["Chromium render<br/>(30 s total, then killed)"]
     C --> W["write tmp/storage/documents<br/>(temp file + rename)"]
     W --> R
 ```
@@ -199,9 +258,9 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
 - **Plaintext on disk, accepted in writing:** the file holds personal and financial data and is not
   encrypted, like the Mongo data files; at-rest protection is the host's
   ([Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest)).
-- **Bounded renders.** At most two Chromium processes run at once; up to 20 more renders wait; the
-  21st is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
-  held connections a burst can grow at will. One render has 20 seconds in all (launch, load,
+- **Bounded renders.** At most two Chromium processes run at once; up to 10 more renders wait; the
+  11th is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
+  held connections a burst can grow at will. One render has 30 seconds in all (launch, load,
   print): past it the browser is closed and the slot freed, and a hung Chromium cannot hold every
   render behind it.
 
@@ -222,7 +281,9 @@ step at issue (`services/issue-invoice.ts`, `issue-credit-note.ts`), designed by
 Issuing an invoice writes `invoice_issued` (`invoiceId`, `number`) and a credit note
 `credit_note_issued` (`creditNoteId`, `number`, `refundId`) on the order's
 [timeline](./orders.md#the-timeline), in the same transaction as the document. The race's loser
-aborts both, so each document leaves exactly one row.
+aborts both, so each document leaves exactly one row. A correction writes one `invoice_corrected`
+(`invoiceId`, `number`, `creditNoteId`, `creditNoteNumber`), visible to the buyer, who is the one
+holding the documents.
 
 ## Configuration
 

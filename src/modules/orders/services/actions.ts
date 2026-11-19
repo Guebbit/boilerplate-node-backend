@@ -20,6 +20,7 @@ import {
     isDigitalOnlyOrder,
     isPayable,
     canCorrectAddress,
+    canCorrectBilling,
     canWithdraw,
     withdrawalRefusalOf,
     shipsAwaitedStock,
@@ -54,8 +55,9 @@ type OrderForActions = Lean<OrderDocument>;
 const startAndOverrideActions = (
     order: OrderForActions,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'process' | 'overrideStatus' | 'correctAddress'> => {
-    if (!authContext) return { process: false, overrideStatus: [], correctAddress: false };
+): Pick<OrderActions, 'process' | 'overrideStatus' | 'correctAddress' | 'correctBilling'> => {
+    if (!authContext)
+        return { process: false, overrideStatus: [], correctAddress: false, correctBilling: false };
 
     const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
@@ -64,6 +66,7 @@ const startAndOverrideActions = (
     return {
         process: holds(caller, 'start', 'Shipment') && reachesProcessing,
         correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),
+        correctBilling: holds(caller, 'update', 'Order') && canCorrectBilling(order),
         /** The door's own stock guard, so no target is offered that answers 409. */
         overrideStatus: holds(caller, 'override', 'Order')
             ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(

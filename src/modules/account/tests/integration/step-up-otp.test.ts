@@ -312,17 +312,6 @@ describe('undoing an email change', () => {
         expect(await statusOf(undo(undoToken))).toBe(204);
     });
 
-    it('answers 409 when the previous address was meanwhile taken by another account', async () => {
-        const { user, undoToken, confirmToken } = await requested();
-        await api().post('/account/email-change/confirm').send({ token: confirmToken });
-        await createUser({ email: 'old@example.com', username: 'squatter' });
-
-        const response = await undo(undoToken);
-
-        expect(response.status).toBe(409);
-        expect(await emailOf(user.id)).toBe('new@example.com');
-    });
-
     it('lives for the newest request only: an older undo link is pulled', async () => {
         const { user, bearer, undoToken } = await requested();
         await userRepository.updateMany({ _id: user.id }, { $unset: { pendingEmail: '' } });

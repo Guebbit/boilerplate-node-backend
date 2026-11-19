@@ -131,6 +131,10 @@ itself, and recording an arrival has no forced variant either.
   alone, forward to `processing`/`shipped`/`delivered` only. No shipped email and no webhook: an override never lands on `paid`, the only status change
   a subscriber hears, and the shipments it cuts for `delivery` are silent too.
 
+The billing correction announces `order.billing_corrected {orderId}` the same way, internal only:
+[`invoicing`](./invoicing.md#correcting-the-buyer) cancels and reissues the invoice off it, and dedupes
+on the outbox event id.
+
 The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
 in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to
 `shipped` ships every remainder, forward to `delivered` delivers them too, all at `at` — the same
@@ -202,6 +206,8 @@ fails the test, and one added to a variant without it fails to compile. Each row
 keeping a copy of this table.
 
 The audience of every type is `domain/timeline.ts`, and the types are the contract's `OrderTimelineType`.
+Two belong to a billing correction: `billing_corrected` (staff: who changed the buyer's invoice details)
+and `invoice_corrected` (buyer: the replacement invoice and the credit note that cancelled the old one).
 
 **What `data` holds, per type.** The wire carries one `oneOf` variant per kind of row, told apart by
 `type` (a discriminator with a many-to-one `mapping`; the export's `OrderTimelineExportEntry` has

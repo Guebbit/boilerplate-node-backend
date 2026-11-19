@@ -122,6 +122,24 @@ describe('the stored copy of a rendered invoice', () => {
         expect(renderDocument).toHaveBeenCalledTimes(2);
     });
 
+    it('tells the provider why a credit note reverses its invoice, so a correction prints its own notice', async () => {
+        const note = asStub<CreditNoteDocument>({
+            _id: 'd'.repeat(24),
+            number: 'CN-2',
+            invoiceNumber: 'INV-1',
+            reason: 'correction',
+            lines: [],
+            seller: SELLER,
+            taxSummary: []
+        });
+
+        await renderCreditNotePdf(note);
+
+        expect(renderDocument).toHaveBeenCalledWith(
+            expect.objectContaining({ reversalOf: { number: 'INV-1', reason: 'correction' } })
+        );
+    });
+
     it('renders again once the file has been reaped', async () => {
         const invoice = anInvoice('d'.repeat(24));
         await renderInvoicePdf(invoice);

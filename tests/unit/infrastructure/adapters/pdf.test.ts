@@ -34,6 +34,21 @@ const newPage = jest.fn(() =>
 /** Stands in for the browser's `launch`; the cases assert how it was called. */
 const launch = jest.fn((_options?: unknown) => Promise.resolve({ newPage, close }));
 
+/** The logger, mocked so the case below can assert what was logged (getter: see mailer-dispatch.test.ts). */
+const loggerMock = { warn: jest.fn() };
+jest.mock('@infrastructure/adapters/logger', () => ({
+    __esModule: true,
+    get logger() {
+        return loggerMock;
+    }
+}));
+
+/** `rmSync` wrapped so a case can make it throw once; every other call deletes for real. */
+jest.mock('node:fs', () => {
+    const actual = jest.requireActual<typeof import('node:fs')>('node:fs');
+    return { ...actual, rmSync: jest.fn(actual.rmSync) };
+});
+
 jest.mock('puppeteer-core', () => ({
     __esModule: true,
     default: {
@@ -47,12 +62,19 @@ import {
     renderHtmlToPdf,
     settleRenders
 } from '@infrastructure/adapters/pdf';
+import { rmSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { setEnvironment } from '@tests/environment';
 
 /** The options object handed to the last `puppeteer.launch` call. */
 const lastLaunchOptions = () =>
-    launch.mock.calls.at(-1)?.[0] as { executablePath: string; args: string[] };
+    launch.mock.calls.at(-1)?.[0] as {
+        executablePath: string;
+        args: string[];
+        env: Record<string, string>;
+    };
 
 /** A puppeteer request double that records which way it was answered. */
 const make = (url: string) => ({
@@ -83,7 +105,64 @@ describe('renderHtmlToPdf', () => {
         it('disables both Chromium sandboxes, which containers cannot grant', async () => {
             await renderHtmlToPdf('<p>hello</p>');
 
-            expect(lastLaunchOptions().args).toEqual(['--no-sandbox', '--disable-setuid-sandbox']);
+            expect(lastLaunchOptions().args).toEqual(
+                expect.arrayContaining(['--no-sandbox', '--disable-setuid-sandbox'])
+            );
+        });
+
+        it('keeps shared memory out of /dev/shm, which a container sizes at 64 MB', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            expect(lastLaunchOptions().args).toContain('--disable-dev-shm-usage');
+        });
+
+        it('gives each render its own HOME under the temp directory, which the browser can write', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+            const first = lastLaunchOptions().env.HOME;
+            await renderHtmlToPdf('<p>hello</p>');
+            const second = lastLaunchOptions().env.HOME;
+
+            // Without a writable HOME Chromium's crash handler aborts the launch.
+            expect(first?.startsWith(tmpdir())).toBe(true);
+            expect(second).not.toBe(first);
+        });
+
+        it('removes that HOME once the render is over, so crash data does not outlive it', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            await expect(stat(lastLaunchOptions().env.HOME ?? '')).rejects.toMatchObject({
+                code: 'ENOENT'
+            });
+        });
+
+        it('removes it when the render fails too', async () => {
+            pdf.mockRejectedValueOnce(new Error('print failed'));
+
+            await expect(renderHtmlToPdf('<p>hello</p>')).rejects.toThrow('print failed');
+
+            await expect(stat(lastLaunchOptions().env.HOME ?? '')).rejects.toMatchObject({
+                code: 'ENOENT'
+            });
+        });
+
+        it('still answers with the PDF when the HOME cannot be removed, and logs it', async () => {
+            jest.mocked(rmSync).mockImplementationOnce(() => {
+                throw new Error('ENOTEMPTY');
+            });
+
+            await expect(renderHtmlToPdf('<p>hello</p>')).resolves.toBe(pdfBuffer);
+
+            expect(loggerMock.warn).toHaveBeenCalledWith(
+                expect.objectContaining({ home: lastLaunchOptions().env.HOME, error: 'ENOTEMPTY' })
+            );
+            // The mocked delete threw, so the directory is still there: this case removes it.
+            rmSync(lastLaunchOptions().env.HOME ?? '', { recursive: true, force: true });
+        });
+
+        it('keeps the rest of the environment, so Chromium still finds its PATH', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            expect(lastLaunchOptions().env.PATH).toBe(process.env.PATH);
         });
     });
 
@@ -326,8 +405,8 @@ describe('the render bounds', () => {
 
     it('refuses a render once every slot is busy and the queue is full, starting nothing', async () => {
         holdLaunches();
-        // Two renders take the two slots, then 20 wait behind them (docs/modules/invoicing.md: 20 waiting).
-        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
+        // Two renders take the two slots, then 10 wait behind them (docs/modules/invoicing.md: 10 waiting).
+        const queued = Array.from({ length: 2 + 10 }, () => renderHtmlToPdf('<p>x</p>'));
         await nextTick();
         launch.mockClear();
 
@@ -342,7 +421,7 @@ describe('the render bounds', () => {
 
     it('does not hand out a slot to a render it refused: the queue drains cleanly afterwards', async () => {
         holdLaunches();
-        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
+        const queued = Array.from({ length: 2 + 10 }, () => renderHtmlToPdf('<p>x</p>'));
         await expect(renderHtmlToPdf('<p>refused</p>')).rejects.toBeInstanceOf(ServiceBusyError);
         releaseLaunches();
         await Promise.all(queued);
@@ -353,11 +432,11 @@ describe('the render bounds', () => {
 
     it('queues up to the bound without refusing', async () => {
         holdLaunches();
-        const queued = Array.from({ length: 2 + 20 }, () => renderHtmlToPdf('<p>x</p>'));
+        const queued = Array.from({ length: 2 + 10 }, () => renderHtmlToPdf('<p>x</p>'));
 
         releaseLaunches();
 
-        await expect(Promise.all(queued)).resolves.toHaveLength(2 + 20);
+        await expect(Promise.all(queued)).resolves.toHaveLength(2 + 10);
     });
 
     describe('the total timeout', () => {
@@ -372,10 +451,25 @@ describe('the render bounds', () => {
             const render = renderHtmlToPdf('<p>hung</p>');
             await Promise.all([
                 expect(render).rejects.toBeInstanceOf(RenderTimeoutError),
-                jest.advanceTimersByTimeAsync(20_001)
+                jest.advanceTimersByTimeAsync(30_001)
             ]);
             // Closed once, by the deadline: never twice, which would reject and replace the answer.
             expect(close).toHaveBeenCalledTimes(1);
+        });
+
+        it('still rejects with the timeout when the HOME cannot be removed', async () => {
+            pdf.mockImplementationOnce(() => new Promise(() => undefined));
+            jest.mocked(rmSync).mockImplementationOnce(() => {
+                throw new Error('EBUSY');
+            });
+
+            const render = renderHtmlToPdf('<p>hung</p>');
+            await Promise.all([
+                expect(render).rejects.toBeInstanceOf(RenderTimeoutError),
+                jest.advanceTimersByTimeAsync(30_001)
+            ]);
+
+            rmSync(lastLaunchOptions().env.HOME ?? '', { recursive: true, force: true });
         });
 
         it('frees the slot, so renders behind a hung one are not held up', async () => {
@@ -385,7 +479,7 @@ describe('the render bounds', () => {
             const outcomes = hung.map((render) => expect(render).rejects.toBeDefined());
             const third = renderHtmlToPdf('<p>c</p>');
 
-            await jest.advanceTimersByTimeAsync(20_001);
+            await jest.advanceTimersByTimeAsync(30_001);
             await Promise.all(outcomes);
 
             await expect(third).resolves.toBe(pdfBuffer);
@@ -395,7 +489,7 @@ describe('the render bounds', () => {
             close.mockClear();
 
             await expect(renderHtmlToPdf('<p>quick</p>')).resolves.toBe(pdfBuffer);
-            await jest.advanceTimersByTimeAsync(40_000);
+            await jest.advanceTimersByTimeAsync(60_000);
 
             expect(close).toHaveBeenCalledTimes(1);
         });
@@ -403,7 +497,7 @@ describe('the render bounds', () => {
         it('hands the launch the same budget, so a browser that never starts is bounded too', async () => {
             await renderHtmlToPdf('<p>hello</p>');
 
-            expect((launch.mock.calls.at(-1)?.[0] as { timeout: number }).timeout).toBe(20_000);
+            expect((launch.mock.calls.at(-1)?.[0] as { timeout: number }).timeout).toBe(30_000);
         });
     });
 });

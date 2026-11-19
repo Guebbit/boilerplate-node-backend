@@ -55,7 +55,7 @@ docker compose --env-file "clients/<name>/.env" -f compose.yaml -f compose.produ
 ```
 
 Then write the new value into the secret file and recreate the services that mount it — the running
-`app`/`cron` containers hold the old password in memory until they restart. Rotate
+`app`/`worker`/`cron` containers hold the old password in memory until they restart. Rotate
 `mongo_root_password` the same way against the `admin` database, with
 `db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
 

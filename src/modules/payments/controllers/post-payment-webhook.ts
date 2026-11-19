@@ -11,9 +11,9 @@
  * 3. **Applied once**, behind the service: every effect is a conditional write, so a redelivered
  *    event settles nothing twice. A provider retries until it gets a 2xx.
  * 4. **204 for anything authentic**, including events this module ignores. A non-2xx tells the
- *    provider the delivery failed, and it comes back harder. Only an unverifiable body is a 400,
- *    because that is not a delivery — and a genuine fault is left to become a 500, since that IS
- *    a retry worth having.
+ *    provider the delivery failed, and it comes back harder. Only a body that cannot be verified or
+ *    read (bad signature, no body, not a valid event) is a 400, because that is not a
+ *    delivery — and a genuine fault is left to become a 500, since that IS a retry worth having.
  *
  * One endpoint per provider, resolved from the registry of installed adapters by the name in the
  * path, never from `NODE_PAYMENT_PROVIDER`: a provider that is no longer the one new checkouts use
@@ -73,9 +73,9 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
             if (error instanceof WebhookRejected) {
                 /**
                  * `error.message` IS the reason — 'Malformed signature header', 'Signature
-                 * timestamp outside tolerance', 'Signature does not match', 'Body is not valid
-                 * JSON', or 'Event carries no id'. A fixed headline here would be right for one of
-                 * those and a guess for the other four.
+                 * timestamp outside tolerance', 'Signature does not match', or 'Event does not
+                 * match the event schema'. A fixed headline here would be right for one of those
+                 * and a guess for the other three.
                  */
                 // Stryker disable next-line all
                 logger.warn({ message: `Payment webhook rejected: ${error.message}` });

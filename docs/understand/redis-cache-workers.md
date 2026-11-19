@@ -89,14 +89,18 @@ Two consequences worth keeping in mind:
 ### Queue workers
 
 `src/infrastructure/adapters/` (email, image digest) plus the module-owned consumers (webhook delivery, account export) are a different meaning of the word:
-those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every copy**,
-so N processes consume from the same queues.
+those are RabbitMQ consumers, and `registerWorkers()` runs them in the **worker process**
+(`src/worker.ts`), never in the web one: the API publishes, the worker takes. N workers consume
+from the same queues; see [RabbitMQ](./rabbitmq.md#two-processes-one-image).
 
 ```mermaid
 flowchart LR
-    subgraph W["Each copy"]
+    subgraph A["Web copy"]
         E["Express routes"] --> Cache[("Redis cache")]
-        Q["Mail + module consumers"] --> Rabbit[("RabbitMQ")]
+        E -. publishes .-> Rabbit[("RabbitMQ")]
+    end
+    subgraph W["Worker copy"]
+        Q["Mail + module consumers"] --> Rabbit
         I["Image digest consumer"] --> Rabbit
         I -. invalidates on a<br/>matched writeback .-> Cache
     end
