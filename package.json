@@ -91,7 +91,7 @@
         "complete": "npm run complete:static && npm run docs:build && npm run test",
         "complete:fix": "npm run lint:fix && npm run prettier:fix && npm run complete",
         "complete:manual": "npm run test:prism && npm run test:replicas && npm run test:broker",
-        "complete:light": "npm run lint && npm run prettier:check && npm run complete:light:gates",
+        "complete:light:fix": "npm run lint:fix && npm run prettier:fix && npm run lint && npm run prettier:check && npm run complete:light:gates",
         "complete:light:gates": "npm run complete:static:gates && npm run test:unit && npm run test:cross-cutting",
         "postinstall": "tsx scripts/docs/generate-scenario-registries.ts && tsx scripts/contracts/authorization-bundle.ts && npm run gen:permission-vocabulary && tsx scripts/contracts/generate-shared-rule-schemas.ts && npm run contracts:bundle && npm run gen:api && npm run gen:asyncapi",
         "prepare": "husky",

@@ -65,7 +65,7 @@ export const SUITES: Record<string, Suite> = {
 };
 
 /**
- * The layers `complete:light` runs in full on every commit.
+ * The layers `complete:light:gates` runs in full on every commit.
  * Every other layer's file only runs at commit time when it is staged — see {@link isOutsideLightGate}.
  */
 const LIGHT_SUITES = ['unit', 'cross-cutting'] as const;

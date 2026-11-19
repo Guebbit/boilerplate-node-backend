@@ -231,13 +231,13 @@ How to run more than one copy, and what changes: [Scaling](../understand/scaling
 npm run complete     # build + all tests + lint + format check — several minutes
 ```
 
-The pre-commit hook runs a faster subset permanently: it regenerates on disk and refuses a commit whose
-committed generated files are stale (it never stages anything), then eslint and prettier on the staged files, then
+The pre-commit hook runs a faster subset permanently, in this order: `regenerate` on disk, then
+lint-staged (fixes eslint and prettier on the staged files and stages the fixes), then
+`check:generated` (refuses a commit whose committed generated files are stale), then
 `npm run complete:light:gates` (every other static check plus the unit and cross-cutting suites,
 nothing that needs `mongod`), then `npm run test:staged`: the integration, contract and fuzz test
-files the commit adds or changes, run by file. Run the full `complete` yourself before merging a lane and once on main
-after; CI on push is authoritative. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
-them.
+files the commit adds or changes, run by file. When a lane merges and when the full gate runs:
+[Testing & Docs](./testing-and-docs.md#when-each-gate-runs).
 
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,
 minutes), `npm run test:prism` (boots a mock server on a real port).

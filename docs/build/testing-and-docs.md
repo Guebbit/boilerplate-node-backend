@@ -173,6 +173,15 @@ would share one in-memory Mongo — no longer describes the setup: `tests/suppor
 starts one server and `database.ts` gives each file its own DATABASE on it, so files are already
 isolated from one another. Worth measuring before changing, not assuming.
 
+## When each gate runs
+
+- The pre-commit hook: lint-staged fixes eslint and prettier on the staged files and stages the fixes
+  into the same commit, then `complete:light:gates`, then `test:staged`.
+- A lane merges on `npm run complete:light:fix`: whole-tree fixers, the strict checks, then
+  `complete:light:gates`. Commit whatever its fixers changed before merging.
+- The full `npm run complete:fix` (no live e2e, no mutation) runs every 20 commits or merges on
+  main. CI on push is authoritative.
+
 ## Quality tools
 
 | Tool                                                                                            | Why it is here                                                                                                                                           |
