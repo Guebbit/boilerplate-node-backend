@@ -269,9 +269,9 @@ flowchart LR
 One process is not the deployment. These boot real copies of the app behind a proxy, because the bugs they look for cannot
 happen in a single process.
 
-| Folder            | What lives here                                                   | Read next                                                                                         |
-| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `tests/replicas/` | N copies behind a proxy: what only more than one process can show | [Replicas testing](../build/replicas-testing.md) · [Scaling & Shutdown](../understand/scaling.md) |
+| Folder            | What lives here                                                   | Read next                                                                                                                                                |
+| ----------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/replicas/` | N copies behind a proxy: what only more than one process can show | [Replicas testing](../build/replicas-testing.md) · [Kubernetes testing](../build/kubernetes-testing.md) · [Scaling & Shutdown](../understand/scaling.md) |
 
 ## `tests/broker/` — a real RabbitMQ
 

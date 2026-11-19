@@ -30,7 +30,13 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { AuthContext } from '@types';
-import { RefundFailureReason, RefundStatus, type CallerContext, type RefundReason } from '@types';
+import {
+    RefundFailureReason,
+    RefundStatus,
+    type CallerContext,
+    type PaidOutside,
+    type RefundReason
+} from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
@@ -73,12 +79,14 @@ import {
     type RefundDue
 } from '../domain';
 import {
+    announceRefund,
     isFullyRefunded,
     recordRefundFailure,
     refundedPayload,
     refundRow,
     remainingOf,
     settleRefund,
+    settleWithin,
     stampOrder
 } from './refund-settlement';
 import { rereadRefund } from './refund-sync';
@@ -115,6 +123,12 @@ export interface RefundRequest {
      * opens stamps the id on the payment in the same write, so a redelivery cannot open another.
      */
     cancelEventId?: string;
+    /**
+     * Staff say the money already went back outside the application. The record is then born
+     * settled by hand, in the transaction that opens it ({@link refundOutside}): no provider is
+     * asked, nothing is left `pending` for the sweep, and no owed-by-hand to-do is announced.
+     */
+    paidOutside?: PaidOutside;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -204,8 +218,10 @@ export const recordOwedByHand = (
 /**
  * Open a hand-paid payment's refund and leave it `pending`. There is no provider to ask and
  * nobody here to say the money went back, so the record waits for an operator's own
- * `settleRefundByHand`: it is what the needs-attention list shows. No caller, however privileged,
- * settles it on the spot — receiving a parcel or withdrawing a basket is not returning cash.
+ * `settleRefundByHand`: it is what the needs-attention list shows. Receiving a parcel or
+ * withdrawing a basket is not returning cash, so only an operator who says the money is already
+ * back (`paidOutside`, see {@link refundOutside}) settles it on the spot; every other caller
+ * leaves it for the operator.
  *
  * Idempotent: the record reserves the amount, so a redelivery finds nothing left to open and
  * writes nothing.
@@ -328,6 +344,7 @@ export const openRefund = (
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
         ...request.due,
+        ...(request.paidOutside ? { paidOutside: request.paidOutside } : {}),
         ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? '0' } : {}),
         /**
          * One key per RECORD, not per payment: two different partial refunds must not be taken
@@ -366,7 +383,12 @@ export const openRefund = (
                               },
                               active
                           )
-                          .then(() => announceOwedByHand(payment, refund, active))
+                          // A record born settled is owed to nobody: it would open a to-do that closes at once.
+                          .then(() =>
+                              request.paidOutside
+                                  ? undefined
+                                  : announceOwedByHand(payment, refund, active)
+                          )
                           .then(() => updated)
                     : updated
             );
@@ -746,12 +768,80 @@ const performCardRefund = (
         }
     );
 
+/** How many times a refund recorded as paid outside re-reads the payment when a racing write moved the total. */
+const OUTSIDE_WRITE_ATTEMPTS = 3;
+
+/**
+ * Open a refund and settle it by hand inside the caller's transaction: the record is born
+ * `succeeded` with `settledByHand`, so nothing can ever send it to a provider and the sweep never
+ * sees it as open. A miss (a racing write moved the running total) re-reads the payment inside the
+ * same transaction and tries again, up to {@link OUTSIDE_WRITE_ATTEMPTS}.
+ *
+ * @param payment - the payment as the caller read it
+ * @param request - what to return; its `paidOutside` is what makes the record settled
+ * @param actor - the operator who said the money went back
+ * @param session - the transaction the two writes, the timeline rows and `payment.refunded` share
+ * @param attemptsLeft - reads left before a miss is final
+ * @returns the payment and the settled record, or `null` when nothing (or not that much) was left
+ */
+const openSettledOutside = (
+    payment: PaymentDocument,
+    request: RefundRequest,
+    actor: string | null | undefined,
+    session: ClientSession,
+    attemptsLeft = OUTSIDE_WRITE_ATTEMPTS
+): Promise<OpenedRefund | null> =>
+    openRefund(payment, request, actor, session).then((opened) => {
+        if (opened)
+            return settleWithin(
+                opened.payment,
+                opened.refund,
+                { settledByHand: true, from: [RefundStatus.pending] },
+                session,
+                actor
+            ).then((final) => (final ? { payment: final, refund: opened.refund } : null));
+        if (attemptsLeft <= 1) return null;
+        return paymentRepository
+            .findByOrderId(String(payment.orderId), undefined, session)
+            .then((fresh) =>
+                fresh?.status === REFUNDABLE_PAYMENT_STATUS
+                    ? openSettledOutside(fresh, request, actor, session, attemptsLeft - 1)
+                    : null
+            );
+    });
+
+/**
+ * A refund staff already paid outside the application (cash at the counter, a bank transfer):
+ * opened and settled by hand in ONE transaction, on a card payment or a hand-paid one alike. The
+ * provider is never asked, so the buyer is not paid twice; the settlement is the ordinary one
+ * (order stamp, timeline, `payment.refunded` for the credit note and the buyer's mail).
+ *
+ * @param payment - the `succeeded`, not-yet-fully-refunded payment
+ * @param request - the amount, the reason and the `paidOutside` statement
+ * @param context - the operator, audited as `admin.payment.refund_settled_by_hand`
+ * @returns the settled outcome, or `null` when nothing was left to refund
+ */
+const refundOutside = (
+    payment: PaymentDocument,
+    request: RefundRequest,
+    context: CallerContext | undefined
+): Promise<RefundOutcome | null> =>
+    withTransaction((session) =>
+        openSettledOutside(payment, request, context?.caller.id, session)
+    ).then((done) => {
+        if (!done) return null;
+        nudgeOutbox();
+        announceRefund(done.payment, done.refund, context, 'success', true);
+        return { payment: done.payment, leftOpen: false, refundId: String(done.refund._id) };
+    });
+
 /**
  * Refund an order's payment — the operator action, and the listener's compensation.
  *
  * A card payment finishes any refund still open first, so a retried cancel completes the refund it
  * already started instead of opening a second one for the same money. A hand-paid payment only
- * ever gets a record opened and left `pending` ({@link leaveForOperator}), whoever asked.
+ * gets a record opened and left `pending` ({@link leaveForOperator}), whoever asked — unless the
+ * request says the money already went back outside ({@link refundOutside}), on any payment.
  *
  * @param orderId - the order whose payment is being returned
  * @param context - present only for a request with a caller (`refundPayment`);
@@ -772,6 +862,8 @@ export const performRefund = (
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
         // Everything is back already: a repeated cancel has nothing to leave for anyone.
         if (isFullyRefunded(payment)) return null;
+
+        if (request.paidOutside) return refundOutside(payment, request, context);
 
         if (isHandRecorded(payment)) return leaveForOperator(payment, request, context);
 
@@ -864,7 +956,7 @@ const refusedRefundAnswer = (
  */
 const refundFoundPayment = (
     payment: PaymentDocument,
-    body: { amount?: string },
+    body: { amount?: string; paidOutside?: PaidOutside },
     context: CallerContext,
     authContext: AuthContext | undefined
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> => {
@@ -886,7 +978,8 @@ const refundFoundPayment = (
 
     return performRefund(String(payment.orderId), context, {
         amount: body.amount,
-        reason: 'goodwill'
+        reason: 'goodwill',
+        ...(body.paidOutside ? { paidOutside: body.paidOutside } : {})
     }).then(
         (refunded) =>
             refunded
@@ -908,7 +1001,8 @@ const refundFoundPayment = (
  * @param paymentId - the payment whose money is being returned
  * @param authContext - the caller, for the read that distinguishes 404 from 409
  * @param context - the caller context to audit the refund against
- * @param body - the optional `amount` (absent = everything left) and its `currency`
+ * @param body - the optional `amount` (absent = everything left), its `currency`, and `paidOutside`
+ *   when staff already gave the money back outside the application: the record is then born settled
  * @returns the payment as it now stands with the record this request wrote, or a refusal naming
  *   which case it was
  */
@@ -916,7 +1010,7 @@ export const refundPayment = (
     paymentId: string,
     authContext: AuthContext | undefined,
     context: CallerContext,
-    body: { amount?: string; currency?: string } = {}
+    body: { amount?: string; currency?: string; paidOutside?: PaidOutside } = {}
 ): Promise<ResponseSuccess<RefundRequested> | ResponseReject> =>
     paymentRepository
         .findByIdScoped(paymentId, callerScope(authContext))
@@ -1270,6 +1364,15 @@ const mayReturnMoney = (
         payment.userId !== undefined &&
         context.caller.id === String(payment.userId));
 
+/**
+ * Whether the caller may say a refund was paid outside the application: the same key as refunding
+ * by hand (`create:Refund`), or the system itself.
+ *
+ * @param context - the caller
+ */
+const mayRefundOutside = (context: CallerContext): boolean =>
+    context.caller.system || holds(context.caller, 'create', 'Refund');
+
 /** The record a return's refund opened: its id for {@link sendOpenedRefund}, and whether it is hand-paid. */
 export interface OpenedReturnRefund {
     /** The record's id, for {@link sendOpenedRefund}. */
@@ -1323,7 +1426,7 @@ const announceShort = (
  * @param context - the staff member who received the goods
  * @param session - the return's transaction
  * @returns the opened record, or `null` when none could be opened: a zero amount (nothing was
- *   asked), or no succeeded payment, or nothing left of it. Decided before anything is written.
+ *   asked), or no succeeded payment, or nothing left of it. Decided before any refund record is written.
  *   When money was asked and less than all of it was opened, `payment.return_refund_short` is
  *   written in the same transaction, so a person is told.
  * @throws Error when the caller is not one {@link mayReturnMoney} allows (audited as
@@ -1340,6 +1443,7 @@ export const openReturnRefund = (
         shipping: string;
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
         due?: RefundDue;
+        paidOutside?: PaidOutside;
     },
     context: CallerContext,
     session: ClientSession
@@ -1363,20 +1467,34 @@ export const openReturnRefund = (
 
         if (remainingOf(payment) <= 0) return announceShort(orderId, input, undefined, session);
 
-        return openRefund(
-            payment,
-            {
-                amount: input.amount,
-                capAtRemaining: true,
-                reason,
-                returnId: input.returnId,
-                lines: input.lines,
-                shipping: input.shipping,
-                ...(input.due ? { due: input.due } : {})
-            },
-            context.caller.id,
-            session
-        ).then((opened) => {
+        // Saying the money already went back is a refund: `receive:Return` alone does not carry it.
+        if (input.paidOutside && !mayRefundOutside(context)) {
+            auditForbidden(context, {
+                targetType: 'payment',
+                targetId: String(payment._id),
+                metadata: { reason: 'missing_permission', permission: 'create:Refund' }
+            });
+            throw new Error(
+                '[payments] openReturnRefund: the caller may not record a refund as paid outside.'
+            );
+        }
+
+        const request: RefundRequest = {
+            amount: input.amount,
+            capAtRemaining: true,
+            reason,
+            returnId: input.returnId,
+            lines: input.lines,
+            shipping: input.shipping,
+            ...(input.due ? { due: input.due } : {}),
+            ...(input.paidOutside ? { paidOutside: input.paidOutside } : {})
+        };
+        // Born settled, in this transaction: nothing is ever `pending` for the sweep to send to the card.
+        const opening = input.paidOutside
+            ? openSettledOutside(payment, request, context.caller.id, session)
+            : openRefund(payment, request, context.caller.id, session);
+
+        return opening.then((opened) => {
             if (!opened)
                 throw new Error(
                     '[payments] openReturnRefund: the payment moved under the return; retry.'
@@ -1389,7 +1507,10 @@ export const openReturnRefund = (
                 gave < asked
                     ? announceShort(orderId, input, record.amount, session)
                     : Promise.resolve(null)
-            ).then(() => ({ refundId: String(record._id), byHand: isHandRecorded(payment) }));
+            ).then(() => ({
+                refundId: String(record._id),
+                byHand: !input.paidOutside && isHandRecorded(payment)
+            }));
         });
     });
 
@@ -1429,7 +1550,15 @@ export const sendOpenedRefund = (
         .then((payment) => {
             const refund = payment?.refunds.find((record) => String(record._id) === refundId);
             if (!payment || !refund) return 'open';
-            if (refund.status === RefundStatus.succeeded) return 'settled';
+            if (refund.status === RefundStatus.succeeded) {
+                /**
+                 * A record born settled by hand (`paidOutside`) is audited here, after the
+                 * receipt's commit: the audit writer takes no session, so a row written inside the
+                 * transaction would repeat on a retry and survive an abort.
+                 */
+                if (refund.paidOutside) announceRefund(payment, refund, context, 'success', true);
+                return 'settled';
+            }
 
             auditRefundRequested(payment, refund, context);
             if (isHandRecorded(payment)) {

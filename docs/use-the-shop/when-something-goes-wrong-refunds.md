@@ -10,6 +10,8 @@ audience: [staff, owner]
 | Something odd happened                                              | Go to                                                                                                  |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | A refund is owed and the money must be paid back by hand            | [A refund owed by hand](#refund-owed-by-hand)                                                          |
+| I already paid the buyer back myself (cash, transfer)               | [Paid the buyer back already](#paid-outside)                                                           |
+| The provider emailed a dispute the order does not show              | [A card dispute](#card-dispute)                                                                        |
 | The card refused to take a refund back                              | [A card refund the card refused](#card-refund-refused)                                                 |
 | The bank sent a refund back after the shop had marked it paid       | [A refund the bank sent back](#refund-bounced)                                                         |
 | A buyer asked their bank to take a card payment back (a dispute)    | [A card dispute](#card-dispute)                                                                        |
@@ -55,8 +57,32 @@ believe they were paid back and nobody is left to notice.
 :::
 
 **Whose job.** Whoever holds the refund permission: the [moderator](./moderator.md) or the admin.
-A card payment is different: the shop refunds the card itself, and has no hand step.
+A card payment is different: the shop refunds the card itself, and has no hand step, unless you
+already paid the buyer yourself (next section).
 → [Payments](../modules/payments.md)
+
+## Paid the buyer back already {#paid-outside}
+
+**What you see.** A buyer paid by card, you gave the money back at the counter or by bank transfer,
+and the shop would still send the same money to the card. That would pay the buyer twice.
+
+**What to do.** On the order page, in the refund block, switch on **Already paid outside the app**,
+pick how it went back (cash, bank transfer, other), add a reference if you have one, and press
+**Refund only**. The refund is recorded as paid at once: nothing is sent to the card, the credit
+note is issued, the buyer gets the "your money is back" email, and there is no **Mark returned** step.
+For a returned parcel, tick the same choice when you receive it.
+
+::: warning It is your word
+The shop does not check that the money left. Switch it on only once it has. A refund goes back by
+the buyer's own means of payment unless they agreed to another one (EU Directive 2011/83, Art. 13).
+:::
+
+To cancel an order and give cash, refund with the switch first, then cancel: the cancel then finds
+nothing left to refund. **Cancel and refund** still goes to the card.
+
+If a refund was also made in the provider's dashboard on top, the order appears on **Needs attention**
+as **Refunded more than was paid**. The money really moved, so nothing is held and the row does not
+clear by itself: check the books.
 
 ## A card refund the card refused {#card-refund-refused}
 
@@ -161,6 +187,13 @@ The same holds when the refusal came with no dispute on file: the to-do says so;
 the provider's dashboard first, then choose as above. A refund the bank sent back after it had
 settled can only be marked returned, never voided.
 
+**The provider emailed a dispute, but the order does not show it.** The shop hears of a dispute only
+from the provider's event, and the shop never reads disputes back by itself. In the provider's
+dashboard, **Resend** the `charge.dispute.*` event (Stripe keeps it 15 days in the dashboard, 30 from
+the command line, counted from each event, not from the dispute's start). Past that window, refund
+in the dashboard, press **Re-sync refunds** on the payment, and close the to-do. A dispute is never
+typed in by hand: closing one would unlock **Mark returned** and **Cancel refund** by mistake.
+
 A dispute in **another currency** than the payment is shown like any other, but the shop does not
 subtract it from what you can refund. When it ends lost, its to-do closes with "check the amount":
 look at it in the provider's dashboard before any refund or return.
@@ -262,8 +295,9 @@ There is no such thing as a refund backwards. Cancel the open one, or ask the bu
 ## A canceled order with no refund {#no-refund-opened}
 
 **What you see.** A paid order was canceled, but its payment shows no refund. You were alerted
-twice before this (the **Outbox events dead** alert and the dead-events bell): the message that
-opens the refund failed every retry.
+twice before this: the **Outbox events dead** alert reached the operator, and the dead-events bell
+reached the administrators (a moderator gets neither). The message that opens the refund failed every
+retry.
 
 **What to do.** Press **Refund** on the payment for the amount the buyer paid. If a developer
 revives the dead event instead, the refund opens by itself. Either way, the shop checks the amount

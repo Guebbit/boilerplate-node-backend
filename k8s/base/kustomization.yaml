@@ -1,0 +1,45 @@
+# The app as plain Kubernetes objects: `kubectl apply -k k8s/base` works on any cluster, with no
+# Gateway API, no ingress controller and no CRD. Public traffic is a component or your own Ingress
+# (k8s/components/gateway/); the local test cluster is k8s/overlays/kind/.
+#
+# Two things this base expects the deployer to create first, because a repo cannot hold them:
+#   Secret    `app-secrets`  one key per file the app reads from /run/secrets (secrets.example.txt)
+#   ConfigMap `edge-env`     NODE_URL, NODE_FRONTEND_URL, NODE_CORS_ORIGIN: where clients reach the API
+#
+# Order: `mongo`, `mongo-init`, `cache` and `setup` first, wait for `setup` to complete, then
+# `app` and `cron`. Compose says this with `depends_on: service_completed_successfully`; here the
+# objects carry `boilerplate/stage: app` so `-l boilerplate/stage!=app` and `-l boilerplate/stage=app`
+# can apply the two halves in turn, as k8s/rig.sh does. Applying everything at once boots `app`
+# against a database with no indexes and no shop row.
+# https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+# https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: boilerplate
+
+resources:
+    - namespace.yaml
+    - mongo.yaml
+    - cache.yaml
+    - setup.yaml
+    - app.yaml
+    - cron.yaml
+
+# `app-env` and `crontab` carry a content hash in their name: an edit changes the name, which
+# changes the pod template, which rolls the Deployment. A plain ConfigMap edit would not.
+# https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/configmapgenerator/
+configMapGenerator:
+    - name: app-env
+      envs:
+          - app.env
+    - name: crontab
+      files:
+          - crontab
+
+# The image every app-code workload runs. `localhost/boilerplate-app:rig` is what k8s/rig.sh
+# builds and loads into the kind node; a real cluster sets its own (`kustomize edit set image`).
+images:
+    - name: boilerplate-app
+      newName: localhost/boilerplate-app
+      newTag: rig

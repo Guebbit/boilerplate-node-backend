@@ -1,0 +1,13 @@
+# The class Envoy Gateway serves, with the EnvoyProxy below as its settings.
+# https://gateway.envoyproxy.io/docs/tasks/quickstart/
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+    name: eg
+spec:
+    controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    parametersRef:
+        group: gateway.envoyproxy.io
+        kind: EnvoyProxy
+        name: rig
+        namespace: boilerplate

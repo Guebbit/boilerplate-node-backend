@@ -1,0 +1,12 @@
+# Public traffic through Gateway API: a Gateway (the entry point) and an HTTPRoute (which Service
+# gets which path). Any conforming controller reads the same two objects. A component, not part of
+# `base`, so `base` still applies on a cluster that has no Gateway API CRDs; an overlay switches this
+# on and names the GatewayClass.
+# https://gateway-api.sigs.k8s.io/
+# https://kubectl.docs.kubernetes.io/guides/config_management/components/
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+    - gateway.yaml
+    - httproute.yaml

@@ -14,7 +14,7 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { OrderDocument } from '@modules/orders';
-import type { AuthContext, CallerContext } from '@types';
+import type { AuthContext, CallerContext, PaidOutside } from '@types';
 import { buildReference } from '../domain';
 import { paymentService } from '../services';
 import { paymentRepository } from '../repository';
@@ -115,7 +115,7 @@ export const refundOrderPayment = (
     orderId: string,
     authContext: AuthContext,
     context: CallerContext,
-    body?: { amount?: string; currency?: string }
+    body?: { amount?: string; currency?: string; paidOutside?: PaidOutside }
 ) =>
     paymentRepository
         .findByOrderId(orderId)

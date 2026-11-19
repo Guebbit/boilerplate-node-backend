@@ -25,9 +25,10 @@ export const paymentsAuditActions = {
      */
     ADMIN_PAYMENT_REFUND_REQUESTED: 'admin.payment.refund_requested',
     /**
-     * An operator confirmed that a hand-paid refund's money went back outside the application
-     * (`settleRefundByHand`). The only audit row that says so; `ADMIN_PAYMENT_REFUNDED` is a
-     * provider refund's settlement.
+     * An operator confirmed that a refund's money went back outside the application: afterwards
+     * (`settleRefundByHand`) or when the record opened (`paidOutside`, on a refund or a received
+     * return). The only audit row that says so; `ADMIN_PAYMENT_REFUNDED` is a provider refund's
+     * settlement.
      */
     ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND: 'admin.payment.refund_settled_by_hand',
     /**

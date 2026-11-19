@@ -11,6 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { isPlainObject } from '@infrastructure/object-guards';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import {
     DisputeKind,
@@ -19,9 +20,11 @@ import {
     PaymentStatus,
     PaymentMethod,
     RefundFailureReason,
+    OutsideMoneyMethod,
     RefundDueRule,
     RefundReason,
-    RefundStatus
+    RefundStatus,
+    type PaidOutside
 } from '@types';
 
 /**
@@ -105,6 +108,12 @@ export interface RefundRecord {
      * hand-settled refund says nothing about the next.
      */
     settledByHand?: true;
+    /**
+     * Set when staff said the money already went back outside the application, at the moment the
+     * record opened: the record is born `succeeded` with `settledByHand`, and no provider is ever
+     * asked. `reference` is staff only, like `providerRefundRef`.
+     */
+    paidOutside?: PaidOutside;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     /**
@@ -268,6 +277,20 @@ const refundSchema = new Schema<RefundRecord>(
         attemptedAt: { type: Date },
         nextAttemptAt: { type: Date },
         settledByHand: { type: Boolean },
+        paidOutside: {
+            type: new Schema<PaidOutside>(
+                {
+                    method: {
+                        type: String,
+                        enum: Object.values(OutsideMoneyMethod),
+                        required: true
+                    },
+                    reference: { type: String, minlength: 1, maxlength: 120 }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
         settledAt: { type: Date },
         reversedAt: { type: Date },
         reversedAfterSettling: { type: Boolean }
@@ -424,6 +447,8 @@ const REFUND_INTERNAL_KEYS = [
  */
 const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> => {
     const wire: Record<string, unknown> = { ...refund, id: String(refund._id ?? refund.id) };
+    // The reference is staff's note; the payer sees only how the money went back.
+    if (isPlainObject(wire.paidOutside)) wire.paidOutside = { method: wire.paidOutside.method };
     for (const key of REFUND_INTERNAL_KEYS)
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping caller-named keys from a plain record is the whole job
         delete wire[key];

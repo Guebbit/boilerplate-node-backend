@@ -32,15 +32,29 @@ sequenceDiagram
 ```
 
 - **A refused refund does not change the answer.** `POST /returns/{id}/receive` answers 200 either
-  way: `received` means the money is still owed (its refund record is already on the payment, where
-  the sweep and the attention list follow it), `closed` means it went back.
+  way: `received` means the money is still owed (its refund record is on the payment, where the
+  sweep and the attention list follow it) or short and waiting on staff's **Close** (the payment had
+  nothing left to give, so no record exists and a to-do asks staff to check), `closed` means it went
+  back.
 - **Received is a fact about a parcel; closed is a fact about money.** The status move and the
   restock and the refund RECORD are ONE transaction, so units are never on the shelf behind a return
-  that reads `approved`, and a received return always has its debt on file. Money cannot roll back,
-  so only the provider call is outside it: the record carries this return's id, so a refund the
-  provider refused (or one never sent) is retried by the payment sweep and closes the return when
-  it lands. A return is never stuck
-  `received` for a reason nobody is retrying.
+  that reads `approved`, and a received return owes its debt on file whenever the payment can give
+  it. Money cannot roll back, so only the provider call is outside it: the record carries this
+  return's id, so a refund the provider refused (or one never sent) is retried by the payment sweep
+  and closes the return when it lands. A return with no record because the payment had nothing left
+  (or no succeeded payment) is `received` for a reason a person is told about:
+  `payment.return_refund_short` opens a to-do, and staff **Close** the return by hand once they have
+  checked. That to-do clears only on that hand close, never on an automatic one.
+- **Paid outside.** Staff who may refund (`create:Refund`, on top of `receive:Return`) can say the
+  buyer was already paid back in cash or by transfer: `paidOutside` on the receipt. The refund
+  record is then born settled by hand in the receipt's transaction, the provider is never asked, the
+  credit note and the buyer's mail follow, and the return closes in the same step. Only a `refund`
+  remedy takes it (422 `RETURN_REMEDY_INVALID`), a caller without `create:Refund` gets 403, and a
+  return whose refund the proof of sending already opened refuses it (409
+  `RETURN_REFUND_OPENED_ON_PROOF`). The amount is still capped at what the payment has left, so an
+  earlier goodwill refund makes the record smaller than the return, the return closes anyway, and the
+  short-refund to-do stays open: **Close** answers 409 `RETURN_NOT_CLOSABLE` on a closed return, so
+  staff close the to-do themselves once they have checked. See [Refunds](./payments-refunds.md#paid-outside).
 - **Restock happens on `received`, not on refund** — two facts, two moments. No reservation is
   claimed: the order's hold was `committed` at payment and stays that way.
 - **Staff choose how many units go back on sale.** `POST /returns/{id}/receive` takes

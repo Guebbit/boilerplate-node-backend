@@ -204,8 +204,8 @@ export const shopTasks = {
 
     /**
      * `payment.refund_unrecorded`: staff close it themselves, after "Re-sync refunds" or, for
-     * another currency, once the refund is in their books. Nothing closes it by event: a re-sync
-     * that imports the refund raises no event of its own to listen for.
+     * another currency, once the refund is in their books. Nothing closes it by event: the import
+     * announces `payment.refunded`, but that names the new record, which this to-do does not link to.
      */
     onRefundUnrecorded: (
         payload: DomainEventMap['payment.refund_unrecorded'],
