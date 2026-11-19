@@ -1,7 +1,8 @@
 /**
  * The reaper's decision: which test containers are orphans.
  */
-import { OWNER_LABEL, isProcessAlive, orphanedContainerIds } from '@tests/container-engine';
+import { OWNER_LABEL, orphanedContainerIds } from '@tests/container-engine';
+import { isProcessAlive } from '@tests/process-alive';
 
 describe('orphanedContainerIds', () => {
     it('picks only containers whose owner is dead', () => {

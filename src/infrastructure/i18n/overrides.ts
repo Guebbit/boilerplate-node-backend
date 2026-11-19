@@ -157,9 +157,9 @@ export const getOverrideRefreshMs = (): number => localeConfig().NODE_LOCALE_OVE
 let refreshTimer: NodeJS.Timeout | undefined;
 
 /**
- * Start re-reading the overrides on an interval, so an edit made on one worker reaches the others.
+ * Start re-reading the overrides on an interval, so an edit made on one copy of the app reaches the others.
  *
- * `unref` so the timer never holds the process open — a worker with nothing left to do must exit,
+ * `unref` so the timer never holds the process open — a process with nothing left to do must exit,
  * and a pending copy refresh is not a reason to stay.
  *
  * NOT behind `withLease` (`@infrastructure/persistence/lease`) — and not because N Mongo reads a
@@ -168,8 +168,8 @@ let refreshTimer: NodeJS.Timeout | undefined;
  * Wrong shape: a lease picks ONE runner and skips the rest, which is right for a job whose effect
  *              is durable and shared (an anonymisation pass writes to Mongo once, for everyone).
  *              This refresh writes to `i18next`'s resource bundle, which is PER PROCESS — every
- *              worker holds its own copy and must apply the update itself, or it keeps serving
- *              stale copy until it restarts. Leasing this would starve N-1 workers, not save work.
+ *              process holds its own copy and must apply the update itself, or it keeps serving
+ *              stale copy until it restarts. Leasing this would starve N-1 copies, not save work.
  * Real fix:    if the 60s staleness window ever stops being fine, broadcast the update as a domain
  *              event over the existing bus — this repo has no such primitive today.
  */

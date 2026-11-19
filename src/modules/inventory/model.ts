@@ -195,7 +195,7 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
             type: Number,
             default: 0
         },
-        // Bumped by `$inc` in every level write (`repository.ts`), never set directly.
+        // Set to 0 or 1 when a level row is created, then bumped by `$inc` in every later write (`repository.ts`).
         version: {
             type: Number,
             default: 0

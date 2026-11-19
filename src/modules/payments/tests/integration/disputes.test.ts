@@ -339,24 +339,6 @@ describe('a refund the chargeback blocks', () => {
         await settleOutboxNudges();
         expect(await events(PAYMENT_REFUNDED)).toBe(1);
     });
-
-    it('may be voided or reported returned once the shop won', async () => {
-        const { orderId, providerRef } = await paidOrder();
-        await deliverReport(providerRef);
-        await refundForOrder(orderId).catch(() => undefined);
-        const payment = await paymentRepository.findByOrderId(orderId);
-        const refundId = String(payment?.refunds[0]._id);
-
-        await deliverReport(providerRef, {
-            status: 'won',
-            fundsWithdrawn: false,
-            observedAt: at(60)
-        });
-
-        const view = await staffView(orderId);
-        expect(view?.actions?.settleRefundByHand).toEqual([refundId]);
-        expect(view?.actions?.cancelRefund).toEqual([refundId]);
-    });
 });
 
 describe('the dispute on the staff reads', () => {

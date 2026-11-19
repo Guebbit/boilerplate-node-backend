@@ -129,7 +129,7 @@ module.exports = {
     testMatch: ['**/tests/**/*.test.ts'],
     /**
      * `tests/replicas` runs under `jest.config.replicas.js` instead: it boots N separate copies of
-     * the app as child processes, each with its own Mongo and Redis, and a proxy in front of them,
+     * the app as child processes, all over one Mongo (and Redis as the case needs), and a proxy in front of them,
      * so none of this file's setup applies.
      * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
      */

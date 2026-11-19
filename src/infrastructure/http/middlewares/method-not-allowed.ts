@@ -39,8 +39,11 @@ const allowedMethods = (
     const matching = routes.filter(
         (route) => (route.module === null || served.has(route.module)) && route.pattern.test(path)
     );
-    // OAS: the template with fewer `{param}` wins, so `/a/{id}/sync` shadows `/a/{id}/{other}`.
-    // A lone match has no sibling to shadow, so only a strictly more specific one narrows.
+    /**
+     * Our rule, borrowed from OAS's "a concrete path beats a templated one": the template with
+     * fewer `{param}` wins, so `/a/{id}/sync` shadows `/a/{id}/{other}`.
+     * A match with no `{param}` at all always counts; otherwise only a strictly more specific one narrows.
+     */
     const fewest = Math.min(...matching.map((route) => route.parameterCount));
     const mostParameters = Math.max(...matching.map((route) => route.parameterCount));
     const shadowed = fewest === 0 || fewest < mostParameters;

@@ -260,8 +260,8 @@ jobs:
                     /obs/alertmanager-routes-test.sh
 
             - name: Validate the Loki and production Alloy configs
-              # Each config is checked with the image of the compose file that mounts it (Loki with
-              # both), so an image bump and a config the new version refuses cannot land apart.
+              # Each config is checked with the image pinned in compose.yaml (the one both stacks use),
+              # so an image bump and a config the new version refuses cannot land apart.
               run: bash docker/observability/validate-configs.sh
 
     lint-openapi-modules:

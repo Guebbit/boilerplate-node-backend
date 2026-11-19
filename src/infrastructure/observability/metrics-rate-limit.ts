@@ -15,7 +15,7 @@ import { infrastructureMetricData } from '@infrastructure/observability/metrics.
 
 /**
  * Store operations that could not use the `limits` Redis, by budget namespace.
- * Makes visible: a budget counting in this process alone (one budget per worker, not one for the
+ * Makes visible: a budget counting in this process alone (one budget per copy of the app, not one for the
  * deployment), or a budget letting requests through unbudgeted. A rate above zero means a limit is
  * weaker than configured.
  */

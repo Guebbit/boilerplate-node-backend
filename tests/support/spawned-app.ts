@@ -99,7 +99,8 @@ export const bootableEnvironment = ({
     NODE_VAT_RATE_REDUCED: '0.10',
     /**
      * The access line is `info`: a developer's `.env` set higher would hide it, and
-     * `createServedCounter` could count nothing.
+     * the ready line (`Server listening on port`, waited for in `tests/replicas/support/copies.ts`)
+     * would never be written.
      */
     NODE_LOG_LEVEL: 'info'
 });
