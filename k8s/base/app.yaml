@@ -1,0 +1,169 @@
+# `app`: the HTTP API, three copies behind one Service. Every setting below answers a question
+# the compose file answers elsewhere: the comment says which.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: app
+    labels:
+        app.kubernetes.io/name: app
+        boilerplate/stage: app
+spec:
+    replicas: 3
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: app
+    # Surge one, never take one away first: a rolling restart keeps all three serving until its
+    # replacement is Ready, which is what "0 failed requests" needs.
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: app
+                boilerplate/stage: app
+        spec:
+            # No API credentials in the pod: the app never talks to Kubernetes (CIS 5.1.6). It also
+            # frees /var/run/secrets, which /run/secrets (the same path in the image) would
+            # otherwise collide with when the Secret is mounted there.
+            automountServiceAccountToken: false
+            # SIGTERM -> lame-duck delay (NODE_SHUTDOWN_DELAY_MS, 5 s) -> drain (up to 15 s, the
+            # default NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS) -> exit 0. The grace period must stay above
+            # the sum, or the kubelet SIGKILLs a copy that is still draining.
+            # src/infrastructure/runtime/server-lifecycle.ts, runtime/config.ts
+            terminationGracePeriodSeconds: 30
+            # The Dockerfile's `node` user is uid/gid 1000 (docker/Dockerfile). fsGroup makes the
+            # mounted claim writable by it.
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 1000
+                fsGroup: 1000
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: app
+                  image: boilerplate-app
+                  # `args`, not `command`: `command` would replace the image's ENTRYPOINT
+                  # (dumb-init, PID 1), and SIGTERM would stop reaching Node. The default CMD runs.
+                  envFrom:
+                      - configMapRef:
+                            name: app-env
+                      - configMapRef:
+                            name: edge-env
+                  ports:
+                      - name: http
+                        containerPort: 3000
+                  # 1Gi limit, heap capped at 640 (NODE_OPTIONS in app.env): Node collects before the
+                  # kernel kills the pod. Measured on the kind rig (cgroup memory.stat): 563 MB anonymous
+                  # memory steady and 676 MB peak (page cache included) with the heap capped at 384 MB,
+                  # so ~180 MB lives outside the heap (`tsx` keeps the transpiled module graph).
+                  # 512Mi is OOMKilled at boot; 768Mi would leave under 100 MB above the peak.
+                  # No CPU limit: a throttled event loop looks like a hang.
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 640Mi
+                      limits:
+                          memory: 1Gi
+                  # The same hardening as compose's `x-hardening` (compose.production.yaml): read-only
+                  # root, no capability, no privilege gain. Every path the app writes has a mount below.
+                  securityContext:
+                      readOnlyRootFilesystem: true
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                          drop: [ALL]
+                  # Boot takes a while (the whole module graph loads before the listener opens):
+                  # `/livez` answers only once the app is up (src/app.ts), so this is the boot budget,
+                  # 36 x 5 s = 3 min. Liveness and readiness start after it passes.
+                  startupProbe:
+                      httpGet:
+                          path: /livez
+                          port: http
+                      periodSeconds: 5
+                      timeoutSeconds: 5
+                      failureThreshold: 36
+                  # Liveness is "the process answers", never a dependency: a database blip must not
+                  # restart a healthy pod (docs/operate/health-checks.md). 5 s matches system-routes.ts.
+                  livenessProbe:
+                      httpGet:
+                          path: /livez
+                          port: http
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  # Readiness decides whether the Service sends traffic. Polled fast and failed on the
+                  # first miss, so a draining copy (`/readyz` -> 503 at SIGTERM) leaves the endpoints
+                  # well inside the lame-duck delay.
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 2
+                      timeoutSeconds: 2
+                      failureThreshold: 1
+                  volumeMounts:
+                      # `NODE_UPLOAD_STAGING_PATH` defaults into the system temp dir. An emptyDir cannot
+                      # be `noexec` (compose's tmpfs is); the root stays read-only and nothing here runs
+                      # a file from /tmp.
+                      - name: tmp
+                        mountPath: /tmp
+                      - name: secrets
+                        mountPath: /run/secrets
+                        readOnly: true
+                      # One claim, three paths (compose mounts three named volumes): the images, the mail
+                      # spool and stored invoices, and the quarantine. docker/Dockerfile creates them.
+                      - name: data
+                        mountPath: /app/public/images
+                        subPath: images
+                      - name: data
+                        mountPath: /app/tmp/storage
+                        subPath: storage
+                      - name: data
+                        mountPath: /app/tmp/quarantine
+                        subPath: quarantine
+                  # No /dev/shm mount: it matters only to Chromium (invoice PDFs), and the image builds
+                  # with INSTALL_CHROMIUM=false (docker/Dockerfile). Enable that build argument and
+                  # mount an emptyDir with `medium: Memory` at /dev/shm together.
+            volumes:
+                - name: tmp
+                  emptyDir:
+                      sizeLimit: 64Mi
+                - name: secrets
+                  secret:
+                      secretName: app-secrets
+                      defaultMode: 0444
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: data
+---
+# The stable address of the copies: only Ready pods are behind it.
+apiVersion: v1
+kind: Service
+metadata:
+    name: app
+    labels:
+        app.kubernetes.io/name: app
+        boilerplate/stage: app
+spec:
+    type: ClusterIP
+    selector:
+        app.kubernetes.io/name: app
+    ports:
+        - name: http
+          port: 3000
+          targetPort: http
+---
+# ReadWriteOnce: the pods that share it must run on one node, which is true on the one-node rig.
+# A multi-node cluster needs a ReadWriteMany class or an object store (infrastructure/adapters/image-store.ts).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: data
+spec:
+    accessModes: [ReadWriteOnce]
+    resources:
+        requests:
+            storage: 1Gi

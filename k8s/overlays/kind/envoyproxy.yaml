@@ -1,0 +1,22 @@
+# Envoy's own Service is a NodePort on a fixed port, because rootless kind has no load balancer:
+# a Gateway never reaches `Programmed` here, and a LoadBalancer Service would stay `<pending>`.
+# kind-cluster.yaml maps that node port to the host. The patch merges by `port`, so the Service
+# the controller generates keeps its listener and only gains `nodePort`.
+# https://gateway.envoyproxy.io/docs/api/extension_types/#envoyproxy
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+    name: rig
+spec:
+    provider:
+        type: Kubernetes
+        kubernetes:
+            envoyService:
+                type: NodePort
+                patch:
+                    type: StrategicMerge
+                    value:
+                        spec:
+                            ports:
+                                - port: 80
+                                  nodePort: 30080

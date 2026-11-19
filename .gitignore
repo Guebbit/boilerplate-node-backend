@@ -73,7 +73,7 @@ contract.bruno.yml
 # of them. Nothing outside this repo's own code reads them without running its tools.
 #
 # What STAYS committed, because something reads it without our tools: `shared/rules/schemas/*.json`
-# and `shared/authorization-keys.generated.yaml` (the PHP twin), `docker/crontab` (the production host), the generated
+# and `shared/authorization-keys.generated.yaml` (the PHP twin), `docker/crontab` (the production host) and `k8s/base/crontab` (its Kubernetes copy), the generated
 # tables inside `docs/`, and `scenarios/*-images.generated.json` (cannot be rebuilt). The pre-commit hook
 # refuses a commit where one of those is stale — see docs/build/regenerating.md.
 /asyncapi.yaml
