@@ -1,10 +1,11 @@
 #!/usr/bin/env tsx
 /**
  * Everything derived from the jobs the modules declare — a step of `npm run regenerate`: the
- * `docker/crontab` and the jobs table in `docs/reference/ops.md`. `--check` reports drift instead
+ * `docker/crontab`, its copy for Kubernetes (`k8s/base/crontab`) and the jobs table in
+ * `docs/reference/ops.md`. `--check` reports drift instead
  * of writing, which is what `npm run check` runs.
  *
- * Declared once (`AppModule.jobs`, `src/app/jobs.ts`), written twice: a schedule kept by hand in
+ * Declared once (`AppModule.jobs`, `src/app/jobs.ts`), written three times: a schedule kept by hand in
  * several places is one a person misses, and that is the job that silently never runs.
  */
 
@@ -25,8 +26,12 @@ const checkOnly = hasFlag('check');
 /** Every job in the build: the ones no module owns, then each enabled module's. */
 const jobs = [...appJobs, ...resolveJobs(enabledModules)];
 
-/** The crontab, generated whole. */
-const CRONTAB = 'docker/crontab';
+/**
+ * The crontab, generated whole, and the copy `k8s/base` turns into a ConfigMap. A copy rather
+ * than a reference: kustomize refuses a file outside its own directory, and a hand-kept copy
+ * would drift. `check:generated` guards both.
+ */
+const CRONTABS = ['docker/crontab', 'k8s/base/crontab'];
 
 /**
  * Write one whole file, or report that it differs. Returns the exit-code contribution.
@@ -48,11 +53,23 @@ const settle = (relative: string, expected: string, current: string): number => 
     return 0;
 };
 
-/** Settle the crontab and the ops page; resolves the exit code. */
+/**
+ * Settles one crontab file; returns the exit-code contribution.
+ *
+ * @param relative - repo-relative path of the crontab
+ */
+const settleCrontab = (relative: string): number => {
+    const file = path.join(ROOT, relative);
+    return settle(
+        relative,
+        renderCrontab(jobs),
+        existsSync(file) ? readFileSync(file, 'utf8') : ''
+    );
+};
+
+/** Settle the crontabs and the ops page; resolves the exit code. */
 const main = async (): Promise<number> => {
-    const file = path.join(ROOT, CRONTAB);
-    const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
-    let code = settle(CRONTAB, renderCrontab(jobs), current);
+    let code = CRONTABS.reduce((sum, relative) => sum + settleCrontab(relative), 0);
     code += await applyMarkerBlocks({
         file: path.join(ROOT, 'docs/reference/ops.md'),
         root: ROOT,

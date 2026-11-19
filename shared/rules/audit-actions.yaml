@@ -8,7 +8,9 @@
 # Each `value` is the wire string. The constant's key is derived: uppercase, `.` to `_`.
 actions:
     - value: security.unauthorized
-      description: A request with no usable credential reached a guarded route.
+      description: >-
+          A request with no usable credential on a guarded route, or one that presented a stale
+          credential (on any route, served or refused). Logged, never stored as a row.
     - value: security.forbidden
       description: A caller was identified but lacked the permission the route needs.
     - value: security.rate_limit_hit

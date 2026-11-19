@@ -1,0 +1,107 @@
+# MongoDB as a one-member replica set (`--replSet rs0`): the app uses transactions, which need a
+# replica set even with a single node. No TLS and no auth on the rig: one namespace, one node,
+# nothing published. A deployment brings its own managed Mongo and sets NODE_DB_URI.
+# docker/mongo-rs-init.sh is the compose version of the init Job below.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+    name: mongo
+    labels:
+        app.kubernetes.io/name: mongo
+spec:
+    serviceName: mongo
+    replicas: 1
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: mongo
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: mongo
+        spec:
+            automountServiceAccountToken: false
+            # The official image starts as root, chowns its data directory and drops to `mongodb`
+            # itself (the reason compose.production.yaml's data services keep a few capabilities
+            # and no read-only root). Pod-level hardening stops at the seccomp profile.
+            securityContext:
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: mongo
+                  image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+                  # `--bind_ip_all`: reached by the pod's DNS name from other pods.
+                  args: [mongod, --replSet, rs0, --bind_ip_all]
+                  ports:
+                      - name: mongo
+                        containerPort: 27017
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 256Mi
+                      limits:
+                          memory: 1Gi
+                  # `ping` answers before the set has a primary: the init Job below is what waits for that.
+                  readinessProbe:
+                      exec:
+                          command: [mongosh, --quiet, --eval, "db.adminCommand('ping').ok"]
+                      periodSeconds: 5
+                      timeoutSeconds: 5
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data/db
+    volumeClaimTemplates:
+        - metadata:
+              name: data
+          spec:
+              accessModes: [ReadWriteOnce]
+              resources:
+                  requests:
+                      storage: 2Gi
+---
+# Headless: `mongo-0.mongo` resolves to the pod. Not-ready addresses are published, because the
+# init Job must reach the member before it is Ready, and the replica set host name is this one.
+apiVersion: v1
+kind: Service
+metadata:
+    name: mongo
+spec:
+    clusterIP: None
+    publishNotReadyAddresses: true
+    selector:
+        app.kubernetes.io/name: mongo
+    ports:
+        - name: mongo
+          port: 27017
+          targetPort: mongo
+---
+# Initiates the replica set once and waits for a primary (mongo-rs-init.sh does the same on compose).
+# Idempotent: `rs.status()` throws on an uninitiated set, which is the signal to initiate.
+# The member's host is the StatefulSet DNS name, not `localhost`, so the driver can reach it from other pods.
+# https://www.mongodb.com/docs/manual/reference/method/rs.initiate/
+apiVersion: batch/v1
+kind: Job
+metadata:
+    name: mongo-init
+spec:
+    backoffLimit: 6
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: mongo-init
+        spec:
+            automountServiceAccountToken: false
+            restartPolicy: OnFailure
+            containers:
+                - name: init
+                  image: docker.io/library/mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+                  command:
+                      - bash
+                      - -c
+                      - |
+                          set -euo pipefail
+                          until mongosh --host mongo-0.mongo --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1; do sleep 1; done
+                          mongosh --host mongo-0.mongo --quiet --eval "
+                              try { rs.status(); print('replica set already initiated'); }
+                              catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo-0.mongo:27017' }] }); print('replica set initiated'); }
+                          "
+                          until mongosh --host mongo-0.mongo --quiet --eval 'rs.isMaster().ismaster' 2>/dev/null | grep -q true; do sleep 1; done

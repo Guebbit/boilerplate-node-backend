@@ -45,7 +45,7 @@ The full table, with the optional services, is one home: [Hosting § what this a
 | Shared hosting                   | Cannot run the app               | [Shared hosting](./shared-hosting.md)     |
 | A server with Docker or Podman   | **The supported path**           | [Docker server](./docker-server.md)       |
 | Container PaaS                   | Runs the image; none tested here | [Container PaaS](./container-paas.md)     |
-| Kubernetes                       | Not supported (single host)      | [Kubernetes](./kubernetes.md)             |
+| Kubernetes                       | Starting point only (`k8s/`)     | [Kubernetes](./kubernetes.md)             |
 | Managed MongoDB, Redis, RabbitMQ | Compatible, not tested here      | [Managed services](./managed-services.md) |
 
 ## Pick one

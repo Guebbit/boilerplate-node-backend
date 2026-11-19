@@ -184,6 +184,9 @@ is returned as a keyed digest (`hmac:…`): the operator can correlate "this add
 incidents" and never read the address. An operator watching an installation needs the incidents,
 and holding no shop key was never meant to include reading a shop's customers.
 
+The feed shows no 401s either: a request with no credential, or a stale one, is logged as
+`security.unauthorized` and never stored ([Audit events](../operate/winston.md#audit-events)).
+
 The stored row's `metadata` is credential-scrubbed before it is written (a `password` or `token` key becomes `[REDACTED]`), exactly as the log line's is; `ip` stays raw in the row on purpose.
 
 ## What an update records

@@ -43,7 +43,7 @@ const seenByOperator = () =>
 describe('the operator’s audit read — what it shows', () => {
     it('shows the security refusals, a failed sign-in and the signs of an attack on a credential', async () => {
         await seed([
-            ['security.unauthorized', 'failure'],
+            ['security.token.invalid_signature', 'failure'],
             ['security.forbidden', 'failure'],
             ['security.rate_limit_hit', 'failure'],
             ['security.reauth_required', 'failure'],
@@ -62,7 +62,7 @@ describe('the operator’s audit read — what it shows', () => {
             'security.forbidden:failure',
             'security.rate_limit_hit:failure',
             'security.reauth_required:failure',
-            'security.unauthorized:failure',
+            'security.token.invalid_signature:failure',
             'system.webhook_subscription.auto_disabled:failure'
         ]);
     });

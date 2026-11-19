@@ -309,6 +309,16 @@ paths:
                 can tell the money went back. `POST /payments/{id}/refunds/{refundId}/settle` is
                 what confirms it.
 
+                With `paidOutside` the staff member says the money was already given back outside
+                the application (cash at the counter, a bank transfer). That is the one way to
+                refund a payment without sending anything to its provider, on a card payment or a
+                hand-paid one: the 201 is a `succeeded` record with `settledByHand`, opened and
+                settled in one step, so the credit note, the order's state and the buyer's mail
+                follow as for any refund and no provider is asked. It is staff's word and is not
+                policed: a refund goes back by the buyer's own means of payment unless they agreed
+                otherwise (Directive 2011/83/EU Art. 13(1)). The same checks apply (amount, an open
+                dispute, what is left). The audit row is `admin.payment.refund_settled_by_hand`.
+
                 There is no list at this path: a payment's refunds are listed by `GET /payments/{id}`
                 (`refunds`), and one by `GET /payments/{id}/refunds/{refundId}`.
 
@@ -974,7 +984,9 @@ components:
                         to a caller holding `display:Payment`. A payment with none omits the field. An
                         open chargeback blocks refunds (`actions.refund` is false and the refund door
                         answers 409 `PAYMENT_DISPUTED`); a lost one shrinks what is left to refund by
-                        its amount. `displayStatus` does not change: a dispute is a separate fact.
+                        its amount, unless it is in another currency than the payment, which never
+                        does (staff check it). `displayStatus` does not change: a dispute is a
+                        separate fact.
                 # Computed per CALLER, not stored — the same idea as `Order.actions`, for the half
                 # of the question this module owns.
                 actions:
@@ -1034,6 +1046,12 @@ components:
                 providerRefundRef:
                     type: string
                     description: The provider's id for the refund (Stripe's `re_…`). Staff only.
+                paidOutside:
+                    $ref: '#/components/schemas/PaidOutside'
+                    description: >-
+                        Present when staff recorded the refund as already paid outside the application
+                        (`POST /payments/{id}/refunds` with `paidOutside`, or a return received that way).
+                        The `reference` inside is staff only.
                 failureReason:
                     $ref: '#/components/schemas/RefundFailureReason'
                     description: Staff only (`display:Payment`).
@@ -1078,10 +1096,10 @@ components:
 
                 `disputed`: the buyer's bank took the money back in a dispute (chargeback). It is
                 final like the refusals above, and it is not offered for hand settlement while the
-                chargeback is open: the bank already returned the money. Once the chargeback is
-                lost for an amount that covers the refund, the refund may be marked returned (the
-                bank paid the buyer); once the dispute is decided in the shop's favour the refund
-                may only be canceled.
+                dispute is open: the bank has not decided where the money went. Once no dispute is
+                open, the refund may be marked returned or canceled, whatever the dispute's outcome
+                or amount, and also when no dispute is on file; staff judge from the outcome which
+                of the two the case needs.
 
                 `canceled` is not a refusal: staff voided the refund
                 (`POST /payments/{id}/refunds/{refundId}/cancel`). Nothing was sent, it is never
@@ -1333,7 +1351,7 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, manual_refund_owed, dispute_needs_response]
+            enum: [stale_refund, refused_refund, reversed_refund, refund_exceeds_remaining, over_refunded, manual_refund_owed, dispute_needs_response]
             description: >-
                 `stale_refund` — a provider refund open past the threshold, still waiting for the
                 provider's answer or its next retry;
@@ -1346,6 +1364,12 @@ components:
                 `refund_exceeds_remaining` — a refund made in the provider's dashboard took the room an
                 open refund here counted on: the open one is held unsent (the provider would refuse it)
                 and `exceedsBy` says by how much. Staff cancel it or mark it returned;
+                `over_refunded` — the refunds on the payment add up to more than was paid and no open
+                refund is held back by it (a refund made in the provider's dashboard on top of one
+                recorded here as paid outside, or the other way round). Money really moved, so nothing
+                is held: staff are told so they can reconcile it. It names the payment, not a refund:
+                `amount` is the total refunded, `exceedsBy` the excess, `since` the latest settled
+                refund. The row never clears, because a settled refund cannot be taken back;
                 `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
                 Each of those is an open refund record on a payment: a cancel or a refund opens it
                 before anything is asked of a provider, so no refund is owed without one;
@@ -1397,7 +1421,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/NonNegativeDecimalAmount'
                     description: >-
                         On a `refund_exceeds_remaining` row, by how much this open refund overshoots
-                        what the provider can still give back, in the payment's currency.
+                        what the provider can still give back; on an `over_refunded` row, by how much
+                        the refunds exceed what was paid. In the payment's currency.
                 refundDueBy:
                     type: string
                     format: date-time
@@ -1461,6 +1486,11 @@ components:
                         ISO-4217 code of `amount`. Optional; when sent it must equal the payment's
                         own currency, so an amount written in another unit is refused instead of
                         being read as this one.
+                paidOutside:
+                    $ref: '#/components/schemas/PaidOutside'
+                    description: >-
+                        Present when the money was already given back outside the application: the
+                        record is born `succeeded` with `settledByHand`, and no provider is asked.
 
         PaymentActions:
             type: object
@@ -1621,14 +1651,38 @@ components:
                     items:
                         $ref: '#/components/schemas/PaymentMethodOption'
 
+        OutsideMoneyMethod:
+            type: string
+            enum: [bank_transfer, cash, other]
+            description: >-
+                How money moved outside the application: `cash`, a `bank_transfer`, or `other`. `card`
+                is never one: that path goes through a payment provider.
+
+        PaidOutside:
+            type: object
+            additionalProperties: false
+            required: [method]
+            description: >-
+                Staff's statement that a refund's money already went back outside the application: how,
+                and an optional note tying the record to it. Not policed.
+            properties:
+                method:
+                    $ref: '#/components/schemas/OutsideMoneyMethod'
+                reference:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                    description: >-
+                        A bank transaction id, a receipt number — whatever ties the refund to the money.
+                        Staff only (`display:Payment`), like `providerRefundRef`.
+
         RecordOfflinePaymentRequest:
             type: object
             additionalProperties: false
             required: [method]
             properties:
                 method:
-                    type: string
-                    enum: [bank_transfer, cash, other]
+                    allOf: [{ $ref: '#/components/schemas/OutsideMoneyMethod' }]
                     description: How the money arrived. `card` is not offered here — that path is `POST /payments`.
                 reference:
                     type: string

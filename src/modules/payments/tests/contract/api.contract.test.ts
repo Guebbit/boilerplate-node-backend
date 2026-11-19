@@ -824,6 +824,43 @@ describe('POST /payments/{id}/refunds — the operator', () => {
         });
     });
 
+    it('answers 201 with a settled record when staff say the money already went back outside, the payer seeing no reference', async () => {
+        const { paymentId, bearer } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ paidOutside: { method: 'cash', reference: 'receipt 17' } });
+
+        expect(response.status).toBe(201);
+        expect(response.body).toMatchObject({
+            status: 'succeeded',
+            settledByHand: true,
+            paidOutside: { method: 'cash', reference: 'receipt 17' }
+        });
+        const own = await api().get(`/payments/${paymentId}`).set('Authorization', bearer);
+        expect(own.body.refunds[0].paidOutside).toEqual({ method: 'cash' });
+    });
+
+    it.each([
+        ['a method the contract does not name', { method: 'card' }],
+        ['an empty reference', { method: 'cash', reference: '' }]
+    ])('refuses paidOutside with %s: 422, nothing recorded', async (_label, paidOutside) => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ paidOutside });
+
+        expect(response.status).toBe(422);
+        expect((await paymentRepository.findById(paymentId))!.refunds).toHaveLength(0);
+    });
+
     it('answers 201 with the failed record when the provider refuses, never a 5xx', async () => {
         const { paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
@@ -1259,12 +1296,16 @@ describe('POST /payments/{id}/refunds/sync', () => {
             status: 'succeeded'
         });
         const { bearer: adminBearer } = await authenticateAs('admin');
+        const listed = jest.spyOn(fakePaymentProvider, 'listRefunds');
 
         const response = await api()
             .post(`/payments/${String(intent.body.id)}/refunds/sync`)
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(200);
+        // The guard answers before the provider is asked: a payment that never succeeded has no refunds to find.
+        expect(listed).not.toHaveBeenCalled();
+        listed.mockRestore();
         expect(response.body.status).toBe('requires_confirmation');
         expect(response.body.refunds).toEqual([]);
         expect((await paymentRepository.findById(intent.body.id))!.refunds).toHaveLength(0);
@@ -1602,6 +1643,30 @@ describe('the staff Payments page', () => {
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({ items: [] });
+    });
+
+    it('GET /payments/attention names a payment refunded past what was paid, even with no refund open', async () => {
+        const { paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        await api()
+            .post(`/payments/${paymentId}/refunds`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey())
+            .send({ paidOutside: { method: 'cash' } });
+        const payment = await paymentRepository.findById(paymentId);
+        addFakeExternalRefund(String(payment?.providerRef), {
+            amount: '5.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+        await api().post(`/payments/${paymentId}/refunds/sync`).set('Authorization', adminBearer);
+
+        const response = await api().get('/payments/attention').set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toEqual([
+            expect.objectContaining({ kind: 'over_refunded', paymentId, exceedsBy: '5.00' })
+        ]);
     });
 
     it('a signed dispute delivery is acknowledged, shown to staff, and closes the refund door', async () => {

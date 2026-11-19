@@ -48,8 +48,8 @@ A bearer is a credential the client chose to present, so a bad one is told so, n
 served as a guest (RFC 6750 §3.1; the same rule `sk_` keys already had). `getAuth` answers a
 bearer that names no live session — bad signature, expired, revoked, a user who no longer exists —
 with `401` and `WWW-Authenticate: Bearer error="invalid_token"`, and an idle staff session with
-`401 SESSION_IDLE`. The client refreshes and retries as the same person; if the refresh fails it
-falls back to a guest by itself.
+`401 SESSION_IDLE`. On `invalid_token` the client refreshes and retries as the same person; if the refresh fails
+it falls back to a guest by itself. On `SESSION_IDLE` it tells the user and carries on as a guest.
 
 | Request                                                         | Answer                                         |
 | --------------------------------------------------------------- | ---------------------------------------------- |

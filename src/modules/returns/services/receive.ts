@@ -11,6 +11,9 @@
  *   rest of this page), `replace` (the returned units reopen on the SAME order and ship again)
  *   or `repair` (the guarantee is extended 12 months). The last two move no money and close the
  *   return at once, in the receipt's own transaction.
+ * - **Paid outside** (`paidOutside`, staff holding `create:Refund`): the buyer was already paid
+ *   back in cash or by transfer. The refund record is then opened already settled by hand, in the
+ *   receipt's transaction, so no provider is asked and the return closes in this step.
  * - **Closed** is a fact about money, and money cannot roll back. The refund RECORD is opened in
  *   that same transaction, carrying this return's id, so a received return always has its debt
  *   on file. Only the provider call follows the commit; if it is refused, the record stays open,
@@ -40,8 +43,9 @@ import { buyerIdOf, orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import type { OpenedReturnRefund } from '@modules/payments';
+import { holds } from '@kernel/ability';
 import { ReturnRemedy } from '@types';
-import type { CallerContext } from '@types';
+import type { CallerContext, PaidOutside } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -63,6 +67,7 @@ import {
 } from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
+import { badRemedy, forbidden } from './outcome';
 import { refundDueFor } from './refund-due';
 
 /** What staff may enter when the goods arrive. */
@@ -76,6 +81,11 @@ export interface ReceiveReturnInput {
     lines?: RestockRequest[];
     /** What the buyer is given. Absent means a refund; the others are for a defect or a wrong item. */
     remedy?: ReturnRemedy;
+    /**
+     * Staff already gave the money back outside the application: the refund is recorded settled by
+     * hand and no provider is asked. Needs `create:Refund` as well as `receive:Return`.
+     */
+    paidOutside?: PaidOutside;
 }
 
 /** The 409 for a return not waiting for its goods. */
@@ -215,6 +225,8 @@ const handOverRemedy = (
  * @param restocked - per returned line, how many units go back on sale
  * @param remedy - what the buyer is given; anything but a refund owes no money
  * @param context - the staff member receiving the goods, for the order's timeline and the refund
+ * @param paidOutside - staff already paid the buyer back outside the application: the refund
+ *   record is opened settled by hand, in this transaction
  * @returns what the transaction decided: a refusal of the deduction, a lost race, or the receipt
  * @throws {ActRefusal} when a replacement cannot be sent again; the transaction aborts with it
  */
@@ -224,7 +236,8 @@ const claimAndRestock = (
     handlingDeduction: string,
     restocked: readonly number[],
     remedy: ReturnRemedy,
-    context: CallerContext
+    context: CallerContext,
+    paidOutside: PaidOutside | undefined
 ): Promise<Claimed> =>
     announceInTransaction(
         async (session): Promise<Claimed> => {
@@ -312,7 +325,8 @@ const claimAndRestock = (
                               currency: received.currency,
                               lines: wireLines(received.lines),
                               shipping: verdict.breakdown.shipping,
-                              ...(due ? { due } : {})
+                              ...(due ? { due } : {}),
+                              ...(paidOutside ? { paidOutside } : {})
                           },
                           context,
                           session
@@ -345,7 +359,7 @@ const claimAndRestock = (
  * the receipt), so a refusal or any error here only leaves it for the sweep: the return closes
  * when it lands. A hand-paid refund is only on file: the return closes when an operator confirms.
  *
- * Money asked but no record opened (the payment had nothing left to give) leaves the return
+ * Money asked but no record opened (no succeeded payment, or nothing left on it) leaves the return
  * `received`: `payments` wrote a fact that gave staff a to-do, and the buyer is not told "refunded"
  * for money the app did not move. Staff close it by hand once they have checked.
  *
@@ -426,6 +440,15 @@ const receiveFor = (
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
     const remedy = input.remedy ?? ReturnRemedy.refund;
+    /**
+     * Saying the buyer was already paid back is a refund: `receive:Return` alone does not carry it.
+     * Checked first, so a caller without `create:Refund` learns nothing about the return's state.
+     */
+    if (input.paidOutside && !holds(context.caller, 'create', 'Refund'))
+        return Promise.resolve(forbidden(order, 'create:Refund', context));
+    // Only money goes back outside the application: a replacement or a repair moves none.
+    if (input.paidOutside && remedy !== ReturnRemedy.refund)
+        return Promise.resolve(badRemedy('paidOutside'));
     // Checked before anything is written: a count that cannot stand never half-receives a return.
     if (remedy !== ReturnRemedy.refund && !isGuaranteeReason(returned.reason))
         return Promise.resolve(
@@ -460,6 +483,16 @@ const receiveFor = (
                 }
             ])
         );
+    if (input.paidOutside && proofOpenedRefund(returned))
+        // The proof of sending already opened this return's refund, and it is not this request's to settle.
+        return Promise.resolve(
+            generateReject(409, [
+                {
+                    code: ERROR_CODES.RETURN_REFUND_OPENED_ON_PROOF,
+                    message: t('returns.paid-outside-after-proof')
+                }
+            ])
+        );
     const restock = resolveRestock(wireLines(returned.lines), input.lines);
     if (!restock.ok) return Promise.resolve(badRestock(restock));
 
@@ -470,7 +503,8 @@ const receiveFor = (
             input.handlingDeduction ?? '0',
             restock.restocked,
             remedy,
-            context
+            context,
+            input.paidOutside
         )
             // A replacement the order cannot send again aborted the receipt; the door answers it.
             .catch((error: unknown): Claimed => {
