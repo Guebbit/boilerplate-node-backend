@@ -57,11 +57,12 @@ it: your engine is a property of your machine, not of this repo.
 prints which one (`>>>> Executing external compose provider …`). Use **Docker Compose**, not
 podman-compose, on every machine that runs this repo: your laptop, staging, production.
 
-| podman-compose 1.6 (latest), run whole on the production file            | Docker Compose behind `podman compose` |
-| ------------------------------------------------------------------------ | -------------------------------------- |
-| managed mode (`COMPOSE_PROFILES=`) crashes: `required: false` is ignored | starts                                 |
-| a failed `setup` still starts `app` and `cron`                           | `up` fails, `app` and `cron` stay down |
-| `setup` and `mongo-rs-init` re-run on every dependent start              | run once                               |
+| podman-compose 1.6 (latest), run whole on the production file                   | Docker Compose behind `podman compose` |
+| ------------------------------------------------------------------------------- | -------------------------------------- |
+| managed mode (`COMPOSE_PROFILES=`) crashes: `required: false` is ignored        | starts                                 |
+| a failed `setup` still starts `app` and `cron`                                  | `up` fails, `app` and `cron` stay down |
+| `memswap_limit` on `app` is ignored (fix merged upstream, PR #1574, unreleased) | honoured: no swap beyond `mem_limit`   |
+| `setup` and `mongo-rs-init` re-run on every dependent start                     | run once                               |
 
 Set it up once per host:
 

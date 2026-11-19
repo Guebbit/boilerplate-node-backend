@@ -277,6 +277,25 @@ services:
 
         <<: *hardening
 
+        # Chromium (the PDF render) is the one thing in `app` that forks and grows, so the container
+        # gets the ceilings the other services do not need. Measured 2026-11-19 in this hardened
+        # shape (read-only, noexec /tmp), 2 concurrent renders of a 300-row invoice, with a 600 MB
+        # Node heap beside them (lane 109 measured 563-676 MB idle): no OOM at 1g, peak 1.0 GB
+        # counting reclaimable page cache; 1.5g runs without reclaim and 3x faster.
+        #   mem_limit      raise to 1.5g if renders get slow under load.
+        #   memswap_limit  equal to mem_limit: no swap, so a runaway browser is killed instead of
+        #                  thrashing the host. podman-compose 1.6.0 ignores it (fix merged upstream,
+        #                  PR #1574, unreleased); docker compose honours it.
+        #   pids_limit     a fork bomb or a leaking renderer hits a wall, not the host's PID table.
+        mem_limit: 1g
+        memswap_limit: 1g
+        pids_limit: 256
+        # Overrides `x-hardening`'s 64m `/tmp` for `app` only. Measured peak under 2 renders: 9 MB
+        # (Chromium's profile, `--disable-dev-shm-usage` shared memory); the rest is headroom for
+        # upload staging beside them. tmpfs pages count against `mem_limit`.
+        tmpfs:
+            - /tmp:mode=1777,size=256m,noexec,nosuid
+
         volumes:
             # Uploaded images. WITHOUT this the container's own filesystem holds them and a
             # redeploy loses every one. A named volume is the stopgap; it still pins the deployment

@@ -15,6 +15,8 @@ Part of [Docker & Podman](./docker-and-podman.md): every container, grouped, and
 | --------- | -------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `app`     | `docker/Dockerfile` (node:26.13.1-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `cache`, `limits`, `queue`, `otel-collector`. | [Runtime](../understand/runtime.md) |
 
+In production `app` also carries the ceilings Chromium needs (`mem_limit: 1g`, `memswap_limit: 1g`, `pids_limit: 256`, a 256 MB `noexec` tmpfs at `/tmp`): the measurement and the reasons are in [Email & PDF rendering](../understand/email-and-rendering.md#pdf-pipeline). Under podman-compose `memswap_limit` is ignored; see [the compose provider](./docker-and-podman-podman.md#the-compose-provider-behind-podman-compose).
+
 ### Scheduler
 
 | Container | Image               | Port(s) | Role                                                                                                                    | Read next                           |
