@@ -150,6 +150,16 @@ const depth = (name: string): Promise<number> =>
         channel.checkQueue(name).then((ok) => ok.messageCount)
     );
 
+/**
+ * Consumers bound to a queue, read live like {@link depth}.
+ *
+ * @param name - the queue
+ */
+const consumers = (name: string): Promise<number> =>
+    (inspector ??= rawChannel()).then((channel) =>
+        channel.checkQueue(name).then((ok) => ok.consumerCount)
+    );
+
 /** One delivery a handler saw. */
 interface Seen {
     /** The decoded message body the handler received. */
@@ -450,5 +460,93 @@ describe('a connection dropped by the broker', () => {
 
             expect(adapter.queueState()).toBe('ready');
             expect(seen.map(({ payload }) => payload)).toContainEqual({ n: 2 });
+        }));
+});
+
+/**
+ * Points the app's database `start` at the suite's shared in-memory Mongo (`globalSetup` publishes
+ * it as `NODE_TEST_MONGO_URI`) through the suite's own connect helper. The real `start` hands the
+ * driver no `os` adapter, which jest's module system needs (`tests/support/database.ts`), and this
+ * config runs no `setup.ts` that would map the URI. Needs `jest.resetModules()` before each import
+ * of the app so the helper and the app share one mongoose.
+ */
+const useSharedMongo = (): void => {
+    jest.doMock('@infrastructure/runtime/database', () => ({
+        ...jest.requireActual<object>('@infrastructure/runtime/database'),
+        start: () =>
+            jest.requireActual<typeof import('@tests/database')>('@tests/database').connect()
+    }));
+};
+
+/**
+ * Deletes a work queue and its retry and dead-letter companions, so a case on a fixed queue name
+ * starts from nothing: a message a failed earlier run left behind would otherwise break its counts.
+ * Deleting a queue that does not exist is not an error in RabbitMQ.
+ *
+ * @param adapter - the adapter module, for the companions' names
+ * @param queue - the work queue
+ */
+const clearQueue = (adapter: QueueAdapter, queue: string): Promise<void> =>
+    rawChannel().then((channel) =>
+        Promise.all(
+            [queue, adapter.retryQueueOf(queue), adapter.deadLetterQueueOf(queue)].map((name) =>
+                channel.deleteQueue(name)
+            )
+        ).then(() => undefined)
+    );
+
+describe('the web boot and the worker boot, as two processes on a real broker', () => {
+    /**
+     * The split `src/worker.ts` makes, end to end: `createApp().boot()` only publishes, so a mail
+     * job it sends waits with no consumer; `createWorker().boot()` (a second module registry, so a
+     * second connection, as a second process would have) binds the consumer and drains it.
+     */
+    it('leaves the mail queue unconsumed after the web boot, and takes the job once the worker boots', () =>
+        inBrokerEnvironment(async () => {
+            /** The `stop` of each process this case booted, run in `finally` so a failure leaks none. */
+            const stops: (() => Promise<void>)[] = [];
+            useSharedMongo();
+            try {
+                jest.resetModules();
+                const web = await import('../../src/app');
+                const webQueue = await import('@infrastructure/adapters/queue');
+                const webMailer = await import('@infrastructure/adapters/mailer');
+                const { resetRequestEmail } = await import('@modules/account');
+                adapters.push(webQueue);
+                const queue = webQueue.EMAIL_QUEUE;
+                await clearQueue(webQueue, queue);
+                const app = web.createApp();
+                stops.push(app.stop);
+                await app.boot();
+                await waitUntil(() => webQueue.queueState() === 'ready', 'the web copy to connect');
+
+                const mail = resetRequestEmail('en', 'Ana', 'token');
+                await webMailer.enqueueEmail(
+                    { to: 'ana@example.com', subject: mail.subject },
+                    mail.template,
+                    mail.data
+                );
+
+                expect(await depth(queue)).toBe(1);
+                expect(await consumers(queue)).toBe(0);
+
+                jest.resetModules();
+                const { createWorker } = await import('@app/worker-process');
+                const workerQueue = await import('@infrastructure/adapters/queue');
+                adapters.push(workerQueue);
+                const worker = createWorker();
+                stops.push(worker.stop);
+                await worker.boot();
+                await waitUntil(async () => (await consumers(queue)) === 1, 'the worker to bind');
+                await waitUntil(
+                    async () => (await depth(queue)) === 0,
+                    'the worker to take the job'
+                );
+
+                expect(await consumers(queue)).toBe(1);
+            } finally {
+                jest.dontMock('@infrastructure/runtime/database');
+                await Promise.all(stops.map((stop) => stop().catch(() => undefined)));
+            }
         }));
 });

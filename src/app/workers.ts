@@ -1,12 +1,13 @@
 /**
  * @module
- * Queue-consumer registration for this build. This file is `app`; the email/image handlers it
- * wires directly are `infrastructure`, because sending an email and digesting an upload make sense
- * in an application with no modules at all — naming those two queues is the assembly decision. A
- * module-owned queue (webhooks' `worker.webhook.deliver`) is not named here at all: it is
- * collected from every enabled module's own manifest instead, via
- * `resolveConsumers` — see `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call
- * `consumeFromQueue` itself.
+ * Queue-consumer registration for this build, run by the worker process (`src/worker.ts`).
+ *
+ * This file is `app`; the email/image handlers it wires directly are `infrastructure`, because
+ * sending an email and digesting an upload make sense in an application with no modules at all —
+ * naming those two queues is the assembly decision. A module-owned queue (webhooks'
+ * `worker.webhook.deliver`) is not named here at all: it is collected from every enabled module's
+ * own manifest instead, via `resolveConsumers` — see `ModuleConsumer` (`@kernel/registry.ts`) for
+ * why a module cannot call `consumeFromQueue` itself.
  *
  * @see docs/understand/rabbitmq.md#where-the-code-lives
  */
@@ -24,19 +25,28 @@ import { resolveImageTargets, resolveConsumers } from '@kernel/registry';
 import { enabledModules } from '../modules';
 
 /**
- * Register all queue consumers. Called once during app startup — no-op when RabbitMQ is disabled.
+ * Tell the image pipeline where each module wants its finished image written back.
+ *
+ * Needed by BOTH process roles, with or without a broker: the worker runs the digest job, and
+ * the web process runs it inline when the broker is unconfigured or down. This is the one place
+ * allowed to see every module's `imageTargets` (see `ImageWriteback` in
+ * `infrastructure/adapters/image.worker.ts` for why the pipeline cannot resolve this itself).
  */
-export const registerWorkers = (): Promise<void> => {
-    /**
-     * Wired unconditionally, not gated behind `isQueueEnabled()` below: this is the one place
-     * allowed to see every module's `imageTargets` (see `ImageWriteback` in
-     * `infrastructure/adapters/image.worker.ts` for why the worker cannot resolve this itself),
-     * and registering it costs nothing when there is no broker to deliver a job in the first place.
-     */
+export const registerImageWriteback = (): void => {
     const imageTargets = resolveImageTargets(enabledModules);
     registerImageWritebackResolver((collection) => imageTargets[collection]?.writeback);
+};
 
-    if (!isQueueEnabled()) return Promise.resolve();
+/**
+ * Register all queue consumers. Called once by the worker process (`src/worker.ts`), never by the
+ * web process: the API publishes jobs, the worker takes them. No-op when RabbitMQ is disabled.
+ */
+export const registerWorkers = (): Promise<void> => {
+    if (!isQueueEnabled()) {
+        // Stryker disable next-line all
+        logger.info('Queue disabled: this worker has nothing to consume.');
+        return Promise.resolve();
+    }
 
     // Stryker disable next-line all
     logger.info('Registering queue workers...');

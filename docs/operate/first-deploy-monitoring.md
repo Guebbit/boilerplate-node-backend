@@ -81,7 +81,7 @@ Alloy is the one container in the profile that reaches past its own files.
   environment, which here means `_FILE` paths and no secret value (bar `OTEL_EXPORTER_OTLP_HEADERS`, if
   you set it: [OpenTelemetry](opentelemetry.md#configuration)): the secrets are
   [files in `clients/<name>/secrets/`](first-deploy.md#secrets), bind-mounted, and never under that
-  directory. `docker/deploy-drill.sh` inspects `app`, `cron` and `setup` for a plain value.
+  directory. `docker/deploy-drill.sh` inspects `app`, `worker`, `cron` and `setup` for a plain value.
 - **So:** it sits inside the client's trust domain, like the host's root. **One client per machine** is
   the supported shape ([tenancy](../understand/tenancy.md), the README's Silo line).
 - **Two stacks on one host** ([Two Client Stacks](two-client-stacks.md)): with `monitoring` on, each

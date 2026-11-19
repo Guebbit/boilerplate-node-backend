@@ -238,9 +238,9 @@ empty and a download answers `404 ORDER_CREDIT_NOTE_NOT_ISSUED` (a stranger gets
 flowchart TD
     D["GET …/invoice or …/credit-notes/{id}"] --> S{"stored copy?"}
     S -- "yes" --> R["stream the file"]
-    S -- "no" --> Q{"render slot free,<br/>or room in the queue (20)?"}
+    S -- "no" --> Q{"render slot free,<br/>or room in the queue (10)?"}
     Q -- "no" --> B["503 + Retry-After<br/>(nothing started)"]
-    Q -- "yes" --> C["Chromium render<br/>(20 s total, then killed)"]
+    Q -- "yes" --> C["Chromium render<br/>(30 s total, then killed)"]
     C --> W["write tmp/storage/documents<br/>(temp file + rename)"]
     W --> R
 ```
@@ -258,9 +258,9 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
 - **Plaintext on disk, accepted in writing:** the file holds personal and financial data and is not
   encrypted, like the Mongo data files; at-rest protection is the host's
   ([Secrets at rest](../understand/defences/crypto-and-secrets.md#secrets-at-rest)).
-- **Bounded renders.** At most two Chromium processes run at once; up to 20 more renders wait; the
-  21st is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
-  held connections a burst can grow at will. One render has 20 seconds in all (launch, load,
+- **Bounded renders.** At most two Chromium processes run at once; up to 10 more renders wait; the
+  11th is refused at once with `503` and `Retry-After`, because an unbounded queue is memory and
+  held connections a burst can grow at will. One render has 30 seconds in all (launch, load,
   print): past it the browser is closed and the slot freed, and a hung Chromium cannot hold every
   render behind it.
 

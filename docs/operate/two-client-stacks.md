@@ -58,7 +58,7 @@ docker compose --env-file "clients/acme/.env" -f compose.yaml -f compose.product
 `build app` first, because `setup` and `cron` run the image it builds. Then one `up -d` brings up
 everything in the right order — `database`'s own entrypoint generates the
 replica set's keyFile, `mongo-rs-init` initiates the set, `setup` runs `db:sync` and
-`access:bootstrap` once that succeeds, then `app`/`cron` start.
+`access:bootstrap` once that succeeds, then `app`/`worker`/`cron` start.
 
 **A fresh stack has an organisation but no admin** — every signup is a `customer`, on purpose (a
 race to be first is a known vulnerability pattern). Sign up through the app once, then the

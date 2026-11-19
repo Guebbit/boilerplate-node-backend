@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Boots the production image against a real Mongo and proves two things a unit test cannot:
-#   1. the image starts fail-closed config included, and `/livez` answers;
+#   1. the image starts fail-closed config included, and `/livez` answers, for the web entry and
+#      the worker entry both;
 #   2. the runtime user (`node`) cannot write under `src/` — the code is root-owned.
 #
 # Usage:  docker build -f docker/Dockerfile --target runtime -t boot-check . && docker/boot-check.sh boot-check
@@ -13,12 +14,13 @@ suffix="$$"
 network="boot-check-net-${suffix}"
 mongo="boot-check-mongo-${suffix}"
 app="boot-check-app-${suffix}"
+worker="boot-check-worker-${suffix}"
 port="${BOOT_CHECK_PORT:-3999}"
 secrets="$(mktemp -d)"
 
 # Tears everything down, whatever happened above.
 cleanup() {
-    docker rm -f "$app" "$mongo" >/dev/null 2>&1 || true
+    docker rm -f "$app" "$worker" "$mongo" >/dev/null 2>&1 || true
     docker network rm "$network" >/dev/null 2>&1 || true
     rm -rf "$secrets"
 }
@@ -37,35 +39,42 @@ docker network create "$network" >/dev/null
 mongo_image="$(sed -n -E 's/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p' "$(dirname "$0")/../compose.yaml" | head -1)"
 docker run -d --name "$mongo" --network "$network" "$mongo_image" >/dev/null
 
+# What `app` and `worker` both run with: the same image reads the same environment.
+run_args=(
+    --network "$network"
+    -v "$secrets:/run/secrets:ro"
+    -e NODE_ENV=production
+    -e NODE_DB_URI="mongodb://${mongo}:27017/api"
+    -e NODE_URL=https://api.example.com
+    -e NODE_FRONTEND_URL=https://shop.example.com
+    -e NODE_CORS_ORIGIN=https://shop.example.com
+    -e NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie
+    -e NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access
+    -e NODE_TOKEN_REFRESH_FILE=/run/secrets/token_refresh
+    -e NODE_TOTP_ENCRYPTION_KEY_FILE=/run/secrets/totp
+    -e NODE_PII_ENCRYPTION_KEY_FILE=/run/secrets/pii
+    -e NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE=/run/secrets/webhook
+    -e NODE_PSEUDONYM_KEY_FILE=/run/secrets/pseudonym
+    -e NODE_METRICS_TOKEN_FILE=/run/secrets/metrics
+    -e NODE_LEGAL_COUNTRY=IT
+    -e NODE_SHOP_TIMEZONE=Europe/Rome
+    -e NODE_LEGAL_NAME="Boot Check S.r.l."
+    -e NODE_LEGAL_STREET="Via Roma 1"
+    -e NODE_LEGAL_CITY=Bologna
+    -e NODE_LEGAL_ZIP=40121
+    -e NODE_SUPPORT_EMAIL=support@example.com
+    -e NODE_LEGAL_PHONE="+39 051 555 0100"
+    -e NODE_VAT_RATE_DEFAULT=0.22
+    -e NODE_VAT_RATE_REDUCED=0.10
+)
+
 # No `--read-only` here, unlike the production compose: that flag alone would make the write check
 # below pass, and this check is about who OWNS the code, not about the mount.
-docker run -d --name "$app" --network "$network" \
-    -p "127.0.0.1:${port}:3000" \
-    -v "$secrets:/run/secrets:ro" \
-    -e NODE_ENV=production \
-    -e NODE_DB_URI="mongodb://${mongo}:27017/api" \
-    -e NODE_URL=https://api.example.com \
-    -e NODE_FRONTEND_URL=https://shop.example.com \
-    -e NODE_CORS_ORIGIN=https://shop.example.com \
-    -e NODE_DEVICE_COOKIE_SECRET_FILE=/run/secrets/device_cookie \
-    -e NODE_TOKEN_ACCESS_FILE=/run/secrets/token_access \
-    -e NODE_TOKEN_REFRESH_FILE=/run/secrets/token_refresh \
-    -e NODE_TOTP_ENCRYPTION_KEY_FILE=/run/secrets/totp \
-    -e NODE_PII_ENCRYPTION_KEY_FILE=/run/secrets/pii \
-    -e NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE=/run/secrets/webhook \
-    -e NODE_PSEUDONYM_KEY_FILE=/run/secrets/pseudonym \
-    -e NODE_METRICS_TOKEN_FILE=/run/secrets/metrics \
-    -e NODE_LEGAL_COUNTRY=IT \
-    -e NODE_SHOP_TIMEZONE=Europe/Rome \
-    -e NODE_LEGAL_NAME="Boot Check S.r.l." \
-    -e NODE_LEGAL_STREET="Via Roma 1" \
-    -e NODE_LEGAL_CITY=Bologna \
-    -e NODE_LEGAL_ZIP=40121 \
-    -e NODE_SUPPORT_EMAIL=support@example.com \
-    -e NODE_LEGAL_PHONE="+39 051 555 0100" \
-    -e NODE_VAT_RATE_DEFAULT=0.22 \
-    -e NODE_VAT_RATE_REDUCED=0.10 \
-    "$image" >/dev/null
+docker run -d --name "$app" -p "127.0.0.1:${port}:3000" "${run_args[@]}" "$image" >/dev/null
+
+# The worker entry, same image: it must come up and answer its own loopback `/livez`. No broker is
+# configured, so it consumes nothing; this proves the entry boots under the production config gate.
+docker run -d --name "$worker" "${run_args[@]}" "$image" node --import tsx src/worker.ts >/dev/null
 
 # Up to 90 s for the process to answer `/livez` (liveness only: never a dependency).
 alive=0
@@ -89,3 +98,19 @@ if docker exec "$app" sh -c 'touch /app/src/.boot-check-write 2>/dev/null'; then
     exit 1
 fi
 echo "boot-check: /app/src is not writable by $(docker exec "$app" id -un)"
+
+# The worker answers `/livez` on its own loopback (inside the container: the image has no curl).
+worker_alive=0
+for _ in $(seq 1 45); do
+    if docker exec "$worker" node -e "fetch('http://127.0.0.1:3000/livez').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+        worker_alive=1
+        break
+    fi
+    sleep 2
+done
+if [ "$worker_alive" != 1 ]; then
+    echo "boot-check: the worker's /livez never answered. Container log:" >&2
+    docker logs "$worker" >&2 || true
+    exit 1
+fi
+echo "boot-check: the worker's /livez answered"

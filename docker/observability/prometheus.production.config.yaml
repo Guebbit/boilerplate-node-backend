@@ -37,6 +37,22 @@ scrape_configs:
             target_label: instance
             replacement: api
 
+    # The queue worker: the same scrape and token, its own port (`NODE_WORKER_PORT`, a literal here
+    # too). Two alert counters (`queue_jobs_dead_lettered_total`, `webhook_delivery_attempts_total`)
+    # move only in the worker, so without this job `QueueJobsParked` and
+    # `WebhookDeliveriesFailingEverywhere` would never fire.
+    - job_name: worker
+      metrics_path: /observability/metrics
+      authorization:
+          type: Bearer
+          credentials_file: /run/secrets/metrics_token
+      static_configs:
+          - targets: ['worker:3010']
+      relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: worker
+
     # Prometheus and Alertmanager themselves: the `alerting.rules` in prometheus.infra-rules.yaml
     # read these (failed notifications, rule evaluation errors). Nothing else would notice either
     # one misbehaving.

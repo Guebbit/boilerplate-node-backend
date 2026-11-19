@@ -10,11 +10,15 @@
  * install time and expects an externally provided browser binary. That is the right choice for
  * container images, where the base image installs chromium via the package manager.
  */
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
 import type { Browser, HTTPRequest, PDFOptions } from 'puppeteer-core';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
+import { logger } from '@infrastructure/adapters/logger';
 import { pdfConfig } from '@infrastructure/adapters/config';
 
 /** A4 portrait — the default for invoices. Override per call when a document needs otherwise. */
@@ -26,7 +30,7 @@ const DEFAULT_PDF_OPTIONS: PDFOptions = { format: 'A4' };
  * A function rather than a constant so the configuration is read at call time — which keeps tests
  * able to point the path elsewhere after this module has been imported.
  */
-const launchOptions = () => ({
+const launchOptions = (home: string) => ({
     /**
      * Path to the Chromium binary. Must be set (or match the fallback) because puppeteer-core
      * ships no browser of its own; the fallback is the Alpine/Debian package location.
@@ -37,6 +41,16 @@ const launchOptions = () => ({
      * never finishes. https://pptr.dev/api/puppeteer.launchoptions
      */
     timeout: RENDER_TIMEOUT_MS,
+    /**
+     * Chromium's crash handler keeps its database under `$HOME`. The production image runs on a
+     * read-only filesystem where the `node` user's home is not writable, and the browser then dies
+     * at launch ("chrome_crashpad_handler: --database is required", no flag turns the handler off).
+     * HOME is a directory made for this one render, removed after it: a crash dump can hold the
+     * page being printed, and must not outlive the render or sit in a /tmp other renders share.
+     * https://pptr.dev/api/puppeteer.launchoptions (`env`)
+     */
+    // eslint-disable-next-line no-restricted-properties -- the child inherits the whole environment (PATH, locale, fonts); it is a pass-through to Chromium, not configuration this app reads
+    env: { ...process.env, HOME: home },
     args: [
         /**
          * Chromium's sandbox needs kernel privileges most containers do not grant, so it fails
@@ -45,7 +59,12 @@ const launchOptions = () => ({
          */
         '--no-sandbox',
         // Disables the setuid sandbox helper for the same reason.
-        '--disable-setuid-sandbox'
+        '--disable-setuid-sandbox',
+        /**
+         * Chromium's shared memory goes to `/tmp` instead of `/dev/shm`, which a container
+         * sizes at 64 MB by default: a large page prints blank or crashes the tab there.
+         */
+        '--disable-dev-shm-usage'
     ]
 });
 
@@ -62,7 +81,7 @@ const MAX_CONCURRENT_RENDERS = 2;
  * queue is memory and latency a burst can grow at will, and every request in it holds a
  * connection. The queue's depth times the render timeout below bounds how long the last one waits.
  */
-export const MAX_WAITING_RENDERS = 20;
+export const MAX_WAITING_RENDERS = 10;
 
 /**
  * The longest ONE render (launch, load, print) may take, in ms. A hung Chromium would otherwise
@@ -70,7 +89,7 @@ export const MAX_WAITING_RENDERS = 20;
  * per-step defaults (30 s each) are not a total. When it runs out the browser is closed and the
  * slot freed.
  */
-export const RENDER_TIMEOUT_MS = 20_000;
+export const RENDER_TIMEOUT_MS = 30_000;
 
 /** A render took longer than {@link RENDER_TIMEOUT_MS}; its browser was closed. */
 export class RenderTimeoutError extends Error {
@@ -155,9 +174,8 @@ export const renderHtmlToPdf = (
  * Wait for every render already started, up to `timeoutMs` — the shutdown step that keeps an
  * exiting process from orphaning the Chromium it launched.
  *
- * Why it exists: an invoice render is often fire-and-forget (the placed-order email attaches
- * one). A process that exits mid-render — a seeding script, a worker stopped on deploy — leaves
- * that browser running with no parent, and its ~120 MB temporary profile on disk. `close()` in
+ * Why it exists: a process that exits mid-render — a seeding script, a worker stopped on deploy —
+ * leaves that browser running with no parent, and its temporary profile on disk. `close()` in
  * `renderOnce` only runs if the process lives long enough to reach it.
  *
  * @param timeoutMs - the most it may wait; a hung render must not hold shutdown hostage
@@ -172,11 +190,41 @@ export const settleRenders = (timeoutMs: number): Promise<void> =>
  * @param html - the already-rendered HTML to print
  * @param pdfOptions - `page.pdf()` geometry options
  */
-const renderOnce = (html: string, pdfOptions: PDFOptions): Promise<Uint8Array> =>
+const renderOnce = (html: string, pdfOptions: PDFOptions): Promise<Uint8Array> => {
+    /**
+     * The render's own HOME (see `launchOptions`), removed however the render ends. Synchronous on
+     * purpose: one mkdir and one recursive delete, microseconds beside launching a browser.
+     */
+    const home = mkdtempSync(path.join(tmpdir(), 'render-'));
     // `launch` spawns the Chromium process and connects over the DevTools protocol.
-    puppeteer
-        .launch(launchOptions())
-        .then((browser) => withDeadline(browser, printIn(browser, html, pdfOptions)));
+    return puppeteer
+        .launch(launchOptions(home))
+        .then((browser) => withDeadline(browser, printIn(browser, html, pdfOptions)))
+        .finally(() => removeHome(home));
+};
+
+/**
+ * Delete a render's HOME, and never let that replace the render's own answer.
+ *
+ * On the deadline path the browser's close is NOT awaited (see {@link withDeadline}), so Chromium
+ * may still be shutting down and writing here: the delete can fail (ENOTEMPTY, EBUSY). A leftover
+ * directory in `/tmp` is a nuisance, not the render's failure, so it is logged and the PDF, or the
+ * {@link RenderTimeoutError}, still goes to the caller. `force` covers an already-missing dir.
+ *
+ * @param home - the directory made for this render
+ */
+const removeHome = (home: string): void => {
+    // eslint-disable-next-line no-restricted-syntax -- a synchronous rmSync throw is contained so it cannot replace the render's own answer
+    try {
+        rmSync(home, { recursive: true, force: true });
+    } catch (error) {
+        logger.warn({
+            message: 'PDF render left its temporary HOME behind.',
+            home,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
 
 /**
  * Race a render against {@link RENDER_TIMEOUT_MS}, and close the browser however it ends.

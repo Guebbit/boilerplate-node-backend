@@ -375,6 +375,15 @@ export interface AppModule {
     mounts?: readonly RouteMount[];
 
     /**
+     * What this module serves from the WORKER process (`src/worker.ts`), on the worker's own port.
+     * Only what an operator or a scraper must reach there: today, `observability`'s Prometheus
+     * scrape, because two alert counters move only in the worker. Never a domain route: the worker
+     * has no request pipeline (no session, no rate limit, no locale), so a route that needs one
+     * belongs in `mounts`.
+     */
+    workerMounts?: readonly RouteMount[];
+
+    /**
      * Attach this module's domain-event handlers. Called once at boot, after every module is known,
      * so a handler may safely reference any sibling.
      */

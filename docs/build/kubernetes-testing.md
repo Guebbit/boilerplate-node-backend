@@ -66,13 +66,13 @@ npm run k8s:rig -- run                                           # up, drill, th
 npm run k8s:rig -- up                                                # or step by step, by hand
 ```
 
-| Command               | What it does                                                                                                                                                                        |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `up`                  | Builds `localhost/boilerplate-app:rig`, `podman save`s it into the node (`kind load image-archive`), makes random secrets, applies the data tier and `setup`, then `app` and `cron` |
-| `run`                 | `up`, `drill`, then `down` through an exit trap: the cluster is deleted after a failed step or a Ctrl-C                                                                             |
-| `drill`               | A rolling restart under steady traffic, then a stream across pods (below)                                                                                                           |
-| `down`                | Deletes the cluster and `tmp/k8s-rig`. Leaves nothing in `podman ps -a`                                                                                                             |
-| `K8S_RIG_PORT=3099 …` | A different host port. Default `3072`, inside this repo's block ([ports](./pairing-and-ports.md#host-port-map))                                                                     |
+| Command               | What it does                                                                                                                                                                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `up`                  | Builds `localhost/boilerplate-app:rig`, `podman save`s it into the node (`kind load image-archive`), makes random secrets, applies the data tier and `setup`, then `app` and `cron` (the kind overlay runs no `worker`: the rig has no broker) |
+| `run`                 | `up`, `drill`, then `down` through an exit trap: the cluster is deleted after a failed step or a Ctrl-C                                                                                                                                        |
+| `drill`               | A rolling restart under steady traffic, then a stream across pods (below)                                                                                                                                                                      |
+| `down`                | Deletes the cluster and `tmp/k8s-rig`. Leaves nothing in `podman ps -a`                                                                                                                                                                        |
+| `K8S_RIG_PORT=3099 …` | A different host port. Default `3072`, inside this repo's block ([ports](./pairing-and-ports.md#host-port-map))                                                                                                                                |
 
 **The rig keeps its own kubeconfig** (`tmp/k8s-rig/kubeconfig`) and every `kubectl` also names
 `--context kind-boilerplate-rig`. `kind create` would otherwise add the context to `~/.kube/config` and make it
