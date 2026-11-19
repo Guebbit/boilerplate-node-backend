@@ -380,6 +380,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     findOverRefunded: (limit: number) => Promise<PaymentDocument[]>;
+    findRefundedPastPaid: (limit: number) => Promise<PaymentDocument[]>;
     settleRefund: (
         paymentId: string,
         refundId: string,
@@ -733,6 +734,25 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 provider: { $ne: MANUAL_PROVIDER },
                 // First, so the compound index on `refunds.status` serves the scan.
                 'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
+                $expr: { $gt: ['$amountRefunded', '$amount'] }
+            })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .exec(),
+
+    /**
+     * Payments whose refunds add up to more than was paid, whether or not any refund is still
+     * open: money really moved past the total (a dashboard refund beside one recorded here as paid
+     * outside), and nothing held back is left to show it. Separate from {@link findOverRefunded},
+     * which finds the open record such an overshoot starves and rides the same index.
+     *
+     * @param limit - how many to return at most
+     */
+    findRefundedPastPaid: (limit: number) =>
+        paymentModel
+            .find({
+                // First, so the compound index on `refunds.status` serves the scan: only a payment that settled something can be past what was paid.
+                'refunds.status': RefundStatus.succeeded,
                 $expr: { $gt: ['$amountRefunded', '$amount'] }
             })
             .sort({ updatedAt: 1 })

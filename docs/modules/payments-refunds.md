@@ -134,7 +134,7 @@ only offered when the refusal PROVES the money did not move.
 | The refusal                                                   | Money moved? | Retried?           | Hand settle                                                                                       | Attention kind                      |
 | ------------------------------------------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `declined`, `expired_or_canceled_card`, `lost_or_stolen_card` | no           | never (final)      | yes                                                                                               | `refused_refund`, at once           |
-| `provider_removed` (the adapter is no longer installed)       | no           | never (final)      | yes                                                                                               | `refused_refund`, at once           |
+| `provider_removed` (adapter gone, or no provider reference)   | no           | never (final)      | yes                                                                                               | `refused_refund`, at once           |
 | `disputed` (the buyer's bank took the money back)             | no (already) | never (final)      | once no dispute is open (also void), see [Disputes](./payments-disputes-and-adapters.md#disputes) | `refused_refund`, at once           |
 | `insufficient_funds` (the shop's provider balance is short)   | no           | yes, growing delay | yes                                                                                               | `stale_refund`, after the threshold |
 | `provider_unavailable`, `unknown`                             | maybe        | yes, growing delay | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                                | `stale_refund`, after the threshold |
@@ -280,6 +280,58 @@ flowchart TD
   for a holder of `create:Refund`). A refund it cannot record (another currency) stays unrecorded and is
   announced again on each run: staff record it themselves and close the to-do, and a later re-sync or
   refund on that payment reminds them again, because the books still lack it.
+
+### A refund already paid outside the app {#paid-outside}
+
+Staff sometimes give the money back at the counter or by transfer. A refund sent to the card on top
+would pay the buyer twice, so the refund request carries the fact: `paidOutside { method, reference? }`
+(`method` is the contract's `OutsideMoneyMethod`: `cash`, `bank_transfer`, `other`). It is staff's
+word; the app records it and does not police it (the buyer's agreement to another means of payment,
+Directive 2011/83/EU Art. 13(1), is the shop's call at the counter).
+
+```mermaid
+flowchart TD
+    R[POST /payments/id/refunds with paidOutside] --> C[same checks: amount, open dispute, what is left]
+    C --> T[one transaction]
+    T --> O[open the record]
+    O --> S[settle it by hand: succeeded, settledByHand, paidOutside on the record]
+    S --> E[order stamp, two timeline rows, payment.refunded in the outbox]
+    E --> M[credit note, buyer mail, webhook as for any refund]
+    T -.->|never| P[the provider]
+```
+
+- **Born settled.** The record opens and settles in ONE transaction (`openSettledOutside`), so
+  nothing ever sees it `pending`: the sweep has nothing to claim and the provider is never asked.
+  It works on a card payment and on a hand-paid one alike.
+- **No owed-by-hand to-do.** A record born settled is owed to nobody, so `openRefund` skips
+  `payment.refund_owed_by_hand` when `paidOutside` is set. It would otherwise open a to-do that
+  closes at once.
+- **Audited** as `admin.payment.refund_settled_by_hand`, under the operator.
+- **The reference is staff only**, like `providerRefundRef`: the payer's read of the refund shows the
+  method and no reference.
+- **A refund sent too early is staff's word.** Ticking it before the money leaves tells the buyer
+  "refunded" early; the house rule is to trust staff.
+- **The same door, for a return.** `POST /returns/{id}/receive` takes the same field. See
+  [Returns](./returns.md#what-the-customer-gets-back).
+- **An overshoot is told, not blocked.** The amount is capped at what is left. If a dashboard refund
+  then lands on top, the total passes what was paid and the attention list shows an `over_refunded`
+  row for the payment (`amount` the total, `exceedsBy` the excess). The money really moved, so
+  nothing is held; the row never clears, because no settled refund can be taken back, and no dismiss
+  exists.
+
+### The actions on a payment {#payment-actions}
+
+Each response that carries a payment, the answer to every write included, carries `PaymentActions`,
+computed per caller so a client never decides the next step itself:
+
+| Action               | Offered when                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pay`                | the buyer may confirm, or take a waiting transfer over with a card when a provider is configured              |
+| `sync`               | an in-flight payment may be finished at the provider; narrower than its route, never true together with `pay` |
+| `refund`             | `create:Refund`, a `succeeded` payment and something left; an open refund counts against what is left         |
+| `settleRefundByHand` | the ids of the records a caller may mark returned                                                             |
+| `cancelRefund`       | the ids of the records a caller may void, see [Cancelling a refund](#cancelling-a-refund)                     |
+| `syncRefunds`        | a card payment that succeeded, for a holder of `create:Refund`                                                |
 
 ### Cancelling a refund {#cancelling-a-refund}
 

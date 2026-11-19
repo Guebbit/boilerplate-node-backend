@@ -17,7 +17,7 @@ import type { PaymentDocument, RefundRecord } from './model';
 /** The stored fields only a caller holding `display:Payment` is sent. */
 interface StaffFields {
     providerRef?: string;
-    refunds: Pick<RefundRecord, 'providerRefundRef' | 'failureReason'>[];
+    refunds: Pick<RefundRecord, 'providerRefundRef' | 'failureReason' | 'paidOutside'>[];
 }
 
 /**
@@ -26,9 +26,19 @@ interface StaffFields {
  */
 const staffFieldsOf = (raw: Pick<PaymentDocument, 'providerRef' | 'refunds'>): StaffFields => ({
     ...(raw.providerRef ? { providerRef: raw.providerRef } : {}),
-    refunds: raw.refunds.map(({ providerRefundRef, failureReason }) => ({
+    refunds: raw.refunds.map(({ providerRefundRef, failureReason, paidOutside }) => ({
         ...(providerRefundRef ? { providerRefundRef } : {}),
-        ...(failureReason ? { failureReason } : {})
+        ...(failureReason ? { failureReason } : {}),
+        // Whole, with the reference the payer's wire left out. Copied field by field: the stored
+        // value is a subdocument, and spreading it would carry its internals.
+        ...(paidOutside
+            ? {
+                  paidOutside: {
+                      method: paidOutside.method,
+                      ...(paidOutside.reference ? { reference: paidOutside.reference } : {})
+                  }
+              }
+            : {})
     }))
 });
 

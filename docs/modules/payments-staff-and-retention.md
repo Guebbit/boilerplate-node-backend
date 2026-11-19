@@ -45,7 +45,7 @@ every label both ways.
 | `canceled`           | `canceled`                                                               |
 
 **What staff see that a payer does not.** `providerRef`, each refund's `providerRefundRef` and a
-failed refund's `failureReason`. The reason is a closed code (`declined`, `insufficient_funds`,
+failed refund's `failureReason`, and a refund's `paidOutside.reference`. The reason is a closed code (`declined`, `insufficient_funds`,
 `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_unavailable`, `unknown`, and `canceled`, which is not a refusal but a void by staff), Stripe's
 `failure_reason` shape. A provider adapter throws `PaymentProviderError(code, message)`; anything
 else is `unknown`. The provider's own wording goes to the log and is never stored. The fake
@@ -54,8 +54,10 @@ provider's `setFakeRefundFailure` simulates each code.
 `paymentService.methodMix` groups the payments that took money (`succeeded`) by
 method, provider and currency, for [`stats`](./stats.md).
 
-**Needs attention** lists six kinds (`PaymentAttentionKind`): a dispute the shop has to answer
-(`dispute_needs_response`, [Disputes](./payments-disputes-and-adapters.md#disputes)), and five that are an open refund record: a provider
+**Needs attention** lists seven kinds (`PaymentAttentionKind`): a dispute the shop has to answer
+(`dispute_needs_response`, [Disputes](./payments-disputes-and-adapters.md#disputes)), a payment
+refunded past what was paid with nothing open to blame (`over_refunded`: it names the payment, not a
+refund, and never clears, see [paid outside](./payments-refunds.md#paid-outside)), and five that are an open refund record: a provider
 refund open longer than `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), a refund the provider refused
 for good (`refused_refund`), a settled refund the bank took back (`reversed_refund`), a dashboard refund
 that took the room an open one counted on (`refund_exceeds_remaining`), and a refund owed by hand on a

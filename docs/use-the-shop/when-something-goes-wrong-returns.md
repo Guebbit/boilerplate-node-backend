@@ -56,7 +56,12 @@ A request is approved or declined. Close is for a return whose goods have arrive
 EUR could be sent_. Part of the payment had already gone back (a goodwill refund, a refund made in
 the provider's dashboard, a lost chargeback), so the refund could not be the whole amount. If it
 was _0.00_ sent, the return stays **received** and the buyer was **not** emailed that their money is
-back.
+back. The same happens when no payment stands behind the order at all.
+
+If you tick **Already paid outside the app** when you receive the goods and the payment has less
+left than the return owes, the refund is recorded for what is left and the return closes by itself.
+This to-do stays open: **Close return** is no longer offered, so once you have checked the rest,
+close the to-do yourself.
 
 **What to do.** Check whether the money that already went back was for this return. If it was, the
 buyer has what they are owed. If not, pay the rest outside the shop (it is not on the payment any

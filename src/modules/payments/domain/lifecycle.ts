@@ -133,7 +133,7 @@ export const FINAL_REFUND_FAILURES: readonly RefundFailureReason[] = [
     RefundFailureReason.expired_or_canceled_card,
     RefundFailureReason.lost_or_stolen_card,
     RefundFailureReason.provider_removed,
-    // A chargeback: the bank took the money back. Final; settled by hand only once a lost chargeback covers it.
+    // A chargeback: the bank took the money back. Final; offered for hand settlement (or a void) once no dispute is open.
     RefundFailureReason.disputed
 ];
 
@@ -224,7 +224,8 @@ const sameRecord = (a: RefundFacts, b: RefundFacts): boolean =>
     a === b || (a._id !== undefined && b._id !== undefined && String(a._id) === String(b._id));
 
 /**
- * Whether the provider holds this record's money: it settled, or it holds a provider refund id. A
+ * Whether this record's money has moved: it settled (at the provider, or by hand — a cash record
+ * counts too), or it holds a provider refund id. A
  * record whose last refusal was unclear is NOT counted: if it had gone through, the provider's list
  * would carry it under our record id and it would have settled. A reversed record is the opposite:
  * the money came back.
@@ -235,7 +236,8 @@ const mayHaveMoved = (refund: RefundFacts): boolean =>
     (refund.status === RefundStatus.succeeded || refund.providerRefundRef !== undefined);
 
 /**
- * By how much (minor units) an unsent open refund overshoots what the provider can still give back.
+ * By how much (minor units) an unsent open refund overshoots what can still go back, counting every
+ * record whose money moved (settled or in flight, however it was paid).
  * @param payment - the payment the refund sits on
  * @param refund - the refund record
  */
@@ -251,9 +253,9 @@ export const exceedsBy = (payment: RefundablePayment, refund: RefundFacts): Mone
     );
 
 /**
- * Whether an open refund the application never sent no longer fits: what the provider already holds
- * (settled or in flight, an outside refund imported included) plus this record is more than was
- * paid. Such a record is held unsent: the provider would refuse it, and staff decide.
+ * Whether an open refund the application never sent no longer fits: what has already moved
+ * (settled by the provider or by hand, in flight, an outside refund imported included) plus this
+ * record is more than was paid. Such a record is held unsent: the provider would refuse it, and staff decide.
  *
  * @param payment - the payment the refund sits on
  * @param refund - the refund record, by identity within `payment.refunds`

@@ -139,6 +139,7 @@
             "page": "pagina",
             "pageSize": "dimensione pagina",
             "paidFrom": "pagato dal",
+            "paidOutside": "pagato fuori dall'app",
             "paidTo": "pagato fino al",
             "password": "password",
             "passwordConfirm": "conferma password",

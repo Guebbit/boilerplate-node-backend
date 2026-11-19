@@ -33,6 +33,7 @@ import {
 } from '../domain';
 import {
     addMoney,
+    subtractMoney,
     NO_MONEY,
     padDecimal,
     toDecimalString,
@@ -205,6 +206,41 @@ const exceedingRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
     );
 
 /**
+ * The payments refunded past what was paid, as attention rows: one per payment, since no single
+ * refund is to blame. A payment an open record is already held for shows that row instead
+ * ({@link exceedingRows}), not both.
+ *
+ * @param payments - payments whose refunds add up to more than was paid
+ * @param held - ids of the payments whose open refund is already shown as exceeding what is left
+ */
+const overRefundedRows = (
+    payments: PaymentDocument[],
+    held: ReadonlySet<string>
+): PaymentAttentionItem[] =>
+    payments
+        .filter((payment) => !held.has(String(payment._id)))
+        .map((payment): PaymentAttentionItem => {
+            const refundedAt = payment.refunds
+                .filter((refund) => refund.status === 'succeeded')
+                .map((refund) => (refund.settledAt ?? refund.createdAt).getTime());
+            return {
+                kind: PaymentAttentionKind.over_refunded,
+                orderId: String(payment.orderId),
+                paymentId: String(payment._id),
+                amount: padDecimal(payment.amountRefunded, payment.currency),
+                currency: payment.currency,
+                exceedsBy: toDecimalString(
+                    subtractMoney(
+                        toMinorUnits(payment.amountRefunded, payment.currency),
+                        toMinorUnits(payment.amount, payment.currency)
+                    ),
+                    payment.currency
+                ),
+                since: new Date(Math.max(...refundedAt)).toISOString()
+            };
+        });
+
+/**
  * How much of a payment has been returned for good: its settled refunds that were not taken back.
  */
 const refundedForGood = (payment: PaymentDocument): string =>
@@ -251,7 +287,7 @@ const disputeRows = (payments: PaymentDocument[]): PaymentAttentionItem[] =>
 /**
  * Every problem still recorded on a payment, oldest first: refunds open past the threshold, refunds
  * the provider refused for good (at once), refunds the provider took back, refunds over the room
- * left, disputes awaiting an answer, and refunds owed by hand. A refund owed is always an open
+ * left, payments refunded past what was paid, disputes awaiting an answer, and refunds owed by hand. A refund owed is always an open
  * record, so a fixed problem has closed it and is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
@@ -278,9 +314,11 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
         }),
         // An open refund an outside refund left no room for: shown once, as its own kind.
         paymentRepository.findOverRefunded(ATTENTION_LIMIT).then(exceedingRows),
+        // Refunds past what was paid with nothing held back: money moved, staff reconcile it.
+        paymentRepository.findRefundedPastPaid(ATTENTION_LIMIT),
         // A dispute the shop has to answer, with its deadline.
         paymentRepository.findWithOpenDisputes(ATTENTION_LIMIT).then(disputeRows)
-    ]).then(([stale, refused, manual, reversed, exceeding, disputes]) => {
+    ]).then(([stale, refused, manual, reversed, exceeding, pastPaid, disputes]) => {
         const held = new Set(exceeding.map((item) => item.refundId));
         const others = (row: RefundRow): boolean => !held.has(String(row.refund._id));
         return {
@@ -295,6 +333,7 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
                     refundAttention(row, PaymentAttentionKind.reversed_refund)
                 ),
                 ...exceeding,
+                ...overRefundedRows(pastPaid, new Set(exceeding.map((item) => item.paymentId))),
                 ...disputes,
                 ...manual.map((row) =>
                     refundAttention(row, PaymentAttentionKind.manual_refund_owed)

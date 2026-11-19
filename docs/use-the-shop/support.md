@@ -170,6 +170,12 @@ the reason, and — if they asked a few days ago — the day they asked. The ret
 to. No fresh login: nothing is paid until the goods arrive.
 → [Returns](../modules/returns.md#staff-open-a-return-for-the-buyer)
 
+**A buyer complains by phone or email, but wants nothing back yet.** That is a complaint, not a bank
+dispute: no money moved. Note it on the order (the staff note), then use the tool the outcome needs:
+broken goods, open the return as **Defective goods**; a change of mind in time, **Record withdrawal**;
+a gesture, a goodwill **Refund**. A bank dispute is different: it arrives from the provider.
+→ [A card dispute](./when-something-goes-wrong-refunds.md#card-dispute)
+
 ## A buyer withdraws by phone, email or letter {#withdraws-by-phone}
 
 The law accepts any clear statement, and counts it from the day it was **sent**, not the day you read

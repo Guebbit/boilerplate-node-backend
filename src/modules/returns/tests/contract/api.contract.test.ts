@@ -453,6 +453,43 @@ describe('POST /returns/{id}/receive', () => {
         });
     });
 
+    it('refuses paidOutside to a caller who may receive but not refund: 403, the return still awaiting its goods', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({ paidOutside: { method: 'cash' } });
+
+        expect(response.status).toBe(403);
+        const stored = await returnRepository.findById(id);
+        expect(stored?.status).toBe('approved');
+    });
+
+    it('takes paidOutside from a caller who may refund, and answers the return as for any receipt', async () => {
+        const { id } = await withdrawn();
+        const { bearer: adminBearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', adminBearer)
+            .send({ paidOutside: { method: 'bank_transfer', reference: 'CRO 1' } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.receivedAt).toEqual(expect.any(String));
+    });
+
+    it('refuses paidOutside with a method the contract does not name: 422', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/receive`)
+            .set('Authorization', warehouse)
+            .send({ paidOutside: { method: 'card' } });
+
+        expect(response.status).toBe(422);
+    });
+
     it('takes no body at all', async () => {
         const { warehouse, id } = await withdrawn();
 

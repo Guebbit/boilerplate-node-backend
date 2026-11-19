@@ -124,8 +124,9 @@ export const refundUnrecordedOpening = (
 });
 
 /**
- * A return asked for money and the payment could not give all of it. The return keeps what it
- * owes; staff check whether the earlier money was for this return and pay any rest outside the app.
+ * A return asked for money and the payment could not give all of it: part already went back another
+ * way, or no payment stands behind it. The return keeps what it owes; staff check whether the
+ * earlier money was for this return and pay any rest outside the app.
  *
  * @param short - the return and the two figures
  * @param short.returnId - the return, the record the to-do links to

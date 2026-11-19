@@ -419,8 +419,10 @@ paths:
                 when the goods are received and shown as `refundAmount`. If the payment provider
                 refuses, the return stays `received` and the refund is retried by the payment sweep;
                 the return closes when it lands. The answer is 200 either way: `received` means the
-                money is still owed (its refund record is already on the payment, follow it there
-                and on `GET /payments/attention`), `closed` means it went back. Sends `Idempotency-Key`-safe retries. Requires a
+                money is still owed — usually its refund record is already on the payment (follow it
+                there and on `GET /payments/attention`), but when the payment had nothing left to give
+                no record exists and staff are told by a to-do instead, to close the return by hand
+                once they have checked — and `closed` means it went back. Sends `Idempotency-Key`-safe retries. Requires a
                 session that has re-proved itself within the last few minutes — a valid-but-stale
                 token answers 401 with `errors[].code` `REAUTH_REQUIRED`.
             operationId: receiveReturn
@@ -824,6 +826,19 @@ components:
                         return's currency. Absent means none. More than the refund is worth is refused,
                         and so is any amount on a `defective` or `wrong_item` return (a guarantee remedy
                         is free of charge).
+                paidOutside:
+                    $ref: '../payments/openapi.yaml#/components/schemas/PaidOutside'
+                    description: >-
+                        Staff already gave the buyer's money back outside the application (cash, a bank
+                        transfer). The refund is recorded as paid by hand and no payment provider is
+                        asked, so a card is never refunded a second time; the credit note and the buyer's
+                        mail follow and the return closes in this step. It is staff's word: the refund
+                        should go back by the buyer's own means of payment unless they expressly agreed
+                        otherwise (Directive 2011/83/EU Art. 13(1)). Needs `create:Refund` as well as
+                        `receive:Return` (403 otherwise). Only a `refund` remedy takes it (422
+                        `RETURN_REMEDY_INVALID`), and not on a return whose refund the proof of sending
+                        already opened (409 `RETURN_REFUND_OPENED_ON_PROOF`). The amount is still capped at what
+                        the payment has left.
                 lines:
                     type: array
                     description: >-
