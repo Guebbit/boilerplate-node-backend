@@ -1,0 +1,27 @@
+# The local test cluster: `base`, the gateway component, and Envoy Gateway as the controller.
+# Needs the Envoy Gateway CRDs and controller installed first (k8s/rig.sh does: its pinned release,
+# checked against a sha256). Not for a real cluster: no TLS, a NodePort and a throwaway Mongo.
+# https://gateway.envoyproxy.io/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: boilerplate
+
+resources:
+    - ../../base
+    - gatewayclass.yaml
+    - envoyproxy.yaml
+
+components:
+    - ../../components/gateway
+
+# The component's Gateway names no class; this overlay's controller is Envoy Gateway's `eg`.
+patches:
+    - target:
+          group: gateway.networking.k8s.io
+          kind: Gateway
+          name: app
+      patch: |-
+          - op: replace
+            path: /spec/gatewayClassName
+            value: eg

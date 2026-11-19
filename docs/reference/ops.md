@@ -81,7 +81,7 @@ outbox nudges it caused before it returns, inside its lease; only a `connectFirs
 (a filesystem reaper with no Mongo, so no mail) skips the boot. The name, schedule and summary are data, in the owner's `module.yaml`
 `jobs:` block (`shared/rules/jobs.yaml` for the kernel's), generated into `jobs.generated.ts`
 beside `jobs.ts`, which adds the rest. `npm run regenerate` writes the two things derived from it —
-`docker/crontab` and the table below — and `npm run check` fails `complete` when either has
+`docker/crontab`, its copy `k8s/base/crontab` (the Kubernetes `cron` Deployment's ConfigMap) and the table below — and `npm run check` fails `complete` when either has
 drifted. `npm run job <name>` runs one by hand (inside a running container: `cd /app && node --import tsx scripts/ops/run-job.ts <name>`); with no name it lists them. Deleting a module deletes its jobs on the next regeneration.
 
 The backup schedule is **not** in `docker/crontab`: the `backup` service (the `backup` compose profile)

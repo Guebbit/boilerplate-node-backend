@@ -1,0 +1,16 @@
+# The entry point: one plain-HTTP listener. TLS belongs to the real deployment's own Gateway
+# (a certificate and an https listener); the rig has none. `gatewayClassName` is a placeholder
+# every overlay replaces with the class of the controller it installs.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+    name: app
+spec:
+    gatewayClassName: set-by-the-overlay
+    listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+          allowedRoutes:
+              namespaces:
+                  from: Same

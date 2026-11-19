@@ -252,6 +252,9 @@ Full detail: [Declining, closing and cancelling a return](./returns-statuses-and
 
 Receiving is where the two clocks meet, and they are kept apart on purpose:
 
+A refund staff already paid in cash or by transfer is recorded with `paidOutside` on the receipt:
+the record is born settled and no card is asked (`create:Refund` needed on top of `receive:Return`).
+
 Full detail: [Remedies for a return](./returns-remedies.md#what-the-customer-gets-back).
 
 ## The remedy ladder {#the-remedy-ladder}

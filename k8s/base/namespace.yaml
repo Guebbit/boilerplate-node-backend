@@ -1,0 +1,6 @@
+# One namespace for the whole stack: `kubectl delete namespace boilerplate` removes everything,
+# claims included.
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: boilerplate

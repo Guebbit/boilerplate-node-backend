@@ -1,0 +1,118 @@
+# `cron`: supercronic running the module-declared jobs against the app image. Exactly one copy:
+# two schedulers would run every job twice (jobs lease, but there is no reason to start a race).
+# Not a CronJob per schedule: supercronic already is the scheduler, and one container gives
+# every job the same environment, volumes and health check as compose's `cron` service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: cron
+    labels:
+        app.kubernetes.io/name: cron
+        boilerplate/stage: app
+spec:
+    replicas: 1
+    # Recreate: a rolling update would run the old and the new scheduler side by side.
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: cron
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: cron
+                boilerplate/stage: app
+        spec:
+            automountServiceAccountToken: false
+            terminationGracePeriodSeconds: 30
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 1000
+                fsGroup: 1000
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: cron
+                  image: boilerplate-app
+                  # `args` keeps dumb-init as PID 1 (the image's ENTRYPOINT). `check-config` first:
+                  # supercronic stays alive when every job would refuse a bad environment, so its
+                  # health check alone would call that pod healthy. `exec` makes supercronic PID 1's
+                  # child again, so it receives the stop signal. `-prometheus-listen-address` serves
+                  # `/health` on loopback. Same line as compose.production.yaml's `cron`.
+                  # https://github.com/aptible/supercronic
+                  args:
+                      - sh
+                      - -c
+                      - node --import tsx scripts/ops/check-config.ts && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab
+                  envFrom:
+                      - configMapRef:
+                            name: app-env
+                      - configMapRef:
+                            name: edge-env
+                  env:
+                      - name: NODE_SERVICE_NAME
+                        value: api-cron
+                  # The limit covers the scheduler PLUS every job running at once: supercronic starts each
+                  # job as its own `node` process (~560 MB each, like the app), and the minute and
+                  # five-minute marks fire several together. 1Gi was OOMKilled on the rig within minutes.
+                  resources:
+                      requests:
+                          cpu: 50m
+                          memory: 640Mi
+                      limits:
+                          memory: 4Gi
+                  securityContext:
+                      readOnlyRootFilesystem: true
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                          drop: [ALL]
+                  # An exec probe, not httpGet: supercronic listens on 127.0.0.1 inside the pod, which
+                  # the kubelet's own HTTP probe cannot reach. `node -e fetch` is the compose check
+                  # (the image has no curl).
+                  livenessProbe:
+                      exec:
+                          command:
+                              - node
+                              - -e
+                              - "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                      initialDelaySeconds: 30
+                      periodSeconds: 30
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  volumeMounts:
+                      - name: tmp
+                        mountPath: /tmp
+                      - name: secrets
+                        mountPath: /run/secrets
+                        readOnly: true
+                      # The jobs sweep the same files the app writes (reap:quarantine, the mail spool,
+                      # orphaned images): without the claim they walk an empty path and report nothing.
+                      - name: data
+                        mountPath: /app/public/images
+                        subPath: images
+                      - name: data
+                        mountPath: /app/tmp/storage
+                        subPath: storage
+                      - name: data
+                        mountPath: /app/tmp/quarantine
+                        subPath: quarantine
+                      # Generated from the job declarations (`npm run regenerate` writes k8s/base/crontab).
+                      - name: crontab
+                        mountPath: /app/crontab
+                        subPath: crontab
+                        readOnly: true
+            volumes:
+                - name: tmp
+                  emptyDir:
+                      sizeLimit: 64Mi
+                - name: secrets
+                  secret:
+                      secretName: app-secrets
+                      defaultMode: 0444
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: data
+                - name: crontab
+                  configMap:
+                      name: crontab

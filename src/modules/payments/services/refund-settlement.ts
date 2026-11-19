@@ -16,7 +16,7 @@ import {
 } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceInTransaction, announceWithin, type OutboxAnnouncement } from '@kernel/outbox';
 import { padDecimal, toMinorUnits, subtractMoney, type Money } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { ownOrderFlag } from '@modules/access';
@@ -82,7 +82,7 @@ export const isFullyRefunded = (payment: PaymentDocument): boolean =>
  * @param outcome - `failure` when the status moved but no money actually went back
  * @param byHand - the operator confirmed hand-paid money returned (`settleRefundByHand`)
  */
-const announceRefund = (
+export const announceRefund = (
     payment: PaymentDocument,
     refund: RefundRecord,
     context: CallerContext | undefined,
@@ -193,6 +193,44 @@ const writeSettlement = (
         );
 
 /**
+ * The `payment.refunded` announcement a settlement carries.
+ *
+ * @param refund - the record that settled
+ */
+const refundedAnnouncement =
+    (refund: RefundRecord) =>
+    (final: PaymentDocument): OutboxAnnouncement<typeof PAYMENT_REFUNDED> => ({
+        name: PAYMENT_REFUNDED,
+        payload: refundedPayload(final, refund),
+        aggregateId: String(final.orderId)
+    });
+
+/**
+ * Settle a refund inside a transaction the caller owns: the writes of {@link writeSettlement} and
+ * `payment.refunded` in the outbox, committed with whatever else that transaction holds. The caller
+ * nudges the outbox after the commit ({@link settleRefund} does it for a transaction of its own).
+ *
+ * @param payment - the payment the refund belongs to
+ * @param refund - the record being settled
+ * @param fields - see {@link settleRefund}
+ * @param session - the caller's open transaction
+ * @param actor - the operator, when one settled it
+ * @returns the payment as it now stands, or `null` when the record was no longer open
+ */
+export const settleWithin = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    fields: RefundSettlement,
+    session: ClientSession,
+    actor?: string | null
+): Promise<PaymentDocument | null> =>
+    announceWithin(
+        session,
+        (active) => writeSettlement(payment, refund, fields, active, actor),
+        refundedAnnouncement(refund)
+    );
+
+/**
  * Settle one open refund. The
  * conditional write IS the idempotence: a second caller (the sweep racing the request) finds the
  * record already `succeeded` and answers `null`, so the announcement fires once. The
@@ -214,11 +252,7 @@ export const settleRefund = (
 ): Promise<PaymentDocument | null> =>
     announceInTransaction(
         (session) => writeSettlement(payment, refund, fields, session, context?.caller.id),
-        (final) => ({
-            name: PAYMENT_REFUNDED,
-            payload: refundedPayload(final, refund),
-            aggregateId: String(final.orderId)
-        })
+        refundedAnnouncement(refund)
     ).then((final) => {
         if (final) announceRefund(final, refund, context, outcome, fields.settledByHand === true);
         return final;
