@@ -56,6 +56,7 @@ flowchart LR
     orders -. "order.redacted" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
+    orders -. "order.billing_corrected" .-> invoicing
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.canceled" .-> payments
     orders -. "order.created" .-> payments
@@ -195,7 +196,7 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-the order's claim window has closed (a never-paid order at once, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+the order's claim window has closed (a never-paid order once canceled, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
 ([why](../understand/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
@@ -367,6 +368,16 @@ Shopify allows it on a partly fulfilled order too, and Solidus keeps the address
 the buyer's own edit is a later, optional step.
 
 Full detail: [Creating an order, exports and mails](./orders-creation-and-exports.md#correcting-the-shipping-address).
+
+## Correcting the billing address {#correcting-the-billing-address}
+
+`PUT /orders/{id}/billing-address` (`update:Order`) replaces who the order is invoiced to, with an
+optional buyer VAT number: the case where the buyer writes in that the name, address or VAT number
+on the invoice is wrong. Unlike the shipping one it is accepted at any status, because an invoice
+may already exist.
+
+Full detail: [Creating an order, exports and mails](./orders-creation-and-exports.md#correcting-the-billing-address);
+what happens to the invoice: [`invoicing`](./invoicing.md#correcting-the-buyer).
 
 ## Cancel and refund mails {#cancel-and-refund-mails}
 

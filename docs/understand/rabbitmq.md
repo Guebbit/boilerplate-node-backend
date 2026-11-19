@@ -25,8 +25,32 @@ audience: [developer, architect]
 | Image digest worker       | `src/infrastructure/adapters/image.worker.ts`                                                       |
 | Webhook delivery (module) | `src/modules/webhooks/services/enqueue.ts` (publish), `attempt.ts` (consume)                        |
 | Worker registration       | `src/app/workers.ts` (domainless queues) + `kernel/registry.ts`'s `resolveConsumers` (module-owned) |
-| Startup hook              | `src/app.ts` → `startQueue` + `registerWorkers`                                                     |
+| Worker process            | `src/worker.ts` (entry) → `src/app/worker-process.ts` (`createWorker`)                              |
+| Startup hook (web)        | `src/app.ts` → `startQueue`: publishes only                                                         |
+| Startup hook (worker)     | `src/app/worker-process.ts` → `startQueue`, then `registerWorkers` last                             |
 | Shutdown hook             | `src/infrastructure/runtime/server-lifecycle.ts` → `stopQueue`                                      |
+
+## Two processes, one image
+
+The web process publishes and answers; a separate **worker** process takes the jobs. Both run the
+same image — `src/main.ts` is the web entry, `src/worker.ts` the worker's (`npm run dev:worker`; the
+`worker` service in `compose.override.yaml` and `compose.production.yaml`; the `worker` Deployment in
+`k8s/base`). With a broker configured and no worker running, jobs wait in their queues: nothing is
+lost, nothing is sent. With no broker configured the web process does the work inline and the
+worker has nothing to do, so the default `npm run dev` needs neither a broker nor a worker.
+
+The worker boots what a handler needs, as the web process does: every module (its event
+subscriptions and the configuration check), the database, the cache, the queue, then the
+translations, mail templates and the admin's copy. The consumers bind last, so a job taken in the
+first second renders a sentence, not a key. It serves nothing to clients. On its own port (`NODE_WORKER_PORT`, 3010, never the API's) it
+answers `GET /livez`, its container's health check, and `GET /observability/metrics`, behind the same
+bearer token as the API's: two alert counters (`queue_jobs_dead_lettered_total`,
+`webhook_delivery_attempts_total`) move only in the worker, so Prometheus scrapes it as the `worker` job.
+
+To see which process holds a queue's consumers:
+`podman compose exec queue rabbitmqctl list_queues name messages_ready consumers`. With `worker`
+stopped, a mail leaves `worker.email.send` at `1 0` (one ready, no consumers); starting it drains
+the queue to `0 1`.
 
 ## Architecture
 

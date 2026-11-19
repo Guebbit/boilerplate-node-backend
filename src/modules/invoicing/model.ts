@@ -52,6 +52,8 @@ export interface InvoiceParty {
     city: string;
     zip: string;
     country: string;
+    /** The buyer's VAT number (Art. 226(4)), when the order carried one. Absent for a private buyer. */
+    vatNumber?: string;
 }
 
 /**
@@ -108,20 +110,42 @@ export interface FrozenTaxDocument {
     grandTotal: string;
 }
 
+/**
+ * Whether an invoice is the order's current one. `corrected`: staff corrected the buyer's details,
+ * so a credit note cancelled it and a newer invoice took its place. Never deleted: the old one
+ * stays as the record of what was once issued.
+ */
+export type InvoiceStatus = 'issued' | 'corrected';
+
 /** One issued invoice. */
-export interface InvoiceDocument extends FrozenTaxDocument, Document {}
+export interface InvoiceDocument extends FrozenTaxDocument, Document {
+    /** `issued` for the order's one live invoice; see {@link InvoiceStatus}. */
+    status: InvoiceStatus;
+}
 
 /** Invoice model type. */
 export type InvoiceModel = Model<InvoiceDocument>;
 
+/** Why a credit note was issued: a refund settled, or staff corrected the buyer's details. */
+export type CreditNoteReason = 'refund' | 'correction';
+
 /**
- * One issued credit note — the reversal of ONE refund. A full refund mirrors the invoice it
- * corrects; a partial one carries only the refunded share, so an order refunded in parts has one
- * credit note per part.
+ * One issued credit note — the reversal of ONE refund, or the cancellation of an invoice whose
+ * buyer details were corrected. A full refund mirrors the invoice it corrects; a partial one
+ * carries only the refunded share, so an order refunded in parts has one credit note per part.
  */
 export interface CreditNoteDocument extends FrozenTaxDocument, Document {
-    /** The `payments` refund record this credit note is for — what makes issuing it idempotent. */
-    refundId: string;
+    reason: CreditNoteReason;
+    /**
+     * The `payments` refund record this credit note is for — what makes issuing it idempotent.
+     * Absent on a `correction`: no money moved.
+     */
+    refundId?: string;
+    /**
+     * The outbox event (`order.billing_corrected`) that asked for this correction — what makes a
+     * redelivered event issue nothing twice. Present exactly on a `correction`.
+     */
+    correctionKey?: string;
     /** The invoice this credit note reverses — always present: nothing is refunded before it is invoiced. */
     invoiceId: Types.ObjectId;
     /** The invoice's own number, printed for cross-reference without a lookup. */
@@ -138,7 +162,8 @@ const partySchema = new Schema<InvoiceParty>(
         street: { type: String, required: true },
         city: { type: String, required: true },
         zip: { type: String, required: true },
-        country: { type: String, required: true }
+        country: { type: String, required: true },
+        vatNumber: { type: String }
     },
     { _id: false }
 );
@@ -208,9 +233,13 @@ const frozenTaxDocumentFields = {
  * fact, distinct from `issuedAt`'s legal one); nothing here is ever updated, so `updatedAt` is
  * unused but harmless.
  */
-const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumentFields, {
-    timestamps: true
-});
+const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(
+    {
+        ...frozenTaxDocumentFields,
+        status: { type: String, enum: ['issued', 'corrected'], required: true, default: 'issued' }
+    },
+    { timestamps: true }
+);
 
 /**
  * Money is stored as Decimal128 and a lean read hands decimal text back — see `@infrastructure/persistence/money-field`.
@@ -218,11 +247,16 @@ const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumen
 invoiceSchema.plugin(moneyPlugin);
 
 /**
- * One invoice per order — `repository.ts`'s own duplicate-key guard is what makes a redelivered
+ * One LIVE invoice per order — `repository.ts`'s own duplicate-key guard is what makes a redelivered
  * event idempotent; this index is what makes that guarantee real at the database, not just in the
- * listener's own logic.
+ * listener's own logic. Partial on `status: 'issued'`: a corrected invoice stays beside its
+ * replacement. The filter is a positive equality because a partial index accepts no `$ne` or
+ * `$exists: false`.
  */
-invoiceSchema.index({ orderId: 1 }, { name: 'invoices_orderId', unique: true });
+invoiceSchema.index(
+    { orderId: 1 },
+    { name: 'invoices_orderId', unique: true, partialFilterExpression: { status: 'issued' } }
+);
 
 // Range scan for the stats read by issue date.
 invoiceSchema.index({ issuedAt: 1 }, { name: 'invoices_issuedAt' });
@@ -236,7 +270,9 @@ const creditNoteSchema = new Schema<CreditNoteDocument, CreditNoteModel>(
         ...frozenTaxDocumentFields,
         invoiceId: { type: Schema.Types.ObjectId, required: true },
         invoiceNumber: { type: String, required: true },
-        refundId: { type: String, required: true }
+        reason: { type: String, enum: ['refund', 'correction'], required: true, default: 'refund' },
+        refundId: { type: String },
+        correctionKey: { type: String }
     },
     { timestamps: true }
 );
@@ -251,7 +287,28 @@ creditNoteSchema.plugin(moneyPlugin);
  * event bus promises no de-duplication of its own, so this index is what makes a redelivered
  * event issue nothing twice. An order refunded in parts legitimately has several.
  */
-creditNoteSchema.index({ refundId: 1 }, { name: 'creditNotes_refundId', unique: true });
+creditNoteSchema.index(
+    { refundId: 1 },
+    {
+        name: 'creditNotes_refundId',
+        unique: true,
+        // A correction has no refund: only a credit note that names one is held to uniqueness.
+        partialFilterExpression: { refundId: { $exists: true } }
+    }
+);
+
+/**
+ * One credit note per CORRECTION event — the same guard for a redelivered `order.billing_corrected`,
+ * which would otherwise burn a credit-note number and an invoice number for nothing.
+ */
+creditNoteSchema.index(
+    { correctionKey: 1 },
+    {
+        name: 'creditNotes_correctionKey',
+        unique: true,
+        partialFilterExpression: { correctionKey: { $exists: true } }
+    }
+);
 
 // Backs the per-order list `GET /orders/{id}/credit-notes` reads.
 creditNoteSchema.index({ orderId: 1, issuedAt: 1 }, { name: 'creditNotes_orderId_issuedAt' });

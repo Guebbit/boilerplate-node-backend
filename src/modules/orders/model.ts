@@ -134,9 +134,10 @@ export interface OrderDocument
         >,
         Document {
     /**
-     * Absent on an order whose account was erased. The invoice survives erasure
-     * (Art. 17(3)(b)/(e)); the account it belonged to does not, and unlike every other document
-     * here that IS the dangling foreign key, not a bug in it. See `piiClockStartedAt`.
+     * Absent on an order with no account: a walk-in order staff placed for a buyer who has none,
+     * or one whose account was erased. The invoice survives erasure (Art. 17(3)(b)/(e)); the
+     * account it belonged to does not, and unlike every other document here that IS the dangling
+     * foreign key, not a bug in it. See `piiClockStartedAt`.
      */
     userId?: Types.ObjectId;
     status: OrderStatus;
@@ -169,9 +170,9 @@ export interface OrderDocument
      */
     termsVersion?: string;
     /**
-     * When erasure or inactivity minimisation started this order's PII clock. Only its presence
-     * matters: `reap:orders` derives the due date from `paidAt`, `status` and `conformityUntil`
-     * on every run.
+     * When erasure, inactivity minimisation or a walk-in order's creation started this order's PII
+     * clock. Only its presence matters: `reap:orders` derives the due date from `paidAt`, `status`
+     * and `conformityUntil` on every run.
      *
      * @see docs/understand/data-retention.md#orders-after-the-account
      */
@@ -250,6 +251,15 @@ export type OrderModel = Model<OrderDocument>;
  * `additionalProperties: false`.
  */
 const orderAddressSchema = new Schema(postalAddressPaths, { _id: false });
+
+/**
+ * The billing address: the same six fields plus the buyer's VAT number, which an invoice prints.
+ * Its own schema, so a shipping address cannot store one.
+ */
+const orderBillingAddressSchema = new Schema(
+    { ...postalAddressPaths, vatNumber: { type: String } },
+    { _id: false }
+);
 
 /**
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
@@ -502,7 +512,7 @@ export const orderSchema = new Schema<OrderDocument>(
          * absent on an admin-created order (no checkout).
          */
         billingAddress: {
-            type: orderAddressSchema
+            type: orderBillingAddressSchema
         },
         /**
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product

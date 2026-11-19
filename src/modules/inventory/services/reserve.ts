@@ -13,7 +13,7 @@ import { roomOn } from '../domain';
 import { stockLevelRepository, reservationRepository } from '../repository';
 import type { StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
-import { applyTransition, refreshStockCache } from './transition';
+import { applyTransition, refreshStockCacheForProducts } from './transition';
 import { releaseForOrder } from './holds';
 import { MINUTE_MS } from '@domain-primitives/time';
 
@@ -27,9 +27,14 @@ import { MINUTE_MS } from '@domain-primitives/time';
  * what was held, and a release that threw leaves it `held` for the sweep to free later.
  * A failure is logged rather than thrown, so the caller still reports the original refusal.
  *
+ * A release that succeeds refreshes the catalogue's stock cache itself. One that fails does not,
+ * so the lines already taken are refreshed here, in that branch only: their counters moved and
+ * nothing else will say so before the sweep.
+ *
  * @param orderId - the order whose reserve is being unwound
+ * @param takenProductIds - the products whose counters this reserve already moved
  */
-const giveBack = (orderId: string): Promise<void> =>
+const giveBack = (orderId: string, takenProductIds: readonly string[]): Promise<void> =>
     releaseForOrder(orderId)
         .then(() => undefined)
         .catch((error: unknown) => {
@@ -39,6 +44,7 @@ const giveBack = (orderId: string): Promise<void> =>
                 error
             });
             // Stryker restore all
+            return refreshStockCacheForProducts(takenProductIds);
         });
 
 /**
@@ -160,8 +166,6 @@ const takeSpillLine = async (orderId: string, line: StockLine): Promise<StockLin
         throw error;
     });
 
-    // Written outside the transaction by design: the catalogue's copy cannot roll back.
-    if (parts) await refreshStockCache(line.productId);
     return parts;
 };
 
@@ -202,8 +206,6 @@ const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] |
         );
         return held ? pushed(orderId, [line], session) : null;
     });
-    // Written outside the transaction by design: the catalogue's copy cannot roll back.
-    if (taken) await refreshStockCache(line.productId);
     return taken;
 };
 
@@ -217,6 +219,10 @@ const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] |
  * so the ledger shows the take and the give-back rather than netting them to silence.
  *
  * A line that THROWS (a database hiccup, not a refusal) unwinds the same way, then rethrows.
+ *
+ * The catalogue's stock cache cannot roll back with a line's transaction, so it is refreshed once
+ * for every line taken, after the last one. A refusal or a throw is refreshed by the release that
+ * unwinds it.
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -241,6 +247,7 @@ export const reserveForOrder = async (
     }
 
     const owed: { productId: string; quantity: number }[] = [];
+    const taken: string[] = [];
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
         for (const line of inLockOrder(lines)) {
@@ -264,15 +271,17 @@ export const reserveForOrder = async (
                     available: leftFor(line, blockerLevel)
                 };
 
-                await giveBack(orderId);
+                await giveBack(orderId, taken);
                 return { held: false, shortfalls: [shortfall] };
             }
+            taken.push(line.productId);
             owed.push(...owedPartsOf(line, parts));
         }
     } catch (error) {
-        await giveBack(orderId);
+        await giveBack(orderId, taken);
         throw error;
     }
 
+    await refreshStockCacheForProducts(taken);
     return { held: true, expiresAt, owed };
 };

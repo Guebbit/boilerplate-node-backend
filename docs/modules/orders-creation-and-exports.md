@@ -39,6 +39,10 @@ and whom it was billed to, not what the address book says today):
 | `shippingAddress` | a line ships to an address (not digital-only, not a pickup) | the warehouse, the order page          |
 | `billingAddress`  | every checkout order                                        | the invoice (Art. 226), the order page |
 
+The billing address alone may carry the buyer's `vatNumber` (a business buyer, written by staff when
+they [correct it](#correcting-the-billing-address)); the shipping address never does, since a carrier
+has no use for one.
+
 The split is Shopify's: a digital-only order is invoiced to someone but ships nowhere, so it freezes
 no shipping address. Billing is "same as shipping" unless the buyer names another entry
 ([how checkout resolves it](./cart-checkout.md#the-sequence)); the admin's `POST /orders` runs no
@@ -54,11 +58,18 @@ runs on query filters, so an encrypted path in a filter silently matches nothing
 issuers decrypt the order's address (`billingAddressOf`) and re-encrypt it under the invoice's own
 id (`invoicing/pii.ts`); only the PDF render decrypts it again.
 
-`POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
-exists for manual corrections, not as a second sales channel:
+`POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal: staff raise an
+order for someone, or ring up a counter sale (the staff "New order" screen):
 
-- it takes a buyer, an email and line items, and nothing else — no payment method, no address, no
-  shipping method, and no frontend screen behind it;
+- it takes an optional buyer, an email and line items, and nothing else — no payment method, no
+  address, no shipping method;
+- **no `userId` is a walk-in order** (a counter sale, or money taken outside the app): the order has no
+  account, nobody's "My orders" lists it, the confirmation goes to the `email` in the body (staff may
+  type the shop's own address) and it freezes in the shop's default language. Its personal data starts
+  the retention clock at creation, so the email is not kept forever
+  ([the rule](../understand/data-retention-orders.md#walk-in-orders)). Staff then record the cash on it
+  ([a payment by hand](./payments-offline.md)), ship and deliver it. A manager can ring up the sale
+  without an account lookup; recording the cash needs the payment permission;
 - staff may sell a hidden or off-sale product by hand (the shopper's shelf rules are checkout's, not
   this door's); only a removed (soft-deleted) one is refused with `409 ORDER_PRODUCT_UNAVAILABLE`,
   every one named in `details.productIds`. The product is read through the caller's own scope, so a
@@ -68,9 +79,8 @@ exists for manual corrections, not as a second sales channel:
   order is cancelled by the same reservation sweep as an abandoned checkout, and its buyer gets the
   same hold-expiry notice (`orders.order-hold-expired`): they were sent the confirmation, so the
   cancel is told too;
-- carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
-  ship/deliver flow — moving it forward is the admin override's job (see below), not a parcel
-  someone can actually hand over.
+- carrying no address or shipping method, it has no parcel to post: a counter sale is handed over by
+  shipping it without tracking, then marking it delivered. Shipping works straight from `paid`.
 
 ## The CSV export {#the-csv-export}
 
@@ -160,6 +170,28 @@ the buyer's own edit is a later, optional step.
   `422 ORDER_SHIP_TO_COUNTRY_NOT_SUPPORTED`.
 - The new address is encrypted under the order's id like the one it replaces. The staff-only timeline
   row `address_corrected` and the audit row name **who**, never what it says.
+
+## Correcting the billing address {#correcting-the-billing-address}
+
+`PUT /orders/{id}/billing-address` (`update:Order`) replaces who the order is invoiced to, the buyer VAT
+number included (`OrderBillingAddress`: the address fields plus `vatNumber`, 4 to 20 characters, country
+prefix first; not checked against VIES).
+
+- **Any status.** An order not invoiced yet has nothing to reissue: its future invoice freezes the
+  corrected address. An admin-created order that had none gets one. The one refusal is
+  `409 ORDER_BILLING_LOCKED`, for an order whose personal data retention already erased
+  (`canCorrectBilling`: its email is the anonymised placeholder): the write would put back what was
+  destroyed. `OrderActions.correctBilling` says in advance.
+- **Idempotent.** An address equal to the order's current one, field for field, answers `200` and
+  writes nothing: no timeline row, no event, no audit row, so a repeated PUT burns no invoice number
+  (RFC 9110 section 9.2.2).
+- **Encrypted** under the order's id like the rest of the address, the VAT number too (`pii.ts`,
+  `reencrypt`). The staff-only timeline row `billing_corrected` and the audit row
+  `admin.order.billing_corrected` name **who**, never what it says.
+- **Announced.** The write, its timeline row and the outbox event `order.billing_corrected` commit
+  together. The event is internal: no webhook, no AsyncAPI channel. `invoicing` listens and
+  [cancels and reissues the invoice](./invoicing.md#correcting-the-buyer).
+- **No mail.** Invoices are never mailed (the buyer downloads them), so nothing is sent for a corrected one.
 
 ## Cancel and refund mails {#cancel-and-refund-mails}
 

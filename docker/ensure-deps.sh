@@ -8,7 +8,7 @@
 #   match         -> nothing to do
 #   no / old stamp -> `npm ci` (the same install the dev image runs), then write the stamp
 #
-# Callers: the `app` and `cron` services in compose.override.yaml. The `dev` stage of docker/Dockerfile
+# Callers: the `app`, `worker` and `cron` services in compose.override.yaml. The `dev` stage of docker/Dockerfile
 # writes the same stamp after its own install, so the first start finds a current one.
 set -eu
 

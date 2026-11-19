@@ -16,7 +16,7 @@ import { createProviderRegistry, requireProvider } from '@infrastructure/runtime
 import { defineProbe } from '@infrastructure/config/define';
 import { invoicingConfig } from '../config';
 import { pdfEInvoicingProvider } from './pdf';
-import type { FrozenTaxDocument } from '../model';
+import type { CreditNoteReason, FrozenTaxDocument } from '../model';
 
 /** Which kind of document is being issued — each prints under its own title and disclaimer. */
 export type EInvoicingDocumentKind = 'invoice' | 'creditNote';
@@ -28,8 +28,8 @@ export type EInvoicingDocumentKind = 'invoice' | 'creditNote';
  */
 export type EInvoicingDocument = Omit<FrozenTaxDocument, 'orderId'> & {
     kind: EInvoicingDocumentKind;
-    /** Present only on a credit note — the invoice it reverses. */
-    reversalOf?: { number: string };
+    /** Present only on a credit note — the invoice it reverses, and why. */
+    reversalOf?: { number: string; reason: CreditNoteReason };
 };
 
 /** What an implementation must provide. */

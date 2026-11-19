@@ -8,6 +8,9 @@
             "locked": "Su questo ordine non resta nulla da spedire, o non ha un indirizzo di spedizione, quindi non può essere reindirizzato.",
             "ship-to-country-not-supported": "Non spediamo in quel Paese."
         },
+        "billing": {
+            "locked": "I dati personali di questo ordine sono stati cancellati, quindi il suo indirizzo di fatturazione non può essere corretto."
+        },
         "override": {
             "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova.",
             "awaiting-stock": "Questo ordine ha ancora unità in attesa di scorte, quindi non può essere spostato oltre la spedizione a mano."

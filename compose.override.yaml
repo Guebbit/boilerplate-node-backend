@@ -233,6 +233,57 @@ services:
             queue:
                 condition: service_started
 
+    # The queue consumers, as their own container: `app` publishes a job and answers, this takes it
+    # (an email, an image digest, a webhook delivery). Same image and bind mount as `app`, hot
+    # reloaded the same way, a different entry point (`src/worker.ts`). This stack HAS a broker
+    # (`queue`), so without this service a mail would sit in the queue and never arrive.
+    # See docs/understand/rabbitmq.md#where-the-code-lives.
+    #
+    # It listens on `NODE_WORKER_PORT` inside the container: `GET /livez` is its health check and
+    # `GET /observability/metrics` the Prometheus scrape (docker/observability/prometheus.config.yaml).
+    # No host port is published, so it never competes with `app`'s.
+    worker:
+        logging: *container-logging
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+            target: dev
+        # Same as `app`: a refusal ends as `Exited (1)` instead of looping.
+        restart: 'on-failure:5'
+        environment:
+            NODE_ENV: 'development'
+            NODE_REDIS_URL: 'redis://cache:6379'
+            NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@queue:5672'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+            NODE_SERVICE_NAME: 'worker'
+        volumes:
+            - .:/app:Z
+            # Kept fresh by `docker/ensure-deps.sh` (see the `app` service).
+            - /app/node_modules
+        command: ['sh', '-c', 'sh /app/docker/ensure-deps.sh && npm run dev:worker:docker']
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:${NODE_WORKER_PORT:-3010}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        depends_on:
+            database:
+                condition: service_healthy
+            cache:
+                condition: service_started
+            limits:
+                condition: service_started
+            queue:
+                condition: service_started
+
     # Another container
     database:
         logging: *container-logging

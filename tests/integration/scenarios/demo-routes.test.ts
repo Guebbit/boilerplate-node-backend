@@ -29,6 +29,7 @@ import { paymentModel } from '@modules/payments/model';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { asStub } from '@tests/stub';
+import { OrderStatus } from '@types';
 
 /**
  * A one-shot switch: the next database step of a restore (`emptyDatabase()` for a scenario that is
@@ -207,7 +208,10 @@ describe('POST /__test/jobs/:name', () => {
     it('reap-orders scrubs an order past its retention window and says how many', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        // Canceled and never paid: the one unpaid state the sweep scrubs at once.
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
         const response = await request(testApp()).post('/__test/jobs/reap-orders');

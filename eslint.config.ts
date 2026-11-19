@@ -1091,6 +1091,7 @@ export default defineConfig(
             'boundaries/files': [
                 { pattern: 'src/app.ts', category: 'composition-root' },
                 { pattern: 'src/main.ts', category: 'process-entry' },
+                { pattern: 'src/worker.ts', category: 'process-entry' },
                 { pattern: 'src/serve.ts', category: 'server-entry' },
                 { pattern: 'src/modules.ts', category: 'registry' },
                 { pattern: 'src/globals.d.ts', category: 'ambient' },
@@ -1197,7 +1198,7 @@ export default defineConfig(
                         {
                             /**
                              * The four files that are a tier each — `app.ts` composes,
-                             * `main.ts` is the process entry, `serve.ts` starts what `app.ts` composed
+                             * `main.ts` and `worker.ts` are the process entries, `serve.ts` starts what `app.ts` composed
                              * and wires it to the process signals, `modules.ts` IS the
                              * registry and is the one caller allowed to import
                              * `@modules/<name>/module`. They have no element (an element

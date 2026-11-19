@@ -19,6 +19,9 @@
             <% billing.lines.forEach(function(line) { %>
                 <div><%= line %></div>
             <% }); %>
+            <% if (billing.vatNumberLine) { %>
+                <div><%= billing.vatNumberLine %></div>
+            <% } %>
         </address>
     <% } %>
 

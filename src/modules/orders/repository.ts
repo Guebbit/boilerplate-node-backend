@@ -35,7 +35,7 @@ import { announceInTransaction } from '@kernel/outbox';
 import { ORDER_REDACTED } from './events';
 import { OrderStatus } from '@types';
 import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
-import type { Order, OrderAddress } from '@types';
+import type { Order, OrderAddress, OrderBillingAddress } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -410,6 +410,32 @@ const replaceShippingAddress = (
         .exec();
 
 /**
+ * Replace who an order is invoiced to, encrypted under the order's own id. Refused for an
+ * anonymised order, so a write never puts back what the retention sweep erased.
+ * @param id - the order
+ * @param address - the corrected address, in the clear
+ * @param session - joins the write to the caller's transaction, so its timeline row and event ride with it
+ * @returns the order as it now stands, or `null` if it was anonymised since the caller read it
+ */
+const replaceBillingAddress = (
+    id: string,
+    address: OrderBillingAddress,
+    session?: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), email: { $ne: ANONYMIZED_EMAIL } },
+            {
+                $set: {
+                    billingAddress: encryptOrderPii({ billingAddress: address }, toObjectId(id))
+                        .billingAddress
+                }
+            },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
  * Record that money landed on an order that could no longer take it, so the order is never
  * hard-deleted out from under the payment and refund that now point at it. Set once; a repeat
  * keeps the first instant.
@@ -614,7 +640,8 @@ export interface PiiClaimWindow {
  *
  * | Order                                   | Due                                  |
  * | --------------------------------------- | ------------------------------------ |
- * | never paid                              | at once                              |
+ * | never paid, `canceled`                  | at once                              |
+ * | never paid, still open                  | never (its cash is still to come)    |
  * | delivered (`conformityUntil` set)       | `conformityUntil` + guarantee days   |
  * | paid, `canceled` without delivery      | `paidAt` + undelivered days          |
  * | paid and still open                     | never (it is still to be fulfilled)  |
@@ -627,7 +654,8 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
     /** The sparse index on the marker is what narrows the scan. */
     piiClockStartedAt: { $exists: true },
     $or: [
-        { paidAt: { $exists: false } },
+        // Never paid AND ended: a live walk-in order waiting for its cash holds a clock but is no one's to scrub yet.
+        { paidAt: { $exists: false }, status: OrderStatus.canceled },
         {
             conformityUntil: { $exists: true },
             // $dateAdd: https://www.mongodb.com/docs/manual/reference/operator/aggregation/dateAdd/
@@ -911,6 +939,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     extendConformity: typeof extendConformity;
     replaceShippingAddress: typeof replaceShippingAddress;
+    replaceBillingAddress: typeof replaceBillingAddress;
     applyStatusOverride: (
         id: string,
         from: OrderStatus,
@@ -948,6 +977,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered,
     extendConformity,
     replaceShippingAddress,
+    replaceBillingAddress,
     setProjection,
     applyStatusOverride,
     findInSession,

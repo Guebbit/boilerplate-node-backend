@@ -12,6 +12,9 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { testCallerContext } from '@tests/callers';
+import { productService } from '@modules/products';
+import { reservationRepository } from '../../repository';
+import { countersOf } from '@modules/products/tests/factories';
 
 /**
  * Replaced, not spied on: a CommonJS namespace import exposes a non-configurable getter, which
@@ -28,6 +31,8 @@ jest.mock('@infrastructure/adapters/cache', () => ({
 setupTestDb();
 
 beforeEach(() => jest.mocked(invalidateCacheTagsLogged).mockClear());
+
+afterEach(() => jest.restoreAllMocks());
 
 /** A syntactically valid order id, distinct per call. */
 let orderCounter = 0;
@@ -80,5 +85,87 @@ describe('the products cache tag, cleared where stock is written', () => {
         await inventoryService.refreshStockCacheForProducts([productId]);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
+    });
+});
+
+describe('a multi-line checkout refreshes the catalogue once', () => {
+    it('clears the tag once and syncs every line, however many lines it has', async () => {
+        const first = await createProduct({ onHand: 3 });
+        const second = await createProduct({ onHand: 3 });
+        const third = await createProduct({ onHand: 3 });
+        jest.mocked(invalidateCacheTagsLogged).mockClear();
+        const sync = jest.spyOn(productService, 'syncStockCache');
+
+        const outcome = await inventoryService.reserveForOrder(
+            anOrderId(),
+            [first, second, third].map((p) => ({ productId: String(p._id), quantity: 1 }))
+        );
+
+        expect(outcome.held).toBe(true);
+        expect(invalidateCacheTagsLogged).toHaveBeenCalledTimes(1);
+        expect(sync).toHaveBeenCalledTimes(3);
+        await expect(countersOf(String(third._id))).resolves.toMatchObject({ reserved: 1 });
+    });
+
+    it('never fails the checkout when the catalogue write fails', async () => {
+        const product = await createProduct({ onHand: 3 });
+        jest.spyOn(productService, 'syncStockCache').mockRejectedValue(new Error('catalogue down'));
+        jest.mocked(invalidateCacheTagsLogged).mockClear();
+
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+
+        expect(outcome.held).toBe(true);
+        // No sync landed, so there is nothing stale to clear.
+        expect(invalidateCacheTagsLogged).not.toHaveBeenCalled();
+    });
+
+    it('keeps syncing the other lines when one sync fails, and clears the tag once', async () => {
+        const products = await Promise.all([
+            createProduct({ onHand: 3 }),
+            createProduct({ onHand: 3 }),
+            createProduct({ onHand: 3 })
+        ]);
+        jest.mocked(invalidateCacheTagsLogged).mockClear();
+        const sync = jest
+            .spyOn(productService, 'syncStockCache')
+            .mockRejectedValueOnce(new Error('catalogue down'));
+
+        const outcome = await inventoryService.reserveForOrder(
+            anOrderId(),
+            products.map((p) => ({ productId: String(p._id), quantity: 1 }))
+        );
+
+        expect(outcome.held).toBe(true);
+        expect(sync).toHaveBeenCalledTimes(3);
+        expect(invalidateCacheTagsLogged).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshes the lines already taken when giving them back fails', async () => {
+        // Lines are taken in product-id order: the lower id is taken, the higher one is refused.
+        const created = await Promise.all([
+            createProduct({ onHand: 3 }),
+            createProduct({ onHand: 3 })
+        ]);
+        const [takenProduct, refusedProduct] = created.toSorted((a, b) =>
+            String(a._id).localeCompare(String(b._id), 'en')
+        );
+        await inventoryService.adjust(String(refusedProduct._id), -3, undefined, testCallerContext);
+        jest.spyOn(reservationRepository, 'claimStatus').mockRejectedValue(
+            new Error('release down')
+        );
+        const sync = jest.spyOn(productService, 'syncStockCache');
+
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(takenProduct._id), quantity: 1 },
+            { productId: String(refusedProduct._id), quantity: 1 }
+        ]);
+
+        expect(outcome.held).toBe(false);
+        expect(sync).toHaveBeenCalledWith(
+            String(takenProduct._id),
+            expect.objectContaining({ reserved: 1 })
+        );
     });
 });

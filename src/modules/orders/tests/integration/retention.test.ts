@@ -28,6 +28,7 @@ import { outboxEventModel } from '@kernel/outbox';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { OrderStatus } from '@types';
 import { setEnvironment } from '@tests/environment';
+import { asSuccess } from '@tests/response';
 
 setupTestDb();
 
@@ -249,7 +250,8 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
                 country: 'GB',
                 phone: '+44 113 000 0000'
             },
-            notes: 'Leave with the concierge, 2nd floor'
+            notes: 'Leave with the concierge, 2nd floor',
+            status: OrderStatus.canceled
         });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
@@ -268,7 +270,9 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
     it('leaves an order with no address at all working, scrubbing only email', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
@@ -289,7 +293,8 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
                 city: 'Leeds',
                 zip: 'LS1',
                 country: 'GB'
-            }
+            },
+            status: OrderStatus.canceled
         });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
@@ -303,7 +308,9 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
     it('moves the edit counter, so an edit form opened before the sweep is refused afterwards', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
         const versionOfOrder = (): Promise<number | undefined> =>
             orderRepository.findById(String(order._id)).then((row) => versionOf(row));
@@ -333,7 +340,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
     it('never rescrubs an order it already anonymized', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.canceled });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
         await orderService.anonymizeDueOrders();
 
@@ -342,11 +349,62 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
     });
 });
 
+/** A walk-in order placed through the staff door, so its clock starts the way it does in production. */
+const placeWalkIn = async () => {
+    const product = await createProduct();
+    const result = await orderService.create(
+        undefined,
+        'counter@example.com',
+        [{ productId: String(product._id), quantity: 1 }],
+        callerContextAs('admin')
+    );
+    return String(asSuccess(result).data._id);
+};
+
+describe('orders — a walk-in order (no account) follows the same claim window', () => {
+    beforeEach(() => registerCheckoutModules());
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
+    it('survives the sweep while it waits for its cash', async () => {
+        const id = await placeWalkIn();
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+
+        expect((await orderRepository.findById(id))!.email).toBe('counter@example.com');
+    });
+
+    it('is scrubbed once it is canceled unpaid', async () => {
+        const id = await placeWalkIn();
+        await forceOrderStatus(id, OrderStatus.canceled);
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+
+        expect((await orderRepository.findById(id))!.email).toBe('anonymized@deleted.invalid');
+    });
+
+    it('is scrubbed after its guarantee window once delivered, and not before', async () => {
+        const id = await placeWalkIn();
+        await markOrderPaidAt(id, new Date(Date.now() - 400 * DAY));
+        await forceOrderStatus(id, OrderStatus.delivered);
+        await setConformityUntil(id, new Date(Date.now() + 10 * DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await setConformityUntil(id, new Date(Date.now() - DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+    });
+});
+
 describe('orders — order.redacted outbox event', () => {
     it('is written once per scrubbed order, and for no order that is not yet due', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const due = await createOrder(user, [toOrderItem(product, 1)]);
+        const due = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
         // The second order is paid and still open: its window has not even started.
         const later = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.processing
@@ -362,7 +420,7 @@ describe('orders — order.redacted outbox event', () => {
     it('is not written again by a rerun', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.canceled });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
         await orderService.anonymizeDueOrders();
 
@@ -374,7 +432,9 @@ describe('orders — order.redacted outbox event', () => {
     it('is written for an order whose clock runs on an account that still exists (minimised, not erased)', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
         await orderModel.updateOne(
             { _id: order._id },
             { $set: { piiClockStartedAt: new Date(Date.now() - 1000) } },
@@ -391,7 +451,9 @@ describe('orders — order.redacted outbox event', () => {
         const user = await createUser();
         const product = await createProduct();
         const orders = await Promise.all(
-            Array.from({ length: 3 }, () => createOrder(user, [toOrderItem(product, 1)]))
+            Array.from({ length: 3 }, () =>
+                createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.canceled })
+            )
         );
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 

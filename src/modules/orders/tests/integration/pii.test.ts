@@ -29,7 +29,8 @@ const BILLING = {
     street: '1 Accounts Office Way',
     city: 'London',
     zip: 'SW1A',
-    country: 'GB'
+    country: 'GB',
+    vatNumber: 'GB123456789'
 };
 /** Free text the buyer left on the order, which the redaction must clear. */
 const NOTES = 'Leave with the concierge, 2nd floor';
@@ -52,7 +53,14 @@ describe('order PII at rest', () => {
 
         const raw = JSON.stringify(await orderModel.collection.findOne({ _id: order._id }));
 
-        for (const plain of ['Ada Lovelace', 'Analytical Engine', 'London', '+44 20', 'concierge'])
+        for (const plain of [
+            'Ada Lovelace',
+            'Analytical Engine',
+            'London',
+            '+44 20',
+            'concierge',
+            'GB123456789'
+        ])
             expect(raw).not.toContain(plain);
     });
 
@@ -66,7 +74,10 @@ describe('order PII at rest', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.shippingAddress).toMatchObject(SHIPPING);
-        expect(response.body.billingAddress).toMatchObject({ street: BILLING.street });
+        expect(response.body.billingAddress).toMatchObject({
+            street: BILLING.street,
+            vatNumber: BILLING.vatNumber
+        });
         expect(response.body.notes).toBe(NOTES);
     });
 
