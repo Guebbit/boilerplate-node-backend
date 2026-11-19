@@ -172,7 +172,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
 
         const again = await issueCreditNote({
             orderId,
-            refundId: note.refundId,
+            refundId: String(note.refundId),
             amount: '20.00',
             full: false
         });

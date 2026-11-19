@@ -8,5 +8,6 @@
 
 export { creditShares } from './credit-shares';
 export type { CreditableInvoice, RefundedGoods, CreditLine } from './credit-shares';
+export { remainderLines } from './remainder';
 export { asTaxItems } from './tax-items';
 export { buyerRetentionEnd, isBuyerRetentionOver, buyerRetentionScanBound } from './retention';

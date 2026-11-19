@@ -7,17 +7,20 @@
 
 import { mergeReports, type EncryptedField } from '@infrastructure/security/reencrypt';
 import { getPiiEncryptionKeyRing, piiBinding } from '@infrastructure/security/pii-encryption';
+import type { OrderBillingAddress } from '@types';
 import type { OrderDocument, OrderEventDocument } from '../model';
 import { orderEventRepository, orderRepository } from '../repository';
-import { POSTAL_ADDRESS_FIELDS } from '@domain-primitives/postal-address';
-import { ADDRESS_PATHS, addressAad, notesAad, timelineNoteAad } from '../pii';
+import { ADDRESS_PATHS, addressAad, addressFieldsOf, notesAad, timelineNoteAad } from '../pii';
 
 /** Every encrypted value one order holds, bound to its own `_id`. */
 const fieldsOf = (order: OrderDocument): EncryptedField[] => {
     const id = String(order._id);
     const addresses = ADDRESS_PATHS.flatMap((path) =>
-        POSTAL_ADDRESS_FIELDS.flatMap((field) => {
-            const stored = order[path]?.[field];
+        addressFieldsOf(path).flatMap((field) => {
+            // `vatNumber` is on the billing address only; `addressFieldsOf` hands it to that path alone.
+            // Widened to the billing shape: it alone can hold a `vatNumber`, and `addressFieldsOf` asks for one only on that path.
+            const address: OrderBillingAddress | undefined = order[path];
+            const stored = address?.[field];
             return stored === undefined
                 ? []
                 : [

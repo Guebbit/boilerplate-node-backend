@@ -10,15 +10,15 @@
 
 import { Types, type ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderService, orderTotal } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
 import { findInvoiceForOrder } from './issue-invoice';
 import { allocateCreditNoteNumber, readWinner } from './numbering';
-import { asTaxItems, creditShares, type CreditableInvoice, type RefundedGoods } from '../domain';
-import { creditBreakdownOf } from './credit-breakdown';
+import { creditShares, type CreditableInvoice, type RefundedGoods } from '../domain';
+import { figuresOfLines, mirrorOf, type DocumentFigures } from './figures';
 import type { CreditNoteDocument, InvoiceDocument } from '../model';
 
 /** The refund a credit note is issued for — `PAYMENT_REFUNDED`'s payload, as this module needs it. */
@@ -55,32 +55,8 @@ const creditableOf = (invoice: InvoiceDocument): CreditableInvoice => ({
  * @param invoice - the invoice being reversed
  * @param input - the refund
  */
-const reversedFigures = (
-    invoice: InvoiceDocument,
-    input: RefundedInput
-): Pick<
-    CreditNoteDocument,
-    | 'lines'
-    | 'netTotal'
-    | 'taxTotal'
-    | 'shippingNetAmount'
-    | 'shippingTaxAmount'
-    | 'taxSummary'
-    | 'shippingByRate'
-    | 'grandTotal'
-> & { shippingCost?: string } => {
-    if (input.full)
-        return {
-            lines: invoice.lines,
-            ...(invoice.shippingCost === undefined ? {} : { shippingCost: invoice.shippingCost }),
-            netTotal: invoice.netTotal,
-            taxTotal: invoice.taxTotal,
-            shippingNetAmount: invoice.shippingNetAmount,
-            shippingTaxAmount: invoice.shippingTaxAmount,
-            taxSummary: invoice.taxSummary,
-            shippingByRate: invoice.shippingByRate,
-            grandTotal: invoice.grandTotal
-        };
+const reversedFigures = (invoice: InvoiceDocument, input: RefundedInput): DocumentFigures => {
+    if (input.full) return mirrorOf(invoice);
 
     const lines = creditShares(
         creditableOf(invoice),
@@ -88,21 +64,7 @@ const reversedFigures = (
         translator(invoice.locale)('invoicing.document.partial-refund-line'),
         input.goods
     );
-    const breakdown = creditBreakdownOf(lines, invoice.currency);
-    return {
-        lines,
-        netTotal: breakdown.netTotal,
-        taxTotal: breakdown.taxTotal,
-        shippingNetAmount: breakdown.shippingNetAmount,
-        shippingTaxAmount: breakdown.shippingTaxAmount,
-        taxSummary: breakdown.taxSummary,
-        shippingByRate: breakdown.shippingByRate,
-        grandTotal: orderTotal({
-            items: asTaxItems(lines),
-            shippingCost: undefined,
-            currency: invoice.currency
-        })
-    };
+    return figuresOfLines(lines, invoice.currency);
 };
 
 /**
@@ -131,6 +93,31 @@ const appendIssuedRow = (
         .then(() => note);
 
 /**
+ * Allocates the credit-note number, once the invoice is confirmed still the order's LIVE one.
+ *
+ * Checked in the transaction, with its session: a correction of the buyer cancels the invoice and
+ * issues a new one in a transaction that writes this same counter, so the two conflict and the
+ * loser runs again. A refund that finds its invoice cancelled throws, and the outbox retries the
+ * event against the new invoice. Without this, the note would point at a cancelled invoice and
+ * credit money the new one still carries.
+ *
+ * @param invoice - the invoice read before the transaction
+ * @param issuedAt - the instant the note will carry
+ * @param session - the issuing transaction
+ * @throws {Error} when `invoice` is no longer the order's live invoice
+ */
+const allocateWhileLive = (
+    invoice: InvoiceDocument,
+    issuedAt: Date,
+    session: ClientSession
+): Promise<string> =>
+    invoicingRepository.findInvoiceByOrderId(String(invoice.orderId), session).then((live) => {
+        if (!live?._id.equals(invoice._id))
+            throw new Error(`Invoice ${invoice.number} is no longer the live invoice of its order`);
+        return allocateCreditNoteNumber(issuedAt, session);
+    });
+
+/**
  * Freezes and numbers a credit note for one refund of the invoice already issued on the order. A
  * no-op — `undefined`, never a throw — when no invoice exists to correct. That is right when the
  * money never paid for a sale (a late payment on a canceled order, an amount mismatch): no
@@ -143,6 +130,8 @@ const appendIssuedRow = (
  * @param input - the refund that was just settled
  * @returns the credit note just issued (or the one this refund already had), or `undefined` when
  *   there was no invoice to correct
+ * @throws {Error} when a correction of the buyer cancelled the invoice between the read and the
+ *   write: the outbox retries the event, and the retry credits the new live invoice
  * @internal Freezes a numbered legal document from the amounts it is given: only this module's `payment.refunded` listener may call it, so it is not on `invoicingService`.
  */
 export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocument | undefined> =>
@@ -156,7 +145,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
         const issuedAt = new Date();
 
         return withTransaction((session) =>
-            allocateCreditNoteNumber(issuedAt, session).then((number) =>
+            allocateWhileLive(invoice, issuedAt, session).then((number) =>
                 invoicingRepository
                     .insertCreditNote(
                         {
@@ -164,6 +153,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                             orderId: invoice.orderId,
                             invoiceId: invoice._id,
                             invoiceNumber: invoice.number,
+                            reason: 'refund',
                             refundId: input.refundId,
                             number,
                             issuedAt,

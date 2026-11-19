@@ -127,6 +127,6 @@ export const renderCreditNotePdf = (creditNote: CreditNoteDocument): Promise<Buf
         resolveEInvoicingProvider().render({
             kind: 'creditNote',
             ...sharedFields(creditNote, 'credit-note'),
-            reversalOf: { number: creditNote.invoiceNumber }
+            reversalOf: { number: creditNote.invoiceNumber, reason: creditNote.reason }
         })
     );

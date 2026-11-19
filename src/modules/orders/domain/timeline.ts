@@ -31,6 +31,8 @@ export type OrderTimelineEntryAudience = OrderTimelineEntry['audience'];
  *   fulfillment_held / fulfillment_released: a hold's reason is an internal call (a risk check, say).
  *   address_corrected: who changed where an order ships is the shop's own business; the buyer sees the
  *     new address on the order itself.
+ *   billing_corrected: who changed the buyer's invoice details is the shop's own business; the buyer
+ *     sees the corrected invoice itself (`invoice_corrected`, which is theirs).
  *   refund_failed: the provider's refusal; the buyer's answer is the refund that settles.
  *   refund_canceled: staff voided a refund that never moved money; nothing for the buyer to act on.
  *   refund_reversed: the provider took a refund back; the buyer is mailed, the row is staff's.
@@ -71,6 +73,8 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, OrderTimeline
     release_date_moved: 'buyer',
     delay_notice_sent: 'buyer',
     address_corrected: 'staff',
+    billing_corrected: 'staff',
+    invoice_corrected: 'buyer',
     note_added: 'staff'
 };
 

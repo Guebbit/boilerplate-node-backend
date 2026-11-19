@@ -47,6 +47,9 @@ export type { OrderActor, OrderEvent, OrderEventName } from './lifecycle';
 export { orderTaxBreakdown, lineTaxFromRateTotals } from './tax';
 export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSummary } from './tax';
 
+/** The billing-address correction: when it is allowed, and when a request changes nothing. */
+export { canCorrectBilling, isSameBillingAddress } from './billing';
+
 /** The right of withdrawal: when the window closes, and whether the button shows. */
 export {
     canCorrectAddress,

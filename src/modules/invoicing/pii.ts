@@ -18,16 +18,18 @@ import type { InvoiceParty } from './model';
 export type InvoiceDocumentKind = 'invoice' | 'credit-note';
 
 /**
- * The party's fields, walked by both directions. Its own five, not the shared postal-address list:
- * an invoice carries no phone, on purpose (data minimisation, GDPR Art. 5(1)(c)).
+ * The party's fields, walked by both directions. Its own five postal ones plus the VAT number, not
+ * the shared postal-address list: an invoice carries no phone, on purpose (data minimisation,
+ * GDPR Art. 5(1)(c)), and the VAT number is the one thing an order's billing address adds.
  */
 export const PARTY_FIELDS = [
     'fullName',
     'street',
     'city',
     'zip',
-    'country'
-] as const satisfies readonly PostalAddressField[];
+    'country',
+    'vatNumber'
+] as const satisfies readonly (PostalAddressField | 'vatNumber')[];
 
 /** The associated data binding one field of one document's address. */
 export const partyAad = (
@@ -37,7 +39,8 @@ export const partyAad = (
 ): string => `invoicing:${kind}.billingAddress.${field}:${documentId}`;
 
 /**
- * Rewrites every field of one party with `convert`.
+ * Rewrites every field of one party with `convert`. The VAT number is optional: absent stays
+ * absent, never the string `"undefined"`.
  *
  * @param convert - receives the stored value and its field name
  */
@@ -49,7 +52,8 @@ const mapParty = (
     street: convert(party.street, 'street'),
     city: convert(party.city, 'city'),
     zip: convert(party.zip, 'zip'),
-    country: convert(party.country, 'country')
+    country: convert(party.country, 'country'),
+    ...(party.vatNumber === undefined ? {} : { vatNumber: convert(party.vatNumber, 'vatNumber') })
 });
 
 /**

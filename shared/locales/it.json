@@ -204,6 +204,7 @@
             "userId": "utente",
             "username": "nome utente",
             "value": "valore",
+            "vatNumber": "partita IVA",
             "website": "sito web",
             "weight": "peso",
             "zip": "CAP"

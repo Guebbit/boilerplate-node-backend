@@ -8,7 +8,12 @@
 
 import type { OutboxAnnouncement } from '@kernel/outbox';
 import type { OrderStatus } from '@types';
-import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../events';
+import {
+    ORDER_BILLING_CORRECTED,
+    ORDER_CREATED,
+    ORDER_STATUS_CHANGED,
+    ORDER_STATUS_OVERRIDDEN
+} from '../events';
 
 /**
  * The `order.status_changed` announcement for one landed status move.
@@ -59,5 +64,18 @@ export const statusOverriddenEvent = (
 ): OutboxAnnouncement<typeof ORDER_STATUS_OVERRIDDEN> => ({
     name: ORDER_STATUS_OVERRIDDEN,
     payload: { orderId, from, to, at: at.toISOString(), mode: 'status' },
+    aggregateId: orderId
+});
+
+/**
+ * The `order.billing_corrected` announcement for one landed billing correction.
+ *
+ * @param orderId - the order whose billing address changed
+ */
+export const billingCorrectedEvent = (
+    orderId: string
+): OutboxAnnouncement<typeof ORDER_BILLING_CORRECTED> => ({
+    name: ORDER_BILLING_CORRECTED,
+    payload: { orderId },
     aggregateId: orderId
 });
