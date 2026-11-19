@@ -139,6 +139,7 @@
             "page": "Page",
             "pageSize": "Page size",
             "paidFrom": "Paid from",
+            "paidOutside": "Paid outside the app",
             "paidTo": "Paid to",
             "password": "Password",
             "passwordConfirm": "Password confirmation",

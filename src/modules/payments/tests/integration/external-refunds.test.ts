@@ -320,6 +320,35 @@ describe('a refund made in the dashboard', () => {
         expect(payment.amountRefunded).toBe('130.00');
         expect(await stampOf(orderId)).toBe('refunded');
     });
+
+    it('tells staff when it takes the total past what was paid, though no refund of ours is open', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        // 70.00 recorded here as already paid outside, then 50.00 made in the dashboard: 120.00 of 100.00.
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: '70.00',
+            paidOutside: { method: 'cash' }
+        });
+        const refundRef = addFakeExternalRefund(providerRef, {
+            amount: '50.00',
+            currency: 'EUR',
+            status: 'succeeded'
+        });
+
+        await deliverRefund(providerRef, refundRef);
+
+        const { _id: paymentId } = await paymentOf(orderId);
+        const attention = await paymentService.listAttention();
+        expect(attention.items).toEqual([
+            expect.objectContaining({
+                kind: 'over_refunded',
+                orderId,
+                paymentId: String(paymentId),
+                amount: '120.00',
+                exceedsBy: '20.00'
+            })
+        ]);
+        expect(attention.items[0]).not.toHaveProperty('refundId');
+    });
 });
 
 describe('a refund that is ours', () => {

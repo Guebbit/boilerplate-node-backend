@@ -41,13 +41,22 @@ still land that charge on its own, and recording money too would risk charging t
 attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
 becomes the offline one.
 
+**Cash is a method of the by-hand record, and no deployment switch hides it.** `method` is
+`bank_transfer`, `cash` or `other` (the contract's `OutsideMoneyMethod`, shared with a refund paid
+outside). Who may record one is the role's `PaymentRecording` and `PaymentRefunding` sets, never an
+`.env` knob, on purpose: the same tools are the only door for bank-transfer money and the rescue
+for a failed card refund, so a switch that hid them would break shops that work.
+
 **Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
 money that left the system by hand can only be confirmed returned by a person. Every way a refund
 opens on a hand-paid payment (a cancel, a late transfer on a cancelled order, an operator's
 `refundPayment`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
 and writes a `payment.refund_owed_by_hand` audit row naming the order, the record, the amount and
 the reason; the actor is the caller, or the system when none is behind it. Nobody settles it on the
-spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
+spot by default: goods arriving or a buyer withdrawing is not cash going back. The one exception is
+an operator who says the money is already back (`paidOutside`, see
+[Refunds](./payments-refunds.md#paid-outside)): that record is opened and settled in one step, and
+no owed-by-hand row is written for it.
 
 `settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
 fresh-session tier as recording a payment) is the only door that sets `settledByHand: true` (on the refund, never on the payment: one hand-settled refund says nothing about the next). It
@@ -59,12 +68,9 @@ operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT
 `succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
 
 **The `actions` on every payment.** Each response that carries a payment, the answer to every
-write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
-card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
-than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
-`succeeded` payment, and something left: a refund still open counts against what is left but does
-not hide the control while money remains) and `settleRefundByHand`. `confirm`, `sync` and `intent` read the
-order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
+write included, carries `PaymentActions`. What each one means is in
+[Refunds](./payments-refunds.md#payment-actions); `confirm`, `sync` and `intent` read the order for
+`pay`, while `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
 whatever the order says, so they read nothing.
 
 <a id="refund-records"></a>

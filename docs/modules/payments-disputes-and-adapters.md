@@ -54,6 +54,10 @@ flowchart TD
 | Other currency              | a dispute in another currency than the payment is stored like any other, but never subtracted from what is left to refund; staff check it        |
 | Unshipped goods             | nothing is held by itself; staff use the existing `high_risk` hold                                                                               |
 
+**A lost dispute event.** The application never re-reads a dispute from the provider (SC-5: the port has
+no dispute read, and the provider's word is the only source of one). A missed event is resent from the
+provider's own dashboard, and past its window the attention row can stay until staff close it.
+
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
 **Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
