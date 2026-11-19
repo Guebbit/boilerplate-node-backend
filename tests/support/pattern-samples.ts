@@ -46,6 +46,8 @@ const PATTERN_SAMPLES: Record<string, string> = {
      */
     '^-?\\d+(\\.\\d+)?$': '1.00',
     '^\\d+(\\.\\d+)?$': '1.00',
+    // Buyer VAT number on a billing address: a country prefix, then the national digits.
+    '^[A-Z]{2}[A-Za-z0-9]{2,18}$': 'IT01234567890',
     // An https-only URL.
     '(?:^https://)': 'https://example.com/hook'
 };
