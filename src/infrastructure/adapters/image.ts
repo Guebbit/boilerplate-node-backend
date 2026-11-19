@@ -36,7 +36,7 @@ sharp.concurrency(1);
 
 /**
  * Sharp: turn off libvips's repeated-operation cache, which a one-shot digest never benefits
- * from, and which would otherwise sit in every fork's memory.
+ * from, and which would otherwise sit in the process's memory.
  * https://sharp.pixelplumbing.com/api-utility#cache
  */
 sharp.cache(false);

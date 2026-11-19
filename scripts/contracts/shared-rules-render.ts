@@ -94,7 +94,8 @@ const renderExport = (document: unknown, spec: GeneratedExport): string => {
     const literal =
         spec.shape === 'keyed-list'
             ? // A `keyed-list` spec means the YAML slice is a list of keyed entries; the render step
-              // validates each.
+              // only checks that no two derive the same key (the shape check is
+              // generate-shared-rule-schemas.ts).
               renderKeyed(slice as readonly KeyedEntry[])
             : `${withNumericSeparators(JSON.stringify(slice, undefined, 4))} as const`;
     return `${docblock(spec.description)}\nexport const ${spec.exportName} = ${literal};\n`;

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { currentEnvironment } from '@infrastructure/config/store';
 import { setEnvironment } from '@tests/environment';
 import { resolveSecretFiles } from '@infrastructure/config/secret-files';
-import { assertConfigIn } from '@infrastructure/config/define';
+import { assertConfig } from '@infrastructure/config/define';
 import { antibotConfig, mailConfig } from '@infrastructure/adapters/config';
 import { databaseConfig } from '@infrastructure/runtime/config';
 
@@ -238,24 +238,14 @@ describe('through the config store', () => {
             NODE_ANTIBOT_ALTCHA_SECRET_FILE: secretFile('altcha', `${'a'.repeat(32)}\n`)
         };
         try {
-            expect(() =>
-                assertConfigIn(
-                    slices,
-                    resolveSecretFiles({
-                        ...production,
-                        NODE_SMTP_PASS_FILE: secretFile('smtp', 'from-file\n')
-                    })
-                )
-            ).not.toThrow();
-            expect(() =>
-                assertConfigIn(
-                    slices,
-                    resolveSecretFiles({
-                        ...production,
-                        NODE_SMTP_PASS_FILE: secretFile('smtp-empty', '')
-                    })
-                )
-            ).toThrow(/NODE_SMTP_PASS/);
+            // Through the store, as boot does: `setEnvironment` resolves the files, `assertConfig` judges.
+            setEnvironment({
+                ...production,
+                NODE_SMTP_PASS_FILE: secretFile('smtp', 'from-file\n')
+            });
+            expect(() => assertConfig(slices)).not.toThrow();
+            setEnvironment({ ...production, NODE_SMTP_PASS_FILE: secretFile('smtp-empty', '') });
+            expect(() => assertConfig(slices)).toThrow(/NODE_SMTP_PASS/);
         } finally {
             rmSync(directory, { recursive: true, force: true });
         }

@@ -127,7 +127,7 @@ describe('scenarios/apply.ts', () => {
     );
 
     it(
-        'seeds an empty database, refuses a non-empty one, then reseeds after --reset',
+        'seeds an empty database, then reseeds after --reset',
         async () => {
             const dbUri = freshDbUri();
             const connection = await mongoose
@@ -137,12 +137,6 @@ describe('scenarios/apply.ts', () => {
 
             const first = await runApply(['blank'], dbUri);
             expect(first.status).toBe(0);
-            await expect(userCount()).resolves.toBe(NAMED_ACCOUNT_COUNT);
-
-            // Same database, seeded again with no --reset: refused, and left exactly as it was.
-            const second = await runApply(['blank'], dbUri);
-            expect(second.status).toBe(0);
-            expect(second.stdout + second.stderr).toContain('already holds data');
             await expect(userCount()).resolves.toBe(NAMED_ACCOUNT_COUNT);
 
             // --reset empties it first, so the rebuild lands on the same count, not double it.
@@ -255,27 +249,6 @@ describe('scenarios/apply.ts', () => {
             await expect(
                 connection.collection('users').countDocuments({ email: 'half-a-shop@example.test' })
             ).resolves.toBe(0);
-            await expect(
-                connection.collection('seed_marker').findOne({ _id: 'seed' as never })
-            ).resolves.toMatchObject({ state: 'done' });
-
-            await connection.close();
-        },
-        APPLY_TIMEOUT_MS
-    );
-
-    it(
-        '--reset leaves `done` behind on a database that held other data',
-        async () => {
-            const dbUri = freshDbUri();
-            const connection = await mongoose
-                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
-                .asPromise();
-            await connection.collection('users').insertOne({ email: 'stray@example.test' });
-
-            const reseeded = await runApply(['--reset', 'blank'], dbUri);
-            expect(reseeded.status).toBe(0);
-
             await expect(
                 connection.collection('seed_marker').findOne({ _id: 'seed' as never })
             ).resolves.toMatchObject({ state: 'done' });

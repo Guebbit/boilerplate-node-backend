@@ -241,7 +241,7 @@ const indexUnderTag = (
 /**
  * Claim the right to rebuild one stale entry — refresh-ahead's only mechanism.
  *
- * `SET key 1 NX EX seconds`: Redis grants the key to exactly one caller across every worker and
+ * `SET key 1 NX EX seconds`: Redis grants the key to exactly one caller across every
  * replica; every other caller gets `null` back for the same window. https://redis.io/commands/set/
  * (the `NX` + `EX` combination). No lock to release and no waiter: a claim that is never renewed
  * simply expires, and the next reader past `staleAt` claims it instead.
@@ -277,7 +277,7 @@ export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean
  * Remove every cached entry linked to the given tags — called after a successful write.
  *
  * No cross-instance broadcast needed: entries live in shared Redis, so one call invalidates them
- * for every worker and replica. `reachable: false` means the pre-write response is still cached
+ * for every replica. `reachable: false` means the pre-write response is still cached
  * and served until its TTL expires — a stale read window, not a crash — so the caller decides
  * what to do with the answer; this never rejects.
  *

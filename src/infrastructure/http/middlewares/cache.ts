@@ -550,7 +550,7 @@ const serveOrArm = (
                 }
 
                 /**
-                 * Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
+                 * Past the soft TTL: exactly one caller, across every replica, rebuilds —
                  * everyone else reads back their OWN key's stale body rather than wait. Nobody ever
                  * receives the rebuilder's response object, so this cannot leak across callers —
                  * every caller sharing this key already shares the same answer by construction,
@@ -672,7 +672,7 @@ export const searchCache = (
  * clear the `products` tag.
  *
  * One call covers every instance: the cached responses and tag sets live in shared Redis, so
- * deleting them here is visible to every other worker immediately.
+ * deleting them here is visible to every other replica immediately.
  *
  * @param tags - the cache tags to clear, e.g. `['products']`
  * @returns an Express middleware to mount after the write it invalidates

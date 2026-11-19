@@ -175,7 +175,7 @@ assert_heavy_worker_consuming
 assert_worker_scrape
 
 # `app`, `worker`, `worker-heavy`, `cron` and `setup` read the whole client `.env`, so a plain `NODE_X=value` left in it would
-# beat the file (secret-files.ts) and show in `inspect`. Production refused to boot above without
+# show in `inspect`, even though the file wins over it (secret-files.ts). Production refused to boot above without
 # the device-cookie and SMTP files; this proves no value, only the paths, reached the containers.
 step "no secret value in the environment of app, worker, worker-heavy, cron or setup"
 for service in app worker worker-heavy cron setup; do

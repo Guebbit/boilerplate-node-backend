@@ -156,7 +156,7 @@ export const shutdownInfra = (
 ) =>
     /**
      * `Promise.resolve(server)` starts the chain uniformly whether or not a server was passed
-     * (workers and CLI entry points call this without one).
+     * (a CLI that boots without listening, such as scenarios/apply.ts, gets here without one).
      */
     Promise.resolve(server)
         .then((s) => {

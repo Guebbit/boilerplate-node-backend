@@ -59,8 +59,8 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     if (!sinkBaseUrl) return Promise.resolve([]);
 
     /**
-     * `createdAt` is set here only to satisfy the ring entry's type; the subdocument's own
-     * `{ timestamps: { createdAt: true } }` stamps the same instant on insert.
+     * `createdAt` is set here to satisfy the ring entry's type; Mongoose keeps a `createdAt` that
+     * is given, so this value is the one stored.
      */
     const entry = {
         id: WEBHOOK_DEMO_SECRET_ID,

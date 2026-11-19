@@ -118,6 +118,7 @@ export const scheduleAccountDeletion = (
  *
  * Restoring does not sign anyone in or revive a session: the epoch moved at the lock stays.
  *
+ * @internal Unlocks an account with no check of who asks: the caller has verified the link or the claim.
  * @param user - the locked account
  * @param restoredAt - one clock: the lock and the ledger row carry the same instant
  * @returns a write to hand to the spending transaction; it answers whether THIS call restored the

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { startEphemeralMongo, type EphemeralMongo } from '../../scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '../../scenarios/support/ephemeral-mongod';
 import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
+import { isProcessAlive } from './process-alive';
 
 /**
  * The one handle `globalSetup` has to hand `globalTeardown`. Jest runs both in the same process but
@@ -29,7 +30,7 @@ export interface TestGlobals {
  * Fix:       ownership, not detection. Each instance gets its own directory under the repo, named
  *            for its pid, and deletes exactly that one ({@link globalTeardown}). No instance sees
  *            another's, so nobody works out WHOSE stray directory it is. What remains is "is the
- *            pid a directory is named for still running", which {@link isAlive} answers with
+ *            pid a directory is named for still running", which {@link isProcessAlive} answers with
  *            `process.kill(pid, 0)`; no `mongod.lock` parsing, no age thresholds.
  * Leftover:  a SIGKILLed instance leaves its directory in the gitignored `tmp/test/`. Every
  *            mutation entry point (`scripts/mutation/stryker-run.ts`) clears it first, and
@@ -47,22 +48,6 @@ export const instanceDataRoot = (): string =>
 /** This instance's file sandbox root, one directory per test file beneath it — `file-sandbox.ts`. */
 export const instanceFilesRoot = (): string =>
     path.join(TEST_TMP_ROOT, 'files', String(process.pid));
-
-/**
- * Whether a pid is still running.
- *
- * Signal `0` performs the permission and existence checks without delivering anything. `ESRCH`
- * means no such process; `EPERM` means it exists but belongs to someone else, which still counts
- * as alive — treating it as dead is how you delete a live server's data directory.
- */
-const isAlive = (pid: number): boolean => {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch (error) {
-        return (error as NodeJS.ErrnoException).code === 'EPERM';
-    }
-};
 
 /**
  * Deletes the data roots of instances that are no longer running.
@@ -83,7 +68,7 @@ const sweepDeadInstances = async (mongoRoot: string): Promise<void> => {
     await Promise.all(
         entries
             .filter((entry) => /^\d+$/.test(entry))
-            .filter((entry) => Number(entry) !== process.pid && !isAlive(Number(entry)))
+            .filter((entry) => Number(entry) !== process.pid && !isProcessAlive(Number(entry)))
             .map((entry) =>
                 rm(path.join(mongoRoot, entry), { recursive: true, force: true }).catch(() => {})
             )

@@ -289,7 +289,7 @@ describe('cancelPendingEmailChange', () => {
 describe('confirmEmailChange', () => {
     it('swaps pendingEmail into email, marks verified, clears pendingEmail, and revokes refresh tokens', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
+        const user = await createUser({ email: 'before@example.com' });
         await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
         await accountService.requestEmailChange(user.id, 'after@example.com', testCallerContext);
         await plantToken(user.id, EMAIL_CHANGE_TOKEN_TYPE, 'swap-token', { ttlMs: 3_600_000 });

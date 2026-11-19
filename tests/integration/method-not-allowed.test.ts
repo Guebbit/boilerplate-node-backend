@@ -23,21 +23,6 @@ describe('a wrong method on a known path', () => {
         expect(response.type).toBe('application/problem+json');
         expect(response.body).toMatchObject({ title: 'Method Not Allowed', status: 405 });
     });
-
-    it('answers 405 on a literal path that a templated sibling would otherwise catch', async () => {
-        // `/products/{id}` also reads `facets` as an id: without the pre-router guard this is a 404.
-        const response = await api().delete('/products/facets');
-
-        expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
-    });
-
-    it('answers 405 on a system route too', async () => {
-        const response = await api().post('/livez');
-
-        expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
-    });
 });
 
 /** Every verb the spec can declare an operation under. */
@@ -63,7 +48,9 @@ describe('every path of the spec, asked with every method it does not declare', 
     it.each(PATHS)(
         '%s answers 405 + Allow for each undeclared method',
         async (_route, operation, declared) => {
-            // As admin: a router-level auth guard answers an anonymous caller 401 before the 405 guard runs.
+            // As admin. The early 405 guard (`app/routes.ts`) runs before module auth on every literal path and
+            // every shadowed template; only a templated path with no more specific sibling reaches the
+            // router's auth, and so a 401 for an anonymous caller, first.
             const { user, bearer } = await authenticateAs('admin');
             const url = buildUrl(operation, await seedWorld(user));
             // HEAD rides on GET, and OPTIONS is listed wherever the path has any method (the guard's rule).

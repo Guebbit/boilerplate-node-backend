@@ -142,6 +142,10 @@ The sync on a stock write is a **plain awaited function call inside `applyTransi
 domain event. This module deliberately has no stock event (see "The story" above): an event a
 listener can miss is fine for a fact nothing depends on, and wrong for one a catalogue page reads.
 
+A caller that moves several products at once (a multi-line checkout, a hold's release) refreshes
+them in one batch: one read of all their levels, one sync per product, one clear of the `products`
+cache tag. It is still a plain awaited call that never rejects.
+
 One exception, and it is not a stock write: a payment that serves a preorder moves counters inside
 the payer's transaction, where the catalogue copy cannot be written (it would not roll back). That
 reaction is a listener on this module's own `inventory.backorder_allocated`, which refreshes the

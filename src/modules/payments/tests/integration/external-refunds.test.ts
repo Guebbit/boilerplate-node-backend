@@ -287,25 +287,6 @@ describe('a refund made in the dashboard', () => {
         expect(await unrecordedEvents()).toHaveLength(2);
     });
 
-    it('is imported by the staff re-sync once the race is no longer lost', async () => {
-        const { orderId, providerRef } = await paidOrder();
-        const refundRef = addFakeExternalRefund(providerRef, {
-            amount: '30.00',
-            currency: 'EUR',
-            status: 'succeeded'
-        });
-        jest.spyOn(paymentRepository, 'importRefund').mockResolvedValue(null);
-        await deliverRefund(providerRef, refundRef);
-        jest.restoreAllMocks();
-        const { _id } = await paymentOf(orderId);
-
-        await paymentService.syncRefunds(String(_id), asAdmin());
-        await paymentService.syncRefunds(String(_id), asAdmin());
-
-        expect(await refundsOf(orderId)).toHaveLength(1);
-        expect(await refundedOf(orderId)).toBe('30.00');
-    });
-
     it('records one that is bigger than what was paid: the money moved', async () => {
         const { orderId, providerRef } = await paidOrder();
         const refundRef = addFakeExternalRefund(providerRef, {

@@ -85,7 +85,7 @@ export const isSpent = (id: string): Promise<boolean> => {
 
 /**
  * Record a challenge id as used, atomically: the local map first (synchronous, so two requests in
- * one process cannot both win), then Redis `SET NX`, which settles it across workers. Call it only
+ * one process cannot both win), then Redis `SET NX`, which settles it across replicas. Call it only
  * for a payload `verify` accepted.
  *
  * @param id - the challenge id the payload carries

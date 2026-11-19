@@ -115,6 +115,7 @@ export const passwordChange = (
  * sessions stay live, and the event exists exactly when the change does. The reset hands this to
  * the transaction that also spends its link; the caller wakes the outbox relay after the commit.
  *
+ * @internal Sets a password with no check of who asks: the change and reset flows have verified the caller or the link.
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted
  * @param beforeSave - a caller's own mutation to ride along in the same write, or `undefined`
