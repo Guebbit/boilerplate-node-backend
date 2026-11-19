@@ -7,7 +7,7 @@
 #   ConfigMap `edge-env`     NODE_URL, NODE_FRONTEND_URL, NODE_CORS_ORIGIN: where clients reach the API
 #
 # Order: `mongo`, `mongo-init`, `cache` and `setup` first, wait for `setup` to complete, then
-# `app` and `cron`. Compose says this with `depends_on: service_completed_successfully`; here the
+# `app`, `worker` and `cron`. Compose says this with `depends_on: service_completed_successfully`; here the
 # objects carry `boilerplate/stage: app` so `-l boilerplate/stage!=app` and `-l boilerplate/stage=app`
 # can apply the two halves in turn, as k8s/rig.sh does. Applying everything at once boots `app`
 # against a database with no indexes and no shop row.
@@ -25,6 +25,7 @@ resources:
     - setup.yaml
     - app.yaml
     - cron.yaml
+    - worker.yaml
 
 # `app-env` and `crontab` carry a content hash in their name: an edit changes the name, which
 # changes the pod template, which rolls the Deployment. A plain ConfigMap edit would not.

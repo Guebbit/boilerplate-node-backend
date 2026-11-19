@@ -15,6 +15,18 @@ groups:
                 summary: 'API instance is down'
                 description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
+          # Availability: the queue worker's metrics endpoint unreachable. With no worker running,
+          # jobs (mail, image digests, webhook deliveries) wait in their queues and nothing else
+          # notices: the API keeps answering. Same wait and severity as `ApiDown`.
+          - alert: WorkerDown
+            expr: up{job="worker"} == 0
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'Queue worker instance is down'
+                description: 'Prometheus cannot reach the /observability/metrics endpoint of the queue worker for > 1 min; queued jobs are not being taken.'
+
           # A crash loop: the app restarts faster than `ApiDown`'s one-minute wait can complete, so
           # that alert never fires. More than two process starts in 15 minutes is not a deploy.
           # Scrape every copy as its own target: through a balancer each scrape hits a different copy

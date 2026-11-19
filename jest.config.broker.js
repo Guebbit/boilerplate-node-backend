@@ -9,7 +9,7 @@
  *                    (`NODE_PSEUDONYM_KEY`, which has no built-in value). NOT `tests/support/setup.ts`,
  *                    which boots i18n and raises budgets the queue adapter never touches; the cases
  *                    still build the adapter's own environment per case.
- *   `globalSetup`    starts a shared in-memory mongod. Nothing here reads a database.
+ *   `globalSetup`    starts a shared in-memory mongod. Only the app/worker boot case reads it.
  *   `testTimeout`    30s. Pulling a RabbitMQ image and waiting out a retry TTL is longer; the files
  *                    set their own.
  *
@@ -22,9 +22,14 @@ module.exports = {
     preset: base.preset,
     moduleNameMapper: base.moduleNameMapper,
     transform: base.transform,
+    // The ESM-only packages the app's own boot loads (`jose`): the app/worker boot case needs them.
+    transformIgnorePatterns: base.transformIgnorePatterns,
     // Same on-disk cache as the base config, see its comment.
     cacheDirectory: base.cacheDirectory,
     testEnvironment: base.testEnvironment,
+    // The shared in-memory mongod the app/worker boot case connects to (`NODE_TEST_MONGO_URI`).
+    globalSetup: base.globalSetup,
+    globalTeardown: base.globalTeardown,
     setupFiles: ['<rootDir>/tests/support/setup-environment.ts'],
     roots: ['<rootDir>/tests/broker'],
     testMatch: ['**/tests/broker/**/*.test.ts'],

@@ -20,10 +20,20 @@ something in front of them.
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Containers, production, dev       | `npm start` (`src/main.ts`, one process per container); scale with orchestrator replicas, each with its own address | the platform                        |
 | A single host, more than one core | N plain processes (`npm start`, one `NODE_PORT` each) behind the reverse proxy you already run                      | your process manager (systemd, say) |
+| Queue consumers                   | the `worker` service / Deployment (`src/worker.ts`); scale it on its own, `--scale worker=N` or `kubectl scale`     | the platform                        |
 
 `main.ts` loads `.env`, starts OTel, then imports `serve.ts`. The default is one process because the
 platform already restarts and scales; a second supervisor inside the container is two layers of
 process management.
+
+### Web copies and workers scale apart
+
+A web copy publishes jobs and never consumes them; the **worker** (`src/worker.ts`, same image) takes
+them off the broker. The two scale on their own numbers: more web copies for request traffic, more
+workers for a backlog. A worker copy serves nothing to clients (`GET /livez` is its health check and
+`/observability/metrics` the scrape, on `NODE_WORKER_PORT`), so it needs no balancer and no public address; it takes jobs from the same queues as its siblings
+with no coordination between them. With no broker configured the web copy does the work inline and a
+worker has nothing to take. → [RabbitMQ](rabbitmq.md#two-processes-one-image)
 
 For the single-host row, the proxy has to behave like a real balancer. The shape is the one `tests/replicas`
 builds ([Replicas testing](../build/replicas-testing.md#the-multi-copy-suite)):
@@ -42,6 +52,7 @@ PM2 is a footnote, not a recommendation: it can fork N processes that share one 
 - The `ApiRestarting` alert is unreliable behind a balancer: `process_start_time_seconds` jumps between copies.
 - SSE caps (per-user and global stream limits) are counted per copy, so the real ceiling is cap × copies.
 - Rate-limit budgets are per process without a `limits` Redis, so a budget of 100 a minute becomes `100 × copies`. Nothing refuses to boot without it, because a copy cannot see its siblings: set `NODE_RATE_LIMIT_REDIS_URL` yourself.
+- Queue backlog is a worker question: with a broker and no worker running, jobs wait in their queues until one starts.
 - Copies are stateless: anything kept in memory is invisible to the others and dies on the next deploy or crash. State lives in Mongo or Redis.
 
 ```mermaid
@@ -66,6 +77,7 @@ broadcast to the others. → [Redis and the workers](redis-cache.md#redis-and-th
 | Env var                             | Effect                                                                                                                                                                  |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_PORT`                         | The port a copy listens on. One per copy when several share a host.                                                                                                     |
+| `NODE_WORKER_PORT`                  | The port a worker copy listens on (default 3010): `GET /livez` and the Prometheus scrape. One per worker when several share a host.                                     |
 | `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | Teardown budget (default 15 000 ms), read by `registerSignalHandlers`; the drain steps below take shares of it.                                                         |
 | `NODE_SHUTDOWN_DELAY_MS`            | Lame-duck delay before the teardown (default 0): `/readyz` answers 503 but the server keeps serving, so a balancer's readiness poll notices before the listener closes. |
 
@@ -86,7 +98,10 @@ sequenceDiagram
 ```
 
 A copy's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
-process signals by `src/serve.ts`):
+process signals by `src/serve.ts`). A worker's is `createWorker()`'s `stop` (`src/app/worker-process.ts`,
+wired by `src/worker.ts`): the same sequence, with its small listener in the place of the
+HTTP server, and its consumers cancelled at the signal so a running job finishes and acks before the
+broker is closed:
 
 1. `GET /readyz` is marked draining (503) the moment the signal arrives, by `registerSignalHandlers` (`src/infrastructure/runtime/server-lifecycle.ts`) before `stop` runs. Every response now says `Connection: close`, queue consumers are cancelled, and the copy waits `NODE_SHUTDOWN_DELAY_MS` (see [Health checks](../operate/health-checks.md#shutting-down-behind-a-load-balancer)). A second signal is ignored.
 2. End the SSE streams (each told when to reconnect), then close the HTTP server: no new connections, idle keep-alive sockets dropped, in-flight requests drain. Anything still open at its share of the budget is cut.

@@ -6,7 +6,7 @@ audience: [operator]
 # Prometheus
 
 Prometheus is the **metrics backend** of this boilerplate.
-It scrapes the app's `/observability/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
+It scrapes the app's and the queue worker's `/observability/metrics` endpoints every 15 s (two alert counters, `queue_jobs_dead_lettered_total` and `webhook_delivery_attempts_total`, move only in the worker), stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
 
 ## What it is
 
@@ -69,6 +69,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | Alert                                | What it means                                                                                                                                                 |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ApiDown`                            | scrape target unreachable > 1 min                                                                                                                             |
+| `WorkerDown`                         | the queue worker's scrape target unreachable > 1 min: queued jobs (mail, image digests, webhooks) are not being taken                                         |
 | `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)                                                  |
 | `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (scrape every copy as its own target; `ApiDown` mutes it)                                                  |
 | `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                                                                        |

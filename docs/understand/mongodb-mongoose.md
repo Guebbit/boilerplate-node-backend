@@ -105,7 +105,7 @@ retired (`retireIndexes`) or pruned.
 **`autoIndex` is on in development and test**, and that is what gives the test suite its constraints
 for free: `mongodb-memory-server` starts empty and Mongoose builds every declared index on connect.
 Production turns it off (`configureMongoose()` in `src/infrastructure/runtime/database.ts`) and relies on `compose.production.yaml`'s one-shot
-`setup` service instead — it runs `db:sync` before `app`/`cron` ever start, so the index set is
+`setup` service instead — it runs `db:sync` before `app`/`worker`/`cron` ever start, so the index set is
 already in place by the time a connection with `autoIndex` off is opened.
 
 `tests/integration/scripts/db/index-sync.test.ts` is what holds this. It runs the sync against a

@@ -8,7 +8,7 @@ audience: [developer]
 Health, metrics, the platform operator's audit read and the SSE stream.
 
 ::: tip At a glance
-**Owns** — the operator-facing surface: health, the metrics overview, the live SSE stream, the scrape endpoint, and the audit read.
+**Owns** — the operator-facing surface: health, the metrics overview, the live SSE stream, the scrape endpoint (also served by the worker process on its own port, `worker-routes.ts`), and the audit read.
 **Depends on** — [`audit-logs`](./audit-logs.md), whose collection one of its routes reads.
 **Breaks if you change** — the three authentication styles in `routes.ts`. They are not interchangeable.
 :::

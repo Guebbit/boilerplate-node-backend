@@ -47,6 +47,22 @@ scrape_configs:
             target_label: instance
             replacement: api
 
+    # The queue worker (`src/worker.ts`): the same scrape, the same token, its own port. Two alert
+    # counters (`queue_jobs_dead_lettered_total`, `webhook_delivery_attempts_total`) move only
+    # there, so without this job `QueueJobsParked` and `WebhookDeliveriesFailingEverywhere` would
+    # never fire. A literal that must equal NODE_WORKER_PORT, for the reason `api`'s is NODE_PORT.
+    - job_name: worker
+      metrics_path: /observability/metrics
+      authorization:
+          type: Bearer
+          credentials_file: /etc/prometheus/secrets/metrics-token
+      static_configs:
+          - targets: ['worker:3010']
+      relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: worker
+
     # Scrape collector self-observability metrics (queue, exporter health, etc.).
     - job_name: otel-collector
       metrics_path: /metrics

@@ -51,6 +51,7 @@ is the one runtime door from `src/` to `scenarios/`: under `development` it impo
 | Who loads the doubles                                                  | How                                                                                                   |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `dev`, `dev:docker`, `e2e:serve`, `debug`, the `tests/replicas` copies | `src/main.ts` awaits the loader after `startTracing()` and before `serve`                             |
+| `dev:worker`, `dev:worker:docker`, `e2e:worker`                        | `src/worker.ts` awaits the loader after `startTracing()` and before it builds the worker              |
 | every `db:*`, `ops/*`, `job` script, the dev `cron` container          | `runScript` awaits it before `assertProcessConfig()`; the cron container needs nothing but `NODE_ENV` |
 | `demo`                                                                 | `scenarios/run-server.ts` imports the file first: it forces `NODE_ENV` itself, after imports          |
 | `scenario:apply`                                                       | `scenarios/apply.ts` imports the file: it forces `NODE_MAIL_TRANSPORT=log` whatever `NODE_ENV` is     |
