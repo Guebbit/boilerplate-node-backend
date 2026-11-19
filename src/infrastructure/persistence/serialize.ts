@@ -7,6 +7,7 @@
  * serves both.
  */
 
+import { types } from 'node:util';
 import type { ToObjectOptions } from 'mongoose';
 import { carryVersion } from './versioning';
 import { EDIT_REVISION } from './revision-plugin';
@@ -62,12 +63,6 @@ const isObjectId = (value: unknown): value is { toHexString: () => string } =>
     typeof value === 'object' && value !== null && Reflect.get(value, '_bsontype') === 'ObjectId';
 
 /**
- * Whether a value is a `Date`, whichever realm built it (a jest sandbox has its own `Date`).
- */
-const isDate = (value: unknown): value is Date =>
-    Object.prototype.toString.call(value) === '[object Date]';
-
-/**
  * Turns every `Date` into its ISO text and every `ObjectId` into its hex text, at any depth, in
  * place. Both calls are the ones `JSON.stringify` makes on the wire (`Date#toJSON`, the id's own
  * hex), so the bytes sent do not change; what changes is that the value is already text when a
@@ -81,7 +76,9 @@ const isDate = (value: unknown): value is Date =>
  * @returns `value` itself, or the text it was when it was a date or an id
  */
 const textifyDatesAndIds = (value: unknown): unknown => {
-    if (isDate(value)) return value.toJSON();
+    // V8 brand check, so a Date from another realm (jest's sandbox) still matches.
+    // https://nodejs.org/api/util.html#utiltypesisdatevalue
+    if (types.isDate(value)) return value.toJSON();
     if (isObjectId(value)) return value.toHexString();
     if (typeof value !== 'object' || value === null) return value;
     // Only plain objects and arrays hold nested values worth walking; a Buffer does not.
