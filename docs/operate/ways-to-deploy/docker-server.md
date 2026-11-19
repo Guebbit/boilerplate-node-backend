@@ -13,6 +13,8 @@ flowchart LR
     App --> Mongo[("MongoDB\nreplica set of one")]
     App --> Redis[("Redis\ncache + limits")]
     App --> Queue[("RabbitMQ\nqueue")]
+    Worker["worker"] --> Queue
+    Worker --> Mongo
     Cron["cron"] --> Mongo
     Backup["backup"] --> Repo[("restic repository")]
 ```
@@ -37,12 +39,12 @@ flowchart LR
     Build --> DocsBuild["docs-build\nVitePress"] --> Docs["docs\nnginx"]
 ```
 
-| Target    | What it is                                                         | Who builds it                                  |
-| --------- | ------------------------------------------------------------------ | ---------------------------------------------- |
-| `dev`     | The development image, and the one `npm run complete` runs in      | compose (`app`, `cron`), CI `container-gate`   |
-| `runtime` | What ships: production dependencies, the type-checked source       | compose production, CI `boot`, `publish-image` |
-| `docs`    | The documentation site served by nginx                             | compose profile `docs`                         |
-| `build`   | Installs everything and refuses a type error. Not built on its own | `runtime` and `docs-build` copy from it        |
+| Target    | What it is                                                         | Who builds it                                          |
+| --------- | ------------------------------------------------------------------ | ------------------------------------------------------ |
+| `dev`     | The development image, and the one `npm run complete` runs in      | compose (`app`, `worker`, `cron`), CI `container-gate` |
+| `runtime` | What ships: production dependencies, the type-checked source       | compose production, CI `boot`, `publish-image`         |
+| `docs`    | The documentation site served by nginx                             | compose profile `docs`                                 |
+| `build`   | Installs everything and refuses a type error. Not built on its own | `runtime` and `docs-build` copy from it                |
 
 ### Why `dev` is Debian and `runtime` is Alpine
 
@@ -146,7 +148,7 @@ services and the rest: [Getting Started — Production](../first-deploy.md#secre
 ### One-shot setup
 
 `setup` runs `db:sync` and `access:bootstrap` once, then exits: the equivalent of an `initContainer` or a
-one-off Job. `app` and `cron` wait for it to finish successfully, so a fresh deployment has its indexes and its
+one-off Job. `app`, `worker` and `cron` wait for it to finish successfully, so a fresh deployment has its indexes and its
 shop's row before anything serves a request.
 
 ## Do it

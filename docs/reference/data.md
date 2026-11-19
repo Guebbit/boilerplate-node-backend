@@ -133,7 +133,7 @@ index's window in place, so:
 
 So in development, `db:bootstrap` — which syncs before the server starts — is what makes a window
 change restart-safe. In production, turning `autoIndex` off is what makes it restart-safe instead:
-`compose.production.yaml`'s `setup` service runs `db:sync` before `app`/`cron` start, and a
+`compose.production.yaml`'s `setup` service runs `db:sync` before `app`/`worker`/`cron` start, and a
 later restart with no `setup` re-run simply keeps running on the index that is already there.
 
 ## Data: a one-off script under `scripts/ops/`

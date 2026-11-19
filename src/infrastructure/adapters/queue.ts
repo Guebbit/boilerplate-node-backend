@@ -615,8 +615,8 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
  * Idempotent: called on both publish and consume paths so producer and consumer may start in any
  *             order — both must agree on `retryDelaySeconds` for the same queue, the same way they
  *             already must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on
- *             the second call. In practice this app's consumers register at boot
- *             (`app/workers.ts`), before anything publishes.
+ *             the second call. In practice the web process publishes and the worker process
+ *             (`src/worker.ts`) consumes, so either may declare a queue first.
  * Upgrading:  see `docs/understand/rabbitmq.md` for upgrading an existing broker — a queue's
  *             dead-letter routing key cannot change in place.
  *
@@ -1085,8 +1085,8 @@ const bindConsumer = <TPayload>(
 
 /**
  * Every consumer this process has asked to register, keyed by queue name so a queue asked for
- * twice replaces its binding rather than doubling it. `registerWorkers` calls
- * {@link consumeFromQueue} exactly once at boot, but {@link setupChannel} re-runs this map onto
+ * twice replaces its binding rather than doubling it. `registerWorkers` (the worker
+ * process) calls {@link consumeFromQueue} exactly once at boot, but {@link setupChannel} re-runs this map onto
  * every fresh channel amqplib's recovery hands back, boot's own included — that is what makes a
  * broker restart survivable without this process ever being restarted itself.
  */

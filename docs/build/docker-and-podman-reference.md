@@ -94,7 +94,7 @@ rather than always-on.
 
 | Group         | Services                                                                                     | Why they are here                                                     |
 | ------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| App runtime   | `app`, `cron`                                                                                | runs the backend and its scheduled jobs                               |
+| App runtime   | `app`, `worker`, `cron`                                                                      | runs the backend, its queue consumers and its scheduled jobs          |
 | Core data     | `database`, `cache`, `limits`, `queue`                                                       | persistence, cache, rate-limit counters, and async jobs               |
 | Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `gatus`, `loki`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
 | Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                            | opt-in sinks for outbound webhooks and mail; `--profile integrations` |

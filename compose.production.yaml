@@ -51,7 +51,7 @@ x-logging: &logging
         max-file: '5'
 
 # ── CONTAINER HARDENING, ONCE ───────────────────────────────────────────────────────────────────
-# Merged into `app`, `cron` and `setup` with `<<: *hardening` — all three run the SAME image, so
+# Merged into `app`, `worker`, `cron` and `setup` with `<<: *hardening` — all four run the SAME image, so
 # they have the same needs and a divergence between them would be an accident rather than a
 # decision. `USER node` in the Dockerfile already drops root; these drop what root was not the
 # only way to get:
@@ -406,6 +406,73 @@ services:
                     'node',
                     '-e',
                     "fetch('http://127.0.0.1:9746/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+        depends_on:
+            database:
+                condition: service_healthy
+                required: false
+            cache:
+                condition: service_healthy
+                required: false
+            limits:
+                condition: service_healthy
+                required: false
+            queue:
+                condition: service_healthy
+                required: false
+            setup:
+                condition: service_completed_successfully
+
+    # The queue consumers, as their own container: `app` publishes a job and answers, this takes it
+    # (an email, an image digest, a webhook delivery). Same image as `app` and `cron`, a different
+    # entry point (`src/worker.ts`). One copy by default; a second takes jobs off the same queues
+    # with no coordination, so `docker compose up --scale worker=2` is the whole scaling story.
+    # See docs/understand/rabbitmq.md#where-the-code-lives and docs/understand/scaling.md.
+    #
+    # Same hardening, secrets and three volumes as `cron`, for a reason of its own: a mail job reads
+    # the spool and attachments from `storage`, an image job reads `quarantine` and writes `uploads`.
+    # Without the volumes every such job fails and retries to the dead-letter queue.
+    #
+    # No port is published. The process listens on `NODE_WORKER_PORT` (its own, so it never meets
+    # `app`'s): `GET /livez` is this container's check, as supercronic's `/health` is `cron`'s, and
+    # `GET /observability/metrics` is the Prometheus scrape (the `worker` job in
+    # docker/observability/prometheus.production.config.yaml), behind the same bearer token as the
+    # API's: two alert counters move only here. `stop_grace_period` stays above the shutdown delay plus the drain
+    # (`NODE_SHUTDOWN_DELAY_MS` + `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`): a running job is given
+    # time to finish and ack before the broker redelivers it.
+    worker:
+        logging: *logging
+        image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
+        restart: unless-stopped
+        stop_grace_period: 30s
+        command: ['node', '--import', 'tsx', 'src/worker.ts']
+        env_file:
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        secrets: *service-secrets
+        environment:
+            <<: [*app-env, *app-key-env, *backing-env]
+            # See `cron`'s own comment: a dedicated variable sidesteps podman-compose 1.6's suffix bug.
+            NODE_SERVICE_NAME: '${NODE_WORKER_SERVICE_NAME:-api-worker}'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+        <<: *hardening
+
+        volumes:
+            - storage:/app/tmp/storage
+            - quarantine:/app/tmp/quarantine
+            - uploads:/app/public/images
+            - mongo-ca-dir:/ca-dir:ro
+        # Liveness, like `app`'s: the process answers, never a dependency.
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://127.0.0.1:${NODE_WORKER_PORT:-3010}/livez').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             interval: 30s
             timeout: 5s

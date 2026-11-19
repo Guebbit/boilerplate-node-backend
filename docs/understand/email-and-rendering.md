@@ -132,9 +132,10 @@ SMTP credentials, that mail leaves the machine. So the run has its own entry poi
 
 ```sh
 npm run host -- e2e:serve
+npm run host -- e2e:worker    # only when a broker is configured: the consumers send the mail
 ```
 
-It sets `NODE_E2E_RUN=1`, and boot then refuses `smtp` unless `NODE_SMTP_HOST` is `localhost`,
+Both set `NODE_E2E_RUN=1`, and boot then refuses `smtp` unless `NODE_SMTP_HOST` is `localhost`,
 `127.0.0.1`, `::1` or `mailpit`. `log` and `outbox` open no socket and always pass.
 
 For a readable inbox, run Mailpit and point the app at it (`NODE_SMTP_HOST=127.0.0.1`,

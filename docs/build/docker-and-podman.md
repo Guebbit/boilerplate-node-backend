@@ -78,7 +78,7 @@ flowchart LR
 source never shadows the container's own install. Under podman-compose that volume keeps a stable
 name and is reused on every `up`, so it holds whatever was installed the day it was created.
 
-`app` and `cron` therefore start with `docker/ensure-deps.sh`: it hashes `package-lock.json`,
+`app`, `worker` and `cron` therefore start with `docker/ensure-deps.sh`: it hashes `package-lock.json`,
 compares it with a stamp inside the volume, and runs `npm ci` on a mismatch. A dependency added
 to the lockfile needs only `podman compose up -d` (or `compose:restart`). The dev image writes the
 same stamp at build time, so a fresh volume is not reinstalled.

@@ -12,7 +12,7 @@
 #   COMPOSE_PROFILES      read by compose, from the shell or `clients/<client>/.env`; `backup` among
 #                         them makes the deploy build and check the backup image too
 #
-# A deploy is "good" only when `setup` exited 0 and `app` and `cron` (and `backup`, when its profile is
+# A deploy is "good" only when `setup` exited 0 and `app`, `worker` and `cron` (and `backup`, when its profile is
 # on) are running and healthy and `/readyz` answers from inside `app`. Every good state is appended to `clients/<client>/deploys.log`
 # as `<UTC time> <deploy|auto-rollback|rollback> <image>`; that file is the whole record of what to
 # go back to. Exit codes: 0 good, 1 the new image failed and the previous one is running again,
@@ -104,11 +104,11 @@ probe_ready() {
 
 # Waits until the stack is good. $1 = `full` also requires `setup` to have exited 0, and `backup` to be
 # up when its profile is on: a deploy whose backups cannot start must fail, not report healthy. A
-# rollback touches only `app` and `cron`, so it checks only those.
+# rollback touches only `app`, `worker` and `cron`, so it checks only those.
 # Returns 1 as soon as anything is clearly broken, or when the timeout runs out.
 wait_healthy() {
     local scope="$1" deadline=$((SECONDS + TIMEOUT)) service status code restarts health pending
-    local services=(app cron)
+    local services=(app worker cron)
     if [ "$scope" = full ] && service_active backup; then services+=(backup); fi
     while [ "$SECONDS" -lt "$deadline" ]; do
         pending=0
@@ -160,11 +160,11 @@ previous_good() {
     awk -v current="$current" '$3 != current { previous = $3 } END { print previous }' "$log_file"
 }
 
-# Runs `image` again for `app` and `cron` only: no `setup`, so a rollback never touches the data.
+# Runs `image` again for `app`, `worker` and `cron` only: no `setup`, so a rollback never touches the data.
 run_previous() {
     APP_IMAGE="$1"
     export APP_IMAGE
-    compose up -d --no-build --no-deps app cron
+    compose up -d --no-build --no-deps app worker cron
 }
 
 # Prints what the failed services said, for whoever reads the CI or terminal log. `database` comes
@@ -173,7 +173,7 @@ run_previous() {
 # profiles do not carry (an external database) makes compose refuse the whole call.
 show_logs() {
     local service id
-    for service in database setup app cron backup; do
+    for service in database setup app worker cron backup; do
         compose logs --tail 40 "$service" 2>&1 || true
     done
     id="$(container_of database)"
