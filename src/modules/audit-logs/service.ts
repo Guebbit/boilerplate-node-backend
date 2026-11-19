@@ -84,8 +84,10 @@ const INCIDENT_ACTIONS = [
  * failed logins live under `auth.*`, and `system.user.*` carries customer ids — so each entry
  * below is a decision.
  *
- * - `security.*`: unauthorized, forbidden, a rate limit hit, a step-up demanded — except the shop's
- *   own rank refusals ({@link SHOP_REFUSAL_REASONS}), which are the shop admin's business;
+ * - `security.*`: forbidden, a rate limit hit, a step-up demanded, a forged or malformed token, a
+ *   revoked key — except the shop's own rank refusals ({@link SHOP_REFUSAL_REASONS}), which are
+ *   the shop admin's business. `security.unauthorized` is not stored (a request with no credential,
+ *   or a stale one, is a log line and a counter), so no 401 appears here;
  * - `auth.login` only when it FAILED, and the three other signs of an attack on a credential:
  *   a failed second factor, a failed OAuth sign-in, a refresh token replayed;
  * - a webhook subscription disabled for failing.

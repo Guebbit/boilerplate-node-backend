@@ -25,7 +25,8 @@ export const securityEventsTotal = new Counter({
 
 /**
  * Credentials a customer plausibly still holds, refused: expired or revoked sessions and keys.
- * Metric only — the FE token expires every few minutes, so auditing it would be noise.
+ * A counter and a log line, never a stored row — the FE token expires every few minutes, so a
+ * row each would be noise.
  */
 export const staleCredentialsTotal = new Counter({
     ...counterConfig(infrastructureMetricData.staleCredentialsTotal),

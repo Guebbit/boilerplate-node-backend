@@ -39,6 +39,11 @@ declare module 'express-serve-static-core' {
         /** Set by `getAuth` when the credential it refused was a staff session that idled out. */
         sessionIdle?: boolean;
         /**
+         * Set by `noteMiss` once a refused credential has been counted and logged, so the 401 that
+         * follows does not log the same request a second time.
+         */
+        refusalLogged?: boolean;
+        /**
          * Set by `requirePermissionViaCookie` for an SSE stream: re-answers who the session is, for
          * as long as its family lives, whatever happens to the cookie that opened it.
          */

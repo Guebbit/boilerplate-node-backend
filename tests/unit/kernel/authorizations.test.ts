@@ -42,6 +42,9 @@ import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext, Caller } from '@types';
 
+/** Every audit line written WITHOUT a stored row — what a log-only refusal reaches. */
+const mockLoggedAuditLine = jest.fn();
+
 /**
  * Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
  * event that stops matching the real builder's shape fails here rather than in production.
@@ -65,6 +68,14 @@ jest.mock('@infrastructure/observability/audit', () => {
         ) => {
             if (!context) return;
             emitAuditEvent(actual.buildAuditEvent(context, fields));
+        },
+        /** The log-only twin: the same rerouting, into a spy that is NOT the stored-row emitter. */
+        recordAuditLine: (
+            context: Parameters<typeof actual.recordAuditLine>[0],
+            fields: Parameters<typeof actual.recordAuditLine>[1]
+        ) => {
+            if (!context) return;
+            mockLoggedAuditLine(actual.buildAuditEvent(context, fields));
         }
     };
 });
@@ -403,7 +414,8 @@ describe('getAuth', () => {
 
     /**
      * A forged or garbled bearer has no customer behind it: it is audited and counted. A stale
-     * one (expired, or a revoked session) is only a metric — the FE token expires every few minutes.
+     * one (expired, or a revoked session) is a counter and a log line, never a row — the FE token
+     * expires every few minutes.
      */
     it.each([
         ['invalid_signature', coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE],
@@ -430,7 +442,7 @@ describe('getAuth', () => {
     });
 
     it.each(['expired', 'revoked'] as const)(
-        'only counts a %s bearer JWT, without an audit entry',
+        'counts and logs a %s bearer JWT, without a stored row, and never writes the token',
         async (reason) => {
             mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
             staleCredentialsTotal.reset();
@@ -438,6 +450,19 @@ describe('getAuth', () => {
             await runUntilRefused(makeRequest({ authorization: 'Bearer stale.token' }));
 
             expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+            expect(mockLoggedAuditLine).toHaveBeenCalledTimes(1);
+            expect(mockLoggedAuditLine).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                    metadata: expect.objectContaining({
+                        kind: 'session',
+                        reason,
+                        route: '/protected',
+                        method: 'GET'
+                    })
+                })
+            );
+            expect(JSON.stringify(mockLoggedAuditLine.mock.calls)).not.toContain('stale.token');
             const counted = await staleCredentialsTotal.get();
             expect(counted.values).toEqual([
                 expect.objectContaining({ labels: { kind: 'session', reason }, value: 1 })
@@ -462,12 +487,18 @@ describe('getAuth', () => {
         );
     });
 
-    it('only counts an expired sk_ credential, without an audit entry', async () => {
+    it('logs an expired sk_ credential as a line, without a stored row or the secret', async () => {
         mockedResolveCredential.mockResolvedValue({ miss: 'expired' });
 
         await runUntilRefused(makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }));
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        expect(mockLoggedAuditLine).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ kind: 'api_key', reason: 'expired' })
+            })
+        );
+        expect(JSON.stringify(mockLoggedAuditLine.mock.calls)).not.toContain('abcdefgh_secret');
     });
 
     it.each(['malformed', 'invalid_signature', 'expired', 'revoked'] as const)(
@@ -733,6 +764,38 @@ describe('getAuth in cookie mode', () => {
         expect(request.authContext).toBeUndefined();
     });
 
+    /**
+     * One line per refused credential: `getAuth` logs the stale cookie, and the `isAuth` that then
+     * answers the anonymous request must not log it a second time.
+     */
+    it.each(['idle', 'expired'] as const)(
+        'logs a %s session cookie once across getAuth and isAuth',
+        async (reason) => {
+            fromRefreshToken.mockResolvedValue({ miss: reason });
+            const request = makeCookieModeRequest();
+
+            await runUntilNext(getAuth, request, makeResponseStub());
+            isAuth(request, makeResponseStub(), jest.fn());
+
+            expect(mockLoggedAuditLine).toHaveBeenCalledTimes(1);
+            expect(mockLoggedAuditLine).toHaveBeenCalledWith(
+                expect.objectContaining({ metadata: expect.objectContaining({ reason }) })
+            );
+            expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        }
+    );
+
+    it('stores a forged session cookie as one row, and logs no second line for its 401', async () => {
+        fromRefreshToken.mockResolvedValue({ miss: 'invalid_signature' });
+        const request = makeCookieModeRequest();
+
+        await runUntilNext(getAuth, request, makeResponseStub());
+        isAuth(request, makeResponseStub(), jest.fn());
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledTimes(1);
+        expect(mockLoggedAuditLine).not.toHaveBeenCalled();
+    });
+
     it('does not name Cookie in jwt mode', async () => {
         cookieAuthenticates = false;
 
@@ -785,16 +848,21 @@ describe('isAuth', () => {
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
-    it('records an anonymous unauthorized audit event on rejection', () => {
+    it('logs an anonymous unauthorized line on rejection, and stores no row', () => {
         isAuth(makeRequest(), makeResponseStub(), jest.fn());
 
-        expect(mockedEmitAuditEvent).toHaveBeenCalledTimes(1);
-        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        expect(mockLoggedAuditLine).toHaveBeenCalledTimes(1);
+        expect(mockLoggedAuditLine).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actorUserId: 'anonymous',
                 actorRole: 'anonymous',
-                outcome: 'failure'
+                outcome: 'failure',
+                metadata: expect.objectContaining({
+                    reason: 'not_authenticated',
+                    method: 'GET'
+                })
             })
         );
     });
@@ -963,10 +1031,11 @@ describe('requirePermission', () => {
             jest.fn()
         );
 
-        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        expect(mockLoggedAuditLine).toHaveBeenCalledWith(
             expect.objectContaining({
                 /**
-                 * An absent session is an authentication failure, so it is audited as one — the
+                 * An absent session is an authentication failure, so it is logged as one — the
                  * same action `isAuth` emits, rather than a permission denial.
                  */
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
@@ -1195,8 +1264,8 @@ describe('requirePermissionViaCookie', () => {
         );
     });
 
-    it('audits a cookie that resolves to nobody as an unauthorized attempt by the anonymous actor', async () => {
-        // An audit row with an empty actor is a row nobody can act on.
+    it('logs a cookie that resolves to nobody as an unauthorized attempt by the anonymous actor', async () => {
+        // A line with an empty actor is a line nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
 
         requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
@@ -1206,7 +1275,8 @@ describe('requirePermissionViaCookie', () => {
         );
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        expect(mockLoggedAuditLine).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actorUserId: 'anonymous'
@@ -1237,7 +1307,26 @@ describe('requirePermissionViaCookie', () => {
         );
     });
 
-    it('audits a request that arrives with no cookie at all', async () => {
+    it.each(['idle', 'expired'] as const)(
+        'logs a %s session cookie once on a cookie-guarded route',
+        async (reason) => {
+            mockedVerifyRefreshToken.mockResolvedValueOnce({ miss: reason });
+
+            requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+                makeCookieRequest('cookie.jwt'),
+                makeResponseStub(),
+                asStub<NextFunction>(jest.fn())
+            );
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(mockLoggedAuditLine).toHaveBeenCalledTimes(1);
+            expect(mockLoggedAuditLine).toHaveBeenCalledWith(
+                expect.objectContaining({ metadata: expect.objectContaining({ reason }) })
+            );
+        }
+    );
+
+    it('logs a request that arrives with no cookie at all, without a row', async () => {
         requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest(),
             makeResponseStub(),
@@ -1245,7 +1334,8 @@ describe('requirePermissionViaCookie', () => {
         );
         await new Promise((resolve) => setImmediate(resolve));
 
-        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+        expect(mockLoggedAuditLine).toHaveBeenCalledWith(
             expect.objectContaining({ action: coreAuditActions.SECURITY_UNAUTHORIZED })
         );
     });

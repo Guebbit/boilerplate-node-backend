@@ -50,6 +50,7 @@ import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import {
     recordAudit,
+    recordAuditLine,
     coreAuditActions,
     buildAuditEvent
 } from '@infrastructure/observability/audit';
@@ -72,20 +73,37 @@ const errorLocaleKeyFor = (code: string): string =>
     `generic.error-${code.toLowerCase().replaceAll('_', '-')}`;
 
 /**
- * Record a refusal before answering it, so a denied request always leaves a trail.
- *
- * Which route and which method are on every one of them, and are added here rather than at each
- * call site — a refusal nobody can locate is half a record.
+ * A refusal's fields with the route and the method added to every one of them here rather than at
+ * each call site — a refusal nobody can locate is half a record.
+ */
+const refusalFields = (
+    request: Request,
+    fields: Omit<Parameters<typeof buildAuditEvent>[1], 'outcome'>
+): Parameters<typeof buildAuditEvent>[1] => ({
+    ...fields,
+    outcome: 'failure',
+    metadata: { route: request.path, method: request.method, ...fields.metadata }
+});
+
+/**
+ * Record a refusal before answering it, so a denied request always leaves a trail: a log line and
+ * a stored row.
  */
 const auditRefusal = (
     request: Request,
     fields: Omit<Parameters<typeof buildAuditEvent>[1], 'outcome'>
-): void =>
-    recordAudit(callerContextOf(request), {
-        ...fields,
-        outcome: 'failure',
-        metadata: { route: request.path, method: request.method, ...fields.metadata }
-    });
+): void => recordAudit(callerContextOf(request), refusalFields(request, fields));
+
+/**
+ * Log a refusal that is routine, without storing it: a request with no credential, or a stale one.
+ * Anyone can send these at any rate and a customer's expired tab sends them every few minutes, so
+ * a row each would be a write the caller chooses. The line carries the same fields (route, method,
+ * IP, kind, reason) and never the credential itself.
+ */
+const logRefusal = (
+    request: Request,
+    fields: Omit<Parameters<typeof buildAuditEvent>[1], 'outcome'>
+): void => recordAuditLine(callerContextOf(request), refusalFields(request, fields));
 
 /** Which credential family a refused token belonged to — a metric label, and audit metadata. */
 type CredentialKind = 'session' | 'api_key';
@@ -107,16 +125,26 @@ const securityActionFor = (
 };
 
 /**
- * Count, and where it names an attack audit, a credential the resolver refused.
+ * Count a credential the resolver refused, and log it. Where it names an attack it is also
+ * audited as a row; a stale one (an expired or revoked session, an idle one) is a counter and a
+ * log line only.
  *
  * @param request - the refused request, for the audit trail
  * @param kind - which credential family was presented
  * @param reason - why the resolver refused it
  */
 const noteMiss = (request: Request, kind: CredentialKind, reason: ResolveMissReason): void => {
+    // One line per refused credential: the 401 that follows must not log it again.
+    request.refusalLogged = true;
     const action = securityActionFor(kind, reason);
     if (!action) {
         staleCredentialsTotal.inc({ kind, reason });
+        logRefusal(request, {
+            action: coreAuditActions.SECURITY_UNAUTHORIZED,
+            actorUserId: 'anonymous',
+            actorRole: 'anonymous',
+            metadata: { kind, reason }
+        });
         return;
     }
     recordSecurityEvent(callerContextOf(request), action, {
@@ -245,8 +273,9 @@ const refuseDeadBearer = (request: Request, response: Response): boolean => {
     if (takesNoSignIn(request)) return false;
     response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
     /**
-     * Not `refuseUnauthenticated`: `noteMiss` already counted and, for a forged token, audited
-     * this one, and a token that merely expired every few minutes must not flood the trail.
+     * Not `refuseUnauthenticated`: `noteMiss` already counted and logged this one (and, for a
+     * forged token, stored it), and a token that merely expired every few minutes must not flood
+     * the trail.
      */
     rejectResponse(
         response,
@@ -399,20 +428,23 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * The 401 both identity guards answer with. Audited before rejecting: a failed auth attempt is
- * exactly what the trail exists to record.
+ * The 401 both identity guards answer with. Logged before rejecting, and not stored: the request
+ * carried no usable credential, which is routine and costs the caller nothing to repeat. A request
+ * whose credential {@link noteMiss} already logged (stale, forged) is not logged again.
  */
 const refuseUnauthenticated = (
     request: Request,
     response: Response,
     errors: ResponseErrorItem[] = []
 ): void => {
-    auditRefusal(request, {
-        action: coreAuditActions.SECURITY_UNAUTHORIZED,
-        actorUserId: 'anonymous',
-        actorRole: 'anonymous',
-        ...(request.sessionIdle && { metadata: { reason: 'session_idle' } })
-    });
+    if (!request.refusalLogged) {
+        logRefusal(request, {
+            action: coreAuditActions.SECURITY_UNAUTHORIZED,
+            actorUserId: 'anonymous',
+            actorRole: 'anonymous',
+            metadata: { reason: 'not_authenticated' }
+        });
+    }
     rejectResponse(
         response,
         401,
@@ -614,7 +646,7 @@ export const requirePermission = <TSubject extends PermissionSubject>(
          * @see docs/understand/security.md#_401-or-403-and-why-the-guards-agree
          */
         if (!request.authContext && !request.caller) {
-            auditRefusal(request, {
+            logRefusal(request, {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actorUserId: 'anonymous',
                 actorRole: 'anonymous',

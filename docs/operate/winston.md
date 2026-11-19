@@ -90,7 +90,7 @@ into an underscore: read `user.id` as `user_id`. Alloy extracts the `service` la
 
 ## Audit events
 
-`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login`, `admin.user.erased`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` and `recordAuditLine` (both in `src/infrastructure/observability/audit.ts`) are the only entry points for auditable actions: the first writes the line and stores a row, the second writes the line alone (see [A line, with or without a row](#a-line-with-or-without-a-row)). Each event has a stable `action` (`auth.login`, `admin.user.erased`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {
@@ -106,6 +106,27 @@ into an underscore: read `user.id` as `user_id`. Alloy extracts the `service` la
     "trace_id": "…"
 }
 ```
+
+### A line, with or without a row
+
+`emitAuditEvent` writes the log line and then hands the entry to the persistence sink, which stores
+a row. `recordAuditLine` writes the **line only**. A refusal goes one way or the other by who can
+cause it and how often:
+
+| Refusal                                                              | Line | Row | Counter                        |
+| -------------------------------------------------------------------- | ---- | --- | ------------------------------ |
+| A forged or malformed token, a revoked `sk_` key (an attack)         | yes  | yes | `security_events_total`        |
+| A stale credential: expired, revoked or idle session, an expired key | yes  | no  | `auth_stale_credentials_total` |
+| A request with no credential on a protected route                    | yes  | no  | —                              |
+| A permission refused, a step-up demanded (`security.forbidden`, …)   | yes  | yes | —                              |
+
+The line-only ones are `security.unauthorized`, with `metadata.reason` saying which: `not_authenticated`,
+or the resolver's own (`expired`, `revoked`, `idle`) beside `metadata.kind`
+(`session` or `api_key`). Each carries the route, the method and the address (as every audit line
+carries it, under `NODE_LOG_PERSONAL_FIELDS`) and never the credential: `redactCredentials` scrubs the metadata, and the
+token is not put in it to begin with. A row for each would be a write the caller chooses to make
+at any rate, and a customer's expired tab sends one every few minutes. One request
+logs one line: the 401 that follows a refused credential does not log it again.
 
 The `action` vocabulary is a closed union, not free strings — an alert built on
 `auth.login` cannot be defeated by a typo at a call site.
