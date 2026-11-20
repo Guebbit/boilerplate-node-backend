@@ -192,7 +192,16 @@ export default defineConfig(
          * `npm run lint` fails on a copy of code that is already linted where it lives.
          * `.prettierignore` carries the matching list.
          */
-        '.claude/**'
+        '.claude/**',
+        /**
+         * Local tooling output that is gitignored and not this codebase: `.2brain/` holds the
+         * generated repo map (`.mjs` files outside the `tsconfig` project) and `.work/` the
+         * crew's plan files. Same failure and same fix as `.claude/**` above. An ignore list
+         * is used rather than `includeIgnoreFile`, which would also stop linting the
+         * gitignored `*.generated.ts` files under `src/` and `scenarios/`.
+         */
+        '.2brain/**',
+        '.work/**'
     ]),
 
     /**
