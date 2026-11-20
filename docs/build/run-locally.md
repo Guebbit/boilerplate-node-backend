@@ -231,7 +231,7 @@ How to run more than one copy, and what changes: [Scaling](../understand/scaling
 npm run complete     # build + all tests + lint + format check — several minutes
 ```
 
-The pre-commit hook runs a faster subset permanently, in this order: `regenerate` on disk, then
+The pre-commit hook (and `pre-merge-commit`, which runs the same script on a conflict-free merge) runs a faster subset permanently, in this order: `regenerate` on disk, then
 lint-staged (fixes eslint and prettier on the staged files and stages the fixes), then
 `check:generated` (refuses a commit whose committed generated files are stale), then
 `npm run complete:light:gates` (every other static check plus the unit and cross-cutting suites,

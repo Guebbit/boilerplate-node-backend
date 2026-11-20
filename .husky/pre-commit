@@ -31,8 +31,9 @@ npm run regenerate -- --no-sync
 
 # lint-staged: `eslint --fix` then `prettier --write` on the staged files only, and `git add` of
 # exactly the files those fixers changed. Its own backup stash hides the unstaged hunks of a
-# partially staged file while the fixers run, and puts them back unstaged afterwards; during a
-# merge it touches only the files that differ from both parents. A file `regenerate` rewrote above
+# partially staged file while the fixers run, and puts them back unstaged afterwards; in a `git commit`
+# that concludes a merge it touches only the files that differ from both parents (it finds them
+# through MERGE_HEAD, which does not exist yet when `pre-merge-commit` runs). A file `regenerate` rewrote above
 # is not one the fixers changed, so it is never staged here. `.lintstagedrc.json` holds the tasks.
 # https://github.com/lint-staged/lint-staged#how-does-lint-stageds-stashing-work
 npx lint-staged

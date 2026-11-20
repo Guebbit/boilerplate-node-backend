@@ -210,6 +210,8 @@ fully derived — there is no diff to review because there is nothing committed 
 
 ## The pre-commit hook
 
+`.husky/pre-merge-commit` runs this same script on a conflict-free merge. If it refuses because a committed generated file is stale, stage what `npm run regenerate` wrote and run `git commit --no-edit` to finish the merge. It also refuses when lint-staged staged fixes (they would miss the merge commit); `git commit --no-edit` concludes the merge with them.
+
 The hook stages only the lint and formatting fixes lint-staged made to files you staged; never a file `regenerate` rewrote. It regenerates on disk, so the gates after it read current files,
 then **refuses** a commit whose committed generated files are stale. The check builds from what is
 being committed, not from your working tree: `check:generated` exports the index

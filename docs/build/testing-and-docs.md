@@ -177,6 +177,13 @@ isolated from one another. Worth measuring before changing, not assuming.
 
 - The pre-commit hook: lint-staged fixes eslint and prettier on the staged files and stages the fixes
   into the same commit, then `complete:light:gates`, then `test:staged`.
+- The pre-merge-commit hook: the same script, run on a conflict-free merge, which git does not send
+  through `pre-commit`. It costs what a commit costs, and on a merge `test:staged` runs every
+  integration, contract and fuzz file the merge brings in. Git builds the merge tree before the hook
+  runs, so fixes the gate stages would miss the merge commit: the hook refuses when they appear, and
+  `git commit --no-edit` (which runs `pre-commit`) concludes the merge with them. A merge that needed
+  fixes pays the gate twice. A merge with conflicts ends in `git commit`, which runs `pre-commit`
+  itself.
 - A lane merges on `npm run complete:light:fix`: whole-tree fixers, the strict checks, then
   `complete:light:gates`. Commit whatever its fixers changed before merging.
 - The full `npm run complete:fix` (no live e2e, no mutation) runs every 20 commits or merges on
