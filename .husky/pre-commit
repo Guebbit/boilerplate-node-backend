@@ -44,7 +44,7 @@ npx lint-staged
 # What stays committed and is therefore checked: `shared/rules/schemas/*.json`,
 # `shared/authorization-keys.generated.yaml`, `docker/crontab` and the
 # tables inside `docs/`. Everything else `regenerate` writes (`openapi.yaml`, both asyncapi
-# bundles, `api/`, every `*.generated.ts`) is gitignored: postinstall rebuilds it, and the gates
+# bundles, `api.generated/`, every `*.generated.ts`) is gitignored: postinstall rebuilds it, and the gates
 # below read it off disk.
 #
 # `check:generated` exports the index (`git checkout-index`, so a partial `git commit -- <paths>`

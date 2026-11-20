@@ -20,7 +20,7 @@ flowchart LR
     N["no body at all"] --> P
 ```
 
-The guard is `requireDeclaredContentType`, built from `api/request-content-types.ts`, which
+The guard is `requireDeclaredContentType`, built from `api.generated/request-content-types.ts`, which
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
@@ -81,7 +81,7 @@ runs with `preflightContinue: true`, so ONE handler (`answerOptions`, mounted ri
 - **`Accept-Patch`** is the media types the contract declares for that path's `PATCH` body.
 - **A module this build does not serve** is a 404 for a plain `OPTIONS`, like any other method.
 
-The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
+The guard is `methodNotAllowed`, built from `api.generated/operation-routes.ts`, which `npm run gen:api`
 derives from the contract's paths and mounted twice in `src/app/routes.ts`: before the routers
 (literal paths) and right before the 404 (every other path).
 

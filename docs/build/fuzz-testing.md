@@ -174,7 +174,7 @@ covered with no list to update. The sibling sweep for wrong methods is
   project would inherit, for the coverage this mode and the 405 sweep already give.
 - **An independent reading of the contract**, a second tool that reads `openapi.yaml` apart from
   the generated code: the drift it would catch cannot land, because `npm run check` refuses a stale
-  `api/` ([Verifying](regenerating.md#verifying-and-what-each-failure-means)).
+  `api.generated/` ([Verifying](regenerating.md#verifying-and-what-each-failure-means)).
 - **A raw-spec validator**, a generic JSON Schema check of sampled answers against `openapi.yaml`:
   that same independent reading, so a second judge beside `assertResponseMatchesContract` for the
   same ruled-out drift.

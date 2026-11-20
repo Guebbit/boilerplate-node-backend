@@ -80,7 +80,7 @@ flowchart TD
 ```
 
 **Contract points into the runtime, never the other way round.** `openapi.yaml` is assembled from
-per-module fragments and generates everything under `api/`, which both this repository and the
+per-module fragments and generates everything under `api.generated/`, which both this repository and the
 paired frontend import. Editing generated output is the one mistake this diagram exists to
 prevent.
 
@@ -261,11 +261,11 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 
 ### Orval + OpenAPI Generator (client codegen)
 
-**What it is.** Orval is a code generator that reads an OpenAPI specification and outputs typed API client code (TypeScript, React Query hooks, Zod schemas, etc.). The source of truth is `openapi.yaml`; the generated `api/` folder is a derived artifact.
+**What it is.** Orval is a code generator that reads an OpenAPI specification and outputs typed API client code (TypeScript, React Query hooks, Zod schemas, etc.). The source of truth is `openapi.yaml`; the generated `api.generated/` folder is a derived artifact.
 
 **Problem it solves.** Maintaining a typed API client by hand alongside the spec means they inevitably drift. Every time a route changes, the client must be manually updated — which is error-prone and slow. Code generation makes the client an output of the spec, not a separate thing to maintain.
 
-**In this repo.** `npm run gen:api` regenerates `api/` from `openapi.yaml`. `api/` is gitignored and rebuilt by `postinstall`; the paired frontend regenerates its own from the `openapi.yaml` that `sync:frontend` hands over.
+**In this repo.** `npm run gen:api` regenerates `api.generated/` from `openapi.yaml`. `api.generated/` is gitignored and rebuilt by `postinstall`; the paired frontend regenerates its own from the `openapi.yaml` that `sync:frontend` hands over.
 
 → [OpenAPI Workflow](../build/openapi-workflow.md)
 

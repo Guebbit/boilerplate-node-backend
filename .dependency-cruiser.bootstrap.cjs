@@ -2,11 +2,11 @@
  * The clean-checkout bootstrap guard — `npm run check`.
  *
  * `postinstall` runs `contracts:bundle` BEFORE `gen:api` and `gen:asyncapi`. On a clean checkout
- * `api/` and `src/types/asyncapi.generated.ts` do not exist yet, so the bundler dies with
+ * `api.generated/` and `src/types/asyncapi.generated.ts` do not exist yet, so the bundler dies with
  * "Cannot find module '@api/error-codes'" if its STATIC import graph reaches either. Locally
- * nobody sees it: every checkout already has `api/` from an earlier run.
+ * nobody sees it: every checkout already has `api.generated/` from an earlier run.
  *
- * Only `api/permission-vocabulary.ts` may be reached (`gen:permission-vocabulary` runs first, on purpose).
+ * Only `api.generated/permission-vocabulary.ts` may be reached (`gen:permission-vocabulary` runs first, on purpose).
  *
  * Its own cruise, because the rule must ignore dynamic `import()`: that is how the client
  * collections stay opt-in (`scripts/contracts/bundle-registry.ts`). A `reachable` rule cannot
@@ -23,7 +23,7 @@ module.exports = {
             severity: 'error',
             from: { path: String.raw`^scripts/contracts/build-bundles\.ts$` },
             to: {
-                path: String.raw`^api/(?!permission-vocabulary\.ts$)|^src/types/asyncapi\.generated\.ts$`,
+                path: String.raw`^api\.generated/(?!permission-vocabulary\.ts$)|^src/types/asyncapi\.generated\.ts$`,
                 reachable: true
             }
         }

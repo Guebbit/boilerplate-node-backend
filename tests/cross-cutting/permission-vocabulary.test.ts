@@ -1,7 +1,7 @@
 /**
  * The permission vocabulary has ONE home: `shared/authorization-keys.generated.yaml`.
  *
- * `api/permission-vocabulary.ts` is generated from it, and `kernel/permissions.ts` (and through it
+ * `api.generated/permission-vocabulary.ts` is generated from it, and `kernel/permissions.ts` (and through it
  * the Zod schema that validates every key) imports the result. This holds the two ends of that
  * chain: each generated list is the yaml's, and every declared rule, set and tier is in them.
  */

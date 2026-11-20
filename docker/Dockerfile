@@ -161,14 +161,14 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 # What something reads at run time, copied from `build` so what ships is what was type-checked.
 # No `--chown`: the code is root-owned, so `node` can read it and cannot rewrite it.
-#   src/      the application (with each module's own templates)
-#   api/      generated types and zod schemas, imported as @api/*
-#   shared/   the EJS layout partials and the contract fragments
-#   scripts/  the entry wrapper and flag reader, the deploy-time `db` scripts (file by file), and
-#             `ops/` whole (the cron jobs and `reencrypt`)
-#   public/   express.static root
+#   src/            the application (with each module's own templates)
+#   api.generated/  generated types and zod schemas, imported as @api/*
+#   shared/         the EJS layout partials and the contract fragments
+#   scripts/        the entry wrapper and flag reader, the deploy-time `db` scripts (file by file), and
+#                   `ops/` whole (the cron jobs and `reencrypt`)
+#   public/         express.static root
 COPY --from=build /app/src ./src
-COPY --from=build /app/api ./api
+COPY --from=build /app/api.generated ./api.generated
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/scripts/run-script.ts /app/scripts/cli.ts ./scripts/
 COPY --from=build /app/scripts/db/index-sync.ts \

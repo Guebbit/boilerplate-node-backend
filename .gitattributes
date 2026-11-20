@@ -31,8 +31,12 @@ scenarios/shop-modules.generated.ts                           linguist-generated
 scenarios/scenarios.generated.ts                               linguist-generated=true
 scenarios/support/doubles/modules.generated.ts                 linguist-generated=true
 
+# ── Cron schedules, generated from the job registry ──────────────────────────────────────────
+docker/crontab                                                 linguist-generated=true
+k8s/base/crontab                                               linguist-generated=true
+
 # ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
-api/**                                                         linguist-generated=true
+api.generated/**                                               linguist-generated=true
 
 # 2brain:start — regenerate with: 2brain <repo-path>
 .2brain/** linguist-generated=true

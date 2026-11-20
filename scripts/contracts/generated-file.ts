@@ -23,7 +23,7 @@ export const writeOrCheck = (
     fixCommand = 'npm run gen:api'
 ): void => {
     if (!hasFlag('check')) {
-        // The folder may not exist yet: `regenerate` writes some of these BEFORE orval creates `api/`.
+        // The folder may not exist yet: `regenerate` writes some of these BEFORE orval creates `api.generated/`.
         mkdirSync(path.dirname(output), { recursive: true });
         writeFileSync(output, text, 'utf8');
         console.log(`✓ Generated ${output}`);

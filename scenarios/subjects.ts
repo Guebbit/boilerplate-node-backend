@@ -3,7 +3,7 @@
  * The named ids and credentials a consumer that cannot import module code still needs to point at
  * a specific seeded row: a generated API client collection. It imports `@scenarios/accounts` (the seed passwords come from app config) and
  * nothing generated: the collections that read it are loaded on demand, and the
- * bundler itself must never reach `api/` (`.dependency-cruiser.bootstrap.cjs` guards that).
+ * bundler itself must never reach `api.generated/` (`.dependency-cruiser.bootstrap.cjs` guards that).
  *
  * The foundation's two accounts only. A module's own pinned rows live beside its fixtures
  * (`scenarios/product-ids.ts`), and what the flows produce is minted at boot and recorded by the

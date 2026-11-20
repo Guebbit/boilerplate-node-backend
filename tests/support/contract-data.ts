@@ -290,7 +290,7 @@ const buildValue = (schema: ZodType): unknown => {
              * satisfies fields the OpenAPI spec declares `type: integer` — a constraint that
              * doesn't always survive into the generated zod schema as an explicit `.int()`
              * (e.g. CreateOrderBody's `items[].quantity` is `zod.number().min(1)` in
-             * `api/schemas.zod.ts`, but `integer` in `openapi.yaml`).
+             * `api.generated/schemas.zod.ts`, but `integer` in `openapi.yaml`).
              */
             return Math.round(low + random() * (high - low));
         }
@@ -451,7 +451,7 @@ const violationsForField = (fieldSchema: ZodType): { violation: string; value: u
  * exactly one field mutated — missing (for a required field) or out of bounds / wrong format
  * (for a field carrying a min/max/format constraint). Object schemas are supported, and a union of
  * them (a tagged body, like `POST /account/reauth`'s) is walked branch by branch; every `*Body`
- * export in `api/schemas.zod.ts` is one of the two.
+ * export in `api.generated/schemas.zod.ts` is one of the two.
  * @throws {Error} when the schema is not an object schema
  */
 export const invalidPayloads = (schema: ZodType): InvalidPayloadCase[] => {

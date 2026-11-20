@@ -2,7 +2,7 @@
 /**
  * Rebuild every generated artifact: `npm run regenerate`.
  *
- * Writes:    mostly gitignored (`api/`, every `*.generated.ts`, the three bundles). The committed
+ * Writes:    mostly gitignored (`api.generated/`, every `*.generated.ts`, the three bundles). The committed
  *            exceptions are the shared-rules schemas, the authorization keys, the crontab and the
  *            docs tables the doc steps rewrite.
  * `--check`: verifies instead of writing; the first half of `npm run check`.
@@ -12,7 +12,7 @@
  *            committed generated files are stale (`npm run check:generated`). It never stages.
  * Order:     a script, not a `&&` chain, because the order is not obvious. {@link STEPS} is the
  *            chain and each step's `because` says what it must follow. The constraint behind most
- *            of it: the app's own models import `@api/schemas.zod`, so `api/` must exist before
+ *            of it: the app's own models import `@api/schemas.zod`, so `api.generated/` must exist before
  *            anything that imports a module's code runs. The client collections read
  *            `scenarios/subjects.ts`, are not committed, and are not a step.
  *
@@ -65,7 +65,7 @@ const STEPS: readonly Step[] = [
         command: ['npm', 'run', 'gen:permission-vocabulary'],
         checks: false,
         because:
-            'api/permission-vocabulary.ts, from shared/authorization-keys.generated.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
+            'api.generated/permission-vocabulary.ts, from shared/authorization-keys.generated.yaml — kernel/permissions.ts imports it, and the bundler below loads the kernel, so it must exist before the first bundle on a clean checkout'
     },
     {
         name: 'shared rules',
@@ -85,7 +85,7 @@ const STEPS: readonly Step[] = [
         command: ['npm', 'run', 'gen:api'],
         checks: false,
         because:
-            'api/ — the typed client, zod schemas and error codes from openapi.yaml, and the permission actions from shared/authorization-keys.generated.yaml; the app itself imports them'
+            'api.generated/ — the typed client, zod schemas and error codes from openapi.yaml, and the permission actions from shared/authorization-keys.generated.yaml; the app itself imports them'
     },
     {
         name: 'gen:asyncapi',

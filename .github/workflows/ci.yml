@@ -14,7 +14,7 @@ name: CI
 #                     asyncapi-breaking (PR-only — nothing to diff
 #                     against on a push to main),
 #                     spec-identity — the spec is valid, and the paired frontend still agrees with
-#                     it. The bundles, api/ and the *.generated.ts files are not committed — see
+#                     it. The bundles, api.generated/ and the *.generated.ts files are not committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
 #   - observability   alert-rules

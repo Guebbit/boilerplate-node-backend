@@ -1,5 +1,5 @@
 /**
- * The Bruno API client collection — `contract.bruno.yml` at the repo root.
+ * The Bruno API client collection — `contract.generated.bruno.yml` at the repo root.
  *
  * GENERATED ON DEMAND, NOT COMMITTED (`.gitignore`d): their only reader is a human
  * about to open one, and committing them put ~1.9 MB of derived text in every contract diff.
