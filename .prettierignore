@@ -22,6 +22,7 @@ tmp/reports/stryker-incremental.json
 # the pre-commit hook runs. One person's working notes would otherwise block every commit in every
 # concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
 .claude/
+.work/
 CLAUDE.md
 
 # 2brain's generated wiki (see CLAUDE.md): a tool writes it, not anyone typing Markdown or YAML —
