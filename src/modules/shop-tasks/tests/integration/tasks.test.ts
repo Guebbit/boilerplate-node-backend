@@ -32,6 +32,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+
 /** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
@@ -83,11 +84,13 @@ const REFUND = {
     amount: '10.00',
     currency: 'EUR'
 };
+
 /** The refund-reversed event payload the cases publish. */
 const REVERSAL: DomainEventMap['payment.refund_reversed'] = {
     ...REFUND,
     failureReason: RefundFailureReason.declined
 };
+
 /** The refund-unrecorded event payload the cases publish. */
 const UNRECORDED: DomainEventMap['payment.refund_unrecorded'] = {
     paymentId: PAYMENT,
@@ -97,6 +100,7 @@ const UNRECORDED: DomainEventMap['payment.refund_unrecorded'] = {
     currency: 'EUR',
     reason: 'lost_race'
 };
+
 /** A return whose refund the payment could not give in full, as the cases publish it. */
 const SHORT: DomainEventMap['payment.return_refund_short'] = {
     returnId: RETURN,
@@ -106,6 +110,7 @@ const SHORT: DomainEventMap['payment.return_refund_short'] = {
     currency: 'EUR',
     cause: 'used_up'
 };
+
 /** The dispute-opened event payload the cases publish. */
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     paymentId: PAYMENT,
@@ -119,6 +124,7 @@ const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
     fundsWithdrawn: true,
     evidenceDueBy: '2031-01-10T00:00:00.000Z'
 };
+
 /** The fulfillment-delayed event payload the cases publish. */
 const DELAY: DomainEventMap['fulfillment_order.delayed'] = {
     orderId: ORDER,

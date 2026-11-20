@@ -22,14 +22,17 @@ import itAccount from '@modules/account/locales/it.json';
 
 /** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'test' });
+
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
 /** Stands in for the queue publisher; the cases assert how it was called. */
 const publishToQueueMock = jest.fn().mockResolvedValue(true);
+
 /** Whether the queue counts as enabled; a case flips it. */
 const isQueueEnabledMock = jest.fn().mockReturnValue(true);
+
 jest.mock('@infrastructure/adapters/queue', () => ({
     isQueueEnabled: () => isQueueEnabledMock(),
     publishToQueue: (job: unknown) => publishToQueueMock(job)

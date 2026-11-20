@@ -24,6 +24,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({ sendTemplatedEmail: jest.f
 
 /** Stands in for discarding a spooled attachment; the cases assert how it was called. */
 const discardSpooledMock = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('@infrastructure/adapters/mail-spool', () => ({
     discardSpooled: (key: string) => discardSpooledMock(key)
 }));

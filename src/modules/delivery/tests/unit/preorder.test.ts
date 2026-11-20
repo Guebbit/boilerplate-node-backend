@@ -16,10 +16,13 @@ import {
 
 /** One day in milliseconds. */
 const DAY = 86_400_000;
+
 /** One hour in milliseconds. */
 const HOUR = 3_600_000;
+
 /** The release date the buyer agreed to; moved dates are measured against it. */
 const AGREED = new Date('2026-12-01T00:00:00Z');
+
 /** Zone the release dates are read in. */
 const ZONE = 'Europe/Rome';
 

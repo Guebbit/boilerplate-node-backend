@@ -34,14 +34,17 @@ jest.mock('@infrastructure/adapters/image.worker', () => ({
 const { imageStore } = jest.requireMock<{
     imageStore: { quarantine: jest.Mock; removeQuarantined: jest.Mock; remove: jest.Mock };
 }>('@infrastructure/adapters/image-store');
+
 /** The mocked file deletion. */
 const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
     '@infrastructure/adapters/filesystem'
 );
+
 /** The mocked queue state probe. */
 const { queueState } = jest.requireMock<{ queueState: jest.Mock }>(
     '@infrastructure/adapters/queue'
 );
+
 /** The mocked digest pipeline. */
 const { digestQuarantinedImage } = jest.requireMock<{ digestQuarantinedImage: jest.Mock }>(
     '@infrastructure/adapters/image.worker'

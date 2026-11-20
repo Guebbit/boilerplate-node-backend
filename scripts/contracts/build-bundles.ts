@@ -34,6 +34,7 @@ const arguments_ = process.argv.slice(2);
 
 /** `--check`: verify the bundles on disk instead of writing them. */
 const checkOnly = arguments_.includes('--check');
+
 /** Bundle names the caller asked for; none means every bundle. */
 const named = arguments_.filter((argument) => !argument.startsWith('--'));
 

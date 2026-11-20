@@ -35,6 +35,7 @@ afterAll(() => resetDomainEvents());
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
+
 /** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'd');
 

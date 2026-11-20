@@ -27,6 +27,7 @@ const buildSchema = () => {
 
 /** The instant every date in these fixtures carries. */
 const AT = new Date('2026-11-17T10:20:30.000Z');
+
 /** The id every id in these fixtures carries. */
 const OWNER = new Types.ObjectId('64b7f0c2a1b2c3d4e5f60718');
 

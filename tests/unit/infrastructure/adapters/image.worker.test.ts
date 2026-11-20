@@ -69,22 +69,31 @@ import {
 
 /** Typed handle on the mocked `ReadQuarantined`. */
 const mockedReadQuarantined = imageStore.readQuarantined as jest.Mock;
+
 /** Typed handle on the mocked `Promote`. */
 const mockedPromote = imageStore.promote as jest.Mock;
+
 /** Typed handle on the mocked `PutDerivative`. */
 const mockedPutDerivative = imageStore.putDerivative as jest.Mock;
+
 /** Typed handle on the mocked `RemoveQuarantined`. */
 const mockedRemoveQuarantined = imageStore.removeQuarantined as jest.Mock;
+
 /** Typed handle on the mocked `Remove`. */
 const mockedRemove = imageStore.remove as jest.Mock;
+
 /** Typed handle on the mocked `DigestImage`. */
 const mockedDigestImage = digestImage as jest.Mock;
+
 /** Typed handle on the mocked `ThumbnailImage`. */
 const mockedThumbnailImage = thumbnailImage as jest.Mock;
+
 /** Typed handle on the mocked `IdentifyImage`. */
 const mockedIdentifyImage = identifyImage as jest.Mock;
+
 /** Typed handle on the mocked `dispatchJob`. */
 const mockedDispatchJob = dispatchJob as jest.Mock;
+
 /** The cache sweep a finished digest triggers — asserted, so a silent writeback is a failure. */
 const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
 

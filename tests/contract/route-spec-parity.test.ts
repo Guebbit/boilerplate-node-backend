@@ -75,6 +75,7 @@ const isTestLever = (operation: OperationKey): boolean => operation.includes(' /
 
 /** Mounted operations, minus the test-only levers. */
 const mounted = mountedOperations().filter((operation) => !isTestLever(operation));
+
 /** Operations the contract declares, minus the test-only levers. */
 const declared = declaredOperations().filter((operation) => !isTestLever(operation));
 

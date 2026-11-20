@@ -23,12 +23,16 @@ import { asStub } from '@tests/stub';
 
 /** Stands in for the client's `On`; the cases assert how it was called. */
 const mockSelectionOn = jest.fn();
+
 /** Stands in for the client's `Connect`; the cases assert how it was called. */
 const mockSelectionConnect = jest.fn();
+
 /** Stands in for the client's `SendCommand`; the cases assert how it was called. */
 const mockSelectionSendCommand = jest.fn();
+
 /** Stands in for the client's `Destroy`; the cases assert how it was called. */
 const mockSelectionDestroy = jest.fn();
+
 /** Stands in for the client's `Quit`; the cases assert how it was called. */
 const mockSelectionQuit = jest.fn();
 
@@ -44,12 +48,15 @@ const mockSelectionClient = {
 
 /** Stands in for the client factory; it returns the mocked client. */
 const mockCreateClient = jest.fn((_options: unknown) => mockSelectionClient);
+
 jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
 
 /** `RedisStore.init` awaits two Lua-script loads internally — see the fix under test below. */
 const mockInit = jest.fn();
+
 /** Stands in for the store's increment. */
 const mockIncrement = jest.fn();
+
 /** Records each time the store is constructed, and with what. */
 const mockConstruct = jest.fn();
 
@@ -73,6 +80,7 @@ class MockRedisStore {
 
     /** The store init, mocked. */
     init = mockInit;
+
     /** Counts a hit for a key. */
     increment = (key: string) => {
         mockIncrement(key);

@@ -27,6 +27,7 @@ import {
 
 /** A charge of 1000.00 in euro. */
 const charge = { amount: '1000.00', currency: 'eur' };
+
 /** The order and payment ids the fake provider echoes back. */
 const metadata = { orderId: 'order-1', paymentId: 'payment-1' };
 

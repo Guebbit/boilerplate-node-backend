@@ -14,6 +14,7 @@ import { fileExists } from '@tests/file-sandbox';
 
 /** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
+
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));

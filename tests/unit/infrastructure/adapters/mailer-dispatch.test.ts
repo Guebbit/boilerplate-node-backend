@@ -24,12 +24,14 @@ import { fileExists } from '@tests/file-sandbox';
 
 /** Stands in for the SMTP send; the cases assert how it was called. */
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
+
 jest.mock('nodemailer', () => ({
     createTransport: () => ({ sendMail: sendMailMock })
 }));
 
 /** Stands in for the dispatcher; the cases assert how it was called. */
 const dispatchJobMock = jest.fn();
+
 jest.mock('@infrastructure/adapters/job-dispatch', () => ({
     dispatchJob: (job: unknown) => dispatchJobMock(job)
 }));
@@ -40,6 +42,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
 
 /** The logger, mocked so cases can assert what was logged. */
 const loggerMock = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
 /**
  * Getters rather than `logger: loggerMock`, and the difference is not stylistic.
  *
@@ -72,8 +75,10 @@ const REQUEST: EmailJobPayload['request'] = {
     to: 'ada@example.com',
     subject: 'Reset your password'
 };
+
 /** The template every dispatch case sends. */
 const TEMPLATE = 'account.reset-request';
+
 /**
  * Every variable the chosen template interpolates — which, since templates stopped translating,
  * means the finished copy a producer would have resolved. The inline paths RENDER for real (only

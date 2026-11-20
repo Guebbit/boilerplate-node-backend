@@ -33,6 +33,7 @@ const BEFORE = {
     zip: 'SW1A',
     country: 'IT'
 };
+
 /** The address the order is placed with. */
 const AFTER = { ...BEFORE, street: '14 Analytical Engine Rd', zip: 'SW1B' };
 

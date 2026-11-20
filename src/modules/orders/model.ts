@@ -577,6 +577,7 @@ orderSchema.index({ status: 1, createdAt: -1 }, { name: 'orders_status_createdAt
  * carries it.
  */
 orderSchema.index({ paidAt: 1 }, { name: 'orders_paidAt', sparse: true });
+
 /**
  * Recursively normalizes each line's embedded product snapshot — `_id` → `id`, `__v` dropped.
  */

@@ -52,6 +52,7 @@ afterEach(() => {
 
 /** The fixed identity the `fake` OAuth provider always answers with. */
 const FAKE_OAUTH_EMAIL = 'oauth.demo@example.com';
+
 /** Subject id the fake OAuth provider reports for the person signing in. */
 const FAKE_OAUTH_PROVIDER_ID = 'fake-oauth-subject';
 

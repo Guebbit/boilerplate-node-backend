@@ -14,10 +14,13 @@ import { setEnvironment } from '@tests/environment';
 
 /** Stands in for the client's `Connect`; the cases assert how it was called. */
 const mockConnect = jest.fn();
+
 /** Stands in for the client's `SendCommand`; the cases assert how it was called. */
 const mockSendCommand = jest.fn();
+
 /** Stands in for the client's `Destroy`; the cases assert how it was called. */
 const mockDestroy = jest.fn();
+
 /** Stands in for the client's `Close`; the cases assert how it was called. */
 const mockClose = jest.fn();
 
@@ -33,6 +36,7 @@ const mockClient = {
 
 /** Stands in for the client factory; it returns the mocked client. */
 const mockCreateClient = jest.fn((_options: unknown) => mockClient);
+
 jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
 
 jest.mock('@infrastructure/adapters/logger', () => ({

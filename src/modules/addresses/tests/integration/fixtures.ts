@@ -12,6 +12,7 @@ export const HOME = {
     zip: '41121',
     country: 'IT'
 };
+
 /** A second address in the same town. */
 export const OFFICE = {
     label: 'office',

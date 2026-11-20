@@ -27,6 +27,7 @@ const alpha: ModuleFragment = {
     paths: ['/alpha', '/alpha/{id}'],
     tags: ['Alpha']
 };
+
 /** A second module fragment. */
 const widgets: ModuleFragment = {
     section: 'widgets',

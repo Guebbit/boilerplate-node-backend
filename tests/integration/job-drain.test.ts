@@ -20,6 +20,7 @@ import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metric
 
 /** What the queue adapter reports; a case sets it. */
 const queueStateMock = jest.fn().mockReturnValue('ready');
+
 jest.mock('@infrastructure/adapters/queue', () => ({
     ...jest.requireActual('@infrastructure/adapters/queue'),
     queueState: () => queueStateMock()

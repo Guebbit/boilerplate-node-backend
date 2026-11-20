@@ -20,6 +20,7 @@ import {
 
 /** One locale's rules for the two stub entities: a single optional string each. */
 const titleRules = z.strictObject({ title: z.string().optional() });
+
 /** A rules schema that accepts an optional body. */
 const bodyRules = z.strictObject({ body: z.string().optional() });
 

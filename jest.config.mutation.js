@@ -7,6 +7,7 @@
  * See docs/build/mutation-testing.md.
  */
 const path = require('node:path');
+
 const baseConfig = require('./jest.config');
 
 module.exports = {

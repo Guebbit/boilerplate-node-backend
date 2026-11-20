@@ -45,6 +45,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 
 /** The audit-log repository, mocked: these cases test the service, not storage. */
 const mockedRepository = auditLogRepository as jest.Mocked<typeof auditLogRepository>;
+
 /** The logger, mocked so a case can assert what the service logged. */
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 

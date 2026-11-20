@@ -72,6 +72,7 @@ const parsedCompose: unknown = parse(
     readFileSync(path.join(REPO_ROOT, 'compose.production.yaml'), 'utf8'),
     { merge: true }
 );
+
 if (!isComposeFile(parsedCompose))
     throw new Error('[production-topology] compose.production.yaml did not parse to an object.');
 

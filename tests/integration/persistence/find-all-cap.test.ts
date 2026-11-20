@@ -19,6 +19,7 @@ interface Probe extends Document {
 
 /** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<Probe>('FindAllCapProbe', new Schema<Probe>({ n: Number }));
+
 /** A throwaway model, so the persistence helper is tested without a module. */
 const probes = createRepository<Probe, Wire<Probe>>(probeModel, {
     transform: (item: Record<string, unknown>) => item,

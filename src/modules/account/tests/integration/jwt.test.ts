@@ -44,6 +44,7 @@ setupTestDb();
 
 /** Signing key the access tokens in this file are minted and verified with. */
 const ACCESS_SECRET = 'test-access-secret';
+
 /** Signing key the refresh tokens in this file are minted and verified with. */
 const REFRESH_SECRET = 'test-refresh-secret';
 

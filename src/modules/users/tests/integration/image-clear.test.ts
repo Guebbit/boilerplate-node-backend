@@ -23,6 +23,7 @@ let root: string;
 
 /** The avatar and thumbnail a finished digest would have left behind. */
 const AVATAR = '/images/avatar-abc.png';
+
 /** Thumbnail url stored on the record, which clearing the image must remove. */
 const THUMBNAIL = '/images/thumbs/v1/avatar-abc.webp';
 

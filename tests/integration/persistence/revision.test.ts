@@ -28,9 +28,12 @@ const probeSchema = new Schema<Probe>(
     { name: { type: String, required: true }, tags: { type: [String], default: [] } },
     { timestamps: true }
 );
+
 probeSchema.plugin(revisionPlugin);
+
 /** Schema of the throwaway model. */
 const transform = applySerialization(probeSchema);
+
 /** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<Probe>('RevisionProbe', probeSchema);
 

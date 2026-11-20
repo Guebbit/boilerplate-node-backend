@@ -20,8 +20,10 @@ const TLS_DIRECTORY = path.join(__dirname, '../../../scenarios/support/tls');
 
 /** The three committed files, read once. */
 const ca = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-ca.pem'));
+
 /** The sink's TLS certificate. */
 const cert = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-cert.pem'));
+
 /** The sink's TLS private key. */
 const key = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-key.pem'));
 

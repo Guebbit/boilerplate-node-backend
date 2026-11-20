@@ -7,6 +7,7 @@ import { NO_PRODUCT_STANDING, productActions } from '../../domain/actions';
 
 /** A product that is not deleted. */
 const LIVE = {};
+
 /** A product soft-deleted at a fixed instant. */
 const DELETED = { deletedAt: '2026-11-01T10:00:00.000Z' };
 

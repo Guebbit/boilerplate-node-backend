@@ -40,7 +40,9 @@
  */
 
 const fs = require('node:fs');
+
 const path = require('node:path');
+
 const { parse: parseYaml } = require('yaml');
 
 /**
@@ -125,8 +127,10 @@ const MODULE_GROUP = Object.fromEntries(
 
 /** Every module in each group, read off `MODULE_GROUP` rather than hand-listed, so relabelling a module in its own `module.yaml` is the only edit this rule ever needs. */
 const FOUNDATION_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'foundation');
+
 /** Modules in the shop group. */
 const SHOP_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'shop');
+
 /** Modules in the example group. */
 const EXAMPLE_MODULES = MODULE_NAMES.filter((name) => MODULE_GROUP[name] === 'example');
 

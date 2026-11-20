@@ -14,6 +14,7 @@ setupTestDb();
 
 /** Id of one product the stats are grouped by. */
 const shoes = new Types.ObjectId();
+
 /** Id of the other product the stats are grouped by. */
 const hats = new Types.ObjectId();
 

@@ -11,6 +11,7 @@
  * file is about what happens to the shape afterwards.
  */
 const listLeaseSummariesMock = jest.fn();
+
 jest.mock('@infrastructure/persistence/lease', () => ({
     listLeaseSummaries: () => listLeaseSummariesMock()
 }));

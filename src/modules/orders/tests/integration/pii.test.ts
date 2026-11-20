@@ -23,6 +23,7 @@ const SHIPPING = {
     country: 'GB',
     phone: '+44 20 0000 0000'
 };
+
 /** A full billing address: every field the redaction must clear. */
 const BILLING = {
     fullName: 'Ada Lovelace',
@@ -32,6 +33,7 @@ const BILLING = {
     country: 'GB',
     vatNumber: 'GB123456789'
 };
+
 /** Free text the buyer left on the order, which the redaction must clear. */
 const NOTES = 'Leave with the concierge, 2nd floor';
 

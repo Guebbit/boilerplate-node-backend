@@ -12,6 +12,7 @@ import type { OrderSnapshotInput } from '@modules/orders/factories';
 
 /** A fixed valid ObjectId string, so an expectation can name it. */
 const HEX = '65dc8a99604c307b702b5ccc';
+
 /** A fixed valid ObjectId string for the product. */
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 

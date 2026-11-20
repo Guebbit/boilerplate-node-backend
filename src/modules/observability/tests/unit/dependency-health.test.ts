@@ -21,6 +21,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({ queueState: jest.fn() }));
 
 /** The cache adapter state probe, mocked so a case picks the state. */
 const mockedCacheState = cacheState as jest.MockedFunction<typeof cacheState>;
+
 /** The queue adapter state probe, mocked so a case picks the state. */
 const mockedQueueState = queueState as jest.MockedFunction<typeof queueState>;
 

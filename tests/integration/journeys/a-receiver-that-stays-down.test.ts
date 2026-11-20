@@ -47,6 +47,7 @@ afterEach(async () => {
 
 /** An hour and a day, in milliseconds. */
 const HOUR_MS = 3_600_000;
+
 /** One day in milliseconds. */
 const DAY_MS = 24 * HOUR_MS;
 

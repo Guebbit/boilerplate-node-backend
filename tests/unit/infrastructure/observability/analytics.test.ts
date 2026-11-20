@@ -34,6 +34,7 @@ import { setEnvironment } from '@tests/environment';
 
 /** Stands in for the provider's capture call. */
 const mockCapture = jest.fn();
+
 /** Stands in for the provider's shutdown. */
 const mockShutdown = jest.fn().mockResolvedValue(void 0);
 
@@ -46,6 +47,7 @@ jest.mock('posthog-node', () => ({
 
 /** Stands in for the logger's warn. */
 const mockLoggerWarn = jest.fn();
+
 /** Stands in for the logger's debug. */
 const mockLoggerDebug = jest.fn();
 
