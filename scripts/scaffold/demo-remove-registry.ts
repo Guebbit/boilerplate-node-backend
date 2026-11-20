@@ -5,7 +5,7 @@
  * list — `demo-remove.ts`'s registry-editing steps.
  *
  * `src/modules.ts` is the one central file that names a module (an import line per module, then one
- * entry per module in a literal); everything else — the contract's path index, the test suite's
+ * entry per module in a literal); everything else — the contract's module paths, the test suite's
  * router map, the docs — reads what is on disk or in the registry. A
  * A module's scheduled jobs are declared on its own manifest, so they leave with its folder and
  * `npm run regenerate` rewrites the crontab.

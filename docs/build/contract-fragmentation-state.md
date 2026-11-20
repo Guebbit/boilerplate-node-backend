@@ -48,8 +48,8 @@ Every operation and every single-domain type lives with the module that owns it.
 
 ```
 shared/contracts/openapi.root.yaml    preamble · securitySchemes · parameters · responses ·
-                                      the shared types · GET / · the per-module path index
-                                      (a preference: completed from the fragments, see below)
+                                      the shared types · the paths no module owns
+                                      (module paths are collected from the fragments, see below)
 src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module:
                                       its paths, its tags, and every schema it owns
 ```
@@ -59,11 +59,11 @@ npm run contracts:bundle              # rebuild every bundle from the fragments
 npm run check                         # fail if any bundle on disk is stale
 ```
 
-**The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
-every fragment on disk, drops the root's `$ref` for a path no fragment declares any more, appends
-the paths and tags of a fragment the root has not heard of (a tag the fragment declares in its own
-`tags:` arrives with that description), and stages the completed tree under `tmp/` for redocly. The root's hand order is kept for what it already lists, so the bundle's
-section order does not move; a new module is in the contract from its own `openapi.yaml` alone.
+**The root lists no module path.** `scripts/contracts/root-assembly.ts` reads every fragment on
+disk, appends a `$ref` for each of its paths (in section order, after the root's own) and its
+tags (a tag the fragment declares in its own `tags:` arrives with that description), and stages
+the completed tree under `tmp/` for redocly. A path claimed twice, by two modules or by a module
+and the root, fails the build. A new module is in the contract from its own `openapi.yaml` alone.
 
 **Two guards close the bundle.** `redocly bundle` runs with
 `--component-renaming-conflicts-severity=error`, so two files defining one schema name fail the

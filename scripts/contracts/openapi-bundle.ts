@@ -12,7 +12,7 @@
  * is parsed once, each step in `bundleSteps` edits that one object in order, and it is stringified
  * once. A step is `(document) => void` and never touches text.
  *
- * The root's path index and tag list are completed from the fragments on disk before redocly runs
+ * Every module's paths and tags are added to the root from the fragments on disk before redocly runs
  * ({@link assembleRoot}), so adding a module is its own `openapi.yaml` and deleting one is `rm -rf`.
  *
  * @see docs/build/contract-fragmentation.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not
@@ -115,7 +115,7 @@ export type SectionName = string;
 export const moduleSpec = (section: ModuleSection): string =>
     path.join(REPO_ROOT, 'src', 'modules', section, 'openapi.yaml');
 
-/** What no module owns: the preamble, the shared components, and `GET /`. */
+/** What no module owns: the preamble, the shared components, and its own system paths. */
 const ROOT_SPEC = path.join(REPO_ROOT, 'shared', 'contracts', 'openapi.root.yaml');
 
 /** The committed contract every tool reads. */
@@ -130,17 +130,8 @@ const OPENAPI_OUTPUT = path.join(REPO_ROOT, 'openapi.yaml');
  */
 const PATH_LINE = /^ {4}(\/\S*):\s*$/gm;
 
-/**
- * What the ROOT declares itself, rather than delegating to a module.
- *
- * Parsed rather than matched, because the root's `paths:` holds both kinds — the shell's own
- * operations and one `$ref` per module path — and only the first kind is the system section's. A
- * `$ref` entry is somebody else's path passing through.
- */
-const rootPaths = (): string[] =>
-    Object.entries(readOpenApiFragment(ROOT_SPEC).paths ?? {})
-        .filter(([, item]) => !('$ref' in item))
-        .map(([url]) => url);
+/** What the ROOT declares itself, rather than a module: the system section's paths. */
+const rootPaths = (): string[] => Object.keys(readOpenApiFragment(ROOT_SPEC).paths ?? {});
 
 /** Every path a section declares, in the order it declares them. */
 export const sectionPaths = (section: SectionName): string[] =>
