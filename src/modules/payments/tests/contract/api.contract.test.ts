@@ -40,6 +40,7 @@ setupTestDb();
  * value pass silently while this test quietly stopped meaning anything.
  */
 const GOOD_METHOD = 'pm_card_visa';
+
 /** The provider test payment method that always declines. */
 const DECLINE_METHOD = 'pm_card_declined';
 

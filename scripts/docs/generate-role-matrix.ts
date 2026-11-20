@@ -42,6 +42,7 @@ const PAGE = path.join(ROOT, 'docs/use-the-shop/start.md');
 
 /** Opening marker of the role matrix block the generator rewrites in place. */
 const START = '<!-- role-matrix:start -->';
+
 /** Closing marker of the role matrix block the generator rewrites in place. */
 const END = '<!-- role-matrix:end -->';
 
@@ -185,6 +186,7 @@ const body = (): string =>
 
 /** The marker pair a module page carries around its generated "who can do what" table. */
 const MODULE_START = '<!-- permissions:start -->';
+
 /** Closing marker of the permissions block the generator rewrites in place. */
 const MODULE_END = '<!-- permissions:end -->';
 

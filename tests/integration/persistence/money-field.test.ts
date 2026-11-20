@@ -37,9 +37,12 @@ const probeSchema = new Schema<Probe>({
         default: []
     }
 });
+
 probeSchema.plugin(moneyPlugin);
+
 /** Schema of the throwaway model. */
 const serialize = applySerialization(probeSchema);
+
 /** A throwaway model, so the persistence helper is tested without a module. */
 const probeModel = model<Probe>('MoneyProbe', probeSchema);
 

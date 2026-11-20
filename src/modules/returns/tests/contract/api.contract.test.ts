@@ -237,6 +237,7 @@ describe('GET /returns and GET /returns/{id}', () => {
 
 /** A staff account with a verified address, distinct per call, whose session a test can age. */
 let staffAccounts = 0;
+
 /** A staff user with the given role. */
 const staffUser = (role: string) => {
     staffAccounts += 1;

@@ -24,10 +24,13 @@ import {
 
 /** The instant openings are judged at. */
 const NOW = new Date('2030-05-01T10:00:00Z');
+
 /** One day in milliseconds. */
 const DAY_MS = 86_400_000;
+
 /** The delivery date the buyer agreed to. */
 const AGREED = '2030-06-01T00:00:00.000Z';
+
 /** One day in milliseconds. */
 const AGREED_PLUS_30 = new Date(new Date(AGREED).getTime() + 30 * DAY_MS);
 

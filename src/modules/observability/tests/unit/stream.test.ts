@@ -34,8 +34,10 @@ import { buildObservabilityPayload, streamObservabilityMetrics } from '../../ser
 
 /** The intervals the module schedules, as documented in its own constants. */
 const UPDATE_INTERVAL_MS = 5000;
+
 /** The stream's heartbeat period, copied here so a change to it is noticed. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
+
 /** How often the stream re-checks the caller's permission, copied here so a change is noticed. */
 const REVERIFY_INTERVAL_MS = 30_000;
 

@@ -111,14 +111,19 @@ const runPaymentsStaffGuard = (authContext: AuthContext) => {
 
 /** Stands in for verifying an access token. */
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
+
 /** Stands in for verifying a refresh token. */
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
+
 /** What a stream's family recheck answers, standing in for the strategy's live-family check. */
 const recheckFamily = jest.fn<Promise<unknown>, []>();
+
 /** What the resolver is told to do with a cookie it refused. */
 const clearDeadCookie = jest.fn();
+
 /** Whether the session cookie authenticates ordinary routes — `cookie` mode's switch. */
 let cookieAuthenticates = false;
+
 registerAuthResolver({
     fromBearer: (token) => fromAccessToken(token) as never,
     fromCookie: (token) => fromRefreshToken(token) as never,
@@ -139,16 +144,20 @@ registerAuthResolver({
 
 /** Fakes `@modules/api-keys`' own resolver, for `getAuth`'s `sk_...` branch. */
 const fromBearerToken = jest.fn<Promise<unknown>, [string]>();
+
 registerCredentialResolver({
     fromBearerToken: (token) => fromBearerToken(token) as never
 });
 
 /** Stands in for verifying an access token. */
 const mockedVerifyAccessToken = fromAccessToken;
+
 /** Stands in for verifying a refresh token. */
 const mockedVerifyRefreshToken = fromRefreshToken;
+
 /** Alias kept for the cases: the bearer-credential resolver. */
 const mockedResolveCredential = fromBearerToken;
+
 /** The audit emitter, typed so cases can read its calls. */
 const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 

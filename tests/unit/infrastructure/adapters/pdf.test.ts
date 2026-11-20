@@ -17,25 +17,33 @@ const pdfBuffer = new Uint8Array([37, 80, 68, 70]);
 
 /** Stands in for the browser's `pdf`; the cases assert how it was called. */
 const pdf = jest.fn((_options?: unknown) => Promise.resolve(pdfBuffer));
+
 /** Stands in for the browser's `setContent`; the cases assert how it was called. */
 const setContent = jest.fn((_html?: string, _options?: unknown) => Promise.resolve());
+
 /** Stands in for the browser's `close`; the cases assert how it was called. */
 const close = jest.fn(() => Promise.resolve());
+
 /** Stands in for the browser's `setJavaScriptEnabled`; the cases assert how it was called. */
 const setJavaScriptEnabled = jest.fn((_enabled?: boolean) => Promise.resolve());
+
 /** Stands in for the browser's `setRequestInterception`; the cases assert how it was called. */
 const setRequestInterception = jest.fn((_enabled?: boolean) => Promise.resolve());
+
 /** Stands in for the browser's `on`; the cases assert how it was called. */
 const on = jest.fn((_event?: string, _handler?: unknown) => undefined);
+
 /** Stands in for the browser's `newPage`; the cases assert how it was called. */
 const newPage = jest.fn(() =>
     Promise.resolve({ setContent, pdf, setJavaScriptEnabled, setRequestInterception, on })
 );
+
 /** Stands in for the browser's `launch`; the cases assert how it was called. */
 const launch = jest.fn((_options?: unknown) => Promise.resolve({ newPage, close }));
 
 /** The logger, mocked so the case below can assert what was logged (getter: see mailer-dispatch.test.ts). */
 const loggerMock = { warn: jest.fn() };
+
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
     get logger() {

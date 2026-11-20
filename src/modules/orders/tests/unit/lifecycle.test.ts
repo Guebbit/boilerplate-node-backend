@@ -31,6 +31,7 @@ import {
 
 /** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(OrderStatus);
+
 /** Every actor the order lifecycle knows, so a new actor is covered without editing the cases. */
 const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
 

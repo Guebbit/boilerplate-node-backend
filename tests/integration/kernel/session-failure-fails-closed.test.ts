@@ -35,6 +35,7 @@ registerAuthResolver({
 
 /** A public route, a protected one and a security-open one behind the same `getAuth`, with the real error handler last. */
 const app = express();
+
 app.get('/public', getAuth, (_request, response) => {
     response.status(200).json({ ok: true });
 });

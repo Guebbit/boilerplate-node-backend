@@ -31,6 +31,7 @@ type QueueAdapter = typeof import('@infrastructure/adapters/queue');
 
 /** Short knobs: a retry that takes seconds, and two attempts, keep each case under a few seconds. */
 const RETRY_DELAY_SECONDS = 1;
+
 /** Delivery attempts the test queue allows before a message is parked. */
 const MAX_ATTEMPTS = 2;
 
@@ -45,6 +46,7 @@ let broker: TestRabbitMq;
 
 /** Adapter copies and raw connections a case opened; closed after it, whatever it asserted. */
 const adapters: QueueAdapter[] = [];
+
 /** Connections the cases opened, so afterEach can close every one. */
 const connections: ChannelModel[] = [];
 

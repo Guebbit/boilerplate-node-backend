@@ -88,10 +88,13 @@ const callerOf = (declared: CaseCaller): Caller =>
  * against a silently empty file stays real in both.
  */
 const shopDeployed = isDeployed('orders');
+
 /** Floor on how many cases the file holds, so an emptied file cannot pass. */
 const MIN_CASES = shopDeployed ? 30 : 20;
+
 /** Floor on how many deny cases the file holds. */
 const MIN_DENY = shopDeployed ? 20 : 12;
+
 /** Floor on how many allow cases the file holds. */
 const MIN_ALLOW = shopDeployed ? 10 : 6;
 

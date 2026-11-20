@@ -28,6 +28,7 @@ const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' };
 
 /** A parking queue also expires its messages after 7 days. */
 const DEAD_LETTER_ARGUMENTS = { ...QUORUM_QUEUE_TYPE, 'x-message-ttl': 604_800_000 };
+
 /** The queue arguments that give at-least-once delivery with dead-lettering. */
 const AT_LEAST_ONCE_DEAD_LETTERING = {
     'x-dead-letter-strategy': 'at-least-once',
@@ -38,8 +39,10 @@ const AT_LEAST_ONCE_DEAD_LETTERING = {
 
 /** Stands in for the channel's `Ack`; the cases assert how it was called. */
 const mockAck = jest.fn();
+
 /** Stands in for the channel's `Nack`; the cases assert how it was called. */
 const mockNack = jest.fn();
+
 /**
  * A confirm channel's `sendToQueue` gains a callback the broker invokes once it has accepted (or
  * refused) the message — `publishToQueue` now waits for THAT, not the return value, so this
@@ -60,22 +63,30 @@ const mockSendToQueue = jest
             return true;
         }
     );
+
 /** Stands in for the channel's `AssertQueue`; the cases assert how it was called. */
 const mockAssertQueue = jest
     .fn()
     .mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
+
 /** Stands in for the channel's `Prefetch`; the cases assert how it was called. */
 const mockPrefetch = jest.fn().mockImplementation(() => Promise.resolve());
+
 /** Stands in for the channel's `Consume`; the cases assert how it was called. */
 const mockConsume = jest.fn().mockResolvedValue({ consumerTag: 'tag-1' });
+
 /** Stands in for the channel's `AssertExchange`; the cases assert how it was called. */
 const mockAssertExchange = jest.fn().mockResolvedValue({ exchange: DEAD_LETTER_EXCHANGE });
+
 /** Stands in for the channel's `BindQueue`; the cases assert how it was called. */
 const mockBindQueue = jest.fn().mockResolvedValue({});
+
 /** Stands in for the channel's `ChannelOn`; the cases assert how it was called. */
 const mockChannelOn = jest.fn();
+
 /** Stands in for the channel's `Cancel`; the cases assert how it was called. */
 const mockCancel = jest.fn().mockResolvedValue({});
+
 /** Builds a channel whose every method is mocked. */
 const channelMock = () => ({
     cancel: mockCancel,
@@ -89,12 +100,14 @@ const channelMock = () => ({
     nack: mockNack,
     on: mockChannelOn
 });
+
 /**
  * `queue.ts` now opens a CONFIRM channel (`model.createConfirmChannel()`), not a plain one — see
  * its own docblock on `currentChannel`. The mock channel shape is identical either way (a
  * `ConfirmChannel` only ADDS the callback/`waitForConfirms` surface `sendToQueue` above covers).
  */
 const mockCreateConfirmChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
+
 /** Stands in for the channel's `ModelClose`; the cases assert how it was called. */
 const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 
@@ -106,8 +119,10 @@ const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 const mockPlainAssertQueue = jest
     .fn()
     .mockResolvedValue({ queue: 'test.dead', messageCount: 0, consumerCount: 0 });
+
 /** Stands in for the channel's `PlainChannelClose`; the cases assert how it was called. */
 const mockPlainChannelClose = jest.fn().mockResolvedValue(undefined);
+
 /** Stands in for the channel's `CreateChannel`; the cases assert how it was called. */
 const mockCreateChannel = jest.fn().mockImplementation(() =>
     Promise.resolve({
@@ -118,14 +133,17 @@ const mockCreateChannel = jest.fn().mockImplementation(() =>
 
 /** Handlers `queue.ts` registered on the recovering connection's own events (`connect`/`disconnect`). */
 let modelListeners: Record<string, ((...args: never[]) => void)[]> = {};
+
 /** Stands in for the channel's `ModelOn`; the cases assert how it was called. */
 const mockModelOn = jest.fn((event: string, handler: (...args: never[]) => void): void => {
     (modelListeners[event] ??= []).push(handler);
 });
+
 /** Fires every handler `queue.ts` registered for one event — simulates the library emitting it. */
 const emitModelEvent = (event: string, ...args: never[]) => {
     for (const handler of modelListeners[event] ?? []) handler(...args);
 };
+
 /** A connection model that reports being recovered. */
 const recoveringModelMock = {
     createConfirmChannel: mockCreateConfirmChannel,

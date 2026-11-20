@@ -104,6 +104,10 @@ Orderly, scannable files. Two rules, always:
   enforced ceiling, not just the floor — so the comment visually belongs to the thing below it.
   Inside a declaration, blank lines are fine as needed.
 
+The blank line is linted (`@stylistic/padding-line-between-statements`, `jest/padding-around-*`):
+the linter checks the file's top level and class bodies; factory bodies and `setup()` are left to
+review.
+
 ```ts
 /**
  * Rows currently visible after the active filter.
@@ -116,6 +120,17 @@ const visibleRows = computed(() => rows.value.filter(isVisible));
  */
 const reload = () => fetchRows().then(applyRows);
 ```
+
+## Nesting depth
+
+Nesting stays at three levels in production code (four in a spec, where walking a table
+exhaustively is the clearest form). A helper takes anything deeper.
+
+- `local/max-depth-through-closures` counts the levels `if`, loops, `switch` and `try` open. A
+  callback does not restart the count, so a `.then` chain cannot hide a fourth level.
+- A function declaration, a class member and an object-literal method start again at zero.
+- `max-nested-callbacks` caps callbacks at four in production code; specs have no cap. Chain, or
+  name the step.
 
 ## Commenting third-party / unowned code
 

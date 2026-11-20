@@ -16,6 +16,7 @@ const mockedResolveMx = jest.fn();
 
 /** The A and AAAA lookups of the RFC 5321 fallback — mocked for the same reason. */
 const mockedResolve4 = jest.fn();
+
 /** Stands in for the IPv6 lookup; a case picks the answer. */
 const mockedResolve6 = jest.fn();
 

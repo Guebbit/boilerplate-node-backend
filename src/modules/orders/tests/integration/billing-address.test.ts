@@ -35,6 +35,7 @@ const BEFORE = {
     zip: '20100',
     country: 'IT'
 };
+
 /** The company the buyer then asked for. */
 const AFTER = { ...BEFORE, fullName: 'Rossi Srl', vatNumber: 'IT01234567890' };
 

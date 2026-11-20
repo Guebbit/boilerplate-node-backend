@@ -40,11 +40,13 @@ const PAGE = path.join(ROOT, 'docs', 'modules', 'start.md');
 
 /** Markers bounding the generated block — everything between them is replaced, nothing outside. */
 const START = '<!-- module-graph:start -->';
+
 /** Closing marker of the module graph block the generator rewrites in place. */
 const END = '<!-- module-graph:end -->';
 
 /** Markers bounding the generated module list on the same page. */
 const LIST_START = '<!-- module-list:start -->';
+
 /** Closing marker of the module list block the generator rewrites in place. */
 const LIST_END = '<!-- module-list:end -->';
 

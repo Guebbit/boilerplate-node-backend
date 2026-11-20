@@ -30,6 +30,7 @@ import {
  * bare constructor for; these are hand-verified integers, not values a real caller could forge.
  */
 const asMoney = (minorUnits: number): Money => minorUnits as Money;
+
 import { PROPERTY_RUNS } from '@tests/knobs';
 
 /** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */

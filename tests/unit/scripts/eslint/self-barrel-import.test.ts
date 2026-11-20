@@ -20,8 +20,10 @@ import { REPO_ROOT } from '@tests/paths';
 
 /** The eslint binary the probe is run with. */
 const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
+
 /** Path of the probe file the case writes. */
 const PROBE_PATH = path.join(REPO_ROOT, 'src/modules/users/__self-barrel-probe.ts');
+
 /** The probe file path, relative to the repo root, as eslint reports it. */
 const PROBE_RELATIVE = path.relative(REPO_ROOT, PROBE_PATH);
 

@@ -47,6 +47,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+
 /** Stands in for the mail queue; the cases assert which mail was enqueued. */
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
@@ -735,6 +736,7 @@ describe('withActions', () => {
             process: false,
             overrideStatus: [],
             invoice: false,
+            correctBilling: false,
             withdraw: true,
             delete: false,
             hardDelete: false,
@@ -742,7 +744,7 @@ describe('withActions', () => {
         });
     });
 
-    it('offers an operator nothing but the delete on a terminal order', async () => {
+    it('offers an operator only the delete and the billing correction on a terminal order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
         await orderService.cancelOnRequestById(String(order._id), asAdmin());
@@ -758,6 +760,7 @@ describe('withActions', () => {
             process: false,
             overrideStatus: [],
             invoice: false,
+            correctBilling: true,
             withdraw: false,
             delete: true,
             hardDelete: true,

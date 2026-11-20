@@ -39,6 +39,7 @@ const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
  * make a run pass.
  */
 const MIN_PAGES = 90;
+
 /** Floor on how many references the sweep must find, so an empty sweep cannot pass. */
 const MIN_REFERENCES = 300;
 

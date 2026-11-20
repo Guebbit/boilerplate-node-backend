@@ -7,8 +7,10 @@
 
 /** Stands in for the broker publish; a case sets what it answers. */
 const publishToQueueMock = jest.fn();
+
 /** Stands in for the configured check; a case sets it. */
 const isQueueEnabledMock = jest.fn();
+
 /** The queue adapter, reduced to those two. */
 jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: (options: unknown) => publishToQueueMock(options),
@@ -17,6 +19,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
 
 /** Stands in for the fallback store. */
 const holdJobMock = jest.fn();
+
 /** The store, reduced to its write. */
 jest.mock('@infrastructure/persistence/job-store', () => ({
     holdJob: (channel: string, payload: unknown) => holdJobMock(channel, payload)
@@ -24,6 +27,7 @@ jest.mock('@infrastructure/persistence/job-store', () => ({
 
 /** The logger, so a case can assert what was logged. */
 const loggerMock = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
 /** Getter, not a property: see `mailer-dispatch.test.ts` for why the factory must not read the const early. */
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,

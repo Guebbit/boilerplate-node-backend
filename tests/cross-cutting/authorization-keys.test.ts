@@ -27,12 +27,14 @@ import { ERROR_CODES } from '@api/error-codes';
 
 /** Every permission rule id the code declares. */
 const declared = new Set(PERMISSION_RULES.map((rule) => rule.id));
+
 /** One role lookup per audience name. */
 const audiences: RoleLookup[] = AUDIENCE_NAMES.map((name) => ({
     name,
     scope: 'tenant',
     permissions: AUDIENCE_ROLES[name].permissions
 }));
+
 /** Every role whose permission keys must be declared: presets plus audiences. */
 const roles: RoleLookup[] = [...PRESET_ROLES, ...audiences];
 

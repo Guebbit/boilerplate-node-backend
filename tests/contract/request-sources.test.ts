@@ -340,6 +340,7 @@ const readAllowedSources = (
 
 /** The contract, parsed from the root openapi.yaml. */
 const spec = parse(read('openapi.yaml')) as Spec;
+
 /** Every route the app mounts. */
 const mountedRoutes = readMountedRoutes();
 

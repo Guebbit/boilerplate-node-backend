@@ -63,6 +63,7 @@ const request = (method: HttpMethod, path: string) => {
 
 /** Every mounted route, as the real router lists them. */
 const routes = everyMountedRoute();
+
 /** A route written as `METHOD path`, the key the cases compare on. */
 const signature = ({ method, path }: { method: string; path: string }) => `${method} ${path}`;
 

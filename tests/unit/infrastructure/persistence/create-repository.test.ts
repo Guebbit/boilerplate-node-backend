@@ -27,6 +27,7 @@ interface FixtureDocument extends Document {
 
 /** A model stub; the repository is given it and never queries it. */
 const stubModel = asStub<Model<FixtureDocument>>({});
+
 /** A transform that returns the item unchanged. */
 const identityTransform = (item: Record<string, unknown>): Record<string, unknown> => item;
 

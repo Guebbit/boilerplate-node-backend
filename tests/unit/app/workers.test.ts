@@ -18,8 +18,10 @@ jest.mock('@infrastructure/adapters/queue', () => ({
         return Promise.resolve();
     }
 }));
+
 /** Stands in for the held-job drain; the cases assert which role it was started for. */
 const startJobDrain = jest.fn();
+
 jest.mock('@infrastructure/adapters/job-drain', () => ({
     startJobDrain: (...arguments_: unknown[]) => startJobDrain(...arguments_)
 }));

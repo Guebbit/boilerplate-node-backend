@@ -36,6 +36,7 @@ const supported = listSupportedLocales();
  * defect once per pair.
  */
 const [reference = 'en', ...others] = supported;
+
 /** Every key of the reference language; the others must have the same. */
 const referenceKeys = flattenKeys(readLocaleDictionary(reference));
 

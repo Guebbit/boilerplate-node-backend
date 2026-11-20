@@ -68,8 +68,10 @@ const sharedFiles = (role: RepoRole, suffix = ''): Record<string, string> =>
  * to write the sibling's copy use `CROSS_PATH` instead.
  */
 const OPENAPI = 'openapi.yaml';
+
 /** The public async contract file name. */
 const ASYNCAPI = 'asyncapi.public.yaml';
+
 /** Kept identical by convention, deliberately NOT shared — the negative case below. */
 const CONVENIENCE = 'shared/contracts/spectral.yaml';
 
@@ -89,6 +91,7 @@ const withoutFile = (role: RepoRole, file: string): Record<string, string> => {
 
 /** The role of the repo under test. */
 const HERE: RepoRole = 'backend';
+
 /** The role of its paired repo. */
 const THERE: RepoRole = 'frontend';
 
@@ -97,6 +100,7 @@ const CROSS_PATH = SHARED_FILES.find(({ backend, frontend }) => backend !== fron
 
 /** Temp roots the cases created, removed after each case. */
 const roots: string[] = [];
+
 /** Writes the given files to a fresh temp root and returns it. */
 const root = (files: Record<string, string>) => {
     const created = makeRoot(files);
@@ -347,6 +351,7 @@ describe('formatSharedFileProblems', () => {
  * `test-unit` fail for something it was never given the means to check.
  */
 const siblingRoot = resolveFrontendPath();
+
 /** Whether the paired repo is checked out next to this one. */
 const siblingPresent = existsSync(siblingRoot);
 

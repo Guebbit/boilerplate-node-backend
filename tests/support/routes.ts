@@ -461,6 +461,7 @@ export const guardsOn = (router: Router, signature: string): string[] => {
  */
 export const chainOf = (router: Router, signature: string): string[] =>
     routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
+
 /**
  * The routed modules of a registry, keyed by module name.
  *

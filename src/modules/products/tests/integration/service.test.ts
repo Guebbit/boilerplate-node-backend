@@ -71,8 +71,10 @@ afterEach(() => {
  * alone, so a rule that starts distinguishing them fails a case rather than passing silently.
  */
 const GUEST: Caller | undefined = undefined;
+
 /** A signed-in customer caller. */
 const LOGGED = callerAs('customer', '507f1f77bcf86cd799439011');
+
 /** An admin caller. */
 const ADMIN = callerAs('admin', '507f1f77bcf86cd799439012');
 

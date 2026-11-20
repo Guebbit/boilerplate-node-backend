@@ -76,6 +76,7 @@ if (declared.size !== 1) {
 
 /** The accepted media types, in the order the contract lists them. */
 const [accepted = ''] = declared.keys();
+
 /** The accepted media types, one string each. */
 const types = accepted.split(',').map((type) => type.trim());
 

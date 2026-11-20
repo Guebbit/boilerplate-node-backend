@@ -26,27 +26,37 @@ import { setEnvironment } from '@tests/environment';
 
 /** Stands in for the client's `On`; the cases assert how it was called. */
 const mockOn = jest.fn();
+
 /** Stands in for the client's `Connect`; the cases assert how it was called. */
 const mockConnect = jest.fn();
+
 /** Stands in for the client's `ScanIterator`; the cases assert how it was called. */
 const mockScanIterator = jest.fn();
+
 /** Stands in for the client's `Del`; the cases assert how it was called. */
 const mockDel = jest.fn();
+
 /** Stands in for the client's `Set`; the cases assert how it was called. */
 const mockSet = jest.fn();
+
 /** Stands in for the client's `ZAdd`; the cases assert how it was called. */
 const mockZAdd = jest.fn();
+
 /** Stands in for the client's `ZRemRangeByScore`; the cases assert how it was called. */
 const mockZRemRangeByScore = jest.fn();
+
 /** Stands in for the client's `Expire`; the cases assert how it was called. */
 const mockExpire = jest.fn();
+
 /** Stands in for the client's `Get`; the cases assert how it was called. */
 const mockGet = jest.fn();
+
 /** Stands in for the client's `ZRange`; the cases assert how it was called. */
 const mockZRange = jest.fn();
 
 /** Stands in for the client's `Quit`; the cases assert how it was called. */
 const mockQuit = jest.fn();
+
 /** Stands in for the client's `Destroy`; the cases assert how it was called. */
 const mockDestroy = jest.fn();
 

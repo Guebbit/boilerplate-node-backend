@@ -33,12 +33,16 @@ jest.mock('@app/development-doubles', () => ({ loadDevelopmentDoubles: jest.fn()
 
 /** Stands in for the logger's error. */
 const mockError = jest.mocked(logger.error);
+
 /** Stands in for the logger's warn. */
 const mockWarn = jest.mocked(logger.warn);
+
 /** Stands in for recording the job outcome. */
 const mockRecordJobOutcome = jest.mocked(recordJobOutcome);
+
 /** Stands in for the process config check. */
 const mockAssertProcessConfig = jest.mocked(assertProcessConfig);
+
 /** Stands in for loading the development doubles. */
 const mockLoadDevelopmentDoubles = jest.mocked(loadDevelopmentDoubles);
 

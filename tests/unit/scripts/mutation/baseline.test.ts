@@ -51,10 +51,13 @@ const baselineOf = (...files: [string, number][]): MutationBaseline => ({
 
 /** The one path used throughout, named so the tuples stay readable. */
 const FILE = 'src/a.ts';
+
 /** A second file in the baseline. */
 const OTHER = 'src/b.ts';
+
 /** A file that is in the run but not in the baseline. */
 const NEWCOMER = 'src/new.ts';
+
 /** A file that is in the baseline but not in the run. */
 const GONE = 'src/gone.ts';
 

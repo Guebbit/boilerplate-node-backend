@@ -7,6 +7,7 @@
  * `tests/unit/infrastructure/adapters/queue.test.ts`; this file is only about the wiring.
  */
 const parkedCountsMock = jest.fn();
+
 jest.mock('@infrastructure/adapters/queue', () => ({
     parkedCounts: () => parkedCountsMock()
 }));

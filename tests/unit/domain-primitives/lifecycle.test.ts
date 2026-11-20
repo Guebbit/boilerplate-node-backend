@@ -2,6 +2,7 @@ import { defineLifecycle } from '@domain-primitives/lifecycle';
 
 /** A small made-up status set, so the primitive is tested apart from any module. */
 const STATUSES = ['draft', 'live', 'gone'] as const;
+
 /** The statuses of the lifecycle under test. */
 type Status = (typeof STATUSES)[number];
 

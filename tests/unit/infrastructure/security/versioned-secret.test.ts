@@ -17,8 +17,10 @@ import {
 
 /** One key of the ring. */
 const KEY: VersionedKey = { version: 'v1', key: 'test-key-material' };
+
 /** A ring holding only KEY. */
 const RING: VersionedKey[] = [KEY];
+
 /** The binding the secrets are encrypted under. */
 const BIND: SecretBinding = { purpose: 'pii', aad: 'tests:field:1' };
 

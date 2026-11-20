@@ -54,6 +54,7 @@ prism.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
 const stop = (): void => {
     if (prism.exitCode === null) prism.kill('SIGTERM');
 };
+
 // Stop prism however this process ends.
 process.on('exit', stop);
 

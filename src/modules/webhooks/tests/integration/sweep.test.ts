@@ -24,14 +24,18 @@ import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 
 /** Stands in for the queue publisher; a case picks whether it accepts. */
 const publishToQueueMock = jest.fn<Promise<boolean>, [unknown]>().mockResolvedValue(true);
+
 /** Stands in for the delivery step; the cases assert which subscriptions it ran for. */
 const deliverWebhookMock = jest.fn();
+
 jest.mock('@modules/webhooks/transport/webhook-delivery', () => ({
     ...jest.requireActual('@modules/webhooks/transport/webhook-delivery'),
     deliverWebhook: (options: unknown) => deliverWebhookMock(options)
 }));
+
 /** Whether a broker is configured at all; a case flips it. */
 const isQueueEnabledMock = jest.fn<boolean, []>().mockReturnValue(true);
+
 jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: (options: unknown) => publishToQueueMock(options),
     isQueueEnabled: () => isQueueEnabledMock()

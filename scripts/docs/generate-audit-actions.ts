@@ -37,6 +37,7 @@ const PAGE = path.join(ROOT, 'docs', 'operate', 'winston.md');
 
 /** Opening marker of the audit actions block the generator rewrites in place. */
 const START = '<!-- audit-actions:start -->';
+
 /** Closing marker of the audit actions block the generator rewrites in place. */
 const END = '<!-- audit-actions:end -->';
 

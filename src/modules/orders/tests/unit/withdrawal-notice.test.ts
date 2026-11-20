@@ -22,6 +22,7 @@ const line = (
 
 /** A delivery of physical goods: the notice offers the withdrawal right. */
 const GOODS: OrderLines = { items: [line('Dog Bed')], currency: 'EUR' };
+
 /** A digital-only order, to which the physical-goods wording does not apply. */
 const DIGITAL: OrderLines = {
     items: [line('E-book', { requiresShipping: false })],

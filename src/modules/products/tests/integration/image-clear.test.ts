@@ -23,6 +23,7 @@ let root: string;
 
 /** The picture and thumbnail a finished digest would have left behind. */
 const PICTURE = '/images/picture-abc.png';
+
 /** Thumbnail url stored on the record, which clearing the image must remove. */
 const THUMBNAIL = '/images/thumbs/v1/picture-abc.webp';
 

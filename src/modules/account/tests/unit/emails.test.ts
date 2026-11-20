@@ -29,6 +29,7 @@ import { setEnvironment } from '@tests/environment';
 
 /** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+
 /** A fixed token the link in the mail is built from. */
 const TOKEN = 'a1b2c3d4e5f6';
 

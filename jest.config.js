@@ -6,7 +6,9 @@
  */
 
 const path = require('node:path');
+
 const { existsSync, readFileSync } = require('node:fs');
+
 const { parseEnv } = require('node:util');
 
 /**

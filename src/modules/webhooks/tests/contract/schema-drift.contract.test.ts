@@ -35,6 +35,7 @@ const spec = parse(readFileSync(path.resolve(__dirname, '../../openapi.yaml'), '
 
 /** The schema a subscription is read with. */
 const subscription = spec.components.schemas.WebhookSubscription;
+
 /** The schema returned once, on creation, which also carries the secret. */
 const created = spec.components.schemas.WebhookSubscriptionCreated;
 

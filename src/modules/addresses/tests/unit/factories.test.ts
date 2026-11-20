@@ -11,6 +11,7 @@ import { makeAddressBook } from '@modules/addresses/factories';
 
 /** Owner id the factory is asked to build for. */
 const USER = '65dc8a99604c307b702b5ccc';
+
 /** Id given to the factory-built address. */
 const ADDRESS = '65dcdec2b18ad5e4bd597f0f';
 

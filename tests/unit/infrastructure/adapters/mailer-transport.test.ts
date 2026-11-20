@@ -17,6 +17,7 @@
  * `createTransport` is mocked so the options object can be inspected without opening a socket.
  */
 const createTransportMock = jest.fn((_options?: unknown) => ({ sendMail: jest.fn() }));
+
 jest.mock('nodemailer', () => ({
     createTransport: (options: unknown) => createTransportMock(options)
 }));

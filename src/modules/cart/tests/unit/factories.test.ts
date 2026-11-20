@@ -13,6 +13,7 @@ import { makeCart } from '@modules/cart/factories';
 
 /** Owner id the factory is asked to build for. */
 const USER = '65dc8a99604c307b702b5ccc';
+
 /** Product id the factory-built line points at. */
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 

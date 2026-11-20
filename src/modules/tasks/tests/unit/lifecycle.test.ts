@@ -17,6 +17,7 @@ import {
 
 /** The instant task state is judged at. */
 const NOW = new Date('2030-05-01T10:00:00Z');
+
 /** An instant before NOW. */
 const EARLIER = new Date('2030-04-01T10:00:00Z');
 

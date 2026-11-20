@@ -16,6 +16,7 @@ const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
 
 /** The probe files: a controller (covered) and a service-layer file that must stay allowed. */
 const CONTROLLER_PROBE = 'src/modules/users/controllers/__side-effect-probe.ts';
+
 /** Path of the probe service file. */
 const SERVICE_PROBE = 'src/modules/users/__side-effect-probe.ts';
 

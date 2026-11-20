@@ -7,10 +7,13 @@ import { isBackorder } from '../../domain/backorder';
 
 /** The instant availability is judged at. */
 const NOW = new Date('2026-10-12T10:00:00.000Z');
+
 /** A date after NOW. */
 const LATER = new Date('2026-12-01T00:00:00.000Z');
+
 /** A date before NOW. */
 const EARLIER = new Date('2026-09-01T00:00:00.000Z');
+
 /** A switch that is on, with room under the cap. */
 const ON = { allowBackorder: true, backorderLimit: 5, backordered: 2 };
 

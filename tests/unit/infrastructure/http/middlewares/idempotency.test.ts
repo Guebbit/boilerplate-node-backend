@@ -32,8 +32,10 @@ import {
 
 /** Stands in for the ledger model's create. */
 const create = idempotencyRecordModel.create as jest.Mock;
+
 /** Stands in for the ledger model's updateOne. */
 const updateOne = idempotencyRecordModel.updateOne as jest.Mock;
+
 /** Stands in for the ledger model's findOne. */
 const findOne = idempotencyRecordModel.findOne as jest.Mock;
 

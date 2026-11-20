@@ -15,8 +15,10 @@ import {
 
 /** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+
 /** Tracking code printed in the shipped mail. */
 const CODE = 'TRK-99887766';
+
 /** The order lines the mail lists. */
 const LINES = [
     { title: 'Analytical Engine', quantity: 2 },

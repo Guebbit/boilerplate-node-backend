@@ -26,6 +26,7 @@ const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
 /** The content type of a JSON body. */
 const JSON_TYPE = 'application/json';
+
 /** The content type of a multipart form. */
 const FORM_TYPE = 'multipart/form-data';
 

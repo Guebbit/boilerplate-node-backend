@@ -19,6 +19,7 @@ import { orderFrontendLink } from '@modules/orders/config';
 
 /** The recipient name the templates are rendered with. */
 const NAME = 'Ada Lovelace';
+
 /** The order the mail refers to. */
 const ORDER_ID = 'order-1';
 
@@ -301,6 +302,7 @@ describe('every order mail prints money in the order"s own currency', () => {
         items: [{ quantity: 1, product: { title: 'Dog Bed', price: '1990.00' } }],
         currency: 'JPY'
     };
+
     it.each([
         ['the confirmation', () => orderConfirmEmail('en', NAME, YEN, ORDER_ID)],
         ['the card-hold expiry', () => holdExpiredEmail('en', YEN)]
