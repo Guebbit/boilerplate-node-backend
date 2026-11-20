@@ -133,7 +133,7 @@ KEEP reason codes — one per row, never "seems fine":
 - `seam` — a test replaces it (`jest.mock`, an injected dependency) — cite the test.
 - `slot` — a self-registering extension point: `register*`, a registry entry.
 - `layout` — the module layout asks for the file: `docs/understand/modules.md#what-a-module-contains`.
-- `depth` — inlining would push nesting past `max-depth` or the caller past the comment caps.
+- `depth` — inlining would push nesting past `local/max-depth-through-closures` or the caller past the comment caps.
 - `shared` — two or more references today (same file counts; a name passed to `.then` counts).
 - `door` — an exported getter, the one access to private module state: another file or a test
   reads it.

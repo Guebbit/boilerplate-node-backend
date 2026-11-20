@@ -118,6 +118,7 @@
         "@stoplight/spectral-rulesets": "1.22.7",
         "@stryker-mutator/core": "^10.1.1",
         "@stryker-mutator/jest-runner": "^10.1.1",
+        "@stylistic/eslint-plugin": "^5.10.0",
         "@swc/core": "^1.16.22",
         "@swc/jest": "^0.2.39",
         "@types/cookie-parser": "^1.4.10",

@@ -59,9 +59,6 @@ what to do instead. The rules below are the ones they cannot check:
 ## Function design
 
 - MUST apply SOLID principles.
-- MUST keep nesting ≤ 3 levels; extract a helper for anything deeper. `max-depth` enforces the
-  block half of this (4 in tests, where an exhaustive table walk is the clearest form);
-  `max-nested-callbacks` caps callbacks at 4 in production code — chain, or name the step.
 - MUST NOT extract a function, file or wrapper unless it hides real complexity, names a domain
   rule, is a boundary (port, adapter, third-party call), or has ≥ 2 callers today. A three-line
   helper with one caller stays inline.

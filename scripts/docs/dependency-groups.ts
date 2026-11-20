@@ -154,7 +154,8 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Linting and formatting',
-        purpose: 'lint rules, TS-aware parsing, rule composition, and formatting',
+        purpose:
+            'lint rules, TS-aware parsing, rule composition, blank-line layout, and formatting',
         readMore: '[Testing & Docs](../build/testing-and-docs.md)',
         match: [
             'eslint',
@@ -165,6 +166,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
             'eslint-plugin-regexp',
             'eslint-plugin-unicorn',
             '@eslint/js',
+            '@stylistic/eslint-plugin',
             '@eslint-community/eslint-plugin-eslint-comments',
             '@typescript-eslint/*',
             'typescript-eslint',

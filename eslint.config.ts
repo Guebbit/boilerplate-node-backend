@@ -7,10 +7,35 @@ import pluginBoundaries from 'eslint-plugin-boundaries';
 import pluginJsdoc from 'eslint-plugin-jsdoc';
 import pluginRegexp from 'eslint-plugin-regexp';
 import pluginJest from 'eslint-plugin-jest';
+import pluginStylistic from '@stylistic/eslint-plugin';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import path from 'node:path';
 import localRules from './scripts/eslint';
+
+/**
+ * What the blank-line rule counts as a top-level declaration: the file's own `const`, function,
+ * class, type, interface and enum, exported or not. Imports are left out on purpose, and so are
+ * bare `export { a }` and `export * from` lines: they are not declarations of ours.
+ *
+ * Scoped by selector (`Program > …`), not by statement kind: `padding-line-between-statements`
+ * otherwise applies inside every block, and a body's own consecutive `const`s are the author's
+ * call. Factory bodies and `setup()` stay with the reviewer.
+ *
+ * @see docs/build/code-comments.md#code-layout
+ */
+const TOP_LEVEL_DECLARATION =
+    'Program > :matches(VariableDeclaration, FunctionDeclaration, ClassDeclaration, TSInterfaceDeclaration, TSTypeAliasDeclaration, TSEnumDeclaration, TSModuleDeclaration, ExportNamedDeclaration[declaration], ExportDefaultDeclaration)';
+
+/** Any statement at the file's top level: the other side of a {@link TOP_LEVEL_DECLARATION} pair. */
+const TOP_LEVEL_STATEMENT = 'Program > *';
+
+/**
+ * A function overload signature, bare or exported. Overloads and their implementation are one
+ * declaration written in several lines, so no blank line is asked between them.
+ */
+const TOP_LEVEL_OVERLOAD =
+    'Program > :matches(TSDeclareFunction, ExportNamedDeclaration:has(> TSDeclareFunction))';
 
 /**
  * `x as unknown as T` — the double cast that erases the type system's objection instead of
@@ -346,12 +371,14 @@ export default defineConfig(
              */
             'local/comment-links': 'error',
             /**
-             * `nesting <= 3 levels`, the block-statement half. The callback half follows.
+             * Three levels of nested blocks, counted THROUGH callbacks (ESLint's own `max-depth`
+             * restarts inside every function). The callback half follows.
              * A chain nests one `.then` deeper per step, so 4 is the line: past it, name the step.
-             * Tests are exempt — `describe` > `describe` > `it` > `expect` callbacks are the
-             * shape of a spec, not a smell.
+             * Tests get a limit of their own, and no callback cap — `describe` > `describe` >
+             * `it` > `expect` callbacks are the shape of a spec, not a smell.
+             * @see docs/build/code-comments.md#nesting-depth
              */
-            'max-depth': ['error', 3],
+            'local/max-depth-through-closures': ['error', { max: 3 }],
             'max-nested-callbacks': ['error', 4],
             /**
              * `!` is allowed where a value has ALREADY been proven present by something the
@@ -733,6 +760,8 @@ export default defineConfig(
                         'Program > TSInterfaceDeclaration',
                         'Program > TSTypeAliasDeclaration',
                         'Program > TSEnumDeclaration',
+                        // No enum exists today; this keeps a first one from arriving undocumented.
+                        'TSEnumMember',
                         // The docblock sits above `export`, so the plugin reads it from this node.
                         'Program > ExportNamedDeclaration[declaration]',
                         'Program > ExportDefaultDeclaration',
@@ -1837,6 +1866,51 @@ export default defineConfig(
     },
 
     /**
+     * One blank line between top-level declarations, and between class members, so the docblock
+     * above each one visibly belongs to the thing below it. The rule is the `--fix`: it puts the
+     * blank line BEFORE the docblock. Later entries win, so the overload entries lift the
+     * requirement for a signature and its implementation.
+     *
+     * https://eslint.style/rules/padding-line-between-statements
+     * https://eslint.style/rules/lines-between-class-members
+     * @see docs/build/code-comments.md#code-layout
+     */
+    {
+        files: ['**/*.{ts,mts,cts,js,mjs,cjs}'],
+
+        plugins: {
+            '@stylistic': pluginStylistic
+        },
+
+        rules: {
+            '@stylistic/padding-line-between-statements': [
+                'error',
+                {
+                    blankLine: 'always',
+                    prev: { selector: TOP_LEVEL_DECLARATION },
+                    next: { selector: TOP_LEVEL_STATEMENT }
+                },
+                {
+                    blankLine: 'always',
+                    prev: { selector: TOP_LEVEL_STATEMENT },
+                    next: { selector: TOP_LEVEL_DECLARATION }
+                },
+                {
+                    blankLine: 'any',
+                    prev: { selector: TOP_LEVEL_OVERLOAD },
+                    next: { selector: TOP_LEVEL_STATEMENT }
+                },
+                {
+                    blankLine: 'any',
+                    prev: { selector: TOP_LEVEL_STATEMENT },
+                    next: { selector: TOP_LEVEL_OVERLOAD }
+                }
+            ],
+            '@stylistic/lines-between-class-members': ['error', 'always']
+        }
+    },
+
+    /**
      * Jest's globals, for the standalone suites and the co-located module specs alike.
      */
     {
@@ -1870,6 +1944,13 @@ export default defineConfig(
             ...pluginJest.configs['flat/recommended'].rules,
             'jest/no-focused-tests': 'error',
             'jest/no-disabled-tests': 'error',
+            /**
+             * A blank line around each `it` / `describe`, so a spec reads as separate cases.
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/padding-around-test-blocks.md
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/padding-around-describe-blocks.md
+             */
+            'jest/padding-around-test-blocks': 'error',
+            'jest/padding-around-describe-blocks': 'error',
             /**
              * `expect-expect`: the helpers that assert on a spec's behalf count as an `expect`.
              * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/expect-expect.md
@@ -1911,7 +1992,7 @@ export default defineConfig(
              * the third `for`, and flattening it into `flatMap` hides the very shape the case is
              * asserting. The limit still holds where nesting is logic rather than enumeration.
              */
-            'max-depth': ['error', 4],
+            'local/max-depth-through-closures': ['error', { max: 4 }],
             // Specs nest `describe` > `describe` > `it` > `expect` callbacks by shape.
             'max-nested-callbacks': 'off'
         }
