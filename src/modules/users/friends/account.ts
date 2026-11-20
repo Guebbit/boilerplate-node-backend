@@ -69,6 +69,7 @@ import {
     clearDeliveredCode
 } from '../services/credentials';
 import { reencryptTwoFactorSecrets } from '../services/reencrypt';
+import { purgeHeldJobsOf } from '../services/held-jobs';
 import {
     findInactiveUnwarned,
     minimiseInactiveBefore,
@@ -98,6 +99,7 @@ export const accountUserService = {
     restoreOwnAccount,
     eraseScheduledDeletion,
     eraseAgain,
+    purgeHeldJobsOf,
     restoreDeletionState,
     findDueScheduledDeletions,
     findAuthenticatableById,

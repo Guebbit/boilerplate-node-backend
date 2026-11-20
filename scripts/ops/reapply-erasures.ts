@@ -4,8 +4,8 @@
  * Why: a restore of an older snapshot brings back accounts that were erased after it. The ledger
  * (`erasureledgers`) outlives the oldest backup, so it still knows them.
  *
- * Run by a person, never on a schedule, on the RESTORED database with the app and cron STOPPED,
- * before the stack starts. The ledger in that database must be the live one or the newest
+ * Run by a person, never on a schedule, on the RESTORED database with the app, worker, worker-heavy
+ * and cron STOPPED, before the stack starts. The ledger in that database must be the live one or the newest
  * snapshot's, never the restored copy.
  *
  * Flags:
@@ -13,7 +13,13 @@
  *   --snapshot <id>      the restic snapshot restored, for the restoration log
  *   --by <name>          who restored, for the restoration log (default: the OS user)
  *
+ * Also deletes the held jobs that name an erased account's address, once more after the outbox has
+ * settled: step 4 re-sends restored outbox rows, which can hold a new job for an erased address.
+ *
  * Safe to repeat: an account already erased is skipped, and a failure is retried by running again.
+ * The one exception is that final sweep: it needs the addresses of the accounts erased in THIS run.
+ * A sweep that throws lists its account under `failed` and exits non-zero; the fix is to restore
+ * again and rerun, since the restored accounts bring their addresses back.
  * Exits non-zero when any account could not be erased.
  *
  * @see docs/operate/backups.md#restoring
@@ -25,7 +31,6 @@ import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { logger } from '@infrastructure/adapters/logger';
 import { bootI18n } from '@infrastructure/i18n';
-import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { enabledModules, enabledModuleDirectories } from '../../src/modules';
 import {
@@ -76,7 +81,6 @@ const replay = (since: Date): Promise<ReapplyReport> => {
         .then(() =>
             reapplyErasures({ since, by: flagValue('by'), snapshot: flagValue('snapshot') })
         )
-        .then((report) => settleOutboxNudges().then(() => report))
         .then(drainAuditSink);
 };
 
