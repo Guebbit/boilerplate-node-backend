@@ -425,32 +425,36 @@ describe('email templates render in every supported locale', () => {
                 'documents',
                 'invoicing.document.ejs'
             ),
-            buildDocumentView(locale, {
-                kind: 'invoice',
-                number: '2026-000001',
-                issuedAt: new Date('2026-01-15'),
-                timezone: 'Europe/Rome',
-                currency: 'EUR',
-                locale,
-                orderNumber: '2026-000007',
-                seller: {
-                    legalName: 'Acme S.r.l.',
-                    street: 'Via Roma 1',
-                    city: 'Milano',
-                    zip: '20100',
-                    country: 'IT'
-                },
-                lines: [{ title: 'A product', quantity: 2, unitPrice: '10.00', taxRate: 0.22 }],
-                netTotal: '16.39',
-                taxTotal: '3.61',
-                shippingNetAmount: '0.00',
-                shippingTaxAmount: '0.00',
-                taxSummary: [
-                    { rate: 0.22, netAmount: '16.39', taxAmount: '3.61', grossAmount: '20.00' }
-                ],
-                shippingByRate: [],
-                grandTotal: '20.00'
-            }),
+            {
+                // The provider adds the logo; the template needs one to render.
+                logoDataUri: 'data:image/svg+xml;base64,AAAA',
+                ...buildDocumentView(locale, {
+                    kind: 'invoice',
+                    number: '2026-000001',
+                    issuedAt: new Date('2026-01-15'),
+                    timezone: 'Europe/Rome',
+                    currency: 'EUR',
+                    locale,
+                    orderNumber: '2026-000007',
+                    seller: {
+                        legalName: 'Acme S.r.l.',
+                        street: 'Via Roma 1',
+                        city: 'Milano',
+                        zip: '20100',
+                        country: 'IT'
+                    },
+                    lines: [{ title: 'A product', quantity: 2, unitPrice: '10.00', taxRate: 0.22 }],
+                    netTotal: '16.39',
+                    taxTotal: '3.61',
+                    shippingNetAmount: '0.00',
+                    shippingTaxAmount: '0.00',
+                    taxSummary: [
+                        { rate: 0.22, netAmount: '16.39', taxAmount: '3.61', grossAmount: '20.00' }
+                    ],
+                    shippingByRate: [],
+                    grandTotal: '20.00'
+                })
+            },
             { root: process.cwd() }
         );
 

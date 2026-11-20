@@ -1,52 +1,158 @@
 <!DOCTYPE html>
 <html lang="<%= locale %>">
-<%- include("/shared/templates/layouts/pdf-template-head.ejs"); %>
+<head>
+    <meta charset="UTF-8">
+    <title><%= pageMetaTitle %></title>
+    <%# Portable on purpose: CSS 2.1, tables for layout, no web fonts, the logo inline as a data: URI. %>
+    <%# The palette comes from the guebbit logo: #00838f is text-safe on white, #00bcd4 is for bars only. %>
+    <style>
+        body { margin: 0; font-family: "DejaVu Sans", Arial, Helvetica, sans-serif; font-size: 9pt; line-height: 1.45; color: #212121; background: #ffffff; }
+        table { border-collapse: collapse; }
+        td, th { vertical-align: top; padding: 0; }
+
+        .caption { font-size: 6.5pt; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; color: #757575; }
+        .strong { font-weight: bold; }
+        .secondary { color: #616161; }
+        .num { text-align: right; white-space: nowrap; }
+
+        .header { width: 100%; }
+        .header td { vertical-align: bottom; padding-bottom: 10pt; }
+        .logo { height: 34pt; width: auto; }
+        .doc-title { font-size: 20pt; line-height: 1.1; color: #00838f; letter-spacing: 0.02em; }
+        .accent-rule { height: 0; border-top: 2pt solid #00bcd4; font-size: 0; line-height: 0; }
+
+        .notice { margin-top: 12pt; padding: 7pt 10pt; background: #e0f7fa; border-left: 3pt solid #00838f; color: #004d55; }
+
+        .meta { width: 100%; margin-top: 14pt; }
+        .meta td { width: 33.33%; padding-right: 12pt; }
+        .meta .value { font-size: 10pt; margin-top: 2pt; }
+
+        .parties { width: 100%; margin-top: 18pt; }
+        .parties td { width: 50%; padding-right: 16pt; }
+        .parties .name { font-size: 10pt; font-weight: bold; margin-top: 4pt; margin-bottom: 1pt; }
+
+        table.lines { width: 100%; margin-top: 22pt; font-size: 8pt; }
+        table.lines th { padding: 0 4pt 6pt 4pt; border-bottom: 1pt solid #bdbdbd; text-align: left; }
+        table.lines th.num { text-align: right; }
+        table.lines td { padding: 7pt 4pt; border-bottom: 0.75pt solid #e0e0e0; }
+        table.lines th:first-child, table.lines td:first-child { padding-left: 0; }
+        table.lines th:last-child, table.lines td:last-child { padding-right: 0; }
+        .chip { padding: 1pt 4pt; border: 0.75pt solid #b2ebf2; background: #e0f7fa; color: #006064; font-size: 7pt; font-weight: bold; }
+
+        .bottom { width: 100%; margin-top: 18pt; page-break-inside: avoid; }
+        .bottom td.left { width: 58%; padding-right: 18pt; }
+        .bottom td.right { width: 42%; }
+
+        table.summary { width: 100%; font-size: 8pt; margin-bottom: 12pt; }
+        table.summary th { width: 20%; padding: 0 0 4pt 0; border-bottom: 1pt solid #bdbdbd; text-align: left; }
+        table.summary th:first-child { width: 40%; }
+        table.summary th.num { text-align: right; padding-left: 8pt; }
+        table.summary td { padding: 4pt 0; border-bottom: 0.75pt solid #e0e0e0; }
+        table.summary td.num { padding-left: 8pt; }
+
+        .card { background: #f5f5f5; padding: 12pt 14pt; }
+        table.totals { width: 100%; }
+        table.totals td { padding: 3pt 0; }
+        table.totals tr.grand td { padding-top: 9pt; border-top: 1.5pt solid #00838f; vertical-align: bottom; }
+        table.totals tr.grand td.label { padding-bottom: 3pt; font-size: 8pt; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; color: #00838f; }
+        table.totals tr.grand td.num { font-size: 14pt; font-weight: bold; color: #00838f; }
+
+    </style>
+</head>
 <body>
-<main class="centered">
-    <h1><%= title %></h1>
+    <table class="header">
+        <tr>
+            <td style="width: 55%;"><img class="logo" alt="" src="<%= logoDataUri %>"></td>
+            <td class="num"><div class="doc-title"><%= title %></div></td>
+        </tr>
+    </table>
+    <div class="accent-rule">&nbsp;</div>
+
     <% if (typeof reversalNotice !== 'undefined' && reversalNotice) { %>
-        <p><em><%= reversalNotice %></em></p>
+        <div class="notice"><%= reversalNotice %></div>
     <% } %>
 
-    <% if (typeof meta !== 'undefined' && meta) { %>
-        <p><%= meta.numberLabel %></p>
-        <p><%= meta.dateLabel %></p>
-    <% } %>
+    <table class="meta">
+        <tr>
+            <td><div class="caption"><%= meta.numberCaption %></div><div class="value"><%= meta.number %></div></td>
+            <td><div class="caption"><%= meta.issuedCaption %></div><div class="value"><%= meta.issued %></div></td>
+            <td><div class="caption"><%= meta.orderCaption %></div><div class="value"><%= meta.order %></div></td>
+        </tr>
+    </table>
 
-    <% if (typeof billing !== 'undefined' && billing) { %>
-        <address>
-            <div><%= billing.fullName %></div>
-            <% billing.lines.forEach(function(line) { %>
-                <div><%= line %></div>
+    <table class="parties">
+        <tr>
+            <td>
+                <div class="caption"><%= parties.sellerCaption %></div>
+                <div class="name"><%= vat.supplier.legalName %></div>
+                <div class="secondary"><%= vat.supplier.address %></div>
+                <div class="secondary"><%= vat.supplier.vatNumberLine %></div>
+            </td>
+            <td>
+                <% if (typeof billing !== 'undefined' && billing) { %>
+                    <div class="caption"><%= parties.buyerCaption %></div>
+                    <div class="name"><%= billing.fullName %></div>
+                    <% billing.lines.forEach(function(line) { %>
+                        <div class="secondary"><%= line %></div>
+                    <% }); %>
+                    <% if (billing.vatNumberLine) { %>
+                        <div class="secondary"><%= billing.vatNumberLine %></div>
+                    <% } %>
+                <% } else if (typeof buyerErasedNotice !== 'undefined' && buyerErasedNotice) { %>
+                    <div class="caption"><%= parties.buyerCaption %></div>
+                    <div class="secondary"><em><%= buyerErasedNotice %></em></div>
+                <% } %>
+            </td>
+        </tr>
+    </table>
+
+    <table class="lines">
+        <thead>
+            <tr>
+                <th class="caption"><%= vat.columns.description %></th>
+                <th class="caption num"><%= vat.columns.quantity %></th>
+                <th class="caption num"><%= vat.columns.unitPrice %></th>
+                <th class="caption num"><%= vat.columns.net %></th>
+                <th class="caption num"><%= vat.columns.rate %></th>
+                <th class="caption num"><%= vat.columns.category %></th>
+                <th class="caption num"><%= vat.columns.tax %></th>
+                <th class="caption num"><%= vat.columns.gross %></th>
+            </tr>
+        </thead>
+        <tbody>
+            <% vat.rows.forEach(function(row) { %>
+                <tr>
+                    <td class="strong"><%= row.description %></td>
+                    <td class="num"><%= row.quantity %></td>
+                    <td class="num"><%= row.unitPrice %></td>
+                    <td class="num"><%= row.netAmount %></td>
+                    <td class="num"><%= row.taxRateLabel %></td>
+                    <td class="num"><span class="chip"><%= row.categoryCode %></span></td>
+                    <td class="num"><%= row.taxAmount %></td>
+                    <td class="num strong"><%= row.grossAmount %></td>
+                </tr>
             <% }); %>
-            <% if (billing.vatNumberLine) { %>
-                <div><%= billing.vatNumberLine %></div>
-            <% } %>
-        </address>
-    <% } %>
+        </tbody>
+    </table>
 
-    <% if (typeof buyerErasedNotice !== 'undefined' && buyerErasedNotice) { %>
-        <p><em><%= buyerErasedNotice %></em></p>
-    <% } %>
-
-    <%- include("./invoicing.document.vat-table.ejs", { columns: vat.columns, rows: vat.rows, showQuantity: true }); %>
-    <% if (vat.shipping) { %>
-        <h2><%= vat.shipping.title %></h2>
-        <%- include("./invoicing.document.vat-table.ejs", { columns: vat.columns, rows: vat.shipping.rows, showQuantity: false }); %>
-    <% } %>
-
-    <h2><%= vat.summaryTitle %></h2>
-    <%- include("./invoicing.document.vat-table.ejs", { columns: vat.columns, rows: vat.summaryRows, showQuantity: false }); %>
-
-    <p><%= vat.netTotalLabel %>: <%= vat.netTotal %></p>
-    <p><%= vat.taxTotalLabel %>: <%= vat.taxTotal %></p>
-    <p><strong><%= vat.grandTotalLabel %>: <%= vat.grandTotal %></strong></p>
-
-    <address>
-        <div><%= vat.supplier.legalName %></div>
-        <div><%= vat.supplier.address %></div>
-        <div><%= vat.supplier.vatNumberLine %></div>
-    </address>
-</main>
+    <table class="bottom">
+        <tr>
+            <td class="left">
+                <% if (vat.shipping) { %>
+                    <%- include("./invoicing.document.vat-table.ejs", { title: vat.shipping.title, columns: vat.columns, rows: vat.shipping.rows }); %>
+                <% } %>
+                <%- include("./invoicing.document.vat-table.ejs", { title: vat.summaryTitle, columns: vat.columns, rows: vat.summaryRows }); %>
+            </td>
+            <td class="right">
+                <div class="card">
+                    <table class="totals">
+                        <tr><td class="secondary"><%= vat.netTotalLabel %></td><td class="num"><%= vat.netTotal %></td></tr>
+                        <tr><td class="secondary"><%= vat.taxTotalLabel %></td><td class="num"><%= vat.taxTotal %></td></tr>
+                        <tr class="grand"><td class="label"><%= vat.grandTotalLabel %></td><td class="num"><%= vat.grandTotal %></td></tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

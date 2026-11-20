@@ -11,8 +11,11 @@
             "reversal-notice-correction": "Questa nota di credito annulla la fattura {{number}}: i dati dell'acquirente sono stati corretti. Una nuova fattura la sostituisce.",
             "buyer-vat-number": "Partita IVA dell'acquirente: {{number}}",
             "buyer-erased": "I dati personali dell'acquirente sono stati rimossi al termine del periodo legale di conservazione.",
-            "number": "N. {{number}}",
-            "date": "Data: {{date}}",
+            "caption-number": "Numero",
+            "caption-issued": "Emessa",
+            "caption-order": "Ordine",
+            "caption-seller": "Venditore",
+            "caption-billed-to": "Intestata a",
             "vat": {
                 "column-description": "Descrizione",
                 "column-quantity": "Qtà",
