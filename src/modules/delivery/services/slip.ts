@@ -17,6 +17,7 @@
  * @see docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
+import { ERROR_CODES } from '@api/error-codes';
 import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
 import { shopDayOf, shopTimezone } from '@modules/shop';
@@ -24,7 +25,7 @@ import { expectedDateOfWaiting, judgeMove } from '../domain';
 import type { SlipVerdict, WaitCause } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
-import { runAct } from './act';
+import { refuse, runAct } from './act';
 import { recordNotice, type SentNotice } from './notice';
 import type { ClientSession } from 'mongoose';
 
@@ -112,14 +113,19 @@ const apply = async (
         return undefined;
     }
 
+    /**
+     * The move first: the timeline sorts by time, then id, and the notice stamps its own row at
+     * write, so on a same-millisecond tie the earlier write must be the move.
+     */
+    await recordDateMoved(fulfillmentOrder, next, now, session);
     const sent = await recordNotice(
         fulfillmentOrder,
         { reason: 'moved', expectedAt: next ?? null },
         now,
         session
     );
-    // After the notice, stamped `now` so the row still sorts before the notice's own.
-    if (sent) await recordDateMoved(fulfillmentOrder, next, now, session);
+    // A ship or allocation won the race: the move did not land, so its row rolls back with the act.
+    if (!sent) return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
     return sent;
 };
 

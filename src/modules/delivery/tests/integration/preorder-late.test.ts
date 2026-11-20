@@ -14,10 +14,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { asCustomer, testCallerContext } from '@tests/callers';
+import { freezeDate } from '@tests/clock';
 import { productService } from '@modules/products';
 import { timelineOf } from '@modules/orders/tests/factories';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { deliveryService } from '@modules/delivery/services';
+import { fulfillmentOrderRepository } from '@modules/delivery/repository';
 import {
     presentExportFulfillmentOrder,
     presentPreorderFulfillmentOrder
@@ -489,6 +491,44 @@ describe('what the timeline says of a preorder', () => {
         ]);
         expect(rows[1].data).toHaveProperty('from');
         expect(rows[1].data).not.toHaveProperty('to');
+    });
+
+    it('puts the move before the notice when both rows carry the same millisecond', async () => {
+        const { orderId, productIds } = await preorder(30);
+        /**
+         * Only the clock is frozen: every row the act writes is stamped with the same instant, so
+         * the timeline's tie-break (the id, i.e. the write order) is all that orders the two.
+         */
+        freezeDate();
+        try {
+            await moveDate(productIds[0], inDays(75));
+        } finally {
+            jest.useRealTimers();
+        }
+
+        expect(await typesOf(orderId)).toEqual([
+            'fulfillment_held',
+            'release_date_moved',
+            'delay_notice_sent'
+        ]);
+    });
+
+    /**
+     * Spies on `claim`, an internal of the repository: a ship or an allocation winning the race for
+     * the fulfillment order cannot be staged through a door inside the one transaction.
+     */
+    it('writes no move row when the notice loses its claim to a racing write', async () => {
+        const { orderId, productIds } = await preorder(30);
+        const claim = jest.spyOn(fulfillmentOrderRepository, 'claim').mockResolvedValueOnce(null);
+
+        try {
+            await moveDate(productIds[0], inDays(75));
+        } finally {
+            claim.mockRestore();
+        }
+
+        expect(await typesOf(orderId)).toEqual(['fulfillment_held']);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 
     it("writes the sweep's notice once, as due", async () => {
