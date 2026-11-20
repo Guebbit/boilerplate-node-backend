@@ -189,7 +189,7 @@ module.exports = {
         'node_modules/(?!.*(?:@(?:scure|noble|mdit-vue)|(?:jose|oauth4webapi|openid-client|sitemap)/))'
     ],
     moduleNameMapper: {
-        '^@api/(.*)$': '<rootDir>/api/$1',
+        '^@api/(.*)$': '<rootDir>/api.generated/$1',
         '^@types$': '<rootDir>/src/types',
         '^@tests/(.*)$': '<rootDir>/tests/support/$1',
         '^@app/(.*)$': '<rootDir>/src/app/$1',

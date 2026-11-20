@@ -55,7 +55,7 @@ A query filter takes the same value as the body field it mirrors (`username` 50,
 
 ## Where the number is read
 
-The generated Zod schemas under `api/` carry the value, and the models import them, so the bound
+The generated Zod schemas under `api.generated/` carry the value, and the models import them, so the bound
 is enforced with no hand-written copy. Where a controller replaces a generated field (a multipart
 body, an `.extend`), it imports the generated `...Max` constant instead of repeating the number.
 

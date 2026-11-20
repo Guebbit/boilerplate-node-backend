@@ -23,8 +23,8 @@ export default defineConfig({
              * 'tags-split'  - a folder per tag, each further split into impl/schemas
              */
             mode: 'single',
-            target: './api/schemas.zod.ts',
-            schemas: './api/models',
+            target: './api.generated/schemas.zod.ts',
+            schemas: './api.generated/models',
             /**
              * Which HTTP-client flavor to generate operation functions for. One of:
              * 'fetch' / 'axios' / 'axios-functions' - typed callers of this API -

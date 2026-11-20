@@ -186,7 +186,7 @@ The dataset is split by ROLE, and the split matters:
 | `src/modules/<name>/factories.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
 | `scenarios/<name>.ts`             | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `scenarios/index.ts` tables it by name, and `scenarios/apply.ts` walks that table                                   |
 | `scenarios/accounts.ts`           | The **shared literals** — the seed accounts' ids and credentials, plus the write that gives them their roles. Outside `src/` entirely, like the records above, since only scenario files need a piece of them                                           |
-| `scenarios/subjects.ts`           | The **named ids** a consumer that cannot import module code still needs — a generated API client collection, a future `GET /__test/scenario`. Imports only the plain literals of `@scenarios/accounts`, so it resolves before `api/` exists             |
+| `scenarios/subjects.ts`           | The **named ids** a consumer that cannot import module code still needs — a generated API client collection, a future `GET /__test/scenario`. Imports only the plain literals of `@scenarios/accounts`, so it resolves before `api.generated/` exists   |
 
 ### Conformance is a test, not a build step
 

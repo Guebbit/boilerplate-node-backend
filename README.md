@@ -103,7 +103,7 @@ Four ideas carry the whole repository:
 
 The tiers, their folders and their main job are one table: [Layers](./docs/understand/layers.md#quick-map).
 The domains are `src/modules/*` (each one deletable; `src/modules/example` is the one to copy for a new
-domain), the contract and everything generated from it is `api/`, and `shared/` holds what both backends
+domain), the contract and everything generated from it is `api.generated/`, and `shared/` holds what both backends
 read (`rules/`, `cases/`, `locales/`, `scenarios/`, `templates/`, the authorization keys). The demo records
 and the flow runner are `scenarios/`, outside `src/` entirely; index sync and the one-off data scripts are `scripts/db/`.
 

@@ -54,18 +54,18 @@ src/modules/*/__factories-import-probe.ts
 # -- bruno` — and never read by the suite, the app or CI. Committing them put
 # 1.9 MB of derived text in every diff that touched the contract, for an artefact whose only reader
 # is a human about to open it in the tool. Regenerate when you want one.
-contract.bruno.yml
+contract.generated.bruno.yml
 
 # The compiled contract and the typed client it produces. Both are deterministic outputs of
 # `npm run contracts:bundle` + `npm run gen:api` (module `openapi.yaml` fragments -> this root
-# file -> api/), which `postinstall` runs automatically — see package.json. Never hand-edit
+# file -> api.generated/), which `postinstall` runs automatically — see package.json. Never hand-edit
 # either: a fresh clone has neither until install runs, and there is no "committed copy" left to
 # go stale, which is what forgetting to regenerate used to look like.
 #
 # `src/modules/*/openapi.yaml` (the authored fragments) are NOT covered by this — a bare filename
 # pattern without a leading slash would match those too, which is exactly the mistake to avoid.
 /openapi.yaml
-/api/
+/api.generated/
 
 # Same reasoning, for the AsyncAPI side and every code file a generator writes: the two bundles
 # (`npm run contracts:bundle`), the realtime types (`npm run gen:asyncapi`) and every

@@ -137,7 +137,7 @@ already say about themselves.
 - **A cases file** (`shared/cases/*.cases.yaml`) is run by the `tests/cross-cutting/<name>-conformance.test.ts`
   of the same name.
 - **`shared/authorization-keys.generated.yaml`** is not on the rules generator: the frontend cannot run
-  it, so `api/permission-vocabulary.ts` and the frontend's copy are built from it instead.
+  it, so `api.generated/permission-vocabulary.ts` and the frontend's copy are built from it instead.
 
 ## Money is a case file, not a rule table
 

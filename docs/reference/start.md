@@ -23,7 +23,7 @@ for the first time? [Reading Path](../understand/reading-path.md) names nine fil
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
 flowchart TD
     Root["Repository root<br/><i>configs, specs, manifests</i>"] --> Src["src/"]
-    Root --> Contracts["Contracts<br/><i>openapi · asyncapi · api/</i>"]
+    Root --> Contracts["Contracts<br/><i>openapi · asyncapi · api.generated/</i>"]
     Root --> Ops["Ops<br/><i>docker · .github · public</i>"]
     Root --> Dev["Dev tooling<br/><i>scripts · .husky</i>"]
     Root --> Jobs["Scheduled jobs<br/><i>scripts/ops/</i>"]
@@ -46,17 +46,17 @@ flowchart TD
 
 ### The folder map
 
-| Page                                      | Covers                                                                                                              |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [Repository Root](./root.md)              | Everything with no directory above it — configs, manifests, tool entry points                                       |
-| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `src/domain-primitives/`, `shared/locales/`, and the entry files of `src/` |
-| [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                         |
-| [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                                  |
-| [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets       |
-| [Data](./data.md)                         | `scripts/db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner                |
-| [Scripts & Hooks](./scripts.md)           | `scripts/` folder by folder, `.husky/`                                                                              |
-| [Tests](./tests.md)                       | `tests/` suite by suite, the co-located module suites, `tests/load/`                                                |
-| [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`, the scheduled jobs                                                 |
+| Page                                      | Covers                                                                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| [Repository Root](./root.md)              | Everything with no directory above it — configs, manifests, tool entry points                                           |
+| [App, Kernel & Types](./src-app.md)       | `src/app/`, `src/kernel/`, `src/types/`, `src/domain-primitives/`, `shared/locales/`, and the entry files of `src/`     |
+| [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                             |
+| [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                                      |
+| [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api.generated/`, collection exports, Spectral rulesets |
+| [Data](./data.md)                         | `scripts/db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner                    |
+| [Scripts & Hooks](./scripts.md)           | `scripts/` folder by folder, `.husky/`                                                                                  |
+| [Tests](./tests.md)                       | `tests/` suite by suite, the co-located module suites, `tests/load/`                                                    |
+| [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`, the scheduled jobs                                                     |
 
 ### The API lookups
 

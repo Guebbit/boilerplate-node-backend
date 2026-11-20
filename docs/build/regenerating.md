@@ -15,14 +15,14 @@ this shape. This page is the short version you keep open while working.
 - You edited a fragment, a shared contract file, a seed record or a probe: [I changed X — run Y](#i-changed-x-—-run-y) names which.
 - `npm install` has run once (it already generated everything once).
 
-## The bundles, `api/` and the generated TypeScript are not committed
+## The bundles, `api.generated/` and the generated TypeScript are not committed
 
 `postinstall` runs the scenario registries, the authorization bundle, the permission vocabulary, the shared-rules step and then
 `contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/`npm ci`, so a
 fresh clone has all of it without anyone doing anything. The rest of this page still matters the
 moment you're actively editing a fragment mid-session — `postinstall` only fires on install, not on
 every save — but there is no committed copy of these to go stale, forget to regenerate, or diff in
-a PR: `openapi.yaml`, both AsyncAPI bundles, `api/` and every `*.generated.ts`. What stays committed
+a PR: `openapi.yaml`, both AsyncAPI bundles, `api.generated/` and every `*.generated.ts`. What stays committed
 is a short list, because something reads it without our tools — see
 [The generated output and what is committed](#the-generated-output-and-what-is-committed).
 
@@ -77,9 +77,9 @@ flowchart LR
 
     ROOT --> COL[generate]
     PR --> COL
-    COL --> DEV["contract.bruno.yml<br/><i>generated whole</i>"]
+    COL --> DEV["contract.generated.bruno.yml<br/><i>generated whole</i>"]
 
-    ROOT --> G[gen:api] --> API["api/models · api/schemas.zod.ts"]
+    ROOT --> G[gen:api] --> API["api.generated/models · api.generated/schemas.zod.ts"]
     ROOT --> FE["copy to the frontend"]
 
     classDef auth fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -96,14 +96,14 @@ assembled before they can be produced — and they also read `scenarios/subjects
 
 ```mermaid
 flowchart LR
-    O["openapi.yaml"] --> A["api/"] --> C["the client collection"]
+    O["openapi.yaml"] --> A["api.generated/"] --> C["the client collection"]
 ```
 
 `scenarios/subjects.ts` is import-free, not generated, so nothing has to build it first. Nothing
 has to sequence the collections for you either, because nothing generates one unless you ask. Ask
 last — after `regenerate` has settled the contract — and what you get is current by construction.
 There is no committed copy of a collection to go stale in the meantime, and — since `postinstall` —
-the same is true of `openapi.yaml` and `api/` themselves: neither `npm run complete` nor
+the same is true of `openapi.yaml` and `api.generated/` themselves: neither `npm run complete` nor
 the bundle check in `npm run check` has a "stale committed copy" to report on any of them.
 
 The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
@@ -123,7 +123,7 @@ phase and not the others.
 | `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it                                 |
 | A controller or service (no contract, no route change)                           | nothing                                 | no bundle reads source code, and no page states a service's internals                                                                                                           |
 | `openapi.yaml` / `asyncapi*.yaml` **directly**                                   | stop — edit the fragment instead        | the next bundle overwrites you, and `contracts:bundle --check` fails first                                                                                                      |
-| `contract.bruno.yml`                                                             | stop — these are generated              | edit the contract or the probes; a hand edit is reverted by the next run                                                                                                        |
+| `contract.generated.bruno.yml`                                                   | stop — these are generated              | edit the contract or the probes; a hand edit is reverted by the next run                                                                                                        |
 
 When in doubt, `npm run contracts:bundle` on its own is always safe: it compares before it writes
 and touches only the bundles that actually drifted.
@@ -136,7 +136,7 @@ a collection named here regenerates from the contract on disk rather than one th
 ```bash
 npm run contracts:bundle -- openapi     # just openapi.yaml
 npm run contracts:bundle -- asyncapi    # just asyncapi.yaml (asyncapi-public is its own name)
-npm run contracts:bundle -- bruno       # just contract.bruno.yml
+npm run contracts:bundle -- bruno       # just contract.generated.bruno.yml
 ```
 
 Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`.
@@ -189,23 +189,23 @@ Two groups. The first is rebuilt by `postinstall`, gitignored, and never reviewe
 second is committed, because something reads it without running our tools; the pre-commit hook
 refuses a commit where one of them is stale ([below](#the-pre-commit-hook)).
 
-| Generated output                                    | Read by                                                                                                                                                               | Committed?                                |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `openapi.yaml`                                      | spectral · orval · Prism · the frontend                                                                                                                               | no — gitignored, rebuilt by `postinstall` |
-| `asyncapi.yaml` · `asyncapi.public.yaml`            | `gen:asyncapi` · `lint:asyncapi` · the frontend's realtime pipeline · `GET /webhooks/events`                                                                          | no — gitignored, rebuilt by `postinstall` |
-| `api/models/` · `api/schemas.zod.ts`                | `@types` and the services that validate input                                                                                                                         | no — gitignored, rebuilt by `postinstall` |
-| `api/permission-vocabulary.ts`                      | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.generated.yaml` (see [Permission Vocabulary](../reference/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
-| `src/types/asyncapi.generated.ts`                   | every SSE, domain-event and queue call site                                                                                                                           | no — gitignored, rebuilt by `postinstall` |
-| every other `*.generated.ts` (`src/`, `scenarios/`) | this repo's own code only — built from the shared rules and the scenario files                                                                                        | no — gitignored, rebuilt by `postinstall` |
-| `contract.bruno.yml`                                | you, and whoever explores the API without running it                                                                                                                  | no — generated on demand, see above       |
-| `shared/authorization-keys.generated.yaml`          | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml`                                                    | yes — read at boot and handed to the twin |
-| `shared/rules/schemas/*.generated.schema.json`      | the PHP twin, which validates with them and cannot rebuild them                                                                                                       | yes                                       |
-| `docker/crontab` · `k8s/base/crontab`               | the production host bind-mounts the first; the Kubernetes `cron` Deployment turns the second into a ConfigMap. Same content, both generated                           | yes                                       |
-| the generated tables inside `docs/` pages           | readers; they sit inside hand-written pages                                                                                                                           | yes                                       |
-| `scenarios/*-images.generated.json`                 | seeding. Not part of `regenerate`: it downloads random photos, so it cannot be rebuilt                                                                                | yes                                       |
+| Generated output                                         | Read by                                                                                                                                                               | Committed?                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `openapi.yaml`                                           | spectral · orval · Prism · the frontend                                                                                                                               | no — gitignored, rebuilt by `postinstall` |
+| `asyncapi.yaml` · `asyncapi.public.yaml`                 | `gen:asyncapi` · `lint:asyncapi` · the frontend's realtime pipeline · `GET /webhooks/events`                                                                          | no — gitignored, rebuilt by `postinstall` |
+| `api.generated/models/` · `api.generated/schemas.zod.ts` | `@types` and the services that validate input                                                                                                                         | no — gitignored, rebuilt by `postinstall` |
+| `api.generated/permission-vocabulary.ts`                 | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.generated.yaml` (see [Permission Vocabulary](../reference/permission-vocabulary.md)) | no — gitignored, rebuilt by `postinstall` |
+| `src/types/asyncapi.generated.ts`                        | every SSE, domain-event and queue call site                                                                                                                           | no — gitignored, rebuilt by `postinstall` |
+| every other `*.generated.ts` (`src/`, `scenarios/`)      | this repo's own code only — built from the shared rules and the scenario files                                                                                        | no — gitignored, rebuilt by `postinstall` |
+| `contract.generated.bruno.yml`                           | you, and whoever explores the API without running it                                                                                                                  | no — generated on demand, see above       |
+| `shared/authorization-keys.generated.yaml`               | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml`                                                    | yes — read at boot and handed to the twin |
+| `shared/rules/schemas/*.generated.schema.json`           | the PHP twin, which validates with them and cannot rebuild them                                                                                                       | yes                                       |
+| `docker/crontab` · `k8s/base/crontab`                    | the production host bind-mounts the first; the Kubernetes `cron` Deployment turns the second into a ConfigMap. Same content, both generated                           | yes                                       |
+| the generated tables inside `docs/` pages                | readers; they sit inside hand-written pages                                                                                                                           | yes                                       |
+| `scenarios/*-images.generated.json`                      | seeding. Not part of `regenerate`: it downloads random photos, so it cannot be rebuilt                                                                                | yes                                       |
 
-For the gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, the two AsyncAPI
-bundles or a `*.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api`, and all of them are
+For the gitignored ones: **never hand-edit anything under `api.generated/`, `openapi.yaml`, the two AsyncAPI
+bundles or a `*.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api.generated`, and all of them are
 fully derived — there is no diff to review because there is nothing committed to diff against.
 
 ## The pre-commit hook

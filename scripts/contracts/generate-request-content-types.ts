@@ -7,12 +7,12 @@
  *           guard (`src/infrastructure/http/middlewares/content-type.ts`) reads it, so a body in an
  *           undeclared type is refused instead of arriving as an empty `{}`. Each row carries its
  *           path matcher as a regex literal, so the guard compiles nothing at boot.
- * Routes:   also writes `api/operation-routes.ts` beside it: per path, the methods the contract
+ * Routes:   also writes `api.generated/operation-routes.ts` beside it: per path, the methods the contract
  *           gives it, the owning module, and which methods take no sign-in (`security: []`). The
  *           405 handler (`src/infrastructure/http/middlewares/method-not-allowed.ts`) reads it, so a known path asked
  *           with the wrong method answers 405 + `Allow`, not the catch-all's 404.
  * Backend only: the frontend has no server to guard. Written beside the other generated contract
- *           files under `api/`, which `npm run gen:api` rebuilds from scratch.
+ *           files under `api.generated/`, which `npm run gen:api` rebuilds from scratch.
  * `--check`: writes nothing and exits 1 on a mismatch (the shared `writeOrCheck` helper).
  *
  * Usage: tsx scripts/contracts/generate-request-content-types.ts --out <path> [--check]

@@ -67,7 +67,7 @@ flowchart LR
 
 The **contract** lists them, once: the root's `x-image-upload-types` (`shared/contracts/openapi.root.yaml`)
 is stamped by the bundler onto every upload body as OpenAPI 3.1's `encoding.imageUpload.contentType`.
-`npm run gen:api` turns that into `api/upload-types.ts` (`ACCEPTED_UPLOAD_TYPES`), which the backend's
+`npm run gen:api` turns that into `api.generated/upload-types.ts` (`ACCEPTED_UPLOAD_TYPES`), which the backend's
 `fileFilter` reads and the frontend's file picker reads its own generated copy.
 
 | Fact                        | Home                                   | Why there                                          |

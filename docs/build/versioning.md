@@ -89,7 +89,7 @@ the repo today.
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Contract      | `deprecated: true` plus `x-sunset: <RFC 3339 date>` on the operation (oasdiff's own extension)                                                                    |
 | Bundler       | like `x-versioned`, adds the `Deprecation`, `Sunset` and `Link rel="deprecation"` response headers to that operation's responses                                  |
-| Generated map | the marked operations become fields on `OPERATION_ROUTES` in `api/operation-routes.ts`, not a second table. Never YAML parsed at runtime                          |
+| Generated map | the marked operations become fields on `OPERATION_ROUTES` in `api.generated/operation-routes.ts`, not a second table. Never YAML parsed at runtime                |
 | Runtime       | one middleware reads that map and sets `Deprecation: @<epoch>` (RFC 9745) and `Sunset: <HTTP-date>` (RFC 8594), and counts each call (Zalando 188, "monitor use") |
 | CORS          | `Deprecation`, `Sunset` and `Link` join the exposed headers                                                                                                       |
 | CI            | an `openapi-breaking` job next to `asyncapi-breaking`, with oasdiff's `--deprecation-days-stable`. Adding that tool needs the owner's go-ahead at 1.0             |

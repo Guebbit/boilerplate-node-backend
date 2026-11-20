@@ -54,7 +54,7 @@ const createRandom = (seed: number) => {
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart TB
-    Schema["api/schemas.zod.ts\ne.g. CreateProductBody"] --> Walk["buildValue(schema)\nwalks _zod.def recursively"]
+    Schema["api.generated/schemas.zod.ts\ne.g. CreateProductBody"] --> Walk["buildValue(schema)\nwalks _zod.def recursively"]
     Seed["RANDOM_DATA_SEED\nor a fresh value, printed once"] --> PRNG["Mulberry32\nseeded once per process"]
     PRNG --> Walk
     Walk --> Valid["validPayload()\nevery field populated,\nincluding optional ones"]
@@ -174,7 +174,7 @@ Worth remembering when extending the walker: `unwrapField` had handled `'default
 | `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                                                                        |
 | `tests/contract/request-contract.test.ts` | Two top-level `describe`s: the invalid-query walk, and [the walk over every write operation](#every-write-operation); the endpoint-specific glue lives here as data tables (`FIELD_OVERRIDES`, `NEEDS_STATE_OR_SIGNATURE`), not in the walker |
 | `tests/support/spec-world.ts`             | The seeded rows a templated path names (`{id}`, `{app}`, ...), shared with the fuzz suite                                                                                                                                                     |
-| `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                                                                 |
+| `api.generated/schemas.zod.ts`            | The generated `*Body` schemas this file walks                                                                                                                                                                                                 |
 
 ## Commands
 

@@ -36,13 +36,13 @@ tmp
 # `npm run contracts:bundle -- bruno`. Only
 # `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests,
 # only `ts-check`.
-contract.bruno.yml
+contract.generated.bruno.yml
 
 # Generated from openapi.yaml fragments by `postinstall` — see .gitignore. A stale host copy would
-# be overwritten anyway (`gen:api` starts with `rm -rf ./api`), but there is no reason to upload it
+# be overwritten anyway (`gen:api` starts with `rm -rf ./api.generated`), but there is no reason to upload it
 # to the build daemon first.
 /openapi.yaml
-/api/
+/api.generated/
 
 # Logs
 *.log

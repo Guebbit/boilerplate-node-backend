@@ -107,7 +107,7 @@ Ask for a collection and one lands at the repo root:
 npm run contracts:bundle -- bruno
 ```
 
-`contract.bruno.yml` carries one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
+`contract.generated.bruno.yml` carries one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
 Import it into Bruno and start clicking; `POST /account/login` already carries credentials that work.
 
 It is generated rather than hand-written, which is why it cannot rot, and `.gitignore`d rather

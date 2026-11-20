@@ -211,7 +211,7 @@ generated and `.gitignore`d, so they are opt-in:
 npm run contracts:bundle -- bruno
 ```
 
-`contract.bruno.yml` lands at the repo root, untracked, built from the committed
+`contract.generated.bruno.yml` lands at the repo root, untracked, built from the committed
 `openapi.yaml` and `scenarios/subjects.ts`'s example ids. They are generated and never hand-edited —
 a request the contract cannot describe belongs in that module's `probes.ts`.
 

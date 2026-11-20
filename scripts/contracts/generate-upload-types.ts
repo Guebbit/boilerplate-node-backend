@@ -7,7 +7,7 @@
  *
  * Refuses a contract whose upload bodies disagree, or declare none: one list for the whole API.
  *
- * Written beside the backend's other generated contract files under `api/`; the frontend keeps its
+ * Written beside the backend's other generated contract files under `api.generated/`; the frontend keeps its
  * own copy of this script, which writes under its `contracts/` folder.
  *
  * `--check` writes nothing and exits 1 on a mismatch (the shared `writeOrCheck` helper).

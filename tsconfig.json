@@ -5,7 +5,7 @@
         "module": "es2020",
         "paths": {
             "@types": ["./src/types"],
-            "@api/*": ["./api/*"],
+            "@api/*": ["./api.generated/*"],
             "@tests/*": ["./tests/support/*"],
             "@app/*": ["./src/app/*"],
 
@@ -32,7 +32,7 @@
     },
     "exclude": ["node_modules"],
     "include": [
-        "api/**/*.ts",
+        "api.generated/**/*.ts",
         "src/*.ts",
         "src/**/*.ts",
         "src/**/*.json",

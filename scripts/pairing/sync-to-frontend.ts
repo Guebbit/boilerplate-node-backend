@@ -185,7 +185,7 @@ console.info(
  * UNCONDITIONAL, and deliberately not gated on `moved.length`. A copy is not the only thing that
  * leaves that client stale: switching which backend this pair points at lands a frontend whose
  * `openapi.yaml` already matches the new one byte-for-byte — nothing to copy — while its
- * `contracts/rest/*` is still the client generated from the PREVIOUS backend's contract. Gated on
+ * `contracts/rest.generated/*` is still the client generated from the PREVIOUS backend's contract. Gated on
  * a copy, this step skipped and the run reported success over a client for another API. Running it
  * when nothing moved costs one no-op regeneration; skipping it when something has silently drifted
  * costs a suite that tests the wrong contract.

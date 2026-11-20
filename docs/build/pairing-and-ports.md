@@ -100,7 +100,7 @@ because of it.
 `openapi.yaml` is the canonical contract for **both** repositories, and this one produces it.
 
 - After any contract edit, run `npm run regenerate`: it bundles, generates and hands the shared
-  documents to the frontend checkout. `api/` and `openapi.yaml` are gitignored, so there is nothing
+  documents to the frontend checkout. `api.generated/` and `openapi.yaml` are gitignored, so there is nothing
   generated to commit there — see [Regenerating After a Change](regenerating.md).
 - Keep paired branches aligned before merging a contract change: a backend branch and the frontend
   branch that consumes it are one change in two repositories.
@@ -187,7 +187,7 @@ diff looks like the backend broke something.
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `openapi.yaml`                                         | `openapi.yaml`                                                                                                                                                                                                    |
 | `asyncapi.public.yaml`                                 | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned                                                                                                           |
-| `shared/authorization-keys.generated.yaml`             | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Vocabulary](../reference/permission-vocabulary.md)                                                               |
+| `shared/authorization-keys.generated.yaml`             | `<frontend>/contracts/authorization-keys.generated.yaml` — read there only for `actions:`, see [Permission Vocabulary](../reference/permission-vocabulary.md)                                                     |
 | `shared/rules/frontend-links.yaml`                     | `<frontend>/contracts/frontend-links.yaml` — the paths mail and sitemap links point at; the frontend's router spec walks every one, so a renamed route fails there instead of as a 404 in an inbox                |
 | `shared/rules/cookies.yaml`                            | `<frontend>/contracts/cookies.yaml` — every cookie the backend sets; the frontend's browser-storage inventory is built from it and its own file, and the build fails when a row has no place in the display order |
 | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem` | `<frontend>/scripts/e2e/tls/` — the demo webhook sink's test CA and leaf: this side trusts the CA, the frontend's Cypress sink serves the leaf. See [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |

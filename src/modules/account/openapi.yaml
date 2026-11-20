@@ -1088,7 +1088,7 @@ paths:
                     # The failure codes the redirect's `?error=` query carries (absent on success). Inline,
                     # not a component: the bundler inlines a `$ref` under an `x-` key and prunes the
                     # component, so a shared schema would never reach the generated types. Both
-                    # repos' generated `REDIRECT_QUERY_ENUMS` (`api/redirect-query.ts` here) read this
+                    # repos' generated `REDIRECT_QUERY_ENUMS` (`api.generated/redirect-query.ts` here) read this
                     # list.
                     x-redirect-query:
                         error:

@@ -36,12 +36,12 @@ The client collection stays in this repo only — it is derived from `openapi.ya
 frontend copy could never disagree without the spec disagreeing first, and nothing there reads
 it:
 
-| Bundle            | Written to                         | Built from                                                                                        |
-| ----------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `openapi`         | `openapi.yaml`                     | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`**                              |
-| `asyncapi`        | `asyncapi.yaml`                    | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
-| `asyncapi-public` | `asyncapi.public.yaml`             | the same sources minus the backend-only ones — the half the frontend receives                     |
-| `bruno`           | `contract.bruno.yml` _(untracked)_ | `openapi.yaml` + the demo dataset — **generated whole**                                           |
+| Bundle            | Written to                                   | Built from                                                                                        |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `openapi`         | `openapi.yaml`                               | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`**                              |
+| `asyncapi`        | `asyncapi.yaml`                              | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
+| `asyncapi-public` | `asyncapi.public.yaml`                       | the same sources minus the backend-only ones — the half the frontend receives                     |
+| `bruno`           | `contract.generated.bruno.yml` _(untracked)_ | `openapi.yaml` + the demo dataset — **generated whole**                                           |
 
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
@@ -56,7 +56,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | the client collection  | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 A 405 is not merged in: it answers a request that matched no operation, so it is the
-`METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api/operation-routes.ts`
+`METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api.generated/operation-routes.ts`
 ([Write Methods](../understand/write-methods.md#a-known-path-with-the-wrong-method)).
 
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
@@ -96,7 +96,7 @@ flowchart TD
     ROOT -.->|"npm run sync:frontend<br/>(byte-identical)"| FEROOT
 
     subgraph FE["boilerplate-vue-frontend  (consumes it)"]
-        FEROOT["openapi.yaml"] --> ORVAL[orval] --> CLIENT["contracts/rest/index.ts"]
+        FEROOT["openapi.yaml"] --> ORVAL[orval] --> CLIENT["contracts/rest.generated/index.ts"]
     end
 
     classDef frag fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -241,10 +241,10 @@ security:
 
 ### Client hints a fragment can put on an operation
 
-| key                  | on               | what the client does with it                                                                                                                                                                                                                                                                                                                                                  |
-| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `x-no-refresh: true` | an operation     | a `401` there is a real credential failure, so the frontend never refreshes the token and replays it. The frontend's route table carries it as `noRefresh`.                                                                                                                                                                                                                   |
-| `x-redirect-query`   | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; both repos' generators emit it as `REDIRECT_QUERY_ENUMS` (the backend's is `api/redirect-query.ts`, from `scripts/contracts/generate-redirect-query.ts`). |
+| key                  | on               | what the client does with it                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-no-refresh: true` | an operation     | a `401` there is a real credential failure, so the frontend never refreshes the token and replays it. The frontend's route table carries it as `noRefresh`.                                                                                                                                                                                                                             |
+| `x-redirect-query`   | a `302` response | lists the schema of a query parameter on the redirect (`error` on the OAuth callback), inline. A `$ref` under an `x-` key is inlined by the bundler and its component pruned, so the set cannot be a shared schema; both repos' generators emit it as `REDIRECT_QUERY_ENUMS` (the backend's is `api.generated/redirect-query.ts`, from `scripts/contracts/generate-redirect-query.ts`). |
 
 Neither is wire data a server reads. The bundler passes both through untouched.
 

@@ -171,7 +171,7 @@ Everything above is easier if these are in your head first:
 2. **Layers only point downward.** `kernel` and `infrastructure` know no domain; modules reach each
    other only through a sibling's barrel, or through domain events.
 3. **The contract is an output.** `openapi.yaml` is assembled from per-module fragments, and
-   generates the client and Zod schemas both repos import. Never edit `openapi.yaml` or `api/`.
+   generates the client and Zod schemas both repos import. Never edit `openapi.yaml` or `api.generated/`.
 4. **Controllers respond, services decide, repositories query.** No layer does two of those.
 5. **`id` is not `_id`.** Mongo stores `_id`; the API speaks `id`. `persistence/serialize.ts` is
    the border.

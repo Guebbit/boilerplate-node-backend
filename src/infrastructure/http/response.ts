@@ -44,7 +44,7 @@ export interface ResponseErrorItem {
      * Stable code for client logic — clients must branch on this, never on `message`. Typed
      * against the generated catalogue so a typo or a removed code fails at compile time;
      * the contract's own `code: string` stays open-ended, since {@link ErrorCode} is a union of
-     * KNOWN codes, not an exhaustive `enum` — see `api/error-codes.ts`.
+     * KNOWN codes, not an exhaustive `enum` — see `api.generated/error-codes.ts`.
      */
     code: ErrorCode;
     /** Human-readable, translatable text safe to show a user. */

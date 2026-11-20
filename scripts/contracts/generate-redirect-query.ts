@@ -8,7 +8,7 @@
  * Why not a component schema: the bundler inlines a `$ref` under an `x-` key and prunes the
  * component, so the list is written inline in the fragment and read here.
  *
- * Written beside the backend's other generated contract files under `api/`; the frontend's
+ * Written beside the backend's other generated contract files under `api.generated/`; the frontend's
  * route-table generator writes the same table into its own routes file.
  *
  * `--check` writes nothing and exits 1 on a mismatch (the shared `writeOrCheck` helper).
