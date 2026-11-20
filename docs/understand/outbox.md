@@ -258,7 +258,14 @@ dispute still open (or a refund settled meanwhile) changes which refunds qualify
   transaction: the dispute stays unrecorded and no event exists, so the provider's redelivery of the
   same report records it and raises the events then.
 - **Said once.** Only a dispute that just turned closed raises them. A closed dispute flipping from
-  lost to won raises one more per refund staff had marked returned against it, and nothing else.
+  lost to won raises one more per refund staff had marked returned against it, and one more
+  (`followsFlip`) per refund still refused as `disputed`, whose earlier to-do is out of date. Nothing
+  else.
+- **Replace, not touch.** A later event for a refund shares its to-do key with the one the earlier
+  event opened. `shop-tasks` hands the tasks engine `replaceOpen` for every one that is not
+  `markedReturned`: after the redelivery check, in the same transaction, an open to-do with other
+  words is closed and the new one opens; one with the same words is only touched. A redelivery of
+  either event is then a no-op, so it cannot close the to-do the other opened.
 
 See [Disputes](../modules/payments-disputes-and-adapters.md#disputes).
 

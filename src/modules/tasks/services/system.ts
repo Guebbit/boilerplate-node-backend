@@ -13,6 +13,7 @@ import { TaskKind } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import type { ClientSession } from 'mongoose';
 import { announceInTransaction } from '@kernel/outbox';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
@@ -26,16 +27,93 @@ import {
     type SystemOpening
 } from '../domain';
 import { TASK_OPENED, taskFactOf } from '../events';
+import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
+
+/** What `openSystemTask` can be told beyond the situation itself. */
+export interface OpenSystemTaskOptions {
+    /**
+     * The open task of the same situation may be out of date: when its message differs from the
+     * new one, close it as `cleared` (this note left on it) and open the new one in the same
+     * transaction; when the message is the same, it is only touched, as without the option. It runs
+     * after the redelivery check, so a redelivered event can never close the task its first
+     * delivery opened.
+     */
+    replaceOpen?: { note: string };
+}
+
+/**
+ * Close one open task as `cleared`, leaving the note on it. One conditional write on the status
+ * read, so staff closing at the same moment wins and this one steps aside.
+ *
+ * @param task - the open task, as read
+ * @param now - the clock
+ * @param note - a system note (no author) naming how it ended
+ * @param session - the open transaction, when the close is part of one
+ * @returns the closed task, or `null` when it moved first
+ */
+const closeSystemTask = (
+    task: TaskDocument,
+    now: Date,
+    note?: string,
+    session?: ClientSession
+): Promise<TaskDocument | null> =>
+    taskRepository
+        .moveFrom(String(task._id), task.status, clear(now), session)
+        .then((moved) =>
+            moved && note !== undefined
+                ? taskRepository
+                      .appendNote(String(moved._id), { body: note, at: now }, session)
+                      .then(() => moved)
+                : moved
+        );
+
+/**
+ * The audit line of a system close; written after the close commits.
+ *
+ * @param task - the task that was closed
+ */
+const auditCleared = (task: TaskDocument): void =>
+    recordAudit(systemCallerContext('Task'), {
+        action: tasksAuditActions.SYSTEM_TASK_CLEARED,
+        outcome: 'success',
+        targetType: 'task',
+        targetId: String(task._id),
+        metadata: { kind: task.kind }
+    });
+
+/**
+ * Close the open task holding a key, inside the open transaction. Nothing open, or a task staff
+ * moved first, closes nothing.
+ *
+ * @param openKey - the situation's dedup key
+ * @param note - how it ended, left on the task as a system note
+ * @param session - the open transaction
+ * @returns the closed task, to be audited once the transaction commits
+ */
+const clearOpenByKey = (
+    openKey: string,
+    note: string,
+    session: ClientSession
+): Promise<TaskDocument | null> =>
+    taskRepository
+        .findOpenByKey(openKey, session)
+        .then((task) => (task ? closeSystemTask(task, new Date(), note, session) : null));
 
 /**
  * Open one task for a situation, or stamp the open one seen again. Announces `task.opened`
- * (through the transactional outbox) only on an insert: a repeat tells nobody twice.
+ * (through the transactional outbox) only on an insert: a repeat tells nobody twice. With
+ * `replaceOpen`, an open task whose message differs is closed and replaced instead.
  *
  * @param opening - the situation
  * @param meta - the event's delivery facts; its `eventId` makes a redelivery a no-op
+ * @param options - see {@link OpenSystemTaskOptions}
  */
-export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): Promise<void> => {
+export const openSystemTask = (
+    opening: SystemOpening,
+    meta: DomainEventMeta,
+    options: OpenSystemTaskOptions = {}
+): Promise<void> => {
     const openKey = openKeyOf(opening.kind, opening.link);
     const now = new Date();
     const touch = () => taskRepository.touchOpen(openKey, meta.eventId, now).then(() => undefined);
@@ -48,38 +126,48 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
     const open = () =>
         announceInTransaction(
             (session) =>
-                taskRepository.insertSystem(
-                    {
-                        kind: opening.kind,
-                        routeSet: opening.routeSet,
-                        ...(opening.work ? { work: opening.work } : {}),
-                        link: opening.link,
-                        openKey,
-                        ...(opening.subjectId ? { subjectId: opening.subjectId } : {}),
-                        subject: opening.subject,
-                        message: opening.message,
-                        dueAt: opening.dueAt,
-                        ...(opening.noDueSoon ? { noDueSoon: opening.noDueSoon } : {}),
-                        eventId: meta.eventId,
-                        now
-                    },
-                    session
+                (options.replaceOpen
+                    ? clearOpenByKey(openKey, options.replaceOpen.note, session)
+                    : Promise.resolve(null)
+                ).then((cleared) =>
+                    taskRepository
+                        .insertSystem(
+                            {
+                                kind: opening.kind,
+                                routeSet: opening.routeSet,
+                                ...(opening.work ? { work: opening.work } : {}),
+                                link: opening.link,
+                                openKey,
+                                ...(opening.subjectId ? { subjectId: opening.subjectId } : {}),
+                                subject: opening.subject,
+                                message: opening.message,
+                                dueAt: opening.dueAt,
+                                ...(opening.noDueSoon ? { noDueSoon: opening.noDueSoon } : {}),
+                                eventId: meta.eventId,
+                                now
+                            },
+                            session
+                        )
+                        .then((created) => ({ created, cleared }))
                 ),
-            (created) => ({
+            ({ created }) => ({
                 name: TASK_OPENED,
                 payload: taskFactOf(created),
                 aggregateId: String(created._id)
             })
         )
-            .then((created) =>
+            .then(({ created, cleared }) =>
                 // After the commit: an audit line for a task that rolled back would be a lie.
-                recordAudit(systemCallerContext('Task'), {
-                    action: tasksAuditActions.SYSTEM_TASK_OPENED,
-                    outcome: 'success',
-                    targetType: 'task',
-                    targetId: String(created._id),
-                    metadata: { kind: created.kind }
-                })
+                {
+                    if (cleared) auditCleared(cleared);
+                    recordAudit(systemCallerContext('Task'), {
+                        action: tasksAuditActions.SYSTEM_TASK_OPENED,
+                        outcome: 'success',
+                        targetType: 'task',
+                        targetId: String(created._id),
+                        metadata: { kind: created.kind }
+                    });
+                }
             )
             // Another event opened it first: this one only touches.
             .catch((error: unknown) => {
@@ -88,7 +176,14 @@ export const openSystemTask = (opening: SystemOpening, meta: DomainEventMeta): P
             });
 
     const seen = meta.eventId ? taskRepository.sawEvent(meta.eventId) : Promise.resolve(false);
-    return seen.then((replayed) => (replayed ? undefined : open()));
+    return seen.then((replayed) => {
+        if (replayed) return undefined;
+        if (!options.replaceOpen) return open();
+        // The same words again: nothing changed, so staff keep their task (and its assignee).
+        return taskRepository
+            .findOpenByKey(openKey)
+            .then((current) => (current?.message === opening.message ? touch() : open()));
+    });
 };
 
 /**
@@ -105,24 +200,9 @@ const clearMatching = (filter: Record<string, unknown>, note?: string): Promise<
         .then((open) =>
             Promise.all(
                 open.map((task) =>
-                    taskRepository
-                        .moveFrom(String(task._id), task.status, clear(now))
-                        .then((moved) => {
-                            if (!moved) return undefined;
-                            recordAudit(systemCallerContext('Task'), {
-                                action: tasksAuditActions.SYSTEM_TASK_CLEARED,
-                                outcome: 'success',
-                                targetType: 'task',
-                                targetId: String(moved._id),
-                                metadata: { kind: moved.kind }
-                            });
-                            return note === undefined
-                                ? undefined
-                                : taskRepository.appendNote(String(moved._id), {
-                                      body: note,
-                                      at: now
-                                  });
-                        })
+                    closeSystemTask(task, now, note).then((moved) => {
+                        if (moved) auditCleared(moved);
+                    })
                 )
             )
         )

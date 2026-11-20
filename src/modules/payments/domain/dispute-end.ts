@@ -10,7 +10,13 @@
  */
 
 import { RefundFailureReason, RefundStatus } from '@types';
-import { hasOpenDispute, keptInOtherCurrency, bankKeptMoney, type DisputeFacts } from './disputes';
+import {
+    anyDisputeKeptMoney,
+    bankKeptMoney,
+    hasOpenDispute,
+    otherCurrencyKept,
+    type DisputeFacts
+} from './disputes';
 import { isReversed } from './lifecycle';
 
 /** The slice of a refund record the rule reads. */
@@ -44,28 +50,29 @@ export interface RefundOwedAfterDispute {
     currency: string;
     /** `true` when the bank took the refund back after it had settled. */
     reversed: boolean;
-    /** `true` when the bank kept the money: the buyer already has it, so staff only mark it returned. */
+    /** `true` when ANY dispute on the payment kept money: the buyer already has it, so staff only mark it returned. */
     bankKept: boolean;
-    /** The dispute's currency when the bank kept money in another currency than the payment's. */
+    /** The currency of a kept dispute in another currency than the payment's, if there is one. */
     otherCurrency?: string;
     /** `true` when the refund had already been marked returned: the win makes it owed again. */
     markedReturned?: true;
+    /** `true` when a lost dispute flipped to won, for the wording. */
+    followsFlip?: true;
 }
 
 /**
  * The refunds a dispute's end hands back to staff: the ones still open and refused as `disputed`,
  * and only once no dispute on the payment is open (a second dispute still decides where the money
- * goes). A refund settled or voided meanwhile is not owed.
+ * goes). A refund settled or voided meanwhile is not owed. The outcome is read over EVERY dispute
+ * on the payment, not the one that just ended: a refund held back for one dispute is already paid
+ * if the bank kept money in another, and the app cannot tell which one held it.
  *
  * @param payment - the payment AFTER the dispute's write, read in the writing transaction
- * @param ended - the dispute that just ended, as now stored
  * @returns one entry per refund owed again, in the payment's order; empty when none is
  */
-export const refundsOwedAfterDispute = (
-    payment: PaymentAtDisputeEnd,
-    ended: DisputeFacts
-): RefundOwedAfterDispute[] => {
+export const refundsOwedAfterDispute = (payment: PaymentAtDisputeEnd): RefundOwedAfterDispute[] => {
     if (hasOpenDispute(payment)) return [];
+    const otherCurrency = otherCurrencyKept(payment, payment.currency);
     return payment.refunds
         .filter(
             (refund) =>
@@ -77,10 +84,8 @@ export const refundsOwedAfterDispute = (
             amount: refund.amount,
             currency: refund.currency,
             reversed: isReversed(refund),
-            bankKept: bankKeptMoney(ended),
-            ...(keptInOtherCurrency(ended, payment.currency)
-                ? { otherCurrency: ended.currency }
-                : {})
+            bankKept: anyDisputeKeptMoney(payment),
+            ...(otherCurrency ? { otherCurrency } : {})
         }));
 };
 

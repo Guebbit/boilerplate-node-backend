@@ -352,6 +352,34 @@ describe('refundOwedAfterDisputeOpening', () => {
         expect(same.message).not.toContain('check the amount in the provider');
     });
 
+    it('sends staff to the dashboard to check each dispute when the bank kept money', () => {
+        const { message } = refundOwedAfterDisputeOpening(refund, NOW);
+
+        expect(message).toContain("check each one in the provider's dashboard");
+    });
+
+    it('does not send staff to check disputes when the shop won', () => {
+        const { message } = refundOwedAfterDisputeOpening({ ...refund, bankKept: false }, NOW);
+
+        expect(message).not.toContain('check each one');
+    });
+
+    it('says a flipped dispute makes the earlier advice out of date, and still never offers a void for a bounced refund', () => {
+        const flipped = refundOwedAfterDisputeOpening(
+            { ...refund, bankKept: false, followsFlip: true },
+            NOW
+        );
+        const bounced = refundOwedAfterDisputeOpening(
+            { ...refund, bankKept: false, reversed: true, followsFlip: true },
+            NOW
+        );
+
+        expect(flipped.message).toContain('first lost, then won');
+        expect(flipped.message).toContain('Void the refund, then refund the buyer by card');
+        expect(bounced.message).toContain('first lost, then won');
+        expect(bounced.message).not.toContain('Void');
+    });
+
     it('names the legal deadline beside the date', () => {
         const { message } = refundOwedAfterDisputeOpening(refund, NOW, {
             rule: 'withdrawal',

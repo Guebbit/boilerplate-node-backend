@@ -955,6 +955,104 @@ describe('a dispute ended and refunds are owed again', () => {
         expect(message).toContain('Void the refund, then refund the buyer by card');
     });
 
+    describe('after a lost dispute is won and the refund is still refused', () => {
+        const FLIP = { ...OWED, bankKept: false, followsFlip: true as const };
+
+        it('replaces the to-do the loss opened with the won one: closed with a note, one open', async () => {
+            const lost = { eventId: nextEventId() };
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, lost);
+
+            await emitDomainEvent('payment.refund_owed_after_dispute', FLIP, {
+                eventId: nextEventId()
+            });
+
+            const tasks = await allTasks();
+            expect(tasks.map((task) => [task.kind, task.status])).toEqual([
+                [TaskKind.refund_refused, TaskStatus.resolved],
+                [TaskKind.refund_refused, TaskStatus.new]
+            ]);
+            expect(tasks[0].notes.map((note) => note.body)).toEqual([
+                expect.stringContaining('changed outcome')
+            ]);
+            expect(tasks[0].notes[0].body).not.toContain('money is back');
+            expect(tasks[1].message).toContain('Void the refund, then refund the buyer by card');
+            expect(tasks[1].message).toContain('first lost, then won');
+        });
+
+        it('keeps the won to-do OPEN when the outbox delivers either event again', async () => {
+            const lost = { eventId: nextEventId() };
+            const flip = { eventId: nextEventId() };
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, lost);
+            await emitDomainEvent('payment.refund_owed_after_dispute', FLIP, flip);
+
+            await emitDomainEvent('payment.refund_owed_after_dispute', FLIP, flip);
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, lost);
+
+            const tasks = await allTasks();
+            expect(tasks.map((task) => task.status)).toEqual([TaskStatus.resolved, TaskStatus.new]);
+        });
+
+        it('just opens the won to-do when none was open, as when staff already closed the first', async () => {
+            await emitDomainEvent('payment.refund_owed_after_dispute', FLIP, {
+                eventId: nextEventId()
+            });
+
+            const tasks = await allTasks();
+
+            expect(tasks.map((task) => task.status)).toEqual([TaskStatus.new]);
+        });
+    });
+
+    describe('whenever a later dispute changes the outcome, whatever order they arrived in', () => {
+        const WON = { ...OWED, bankKept: false };
+
+        it('replaces a bank-kept to-do with the won one even when no flip is involved', async () => {
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+                eventId: nextEventId()
+            });
+            const won = { eventId: nextEventId() };
+
+            await emitDomainEvent('payment.refund_owed_after_dispute', WON, won);
+            await emitDomainEvent('payment.refund_owed_after_dispute', WON, won);
+
+            const tasks = await allTasks();
+            expect(tasks.map((task) => task.status)).toEqual([TaskStatus.resolved, TaskStatus.new]);
+            expect(tasks[1].message).toContain('Void the refund, then refund the buyer by card');
+        });
+
+        it('replaces "refund by card" with the bank-kept to-do when a later dispute is lost', async () => {
+            await emitDomainEvent('payment.refund_owed_after_dispute', WON, {
+                eventId: nextEventId()
+            });
+            const lost = { eventId: nextEventId() };
+
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, lost);
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, lost);
+
+            const tasks = await allTasks();
+            expect(tasks.map((task) => task.status)).toEqual([TaskStatus.resolved, TaskStatus.new]);
+            expect(tasks[1].message).toContain('the buyer already has it');
+        });
+
+        it('keeps the original to-do, same id, when the outcome is told again in the same words', async () => {
+            await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+                eventId: nextEventId()
+            });
+            const [original] = await allTasks();
+
+            await emitDomainEvent(
+                'payment.refund_owed_after_dispute',
+                { ...OWED, followsFlip: true },
+                { eventId: nextEventId() }
+            );
+
+            const tasks = await allTasks();
+            expect(tasks).toHaveLength(1);
+            expect(String(tasks[0]._id)).toBe(String(original._id));
+            expect(tasks[0].status).toBe(TaskStatus.new);
+        });
+    });
+
     it('carries the other-currency warning on the refund to-do, where staff act', async () => {
         await emitDomainEvent(
             'payment.refund_owed_after_dispute',

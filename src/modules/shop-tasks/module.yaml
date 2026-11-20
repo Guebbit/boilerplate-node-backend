@@ -7,7 +7,7 @@ dependsOn:
     - inventory # subscribes to its event, a paid order with no stock set aside; the digest counts low stock
     - notifications # writes the buyer's messages and staff notices, and the digest rows
     - orders # subscribes to its events; the digest counts its orders
-    - payments # subscribes to its refund and dispute events, the refund-owed-after-dispute one among them (payments decides which refunds and how the dispute ended; this only words it); the digest counts stale refunds; names a payment's order
+    - payments # subscribes to its refund and dispute events, the refund-owed-after-dispute one among them (payments decides which refunds and whether any dispute kept money; this only words it); the digest counts stale refunds; names a payment's order
     - products # names the product of a stock movement whose outcome is unknown
     - returns # subscribes to its event, a return requested; the digest counts its returns
     - shop # the shop's country, which decides who owes a delay-consent reminder

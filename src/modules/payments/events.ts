@@ -167,12 +167,14 @@ declare module '@kernel/events' {
          * A dispute ended and a refund it had refused (`failureReason: disputed`) is owed again:
          * one event PER refund, written in the transaction that records the dispute's end, so a
          * redelivery or a crash after the commit opens each to-do exactly once. Raised only when
-         * no other dispute on the payment is still open. `bankKept` says how the dispute ended
-         * (the buyer already has the money, or the shop kept it); `otherCurrency` is set when the
-         * bank kept money in another currency than the payment's, which the app never subtracted.
+         * no other dispute on the payment is still open. `bankKept` says whether ANY dispute on the
+         * payment kept money (the buyer already has it, or the shop kept it); `otherCurrency` is set
+         * when a kept dispute is in another currency than the payment's, which the app never subtracted.
          * A dispute the bank had kept money in that then flips to won raises one more per refund
          * staff had marked returned for it (`markedReturned`): the bank took the money back from
-         * the buyer, so it is owed again.
+         * the buyer, so it is owed again. It also raises the event again for each refund still
+         * refused as `disputed`, with `followsFlip` (it only words the to-do: "first lost, then won").
+         * `tasks` replaces a refund's open to-do whenever a new event of this name words it differently.
          * Internal only: no AsyncAPI channel carries it; `tasks` opens the work from it.
          *
          * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
@@ -191,6 +193,8 @@ declare module '@kernel/events' {
             otherCurrency?: string;
             /** `true` when staff had marked the refund returned and a late win makes it owed again. */
             markedReturned?: true;
+            /** `true` when a lost dispute flipped to won, for the wording. */
+            followsFlip?: true;
         };
 
         /**

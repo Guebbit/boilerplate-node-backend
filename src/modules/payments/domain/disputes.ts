@@ -90,6 +90,29 @@ export const keptInOtherCurrency = (
 ): boolean => bankKeptMoney(dispute) && dispute.currency !== currency;
 
 /**
+ * Whether ANY dispute on the payment kept money, in any currency. Several disputes can stand on one
+ * payment, and a refund held back for one of them is already paid by whichever the bank kept.
+ *
+ * @param payment - the payment's disputes
+ */
+export const anyDisputeKeptMoney = (payment: DisputablePayment): boolean =>
+    (payment.disputes ?? []).some((dispute) => bankKeptMoney(dispute));
+
+/**
+ * The currency of a dispute the bank kept money in when it is not the payment's: the first one on
+ * file, since staff check each in the provider's dashboard anyway.
+ *
+ * @param payment - the payment's disputes
+ * @param currency - the payment's currency
+ * @returns the dispute's currency, or `undefined` when no kept dispute is in another one
+ */
+export const otherCurrencyKept = (
+    payment: DisputablePayment,
+    currency: string
+): string | undefined =>
+    (payment.disputes ?? []).find((dispute) => keptInOtherCurrency(dispute, currency))?.currency;
+
+/**
  * What lost chargebacks took, in minor units: the shop cannot refund money the bank kept. A
  * `won` one took nothing (funds reinstated), so a late win gives the room back by itself. A
  * dispute reported in another currency than the payment's is not subtracted: its amount is not in

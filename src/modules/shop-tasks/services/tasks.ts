@@ -53,9 +53,14 @@ const attentionDueAt = (now: Date): Date =>
  * @param opening - the situation
  * @param work - the staff screen, see `SystemOpening.work` in `tasks`
  * @param meta - the event's delivery facts; its `eventId` makes a redelivery a no-op
+ * @param options - `replaceOpen` when the open to-do of this situation may be out of date
  */
-const open = (opening: ShopOpening, work: string, meta: DomainEventMeta): Promise<void> =>
-    taskService.openSystemTask({ ...opening, work }, meta);
+const open = (
+    opening: ShopOpening,
+    work: string,
+    meta: DomainEventMeta,
+    options?: Parameters<typeof taskService.openSystemTask>[2]
+): Promise<void> => taskService.openSystemTask({ ...opening, work }, meta, options);
 
 /**
  * Log a handler's failure and let the outbox redeliver: a missed open is a lost task, so the
@@ -95,17 +100,18 @@ const disputeTaskCarries = (payload: {
 
 /**
  * The closing words of a dispute's to-do. When the bank kept money in another currency than the
- * payment's, the app never subtracted it, so staff must check the amount; payments owns that rule.
+ * payment's, in this dispute or another on the payment, the app never subtracted it, so staff must
+ * check the amount; payments owns that rule.
  *
  * @param payload - the dispute as the provider last reported it
  */
 const disputeEndedNote = (payload: DomainEventMap['payment.dispute_opened']): Promise<string> => {
     const plain = `The dispute ended: ${payload.status}.`;
     return paymentService
-        .keptInOtherCurrencyOn(payload.paymentId, payload.disputeId)
+        .keptInOtherCurrencyOn(payload.paymentId)
         .then((other) =>
             other
-                ? `${plain} It was in ${other.disputeCurrency}, not the payment's ${other.paymentCurrency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
+                ? `${plain} A dispute on this payment was in ${other.disputeCurrency}, not the payment's ${other.paymentCurrency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
                 : plain
         );
 };
@@ -292,7 +298,9 @@ export const shopTasks = {
     /**
      * `payment.refund_owed_after_dispute`: a dispute ended and a refund it had refused is owed
      * again. One event per refund, so one to-do per refund; payments already decided which refunds
-     * and how the dispute ended, this only words it.
+     * and how the dispute ended, this only words it. An earlier to-do for the refund may be out of
+     * date (a dispute on the payment changed outcome since): it is replaced when the words differ,
+     * and left alone when they are the same.
      */
     onRefundOwedAfterDispute: (
         payload: DomainEventMap['payment.refund_owed_after_dispute'],
@@ -311,7 +319,15 @@ export const shopTasks = {
                         legalDeadlineOf(due)
                     ),
                     PAYMENTS_ATTENTION_WORK,
-                    meta
+                    meta,
+                    // A refund marked returned has no earlier to-do to replace.
+                    payload.markedReturned
+                        ? undefined
+                        : {
+                              replaceOpen: {
+                                  note: 'Replaced: a dispute on this payment changed outcome; see the new to-do.'
+                              }
+                          }
                 )
             )
         ),

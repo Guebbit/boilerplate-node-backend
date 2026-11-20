@@ -51,10 +51,11 @@ describe('refundsOwedAfterDispute', () => {
     it('lists each open refund refused as disputed, in the payment’s order', () => {
         const ended = dispute();
 
-        const owed = refundsOwedAfterDispute(
-            { currency: 'EUR', disputes: [ended], refunds: [refund('a'), refund('b')] },
-            ended
-        );
+        const owed = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [ended],
+            refunds: [refund('a'), refund('b')]
+        });
 
         expect(owed.map(({ refundId }) => refundId)).toEqual(['a', 'b']);
     });
@@ -65,39 +66,33 @@ describe('refundsOwedAfterDispute', () => {
         ['refused for another reason', { failureReason: RefundFailureReason.declined }],
         ['still being sent', { status: RefundStatus.pending, failureReason: undefined }]
     ] as const)('leaves out a refund that is %s', (_name, over) => {
-        const ended = dispute();
-
         expect(
-            refundsOwedAfterDispute(
-                { currency: 'EUR', disputes: [ended], refunds: [refund('a', over)] },
-                ended
-            )
+            refundsOwedAfterDispute({
+                currency: 'EUR',
+                disputes: [dispute()],
+                refunds: [refund('a', over)]
+            })
         ).toEqual([]);
     });
 
     it('lists nothing while another dispute on the payment is still open', () => {
-        const ended = dispute();
         const stillOpen = dispute({ status: DisputeStatus.needs_response });
 
         expect(
-            refundsOwedAfterDispute(
-                { currency: 'EUR', disputes: [ended, stillOpen], refunds: [refund('a')] },
-                ended
-            )
+            refundsOwedAfterDispute({
+                currency: 'EUR',
+                disputes: [dispute(), stillOpen],
+                refunds: [refund('a')]
+            })
         ).toEqual([]);
     });
 
     it('marks a refund the bank took back after settling as reversed', () => {
-        const ended = dispute();
-
-        const [owed] = refundsOwedAfterDispute(
-            {
-                currency: 'EUR',
-                disputes: [ended],
-                refunds: [refund('a', { reversedAt: new Date() })]
-            },
-            ended
-        );
+        const [owed] = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [dispute()],
+            refunds: [refund('a', { reversedAt: new Date() })]
+        });
 
         expect(owed.reversed).toBe(true);
     });
@@ -109,14 +104,43 @@ describe('refundsOwedAfterDispute', () => {
         [DisputeKind.chargeback, DisputeStatus.closed, false],
         [DisputeKind.inquiry, DisputeStatus.lost, false]
     ] as const)('says the bank kept the money for a %s that ended %s: %s', (kind, status, kept) => {
-        const ended = dispute({ kind, status });
-
-        const [owed] = refundsOwedAfterDispute(
-            { currency: 'EUR', disputes: [ended], refunds: [refund('a')] },
-            ended
-        );
+        const [owed] = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [dispute({ kind, status })],
+            refunds: [refund('a')]
+        });
 
         expect(owed.bankKept).toBe(kept);
+    });
+
+    it('says the bank kept the money when an EARLIER dispute lost and the one that just ended was won', () => {
+        const [owed] = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [dispute(), dispute({ status: DisputeStatus.won })],
+            refunds: [refund('a')]
+        });
+
+        expect(owed.bankKept).toBe(true);
+    });
+
+    it('counts a loss in another currency, and names that currency', () => {
+        const [owed] = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [dispute({ currency: 'USD' }), dispute({ status: DisputeStatus.won })],
+            refunds: [refund('a')]
+        });
+
+        expect(owed).toMatchObject({ bankKept: true, otherCurrency: 'USD' });
+    });
+
+    it('names no other currency when every kept dispute is in the payment’s', () => {
+        const [owed] = refundsOwedAfterDispute({
+            currency: 'EUR',
+            disputes: [dispute()],
+            refunds: [refund('a')]
+        });
+
+        expect(owed).not.toHaveProperty('otherCurrency');
     });
 });
 

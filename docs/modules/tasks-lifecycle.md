@@ -31,6 +31,12 @@ event ids, and an id already seen is a no-op, so a redelivery after the task clo
 it again. The same situation returning after a close opens a **new** task. A clearing event on a
 task staff closed first does nothing.
 
+**Replacing an open task.** A producer whose new event may make the open task of the same situation
+out of date passes `replaceOpen: { note }` to `openSystemTask`. After the replay check: an open task
+with the same message is only touched; one with another message is closed as `cleared` with that note
+(and the close is audited) in the one transaction that inserts the new task, which takes its key. A
+redelivered event is a no-op, so it never closes the task it opened.
+
 **The shop's kinds.** The kinds a payment, stock or delivery situation opens (for example a refund owed by
 hand, a refused refund, a mismatch, a dispute, a payment with no hold, the delay reminder) belong
 to [`shop-tasks`](./shop-tasks.md#the-shop-s-to-dos), which opens them through this engine. The

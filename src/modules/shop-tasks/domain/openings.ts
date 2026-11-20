@@ -270,12 +270,14 @@ export interface RefundOwedAfterDispute {
     currency: string;
     /** `true` when the bank took the refund back after it settled, else it was refused. */
     reversed: boolean;
-    /** `true` when the bank kept the money: the buyer already has it. */
+    /** `true` when ANY dispute on the payment kept money: the buyer already has it. */
     bankKept: boolean;
-    /** The dispute's currency, set when the bank kept money in another currency than the payment's. */
+    /** The currency of a kept dispute in another currency than the payment's, if there is one. */
     otherCurrency?: string | undefined;
     /** `true` when staff had marked the refund returned and a late win makes it owed again. */
     markedReturned?: true | undefined;
+    /** `true` when a lost dispute flipped to won, for the wording. */
+    followsFlip?: true | undefined;
 }
 
 /**
@@ -287,11 +289,15 @@ const afterDisputeAdvice = (refund: RefundOwedAfterDispute): string => {
     if (refund.markedReturned)
         return 'The refund was marked returned because the bank had kept the money, but the dispute was then won: the bank took the money back from the buyer, so they are owed it again. Agree a way with the buyer, pay outside the app, then close this to-do.';
     if (refund.bankKept)
-        return `The dispute ended and the bank kept the money, so the buyer already has it: pay nothing again, just mark the refund returned.${
+        return `The dispute ended and the bank kept the money, so the buyer already has it: pay nothing again, just mark the refund returned. If the payment has several disputes, check each one in the provider's dashboard first: the app cannot tell which of them held this refund.${
             refund.otherCurrency
-                ? ` The dispute was in ${refund.otherCurrency}, not the payment's ${refund.currency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
+                ? ` A dispute on this payment was in ${refund.otherCurrency}, not the payment's ${refund.currency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
                 : ''
         }`;
+    if (refund.followsFlip)
+        return refund.reversed
+            ? 'The dispute was first lost, then won, so the money is back with the shop and any earlier advice to mark this returned is out of date. Agree a way with the buyer, pay, then mark the refund returned.'
+            : 'The dispute was first lost, then won, so the money is back with the shop and any earlier advice to mark this returned is out of date. Void the refund, then refund the buyer by card.';
     return refund.reversed
         ? "The dispute ended in the shop's favour, so the money stayed with the shop. Agree a way with the buyer, pay, then mark the refund returned."
         : "The dispute ended in the shop's favour, so the money stayed with the shop. Void the refund, then refund the buyer by card.";

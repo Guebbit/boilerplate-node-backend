@@ -28,7 +28,7 @@ import {
     bankKeptMoney,
     hasOpenDispute,
     isOpenDispute,
-    keptInOtherCurrency,
+    otherCurrencyKept,
     refundsOwedAfterDispute,
     refundsOwedAfterWin,
     type RefundOwedAfterDispute
@@ -158,8 +158,10 @@ const flipsToWon = (recorded: RecordedDispute, record: DisputeRecord): boolean =
     recorded.previous !== undefined && bankKeptMoney(recorded.previous) && !bankKeptMoney(record);
 
 /**
- * Which refunds the stored write left owed: the ones its ending hands back, or the ones a win
- * returns to staff (the two never both apply: an ending is a close, a flip is closed to closed).
+ * Which refunds the stored write left owed. An ending hands back the refunds it had refused. A
+ * flip from lost to won does both: the refunds staff marked returned against that dispute are owed
+ * again, and the refunds still refused as `disputed` are owed as a win says, worded with
+ * `followsFlip` (the to-do the loss opened is replaced by `tasks`, as for any change of outcome).
  *
  * @param payment - the payment as it stands after the write
  * @param recorded - what the write did
@@ -171,14 +173,20 @@ const owedOf = (
     record: DisputeRecord
 ): RefundOwedAfterDispute[] =>
     flipsToWon(recorded, record) && recorded.previous
-        ? refundsOwedAfterWin(payment, recorded.previous, record, record.disputeRef)
-        : refundsOwedAfterDispute(payment, record);
+        ? [
+              ...refundsOwedAfterWin(payment, recorded.previous, record, record.disputeRef),
+              ...refundsOwedAfterDispute(payment).map((owed): RefundOwedAfterDispute => ({
+                  ...owed,
+                  followsFlip: true
+              }))
+          ]
+        : refundsOwedAfterDispute(payment);
 
 /**
  * The refunds this write left owed again. Only a dispute that now reads closed and did not before
- * qualifies (a late win, closed to closed, was told already). The payment is read again inside the
- * writing transaction: the snapshot the delivery carried predates this write, and a second
- * dispute's state or a refund settled meanwhile changes the answer.
+ * qualifies, or a lost dispute flipped to won (the to-do the loss opened is out of date). The
+ * payment is read again inside the writing transaction: the snapshot the delivery carried predates
+ * this write, and a second dispute's state or a refund settled meanwhile changes the answer.
  *
  * @param payment - the payment the report names
  * @param recorded - what the write did
@@ -298,19 +306,18 @@ export const disputeStanding = (
 /**
  * The currency of a dispute the bank kept money in when it is not the payment's: the app never
  * subtracted that amount from what may be refunded, so staff must check it in the provider's
- * dashboard.
+ * dashboard. Read over every dispute on the payment, as the refund to-do is, so the two never
+ * disagree.
  *
  * @param paymentId - the payment, read with no caller's scope
- * @param disputeId - the provider's dispute id
  * @returns the dispute's currency and the payment's, or `undefined` when the rule does not apply
  */
 export const keptInOtherCurrencyOn = (
-    paymentId: string,
-    disputeId: string
+    paymentId: string
 ): Promise<{ disputeCurrency: string; paymentCurrency: string } | undefined> =>
     paymentRepository.findByIdScoped(paymentId).then((payment) => {
-        const dispute = payment?.disputes.find((known) => known.disputeRef === disputeId);
-        return payment && dispute && keptInOtherCurrency(dispute, payment.currency)
-            ? { disputeCurrency: dispute.currency, paymentCurrency: payment.currency }
+        const disputeCurrency = payment && otherCurrencyKept(payment, payment.currency);
+        return payment && disputeCurrency
+            ? { disputeCurrency, paymentCurrency: payment.currency }
             : undefined;
     });

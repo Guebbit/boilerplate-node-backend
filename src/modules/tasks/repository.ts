@@ -43,13 +43,22 @@ const base = createRepository<TaskDocument, StoredTask>(taskModel, {
 /** What the repository adds to the standard factory. */
 export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     /** Apply a transition's patch, only if the task is still in `from`. `null`: it moved first. */
-    moveFrom: (id: string, from: TaskStatus, patch: TaskPatch) => Promise<TaskDocument | null>;
+    moveFrom: (
+        id: string,
+        from: TaskStatus,
+        patch: TaskPatch,
+        session?: ClientSession
+    ) => Promise<TaskDocument | null>;
     /** Give an open task to someone; a `new` one becomes `in_progress`. `null`: not open. */
     assign: (id: string, userId: string, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Clear the assignee; an `in_progress` task goes back to `new`. `null`: no such task, or nobody held it. */
     unassign: (id: string) => Promise<TaskDocument | null>;
     /** Append a note. `null`: no such task. */
-    appendNote: (id: string, note: TaskNoteDocument) => Promise<TaskDocument | null>;
+    appendNote: (
+        id: string,
+        note: TaskNoteDocument,
+        session?: ClientSession
+    ) => Promise<TaskDocument | null>;
     /**
      * Claim ONE open task past its due date that was never reminded: stamp `overdueNotifiedAt`
      * and return it. One conditional write, so two sweeps cannot claim the same task. `null`:
@@ -72,7 +81,7 @@ export interface TaskRepository extends Repository<TaskDocument, StoredTask> {
     /** The open system tasks matching a filter, to be cleared one by one. */
     findOpenSystem: (filter: Record<string, unknown>) => Promise<TaskDocument[]>;
     /** The open task currently holding a dedup key. */
-    findOpenByKey: (openKey: string) => Promise<TaskDocument | null>;
+    findOpenByKey: (openKey: string, session?: ClientSession) => Promise<TaskDocument | null>;
     /** Delete a person's visitor tasks, inside the erasure's transaction. Resolves to their ids. */
     deleteOwned: (filter: OwnTasksFilter, session: ClientSession) => Promise<string[]>;
     /** Delete the system tasks whose subject is a record that goes with the person. */
@@ -110,7 +119,7 @@ const LINKS_THAT_GO_WITH_THE_PERSON = [TaskLinkType.user, TaskLinkType.export];
 export const taskRepository: TaskRepository = {
     ...base,
 
-    moveFrom: (id, from, patch) =>
+    moveFrom: (id, from, patch, session) =>
         /**
          * Mongoose: findOneAndUpdate with `returnDocument: 'after'` returns the document AFTER it.
          * https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
@@ -124,7 +133,7 @@ export const taskRepository: TaskRepository = {
                         ? { $unset: Object.fromEntries(patch.unset.map((key) => [key, 1])) }
                         : {})
                 },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', session }
             )
             .exec(),
 
@@ -168,12 +177,12 @@ export const taskRepository: TaskRepository = {
                     .exec()
             ),
 
-    appendNote: (id, note) =>
+    appendNote: (id, note, session) =>
         taskModel
             .findOneAndUpdate(
                 { _id: toObjectId(id) },
                 { $push: { notes: note } },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', session }
             )
             .exec(),
 
@@ -272,7 +281,7 @@ export const taskRepository: TaskRepository = {
     findOpenSystem: (filter) =>
         taskModel.find({ source: TaskSource.system, openKey: { $exists: true }, ...filter }).exec(),
 
-    findOpenByKey: (openKey) => taskModel.findOne({ openKey }).exec(),
+    findOpenByKey: (openKey, session) => taskModel.findOne({ openKey }, null, { session }).exec(),
 
     deleteOwned: (filter, session) =>
         /**

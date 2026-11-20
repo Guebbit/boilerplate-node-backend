@@ -63,7 +63,10 @@ last open dispute on the payment ends, `payments` re-reads the payment inside th
 and writes one internal `payment.refund_owed_after_dispute` per refund still open and refused as
 `disputed` (none when another dispute is open, or nothing was refused). Each carries `bankKept` (the
 buyer already has the money) and, for money the bank kept in another currency than the payment's,
-`otherCurrency`. A throw in that step rolls the dispute back with it: the dispute stays unrecorded and
+`otherCurrency`. Both read EVERY dispute on the payment, not only the one that just ended: a payment
+with one dispute lost and another won still says the bank kept money, because the refund may have been
+held for the lost one and the app cannot tell which. The other-currency loss counts here, though it is
+never subtracted from what may be refunded (`lostToChargebacks` does not count it). A throw in that step rolls the dispute back with it: the dispute stays unrecorded and
 the provider's redelivery records it. See
 [A dispute ending](../understand/outbox.md#a-dispute-ending-one-event-per-refund).
 
@@ -72,6 +75,15 @@ the refund (`settledAgainstDispute`, internal, never on the wire). If that dispu
 `won`, the buyer's money goes back to the shop and the refund is owed again: one more
 `payment.refund_owed_after_dispute` per refund carrying that id, with `markedReturned`. A refund marked
 returned for another dispute, or after a win, is left alone.
+
+**A late win while a refund is still refused.** The same flip also re-runs the check above for the
+refunds still open and refused as `disputed` (nobody marked them returned): one more
+`payment.refund_owed_after_dispute` each, with `followsFlip` (it only words the to-do). The to-do the loss
+opened told staff the buyer already had the money, which is no longer true, so `shop-tasks` replaces it,
+as it does whenever a later dispute changes the outcome of a refund that is still refused (see
+[A later dispute changes the outcome](./shop-tasks-todos.md#the-shop-s-to-dos)). A known limit: with
+two lost disputes the app ties a Mark returned refund to the latest one, which may not be the one the
+bank paid out of; the to-do tells staff to check each dispute in the provider's dashboard, and they decide.
 
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 

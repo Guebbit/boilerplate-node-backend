@@ -183,6 +183,17 @@ is, you have two buttons on it (**Mark returned** and **Cancel refund**), and th
   took less than the refund, pay the small rest outside the app first, then press it.
 - **Won:** the shop kept the money. Press **Cancel refund**, then refund by card.
 
+**Several disputes, or a late win.** The to-do reads every dispute on the payment: if the bank kept
+money in any of them, it says the buyer already has it, even when the last dispute ended won. The app
+cannot tell which dispute held the refund, so check each one in the provider's dashboard before you
+press anything. Whenever a later dispute changes the outcome while the refund is still refused (a lost
+one is won, or another one is lost), the to-do is replaced by a new one that says the new outcome; a
+replaced to-do is closed with a note, and one whose words did not change stays as it is. After a late
+win it says "first lost, then won": cancel the refund and refund by card. If you had already pressed
+**Mark returned**, the buyer is owed again and a new to-do says so.
+One case stays yours to judge: two lost disputes, where the refund may be tied to the wrong one. The
+dashboard has the amounts; the app computes none.
+
 The same holds when the refusal came with no dispute on file: the to-do says so; check the dispute in
 the provider's dashboard first, then choose as above. A refund the bank sent back after it had
 settled can only be marked returned, never voided.

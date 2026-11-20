@@ -44,7 +44,9 @@ export {
     hasOpenChargeback,
     lostToChargebacks,
     bankKeptMoney,
-    keptInOtherCurrency
+    keptInOtherCurrency,
+    anyDisputeKeptMoney,
+    otherCurrencyKept
 } from './disputes';
 export type { DisputeFacts, DisputablePayment } from './disputes';
 

@@ -15,10 +15,20 @@ import { emitDomainEvent, onDomainEvent, resetDomainEvents } from '@kernel/event
 import { registerModules } from '@kernel/registry';
 import { taskModel } from '@modules/tasks/model';
 import { taskRepository } from '@modules/tasks/repository';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
+import { tasksAuditActions } from '../../audit';
+import { openSystemTask } from '../../services/system';
+import { accountReviewOpening } from '../../domain';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { TASK_OPENED } from '../../events';
 import { TaskKind, TaskResolution, TaskStatus } from '@types';
 import { enabledModules } from '../../../../modules';
+
+/* The audit port is replaced, not spied on — see `tests/support/ports.ts`. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 // The queue, not the mail: opening a task tells the staff who work it.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -290,5 +300,81 @@ describe('dedup', () => {
             );
 
         expect(await eventIdsOnly()).toHaveLength(20);
+    });
+});
+
+describe('replacing the open task of a situation', () => {
+    const NOTE = 'Out of date: replaced.';
+
+    it('closes the open task as cleared, with the note, and opens the new one in its place', async () => {
+        await openSystemTask(accountReviewOpening(USER, new Date()), { eventId: nextEventId() });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await openSystemTask(
+            { ...accountReviewOpening(USER, new Date()), message: 'The newer facts.' },
+            { eventId: nextEventId() },
+            { replaceOpen: { note: NOTE } }
+        );
+        expect(auditSpy.mock.calls.map(([entry]) => entry.action).toSorted()).toEqual(
+            [tasksAuditActions.SYSTEM_TASK_CLEARED, tasksAuditActions.SYSTEM_TASK_OPENED].toSorted()
+        );
+
+        const [old, fresh] = await allTasks();
+        expect(old).toMatchObject({
+            status: TaskStatus.resolved,
+            resolution: TaskResolution.cleared
+        });
+        expect(old.notes.map((note) => note.body)).toEqual([NOTE]);
+        expect(old.openKey).toBeUndefined();
+        expect(fresh).toMatchObject({ status: TaskStatus.new, message: 'The newer facts.' });
+    });
+
+    it('without the option, only touches the open task: nothing is replaced', async () => {
+        await openSystemTask(accountReviewOpening(USER, new Date()), { eventId: nextEventId() });
+
+        await openSystemTask(accountReviewOpening(USER, new Date()), { eventId: nextEventId() });
+
+        const task = await onlyTask();
+        expect(task.seenCount).toBe(2);
+    });
+
+    it('opens a task when nothing is open to replace', async () => {
+        await openSystemTask(
+            accountReviewOpening(USER, new Date()),
+            { eventId: nextEventId() },
+            { replaceOpen: { note: NOTE } }
+        );
+
+        const task = await onlyTask();
+        expect(task.status).toBe(TaskStatus.new);
+    });
+
+    it('touches the open task, same id, when the new message is the same', async () => {
+        await openSystemTask(accountReviewOpening(USER, new Date()), { eventId: nextEventId() });
+        const [original] = await allTasks();
+
+        await openSystemTask(
+            accountReviewOpening(USER, new Date()),
+            { eventId: nextEventId() },
+            { replaceOpen: { note: NOTE } }
+        );
+
+        const task = await onlyTask();
+        expect(String(task._id)).toBe(String(original._id));
+        expect(task).toMatchObject({ status: TaskStatus.new, seenCount: 2 });
+    });
+
+    it('leaves the replacement open when its own event is delivered again', async () => {
+        const first = { eventId: nextEventId() };
+        const second = { eventId: nextEventId() };
+        const newer = { ...accountReviewOpening(USER, new Date()), message: 'The newer facts.' };
+        await openSystemTask(accountReviewOpening(USER, new Date()), first);
+        await openSystemTask(newer, second, { replaceOpen: { note: NOTE } });
+
+        await openSystemTask(newer, second, { replaceOpen: { note: NOTE } });
+        await openSystemTask(accountReviewOpening(USER, new Date()), first);
+
+        const tasks = await allTasks();
+        expect(tasks.map((task) => task.status)).toEqual([TaskStatus.resolved, TaskStatus.new]);
     });
 });
