@@ -28,9 +28,6 @@ const cookieRowSchema = z.strictObject({
     lifetime: z.enum(['sessionTier', 'challenge']).optional()
 });
 
-/** One parsed row. */
-export type CookieRow = z.infer<typeof cookieRowSchema>;
-
 /** A row's id: camelCase, because the frontend uses it as a translation key. */
 const rowId = z.string().regex(/^[a-z][A-Za-z0-9]*$/);
 

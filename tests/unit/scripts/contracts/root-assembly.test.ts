@@ -5,7 +5,7 @@ import {
     type ModuleFragment
 } from '../../../../scripts/contracts/root-assembly';
 
-/** A root shaped like the real one: a system path, a comment, module refs in a chosen order, a tag list. */
+/** A root shaped like the real one: a system path with a comment, a tag list, no module path. */
 const ROOT = `openapi: 3.1.0
 tags:
     - name: Alpha
@@ -15,17 +15,10 @@ x-tagGroups:
       tags:
           - Alpha
 paths:
+    # ---------- system ----------
     /:
         get:
             summary: the shell
-    # ---------- alpha ----------
-    /alpha:
-        $ref: '${pathRefFor('alpha', '/alpha')}'
-    # ---------- gone ----------
-    /gone:
-        $ref: '${pathRefFor('gone', '/gone')}'
-    /alpha/{id}:
-        $ref: '${pathRefFor('alpha', '/alpha/{id}')}'
 `;
 
 /** A first module fragment. */
@@ -54,14 +47,7 @@ const groupsOf = (fragments: ModuleFragment[]) =>
     assembled(fragments)['x-tagGroups'].map(({ name, tags }) => [name, tags]);
 
 describe('assembleRoot', () => {
-    it('leaves a root that already matches its fragments as it was', () => {
-        const fragments = [alpha];
-        const withoutGone = ROOT.replace(/ {4}# -+ gone -+\n {4}\/gone:\n {8}\$ref: '[^']+'\n/, '');
-
-        expect(assembleRoot(withoutGone, fragments)).toBe(withoutGone);
-    });
-
-    it('appends the paths and tags of a module the root has not heard of, after the existing ones', () => {
+    it("appends the paths and tags of every module after the root's own, in the order given", () => {
         const { paths, tags } = assembled([alpha, widgets]);
 
         expect(Object.keys(paths)).toEqual([
@@ -75,8 +61,20 @@ describe('assembleRoot', () => {
         expect(tags.map(({ name }) => name)).toEqual(['Alpha', 'Widgets']);
     });
 
-    it('drops the refs of a module whose folder is gone, so deleting one edits nothing', () => {
-        expect(Object.keys(assembled([alpha]).paths)).not.toContain('/gone');
+    it('refuses a path two modules both claim, naming both', () => {
+        const rival: ModuleFragment = { section: 'rival', paths: ['/alpha'], tags: [] };
+
+        expect(() => assembleRoot(ROOT, [alpha, rival])).toThrow(
+            /\/alpha is claimed by module alpha and by module rival/
+        );
+    });
+
+    it('refuses a path a module claims that the root already owns', () => {
+        const shadow: ModuleFragment = { section: 'shadow', paths: ['/'], tags: [] };
+
+        expect(() => assembleRoot(ROOT, [shadow])).toThrow(
+            /path \/ is claimed by the root and by module shadow/
+        );
     });
 
     it('keeps what the root declares itself, and a tag it already describes', () => {
@@ -86,13 +84,8 @@ describe('assembleRoot', () => {
         expect(tags[0]).toEqual({ name: 'Alpha', description: 'keeps its description' });
     });
 
-    it('keeps the root order of the paths it already lists', () => {
-        // `/alpha/{id}` sits after the removed `/gone` in the root; it must not move ahead of `/alpha`.
-        expect(Object.keys(assembled([alpha]).paths)).toEqual(['/', '/alpha', '/alpha/{id}']);
-    });
-
     it('keeps the comments of the root', () => {
-        expect(assembleRoot(ROOT, [alpha])).toContain('# ---------- alpha ----------');
+        expect(assembleRoot(ROOT, [alpha])).toContain('# ---------- system ----------');
     });
 
     it('escapes a path the way a JSON pointer does', () => {

@@ -46,7 +46,7 @@ export const findReaperSoftDeletedPastGrace = (cutoff: Date) =>
  * Every account quiet since before `cutoff` and not yet minimised for this stretch of inactivity —
  * the reaper's minimise stage. Staff and administrators are never in it.
  */
-export const findInactiveUnminimised = (cutoff: Date) =>
+const findInactiveUnminimised = (cutoff: Date) =>
     userRepository.findInactiveUnminimised(cutoff).then(customersOnly);
 
 /**
@@ -55,7 +55,7 @@ export const findInactiveUnminimised = (cutoff: Date) =>
  *
  * @param user - an account from {@link findInactiveUnminimised}
  */
-export const minimiseInactive = async (user: UserDocument): Promise<void> => {
+const minimiseInactive = async (user: UserDocument): Promise<void> => {
     for (const minimise of personalDataMinimisers()) await minimise(user.id);
     await userRepository.markInactivityMinimised(user.id, new Date());
 };

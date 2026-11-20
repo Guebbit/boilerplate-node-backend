@@ -175,7 +175,8 @@ already — nothing below applies.
 ### 3 · The fragments
 
 Write `openapi.yaml`; its paths and tags reach the root contract by themselves
-(`scripts/contracts/root-assembly.ts`). A line in `MODULE_ORDER` is optional —
+(`scripts/contracts/root-assembly.ts`); a path another module or the root already owns fails the
+build. A line in `MODULE_ORDER` is optional —
 it only chooses where the paths sit; without one the module is appended alphabetically. The same
 goes for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
 — see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A

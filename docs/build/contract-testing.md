@@ -77,7 +77,7 @@ Two recurring shapes across the per-module `api.contract.test.ts` files:
 
 Who is refused is not a module file's job. The authorization sweep (`tests/contract/authorization-contract.test.ts`) sends every route that mounts an identity guard a callerless request, and every guarded route a request as each tenant persona (the two audiences with no stored role, and every preset role, the administrator included), and holds the answer to the role file. `tests/cross-cutting/identity-guards-follow-the-spec.test.ts` holds the other half: that no route is missing the guard its `security` names, and no route locks what the spec calls open. A module's contract file therefore asserts a 401 or a 403 only when it checks more than the status: an error `code`, a row left untouched, a refusal decided after the row is loaded (an ownership-aware rule, a stale session asked to re-authenticate). Malformed path, body and query ids are owned the same way by `tests/integration/malformed-ids.test.ts`, with the same exceptions: a module test sends one only when it checks more than the status, or when it is the route's only contract test of that 404 or 422.
 
-Every file still drives the 404 and 422 branches through the real route: the automatic check judges those against their OWN documented schema (`GetUsers404Response`, not the success one), so a `Problem` body that drifts from what's declared is exactly as much a contract break as a success response would be. A response that is a genuine, deliberate deviation — not a bug — opts out per call site with `excludeFromSpecCheck`, from `tests/support/contract.ts`.
+Every file still drives the 404 and 422 branches through the real route: the automatic check judges those against their OWN documented schema (`GetUsers404Response`, not the success one), so a `Problem` body that drifts from what's declared is exactly as much a contract break as a success response would be.
 
 ```mermaid
 flowchart LR
@@ -95,7 +95,7 @@ along with it. Only the specs that belong to no domain live centrally.
 
 | Path                                                     | Contents                                                                                                                        |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/contract.ts`                              | Patches `supertest` to capture every response and judge it in one `afterEach`; `excludeFromSpecCheck` is the opt-out            |
+| `tests/support/contract.ts`                              | Patches `supertest` to capture every response and judge it in one `afterEach`                                                   |
 | `tests/support/response-contract.ts`                     | The judge itself: matches a response's method+path+status to its generated Zod schema and parses the body                       |
 | `src/modules/<name>/tests/contract/api.contract.test.ts` | One per routed module. Everything under that module's `basePath`                                                                |
 | `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                                   |

@@ -25,18 +25,6 @@ import { assertResponseMatchesContract } from './response-contract';
 let responsesThisTest: Response[] = [];
 
 /**
- * Excludes ONE already-captured response from this test's automatic contract check — for a
- * response that is a genuine, deliberate DEVIATION from the spec (see the call site's own comment
- * for which), never for a tooling gap: `assertResponseMatchesContract` already skips what isn't its
- * job (an undeclared path) and matches a redirect or a binary body against the `zod.unknown()`
- * orval emits for them. Rare on purpose: the whole point of the automatic check is that a call site
- * does not get to opt out silently, so every use of this needs its own paper trail.
- */
-export const excludeFromSpecCheck = (response: Response): void => {
-    responsesThisTest = responsesThisTest.filter((candidate) => candidate !== response);
-};
-
-/**
  * The shape of `supertest.Test`'s inherited `.then` (superagent's `RequestBase.prototype.then`,
  * https://github.com/ladjs/superagent/blob/master/src/request-base.js) — restated here because
  * `@types/supertest` declares it as a class member, not a value this file can otherwise reference

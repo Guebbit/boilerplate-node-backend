@@ -3,9 +3,9 @@
  * The root OpenAPI document, completed from what the modules ship — the half of "adding a module
  * edits nothing outside its folder" that the contract needed.
  *
- * `shared/contracts/openapi.root.yaml` keeps one `$ref` per module path, in the narrative order
- * the bundle has always had. That list is a PREFERENCE, not a registry, the same as the section
- * order (`section-order.ts`): membership is what the module fragments declare on disk.
+ * `shared/contracts/openapi.root.yaml` keeps only the paths no module owns. Every module path is
+ * collected here, in section order (`section-order.ts`): membership is what the module fragments
+ * declare on disk, so the root never lists them.
  *
  * Pure: takes the root's text and what each fragment declares, returns the text to bundle. The
  * caller owns the disk.
@@ -43,9 +43,6 @@ export interface ModuleFragment {
     group?: string;
 }
 
-/** A `$ref` into a module fragment's path item — what the root's `paths` holds per module path. */
-const PATH_REF = /^\.\.\/\.\.\/src\/modules\/[^/]+\/openapi\.yaml#\/paths\/.+$/;
-
 /** JSON Pointer escaping: `~` then `/`, in that order. */
 const encodePointer = (segment: string): string =>
     segment.replaceAll('~', '~0').replaceAll('/', '~1');
@@ -54,48 +51,30 @@ const encodePointer = (segment: string): string =>
 export const pathRefFor = (section: string, urlPath: string): string =>
     `../../src/modules/${section}/openapi.yaml#/paths/${encodePointer(urlPath)}`;
 
-/** The `$ref` string of a path item, or `undefined` for one the root declares itself. */
-const refOf = (item: unknown): string | undefined => {
-    if (!isMap(item)) return undefined;
-    const ref = item.get('$ref');
-    return typeof ref === 'string' ? ref : undefined;
-};
-
 /**
- * Drops every root entry pointing at a path no fragment declares any more, and returns the refs
- * that survive. A deleted module thereby needs no edit to the root.
+ * Appends a `$ref` entry for every fragment path, in section order, after the root's own paths.
+ *
+ * @throws Error if a path is claimed twice: by two modules, or by a module and the root
  */
-const pruneStaleReferences = (
-    paths: YAMLMap,
-    fragments: readonly ModuleFragment[]
-): Set<string> => {
-    const declared = new Set(
-        fragments.flatMap(({ section, paths: urls }) => urls.map((url) => pathRefFor(section, url)))
-    );
-    const kept = new Set<string>();
-    // Collected first, deleted after: `paths.items` is the live array the delete edits.
-    const stale = paths.items.filter((pair) => {
-        const ref = isScalar(pair.key) ? refOf(pair.value) : undefined;
-        if (ref === undefined || !PATH_REF.test(ref)) return false;
-        if (declared.has(ref)) kept.add(ref);
-        return !declared.has(ref);
-    });
-    for (const pair of stale) paths.delete(pair.key);
-
-    return kept;
-};
-
-/** Appends a `$ref` entry for every fragment path the root does not yet reference. */
-const appendMissingPaths = (
+const appendModulePaths = (
     document: Document,
     paths: YAMLMap,
-    fragments: readonly ModuleFragment[],
-    kept: ReadonlySet<string>
+    fragments: readonly ModuleFragment[]
 ): void => {
+    // Who holds each URL so far: `the root` for what it declares itself, else a module folder.
+    const owners = new Map<string, string>();
+    for (const pair of paths.items)
+        if (isScalar(pair.key)) owners.set(String(pair.key.value), 'the root');
+
     for (const { section, paths: urls } of fragments)
         for (const url of urls) {
-            const ref = pathRefFor(section, url);
-            if (!kept.has(ref)) paths.set(url, document.createNode({ $ref: ref }));
+            const owner = owners.get(url);
+            if (owner !== undefined)
+                throw new Error(
+                    `[openapi] path ${url} is claimed by ${owner} and by module ${section}: one owner per path.`
+                );
+            owners.set(url, `module ${section}`);
+            paths.set(url, document.createNode({ $ref: pathRefFor(section, url) }));
         }
 };
 
@@ -189,16 +168,16 @@ const appendTagGroups = (document: Document, fragments: readonly ModuleFragment[
 };
 
 /**
- * The root document with its module path index and tag list made to match the fragments.
+ * The root document with every module path and tag added from the fragments.
  *
- * Existing entries keep their place; entries for vanished paths are dropped; new paths and tags
- * are appended in the fragments' own order. Comments are preserved (the document is edited, not
- * re-serialised from a plain object).
+ * The root keeps only the paths it owns; module paths are appended after them, in section order.
+ * Tags the root already lists keep their place. Comments are preserved (the document is edited,
+ * not re-serialised from a plain object).
  *
  * @param rootText - `shared/contracts/openapi.root.yaml`, verbatim
  * @param fragments - every module fragment on disk, in the order they should be appended
  * @returns the YAML to hand to `redocly bundle`
- * @throws Error if the root has no `paths` map
+ * @throws Error if the root has no `paths` map, or a path has two owners
  */
 export const assembleRoot = (rootText: string, fragments: readonly ModuleFragment[]): string => {
     /**
@@ -209,8 +188,7 @@ export const assembleRoot = (rootText: string, fragments: readonly ModuleFragmen
     const paths = document.get('paths');
     if (!isMap(paths)) throw new Error('[openapi] the root document has no `paths` map.');
 
-    const kept = pruneStaleReferences(paths, fragments);
-    appendMissingPaths(document, paths, fragments, kept);
+    appendModulePaths(document, paths, fragments);
     appendMissingTags(document, fragments);
     appendTagGroups(document, fragments);
 

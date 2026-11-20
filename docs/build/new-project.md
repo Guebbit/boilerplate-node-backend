@@ -92,7 +92,7 @@ branch, or after committing whatever you had in progress. It touches:
   describes.
 - **The handful of central files a module folder cannot own by itself**: the module registry
   (`src/modules.ts`). Everything else that names a module is read from disk or from the
-  registry — the contract's path index, the client collections' probes, the test suite's router
+  registry — the contract's module paths, the client collections' probes, the test suite's router
   map, the docs index and sidebar — and their order lists are only a preference.
   The account data-export schema is among them: each module declares its section as
   `x-personal-data` in its own `openapi.yaml`, so a removed module takes its section with it.
@@ -156,7 +156,7 @@ throughout (the mailer-template sweep, the analytics port's suite, the write-met
 request-contract suites) — they go entirely;
 rewrite them around your own domain if you want that coverage back.
 
-**The published contract follows the modules that are left.** The path index, the tags, the shop's
+**The published contract follows the modules that are left.** The module paths, the tags, the shop's
 schemas and the data export's sections all live in the module that owns them, so removing a module
 removes them from the bundle, and the bundler's last step drops what nothing references any more.
 `shared/contracts/openapi.root.yaml` is left with what no module owns, and `info.title` there is

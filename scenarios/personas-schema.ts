@@ -67,8 +67,5 @@ export const personasSchema = z.strictObject({
     )
 });
 
-/** One account, as parsed. */
-export type Persona = z.infer<typeof accountSchema>;
-
 /** The parsed file. */
 export const personas = loadSharedRules('personas', personasSchema, 'scenarios');

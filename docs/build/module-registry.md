@@ -48,11 +48,10 @@ MEMBERSHIP is discovered from disk: a module folder either ships an `openapi.yam
 `asyncapi.yaml` / `authorization.yaml` or it doesn't, and `scripts/contracts/section-order.ts` puts
 the discovered ones in the listed order, drops a listed module whose folder is gone, and appends
 one the list has never heard of in alphabetical order. The root OpenAPI document is treated the
-same way: `shared/contracts/openapi.root.yaml` keeps one `$ref` per module path in the order the
-bundle has always had, and `assembleRoot` drops the entries of a module that is gone and appends
-the paths and tags of one it has not seen. So neither adding nor removing a module needs an edit
-to any of them — an edit only moves where the module sits, and the bundles of a full checkout keep
-their historical order byte for byte.
+same way: `shared/contracts/openapi.root.yaml` keeps only the paths no module owns, and
+`assembleRoot` collects every module's paths and tags itself, in section order. A path claimed
+twice (by two modules, or by a module and the root) is a build error. So neither adding nor
+removing a module needs an edit to any of them — an edit only moves where the module sits.
 
 An `asyncapi.internal.yaml` (a queue nothing outside this service reaches) and whether a module's
 public `asyncapi.yaml` is frontend-visible are both fully automatic — see step 3 below — so neither

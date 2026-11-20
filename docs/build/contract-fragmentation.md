@@ -86,7 +86,7 @@ full contract is compared against nothing and is marked `shared: false` to say s
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
     subgraph BE["boilerplate-node-backend  (owns the contract)"]
-        H["shared/contracts/openapi.root.yaml<br/><i>preamble · shared components · GET /</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
+        H["shared/contracts/openapi.root.yaml<br/><i>preamble · shared components · the paths no module owns</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
         F1["modules/products/openapi.yaml"] --> B
         F2["modules/orders/openapi.yaml"] --> B
         F3["modules/…/openapi.yaml"] --> B
