@@ -1,35 +1,20 @@
-<table>
+<%# One rate-grouped breakdown (the shipping rows, or the VAT summary): `title` over net, VAT and total. %>
+<table class="summary">
     <thead>
         <tr>
-            <th><%= columns.description %></th>
-            <% if (showQuantity) { %>
-                <th><%= columns.quantity %></th>
-                <th><%= columns.unitPrice %></th>
-            <% } %>
-            <th><%= columns.net %></th>
-            <th><%= columns.rate %></th>
-            <% if (showQuantity) { %>
-                <th><%= columns.category %></th>
-            <% } %>
-            <th><%= columns.tax %></th>
-            <th><%= columns.gross %></th>
+            <th class="caption"><%= title %></th>
+            <th class="caption num"><%= columns.net %></th>
+            <th class="caption num"><%= columns.tax %></th>
+            <th class="caption num"><%= columns.gross %></th>
         </tr>
     </thead>
     <tbody>
         <% rows.forEach(function(row) { %>
             <tr>
                 <td><%= row.description %></td>
-                <% if (showQuantity) { %>
-                    <td><%= row.quantity %></td>
-                    <td><%= row.unitPrice %></td>
-                <% } %>
-                <td><%= row.netAmount %></td>
-                <td><%= row.taxRateLabel %></td>
-                <% if (showQuantity) { %>
-                    <td><%= row.categoryCode %></td>
-                <% } %>
-                <td><%= row.taxAmount %></td>
-                <td><%= row.grossAmount %></td>
+                <td class="num"><%= row.netAmount %></td>
+                <td class="num"><%= row.taxAmount %></td>
+                <td class="num"><%= row.grossAmount %></td>
             </tr>
         <% }); %>
     </tbody>

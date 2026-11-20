@@ -102,15 +102,17 @@ export interface DocumentVatBlock {
     };
 }
 
-/** The number-and-date block every document prints under its title. */
+/** The number, issue date and order number every document prints under its title, with their captions. */
 const buildMeta = (locale: string, t: TFunction, document: EInvoicingDocument) => ({
-    numberLabel: t('invoicing.document.number', { number: document.number }),
-    dateLabel: t('invoicing.document.date', {
-        date: new Intl.DateTimeFormat(locale, {
-            dateStyle: 'long',
-            timeZone: document.timezone
-        }).format(document.issuedAt)
-    })
+    numberCaption: t('invoicing.document.caption-number'),
+    number: document.number,
+    issuedCaption: t('invoicing.document.caption-issued'),
+    issued: new Intl.DateTimeFormat(locale, {
+        dateStyle: 'long',
+        timeZone: document.timezone
+    }).format(document.issuedAt),
+    orderCaption: t('invoicing.document.caption-order'),
+    order: document.orderNumber
 });
 
 /** The frozen billing address block, or `undefined` for a digital-only / pre-address-book order. */
@@ -261,6 +263,25 @@ const buildVatBlock = (
 };
 
 /**
+ * The line printed in the footer of every page, so a loose sheet still names who issued it and
+ * which document it is. Printed by the browser's page footer, not by the template (see
+ * `providers/pdf.ts`), hence its own builder.
+ * @param locale - the document's own frozen language
+ * @param document - every frozen field the provider was handed
+ * @returns seller, VAT number and document number, joined with a middle dot
+ */
+export const buildDocumentFooter = (locale: string, document: EInvoicingDocument): string => {
+    const t = translator(locale);
+    return [
+        document.seller.legalName,
+        document.seller.vatNumber
+            ? t('invoicing.document.vat.vat-number', { number: document.seller.vatNumber })
+            : t('invoicing.document.vat.vat-number-missing'),
+        `${t(document.kind === 'creditNote' ? 'invoicing.document.credit-note-title' : 'invoicing.document.title')} ${document.number}`
+    ].join(' · ');
+};
+
+/**
  * Render context for an invoice or credit-note PDF — the same shape either way, since a credit
  * note, full or partial, is the invoice's own shape over fewer or smaller lines rather than a
  * differently-structured document.
@@ -296,6 +317,10 @@ export const buildDocumentView = (
                   )
                 : undefined,
         meta: buildMeta(locale, t, document),
+        parties: {
+            sellerCaption: t('invoicing.document.caption-seller'),
+            buyerCaption: t('invoicing.document.caption-billed-to')
+        },
         billing: buildBilling(t, document),
         buyerErasedNotice:
             document.buyerErasedAt && !document.billingAddress

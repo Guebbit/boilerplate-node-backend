@@ -209,6 +209,8 @@ flowchart LR
 
 `puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, `GET /orders/{id}/invoice` and `/credit-notes/{creditNoteId}` both answer `500` — see [Hosting](../operate/hosting.md) and the `INSTALL_CHROMIUM` note on the `runtime` stage of `docker/Dockerfile`. The placed-order email carries no invoice at all (nothing is invoiced yet at that point), so it is unaffected either way.
 
+**The invoice's look and its logo.** The page may fetch nothing from the network, so the invoice logo is an inline `data:` URI and its styles live in the module's own template; see [How the PDF looks](../modules/invoicing.md#the-pdf).
+
 **Renders are bounded, and a finished PDF is kept.** At most two Chromium processes run at once, up
 to 10 more renders wait, and the next is refused with `503` + `Retry-After` instead of queueing
 without limit; one render gets 30 seconds in all, after which its browser is closed and its slot

@@ -132,6 +132,26 @@ describe('GET /orders/{id}/invoice', () => {
         expect(html.some((page) => page.includes('Renamed Holding Srl'))).toBe(false);
     });
 
+    it("prints the order's number and an inline logo on the invoice, and no credit-note banner", async () => {
+        setEnvironment({ NODE_INVOICE_PDF_RETENTION_DAYS: '0' });
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await markPaid(String(order._id));
+        await waitUntilInvoiced(String(order._id), bearer);
+
+        jest.mocked(renderHtmlToPdf).mockClear();
+        await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', bearer);
+
+        const [html] = jest.mocked(renderHtmlToPdf).mock.calls[0];
+        expect(html).toContain(`<div class="value">${order.orderNumber}</div>`);
+        expect(html).toContain('src="data:image/svg+xml;base64,');
+        expect(html).not.toMatch(/(?:src|href)="https?:/);
+        expect(html).not.toContain('class="notice"');
+    });
+
     it("a scoped caller cannot download another customer's invoice — absence, not refusal", async () => {
         const owner = await authenticateAs('user');
         const stranger = await authenticateAnotherUser();

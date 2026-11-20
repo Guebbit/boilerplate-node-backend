@@ -4,7 +4,7 @@
  * the place where a formatting slip is read as a billing error by the person least able to check
  * it, adapted from `orders/tests/unit/emails.test.ts`'s own retired `invoiceDocument` suite.
  */
-import { buildDocumentView, taxCategoryCode } from '@modules/invoicing/emails';
+import { buildDocumentFooter, buildDocumentView, taxCategoryCode } from '@modules/invoicing/emails';
 import { addressLine } from '@modules/shop';
 import type { EInvoicingDocument } from '@modules/invoicing/providers';
 
@@ -45,6 +45,35 @@ describe('buildDocumentView', () => {
 
         expect(rows).toHaveLength(1);
         expect(rows[0].description).toBe('Widget');
+    });
+
+    it('prints the order number, the issue date and the document number under their captions', () => {
+        const view = buildDocumentView('en', DOCUMENT);
+
+        expect(view.meta).toEqual({
+            numberCaption: 'Number',
+            number: '2026-000041',
+            issuedCaption: 'Issued',
+            issued: 'March 1, 2026',
+            orderCaption: 'Order',
+            order: '2026-000007'
+        });
+        expect(view.parties).toEqual({ sellerCaption: 'Seller', buyerCaption: 'Billed to' });
+    });
+
+    it('builds the footer every page repeats from the seller and the document number', () => {
+        const withVat = buildDocumentFooter('en', {
+            ...DOCUMENT,
+            seller: { ...SELLER, vatNumber: 'IT01234567890' }
+        });
+        const without = buildDocumentFooter('en', DOCUMENT);
+        const creditNote = buildDocumentFooter('en', { ...DOCUMENT, kind: 'creditNote' });
+
+        expect(withVat).toBe('Acme S.r.l. · VAT number: IT01234567890 · Invoice 2026-000041');
+        expect(without).toBe('Acme S.r.l. · VAT number not configured · Invoice 2026-000041');
+        expect(creditNote).toBe(
+            'Acme S.r.l. · VAT number not configured · Credit note 2026-000041'
+        );
     });
 
     it('names the document number in its title metadata', () => {
@@ -408,7 +437,7 @@ describe('buildDocumentView — the printed date', () => {
             timezone: 'UTC'
         });
 
-        expect((rome.meta as { dateLabel: string }).dateLabel).toContain('January 1, 2027');
-        expect((utc.meta as { dateLabel: string }).dateLabel).toContain('December 31, 2026');
+        expect((rome.meta as { issued: string }).issued).toContain('January 1, 2027');
+        expect((utc.meta as { issued: string }).issued).toContain('December 31, 2026');
     });
 });

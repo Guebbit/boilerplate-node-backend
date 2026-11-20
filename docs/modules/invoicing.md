@@ -264,6 +264,31 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
   print): past it the browser is closed and the slot freed, and a hung Chromium cannot hold every
   render behind it.
 
+## How the PDF looks {#the-pdf}
+
+One template prints both documents (`templates/documents/invoicing.document.ejs`, plus
+`invoicing.document.vat-table.ejs` for the two rate-grouped breakdowns). The design is the
+Material look the PHP twin prints: the guebbit logo, `#00838f` for text and `#00bcd4` for bars only.
+
+- **Portable on purpose.** CSS 2.1, tables for layout, no web fonts, no script. It prints the same in
+  Chromium here and in Dompdf in the twin.
+- **The logo travels inside the HTML.** `templates/documents/logo.svg` is read once and passed as a
+  `data:` URI, because the renderer refuses every request that is not a `data:` one
+  ([PDF pipeline](../understand/email-and-rendering.md#pdf-pipeline)). The guebbit logo stays: the
+  user approved the look as it is, so a deployment swaps the file.
+- **Backgrounds are printed** (`printBackground: true` in `providers/pdf.ts`): the notice banner,
+  the category chips and the totals card are all backgrounds.
+- **A credit note** shares the template. Its reversal notice ("reverses invoice N" / "cancels
+  invoice N") prints as a tinted banner under the header; an invoice never has one.
+- **Every legal field stays:** number, issue date, order number, seller legal name, address and VAT
+  number (or "not configured"), the buyer's name, address and VAT number, per line description,
+  quantity, unit price excl. VAT, net, rate, EN 16931 category, VAT and total, shipping by rate, the
+  VAT summary and the three totals. The footer repeats seller, VAT number and document number on
+  every page; it is Chromium's own page footer (`footerTemplate`), because a footer inside the HTML
+  prints on a page of its own.
+- **Old files keep the old look.** A stored PDF is not re-rendered until it is reaped after
+  `NODE_INVOICE_PDF_RETENTION_DAYS`; a regenerated one follows the new template.
+
 ## The e-invoicing port
 
 `providers/index.ts` declares `EInvoicingProvider`, shaped after `payments/providers` (one

@@ -11,8 +11,11 @@
             "reversal-notice-correction": "This credit note cancels invoice {{number}}: the buyer's details were corrected. A new invoice replaces it.",
             "buyer-vat-number": "Buyer VAT number: {{number}}",
             "buyer-erased": "The buyer's personal data was removed once its legal retention period ended.",
-            "number": "No. {{number}}",
-            "date": "Date: {{date}}",
+            "caption-number": "Number",
+            "caption-issued": "Issued",
+            "caption-order": "Order",
+            "caption-seller": "Seller",
+            "caption-billed-to": "Billed to",
             "vat": {
                 "column-description": "Description",
                 "column-quantity": "Qty",
