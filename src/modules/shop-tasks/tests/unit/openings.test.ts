@@ -16,6 +16,7 @@ import {
     paidWithoutHoldOpening,
     refundOwedOpening,
     refundRefusedOpening,
+    refundOwedAfterDisputeOpening,
     refundReversedOpening,
     refundUnrecordedOpening,
     returnRefundShortOpening
@@ -129,7 +130,8 @@ describe('the other openings', () => {
                     orderId: 'o1',
                     asked: '100.00',
                     opened: '70.00',
-                    currency: 'EUR'
+                    currency: 'EUR',
+                    cause: 'used_up'
                 },
                 NOW
             )
@@ -142,7 +144,13 @@ describe('the other openings', () => {
         [
             'dispute',
             disputeOpening(
-                { paymentId: 'p1', orderId: 'o1', kind: 'chargeback', reason: 'fraudulent' },
+                {
+                    paymentId: 'p1',
+                    disputeId: 'dp1',
+                    orderId: 'o1',
+                    kind: 'chargeback',
+                    reason: 'fraudulent'
+                },
                 NOW
             )
         ]
@@ -176,7 +184,13 @@ describe('the other openings', () => {
     });
 
     it('dates a dispute by the provider deadline, else the fallback', () => {
-        const base = { paymentId: 'p1', orderId: 'o1', kind: 'inquiry', reason: 'general' };
+        const base = {
+            paymentId: 'p1',
+            disputeId: 'dp1',
+            orderId: 'o1',
+            kind: 'inquiry',
+            reason: 'general'
+        };
         const evidenceDueBy = '2030-05-20T00:00:00.000Z';
         expect(disputeOpening({ ...base, evidenceDueBy }, NOW).dueAt).toEqual(
             new Date(evidenceDueBy)
@@ -195,12 +209,12 @@ describe('the other openings', () => {
 
 describe('disputeAwaitingBankOpening', () => {
     it('waits on the payment, 75 days out, with no due-soon reminder', () => {
-        const opening = disputeAwaitingBankOpening({ paymentId: 'p1' }, NOW);
+        const opening = disputeAwaitingBankOpening({ paymentId: 'p1', disputeId: 'dp1' }, NOW);
 
         expect(opening).toMatchObject({
             kind: TaskKind.dispute_awaiting_bank,
             routeSet: 'PaymentRefunding',
-            link: { type: TaskLinkType.payment, id: 'p1' },
+            link: { type: TaskLinkType.dispute, id: 'dp1' },
             noDueSoon: true
         });
         expect(opening.dueAt).toEqual(new Date(NOW.getTime() + 75 * DAY_MS));
@@ -247,5 +261,113 @@ describe('the legal deadline in a refund to-do', () => {
 
     it('adds nothing when the law sets no deadline', () => {
         expect(refundRefusedOpening(refund, NOW).message).not.toContain('Legal refund deadline');
+    });
+});
+
+describe('a dispute is a record of its own', () => {
+    it('keys both dispute to-dos by the dispute, so two disputes on one payment never share one', () => {
+        const base = { paymentId: 'p1', orderId: 'o1', kind: 'chargeback', reason: 'fraudulent' };
+        const first = disputeOpening({ ...base, disputeId: 'dp1' }, NOW);
+        const second = disputeOpening({ ...base, disputeId: 'dp2' }, NOW);
+        const waiting = disputeAwaitingBankOpening({ paymentId: 'p1', disputeId: 'dp1' }, NOW);
+
+        expect(openKeyOf(first.kind, first.link)).not.toBe(openKeyOf(second.kind, second.link));
+        expect(waiting.link).toEqual(first.link);
+    });
+});
+
+describe('returnRefundShortOpening by cause', () => {
+    const short = {
+        returnId: 'r1',
+        orderId: 'o1',
+        asked: '100.00',
+        opened: '0.00',
+        currency: 'EUR'
+    };
+
+    it('says nothing was sent when no payment stands behind the order, not that the rest went back', () => {
+        const { message } = returnRefundShortOpening({ ...short, cause: 'no_payment' }, NOW);
+
+        expect(message).toContain('no succeeded payment stands behind the order');
+        expect(message).not.toContain('already went back another way');
+    });
+
+    it('says the rest of the payment already went back when it was used up', () => {
+        const { message } = returnRefundShortOpening({ ...short, cause: 'used_up' }, NOW);
+
+        expect(message).toContain('already went back another way');
+    });
+});
+
+describe('refundOwedAfterDisputeOpening', () => {
+    const refund = {
+        refundId: 'r1',
+        orderId: 'o1',
+        amount: '30.00',
+        currency: 'EUR',
+        reversed: false,
+        bankKept: true
+    };
+
+    it('leads with the outcome when the bank kept the money: pay nothing again, mark it returned', () => {
+        const opening = refundOwedAfterDisputeOpening(refund, NOW);
+
+        expect(opening).toMatchObject({
+            kind: TaskKind.refund_refused,
+            routeSet: 'PaymentRefunding',
+            link: { type: TaskLinkType.refund, id: 'r1' }
+        });
+        expect(opening.message).toContain('the bank kept the money, so the buyer already has it');
+        expect(opening.message).toContain('mark the refund returned');
+        expect(opening.message).not.toContain('Void the refund');
+    });
+
+    it('says to void then refund by card when the shop won', () => {
+        const { message } = refundOwedAfterDisputeOpening({ ...refund, bankKept: false }, NOW);
+
+        expect(message).toContain('the money stayed with the shop');
+        expect(message).toContain('Void the refund, then refund the buyer by card');
+    });
+
+    it('never offers a void for a refund the bank took back after it settled', () => {
+        const opening = refundOwedAfterDisputeOpening(
+            { ...refund, bankKept: false, reversed: true },
+            NOW
+        );
+
+        expect(opening.kind).toBe(TaskKind.refund_reversed);
+        expect(opening.message).not.toContain('Void');
+        expect(opening.message).toContain('mark the refund returned');
+    });
+
+    it('warns about the amount only when the bank kept money in another currency', () => {
+        const other = refundOwedAfterDisputeOpening({ ...refund, otherCurrency: 'USD' }, NOW);
+        const same = refundOwedAfterDisputeOpening(refund, NOW);
+
+        expect(other.message).toContain('check the amount in the provider');
+        expect(other.message).toContain('USD');
+        expect(same.message).not.toContain('check the amount in the provider');
+    });
+
+    it('names the legal deadline beside the date', () => {
+        const { message } = refundOwedAfterDisputeOpening(refund, NOW, {
+            rule: 'withdrawal',
+            day: '2030-05-20'
+        });
+
+        expect(message).toContain('Legal refund deadline (withdrawal): 2030-05-20.');
+    });
+
+    it('tells staff a refund marked returned is owed again after a win, to be paid outside and closed', () => {
+        const { kind, message } = refundOwedAfterDisputeOpening(
+            { ...refund, bankKept: false, reversed: true, markedReturned: true },
+            NOW
+        );
+
+        expect(kind).toBe(TaskKind.refund_reversed);
+        expect(message).toContain('marked returned because the bank had kept the money');
+        expect(message).toContain('the dispute was then won');
+        expect(message).toContain('then close this to-do');
+        expect(message).not.toContain('mark the refund returned');
     });
 });

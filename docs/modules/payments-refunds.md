@@ -269,7 +269,7 @@ flowchart TD
 - **A return that asks for more than is left tells staff.** `openReturnRefund` clamps a return's
   refund to what the payment has left. When it opens less than the return asked, or nothing, it
   writes `payment.return_refund_short` (outbox, in the return's own transaction: asked, opened,
-  currency) and `shop-tasks` opens a `return_refund_short` to-do for the return. A receipt that
+  currency, and a `cause`: `no_payment` or `used_up`) and `shop-tasks` opens a `return_refund_short` to-do for the return. A receipt that
   opened nothing leaves the return `received`. See
   [A return the payment could not pay in full](./shop-tasks-todos.md).
 - **Re-sync refunds.** `POST /payments/{id}/refunds/sync` (`syncRefunds`) runs the same idempotent

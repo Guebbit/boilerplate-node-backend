@@ -14,16 +14,25 @@
 import type { ClientSession } from 'mongoose';
 import { padDecimal } from '@domain-primitives/money';
 import { logger } from '@infrastructure/adapters/logger';
-import { announceInTransaction } from '@kernel/outbox';
+import { announceInTransaction, type OutboxAnnouncement } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { DisputeStatus } from '@types';
 import { paymentRepository, type RecordedDispute } from '../repository';
 import {
     PAYMENT_DISPUTE_OPENED,
     PAYMENT_DISPUTE_UPDATED,
+    PAYMENT_REFUND_OWED_AFTER_DISPUTE,
     type DisputeEventPayload
 } from '../events';
-import { hasOpenDispute, isOpenDispute } from '../domain';
+import {
+    bankKeptMoney,
+    hasOpenDispute,
+    isOpenDispute,
+    keptInOtherCurrency,
+    refundsOwedAfterDispute,
+    refundsOwedAfterWin,
+    type RefundOwedAfterDispute
+} from '../domain';
 import type { DisputeRecord, PaymentDocument } from '../model';
 import type { ProviderDisputeState } from '../providers';
 
@@ -127,8 +136,100 @@ const appendRows = async (
         );
 };
 
+/** The events a stored dispute report can announce. */
+type DisputeEventName =
+    | typeof PAYMENT_DISPUTE_OPENED
+    | typeof PAYMENT_DISPUTE_UPDATED
+    | typeof PAYMENT_REFUND_OWED_AFTER_DISPUTE;
+
+/** What the write step hands the announcement: the write, and the refunds it left owed again. */
+interface StoredDispute {
+    recorded: RecordedDispute;
+    owed: RefundOwedAfterDispute[];
+}
+
 /**
- * Store a dispute report on its payment, its timeline rows and its event in one transaction.
+ * Whether this write turned a dispute the bank had kept money in into one it did not (a late win).
+ *
+ * @param recorded - what the write did
+ * @param record - the report that was applied
+ */
+const flipsToWon = (recorded: RecordedDispute, record: DisputeRecord): boolean =>
+    recorded.previous !== undefined && bankKeptMoney(recorded.previous) && !bankKeptMoney(record);
+
+/**
+ * Which refunds the stored write left owed: the ones its ending hands back, or the ones a win
+ * returns to staff (the two never both apply: an ending is a close, a flip is closed to closed).
+ *
+ * @param payment - the payment as it stands after the write
+ * @param recorded - what the write did
+ * @param record - the report that was applied
+ */
+const owedOf = (
+    payment: PaymentDocument,
+    recorded: RecordedDispute,
+    record: DisputeRecord
+): RefundOwedAfterDispute[] =>
+    flipsToWon(recorded, record) && recorded.previous
+        ? refundsOwedAfterWin(payment, recorded.previous, record, record.disputeRef)
+        : refundsOwedAfterDispute(payment, record);
+
+/**
+ * The refunds this write left owed again. Only a dispute that now reads closed and did not before
+ * qualifies (a late win, closed to closed, was told already). The payment is read again inside the
+ * writing transaction: the snapshot the delivery carried predates this write, and a second
+ * dispute's state or a refund settled meanwhile changes the answer.
+ *
+ * @param payment - the payment the report names
+ * @param recorded - what the write did
+ * @param record - the report that was applied
+ * @param session - the open transaction
+ */
+const owedAfter = (
+    payment: PaymentDocument,
+    recorded: RecordedDispute,
+    record: DisputeRecord,
+    session: ClientSession
+): Promise<RefundOwedAfterDispute[]> =>
+    timelineTypes(recorded, record).includes('dispute_closed') || flipsToWon(recorded, record)
+        ? paymentRepository
+              .findByOrderId(String(payment.orderId), undefined, session)
+              .then((fresh) => (fresh ? [...owedOf(fresh, recorded, record)] : []))
+        : Promise.resolve([]);
+
+/**
+ * The announcements a stored report earns: the dispute's own event, then one event per refund it
+ * left owed again. Each is its own outbox row, so each refund's to-do dedupes on its own id.
+ *
+ * @param payment - the payment the report names
+ * @param record - the report that was applied
+ * @param stored - what the write did and left owed
+ */
+const announcementsOf = (
+    payment: PaymentDocument,
+    record: DisputeRecord,
+    stored: StoredDispute
+): OutboxAnnouncement<DisputeEventName>[] => [
+    {
+        name:
+            stored.recorded.outcome === 'opened' ? PAYMENT_DISPUTE_OPENED : PAYMENT_DISPUTE_UPDATED,
+        payload: payloadOf(payment, record),
+        aggregateId: String(payment.orderId)
+    },
+    ...stored.owed.map((owed): OutboxAnnouncement<DisputeEventName> => ({
+        name: PAYMENT_REFUND_OWED_AFTER_DISPUTE,
+        payload: {
+            paymentId: String(payment._id),
+            orderId: String(payment.orderId),
+            disputeId: record.disputeRef,
+            ...owed
+        },
+        aggregateId: String(payment.orderId)
+    }))
+];
+
+/**
+ * Store a dispute report on its payment, its timeline rows and its events in one transaction.
  *
  * @param payment - the payment the report names
  * @param record - the report as a record
@@ -138,23 +239,19 @@ const storeDispute = (
     payment: PaymentDocument,
     record: DisputeRecord
 ): Promise<RecordedDispute | null> =>
-    announceInTransaction(
+    announceInTransaction<StoredDispute | null, DisputeEventName>(
         (session) =>
             paymentRepository
                 .recordDispute(String(payment._id), record, session)
                 .then((recorded) =>
                     recorded
-                        ? appendRows(String(payment.orderId), recorded, record, session).then(
-                              () => recorded
-                          )
-                        : recorded
+                        ? appendRows(String(payment.orderId), recorded, record, session)
+                              .then(() => owedAfter(payment, recorded, record, session))
+                              .then((owed) => ({ recorded, owed }))
+                        : null
                 ),
-        (recorded) => ({
-            name: recorded.outcome === 'opened' ? PAYMENT_DISPUTE_OPENED : PAYMENT_DISPUTE_UPDATED,
-            payload: payloadOf(payment, record),
-            aggregateId: String(payment.orderId)
-        })
-    );
+        (stored) => announcementsOf(payment, record, stored)
+    ).then((stored) => stored?.recorded ?? null);
 
 /**
  * Apply a delivery that carries a dispute: find the payment by its intent and store the report.
@@ -184,8 +281,7 @@ export const applyDisputeDelivery = (
 
 /**
  * Where a payment's disputes stand, for a reader that must decide without the payment: whether any
- * dispute is still open (an inquiry included) and the payment's own currency, which a dispute
- * reported in another currency is compared against.
+ * dispute is still open (an inquiry included) and the payment's own currency.
  *
  * @param paymentId - the payment, read with no caller's scope
  * @returns the standing, or `undefined` for a missing payment
@@ -198,3 +294,23 @@ export const disputeStanding = (
         .then((payment) =>
             payment ? { open: hasOpenDispute(payment), currency: payment.currency } : undefined
         );
+
+/**
+ * The currency of a dispute the bank kept money in when it is not the payment's: the app never
+ * subtracted that amount from what may be refunded, so staff must check it in the provider's
+ * dashboard.
+ *
+ * @param paymentId - the payment, read with no caller's scope
+ * @param disputeId - the provider's dispute id
+ * @returns the dispute's currency and the payment's, or `undefined` when the rule does not apply
+ */
+export const keptInOtherCurrencyOn = (
+    paymentId: string,
+    disputeId: string
+): Promise<{ disputeCurrency: string; paymentCurrency: string } | undefined> =>
+    paymentRepository.findByIdScoped(paymentId).then((payment) => {
+        const dispute = payment?.disputes.find((known) => known.disputeRef === disputeId);
+        return payment && dispute && keptInOtherCurrency(dispute, payment.currency)
+            ? { disputeCurrency: dispute.currency, paymentCurrency: payment.currency }
+            : undefined;
+    });

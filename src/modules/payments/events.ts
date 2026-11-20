@@ -164,6 +164,36 @@ declare module '@kernel/events' {
         'payment.dispute_updated': DisputeEventPayload;
 
         /**
+         * A dispute ended and a refund it had refused (`failureReason: disputed`) is owed again:
+         * one event PER refund, written in the transaction that records the dispute's end, so a
+         * redelivery or a crash after the commit opens each to-do exactly once. Raised only when
+         * no other dispute on the payment is still open. `bankKept` says how the dispute ended
+         * (the buyer already has the money, or the shop kept it); `otherCurrency` is set when the
+         * bank kept money in another currency than the payment's, which the app never subtracted.
+         * A dispute the bank had kept money in that then flips to won raises one more per refund
+         * staff had marked returned for it (`markedReturned`): the bank took the money back from
+         * the buyer, so it is owed again.
+         * Internal only: no AsyncAPI channel carries it; `tasks` opens the work from it.
+         *
+         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+         * `meta.eventId`.
+         */
+        'payment.refund_owed_after_dispute': {
+            paymentId: string;
+            orderId: string;
+            refundId: string;
+            disputeId: string;
+            amount: string;
+            currency: string;
+            /** `true` when the bank had taken the refund back after it settled, else it was refused. */
+            reversed: boolean;
+            bankKept: boolean;
+            otherCurrency?: string;
+            /** `true` when staff had marked the refund returned and a late win makes it owed again. */
+            markedReturned?: true;
+        };
+
+        /**
          * A refund of a hand-recorded payment opened, so the money is owed outside the app (cash,
          * a transfer): nothing here can send it, and a person has to. Written in the transaction
          * that opens the record; the refund closes on `payment.refunded` or
@@ -228,6 +258,11 @@ declare module '@kernel/events' {
             /** What the refund record opened for, a decimal; `0.00` when none was opened. */
             opened: string;
             currency: string;
+            /**
+             * Why it came up short: `no_payment` when no succeeded payment stands behind the
+             * order, `used_up` when the payment had less left than asked (it went back another way).
+             */
+            cause: 'no_payment' | 'used_up';
         };
     }
 }
@@ -255,6 +290,9 @@ export const PAYMENT_DISPUTE_OPENED = 'payment.dispute_opened';
 
 /** See `DomainEventMap['payment.dispute_updated']` above. */
 export const PAYMENT_DISPUTE_UPDATED = 'payment.dispute_updated';
+
+/** See `DomainEventMap['payment.refund_owed_after_dispute']` above. */
+export const PAYMENT_REFUND_OWED_AFTER_DISPUTE = 'payment.refund_owed_after_dispute';
 
 /** See `DomainEventMap['payment.refund_owed_by_hand']` above. */
 export const PAYMENT_REFUND_OWED_BY_HAND = 'payment.refund_owed_by_hand';

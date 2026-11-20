@@ -33,6 +33,7 @@ import {
     PAYMENT_DISPUTE_OPENED,
     PAYMENT_DISPUTE_UPDATED,
     PAYMENT_REFUNDED,
+    PAYMENT_REFUND_OWED_AFTER_DISPUTE,
     PAYMENT_REFUND_CANCELED,
     PAYMENT_REFUND_FAILED,
     PAYMENT_REFUND_OWED_BY_HAND,
@@ -80,6 +81,7 @@ export default {
         onDomainEvent(RETURN_CLOSED_BY_HAND, shopTasksService.onReturnClosedByHand);
         onDomainEvent(PAYMENT_DISPUTE_OPENED, shopTasksService.onDispute);
         onDomainEvent(PAYMENT_DISPUTE_UPDATED, shopTasksService.onDispute);
+        onDomainEvent(PAYMENT_REFUND_OWED_AFTER_DISPUTE, shopTasksService.onRefundOwedAfterDispute);
         onDomainEvent(HOLD_ORPHANED, shopTasksService.onHoldOrphaned);
         onDomainEvent(ORDER_CANCELED, shopTasksService.onOrderCanceled);
         onDomainEvent(SHIPMENT_SHIPPED, shopTasksService.onShipped);

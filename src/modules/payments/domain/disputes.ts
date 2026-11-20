@@ -68,6 +68,28 @@ export const hasOpenChargeback = (payment: DisputablePayment): boolean =>
     );
 
 /**
+ * Whether the bank kept the money: a chargeback decided against the shop or accepted by it. An
+ * inquiry takes none, and a `won` or `closed` dispute gives nothing up.
+ *
+ * @param dispute - the dispute as stored
+ */
+export const bankKeptMoney = (dispute: Pick<DisputeFacts, 'kind' | 'status'>): boolean =>
+    dispute.kind === DisputeKind.chargeback && LOSS_DISPUTE_STATUSES.has(dispute.status);
+
+/**
+ * Whether the bank kept money that was not in the payment's currency: such an amount is never
+ * subtracted from what may be refunded (see {@link lostToChargebacks}), so staff must check it in
+ * the provider's dashboard.
+ *
+ * @param dispute - the dispute as stored
+ * @param currency - the payment's currency
+ */
+export const keptInOtherCurrency = (
+    dispute: Pick<DisputeFacts, 'kind' | 'status' | 'currency'>,
+    currency: string
+): boolean => bankKeptMoney(dispute) && dispute.currency !== currency;
+
+/**
  * What lost chargebacks took, in minor units: the shop cannot refund money the bank kept. A
  * `won` one took nothing (funds reinstated), so a late win gives the room back by itself. A
  * dispute reported in another currency than the payment's is not subtracted: its amount is not in
@@ -77,11 +99,6 @@ export const hasOpenChargeback = (payment: DisputablePayment): boolean =>
 export const lostToChargebacks = (payment: DisputablePayment, currency: string): Money =>
     addMoney(
         ...(payment.disputes ?? [])
-            .filter(
-                (dispute) =>
-                    dispute.kind === DisputeKind.chargeback &&
-                    dispute.currency === currency &&
-                    LOSS_DISPUTE_STATUSES.has(dispute.status)
-            )
+            .filter((dispute) => bankKeptMoney(dispute) && dispute.currency === currency)
             .map((dispute) => toMinorUnits(dispute.amount, currency))
     );

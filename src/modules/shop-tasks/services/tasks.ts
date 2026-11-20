@@ -8,7 +8,7 @@
  * @see docs/modules/shop-tasks.md#the-shop-s-to-dos
  */
 
-import { DisputeKind, DisputeStatus, RefundFailureReason, TaskKind } from '@types';
+import { RefundFailureReason, TaskKind, TaskLinkType } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { fillPath, FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
 import type { DomainEventMap, DomainEventMeta } from '@kernel/events';
@@ -26,6 +26,7 @@ import {
     returnRefundShortOpening,
     refundRefusedOpening,
     refundReversedOpening,
+    refundOwedAfterDisputeOpening,
     type LegalDeadline,
     type ShopOpening
 } from '../domain/openings';
@@ -93,24 +94,33 @@ const disputeTaskCarries = (payload: {
         : Promise.resolve(false);
 
 /**
- * The closing words of a dispute's to-do. A lost or accepted chargeback in another currency than
- * the payment's was never subtracted from what may be refunded, so staff must check the amount.
+ * The closing words of a dispute's to-do. When the bank kept money in another currency than the
+ * payment's, the app never subtracted it, so staff must check the amount; payments owns that rule.
  *
  * @param payload - the dispute as the provider last reported it
  */
 const disputeEndedNote = (payload: DomainEventMap['payment.dispute_opened']): Promise<string> => {
     const plain = `The dispute ended: ${payload.status}.`;
-    const tookMoney =
-        payload.kind === DisputeKind.chargeback &&
-        (payload.status === DisputeStatus.lost || payload.status === DisputeStatus.accepted);
-    if (!tookMoney) return Promise.resolve(plain);
     return paymentService
-        .disputeStanding(payload.paymentId)
-        .then((standing) =>
-            standing && standing.currency !== payload.currency
-                ? `${plain} It was in ${payload.currency}, not the payment's ${standing.currency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
+        .keptInOtherCurrencyOn(payload.paymentId, payload.disputeId)
+        .then((other) =>
+            other
+                ? `${plain} It was in ${other.disputeCurrency}, not the payment's ${other.paymentCurrency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
                 : plain
         );
+};
+
+/**
+ * When a refund the dispute held back is overdue. Never already past: the wait was the dispute's,
+ * not staff's, so the legal day (a refund waiting weeks is long past it) is only used while it is
+ * still ahead and sooner than the attention window.
+ *
+ * @param due - the refund's stamped legal deadline, when the law sets one
+ * @param now - the clock
+ */
+const afterDisputeDueAt = (due: RefundDue | undefined, now: Date): Date => {
+    const window = attentionDueAt(now);
+    return due && due.dueBy > now && due.dueBy < window ? due.dueBy : window;
 };
 
 /** The task handlers `module.ts` subscribes; each takes the event payload, most also its `meta`. */
@@ -253,7 +263,7 @@ export const shopTasks = {
      */
     onDispute: (payload: DomainEventMap['payment.dispute_opened'], meta: DomainEventMeta) =>
         guarded('payment dispute', () => {
-            const link = { type: 'payment', id: payload.paymentId } as const;
+            const link = { type: TaskLinkType.dispute, id: payload.disputeId };
             if (payload.status === 'needs_response')
                 return open(
                     disputeOpening(payload, attentionDueAt(new Date())),
@@ -278,6 +288,33 @@ export const shopTasks = {
                 )
             );
         }),
+
+    /**
+     * `payment.refund_owed_after_dispute`: a dispute ended and a refund it had refused is owed
+     * again. One event per refund, so one to-do per refund; payments already decided which refunds
+     * and how the dispute ended, this only words it.
+     */
+    onRefundOwedAfterDispute: (
+        payload: DomainEventMap['payment.refund_owed_after_dispute'],
+        meta: DomainEventMeta
+    ) =>
+        guarded('payment.refund_owed_after_dispute', () =>
+            // A refund already marked returned has no legal clock left to name.
+            (payload.markedReturned
+                ? Promise.resolve(undefined)
+                : paymentService.refundLegalDue(payload.paymentId, payload.refundId)
+            ).then((due) =>
+                open(
+                    refundOwedAfterDisputeOpening(
+                        payload,
+                        afterDisputeDueAt(due, new Date()),
+                        legalDeadlineOf(due)
+                    ),
+                    PAYMENTS_ATTENTION_WORK,
+                    meta
+                )
+            )
+        ),
 
     /** `inventory.hold_orphaned`: paid, nothing set aside. */
     onHoldOrphaned: (payload: DomainEventMap['inventory.hold_orphaned'], meta: DomainEventMeta) =>

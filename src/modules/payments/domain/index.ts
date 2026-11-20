@@ -42,9 +42,15 @@ export {
     isOpenDispute,
     hasOpenDispute,
     hasOpenChargeback,
-    lostToChargebacks
+    lostToChargebacks,
+    bankKeptMoney,
+    keptInOtherCurrency
 } from './disputes';
 export type { DisputeFacts, DisputablePayment } from './disputes';
+
+/** What a dispute ending leaves owed: the refunds it hands back to staff. */
+export { refundsOwedAfterDispute, refundsOwedAfterWin, disputeBehindRefund } from './dispute-end';
+export type { RefundOwedAfterDispute } from './dispute-end';
 
 /** The RF creditor reference a bank-transfer payment carries, and its admin-side parse. */
 export { buildReference, parseReference } from './transfer-reference';

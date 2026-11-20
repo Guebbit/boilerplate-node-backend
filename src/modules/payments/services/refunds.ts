@@ -63,6 +63,7 @@ import { PAYMENT_REFUND_CANCELED, PAYMENT_REFUND_OWED_BY_HAND } from '../events'
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import {
     exceedsRemaining,
+    disputeBehindRefund,
     hasOpenChargeback,
     isHandRecorded,
     isOpenRefund,
@@ -1096,10 +1097,16 @@ export const settleRefundByHand = (
          * `null` is the loser of a race: the conditional write found the record no longer in the
          * state it was read in (settled by a second operator, or claimed for a new attempt).
          */
+        // Marked returned because the bank kept the money: remember which dispute, for a late win.
+        const dispute = disputeBehindRefund(payment, refund);
         return settleRefund(
             payment,
             refund,
-            { settledByHand: true, from: [refund.status] },
+            {
+                settledByHand: true,
+                from: [refund.status],
+                ...(dispute ? { settledAgainstDispute: dispute } : {})
+            },
             context
         ).then((final): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
             final

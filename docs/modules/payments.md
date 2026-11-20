@@ -50,6 +50,7 @@ flowchart LR
     payments -. "payment.dispute_updated" .-> shop_tasks
     payments -. "payment.refund_canceled" .-> shop_tasks
     payments -. "payment.refund_failed" .-> shop_tasks
+    payments -. "payment.refund_owed_after_dispute" .-> shop_tasks
     payments -. "payment.refund_owed_by_hand" .-> shop_tasks
     payments -. "payment.refund_reversed" .-> shop_tasks
     payments -. "payment.refund_unrecorded" .-> shop_tasks

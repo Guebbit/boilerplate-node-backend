@@ -25,6 +25,7 @@ x-extends:
         - order
         - payment
         - refund
+        - dispute
         - fulfillment_order
         - return
     TaskCategory:

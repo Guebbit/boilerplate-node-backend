@@ -20,7 +20,7 @@ import { callerInScope } from '@kernel/permissions';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { registerModules } from '@kernel/registry';
 import { notificationsService } from '@modules/notifications';
-import { paymentService } from '@modules/payments';
+import { paymentAttentionMinutes, paymentService } from '@modules/payments';
 import { shopTimezone } from '@modules/shop';
 import { dayInZone } from '@domain-primitives/time';
 import { findAllTasks } from '@modules/tasks/tests/factories';
@@ -103,7 +103,8 @@ const SHORT: DomainEventMap['payment.return_refund_short'] = {
     orderId: ORDER,
     asked: '100.00',
     opened: '70.00',
-    currency: 'EUR'
+    currency: 'EUR',
+    cause: 'used_up'
 };
 /** The dispute-opened event payload the cases publish. */
 const DISPUTE: DomainEventMap['payment.dispute_opened'] = {
@@ -708,26 +709,21 @@ describe('a dispute is two to-dos', () => {
     );
 
     it.each([
-        ['a lost chargeback in another currency than the payment', 'lost', 'USD', true],
-        ['an accepted chargeback in another currency than the payment', 'accepted', 'USD', true],
-        ['a lost chargeback in the payment’s currency', 'lost', 'EUR', false],
-        ['a won chargeback in another currency than the payment', 'won', 'USD', false]
-    ] as const)(
-        'tells staff to check the amount for %s: %s',
-        async (_name, status, currency, tellsStaff) => {
-            jest.spyOn(paymentService, 'disputeStanding').mockResolvedValue({
-                open: false,
-                currency: 'EUR'
-            });
-            await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+        ['payments says the bank kept money in another currency', true],
+        ['payments says the rule does not apply', false]
+    ] as const)('tells staff to check the amount when %s', async (_name, tellsStaff) => {
+        jest.spyOn(paymentService, 'keptInOtherCurrencyOn').mockResolvedValue(
+            tellsStaff ? { disputeCurrency: 'USD', paymentCurrency: 'EUR' } : undefined
+        );
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
 
-            await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status, currency });
+        await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status: 'lost' });
 
-            const [task] = await allTasks();
-            const note = task.notes.map((entry) => entry.body).join(' ');
-            expect(note.includes('check the amount in the provider')).toBe(tellsStaff);
-        }
-    );
+        const [task] = await allTasks();
+        const note = task.notes.map((entry) => entry.body).join(' ');
+        expect(note.includes('check the amount in the provider')).toBe(tellsStaff);
+        expect(note.includes('USD, not the payment')).toBe(tellsStaff);
+    });
 
     it('opens no waiting to-do when the bank decides straight from needs_response', async () => {
         await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
@@ -826,5 +822,212 @@ describe('a refund sent back by the bank', () => {
 
         expect(kind).toBe(TaskKind.refund_refused);
         expect((dueAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(0);
+    });
+});
+
+/** The refund-owed-after-dispute payload the cases publish: a lost dispute, a refund refused for it. */
+const OWED: DomainEventMap['payment.refund_owed_after_dispute'] = {
+    paymentId: PAYMENT,
+    orderId: ORDER,
+    refundId: 'ref1',
+    disputeId: 'dp1',
+    amount: '30.00',
+    currency: 'EUR',
+    reversed: false,
+    bankKept: true
+};
+
+describe('a dispute ended and refunds are owed again', () => {
+    const DAY_MS = 86_400_000;
+
+    it('opens the refund to-do on the refund, outcome first, on the payments attention tab', async () => {
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+
+        const task = await onlyTask();
+
+        expect(task).toMatchObject({
+            kind: TaskKind.refund_refused,
+            routeSet: 'PaymentRefunding',
+            link: { type: 'refund', id: 'ref1' },
+            work: 'sales/payments?tab=attention'
+        });
+        expect(task.message).toContain('the bank kept the money, so the buyer already has it');
+    });
+
+    it('opens one to-do per refund, each from its own event', async () => {
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+        await emitDomainEvent(
+            'payment.refund_owed_after_dispute',
+            { ...OWED, refundId: 'ref2', reversed: true },
+            { eventId: nextEventId() }
+        );
+
+        const tasks = await allTasks();
+
+        expect(tasks.map((task) => [task.kind, task.link?.id])).toEqual([
+            [TaskKind.refund_refused, 'ref1'],
+            [TaskKind.refund_reversed, 'ref2']
+        ]);
+    });
+
+    it('opens each to-do once when the outbox delivers the same events again after a crash', async () => {
+        const first = { eventId: nextEventId() };
+        const second = { eventId: nextEventId() };
+        const other = { ...OWED, refundId: 'ref2' };
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, first);
+        await emitDomainEvent('payment.refund_owed_after_dispute', other, second);
+
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, first);
+        await emitDomainEvent('payment.refund_owed_after_dispute', other, second);
+
+        const tasks = await allTasks();
+        expect(tasks).toHaveLength(2);
+        expect(tasks.map((task) => task.seenCount)).toEqual([1, 1]);
+    });
+
+    it('is due within the attention window after a loss, never already overdue', async () => {
+        jest.spyOn(paymentService, 'refundLegalDue').mockResolvedValue({
+            dueBy: new Date(Date.now() - 20 * DAY_MS),
+            dueRule: 'withdrawal'
+        });
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+
+        const { dueAt, message } = await onlyTask();
+
+        const ahead = (dueAt?.getTime() ?? 0) - Date.now();
+        expect(ahead).toBeGreaterThan(0);
+        expect(ahead).toBeLessThanOrEqual(paymentAttentionMinutes() * 60_000);
+        expect(message).toContain('Legal refund deadline (withdrawal)');
+    });
+
+    it('is due at the attention window, not the legal day, when the legal day is far ahead', async () => {
+        jest.spyOn(paymentService, 'refundLegalDue').mockResolvedValue({
+            dueBy: new Date(Date.now() + 365 * DAY_MS),
+            dueRule: 'withdrawal'
+        });
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+
+        const { dueAt } = await onlyTask();
+
+        const ahead = (dueAt?.getTime() ?? 0) - Date.now();
+        expect(ahead).toBeLessThanOrEqual(paymentAttentionMinutes() * 60_000);
+        expect(ahead).toBeGreaterThan(paymentAttentionMinutes() * 60_000 - 60_000);
+    });
+
+    it('keeps a legal day that is still ahead and sooner than the window', async () => {
+        const dueBy = new Date(Date.now() + 60_000);
+        jest.spyOn(paymentService, 'refundLegalDue').mockResolvedValue({
+            dueBy,
+            dueRule: 'withdrawal'
+        });
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+
+        const { dueAt } = await onlyTask();
+
+        expect(dueAt).toEqual(dueBy);
+    });
+
+    it('words a win as void, then refund by card', async () => {
+        await emitDomainEvent(
+            'payment.refund_owed_after_dispute',
+            { ...OWED, bankKept: false },
+            { eventId: nextEventId() }
+        );
+
+        const { message } = await onlyTask();
+
+        expect(message).toContain('Void the refund, then refund the buyer by card');
+    });
+
+    it('carries the other-currency warning on the refund to-do, where staff act', async () => {
+        await emitDomainEvent(
+            'payment.refund_owed_after_dispute',
+            { ...OWED, otherCurrency: 'USD' },
+            { eventId: nextEventId() }
+        );
+
+        const { message } = await onlyTask();
+
+        expect(message).toContain('check the amount in the provider');
+    });
+
+    it('opens a refund_reversed to-do for a marked-returned refund a win made owed again, with no legal clock', async () => {
+        const legal = jest.spyOn(paymentService, 'refundLegalDue');
+        await emitDomainEvent(
+            'payment.refund_owed_after_dispute',
+            { ...OWED, bankKept: false, reversed: true, markedReturned: true },
+            { eventId: nextEventId() }
+        );
+
+        const { kind, message } = await onlyTask();
+
+        expect(kind).toBe(TaskKind.refund_reversed);
+        expect(message).toContain('the dispute was then won');
+        expect(message).not.toContain('Legal refund deadline');
+        expect(legal).not.toHaveBeenCalled();
+    });
+
+    it('is closed when the refund is returned or voided, like any refund to-do', async () => {
+        await emitDomainEvent('payment.refund_owed_after_dispute', OWED, {
+            eventId: nextEventId()
+        });
+
+        await emitDomainEvent('payment.refund_canceled', { ...REFUND, refundId: 'ref1' });
+
+        const { status } = await onlyTask();
+
+        expect(status).toBe(TaskStatus.resolved);
+    });
+});
+
+describe('two disputes on one payment', () => {
+    it('keep a to-do each, keyed by the dispute: the first to end clears only its own', async () => {
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+        await emitDomainEvent(
+            'payment.dispute_opened',
+            { ...DISPUTE, disputeId: 'dp2' },
+            { eventId: nextEventId() }
+        );
+
+        await emitDomainEvent('payment.dispute_updated', { ...DISPUTE, status: 'lost' });
+
+        const tasks = await allTasks();
+        expect(tasks.map((task) => [task.link?.id, task.status])).toEqual([
+            ['dp1', TaskStatus.resolved],
+            ['dp2', TaskStatus.new]
+        ]);
+        expect(tasks[0].link?.type).toBe('dispute');
+    });
+
+    it('moves only the dispute whose proof was sent to the wait', async () => {
+        await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
+        await emitDomainEvent(
+            'payment.dispute_opened',
+            { ...DISPUTE, disputeId: 'dp2' },
+            { eventId: nextEventId() }
+        );
+
+        await emitDomainEvent(
+            'payment.dispute_updated',
+            { ...DISPUTE, status: 'under_review' },
+            { eventId: nextEventId() }
+        );
+
+        const tasks = await allTasks();
+        expect(tasks.map((task) => [task.kind, task.link?.id, task.status])).toEqual([
+            [TaskKind.dispute, 'dp1', TaskStatus.resolved],
+            [TaskKind.dispute, 'dp2', TaskStatus.new],
+            [TaskKind.dispute_awaiting_bank, 'dp1', TaskStatus.new]
+        ]);
     });
 });

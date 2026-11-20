@@ -245,6 +245,23 @@ mark rows published with nobody listening.
   `cart.merge_refused` stay on the in-process bus. They only write inbox notes, and losing one on
   a crash is acceptable, so no outbox row is written for them.
 
+## A dispute ending: one event per refund {#a-dispute-ending-one-event-per-refund}
+
+When a dispute ends, `payments` announces the dispute's own event and, in the SAME transaction, one
+`payment.refund_owed_after_dispute` per refund the dispute had refused and that is owed again. The
+payment is re-read inside that transaction: the delivery's snapshot predates the write, and a second
+dispute still open (or a refund settled meanwhile) changes which refunds qualify.
+
+- **One row per refund.** Each outbox row has its own id, so `shop-tasks` opens each refund's to-do
+  once however often the relay redelivers, and a crash after the commit loses none.
+- **A throw in the write step** (the dispute write, its timeline row or the re-read) aborts the
+  transaction: the dispute stays unrecorded and no event exists, so the provider's redelivery of the
+  same report records it and raises the events then.
+- **Said once.** Only a dispute that just turned closed raises them. A closed dispute flipping from
+  lost to won raises one more per refund staff had marked returned against it, and nothing else.
+
+See [Disputes](../modules/payments-disputes-and-adapters.md#disputes).
+
 ## Read next
 
 - [Events & Logging](./events-and-logging.md)

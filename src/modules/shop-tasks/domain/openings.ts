@@ -134,10 +134,18 @@ export const refundUnrecordedOpening = (
  * @param short.asked - what the return owes the buyer, a decimal
  * @param short.opened - what the refund record opened for, a decimal (`0.00` when none was)
  * @param short.currency - the ISO code of both figures
+ * @param short.cause - `no_payment`: nothing paid stands behind the return; `used_up`: the payment had less left
  * @param dueAt - when it is overdue
  */
 export const returnRefundShortOpening = (
-    short: { returnId: string; orderId: string; asked: string; opened: string; currency: string },
+    short: {
+        returnId: string;
+        orderId: string;
+        asked: string;
+        opened: string;
+        currency: string;
+        cause: 'no_payment' | 'used_up';
+    },
     dueAt: Date
 ): ShopOpening => ({
     kind: TaskKind.return_refund_short,
@@ -145,7 +153,10 @@ export const returnRefundShortOpening = (
     link: { type: TaskLinkType.return, id: short.returnId },
     subject: 'Return refund is smaller than owed',
     message:
-        `Return ${short.returnId} of order ${short.orderId}: ${short.asked} ${short.currency} was owed, ${short.opened} ${short.currency} could be sent; the rest of the payment already went back another way. ` +
+        `Return ${short.returnId} of order ${short.orderId}: ${short.asked} ${short.currency} was owed, ${short.opened} ${short.currency} could be sent; ` +
+        (short.cause === 'no_payment'
+            ? 'no succeeded payment stands behind the order, so nothing was sent. '
+            : 'the rest of the payment already went back another way. ') +
         'Check whether the buyer got what this return is owed and pay any rest outside the app. ' +
         'A return that is still received stays open until you press "Close return" on it, which clears this; otherwise close this yourself.',
     dueAt
@@ -250,11 +261,69 @@ export const refundReversedOpening = (
     dueAt
 });
 
+/** What a dispute's end says about a refund it had refused, as the payments module reported it. */
+export interface RefundOwedAfterDispute {
+    refundId: string;
+    orderId: string;
+    amount: string;
+    /** The payment's currency, the refund's too. */
+    currency: string;
+    /** `true` when the bank took the refund back after it settled, else it was refused. */
+    reversed: boolean;
+    /** `true` when the bank kept the money: the buyer already has it. */
+    bankKept: boolean;
+    /** The dispute's currency, set when the bank kept money in another currency than the payment's. */
+    otherCurrency?: string | undefined;
+    /** `true` when staff had marked the refund returned and a late win makes it owed again. */
+    markedReturned?: true | undefined;
+}
+
+/**
+ * What staff do with the refund now that its dispute is over, the outcome first.
+ *
+ * @param refund - the refund and how the dispute ended
+ */
+const afterDisputeAdvice = (refund: RefundOwedAfterDispute): string => {
+    if (refund.markedReturned)
+        return 'The refund was marked returned because the bank had kept the money, but the dispute was then won: the bank took the money back from the buyer, so they are owed it again. Agree a way with the buyer, pay outside the app, then close this to-do.';
+    if (refund.bankKept)
+        return `The dispute ended and the bank kept the money, so the buyer already has it: pay nothing again, just mark the refund returned.${
+            refund.otherCurrency
+                ? ` The dispute was in ${refund.otherCurrency}, not the payment's ${refund.currency}, so the app did not subtract it: check the amount in the provider's dashboard before any refund or return.`
+                : ''
+        }`;
+    return refund.reversed
+        ? "The dispute ended in the shop's favour, so the money stayed with the shop. Agree a way with the buyer, pay, then mark the refund returned."
+        : "The dispute ended in the shop's favour, so the money stayed with the shop. Void the refund, then refund the buyer by card.";
+};
+
+/**
+ * A refund that waited for its dispute to end, and is owed again now it has. Opens the same to-do
+ * as a refusal or a bounce, with the outcome first so staff do not pay twice.
+ *
+ * @param refund - the refund and how the dispute ended
+ * @param dueAt - when it is overdue: never already past, see the handler
+ * @param legal - the legal deadline and its rule, when the law sets one
+ */
+export const refundOwedAfterDisputeOpening = (
+    refund: RefundOwedAfterDispute,
+    dueAt: Date,
+    legal?: LegalDeadline
+): ShopOpening => ({
+    kind: refund.reversed ? TaskKind.refund_reversed : TaskKind.refund_refused,
+    routeSet: 'PaymentRefunding',
+    link: { type: TaskLinkType.refund, id: refund.refundId },
+    subject: refund.reversed ? 'Refund sent back by the bank' : 'Refund refused by the provider',
+    message: `Refund ${refund.refundId} of ${refund.amount} ${refund.currency} on order ${refund.orderId} ${refund.markedReturned ? 'is owed again after a dispute.' : 'was held back by a dispute.'} ${afterDisputeAdvice(refund)}${legalDeadlineNote(legal)}`,
+    dueAt
+});
+
 /**
  * A dispute the buyer's bank opened (or reopened) on a payment.
  *
  * @param dispute - the dispute as the provider last reported it
  * @param dispute.paymentId - the disputed payment
+ * @param dispute.disputeId - the provider's dispute id: the to-do is keyed by it, so two disputes on one payment keep a to-do each
  * @param dispute.orderId - its order
  * @param dispute.kind - inquiry or chargeback
  * @param dispute.reason - the closed reason code
@@ -264,6 +333,7 @@ export const refundReversedOpening = (
 export const disputeOpening = (
     dispute: {
         paymentId: string;
+        disputeId: string;
         orderId: string;
         kind: string;
         reason: string;
@@ -273,7 +343,7 @@ export const disputeOpening = (
 ): ShopOpening => ({
     kind: TaskKind.dispute,
     routeSet: 'PaymentRefunding',
-    link: { type: TaskLinkType.payment, id: dispute.paymentId },
+    link: { type: TaskLinkType.dispute, id: dispute.disputeId },
     subject: `Payment dispute (${dispute.kind})`,
     message: `The buyer's bank opened a ${dispute.kind} on payment ${dispute.paymentId} of order ${dispute.orderId} (${dispute.reason}). Send the evidence in the provider's dashboard before the deadline.`,
     dueAt: dispute.evidenceDueBy ? new Date(dispute.evidenceDueBy) : fallbackDueAt
@@ -285,15 +355,16 @@ export const disputeOpening = (
  *
  * @param dispute - the dispute as the provider last reported it
  * @param dispute.paymentId - the disputed payment
+ * @param dispute.disputeId - the provider's dispute id, the to-do's link
  * @param now - the clock
  */
 export const disputeAwaitingBankOpening = (
-    dispute: { paymentId: string },
+    dispute: { paymentId: string; disputeId: string },
     now: Date
 ): ShopOpening => ({
     kind: TaskKind.dispute_awaiting_bank,
     routeSet: 'PaymentRefunding',
-    link: { type: TaskLinkType.payment, id: dispute.paymentId },
+    link: { type: TaskLinkType.dispute, id: dispute.disputeId },
     subject: 'Dispute: waiting for the bank',
     message: `Proof sent. Waiting for the bank's decision on payment ${dispute.paymentId}. Nothing to do unless it runs late.`,
     dueAt: new Date(now.getTime() + AWAITING_BANK_MS),

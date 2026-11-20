@@ -44,7 +44,7 @@ import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 import { refundLegalDue } from './deadline';
-import { disputeStanding } from './disputes';
+import { disputeStanding, keptInOtherCurrencyOn } from './disputes';
 
 export { RefundLeftOpenError, WebhookProviderUnknownError } from './errors';
 export type { OfflinePaymentInput } from './offline';
@@ -74,6 +74,7 @@ export const paymentService = {
     refundOf,
     refundLegalDue,
     disputeStanding,
+    keptInOtherCurrencyOn,
     refundPayment,
     openReturnRefund,
     returnRefundState,

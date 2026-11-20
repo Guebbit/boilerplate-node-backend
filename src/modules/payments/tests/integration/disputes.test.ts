@@ -7,6 +7,7 @@
  * Real Mongo, the fake provider's dispute lever, through the services' public door.
  */
 
+import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -21,8 +22,10 @@ import { paymentRepository } from '@modules/payments/repository';
 import {
     PAYMENT_DISPUTE_OPENED,
     PAYMENT_DISPUTE_UPDATED,
-    PAYMENT_REFUNDED
+    PAYMENT_REFUNDED,
+    PAYMENT_REFUND_OWED_AFTER_DISPUTE
 } from '@modules/payments/events';
+import { paymentModel } from '@modules/payments/model';
 import paymentsModule from '@modules/payments/module';
 import { fakePaymentProvider, setFakeDispute } from '@scenarios/support/doubles/payments/fake';
 import type { ProviderDisputeState } from '@modules/payments/providers';
@@ -430,5 +433,353 @@ describe('disputeStanding', () => {
 
     it('answers undefined for a payment that does not exist', async () => {
         expect(await paymentService.disputeStanding('65dc8a99604c307b702b5ccc')).toBeUndefined();
+    });
+});
+
+/**
+ * Put a refund the dispute refused on the payment's record, the state a refund opened while a
+ * chargeback stood is left in. Written straight to storage: two such records on one payment cannot
+ * be made through the door, which keeps a single open refund per cancel.
+ *
+ * @param orderId - the order whose payment gets the record
+ * @param amount - the refund's amount, a decimal in EUR
+ * @param over - fields that make it another kind of record (settled, reversed, other reason)
+ */
+const seedRefund = async (
+    orderId: string,
+    amount: string,
+    over: Record<string, unknown> = {}
+): Promise<string> => {
+    const payment = await paymentRepository.findByOrderId(orderId);
+    const refundId = new Types.ObjectId();
+    await paymentModel
+        .updateOne(
+            { _id: payment?._id },
+            {
+                $push: {
+                    refunds: {
+                        _id: refundId,
+                        amount,
+                        currency: 'EUR',
+                        status: 'failed',
+                        reason: 'cancellation',
+                        idempotencyKey: `key-${String(refundId)}`,
+                        failureReason: 'disputed',
+                        attempts: 1,
+                        ...over
+                    }
+                }
+            }
+        )
+        .exec();
+    return String(refundId);
+};
+
+/** The `payment.refund_owed_after_dispute` payloads written so far. */
+const owedEvents = () =>
+    outboxEventModel
+        .find({ name: PAYMENT_REFUND_OWED_AFTER_DISPUTE })
+        .sort({ createdAt: 1 })
+        .lean()
+        .exec()
+        .then((rows) => rows.map(({ payload }) => payload as Record<string, unknown>));
+
+describe('a dispute ends while refunds wait on it', () => {
+    it('raises one event per refund still owed, saying the bank kept the money after a loss', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        const first = await seedRefund(orderId, '30.00');
+        const second = await seedRefund(orderId, '20.00', { reversedAt: new Date() });
+
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+
+        await settleOutboxNudges();
+        const owed = await owedEvents();
+        expect(owed).toEqual([
+            expect.objectContaining({
+                orderId,
+                disputeId: 'dp_1',
+                refundId: first,
+                amount: '30.00',
+                currency: 'EUR',
+                reversed: false,
+                bankKept: true
+            }),
+            expect.objectContaining({ refundId: second, reversed: true, bankKept: true })
+        ]);
+        expect(owed[0]).not.toHaveProperty('otherCurrency');
+    });
+
+    it('says the shop kept the money after a win', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        await seedRefund(orderId, '30.00');
+
+        await deliverReport(providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(60)
+        });
+
+        expect(await owedEvents()).toEqual([expect.objectContaining({ bankKept: false })]);
+    });
+
+    it('names the dispute’s currency when the bank kept money in another one', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        await seedRefund(orderId, '30.00');
+
+        await deliverReport(providerRef, {
+            status: 'accepted',
+            currency: 'USD',
+            observedAt: at(60)
+        });
+
+        expect(await owedEvents()).toEqual([
+            expect.objectContaining({ bankKept: true, otherCurrency: 'USD' })
+        ]);
+    });
+
+    it.each([
+        ['no refund was refused as disputed', undefined],
+        ['the refund settled elsewhere', { status: 'succeeded' }],
+        ['the refund was voided', { failureReason: 'canceled' }],
+        ['the refund was refused for another reason', { failureReason: 'declined' }]
+    ] as const)('raises nothing when %s', async (_name, over) => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        if (over) await seedRefund(orderId, '30.00', over);
+
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+
+        await settleOutboxNudges();
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(0);
+    });
+
+    it('waits for the second dispute: nothing is owed while another one is open', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        await deliverReport(providerRef, { disputeRef: 'dp_2', observedAt: at(1) });
+        await seedRefund(orderId, '30.00');
+
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(0);
+
+        await deliverReport(providerRef, {
+            disputeRef: 'dp_2',
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(90)
+        });
+        expect(await owedEvents()).toEqual([
+            expect.objectContaining({ disputeId: 'dp_2', bankKept: false })
+        ]);
+    });
+
+    it('says it once: a repeated report and a later flip of a closed dispute raise nothing more', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        await seedRefund(orderId, '30.00');
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+        await deliverReport(providerRef, {
+            status: 'won',
+            fundsWithdrawn: false,
+            observedAt: at(120)
+        });
+
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(1);
+    });
+
+    it('announces a dispute that is first reported already decided, with its owed refund', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await seedRefund(orderId, '30.00');
+
+        await deliverReport(providerRef, { status: 'lost' });
+
+        expect(await owedEvents()).toEqual([expect.objectContaining({ bankKept: true })]);
+    });
+
+    it('leaves the dispute unrecorded when the write step throws, and records it on redelivery', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        await seedRefund(orderId, '30.00');
+        const real = paymentRepository.findByOrderId.bind(paymentRepository);
+        // The re-read inside the writing transaction is the only call that carries a session.
+        const failing = jest
+            .spyOn(paymentRepository, 'findByOrderId')
+            .mockImplementation((id, scope, session) =>
+                session ? Promise.reject(new Error('read failed')) : real(id, scope, session)
+            );
+
+        await expect(
+            deliverReport(providerRef, { status: 'lost', observedAt: at(60) })
+        ).rejects.toThrow('read failed');
+
+        const stored = await paymentRepository.findByOrderId(orderId);
+        expect(stored?.disputes[0].status).toBe('needs_response');
+        expect(await events(PAYMENT_DISPUTE_UPDATED)).toBe(0);
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(0);
+
+        failing.mockRestore();
+        await deliverReport(providerRef, { status: 'lost', observedAt: at(60) });
+
+        expect(await events(PAYMENT_DISPUTE_UPDATED)).toBe(1);
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(1);
+    });
+});
+
+/**
+ * Lose the dispute, then mark the refund it refused returned: the buyer already has the money
+ * from the bank. Returns the refund's id and the payment's.
+ *
+ * @param orderId - the paid order
+ * @param providerRef - its payment's provider reference
+ * @param disputeRef - the dispute the bank kept the money in
+ */
+const loseThenMarkReturned = async (orderId: string, providerRef: string, disputeRef = 'dp_1') => {
+    await deliverReport(providerRef, { disputeRef });
+    const refundId = await seedRefund(orderId, '30.00');
+    await deliverReport(providerRef, { disputeRef, status: 'lost', observedAt: at(60) });
+    const payment = await paymentRepository.findByOrderId(orderId);
+    const settled = await paymentService.settleRefundByHand(
+        String(payment?._id),
+        refundId,
+        asAdmin(),
+        callerContextAs('admin')
+    );
+    expect(settled.success).toBe(true);
+    return refundId;
+};
+
+/** A report of a won dispute, the bank returning the funds to the shop. */
+const win = (disputeRef: string, minutes: number): Partial<ProviderDisputeState> => ({
+    disputeRef,
+    status: 'won',
+    fundsWithdrawn: false,
+    observedAt: at(minutes)
+});
+
+describe('a lost dispute flips to won after the refund was marked returned', () => {
+    it('remembers the dispute on the refund, and never shows it to a client', async () => {
+        const { orderId, providerRef } = await paidOrder();
+
+        const refundId = await loseThenMarkReturned(orderId, providerRef);
+
+        const stored = await paymentRepository.findByOrderId(orderId);
+        expect(stored?.refunds.find(({ _id }) => String(_id) === refundId)).toMatchObject({
+            status: 'succeeded',
+            settledAgainstDispute: 'dp_1'
+        });
+        const view = await staffView(orderId);
+        expect(JSON.stringify(view)).not.toContain('settledAgainstDispute');
+    });
+
+    it('raises one more event for that refund: owed again, not voidable, the shop kept the money', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        const refundId = await loseThenMarkReturned(orderId, providerRef);
+        await settleOutboxNudges();
+        // The loss itself told staff the refund was owed; that is the one already there.
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(1);
+
+        await deliverReport(providerRef, win('dp_1', 120));
+
+        await settleOutboxNudges();
+        const owed = await owedEvents();
+        expect(owed).toHaveLength(2);
+        expect(owed[1]).toEqual(
+            expect.objectContaining({
+                refundId,
+                disputeId: 'dp_1',
+                reversed: true,
+                bankKept: false,
+                markedReturned: true
+            })
+        );
+    });
+
+    it('leaves a refund staff marked returned for another dispute alone', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await loseThenMarkReturned(orderId, providerRef, 'dp_1');
+        await deliverReport(providerRef, { disputeRef: 'dp_2', observedAt: at(61) });
+
+        await deliverReport(providerRef, win('dp_2', 120));
+
+        await settleOutboxNudges();
+        // Only the one the first dispute's loss raised.
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(1);
+    });
+
+    it('raises nothing when the refund was not marked returned, or the dispute was never lost', async () => {
+        const lost = await paidOrder();
+        await deliverReport(lost.providerRef);
+        await seedRefund(lost.orderId, '30.00');
+        await deliverReport(lost.providerRef, { status: 'lost', observedAt: at(60) });
+        const won = await paidOrder();
+        await deliverReport(won.providerRef);
+        await seedRefund(won.orderId, '30.00');
+        await deliverReport(won.providerRef, win('dp_1', 60));
+        await settleOutboxNudges();
+        const sofar = await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE);
+
+        await deliverReport(lost.providerRef, win('dp_1', 120));
+
+        await settleOutboxNudges();
+        expect(await events(PAYMENT_REFUND_OWED_AFTER_DISPUTE)).toBe(sofar);
+    });
+
+    it('marks nothing when the refund is marked returned after the shop won', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef);
+        const refundId = await seedRefund(orderId, '30.00');
+        await deliverReport(providerRef, win('dp_1', 60));
+        const payment = await paymentRepository.findByOrderId(orderId);
+
+        await paymentService.settleRefundByHand(
+            String(payment?._id),
+            refundId,
+            asAdmin(),
+            callerContextAs('admin')
+        );
+
+        const stored = await paymentRepository.findByOrderId(orderId);
+        expect(stored?.refunds[0].settledAgainstDispute).toBeUndefined();
+    });
+});
+
+describe('keptInOtherCurrencyOn', () => {
+    it('answers the dispute’s currency and the payment’s for a lost chargeback in another currency', async () => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef, { status: 'lost', currency: 'USD' });
+
+        const answer = await paymentService.keptInOtherCurrencyOn(
+            await paymentIdOf(orderId),
+            'dp_1'
+        );
+
+        expect(answer).toEqual({ disputeCurrency: 'USD', paymentCurrency: 'EUR' });
+    });
+
+    it.each([
+        ['a lost one in the payment’s currency', { status: 'lost', currency: 'EUR' }, 'dp_1'],
+        ['a won one in another currency', { status: 'won', currency: 'USD' }, 'dp_1'],
+        ['a dispute id the payment does not carry', { status: 'lost', currency: 'USD' }, 'dp_x']
+    ] as const)('answers nothing for %s', async (_name, over, disputeId) => {
+        const { orderId, providerRef } = await paidOrder();
+        await deliverReport(providerRef, over);
+
+        const answer = await paymentService.keptInOtherCurrencyOn(
+            await paymentIdOf(orderId),
+            disputeId
+        );
+
+        expect(answer).toBeUndefined();
+    });
+
+    it('answers nothing for a payment that does not exist', async () => {
+        expect(
+            await paymentService.keptInOtherCurrencyOn('65dc8a99604c307b702b5ccc', 'dp_1')
+        ).toBeUndefined();
     });
 });

@@ -121,7 +121,8 @@ describe('receiving a return whose payment has nothing left', () => {
                 orderId: fixture.orderId,
                 asked: '60.00',
                 opened: '0.00',
-                currency: 'EUR'
+                currency: 'EUR',
+                cause: 'used_up'
             }
         ]);
     });
@@ -139,7 +140,8 @@ describe('receiving a return whose payment has nothing left', () => {
                 orderId: fixture.orderId,
                 asked: '60.00',
                 opened: '0.00',
-                currency: 'EUR'
+                currency: 'EUR',
+                cause: 'no_payment'
             }
         ]);
     });
@@ -186,7 +188,8 @@ describe('receiving a return whose payment has only part of it left', () => {
                 orderId: fixture.orderId,
                 asked: '60.00',
                 opened: '40.00',
-                currency: 'EUR'
+                currency: 'EUR',
+                cause: 'used_up'
             }
         ]);
     });

@@ -84,6 +84,7 @@ const announceShort = (
     orderId: string,
     input: { returnId: string; amount: string; currency: string },
     opened: string | undefined,
+    cause: 'no_payment' | 'used_up',
     session: ClientSession
 ): Promise<null> =>
     enqueueOutboxEvent(
@@ -93,7 +94,8 @@ const announceShort = (
             orderId,
             asked: padDecimal(input.amount, input.currency),
             opened: padDecimal(opened ?? '0', input.currency),
-            currency: input.currency
+            currency: input.currency,
+            cause
         },
         orderId,
         session
@@ -141,7 +143,7 @@ export const openReturnRefund = (
     paymentRepository.findByOrderId(orderId, undefined, session).then((payment) => {
         if (toMinorUnits(input.amount, input.currency) <= 0) return null;
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS)
-            return announceShort(orderId, input, undefined, session);
+            return announceShort(orderId, input, undefined, 'no_payment', session);
 
         const reason = input.reason ?? 'return';
         if (!mayReturnMoney(payment, reason, context)) {
@@ -155,7 +157,8 @@ export const openReturnRefund = (
             );
         }
 
-        if (remainingOf(payment) <= 0) return announceShort(orderId, input, undefined, session);
+        if (remainingOf(payment) <= 0)
+            return announceShort(orderId, input, undefined, 'used_up', session);
 
         // Saying the money already went back is a refund: `receive:Return` alone does not carry it.
         if (input.paidOutside && !mayRefundOutside(context)) {
@@ -195,7 +198,7 @@ export const openReturnRefund = (
             // Less than asked: the rest already went back another way. The record stands, a person is told.
             return (
                 gave < asked
-                    ? announceShort(orderId, input, record.amount, session)
+                    ? announceShort(orderId, input, record.amount, 'used_up', session)
                     : Promise.resolve(null)
             ).then(() => ({
                 refundId: String(record._id),

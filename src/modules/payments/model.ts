@@ -114,6 +114,13 @@ export interface RefundRecord {
      * asked. `reference` is staff only, like `providerRefundRef`.
      */
     paidOutside?: PaidOutside;
+    /**
+     * The dispute the bank kept money in, when staff marked this refund returned because of it: the
+     * buyer already had the money from the bank. If that dispute is later won, the bank takes it
+     * back from the buyer and this refund is owed again, so the flip finds it by this id. Internal:
+     * never on the wire.
+     */
+    settledAgainstDispute?: string;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     /**
@@ -165,6 +172,8 @@ export interface DisputeRecord {
 export interface RefundSettlement {
     providerRefundRef?: string;
     settledByHand?: true;
+    /** The dispute the bank kept money in, when this hand settle was because of it; see `RefundRecord`. */
+    settledAgainstDispute?: string;
     /** The fence token of the attempt that got the provider's answer; absent for a hand settle. */
     attempt?: Date;
     /**
@@ -291,6 +300,7 @@ const refundSchema = new Schema<RefundRecord>(
             ),
             default: undefined
         },
+        settledAgainstDispute: { type: String },
         settledAt: { type: Date },
         reversedAt: { type: Date },
         reversedAfterSettling: { type: Boolean }
@@ -434,7 +444,8 @@ const REFUND_INTERNAL_KEYS = [
     'lines',
     'shipping',
     'dueBy',
-    'dueRule'
+    'dueRule',
+    'settledAgainstDispute'
 ] as const;
 
 /**

@@ -58,6 +58,21 @@ flowchart TD
 no dispute read, and the provider's word is the only source of one). A missed event is resent from the
 provider's own dashboard, and past its window the attention row can stay until staff close it.
 
+**A dispute ends with refunds waiting.** A refund refused as `disputed` waits for the dispute. When the
+last open dispute on the payment ends, `payments` re-reads the payment inside the write's own transaction
+and writes one internal `payment.refund_owed_after_dispute` per refund still open and refused as
+`disputed` (none when another dispute is open, or nothing was refused). Each carries `bankKept` (the
+buyer already has the money) and, for money the bank kept in another currency than the payment's,
+`otherCurrency`. A throw in that step rolls the dispute back with it: the dispute stays unrecorded and
+the provider's redelivery records it. See
+[A dispute ending](../understand/outbox.md#a-dispute-ending-one-event-per-refund).
+
+**A late win after Mark returned.** Marking a refund returned after a lost dispute stores the dispute's id on
+the refund (`settledAgainstDispute`, internal, never on the wire). If that dispute flips from lost or accepted to
+`won`, the buyer's money goes back to the shop and the refund is owed again: one more
+`payment.refund_owed_after_dispute` per refund carrying that id, with `markedReturned`. A refund marked
+returned for another dispute, or after a win, is left alone.
+
 **To-dos.** The proof the shop owes is the `dispute` to-do; once it is sent (`under_review`) that closes and a `dispute_awaiting_bank` to-do waits for the bank's decision, see [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
 **Visibility.** The attention list gets `dispute_needs_response` for a dispute waiting on the shop,
@@ -69,7 +84,8 @@ rows, `dispute_opened` and `dispute_closed`.
 **Events.** `payment.dispute_opened` on the first report and `payment.dispute_updated` on each newer
 one (Shopify's two topics), both through the outbox and both public webhook events. The payload is
 ids, closed codes and money: `{paymentId, orderId, disputeId, kind, status, reason, amount, currency,
-fundsWithdrawn, evidenceDueBy?}`.
+fundsWithdrawn, evidenceDueBy?}`. `payment.refund_owed_after_dispute` is internal only (no webhook, no
+AsyncAPI channel); `shop-tasks` opens the refund to-do from it.
 
 | Provider      | Its event                                                                                | Maps to                                              |
 | ------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |

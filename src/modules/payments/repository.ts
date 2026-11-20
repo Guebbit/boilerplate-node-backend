@@ -801,7 +801,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                         ...(fields.providerRefundRef === undefined
                             ? {}
                             : { 'refunds.$.providerRefundRef': fields.providerRefundRef }),
-                        ...(fields.settledByHand ? { 'refunds.$.settledByHand': true } : {})
+                        ...(fields.settledByHand ? { 'refunds.$.settledByHand': true } : {}),
+                        ...(fields.settledAgainstDispute
+                            ? { 'refunds.$.settledAgainstDispute': fields.settledAgainstDispute }
+                            : {})
                     },
                     $unset: { 'refunds.$.failureReason': 1, 'refunds.$.nextAttemptAt': 1 }
                 },
