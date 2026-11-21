@@ -51,7 +51,7 @@ x-logging: &logging
         max-file: '5'
 
 # ── CONTAINER HARDENING, ONCE ───────────────────────────────────────────────────────────────────
-# Merged into `app`, `worker`, `cron` and `setup` with `<<: *hardening` — all four run the SAME image, so
+# Merged into `app`, `worker`, `worker-heavy`, `cron` and `setup` with `<<: *hardening` — all five run the SAME image, so
 # they have the same needs and a divergence between them would be an accident rather than a
 # decision. `USER node` in the Dockerfile already drops root; these drop what root was not the
 # only way to get:

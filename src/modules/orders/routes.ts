@@ -6,8 +6,8 @@
  *
  * `GET /orders/{id}/invoice` and `/credit-note` are NOT here: `invoicing` mounts its own router at
  * this same `/orders` basePath (the `account`/`addresses` precedent) and owns both, since it owns
- * what they read. Router order at the app tier still matters between the two — see
- * `invoicing/module.ts`.
+ * what they read. The order of the two mounts does not matter: `/:id` matches one path segment, so
+ * `/orders/{id}/invoice` is never swallowed by it.
  *
  * @see docs/understand/layers.md#layer-stack-inside-one-module
  */

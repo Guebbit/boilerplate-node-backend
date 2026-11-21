@@ -18,6 +18,7 @@ import {
     markDraftPreview,
     noStore,
     privateNoCache,
+    publicNoCache,
     resolveCacheTtl,
     setCache
 } from '@infrastructure/http/middlewares/cache';
@@ -1385,6 +1386,35 @@ describe('a draft preview', () => {
         privateNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
 
         expect(headers['cache-control']).toBe('private, no-store');
+    });
+});
+
+describe('publicNoCache', () => {
+    it('lets a shared cache keep the answer and makes a browser ask first', () => {
+        const { response, headers } = createResponse();
+        const next = jest.fn();
+
+        publicNoCache(asStub<Request>({ headers: {} }), response, next as NextFunction);
+
+        expect(headers['cache-control']).toBe('public, no-cache');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('varies on who is asking, and on nothing else', () => {
+        const { response, headers } = createResponse();
+
+        publicNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        expect(headers.vary).toBe('Authorization');
+    });
+
+    it('never reaches Redis: the module that owns the answer stores it', () => {
+        const { response } = createResponse();
+
+        publicNoCache(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
     });
 });
 

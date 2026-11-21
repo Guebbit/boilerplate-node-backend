@@ -24,9 +24,15 @@ import { findRule, ruleId } from '@kernel/permissions';
 type Security = Record<string, string[]>[];
 
 /** Operations that stay anonymous-readable but give an API key the wider view. */
-const KEY_AWARE_OPTIONAL_READS = new Set(
-    isDeployed('products') ? ['GET /products', 'POST /products/search', 'GET /products/{id}'] : []
-);
+const KEY_AWARE_OPTIONAL_READS = new Set([
+    ...(isDeployed('products')
+        ? ['GET /products', 'POST /products/search', 'GET /products/{id}']
+        : []),
+    // Inventory's availability reads: a key holding `display:Product` also sees hidden products.
+    ...(isDeployed('inventory')
+        ? ['GET /products/availability', 'GET /products/{id}/availability']
+        : [])
+]);
 
 /** `METHOD /spec/{path}` for each operation's security list, read from the bundle. */
 const specSecurity = (): Map<string, Security | undefined> => {

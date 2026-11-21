@@ -775,3 +775,21 @@ export const privateNoCache = (request: Request, response: Response, next: NextF
     response.vary('Accept-Language');
     next();
 };
+
+/**
+ * For a GET every caller may keep a copy of, but only after asking the server (`x-cache: revalidate`)
+ * — the availability reads, whose answer moves with every sale and is cached by their own module
+ * under their own keys, so this layer only sets the headers.
+ *
+ * Server:  no Redis entry. The module that owns the answer stores and clears it.
+ * Browser: `public, no-cache`: it may store the answer and must re-check, a `304` when the ETag
+ *          still matches. `public` because the answer is the same for every caller who may see it.
+ * Vary:    `Authorization` only. A caller who sees more (staff reading a hidden product) gets
+ *          an answer a guest would not, so a shared cache must tell them apart; there is no
+ *          `Accept-Language`, because a successful answer carries no words.
+ */
+export const publicNoCache = (_request: Request, response: Response, next: NextFunction) => {
+    response.set('Cache-Control', 'public, no-cache');
+    response.vary('Authorization');
+    next();
+};
