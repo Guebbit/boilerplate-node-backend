@@ -44,10 +44,9 @@ KUBECONFIG_FILE="$STATE/kubeconfig"
 
 # Envoy Gateway: the newest release at least two weeks old on build day, fetched by URL and checked
 # against a hash written here, never vendored. A new release: bump both lines, after reading its notes.
-# v1.10.0 is eligible from 2026-11-20.
 # https://github.com/envoyproxy/gateway/releases
-EG_VERSION=v1.9.3
-EG_SHA256=ac89b0b564e52c97c97a3f8b4d82bb594a0fbc810431fb2e6ffd91702aabebfb
+EG_VERSION=v1.10.0
+EG_SHA256=f87f4d59b983aa760da52a2a0002c612028106fe69beefdf3d30cfb03905944e
 EG_URL="https://github.com/envoyproxy/gateway/releases/download/$EG_VERSION/install.yaml"
 
 # Prints a step heading.
