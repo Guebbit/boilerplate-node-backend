@@ -108,12 +108,12 @@ It is not a signal in the table above. Nothing reads it, nothing stores it, and 
 process — it is a call graph device, and the price it pays is the call graph itself: "find all
 references" no longer reaches the handler.
 
-**These are deliberately not AsyncAPI channels**, and their absence from `asyncapi.yaml` is not a
-gap to fill: a channel is declared only for something that crosses a process boundary
-([why](../build/asyncapi-workflow.md#naming-convention), including the one that was declared in error
-and removed). Each event's contract — when it fires, what the payload means, and what a listener may
-assume — is the JSDoc on the `DomainEventMap` augmentation in the emitting module's own
-`events.ts`. That is what a test asserting an event's effect is graded against.
+**These are not public AsyncAPI channels.** Each event's contract — when it fires, what the payload
+means, and what a listener may assume — is its channel in the emitting module's
+`asyncapi.domain-events.yaml`: a backend-only section that never reaches `asyncapi.public.yaml`
+([how](../build/asyncapi-workflow.md#domain-events)). The generated `DomainEventMap` types the bus from
+it, and the [outbox](./outbox.md) validates a stored payload against it before any handler runs. That
+is what a test asserting an event's effect is graded against.
 
 ### The three properties that matter
 
@@ -124,8 +124,9 @@ assume — is the JSDoc on the `DomainEventMap` augmentation in the emitting mod
 - **A throwing handler is logged and skipped.** It stops neither the remaining handlers nor the
   emitter: a listener must not roll back an operation that was already authorised, and the emitting
   module cannot decide failure modes for code it has never heard of.
-- **The payload map is open.** A module declares its own events by augmenting `DomainEventMap` from
-  inside its own folder, so adding a domain edits no shared file.
+- **The payload map is generated, and each module owns its part.** A module declares its events in
+  its own `asyncapi.domain-events.yaml`, so adding a domain edits no shared file; `DomainEventMap`
+  is generated from all of them.
 
 ### Why it is not a substitute for the broker
 

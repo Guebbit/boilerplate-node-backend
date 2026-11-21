@@ -661,3 +661,108 @@ describe('compose.yaml shares names, builds and pins, and nothing the production
         ).toEqual([]);
     });
 });
+
+/**
+ * `NODE_*_FILE` variables of an env file, as variable to the secret file's name (the last path segment).
+ *
+ * @param text - a dotenv-style file: `NAME=value` lines, `#` comments
+ */
+const secretFilesOfEnv = (text: string): Map<string, string> =>
+    new Map(
+        text
+            .split('\n')
+            .map((line) => /^(NODE_[A-Z0-9_]+_FILE)=\/run\/secrets\/(\S+)$/.exec(line))
+            .filter((match) => match !== null)
+            .map((match) => [match[1] ?? '', match[2] ?? ''])
+    );
+
+/**
+ * The words of every `for name in <words>; do` list in a shell script, backslash continuations joined.
+ *
+ * @param script - the script's text
+ */
+const forNameLists = (script: string): string[] =>
+    [...script.replaceAll('\\\n', ' ').matchAll(/for name in ([^;]+); do/g)].flatMap((match) =>
+        (match[1] ?? '').split(/\s+/).filter(Boolean)
+    );
+
+describe('the Kubernetes manifests, compose, the rig and boot-check name the same secret files', () => {
+    const k8sFiles = secretFilesOfEnv(
+        readFileSync(path.join(REPO_ROOT, 'k8s', 'base', 'app.env'), 'utf8')
+    );
+    const rigScript = readFileSync(path.join(REPO_ROOT, 'k8s', 'rig.sh'), 'utf8');
+    const bootCheck = readFileSync(path.join(REPO_ROOT, 'docker', 'boot-check.sh'), 'utf8');
+
+    /**
+     * The passwords of the backing services. The rig runs Mongo, Redis and no broker, all without
+     * auth (k8s/base/app.env says so), so it has no file for them. Everything else is shared.
+     */
+    const BACKING_PASSWORDS = [
+        'NODE_DB_PASSWORD_FILE',
+        'NODE_REDIS_PASSWORD_FILE',
+        'NODE_RATE_LIMIT_REDIS_PASSWORD_FILE',
+        'NODE_RABBITMQ_PASSWORD_FILE'
+    ];
+    const composeFiles = secretFilesOfEnv(
+        Object.entries(environmentOf('app'))
+            .map(([variable, value]) => `${variable}=${value}`)
+            .join('\n')
+    );
+    for (const variable of BACKING_PASSWORDS) composeFiles.delete(variable);
+
+    /**
+     * boot-check.sh names its throwaway files short (`totp`, `pii`) and sets only the variables the
+     * production gate needs to boot. The map is explicit: the short name is not derivable from the variable.
+     */
+    const BOOT_CHECK_FILE_NAMES: Record<string, string> = {
+        NODE_TOKEN_ACCESS_FILE: 'token_access',
+        NODE_TOKEN_REFRESH_FILE: 'token_refresh',
+        NODE_TOTP_ENCRYPTION_KEY_FILE: 'totp',
+        NODE_PII_ENCRYPTION_KEY_FILE: 'pii',
+        NODE_WEBHOOK_SECRET_ENCRYPTION_KEY_FILE: 'webhook',
+        NODE_PSEUDONYM_KEY_FILE: 'pseudonym',
+        NODE_METRICS_TOKEN_FILE: 'metrics',
+        NODE_DEVICE_COOKIE_SECRET_FILE: 'device_cookie'
+    };
+    const bootCheckFiles = secretFilesOfEnv(
+        [...bootCheck.matchAll(/-e (NODE_[A-Z0-9_]+_FILE=\/run\/secrets\/\S+)/g)]
+            .map((match) => match[1])
+            .join('\n')
+    );
+
+    // A parity test over two empty sets passes; this one cannot.
+    it('reads a non-empty set from every source', () => {
+        expect(k8sFiles.size).toBeGreaterThan(0);
+        expect(composeFiles.size).toBeGreaterThan(0);
+        expect(forNameLists(rigScript).length).toBeGreaterThan(0);
+        expect(bootCheckFiles.size).toBeGreaterThan(0);
+    });
+
+    it('gives the manifests and the production compose the same variables, each on the same file', () => {
+        expect(Object.fromEntries(k8sFiles)).toEqual(Object.fromEntries(composeFiles));
+    });
+
+    it('has the rig create exactly the secret files the manifests mount', () => {
+        expect(forNameLists(rigScript).toSorted()).toEqual([...k8sFiles.values()].toSorted());
+    });
+
+    it('declares in the production compose every secret file the manifests mount', () => {
+        expect(Object.keys(compose.secrets ?? {})).toEqual(
+            expect.arrayContaining([...k8sFiles.values()])
+        );
+    });
+
+    it('has boot-check set only variables the manifests set, on the file it generates', () => {
+        const generated = forNameLists(bootCheck);
+        const wrong = [...bootCheckFiles].filter(
+            ([variable, file]) =>
+                !k8sFiles.has(variable) || BOOT_CHECK_FILE_NAMES[variable] !== file
+        );
+
+        expect(wrong).toEqual([]);
+        expect(generated.toSorted()).toEqual(Object.values(BOOT_CHECK_FILE_NAMES).toSorted());
+        expect(Object.keys(BOOT_CHECK_FILE_NAMES).toSorted()).toEqual(
+            [...bootCheckFiles.keys()].toSorted()
+        );
+    });
+});

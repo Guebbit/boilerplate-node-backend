@@ -1,311 +1,54 @@
 /**
  * @module
- * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. `payment.succeeded` and
+ * Domain events this module emits, declared in `./asyncapi.domain-events.yaml`. `payment.succeeded` and
  * `payment.failed` are emitted from `settlePayment`, the one place a payment is reconciled
  * (`./services/settlement`); `payment.refunded` comes from `./services/refunds.ts`.
  */
 
-import type { DisputeKind, DisputeReason, DisputeStatus, RefundFailureReason } from '@types';
+import type { DomainEventMap, DomainEventName } from '@kernel/events';
 
 /**
  * What both dispute events carry: the dispute as the provider last reported it, never its free
- * text. Money is a decimal in `currency`; `evidenceDueBy` is an ISO time.
+ * text. The generated payload (`asyncapi.domain-events.yaml`), under the name callers use.
  */
-export interface DisputeEventPayload {
-    paymentId: string;
-    orderId: string;
-    /** The provider's dispute id. */
-    disputeId: string;
-    kind: DisputeKind;
-    status: DisputeStatus;
-    reason: DisputeReason;
-    amount: string;
-    currency: string;
-    fundsWithdrawn: boolean;
-    evidenceDueBy?: string;
-}
+export type DisputeEventPayload = DomainEventMap['payment.dispute_opened'];
 
-/** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        /**
-         * A payment settled. Emitted alongside `order.status_changed` (`to: 'paid'`), from the
-         * same at-most-once write — `webhooks` is the first listener that needs this as its own
-         * fact rather than inferred from the order's status.
-         *
-         * Delivered through the transactional outbox (`./services/announce.ts`), not emitted inline:
-         * at-least-once, so a listener dedupes on `meta.eventId`. It can arrive after the
-         * settlement's response, and — when a settlement died after charging — minutes later.
-         */
-        'payment.succeeded': { paymentId: string; orderId: string };
+/** See the `payment.succeeded` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_SUCCEEDED = 'payment.succeeded' satisfies DomainEventName;
 
-        /**
-         * The provider declined the method. Retryable with another method (see
-         * `CONFIRMABLE_PAYMENT_STATUSES`), so this can fire more than once for the same order —
-         * each attempt is its own fact, same as `paymentsAuditActions.PAYMENT_FAILED`.
-         *
-         * Delivered through the transactional outbox (`./services/announce.ts`'s `recordDecline`),
-         * written with the `declined` status move: at-least-once, so a listener dedupes on
-         * `meta.eventId`.
-         */
-        'payment.failed': { paymentId: string; orderId: string };
+/** See the `payment.failed` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_FAILED = 'payment.failed' satisfies DomainEventName;
 
-        /**
-         * One refund settled — emitted from `./services/refund-settlement.ts`'s
-         * `settleRefund`, on the same at-most-once write, whether an operator asked for it (`refundPayment`) or the automatic
-         * `order.canceled` listener did. A payment can raise it more than once: each partial
-         * refund is its own fact. `invoicing` is the listener that issues a credit note from it.
-         * Absent while a hand-paid refund waits for an operator
-         * (`leaveForOperator`): its record is open and nothing has settled yet.
-         *
-         * `amount` is THIS refund's, not the payment's. `full` says the refund is the whole payment,
-         * the one case where a credit note mirrors the invoice instead of apportioning it.
-         *
-         * Delivered through the transactional outbox, written in the transaction that settles the
-         * refund record (`./services/refunds.ts`): at-least-once, so a listener dedupes on
-         * `meta.eventId`.
-         */
-        'payment.refunded': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            /** The return this refund pays for, when it is one — `returns` closes it on this. */
-            returnId?: string;
-            /**
-             * The goods and delivery this refund pays back, when it pays for specific ones — so
-             * `invoicing` credits each line at its own VAT rate. Absent for goodwill and
-             * cancellation refunds, which a credit note spreads across every rate instead.
-             */
-            goods?: {
-                lines: { productId: string; quantity: number }[];
-                /** The delivery cost inside `amount`, a decimal. */
-                shipping: string;
-            };
-            amount: string;
-            currency: string;
-            full: boolean;
-        };
+/** See the `payment.refunded` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUNDED = 'payment.refunded' satisfies DomainEventName;
 
-        /**
-         * Staff voided a refund that must never be paid (`./services/refunds.ts`'s `cancelRefund`).
-         * No money moved and none will: the record is closed and its share is refundable again.
-         * Nothing is credited and no webhook carries it; a staff task or attention row that
-         * waited on that refund closes on it.
-         *
-         * Delivered through the transactional outbox, written in the transaction that voids the
-         * record: at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.refund_canceled': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            amount: string;
-            currency: string;
-        };
+/** See the `payment.refund_canceled` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_CANCELED = 'payment.refund_canceled' satisfies DomainEventName;
 
-        /**
-         * The provider refused a refund, or reported one failed. `final` says whether the refusal
-         * ends the retrying (`FINAL_REFUND_FAILURES`): the money has to go back another way, and the
-         * buyer is told so. A transient refusal (`final: false`) is retried by the sweep and only
-         * worth a digest line. Emitted once per NEW refusal (the first, or a changed reason), so a
-         * retry that fails the same way is silent.
-         *
-         * `failureReason` is the closed code, never the provider's wording.
-         *
-         * Delivered through the transactional outbox, written in the transaction that records the
-         * refusal: at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.refund_failed': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            amount: string;
-            currency: string;
-            failureReason: RefundFailureReason;
-            final: boolean;
-        };
+/** See the `payment.refund_failed` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_FAILED = 'payment.refund_failed' satisfies DomainEventName;
 
-        /**
-         * The provider took back a refund it had settled (a bank sent the money back). The credit
-         * note and a closed return stay; the record is open again and owed another way until staff
-         * mark it returned, which fires `payment.refunded` once more for the same `refundId`.
-         *
-         * Delivered through the transactional outbox, written in the transaction that reverses the
-         * record: at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.refund_reversed': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            amount: string;
-            currency: string;
-            failureReason: RefundFailureReason;
-        };
+/** See the `payment.refund_reversed` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_REVERSED = 'payment.refund_reversed' satisfies DomainEventName;
 
-        /**
-         * The buyer's bank disputed a card payment, first reported (an inquiry or a chargeback).
-         * It is not a refund: nothing is credited and the order does not change. The shop answers
-         * in the provider's dashboard before `evidenceDueBy`; a staff task opens on this.
-         *
-         * Delivered through the transactional outbox, written in the transaction that stores the
-         * dispute: at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.dispute_opened': DisputeEventPayload;
+/** See the `payment.dispute_opened` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_DISPUTE_OPENED = 'payment.dispute_opened' satisfies DomainEventName;
 
-        /**
-         * A newer report of a dispute already on file: evidence under review, decided, accepted,
-         * or a closed one reopened (a late win, a second chargeback). `status` says where it is; a
-         * repeated or older report announces nothing.
-         *
-         * Delivered through the transactional outbox, written in the transaction that replaces the
-         * stored dispute: at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.dispute_updated': DisputeEventPayload;
+/** See the `payment.dispute_updated` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_DISPUTE_UPDATED = 'payment.dispute_updated' satisfies DomainEventName;
 
-        /**
-         * A dispute ended and a refund it had refused (`failureReason: disputed`) is owed again:
-         * one event PER refund, written in the transaction that records the dispute's end, so a
-         * redelivery or a crash after the commit opens each to-do exactly once. Raised only when
-         * no other dispute on the payment is still open. `bankKept` says whether ANY dispute on the
-         * payment kept money (the buyer already has it, or the shop kept it); `otherCurrency` is set
-         * when a kept dispute is in another currency than the payment's, which the app never subtracted.
-         * A dispute the bank had kept money in that then flips to won raises one more per refund
-         * staff had marked returned for it (`markedReturned`): the bank took the money back from
-         * the buyer, so it is owed again. It also raises the event again for each refund still
-         * refused as `disputed`, with `followsFlip` (it only words the to-do: "first lost, then won").
-         * `tasks` replaces a refund's open to-do whenever a new event of this name words it differently.
-         * Internal only: no AsyncAPI channel carries it; `tasks` opens the work from it.
-         *
-         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
-         * `meta.eventId`.
-         */
-        'payment.refund_owed_after_dispute': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            disputeId: string;
-            amount: string;
-            currency: string;
-            /** `true` when the bank had taken the refund back after it settled, else it was refused. */
-            reversed: boolean;
-            bankKept: boolean;
-            otherCurrency?: string;
-            /** `true` when staff had marked the refund returned and a late win makes it owed again. */
-            markedReturned?: true;
-            /** `true` when a lost dispute flipped to won, for the wording. */
-            followsFlip?: true;
-        };
+/** See the `payment.refund_owed_after_dispute` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_OWED_AFTER_DISPUTE =
+    'payment.refund_owed_after_dispute' satisfies DomainEventName;
 
-        /**
-         * A refund of a hand-recorded payment opened, so the money is owed outside the app (cash,
-         * a transfer): nothing here can send it, and a person has to. Written in the transaction
-         * that opens the record; the refund closes on `payment.refunded` or
-         * `payment.refund_canceled`. Internal only: no AsyncAPI channel carries it; `tasks`
-         * opens the work from it.
-         *
-         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
-         * `meta.eventId`.
-         */
-        'payment.refund_owed_by_hand': {
-            paymentId: string;
-            orderId: string;
-            refundId: string;
-            amount: string;
-            currency: string;
-        };
+/** See the `payment.refund_owed_by_hand` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_OWED_BY_HAND = 'payment.refund_owed_by_hand' satisfies DomainEventName;
 
-        /**
-         * The provider reported a success that is not the payment frozen for the order (another
-         * amount, currency or payment id). The order was canceled and the refund opened; a person
-         * has to look at why. Written in the settlement's transaction. Internal only.
-         *
-         * Delivered through the transactional outbox: at-least-once, so a listener dedupes on
-         * `meta.eventId`.
-         */
-        'payment.amount_mismatch': { paymentId: string; orderId: string };
+/** See the `payment.amount_mismatch` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_AMOUNT_MISMATCH = 'payment.amount_mismatch' satisfies DomainEventName;
 
-        /**
-         * A refund made in the provider's own dashboard that the import could not record: it lost
-         * the race on the running total on every attempt (`lost_race`), or it is in another
-         * currency than the payment and is never converted (`other_currency`). Money moved at the
-         * provider and the books do not show it; `tasks` opens a staff to-do, and "Re-sync refunds"
-         * (`POST /payments/{id}/refunds/sync`) runs the import again. Internal only.
-         *
-         * Delivered through the transactional outbox, written in a transaction of its own:
-         * at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.refund_unrecorded': {
-            paymentId: string;
-            orderId: string;
-            /** The provider's refund id, to find it in the dashboard. */
-            refundRef: string;
-            amount: string;
-            currency: string;
-            reason: 'lost_race' | 'other_currency';
-        };
+/** See the `payment.refund_unrecorded` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_REFUND_UNRECORDED = 'payment.refund_unrecorded' satisfies DomainEventName;
 
-        /**
-         * A return asked for money and the payment could not give all of it: part of it already went
-         * back another way (goodwill, a dashboard refund, a lost chargeback), or none of it can
-         * (`opened` is `0.00`: no succeeded payment, or nothing left on it). `tasks` opens a staff
-         * to-do on the return; staff check whether the buyer is owed the rest. Internal only.
-         *
-         * Delivered through the transactional outbox, written in the return's own transaction:
-         * at-least-once, so a listener dedupes on `meta.eventId`.
-         */
-        'payment.return_refund_short': {
-            returnId: string;
-            orderId: string;
-            /** What the return asked for, a decimal in `currency`. */
-            asked: string;
-            /** What the refund record opened for, a decimal; `0.00` when none was opened. */
-            opened: string;
-            currency: string;
-            /**
-             * Why it came up short: `no_payment` when no succeeded payment stands behind the
-             * order, `used_up` when the payment had less left than asked (it went back another way).
-             */
-            cause: 'no_payment' | 'used_up';
-        };
-    }
-}
-
-/** See `DomainEventMap['payment.succeeded']` above. */
-export const PAYMENT_SUCCEEDED = 'payment.succeeded';
-
-/** See `DomainEventMap['payment.failed']` above. */
-export const PAYMENT_FAILED = 'payment.failed';
-
-/** See `DomainEventMap['payment.refunded']` above. */
-export const PAYMENT_REFUNDED = 'payment.refunded';
-
-/** See `DomainEventMap['payment.refund_canceled']` above. */
-export const PAYMENT_REFUND_CANCELED = 'payment.refund_canceled';
-
-/** See `DomainEventMap['payment.refund_failed']` above. */
-export const PAYMENT_REFUND_FAILED = 'payment.refund_failed';
-
-/** See `DomainEventMap['payment.refund_reversed']` above. */
-export const PAYMENT_REFUND_REVERSED = 'payment.refund_reversed';
-
-/** See `DomainEventMap['payment.dispute_opened']` above. */
-export const PAYMENT_DISPUTE_OPENED = 'payment.dispute_opened';
-
-/** See `DomainEventMap['payment.dispute_updated']` above. */
-export const PAYMENT_DISPUTE_UPDATED = 'payment.dispute_updated';
-
-/** See `DomainEventMap['payment.refund_owed_after_dispute']` above. */
-export const PAYMENT_REFUND_OWED_AFTER_DISPUTE = 'payment.refund_owed_after_dispute';
-
-/** See `DomainEventMap['payment.refund_owed_by_hand']` above. */
-export const PAYMENT_REFUND_OWED_BY_HAND = 'payment.refund_owed_by_hand';
-
-/** See `DomainEventMap['payment.amount_mismatch']` above. */
-export const PAYMENT_AMOUNT_MISMATCH = 'payment.amount_mismatch';
-
-/** See `DomainEventMap['payment.refund_unrecorded']` above. */
-export const PAYMENT_REFUND_UNRECORDED = 'payment.refund_unrecorded';
-
-/** See `DomainEventMap['payment.return_refund_short']` above. */
-export const PAYMENT_RETURN_REFUND_SHORT = 'payment.return_refund_short';
+/** See the `payment.return_refund_short` channel in `asyncapi.domain-events.yaml`. */
+export const PAYMENT_RETURN_REFUND_SHORT = 'payment.return_refund_short' satisfies DomainEventName;

@@ -24,7 +24,7 @@
         "lint:openapi:modules": "spectral lint --ruleset shared/contracts/spectral.modules.yaml src/modules/*/openapi.yaml",
         "lint:asyncapi": "tsx scripts/contracts/validate-asyncapi.ts asyncapi.yaml asyncapi.public.yaml",
         "lint:asyncapi:names": "spectral lint --ruleset shared/contracts/spectral.asyncapi.names.yaml asyncapi.yaml",
-        "lint:asyncapi:modules": "spectral lint --ruleset shared/contracts/spectral.asyncapi.modules.yaml src/modules/*/asyncapi.yaml shared/contracts/asyncapi.workers.yaml",
+        "lint:asyncapi:modules": "spectral lint --ruleset shared/contracts/spectral.asyncapi.modules.yaml src/modules/*/asyncapi.yaml shared/contracts/asyncapi.workers.yaml shared/contracts/asyncapi.domain-events.yaml",
         "prettier:check": "prettier . --check",
         "prettier:fix": "prettier . --write",
         "contracts:bundle": "tsx scripts/contracts/build-bundles.ts",

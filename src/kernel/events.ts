@@ -10,23 +10,18 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import type { DomainEventMap, DomainEventName } from '@types';
 
 /**
- * Event name → payload. Augmented per module; see `modules/products/events.ts` for the shape.
+ * Event name → payload, and the names as a union: generated from the `domain-events` section of
+ * `asyncapi.yaml` (each emitting module's `asyncapi.domain-events.yaml`). A new event is declared
+ * there, never here. Re-exported so a caller keeps one import for the bus and its types; a caller
+ * that only learns a name at runtime (`kernel/registry.ts`'s `resolvePublicEvents`) casts to
+ * {@link DomainEventName} to hand it to {@link onDomainEvent}.
  *
- * Intentionally empty here: this is the extension point, and its members live with the domains
- * that emit them rather than in a list that every new domain has to edit.
+ * @see docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
-export interface DomainEventMap {}
-
-/**
- * The literal event names {@link DomainEventMap} declares, as a string union. Exported so a caller
- * that only learns a domain event's name at runtime (`kernel/registry.ts`'s `resolvePublicEvents`,
- * collected off a module manifest rather than a compile-time literal) has a name for the cast that
- * hands it back to {@link onDomainEvent}.
- */
-export type DomainEventName = Extract<keyof DomainEventMap, string>;
+export type { DomainEventMap, DomainEventName } from '@types';
 
 /**
  * What travels beside a payload. Empty for an in-process emit; the outbox relay (`./outbox`)

@@ -69,12 +69,16 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | …inside a transaction the caller owns     | `announceWithin` in `src/kernel/outbox.ts`           |
 
 Which file announces which event is its call site: `announceInTransaction` and `announceWithin` are called
-where the fact is written, and the event names and payloads are in `asyncapi.yaml`. Search for the
+where the fact is written, and the event names and payloads are in each module's `asyncapi.domain-events.yaml`. Search for the
 event name.
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
-already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
-that was not already crossed by `webhooks`' own queue.
+already subscribes to. Before it does, it checks the row against the event's schema in the
+`domain-events` section of `asyncapi.yaml` (see [Domain events](../build/asyncapi-workflow.md#domain-events)):
+a name the contract does not declare, or a payload that fails its schema, fails the dispatch like a
+throwing consumer would, so the row is retried and then parked `dead`. An unknown field is dropped,
+not refused. No broker is involved: nothing here crosses a process boundary that was not already
+crossed by `webhooks`' own queue.
 
 ## Using it
 
@@ -110,7 +114,8 @@ Rules of thumb:
 - **Same session as the state change.** A write made without it is not part of the transaction.
 - **Pick the aggregate carefully.** Events that must stay in order share an `aggregateId`.
 - **Nudge after commit.** Skipping it only delays delivery to the next sweep.
-- **Declare the event** on `DomainEventMap` in the module's `events.ts`, as for any domain event.
+- **Declare the event** in the module's `asyncapi.domain-events.yaml` (`x-transport: outbox`), as for any
+  domain event, and run `npm run regenerate`. A name or payload the schema does not describe never reaches a handler.
 
 ## Why `payment.succeeded` is written in the settlement transaction
 

@@ -19,11 +19,7 @@ import { paymentService } from './services';
 import { cancelOpenIntentForOrder } from './services/intent';
 import { refundForOrder } from './services/refunds';
 import { paymentsRateLimits } from './rate-limits';
-/**
- * Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
- * PAYMENT_REFUNDED). Reached directly, never through this module's own barrel (CLAUDE.md,
- * "Module barrels").
- */
+/** Reached directly, never through this module's own barrel (CLAUDE.md, "Module barrels"). */
 import {
     PAYMENT_SUCCEEDED,
     PAYMENT_FAILED,

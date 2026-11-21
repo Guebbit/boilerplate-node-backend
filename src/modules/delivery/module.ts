@@ -33,10 +33,7 @@ import { orderRouter } from './order-routes';
 import { deliveryConfig } from './config';
 import { deliveryService } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
-/**
- * Also installs this module's event declarations. Reached directly, never through this module's
- * own barrel — see CLAUDE.md's module-barrel rule.
- */
+/** Reached directly, never through this module's own barrel — see CLAUDE.md's module-barrel rule. */
 import {
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HOLD_NOTICED,

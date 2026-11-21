@@ -96,8 +96,8 @@ rows, `dispute_opened` and `dispute_closed`.
 **Events.** `payment.dispute_opened` on the first report and `payment.dispute_updated` on each newer
 one (Shopify's two topics), both through the outbox and both public webhook events. The payload is
 ids, closed codes and money: `{paymentId, orderId, disputeId, kind, status, reason, amount, currency,
-fundsWithdrawn, evidenceDueBy?}`. `payment.refund_owed_after_dispute` is internal only (no webhook, no
-AsyncAPI channel); `shop-tasks` opens the refund to-do from it.
+fundsWithdrawn, evidenceDueBy?}`. `payment.refund_owed_after_dispute` is internal only (no webhook, only a
+backend-only `domain-events` channel); `shop-tasks` opens the refund to-do from it.
 
 | Provider      | Its event                                                                                | Maps to                                              |
 | ------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------- |

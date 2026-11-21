@@ -11,11 +11,8 @@ import { logger } from '@infrastructure/adapters/logger';
 
 jest.mock('@infrastructure/adapters/logger', () => ({ logger: { error: jest.fn() } }));
 
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        'test.thing-happened': { id: string };
-    }
-}
+/** A real contracted event stands in for a test-only one: the bus is typed by the contract. */
+const EVENT = 'account.authenticator_removed' as const;
 
 afterEach(() => {
     resetDomainEvents();
@@ -25,11 +22,11 @@ afterEach(() => {
 describe('emitDomainEvent', () => {
     it('delivers the payload to a subscriber', async () => {
         const handler = jest.fn();
-        onDomainEvent('test.thing-happened', handler);
+        onDomainEvent(EVENT, handler);
 
-        await emitDomainEvent('test.thing-happened', { id: 'abc' });
+        await emitDomainEvent(EVENT, { userId: 'abc' });
 
-        expect(handler).toHaveBeenCalledWith({ id: 'abc' }, {});
+        expect(handler).toHaveBeenCalledWith({ userId: 'abc' }, {});
     });
 
     it('resolves only after an async handler has finished', async () => {
@@ -38,7 +35,7 @@ describe('emitDomainEvent', () => {
          * the row disappears. A fire-and-forget bus would pass every other test in this file.
          */
         const order: string[] = [];
-        onDomainEvent('test.thing-happened', async () => {
+        onDomainEvent(EVENT, async () => {
             /**
              * A task hop rather than a timer: a fire-and-forget bus would push 'emitter' first
              * either way, and this cannot be slow enough to matter or fast enough to race.
@@ -47,7 +44,7 @@ describe('emitDomainEvent', () => {
             order.push('handler');
         });
 
-        await emitDomainEvent('test.thing-happened', { id: 'abc' });
+        await emitDomainEvent(EVENT, { userId: 'abc' });
         order.push('emitter');
 
         expect(order).toEqual(['handler', 'emitter']);
@@ -55,30 +52,30 @@ describe('emitDomainEvent', () => {
 
     it('runs every subscriber, and keeps going when one throws', async () => {
         const second = jest.fn();
-        onDomainEvent('test.thing-happened', () => {
+        onDomainEvent(EVENT, () => {
             throw new Error('listener exploded');
         });
-        onDomainEvent('test.thing-happened', second);
+        onDomainEvent(EVENT, second);
 
         /**
          * `false`, not a rejection: the emit still succeeded, and the caller decides what an
          * unsettled handler means to it. `orders` reads this to keep a refund marker standing.
          */
-        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
+        await expect(emitDomainEvent(EVENT, { userId: 'abc' })).resolves.toBe(false);
         expect(second).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining('test.thing-happened'),
+            expect.stringContaining(EVENT),
             // Under an `error` key, so the logger serialises it (and, in production, drops the stack).
             { error: expect.any(Error) }
         );
     });
 
     it('does not reject when an async handler rejects', async () => {
-        onDomainEvent('test.thing-happened', () => Promise.reject(new Error('async boom')));
+        onDomainEvent(EVENT, () => Promise.reject(new Error('async boom')));
 
-        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
+        await expect(emitDomainEvent(EVENT, { userId: 'abc' })).resolves.toBe(false);
         // The rejection itself is what gets logged, not a generic "something failed".
-        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('test.thing-happened'), {
+        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(EVENT), {
             error: expect.objectContaining({ message: 'async boom' })
         });
     });
@@ -88,26 +85,26 @@ describe('emitDomainEvent', () => {
          * The other half of the signal, asserted on its own: a `false` that was never `true` for
          * a clean emit would keep every marker standing forever.
          */
-        onDomainEvent('test.thing-happened', jest.fn());
-        onDomainEvent('test.thing-happened', () => Promise.resolve());
+        onDomainEvent(EVENT, jest.fn());
+        onDomainEvent(EVENT, () => Promise.resolve());
 
-        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(true);
+        await expect(emitDomainEvent(EVENT, { userId: 'abc' })).resolves.toBe(true);
         expect(logger.error).not.toHaveBeenCalled();
     });
 
     it('is a no-op when nothing subscribes', async () => {
         // Vacuously settled — nothing threw, so nothing is owed.
-        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(true);
+        await expect(emitDomainEvent(EVENT, { userId: 'abc' })).resolves.toBe(true);
     });
 });
 
 describe('resetDomainEvents', () => {
     it('drops subscriptions so they do not leak between tests', async () => {
         const handler = jest.fn();
-        onDomainEvent('test.thing-happened', handler);
+        onDomainEvent(EVENT, handler);
 
         resetDomainEvents();
-        await emitDomainEvent('test.thing-happened', { id: 'abc' });
+        await emitDomainEvent(EVENT, { userId: 'abc' });
 
         expect(handler).not.toHaveBeenCalled();
     });

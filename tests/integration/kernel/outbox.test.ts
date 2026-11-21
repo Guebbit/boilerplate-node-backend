@@ -32,18 +32,22 @@ import {
 
 setupTestDb();
 
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        'test.outbox': { n: number };
-    }
-}
+/**
+ * A real contracted event stands in for the test's own: the relay refuses a name the `domain-events`
+ * contract does not declare. `n` rides in `userId`, which the subscribers read back.
+ */
+const EVENT = 'account.sessions_revoked' as const;
+
+/** The payload carrying `n`. */
+const payload = (n: number) => ({ userId: String(n), reason: 'logout-all' as const });
 
 /** Every delivery a subscriber saw: the payload's `n` and the stable event id. */
 let seen: { n: number; eventId?: string }[];
 
 /** Record every delivery, and optionally throw for the ones `failWhen` names. */
 const subscribe = (failWhen: (n: number) => boolean = () => false): void => {
-    onDomainEvent('test.outbox', ({ n }, meta: DomainEventMeta) => {
+    onDomainEvent(EVENT, ({ userId }, meta: DomainEventMeta) => {
+        const n = Number(userId);
         if (failWhen(n)) throw new Error('consumer down');
         seen.push({ n, eventId: meta.eventId });
     });
@@ -57,7 +61,7 @@ const deadCounted = (): Promise<number> =>
 
 /** Write one event in its own committed transaction. */
 const write = (n: number, aggregateId = 'agg-1'): Promise<void> =>
-    withTransaction((session) => enqueueOutboxEvent('test.outbox', { n }, aggregateId, session));
+    withTransaction((session) => enqueueOutboxEvent(EVENT, payload(n), aggregateId, session));
 
 /** Make every pending row due now and unclaimed, standing in for the passage of time. */
 const makeDue = (): Promise<unknown> =>
@@ -82,7 +86,7 @@ describe('enqueueOutboxEvent', () => {
     it('is written with the transaction: a rolled-back write leaves no event behind', async () => {
         await expect(
             withTransaction(async (session) => {
-                await enqueueOutboxEvent('test.outbox', { n: 1 }, 'agg-1', session);
+                await enqueueOutboxEvent(EVENT, payload(1), 'agg-1', session);
                 throw new Error('the state change failed');
             })
         ).rejects.toThrow('the state change failed');
@@ -94,7 +98,7 @@ describe('enqueueOutboxEvent', () => {
         let countInside = -1;
 
         await withTransaction(async (session) => {
-            await enqueueOutboxEvent('test.outbox', { n: 1 }, 'agg-1', session);
+            await enqueueOutboxEvent(EVENT, payload(1), 'agg-1', session);
             // A plain read, outside the session: what the relay would see mid-transaction.
             countInside = await outboxEventModel.countDocuments();
         });
@@ -173,6 +177,74 @@ describe('relayOutbox', () => {
         });
     });
 
+    it('keeps an empty object in a payload: a hard-deleted product has no titles, and the row must still validate', async () => {
+        const delivered: unknown[] = [];
+        onDomainEvent('stock_alert.sent', (fact) => {
+            delivered.push(fact);
+        });
+        await withTransaction((session) =>
+            enqueueOutboxEvent(
+                'stock_alert.sent',
+                { userId: 'u-1', productId: 'p-1', titles: {} },
+                'u-1',
+                session
+            )
+        );
+
+        expect(await relayOutbox()).toMatchObject({ published: 1, retried: 0 });
+
+        expect(delivered).toEqual([{ userId: 'u-1', productId: 'p-1', titles: {} }]);
+    });
+
+    it('drops a field the contract does not know before any consumer sees it', async () => {
+        subscribe();
+        await outboxEventModel.create({
+            name: EVENT,
+            payload: { ...payload(1), addedByANewerBuild: true },
+            aggregateId: 'agg-1',
+            nextAttemptAt: new Date(0)
+        });
+        let delivered: unknown;
+        onDomainEvent(EVENT, (fact) => {
+            delivered = fact;
+        });
+
+        expect(await relayOutbox()).toMatchObject({ published: 1 });
+
+        expect(delivered).toEqual(payload(1));
+    });
+
+    it.each([
+        [
+            'an event name the contract does not declare',
+            { name: 'no.such_event', payload: payload(1) }
+        ],
+        ['a payload missing a required field', { name: EVENT, payload: { userId: '1' } }],
+        [
+            'a payload with a value outside its enum',
+            { name: EVENT, payload: { ...payload(1), reason: 'because' } }
+        ]
+    ])('retries %s, then parks it dead, and no consumer runs', async (_title, row) => {
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '2' }, async () => {
+            subscribe();
+            await outboxEventModel.create({
+                ...row,
+                aggregateId: 'agg-1',
+                nextAttemptAt: new Date(0)
+            });
+
+            expect(await relayOutbox()).toMatchObject({ retried: 1, dead: 0 });
+            await makeDue();
+            expect(await relayOutbox()).toMatchObject({ retried: 0, dead: 1 });
+
+            expect(await outboxEventModel.findOne().lean()).toMatchObject({
+                status: 'dead',
+                attempts: 2
+            });
+            expect(seen).toEqual([]);
+        });
+    });
+
     it('announces a parked event once, with its row id, name and aggregate', async () => {
         const announced: unknown[] = [];
         onDomainEvent(OUTBOX_EVENT_DEAD, (fact) => {
@@ -189,7 +261,7 @@ describe('relayOutbox', () => {
 
             const row = await outboxEventModel.findOne().lean();
             expect(announced).toEqual([
-                { eventId: String(row?._id), eventName: 'test.outbox', aggregateId: 'agg-dead' }
+                { eventId: String(row?._id), eventName: EVENT, aggregateId: 'agg-dead' }
             ]);
         });
     });
@@ -293,7 +365,7 @@ describe('a relay whose lease was taken over mid-dispatch', () => {
         onDomainEvent(OUTBOX_EVENT_DEAD, (fact) => {
             announced.push(fact);
         });
-        onDomainEvent('test.outbox', () =>
+        onDomainEvent(EVENT, () =>
             peerTakesOver().then(() => {
                 throw new Error('consumer down');
             })
@@ -317,7 +389,7 @@ describe('a relay whose lease was taken over mid-dispatch', () => {
             announced.push(fact);
         });
         await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '1' }, async () => {
-            onDomainEvent('test.outbox', () =>
+            onDomainEvent(EVENT, () =>
                 peerTakesOver().then(() => {
                     throw new Error('consumer down');
                 })
@@ -337,7 +409,7 @@ describe('a relay whose lease was taken over mid-dispatch', () => {
     });
 
     it('leaves the row pending under the peer when the consumer succeeds late', async () => {
-        onDomainEvent('test.outbox', () => peerTakesOver().then(() => undefined));
+        onDomainEvent(EVENT, () => peerTakesOver().then(() => undefined));
         await write(1);
 
         expect(await relayOutbox()).toEqual({ published: 0, retried: 0, dead: 0 });
@@ -362,8 +434,8 @@ const insertMark = (session: ClientSession): Promise<{ n: number }> =>
 
 /** The announcement for what the write returned. */
 const announce = ({ n }: { n: number }) => ({
-    name: 'test.outbox' as const,
-    payload: { n },
+    name: EVENT,
+    payload: payload(n),
     aggregateId: 'agg-1'
 });
 
@@ -415,8 +487,8 @@ describe('announceInTransaction with several announcements', () => {
         subscribe();
 
         await announceInTransaction(insertMark, () => [
-            { name: 'test.outbox' as const, payload: { n: 1 }, aggregateId: 'agg-1' },
-            { name: 'test.outbox' as const, payload: { n: 2 }, aggregateId: 'agg-1' }
+            { name: EVENT, payload: payload(1), aggregateId: 'agg-1' },
+            { name: EVENT, payload: payload(2), aggregateId: 'agg-1' }
         ]);
         await settleOutboxNudges();
 
@@ -472,7 +544,8 @@ describe('nudgeOutbox', () => {
     });
 
     it('waits for a pass its own listener starts while it waits', async () => {
-        onDomainEvent('test.outbox', ({ n }) => {
+        onDomainEvent(EVENT, ({ userId }) => {
+            const n = Number(userId);
             if (n === 2) {
                 // Slow, so the second pass still holds its claim when the first one ends.
                 return new Promise((resolve) => setTimeout(resolve, 50)).then(() => {

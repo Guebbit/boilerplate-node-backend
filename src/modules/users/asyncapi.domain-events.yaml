@@ -1,0 +1,240 @@
+# The domain events the users module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.user.setup_requested:
+        address: user.setup_requested
+        description: An admin created a user with no password and asked one queued up instead — see
+            `userService.create`. `account` owns tokens and outbound email, so it is the subscriber.
+        x-transport: outbox
+        messages:
+            UserSetupRequestedDomainEvent:
+                $ref: '#/components/messages/UserSetupRequestedDomainEvent'
+    domain.user.deactivated:
+        address: user.deactivated
+        description:
+            'An admin banned an account (`active: true` → `false`), committed with the save that
+            ended its sessions. `account` owns the one-time links, so it is the subscriber that
+            purges them.'
+        x-transport: outbox
+        messages:
+            UserDeactivatedDomainEvent:
+                $ref: '#/components/messages/UserDeactivatedDomainEvent'
+    domain.user.deletion_canceled:
+        address: user.deletion_canceled
+        description:
+            'Staff restored an account its owner had scheduled for erasure, committed with the
+            write that cleared the schedule. `account` owns the restore link and the mail, so it is
+            the subscriber that drops the link and tells the owner. `canceledAt` (ISO) is when it
+            happened, not when the handler runs: the erasure ledger dates its row by it.'
+        x-transport: outbox
+        messages:
+            UserDeletionCanceledDomainEvent:
+                $ref: '#/components/messages/UserDeletionCanceledDomainEvent'
+    domain.user.erased:
+        address: user.erased
+        description:
+            'An account was hard-deleted, committed in the erasure transaction itself, so it exists
+            exactly when the erasure did. `users` is its own subscriber: it asks the analytics
+            provider to forget the account id (GDPR Art. 17).'
+        x-transport: outbox
+        messages:
+            UserErasedDomainEvent:
+                $ref: '#/components/messages/UserErasedDomainEvent'
+    domain.user.profile_changed:
+        address: user.profile_changed
+        description:
+            'A personal-data field of an account was rectified, committed with the save that moved
+            it. Field names only, never values: the outbox row is kept and the delivery log
+            replayable. No in-process subscriber; it exists for the `user.updated` webhook (GDPR
+            Art. 19).'
+        x-transport: outbox
+        messages:
+            UserProfileChangedDomainEvent:
+                $ref: '#/components/messages/UserProfileChangedDomainEvent'
+    domain.user.review_flagged:
+        address: user.review_flagged
+        description: The shop's rule flagged an account for staff review without pausing it (paid
+            cancellations over the limit), committed with the flag. Emitted once per flag set; the
+            automatic hold has its own staff notice and is not announced here. `tasks` opens the
+            review task from it.
+        x-transport: outbox
+        messages:
+            UserReviewFlaggedDomainEvent:
+                $ref: '#/components/messages/UserReviewFlaggedDomainEvent'
+    domain.user.review_cleared:
+        address: user.review_cleared
+        description:
+            "Staff acted on an account's review flag: they placed a hold or lifted it. Committed
+            with the save. `tasks` closes the review task from it."
+        x-transport: outbox
+        messages:
+            UserReviewClearedDomainEvent:
+                $ref: '#/components/messages/UserReviewClearedDomainEvent'
+operations:
+    domainUserSetupRequested:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.setup_requested'
+        summary: An admin created a user with no password and asked one queued up instead — see
+            `userService.create`.
+        messages:
+            - $ref: '#/channels/domain.user.setup_requested/messages/UserSetupRequestedDomainEvent'
+    domainUserDeactivated:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.deactivated'
+        summary:
+            'An admin banned an account (`active: true` → `false`), committed with the save that ended
+            its sessions.'
+        messages:
+            - $ref: '#/channels/domain.user.deactivated/messages/UserDeactivatedDomainEvent'
+    domainUserDeletionCanceled:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.deletion_canceled'
+        summary:
+            Staff restored an account its owner had scheduled for erasure, committed with the write
+            that cleared the schedule.
+        messages:
+            - $ref: '#/channels/domain.user.deletion_canceled/messages/UserDeletionCanceledDomainEvent'
+    domainUserErased:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.erased'
+        summary:
+            An account was hard-deleted, committed in the erasure transaction itself, so it exists
+            exactly when the erasure did.
+        messages:
+            - $ref: '#/channels/domain.user.erased/messages/UserErasedDomainEvent'
+    domainUserProfileChanged:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.profile_changed'
+        summary: A personal-data field of an account was rectified, committed with the save that moved it.
+        messages:
+            - $ref: '#/channels/domain.user.profile_changed/messages/UserProfileChangedDomainEvent'
+    domainUserReviewFlagged:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.review_flagged'
+        summary:
+            The shop's rule flagged an account for staff review without pausing it (paid cancellations
+            over the limit), committed with the flag.
+        messages:
+            - $ref: '#/channels/domain.user.review_flagged/messages/UserReviewFlaggedDomainEvent'
+    domainUserReviewCleared:
+        action: send
+        channel:
+            $ref: '#/channels/domain.user.review_cleared'
+        summary: "Staff acted on an account's review flag: they placed a hold or lifted it."
+        messages:
+            - $ref: '#/channels/domain.user.review_cleared/messages/UserReviewClearedDomainEvent'
+components:
+    messages:
+        UserSetupRequestedDomainEvent:
+            name: UserSetupRequestedDomainEvent
+            title: User setup requested
+            payload:
+                $ref: '#/components/schemas/UserSetupRequestedDomainEventPayload'
+        UserDeactivatedDomainEvent:
+            name: UserDeactivatedDomainEvent
+            title: User deactivated
+            payload:
+                $ref: '#/components/schemas/UserDeactivatedDomainEventPayload'
+        UserDeletionCanceledDomainEvent:
+            name: UserDeletionCanceledDomainEvent
+            title: User deletion canceled
+            payload:
+                $ref: '#/components/schemas/UserDeletionCanceledDomainEventPayload'
+        UserErasedDomainEvent:
+            name: UserErasedDomainEvent
+            title: User erased
+            payload:
+                $ref: '#/components/schemas/UserErasedDomainEventPayload'
+        UserProfileChangedDomainEvent:
+            name: UserProfileChangedDomainEvent
+            title: User profile changed
+            payload:
+                $ref: '#/components/schemas/UserProfileChangedDomainEventPayload'
+        UserReviewFlaggedDomainEvent:
+            name: UserReviewFlaggedDomainEvent
+            title: User review flagged
+            payload:
+                $ref: '#/components/schemas/UserReviewFlaggedDomainEventPayload'
+        UserReviewClearedDomainEvent:
+            name: UserReviewClearedDomainEvent
+            title: User review cleared
+            payload:
+                $ref: '#/components/schemas/UserReviewClearedDomainEventPayload'
+    schemas:
+        UserSetupRequestedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserDeactivatedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserDeletionCanceledDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - canceledAt
+            properties:
+                userId:
+                    type: string
+                canceledAt:
+                    type: string
+            additionalProperties: false
+        UserErasedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserProfileChangedDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - changed
+            properties:
+                userId:
+                    type: string
+                changed:
+                    type: array
+                    items:
+                        title: UserChangedField
+                        type: string
+                        enum:
+                            - username
+                            - email
+                            - phone
+                            - website
+                            - imageUrl
+            additionalProperties: false
+        UserReviewFlaggedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserReviewClearedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false

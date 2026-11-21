@@ -9,6 +9,7 @@ audience: [developer, operator]
 roll over three copies for real: probes, the grace period, the Service's endpoints and a live
 stream moving between pods. This page is the setup, step by step, with the reason for each step.
 The automated cousin, which needs none of this, is [Replicas testing](./replicas-testing.md).
+GitHub runs the same rig weekly ([In CI](#in-ci)).
 
 ```mermaid
 flowchart LR
@@ -25,7 +26,7 @@ flowchart LR
 | It is                                               | It is not                                                     |
 | --------------------------------------------------- | ------------------------------------------------------------- |
 | kind (Kubernetes in a container) on rootless podman | A deployment target: the manifests in `k8s/base` are a start  |
-| The proof that a rolling restart drops no request   | Part of `npm run complete` or CI: it takes minutes and ~3 GB  |
+| The proof that a rolling restart drops no request   | Part of `npm run complete` or `ci.yml`: minutes and ~3 GB     |
 | `k8s/base` + `k8s/overlays/kind` (Kustomize)        | Multi-node, TLS, autoscaling, a Helm chart or a managed Mongo |
 
 ## Set it up once
@@ -66,13 +67,14 @@ npm run k8s:rig -- run                                           # up, drill, th
 npm run k8s:rig -- up                                                # or step by step, by hand
 ```
 
-| Command               | What it does                                                                                                                                                                                                                                   |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `up`                  | Builds `localhost/boilerplate-app:rig`, `podman save`s it into the node (`kind load image-archive`), makes random secrets, applies the data tier and `setup`, then `app` and `cron` (the kind overlay runs no `worker`: the rig has no broker) |
-| `run`                 | `up`, `drill`, then `down` through an exit trap: the cluster is deleted after a failed step or a Ctrl-C                                                                                                                                        |
-| `drill`               | A rolling restart under steady traffic, then a stream across pods (below)                                                                                                                                                                      |
-| `down`                | Deletes the cluster and `tmp/k8s-rig`. Leaves nothing in `podman ps -a`                                                                                                                                                                        |
-| `K8S_RIG_PORT=3099 …` | A different host port. Default `3072`, inside this repo's block ([ports](./pairing-and-ports.md#host-port-map))                                                                                                                                |
+| Command                     | What it does                                                                                                                                                                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `up`                        | Builds `localhost/boilerplate-app:rig`, loads it into the node (podman: `podman save` + `kind load image-archive`; Docker: `kind load docker-image`), makes random secrets, applies the data tier and `setup`, then `app` and `cron` (the kind overlay runs no `worker`: the rig has no broker) |
+| `run`                       | `up`, `drill`, then `down` through an exit trap: the cluster is deleted after a failed step or a Ctrl-C                                                                                                                                                                                         |
+| `drill`                     | A rolling restart under steady traffic, then a stream across pods (below)                                                                                                                                                                                                                       |
+| `down`                      | Deletes the cluster and `tmp/k8s-rig`. Leaves nothing in `podman ps -a`                                                                                                                                                                                                                         |
+| `CONTAINER_ENGINE=docker …` | `podman` (default) or `docker`: the engine kind runs its node on, and the way the image is loaded. CI uses `docker`                                                                                                                                                                             |
+| `K8S_RIG_PORT=3099 …`       | A different host port. Default `3072`, inside this repo's block ([ports](./pairing-and-ports.md#host-port-map))                                                                                                                                                                                 |
 
 **The rig keeps its own kubeconfig** (`tmp/k8s-rig/kubeconfig`) and every `kubectl` also names
 `--context kind-boilerplate-rig`. `kind create` would otherwise add the context to `~/.kube/config` and make it
@@ -81,14 +83,15 @@ To poke at the cluster yourself: `kubectl --kubeconfig tmp/k8s-rig/kubeconfig --
 
 ## What `up` deploys, and why in this order
 
-| Object                | Notes                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Mongo `StatefulSet`   | `--replSet rs0`, one member; a Job initiates it. Transactions need a replica set. No TLS and no auth on the rig    |
-| Redis `Deployment`    | `noeviction`, one instance for both Redis URLs                                                                     |
-| `setup` Job           | Indexes and the access bootstrap, once, **before** the app: compose's `depends_on: service_completed_successfully` |
-| `app` × 3 + `Service` | The probes, grace period and hardening are commented in `k8s/base/app.yaml`                                        |
-| `cron` × 1            | supercronic, `Recreate`, the crontab generated into `k8s/base/crontab` by `npm run regenerate`                     |
-| Envoy Gateway         | The pinned release, checked against a sha256 in `rig.sh`; its proxy Service is a NodePort mapped to the host       |
+| Object                | Notes                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mongo `StatefulSet`   | `--replSet rs0`, one member; a Job initiates it. Transactions need a replica set. No TLS and no auth on the rig                                                                                                                         |
+| Redis `Deployment`    | `noeviction`, one instance for both Redis URLs                                                                                                                                                                                          |
+| `setup` Job           | Indexes and the access bootstrap, once, **before** the app: compose's `depends_on: service_completed_successfully`                                                                                                                      |
+| `NetworkPolicy` × 4   | Default-deny ingress; Mongo, Redis and `app` open only to the pods that need them ([recipe 6](../operate/deployment-hardening.md#on-kubernetes)). In place before any workload, so `setup` and `mongo-init` are on the Mongo allow list |
+| `app` × 3 + `Service` | The probes, grace period and hardening are commented in `k8s/base/app.yaml`                                                                                                                                                             |
+| `cron` × 1            | supercronic, `Recreate`, the crontab generated into `k8s/base/crontab` by `npm run regenerate`                                                                                                                                          |
+| Envoy Gateway         | The pinned release, checked against a sha256 in `rig.sh`; its proxy Service is a NodePort mapped to the host                                                                                                                            |
 
 The order is two `kubectl apply -k` calls split by the `boilerplate/stage` label, with a wait for `setup` between them.
 Applying everything at once starts `app` against a database that has no indexes yet.
@@ -107,15 +110,20 @@ It needs a load balancer address, and rootless kind has none. The rig waits for 
 
 `k8s/drill.ts`, run by `k8s/rig.sh drill`. It reuses the replicas suite's client and stream reader.
 
-| Check                                                                            | How                                                                                                 |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| No request fails during `kubectl rollout restart deployment/app`                 | Four loaders hit `GET /` through the edge: every answer 2xx, no reset connection                    |
-| Old pods exit 0 inside the grace period, no `Graceful shutdown timeout` log line | A pod watch records each container's exit code; a `logs -f` per old pod is searched                 |
-| Each old pod leaves the ready endpoints before it stops                          | EndpointSlices are sampled every 250 ms: the gap from "not ready" to exit must be at least a second |
-| A stream held on an old pod gets the drain `retry:`                              | `kubectl port-forward pod/A` pins the stream to one pod                                             |
-| A frame caused on one new pod reaches a stream held on another                   | Stream via `port-forward pod/C`, `POST /notifications/read-all` via `port-forward pod/D`            |
+| Check                                                                            | How                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No request fails during `kubectl rollout restart deployment/app`                 | Four loaders hit `GET /` through the edge: every answer 2xx, no reset connection                                                                                                                                                                                                                        |
+| Old pods exit 0 inside the grace period, no `Graceful shutdown timeout` log line | A pod watch records each container's exit code; a `logs -f` per old pod is searched                                                                                                                                                                                                                     |
+| Each old pod leaves the ready endpoints before it stops                          | EndpointSlices are sampled every 250 ms: the gap from "not ready" to exit must be at least a second                                                                                                                                                                                                     |
+| A stream held on an old pod gets the drain `retry:`                              | `kubectl port-forward pod/A` pins the stream to one pod                                                                                                                                                                                                                                                 |
+| A frame caused on one new pod reaches a stream held on another                   | Stream via `port-forward pod/C`, `POST /notifications/read-all` via `port-forward pod/D`                                                                                                                                                                                                                |
+| Pods with no allow rule cannot reach `app`, Mongo or Redis                       | Throwaway pods (`kubectl run`, the app image, label `netpol-stranger`) open a TCP connection with a 5 s timeout: a drop is a timeout. Pods labelled `worker`, `worker-heavy` and `cron` must still connect to Mongo and Redis, so the probe cannot pass by being broken and a missing allow entry fails |
 
 The two pods are picked by name because the frame names no pod: only a port-forward guarantees "another pod".
+The NetworkPolicy check runs last, because a pod labelled `app` would join the
+Service's endpoints. It needs a CNI that enforces policies: kindnet, kind's default, does, on rootless podman too. With every
+policy deleted the same probes connect, so the check can fail.
+
 Signup works with an SMTP host and no broker (the mail falls back inline), so the rig needs no Mailpit.
 
 ## What the first run showed
@@ -129,6 +137,45 @@ Measured on the rig (one node, three `app` pods), not guessed:
 | `app` holds ~563 MB steady and ~676 MB at peak, with the heap capped at 384 MB                    | Limit 1Gi and heap cap 640 (512Mi is OOMKilled at boot): `tsx` keeps the transpiled module graph |
 | `cron` needs far more than one process: each job is its own `node` process, several fire together | Limit 4Gi; 1Gi was OOMKilled within minutes                                                      |
 | `NODE_URL` and the CORS origin follow the host port                                               | The `edge-env` ConfigMap, written by `rig.sh` from `K8S_RIG_PORT`                                |
+
+## In CI
+
+Two tiers, because the cluster is too heavy for every PR and the drift it would catch is mostly a renamed secret.
+
+```mermaid
+flowchart LR
+    PR["every PR\nci.yml, the fast suites"] --> T1["tier 1\nsecret-file parity test"]
+    Weekly["Monday, a PR touching k8s/** or the Dockerfile,\nor by hand"] --> T2["tier 2\nk8s-rig.yml"]
+    T2 --> Rig["k8s/rig.sh run\n(Docker engine)"]
+    T2 -. failed on a schedule .-> Issue["one tracking issue"]
+```
+
+| File                                                           | What it proves                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/cross-cutting/production-topology.test.ts` (last block) | **Tier 1, every PR.** The `NODE_*_FILE` names in `k8s/base/app.env` are the compose `app` service's, each on the same file name; the secrets `k8s/rig.sh` creates are exactly the ones the manifests mount; compose declares each; `docker/boot-check.sh` sets only names the manifests set |
+| `.github/workflows/k8s-rig.yml`                                | **Tier 2.** Runs `CONTAINER_ENGINE=docker npm run k8s:rig -- run` on a GitHub runner: the image builds, a cluster comes up, the manifests deploy and the drill above passes                                                                                                                 |
+| `k8s/rig.sh`                                                   | What the workflow runs. Its Docker branch (`KIND_EXPERIMENTAL_PROVIDER=docker`, `kind load docker-image`) exists only for the runner; podman stays the default here                                                                                                                         |
+| `docker/boot-check.sh`                                         | Not Kubernetes. It is the third place the secret names live (short file names, an explicit map in the test), so tier 1 reads it                                                                                                                                                             |
+
+Tier 1 does not need a cluster, so a renamed variable fails the PR that renames it. Tier 2 is the only thing that
+shows the manifests schedule, the probes pass and the rollout drops nothing.
+
+**Tier 2 runs when:** every Monday (06:30 UTC), on a pull request that touches `k8s/**`, `docker/Dockerfile` or the
+workflow, and by hand (`Actions` → `Kubernetes rig` → `Run workflow`). A failed scheduled run opens or updates one issue
+labelled `k8s-rig` through the shared `notify-failure` action; a PR run shows its own red square instead.
+
+**It is its own workflow and gates no merge.** `ci.yml`'s `ci` aggregate cannot depend on it (`needs:` only links jobs
+in the same workflow), so a red rig run shows as its own check and, on a schedule, as the tracking issue.
+
+**kind and kubectl are downloaded on the runner**, not taken from the image: `KIND_VERSION` / `KIND_SHA256` and
+`KUBECTL_VERSION` / `KUBECTL_SHA256` in the workflow, checked with `sha256sum --check` before anything is installed. A new
+version: bump the pair together, from the release's own checksum file. kubectl is held to the node's minor
+(`k8s/overlays/kind/kind-cluster.yaml`).
+
+::: warning The Docker branch and the workflow are unproven until the first GitHub run
+Here `docker` is the podman shim, so `CONTAINER_ENGINE=docker` on this machine does not exercise a real Docker daemon. The
+podman branch is what the local rig runs; neither the Docker branch nor `k8s-rig.yml` has run yet.
+:::
 
 ## Undo it
 

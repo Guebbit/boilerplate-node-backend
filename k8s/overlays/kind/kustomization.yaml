@@ -25,6 +25,23 @@ patches:
           - op: replace
             path: /spec/gatewayClassName
             value: eg
+    # Envoy Gateway runs its proxy pods in its own namespace, labelled with the Gateway that owns them:
+    # the component's allow rule admits exactly those.
+    - target:
+          group: networking.k8s.io
+          kind: NetworkPolicy
+          name: allow-gateway
+      patch: |-
+          - op: replace
+            path: /spec/ingress/0/from/0
+            value:
+                namespaceSelector:
+                    matchLabels:
+                        kubernetes.io/metadata.name: envoy-gateway-system
+                podSelector:
+                    matchLabels:
+                        gateway.envoyproxy.io/owning-gateway-name: app
+                        gateway.envoyproxy.io/owning-gateway-namespace: boilerplate
     # The rig has no broker (base/app.env sets no NODE_RABBITMQ_URL): the app runs its jobs in its
     # own process, so a `worker` or `worker-heavy` would consume nothing. Zero copies save about 0.5 GB on the one node.
     # A cluster with a broker keeps the base's one copy.

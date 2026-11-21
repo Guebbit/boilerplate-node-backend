@@ -1,67 +1,25 @@
 /**
  * @module
- * Domain events this module emits, declared by augmenting the kernel's payload map rather than
- * editing it, so the catalogue grows with the modules that own events and no shared file
- * enumerates domains.
+ * Domain events this module emits, declared in `./asyncapi.domain-events.yaml`.
  */
 
-import type { SessionsRevokedReason } from './domain/revocation';
+import type { DomainEventName } from '@kernel/events';
 
 export type { SessionsRevokedReason } from './domain/revocation';
 
-/** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        /**
-         * The account's owner ended every session (logout everywhere), recovered the account
-         * through a password reset, or reported an email change as not theirs: each means "I may be
-         * compromised". `api-keys` is the subscriber,
-         * revoking what the person minted, since a key outlives every session. Internal only: no
-         * AsyncAPI channel carries it, nothing outside this application needs to know.
-         */
-        'account.sessions_revoked': { userId: string; reason: SessionsRevokedReason };
+/** See `account.sessions_revoked` in `asyncapi.domain-events.yaml`. */
+export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions_revoked' satisfies DomainEventName;
 
-        /**
-         * A staff member's last authenticator app was removed: their role grants nothing from now
-         * on, and `api-keys` revokes what they minted under it. Not a compromise, so it is not a
-         * session revocation. Internal only: no AsyncAPI channel carries it.
-         */
-        'account.authenticator_removed': { userId: string };
+/** See the `account.authenticator_removed` channel in `asyncapi.domain-events.yaml`. */
+export const ACCOUNT_AUTHENTICATOR_REMOVED =
+    'account.authenticator_removed' satisfies DomainEventName;
 
-        /**
-         * The owner withdrew analytics consent (`true` → `false`), committed with the profile save.
-         * `account` is its own subscriber: it asks the analytics provider to forget the id, since
-         * what was captured under the consent is no longer lawful to keep (GDPR Art. 7(3), 17).
-         * Internal only: no AsyncAPI channel carries it.
-         */
-        'account.analytics_consent_withdrawn': { userId: string };
+/** See the `account.analytics_consent_withdrawn` channel in `asyncapi.domain-events.yaml`. */
+export const ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN =
+    'account.analytics_consent_withdrawn' satisfies DomainEventName;
 
-        /**
-         * A data export could not be built (GDPR Art. 12(3): the person is owed their file within
-         * a month), committed with the move of its row to `failed`. `tasks` opens the work from
-         * it. Internal only: no AsyncAPI channel carries it.
-         */
-        'account.export_failed': { userId: string; exportId: string };
+/** See the `account.export_failed` channel in `asyncapi.domain-events.yaml`. */
+export const ACCOUNT_EXPORT_FAILED = 'account.export_failed' satisfies DomainEventName;
 
-        /**
-         * A data export is ready, committed with the move of its row to `ready`. A later ready
-         * export is what closes the work an earlier failure opened. Internal only.
-         */
-        'account.export_ready': { userId: string; exportId: string };
-    }
-}
-
-/** See `DomainEventMap['account.sessions_revoked']` above. */
-export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions_revoked';
-
-/** See `DomainEventMap['account.authenticator_removed']` above. */
-export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator_removed';
-
-/** See `DomainEventMap['account.analytics_consent_withdrawn']` above. */
-export const ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN = 'account.analytics_consent_withdrawn';
-
-/** See `DomainEventMap['account.export_failed']` above. */
-export const ACCOUNT_EXPORT_FAILED = 'account.export_failed';
-
-/** See `DomainEventMap['account.export_ready']` above. */
-export const ACCOUNT_EXPORT_READY = 'account.export_ready';
+/** See the `account.export_ready` channel in `asyncapi.domain-events.yaml`. */
+export const ACCOUNT_EXPORT_READY = 'account.export_ready' satisfies DomainEventName;

@@ -1,0 +1,192 @@
+# The domain events the products module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.product.deleted:
+        address: product.deleted
+        description: >-
+            A product just stopped being reachable — soft-deleted or hard-deleted. The ONLY
+            catalogue event that pulls cart and wishlist lines: hiding or taking a product off sale
+            emits nothing, and a restore does not undo what the delete set in motion.
+
+
+            Outbox:      written in the delete's transaction; redelivered until every listener has
+                         handled it, so a listener is idempotent on `meta.eventId`.
+            `hardDelete`: tells the destructive half from the reversible one; `inventory` deletes
+                         the level row ONLY when `true`, since a restore must find it.
+            `titles`:    the name in every language, read BEFORE a hard delete drops the
+                         translation rows, so a later message (`notifications`) can quote it.
+        x-transport: outbox
+        messages:
+            ProductDeletedDomainEvent:
+                $ref: '#/components/messages/ProductDeletedDomainEvent'
+    domain.product.created:
+        address: product.created
+        description:
+            "A product was created. The document is written with `onHand: 0`, and `inventory`
+            (which already imports this module, so an import back here would cycle) is the one and
+            only listener: it opens the product's stock level at zero. Stock never rides this event:
+            units enter only through `POST /inventory/levels/{productId}/receive`, which moves the
+            counter and writes the ledger row together. Never emitted for an UPDATE: counters move
+            only through inventory's ledger writes."
+        x-transport: outbox
+        messages:
+            ProductCreatedDomainEvent:
+                $ref: '#/components/messages/ProductCreatedDomainEvent'
+    domain.product.release_date_changed:
+        address: product.release_date_changed
+        description: >-
+            A product's `releaseDate` moved, was set or was cleared. Goes through the outbox in the
+            same transaction as the edit, so an event exists exactly when the new date does.
+
+
+            Why it exists: buyers who already paid were promised the old date. `delivery` listens
+            and decides, per waiting fulfillment order, whether the buyer needs a notice and whether
+            silence now means cancel. Both dates are ISO 8601; `from` is absent for a first date,
+            `to` for a cleared one.
+        x-transport: outbox
+        messages:
+            ProductReleaseDateChangedDomainEvent:
+                $ref: '#/components/messages/ProductReleaseDateChangedDomainEvent'
+    domain.product.restock_date_changed:
+        address: product.restock_date_changed
+        description: "A product's `restockDate` moved, was set or was cleared. The twin of
+            `product.release_date_changed` for the owed units of a released product: buyers who
+            already paid for them were promised the old date, and `delivery` decides per waiting
+            fulfillment order what they are owed. Same shape and the same transaction as the edit."
+        x-transport: outbox
+        messages:
+            ProductRestockDateChangedDomainEvent:
+                $ref: '#/components/messages/ProductRestockDateChangedDomainEvent'
+    domain.product.buyable_again:
+        address: product.buyable_again
+        description:
+            'A product that could not be ordered can be again: shelf units arrived, a backorder
+            opened or its date moved on, or it was made visible and buyable. Fires once per flip,
+            never while it stays buyable, in the same transaction as the write that caused it.
+            `stock-alerts` listens and tells the buyers who asked.'
+        x-transport: outbox
+        messages:
+            ProductBuyableAgainDomainEvent:
+                $ref: '#/components/messages/ProductBuyableAgainDomainEvent'
+operations:
+    domainProductDeleted:
+        action: send
+        channel:
+            $ref: '#/channels/domain.product.deleted'
+        summary: A product just stopped being reachable — soft-deleted or hard-deleted.
+        messages:
+            - $ref: '#/channels/domain.product.deleted/messages/ProductDeletedDomainEvent'
+    domainProductCreated:
+        action: send
+        channel:
+            $ref: '#/channels/domain.product.created'
+        summary: A product was created.
+        messages:
+            - $ref: '#/channels/domain.product.created/messages/ProductCreatedDomainEvent'
+    domainProductReleaseDateChanged:
+        action: send
+        channel:
+            $ref: '#/channels/domain.product.release_date_changed'
+        summary: A product's `releaseDate` moved, was set or was cleared.
+        messages:
+            - $ref: '#/channels/domain.product.release_date_changed/messages/ProductReleaseDateChangedDomainEvent'
+    domainProductRestockDateChanged:
+        action: send
+        channel:
+            $ref: '#/channels/domain.product.restock_date_changed'
+        summary: A product's `restockDate` moved, was set or was cleared.
+        messages:
+            - $ref: '#/channels/domain.product.restock_date_changed/messages/ProductRestockDateChangedDomainEvent'
+    domainProductBuyableAgain:
+        action: send
+        channel:
+            $ref: '#/channels/domain.product.buyable_again'
+        summary:
+            'A product that could not be ordered can be again: shelf units arrived, a backorder opened
+            or its date moved on, or it was made visible and buyable.'
+        messages:
+            - $ref: '#/channels/domain.product.buyable_again/messages/ProductBuyableAgainDomainEvent'
+components:
+    messages:
+        ProductDeletedDomainEvent:
+            name: ProductDeletedDomainEvent
+            title: Product deleted
+            payload:
+                $ref: '#/components/schemas/ProductDeletedDomainEventPayload'
+        ProductCreatedDomainEvent:
+            name: ProductCreatedDomainEvent
+            title: Product created
+            payload:
+                $ref: '#/components/schemas/ProductCreatedDomainEventPayload'
+        ProductReleaseDateChangedDomainEvent:
+            name: ProductReleaseDateChangedDomainEvent
+            title: Product release date changed
+            payload:
+                $ref: '#/components/schemas/ProductReleaseDateChangedDomainEventPayload'
+        ProductRestockDateChangedDomainEvent:
+            name: ProductRestockDateChangedDomainEvent
+            title: Product restock date changed
+            payload:
+                $ref: '#/components/schemas/ProductRestockDateChangedDomainEventPayload'
+        ProductBuyableAgainDomainEvent:
+            name: ProductBuyableAgainDomainEvent
+            title: Product buyable again
+            payload:
+                $ref: '#/components/schemas/ProductBuyableAgainDomainEventPayload'
+    schemas:
+        ProductDeletedDomainEventPayload:
+            type: object
+            required:
+                - productId
+                - hardDelete
+                - titles
+            properties:
+                productId:
+                    type: string
+                hardDelete:
+                    type: boolean
+                titles:
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false
+        ProductCreatedDomainEventPayload:
+            type: object
+            required:
+                - productId
+            properties:
+                productId:
+                    type: string
+            additionalProperties: false
+        ProductReleaseDateChangedDomainEventPayload:
+            type: object
+            required:
+                - productId
+            properties:
+                productId:
+                    type: string
+                from:
+                    type: string
+                to:
+                    type: string
+            additionalProperties: false
+        ProductRestockDateChangedDomainEventPayload:
+            type: object
+            required:
+                - productId
+            properties:
+                productId:
+                    type: string
+                from:
+                    type: string
+                to:
+                    type: string
+            additionalProperties: false
+        ProductBuyableAgainDomainEventPayload:
+            type: object
+            required:
+                - productId
+            properties:
+                productId:
+                    type: string
+            additionalProperties: false

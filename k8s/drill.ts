@@ -7,7 +7,9 @@
  * Checks:  no request fails during the restart; every old pod exits 0 inside its grace period with
  *          no forced-exit log line; each old pod leaves the Service's ready endpoints well before
  *          it stops; a stream held on an old pod gets the drain `retry:`; a stream held on a new
- *          pod receives a frame caused by a write on another pod.
+ *          pod receives a frame caused by a write on another pod; a pod with no allow rule cannot
+ *          open a connection to app, mongo or cache, while the worker, worker-heavy and cron
+ *          labels still reach mongo and cache (NetworkPolicy, k8s/base/networkpolicy.yaml).
  * Reuses:  the replicas suite's client and stream reader (`tests/replicas/support`).
  *
  * @see docs/build/kubernetes-testing.md
@@ -338,6 +340,85 @@ const writeUntilHeard = (
         50
     );
 
+/** Seconds a connection attempt may hang before the probe calls it dropped. */
+const PROBE_TIMEOUT_S = 5;
+
+/**
+ * Opens one TCP connection from a throwaway pod inside the namespace and says what happened.
+ * A NetworkPolicy drops the packets silently, so a blocked target is a timeout, not a refusal.
+ *
+ * @param name - the pod's name suffix, unique per probe
+ * @param role - the `app.kubernetes.io/name` the pod carries: it decides which allow rules match
+ * @param image - an image with `node` in it (the app's own, already loaded on the node)
+ * @param target - `host:port` to connect to
+ * @returns `OPEN`, `TIMEOUT` or `ERROR <code>`
+ */
+const probeFrom = (name: string, role: string, image: string, target: string): Promise<string> => {
+    const [host, port] = target.split(':', 2);
+    // Node's net.connect with a socket timeout: https://nodejs.org/api/net.html#netconnectoptions-connectlistener
+    const script = `const s=require('node:net').connect({host:'${host}',port:${port},timeout:${String(PROBE_TIMEOUT_S * 1000)}});s.on('connect',()=>{console.log('OPEN');process.exit(0)});s.on('timeout',()=>{console.log('TIMEOUT');process.exit(0)});s.on('error',(e)=>{console.log('ERROR '+e.code);process.exit(0)})`;
+    return kubectl([
+        'run',
+        `netpol-probe-${name}`,
+        '--rm',
+        '-i',
+        '--quiet',
+        '--restart=Never',
+        `--image=${image}`,
+        // The image is on the node already; the node has no registry for `localhost/…`.
+        '--image-pull-policy=Never',
+        `--labels=app.kubernetes.io/name=${role}`,
+        '--command',
+        '--',
+        'node',
+        '-e',
+        script
+    ]).then((out) => out.trim().split('\n').at(-1) ?? '');
+};
+
+/**
+ * The NetworkPolicy checks: a pod that matches no allow rule is dropped at app, mongo and cache,
+ * and the worker, worker-heavy and cron labels still reach mongo and cache (so the probe itself works).
+ * Run after the restart: a pod labelled `app` would join the Service's endpoints. The `worker`,
+ * `worker-heavy` and `cron` labels join no Service the drill uses.
+ */
+const checkNetworkPolicy = async (): Promise<Check[]> => {
+    const image = await kubectl([
+        'get',
+        'deployment/app',
+        '-o',
+        'jsonpath={.spec.template.spec.containers[0].image}'
+    ]).then((out) => out.trim());
+    const stamp = Date.now().toString(36);
+    const cases = [
+        { role: 'netpol-stranger', target: 'app:3000', expected: 'TIMEOUT' },
+        { role: 'netpol-stranger', target: 'mongo:27017', expected: 'TIMEOUT' },
+        { role: 'netpol-stranger', target: 'cache:6379', expected: 'TIMEOUT' },
+        { role: 'worker', target: 'mongo:27017', expected: 'OPEN' },
+        { role: 'worker', target: 'cache:6379', expected: 'OPEN' },
+        { role: 'worker-heavy', target: 'mongo:27017', expected: 'OPEN' },
+        { role: 'worker-heavy', target: 'cache:6379', expected: 'OPEN' },
+        { role: 'cron', target: 'mongo:27017', expected: 'OPEN' },
+        { role: 'cron', target: 'cache:6379', expected: 'OPEN' }
+    ];
+    return Promise.all(
+        cases.map(({ role, target, expected }, index) =>
+            probeFrom(`${stamp}-${String(index)}`, role, image, target).then(
+                (got): Check => ({
+                    name: `a ${role} pod reaching ${target}: ${expected}`,
+                    ok: got === expected,
+                    detail: `got ${got}`
+                }),
+                (error: unknown): Check => ({
+                    name: `a ${role} pod reaching ${target}: ${expected}`,
+                    ok: false,
+                    detail: String(error)
+                })
+            )
+        )
+    );
+};
+
 /** Prints the verdicts and returns the exit code. */
 const report = (checks: Check[]): number => {
     for (const { name, ok, detail } of checks)
@@ -448,6 +529,7 @@ const drill = async (): Promise<Check[]> => {
                     detail: String(error)
                 })
         );
+        checks.push(...(await checkNetworkPolicy()));
         return checks;
     } finally {
         await Promise.allSettled(cleanups.map((cleanup) => cleanup()));

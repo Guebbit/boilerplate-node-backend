@@ -1,0 +1,109 @@
+# The domain events the cart module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.cart.lines_removed:
+        address: cart.lines_removed
+        description: >-
+            A product left the catalogue and was pulled out of these users' carts. Emitted once per
+            product deletion, after the pull, and only when at least one cart held it.
+
+
+            Only the cart knows whose carts held the product, which is why this is the cart's event
+            and not `notifications` listening to `product.deleted` itself.
+
+
+            `titles` is the product's name by locale, copied from `product.deleted` — the product is
+            gone, so a listener that wants to name it can only quote this.
+        x-transport: in-process
+        messages:
+            CartLinesRemovedDomainEvent:
+                $ref: '#/components/messages/CartLinesRemovedDomainEvent'
+    domain.cart.merge_refused:
+        address: cart.merge_refused
+        description: >-
+            `POST /cart/merge` could not add some of a guest cart's lines at all, because the
+            product is no longer publicly visible, or because the cart already holds its most lines
+            and the product is new to it. One event per merge, with every such line in it, and never
+            emitted for a merge that had none. A line that merely landed with another quantity is
+            not here: that is the answer's to show.
+
+
+            `requested` is what the guest asked for. `titles` is the product's name by locale,
+            copied now because the product may be gone by the time anyone reads the message.
+        x-transport: in-process
+        messages:
+            CartMergeRefusedDomainEvent:
+                $ref: '#/components/messages/CartMergeRefusedDomainEvent'
+operations:
+    domainCartLinesRemoved:
+        action: send
+        channel:
+            $ref: '#/channels/domain.cart.lines_removed'
+        summary: A product left the catalogue and was pulled out of these users' carts.
+        messages:
+            - $ref: '#/channels/domain.cart.lines_removed/messages/CartLinesRemovedDomainEvent'
+    domainCartMergeRefused:
+        action: send
+        channel:
+            $ref: '#/channels/domain.cart.merge_refused'
+        summary: A guest-cart merge could not add some lines at all, and says which.
+        messages:
+            - $ref: '#/channels/domain.cart.merge_refused/messages/CartMergeRefusedDomainEvent'
+components:
+    messages:
+        CartLinesRemovedDomainEvent:
+            name: CartLinesRemovedDomainEvent
+            title: Cart lines removed
+            payload:
+                $ref: '#/components/schemas/CartLinesRemovedDomainEventPayload'
+        CartMergeRefusedDomainEvent:
+            name: CartMergeRefusedDomainEvent
+            title: Cart merge refused
+            payload:
+                $ref: '#/components/schemas/CartMergeRefusedDomainEventPayload'
+    schemas:
+        CartLinesRemovedDomainEventPayload:
+            type: object
+            required:
+                - userIds
+                - productId
+                - titles
+            properties:
+                userIds:
+                    type: array
+                    items:
+                        type: string
+                productId:
+                    type: string
+                titles:
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false
+        CartMergeRefusedDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - lines
+            properties:
+                userId:
+                    type: string
+                lines:
+                    type: array
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - requested
+                            - titles
+                        properties:
+                            productId:
+                                type: string
+                            requested:
+                                type: number
+                            titles:
+                                type: object
+                                additionalProperties:
+                                    type: string
+                        additionalProperties: false
+            additionalProperties: false

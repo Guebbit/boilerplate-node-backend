@@ -178,6 +178,35 @@ What a deployment adds beyond that:
 | Management interfaces            | never publish a database UI. Reach them through an SSH tunnel or a bastion                 |
 | SSH                              | key auth only, no password auth, no root login                                             |
 
+**Compose has one flat network.** `compose.production.yaml` declares no `networks:`, so every service can reach every
+other: the segment is the host, not the service. Splitting it (a `data` network that only the app-code services join)
+is a deployer's change. On Kubernetes the same job is a `NetworkPolicy`, below.
+
+### On Kubernetes
+
+`k8s/base/networkpolicy.yaml` ships the shape ([Kubernetes](./ways-to-deploy/kubernetes.md) says what is yours to add):
+
+| Policy                 | Who may connect                                                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `default-deny-ingress` | nobody: every pod in the namespace refuses connections unless a rule below admits them                                                                   |
+| `allow-mongo`          | `app`, `worker`, `worker-heavy`, `cron`, and the `setup` and `mongo-init` Jobs, on 27017                                                                 |
+| `allow-cache`          | `app`, `worker`, `worker-heavy` and `cron`, on 6379                                                                                                      |
+| `allow-gateway`        | the Gateway's proxy pods, on the app's port 3000: it lives in `k8s/components/gateway`, and each overlay names the controller's namespace and pod labels |
+
+- **It needs an enforcing CNI.** A cluster whose network plugin ignores `NetworkPolicy` (flannel on its own) accepts the
+  objects and filters nothing. kindnet, the rig's CNI, enforces; the rig's drill proves it by timing a connection out
+  ([Kubernetes testing](../build/kubernetes-testing.md#the-drill)). Run the same check on your own cluster.
+- **Ingress only.** Egress stays open: the app reaches the SMTP host, the OAuth providers and webhook subscribers. Default-deny
+  egress is recipe 5.
+- **Your own Ingress needs its own allow rule.** `base` alone admits nothing to `app`, so the deployer who skips the gateway
+  component adds a policy for their controller's pods, shaped like `allow-gateway`.
+- **Your metrics scraper needs its own allow rule:** from its namespace and pods to `app` on 3000 and `worker`/`worker-heavy` on 3010.
+- **Keep the client IP at the load balancer.** The app reads `X-Forwarded-For` by hop count and
+  `NODE_TRUST_PROXY_HOPS` stays as it is (one proxy), so the proxy must see the real caller. On a cloud load balancer that means
+  `externalTrafficPolicy: Local` on the Gateway's Service, or the PROXY protocol v2 between the balancer and the proxy; with
+  the default `Cluster` the node's SNAT hides the caller, and every address buckets together
+  ([edge rate limiting, rule 1](#edge-rate-limiting-and-waf)).
+
 ## Backups and tested restore
 
 Already written up: [Backups](./backups.md): the `backup` container, its knobs, the `backup` database role and

@@ -141,7 +141,8 @@ spec:
 # The stable address a scraper (a Prometheus Service discovery, a ServiceMonitor) finds the worker
 # at. Two alert counters (`queue_jobs_dead_lettered_total`, `webhook_delivery_attempts_total`) move
 # only in the worker, so the scrape must reach it: path `/observability/metrics`, bearer token =
-# the `metrics_token` secret, the same as the API's.
+# the `metrics_token` secret, the same as the API's. The default-deny NetworkPolicy blocks the
+# scraper until its own allow rule exists (docs/operate/deployment-hardening.md#on-kubernetes).
 apiVersion: v1
 kind: Service
 metadata:
