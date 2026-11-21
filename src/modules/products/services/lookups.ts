@@ -112,6 +112,12 @@ export const syncStockCache = (productId: string, counters: StockCounters): Prom
     });
 
 /**
+ * The part of a product a name is read from: a hydrated document and a lean read both carry it,
+ * so a caller that already holds either need not read the product again.
+ */
+type NamedProduct = Pick<ProductDocument, '_id' | 'title' | 'description'>;
+
+/**
  * Lays a product's own columns under the translation rows it was given: they ARE the fallback
  * language's content, so they fill that slot when the rows have none for it.
  *
@@ -119,7 +125,7 @@ export const syncStockCache = (productId: string, counters: StockCounters): Prom
  * @param rows - the translation rows to start from, locale → fields
  */
 const withFallbackRow = (
-    product: ProductDocument,
+    product: NamedProduct,
     rows: Map<string, Record<string, string>>
 ): Record<string, ProductTranslationFields> => {
     const translations: Record<string, ProductTranslationFields> = {};
@@ -167,9 +173,9 @@ export const translationsWithFallback = (
  * look the product up again. A draft language's title is never copied in, so no customer can read
  * it back from an inbox, a stream, an export or a mail.
  *
- * @param product - the document whose names to collect
+ * @param product - the product whose names to collect, hydrated or lean
  */
-export const titlesOf = (product: ProductDocument): Promise<Record<string, string>> =>
+export const titlesOf = (product: NamedProduct): Promise<Record<string, string>> =>
     readServedTranslations('product', product._id.toString()).then((rows) =>
         Object.fromEntries(
             Object.entries(withFallbackRow(product, rows)).map(([locale, { title }]) => [

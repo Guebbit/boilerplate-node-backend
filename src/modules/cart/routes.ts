@@ -71,7 +71,7 @@ router.post(
  * POST /cart/merge — fold a guest cart in; one result per line comes back, and a line that could
  * not be added at all becomes a notification. `idempotencyKey` for the same reason as checkout's:
  * a retry after a lost response must replay the answer, never add the guest's quantities twice.
- * `mergeLimiter` first: one call carries many lines, each a read and a write (see `./rate-limits`).
+ * `mergeLimiter` first: one call carries many lines, one product read and one cart write (see `./rate-limits`).
  */
 router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 
