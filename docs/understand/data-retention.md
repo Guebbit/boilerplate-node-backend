@@ -53,11 +53,11 @@ flowchart LR
 
 ## Orders: kept while the account lives
 
-| Situation         | What happens                                                                      | Why                                                                                               |
-| ----------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Account is alive  | the order keeps its personal fields                                               | order history is part of the contract the customer is using (Art. 6(1)(b))                        |
-| Account is erased | `userId` detached at once; personal fields scrubbed when the per-order clock ends | the order is evidence for a tax audit or a legal claim, never a reason to keep the street forever |
-| Never paid        | scrubbed at once after erasure                                                    | no tax record exists, so no exemption applies                                                     |
+| Situation         | What happens                                                                      | Why                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Account is alive  | the order keeps its personal fields                                               | order history is part of the contract the customer is using (Art. 6(1)(b))                                                    |
+| Account is erased | `userId` detached at once; personal fields scrubbed when the per-order clock ends | the order is evidence for a tax audit or a legal claim, never a reason to keep the street forever                             |
+| Never paid        | scrubbed at once after erasure, unless money landed after the cancel              | no tax record exists, so no exemption applies; late money is clocked from `moneyReceivedAt`, as a paid order is from `paidAt` |
 
 **What others do with a live customer's orders:** Shopify, WooCommerce and Amazon all keep order
 history for as long as the account exists. None of them scrubs a live customer's orders on a timer.
