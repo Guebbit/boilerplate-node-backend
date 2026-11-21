@@ -10,3 +10,4 @@ kind: Component
 resources:
     - gateway.yaml
     - httproute.yaml
+    - networkpolicy.yaml

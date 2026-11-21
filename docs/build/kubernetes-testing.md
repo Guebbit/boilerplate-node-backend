@@ -83,14 +83,15 @@ To poke at the cluster yourself: `kubectl --kubeconfig tmp/k8s-rig/kubeconfig --
 
 ## What `up` deploys, and why in this order
 
-| Object                | Notes                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Mongo `StatefulSet`   | `--replSet rs0`, one member; a Job initiates it. Transactions need a replica set. No TLS and no auth on the rig    |
-| Redis `Deployment`    | `noeviction`, one instance for both Redis URLs                                                                     |
-| `setup` Job           | Indexes and the access bootstrap, once, **before** the app: compose's `depends_on: service_completed_successfully` |
-| `app` × 3 + `Service` | The probes, grace period and hardening are commented in `k8s/base/app.yaml`                                        |
-| `cron` × 1            | supercronic, `Recreate`, the crontab generated into `k8s/base/crontab` by `npm run regenerate`                     |
-| Envoy Gateway         | The pinned release, checked against a sha256 in `rig.sh`; its proxy Service is a NodePort mapped to the host       |
+| Object                | Notes                                                                                                                                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mongo `StatefulSet`   | `--replSet rs0`, one member; a Job initiates it. Transactions need a replica set. No TLS and no auth on the rig                                                                                                                         |
+| Redis `Deployment`    | `noeviction`, one instance for both Redis URLs                                                                                                                                                                                          |
+| `setup` Job           | Indexes and the access bootstrap, once, **before** the app: compose's `depends_on: service_completed_successfully`                                                                                                                      |
+| `NetworkPolicy` × 4   | Default-deny ingress; Mongo, Redis and `app` open only to the pods that need them ([recipe 6](../operate/deployment-hardening.md#on-kubernetes)). In place before any workload, so `setup` and `mongo-init` are on the Mongo allow list |
+| `app` × 3 + `Service` | The probes, grace period and hardening are commented in `k8s/base/app.yaml`                                                                                                                                                             |
+| `cron` × 1            | supercronic, `Recreate`, the crontab generated into `k8s/base/crontab` by `npm run regenerate`                                                                                                                                          |
+| Envoy Gateway         | The pinned release, checked against a sha256 in `rig.sh`; its proxy Service is a NodePort mapped to the host                                                                                                                            |
 
 The order is two `kubectl apply -k` calls split by the `boilerplate/stage` label, with a wait for `setup` between them.
 Applying everything at once starts `app` against a database that has no indexes yet.
@@ -109,15 +110,20 @@ It needs a load balancer address, and rootless kind has none. The rig waits for 
 
 `k8s/drill.ts`, run by `k8s/rig.sh drill`. It reuses the replicas suite's client and stream reader.
 
-| Check                                                                            | How                                                                                                 |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| No request fails during `kubectl rollout restart deployment/app`                 | Four loaders hit `GET /` through the edge: every answer 2xx, no reset connection                    |
-| Old pods exit 0 inside the grace period, no `Graceful shutdown timeout` log line | A pod watch records each container's exit code; a `logs -f` per old pod is searched                 |
-| Each old pod leaves the ready endpoints before it stops                          | EndpointSlices are sampled every 250 ms: the gap from "not ready" to exit must be at least a second |
-| A stream held on an old pod gets the drain `retry:`                              | `kubectl port-forward pod/A` pins the stream to one pod                                             |
-| A frame caused on one new pod reaches a stream held on another                   | Stream via `port-forward pod/C`, `POST /notifications/read-all` via `port-forward pod/D`            |
+| Check                                                                            | How                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No request fails during `kubectl rollout restart deployment/app`                 | Four loaders hit `GET /` through the edge: every answer 2xx, no reset connection                                                                                                                                                                                                                        |
+| Old pods exit 0 inside the grace period, no `Graceful shutdown timeout` log line | A pod watch records each container's exit code; a `logs -f` per old pod is searched                                                                                                                                                                                                                     |
+| Each old pod leaves the ready endpoints before it stops                          | EndpointSlices are sampled every 250 ms: the gap from "not ready" to exit must be at least a second                                                                                                                                                                                                     |
+| A stream held on an old pod gets the drain `retry:`                              | `kubectl port-forward pod/A` pins the stream to one pod                                                                                                                                                                                                                                                 |
+| A frame caused on one new pod reaches a stream held on another                   | Stream via `port-forward pod/C`, `POST /notifications/read-all` via `port-forward pod/D`                                                                                                                                                                                                                |
+| Pods with no allow rule cannot reach `app`, Mongo or Redis                       | Throwaway pods (`kubectl run`, the app image, label `netpol-stranger`) open a TCP connection with a 5 s timeout: a drop is a timeout. Pods labelled `worker`, `worker-heavy` and `cron` must still connect to Mongo and Redis, so the probe cannot pass by being broken and a missing allow entry fails |
 
 The two pods are picked by name because the frame names no pod: only a port-forward guarantees "another pod".
+The NetworkPolicy check runs last, because a pod labelled `app` would join the
+Service's endpoints. It needs a CNI that enforces policies: kindnet, kind's default, does, on rootless podman too. With every
+policy deleted the same probes connect, so the check can fail.
+
 Signup works with an SMTP host and no broker (the mail falls back inline), so the rig needs no Mailpit.
 
 ## What the first run showed

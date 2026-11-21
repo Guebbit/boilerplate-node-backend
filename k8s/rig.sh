@@ -2,7 +2,7 @@
 # A real Kubernetes on this machine, to watch a real rolling restart of the app.
 #
 #   k8s/rig.sh up      build the image, create a kind cluster, install the Gateway controller, deploy
-#   k8s/rig.sh drill   a rolling restart under steady traffic, then a live stream across pods
+#   k8s/rig.sh drill   a rolling restart under steady traffic, a live stream across pods, then the network-policy checks
 #   k8s/rig.sh down    delete the cluster
 #   k8s/rig.sh run     up, then drill, then down: the cluster is deleted however it ends
 #

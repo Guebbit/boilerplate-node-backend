@@ -1,0 +1,60 @@
+# Who may open a connection to whom inside the namespace. Ingress only: egress stays open (the app
+# needs the SMTP host, the OAuth providers and webhook subscribers; recipe 5 of
+# docs/operate/deployment-hardening.md is the place for default-deny egress).
+#
+# Needs a CNI that ENFORCES NetworkPolicy. On one that does not (flannel alone, for instance) these
+# objects are accepted and do nothing; k8s/drill.ts checks the rig's CNI really drops the traffic.
+# Pod-to-pod only: the kubelet's own probes come from the node and are not filtered.
+# https://kubernetes.io/docs/concepts/services-networking/network-policies/
+#
+# 1. Everything in the namespace refuses connections.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: default-deny-ingress
+spec:
+    podSelector: {}
+    policyTypes: [Ingress]
+---
+# 2. Mongo takes connections from the app-code workloads, the two Jobs that run before them
+# (`setup` and `mongo-init`) and itself: a one-member replica set connects to its own address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: allow-mongo
+spec:
+    podSelector:
+        matchLabels:
+            app.kubernetes.io/name: mongo
+    policyTypes: [Ingress]
+    ingress:
+        - from:
+              - podSelector:
+                    matchExpressions:
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values: [app, worker, worker-heavy, cron, setup, mongo-init, mongo]
+          ports:
+              - protocol: TCP
+                port: 27017
+---
+# 3. Redis (the `cache` Service) takes connections from the app-code workloads that keep state in it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: allow-cache
+spec:
+    podSelector:
+        matchLabels:
+            app.kubernetes.io/name: cache
+    policyTypes: [Ingress]
+    ingress:
+        - from:
+              - podSelector:
+                    matchExpressions:
+                        - key: app.kubernetes.io/name
+                          operator: In
+                          values: [app, worker, worker-heavy, cron]
+          ports:
+              - protocol: TCP
+                port: 6379

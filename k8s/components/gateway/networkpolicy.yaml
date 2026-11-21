@@ -1,0 +1,27 @@
+# The Gateway's proxy pods may reach `app` on its HTTP port; nothing else may (k8s/base/networkpolicy.yaml
+# denies the rest). The proxy runs in the CONTROLLER's namespace, with labels the controller picks, so
+# this names none: every overlay patches the two selectors below for the controller it installs
+# (k8s/overlays/kind/ does it for Envoy Gateway).
+# https://kubernetes.io/docs/concepts/services-networking/network-policies/#behavior-of-to-and-from-selectors
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: allow-gateway
+spec:
+    podSelector:
+        matchLabels:
+            app.kubernetes.io/name: app
+    policyTypes: [Ingress]
+    ingress:
+        - from:
+              # One entry holding both selectors: the proxy pods in that namespace (AND), not every
+              # pod of the namespace plus every pod with those labels (two entries would be OR).
+              - namespaceSelector:
+                    matchLabels:
+                        kubernetes.io/metadata.name: set-by-the-overlay
+                podSelector:
+                    matchLabels:
+                        set-by-the-overlay: set-by-the-overlay
+          ports:
+              - protocol: TCP
+                port: 3000
