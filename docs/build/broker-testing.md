@@ -28,6 +28,20 @@ Left out as redundant: the webhook path through the broker (the live e2e and
 broker cannot be made to refuse on demand without testing RabbitMQ itself, and the unit tests cover
 our branch.
 
+## The worker-shutdown case
+
+`tests/broker/worker-shutdown.test.ts` spawns `src/worker.ts` as a real process, because the signal
+handler, `stop` and `process.exit` do not run under jest. SIGTERM arrives while a mail job is in
+flight; the answer is released after the lame-duck delay, so the job is still running when the worker starts waiting for running jobs.
+
+| Part                      | How                                                                                                                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a slow job, none in `src` | a real `worker.email.send` job; `support/held-smtp.ts` withholds its final `250` until the test releases it                                                                                                                                                         |
+| two workers               | A is the only consumer, so the job reaches it; B boots after the job is held, as the rolling-update replacement                                                                                                                                                     |
+| database                  | both children get `NODE_TEST_MONGO_URI`, the shared in-memory mongod the config's `globalSetup` starts: no second mongod, no CI step                                                                                                                                |
+| what it asserts           | A exits `0` inside the grace period; ready and unacked are 0 on the work, `.retry` and `.dead` queues (management API, read after its stats interval); one mail sent. A handler that threw would be acked and republished to `.retry`, so that queue is checked too |
+| ready is not bound        | the worker logs "listening" before its consumer is bound, so the case waits on the broker's consumer count before publishing                                                                                                                                        |
+
 ## The broker
 
 `NODE_TEST_RABBITMQ_URL` if set; otherwise the suite starts `rabbitmq:4-management` with

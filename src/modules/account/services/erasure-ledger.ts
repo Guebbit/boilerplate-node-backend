@@ -12,6 +12,7 @@
 
 import os from 'node:os';
 import type { ClientSession } from 'mongoose';
+import { settleOutboxNudges } from '@kernel/outbox';
 import type { PersonalDataSubject } from '@kernel/registry';
 import type { CallerContext } from '@types';
 import { systemCallerContext } from '@kernel/permissions';
@@ -121,9 +122,15 @@ type ReapplyBucket =
  * - `rescheduled`: locked again at the stored `purgeAt` (the owner asked after the snapshot).
  * - `unscheduled`: unlocked (the owner canceled after the snapshot).
  * - `unchanged`:   its lock already matched the ledger.
- * - `failed`:      the write threw; a rerun retries it.
+ * - `failed`:      the write threw; a rerun retries it. An account whose held-jobs sweep threw is listed
+ *                   here too (as well as under `erased`): a rerun cannot redo that sweep, so restore again.
+ *
+ * `heldJobsRemoved` is separate: the ids of the held jobs the final pass deleted. Ids, never the
+ * addresses they were found by.
  */
-export type ReapplyReport = Record<ReapplyBucket, string[]>;
+export interface ReapplyReport extends Record<ReapplyBucket, string[]> {
+    heldJobsRemoved: string[];
+}
 
 /** The ledger rows of one account since the snapshot, by kind. */
 type RowsByKind = Partial<Record<ErasureLedgerKind, ErasureLedgerRow>>;
@@ -142,6 +149,12 @@ const groupByUser = (rows: readonly ErasureLedgerRow[]): Map<string, RowsByKind>
     return byUser;
 };
 
+/** How one account ended, and for an erased one the addresses its held jobs are found by. */
+interface ReapplyOutcome {
+    bucket: ReapplyBucket;
+    addresses: string[];
+}
+
 /**
  * Bring one account back to what the ledger says. `erased` beats everything; otherwise the later
  * of `scheduled` and `canceled` wins (cancel, then ask again, stays scheduled).
@@ -154,11 +167,15 @@ const reapplyOne = (
     userId: string,
     rows: RowsByKind,
     context: CallerContext
-): Promise<ReapplyBucket> => {
+): Promise<ReapplyOutcome> => {
     if (rows.erased)
         return accountUserService
             .eraseAgain(userId, rows.erased.at, context)
-            .then((result) => (result === null ? 'alreadyGone' : 'erased'));
+            .then((result) =>
+                result === null
+                    ? { bucket: 'alreadyGone', addresses: [] }
+                    : { bucket: 'erased', addresses: result.addresses }
+            );
 
     const { scheduled, canceled } = rows;
     const schedule =
@@ -166,16 +183,21 @@ const reapplyOne = (
             ? { requestedAt: scheduled.at, purgeAt: scheduled.purgeAt }
             : null;
     return accountUserService.restoreDeletionState(userId, schedule, context).then((changed) => {
-        if (changed === null) return 'alreadyGone';
-        if (!changed) return 'unchanged';
-        return schedule ? 'rescheduled' : 'unscheduled';
+        if (changed === null) return { bucket: 'alreadyGone', addresses: [] };
+        if (!changed) return { bucket: 'unchanged', addresses: [] };
+        return { bucket: schedule ? 'rescheduled' : 'unscheduled', addresses: [] };
     });
 };
 
 /**
  * Replay the ledger on a restored database: erase again every account it says was erased since
  * `since`, keeping the original date; lock or unlock the others as their latest schedule or
- * cancel says; then write the restoration-log audit row.
+ * cancel says; sweep the held jobs naming an erased account; then write the restoration-log
+ * audit row.
+ *
+ * The sweep runs last because step 4 itself re-sends every restored pending outbox row, and a
+ * handler may hold a new mail job for an address that was just erased. So it waits for the outbox
+ * to settle first.
  *
  * Idempotent: a second run finds every account already in its ledger state. One account failing
  * is counted and logged, and the rest go on.
@@ -190,20 +212,42 @@ export const reapplyErasures = async (options: ReapplyOptions): Promise<ReapplyR
         rescheduled: [],
         unscheduled: [],
         unchanged: [],
-        failed: []
+        failed: [],
+        heldJobsRemoved: []
     };
+    const addressesByUser = new Map<string, string[]>();
     const rows = await erasureLedgerRepository.findSince(options.since);
 
     for (const [userId, userRows] of groupByUser(rows)) {
-        const outcome = await reapplyOne(userId, userRows, context).catch((error: unknown) => {
-            logger.error({
-                message: 'Reapplying the ledger failed.',
-                userId,
-                error: extractErrorMessage(error, String(error))
+        const { bucket, addresses } = await reapplyOne(userId, userRows, context).catch(
+            (error: unknown) => {
+                logger.error({
+                    message: 'Reapplying the ledger failed.',
+                    userId,
+                    error: extractErrorMessage(error, String(error))
+                });
+                return { bucket: 'failed' as const, addresses: [] };
+            }
+        );
+        report[bucket].push(userId);
+        if (addresses.length > 0) addressesByUser.set(userId, addresses);
+    }
+
+    await settleOutboxNudges();
+    for (const [userId, addresses] of addressesByUser) {
+        // A failed sweep fails the run, but the restoration-log row below is still written.
+        const removed = await accountUserService
+            .purgeHeldJobsOf(addresses)
+            .catch((error: unknown) => {
+                logger.error({
+                    message: 'Sweeping the held jobs of an erased account failed.',
+                    userId,
+                    error: extractErrorMessage(error, String(error))
+                });
+                report.failed.push(userId);
+                return [];
             });
-            return 'failed' as const;
-        });
-        report[outcome].push(userId);
+        report.heldJobsRemoved.push(...removed);
     }
 
     recordAudit(context, {
@@ -224,11 +268,12 @@ export const reapplyErasures = async (options: ReapplyOptions): Promise<ReapplyR
  *
  * @param report - what {@link reapplyErasures} returned
  */
-export const countsOf = (report: ReapplyReport): Record<ReapplyBucket, number> => ({
+export const countsOf = (report: ReapplyReport): Record<keyof ReapplyReport, number> => ({
     erased: report.erased.length,
     alreadyGone: report.alreadyGone.length,
     rescheduled: report.rescheduled.length,
     unscheduled: report.unscheduled.length,
     unchanged: report.unchanged.length,
-    failed: report.failed.length
+    failed: report.failed.length,
+    heldJobsRemoved: report.heldJobsRemoved.length
 });

@@ -393,9 +393,16 @@ export const stopQueue = (drainTimeoutMs: number = DEFAULT_DRAIN_TIMEOUT_MS): Pr
             // A handler that outlives the wait is simply redelivered once the connection closes.
             .then(() => settleWithin(inFlightHandlers, drainTimeoutMs))
             .then(() => {
+                // Cleared first: the channel's close handler then returns early instead of reopening.
                 currentChannel = undefined;
-                return connection.close();
+                /**
+                 * Channel before connection: `close` resolves on the broker's close-ok, sent only
+                 * after it processed every earlier frame, the ack included. A connection closed
+                 * right behind an ack makes RabbitMQ drop the ack and requeue the job.
+                 */
+                return channel?.close().catch(() => undefined);
             })
+            .then(() => connection.close())
             .catch(() => undefined)
     );
 };

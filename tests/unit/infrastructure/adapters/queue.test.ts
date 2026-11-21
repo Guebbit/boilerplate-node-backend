@@ -87,9 +87,13 @@ const mockChannelOn = jest.fn();
 /** Stands in for the channel's `Cancel`; the cases assert how it was called. */
 const mockCancel = jest.fn().mockResolvedValue({});
 
+/** Stands in for the channel's own `close`, which `stopQueue` awaits before it closes the connection. */
+const mockChannelClose = jest.fn().mockResolvedValue(undefined);
+
 /** Builds a channel whose every method is mocked. */
 const channelMock = () => ({
     cancel: mockCancel,
+    close: mockChannelClose,
     assertQueue: mockAssertQueue,
     assertExchange: mockAssertExchange,
     bindQueue: mockBindQueue,
@@ -1158,6 +1162,7 @@ describe('stopQueue() on a live connection', () => {
         const consumed = onMessage(delivery({ jobId: 1 }));
         await settle();
         mockModelClose.mockClear();
+        mockChannelClose.mockClear();
 
         const stopping = stopQueue();
         await settle();
@@ -1171,6 +1176,10 @@ describe('stopQueue() on a live connection', () => {
 
         expect(mockAck).toHaveBeenCalled();
         expect(mockModelClose).toHaveBeenCalled();
+        // The channel closes first: its close-ok is what proves the broker processed the ack.
+        expect(mockChannelClose.mock.invocationCallOrder[0]).toBeLessThan(
+            mockModelClose.mock.invocationCallOrder[0]
+        );
     });
 });
 

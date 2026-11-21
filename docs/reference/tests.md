@@ -269,18 +269,20 @@ flowchart LR
 One process is not the deployment. These boot real copies of the app behind a proxy, because the bugs they look for cannot
 happen in a single process.
 
-| Folder            | What lives here                                                   | Read next                                                                                                                                                |
-| ----------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/replicas/` | N copies behind a proxy: what only more than one process can show | [Replicas testing](../build/replicas-testing.md) · [Kubernetes testing](../build/kubernetes-testing.md) · [Scaling & Shutdown](../understand/scaling.md) |
+| Folder            | What lives here                                                                                                                                                          | Read next                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/replicas/` | N copies behind a proxy: what only more than one process can show                                                                                                        | [Replicas testing](../build/replicas-testing.md) · [Kubernetes testing](../build/kubernetes-testing.md) · [Scaling & Shutdown](../understand/scaling.md) |
+| `k8s/drill.ts`    | A rolling restart on a real kind cluster, weekly in `k8s-rig.yml`; its cheap half, the secret-file parity block, is in `tests/cross-cutting/production-topology.test.ts` | [Kubernetes testing § In CI](../build/kubernetes-testing.md#in-ci)                                                                                       |
 
 ## `tests/broker/` — a real RabbitMQ
 
 `queue.test.ts` mocks `amqplib`; these run the adapter against a real broker, so they see what
-RabbitMQ does with the arguments the unit suite only asserts we pass.
+RabbitMQ does with the arguments the unit suite only asserts we pass. `worker-shutdown.test.ts`
+spawns two real `src/worker.ts` processes and sends one SIGTERM mid-job.
 
-| Folder          | What lives here                           | Read next                             |
-| --------------- | ----------------------------------------- | ------------------------------------- |
-| `tests/broker/` | The queue adapter against a real RabbitMQ | [RabbitMQ](../understand/rabbitmq.md) |
+| Folder          | What lives here                                                             | Read next                                                                            |
+| --------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `tests/broker/` | The queue adapter against a real RabbitMQ; a worker's graceful stop mid-job | [RabbitMQ](../understand/rabbitmq.md) · [Broker testing](../build/broker-testing.md) |
 
 ## `tests/contract/` and `tests/fuzz/`
 

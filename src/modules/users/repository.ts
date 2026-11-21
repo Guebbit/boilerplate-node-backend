@@ -165,6 +165,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findByIdWithCredentials: (id: string, session?: ClientSession) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
+    findByIdWithEmailsInFlight: (
+        id: string,
+        session?: ClientSession
+    ) => Promise<UserDocument | null>;
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     emailTaken: (email: string) => Promise<boolean>;
     findStaffContacts: (ids: readonly string[]) => Promise<UserDocument[]>;
@@ -278,6 +282,19 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * `password`/2FA material, unlike {@link findByIdWithCredentials}'s callers.
      */
     findByIdWithPendingEmail: (id: string) => userModel.findById(id).select('+pendingEmail').exec(),
+
+    /**
+     * Fetch a user by id WITH both in-flight addresses (`pendingEmail`, `previousEmail`), which
+     * are `select: false`. Only the erasure reads them, to find the mail still addressed to them.
+     *
+     * @param session - the erasure's transaction, so the read sees what the erasure sees
+     */
+    findByIdWithEmailsInFlight: (id: string, session?: ClientSession) =>
+        userModel
+            .findById(id)
+            .select('+pendingEmail +previousEmail')
+            .session(session ?? null)
+            .exec(),
 
     /**
      * Whether `email` already backs another account — either its proven `email`, or another

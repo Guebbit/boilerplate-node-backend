@@ -6,7 +6,7 @@ audience: [architect, operator]
 # Kubernetes
 
 Not a supported deployment target: this repo runs one host per stack by decision. It does ship a **starting point**,
-`k8s/`, whose only tested home is a local kind cluster ([Kubernetes testing](../../build/kubernetes-testing.md)).
+`k8s/`, whose only tested home is a kind cluster, on a developer machine and weekly in CI ([Kubernetes testing](../../build/kubernetes-testing.md)).
 Read it as the answer to "what would the app need on Kubernetes", not as a chart to install. This page says what is
 there, what is yours to add, and when to revisit.
 

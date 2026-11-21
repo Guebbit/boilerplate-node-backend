@@ -150,7 +150,7 @@ Reverting it (dropping the `if (connectPromise) return connectPromise` guard in 
 
 ## Read next
 
-- [Kubernetes testing](./kubernetes-testing.md): the same restart on a real cluster, by hand
+- [Kubernetes testing](./kubernetes-testing.md): the same restart on a real cluster, by hand and weekly in CI ([`k8s-rig.yml`](./kubernetes-testing.md#in-ci))
 - [Broker testing](./broker-testing.md)
 - [Scaling & Shutdown](../understand/scaling.md)
 - [Testing — Quick Start](./testing-quickstart.md)
