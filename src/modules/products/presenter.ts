@@ -2,62 +2,22 @@
  * @module
  * The one place a product document becomes the `Product` contract — every read path that builds
  * from a document agrees here, `services/read.ts`'s `getById` included, rather than a hand-written
- * `.toJSON() as Product` cast in each. Search's lean rows never hold a document: they take the
- * derived fields from {@link derivedStockFields}.
+ * `.toJSON() as Product` cast in each. The product carries no stock: availability is
+ * `inventory`'s own read, so the derived block is just the live `currency` and `actions`.
  */
 
 import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
-import { availableStock, preorderAllowanceLeft, stockFlags } from './domain/stock';
-import { isPreorder } from './domain/preorder';
-import { isBackorder } from './domain/backorder';
-import { isBuyable, type BuyableFacts } from './domain/buyable';
 import { NO_PRODUCT_ACTIONS } from './domain/actions';
-import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency, shopDayOf } from '@modules/shop';
 import { padDecimal } from '@domain-primitives/money';
 
 /**
- * The block of a product's response that is derived, never stored: `available` (the shelf, or for
- * a preorder what is left of its allowance), the `inStock` /
- * `lowStock` flags, `preorder`, `backorder`, `buyable`, the live `currency` and `actions` (all
- * `false`: no caller yet, `services/actions.ts` stamps the real ones). One place, because the
- * document's own serialisation and a presented document must agree on every one of them.
- *
- * @param facts - the stock counters, the preorder allowance and what decides a preorder
- * @returns the derived fields of a `Product`
- */
-export const derivedStockFields = (facts: BuyableFacts) => {
-    const now = new Date();
-    const preorder = isPreorder(facts, now);
-    /**
-     * A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
-     * allowance is full the product reads sold out, whatever the cached shelf says.
-     */
-    const available = preorder
-        ? preorderAllowanceLeft(facts.backorderLimit, facts.backordered)
-        : availableStock(facts.onHand, facts.reserved);
-    const flags = stockFlags(available, lowStockThreshold());
-
-    return {
-        available,
-        ...flags,
-        // A preorder waits for stock that does not exist yet: it is not "running low".
-        ...(preorder ? { lowStock: false } : {}),
-        preorder,
-        backorder: isBackorder(facts, now),
-        buyable: isBuyable(facts, now),
-        currency: shopCurrency(),
-        actions: NO_PRODUCT_ACTIONS
-    };
-};
-
-/**
- * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
- * and the `inStock`/`lowStock`/`preorder` flags derived from the two stock counters (never stored),
- * `currency` read live from `NODE_DEFAULT_CURRENCY`, `createdAt`/`updatedAt`/`deletedAt` as ISO
- * strings and the promise dates as the shop's day. The row's version is not part of the contract,
+ * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter,
+ * `currency` read live from `NODE_DEFAULT_CURRENCY` (never stored), `actions` all `false` (no
+ * caller yet; `services/actions.ts` stamps the real ones), `createdAt`/`updatedAt`/`deletedAt` as
+ * ISO strings and the promise dates as the shop's day. The row's version is not part of the contract,
  * so it rides beside the result (`carryVersion`) for the `ETag`.
  */
 export const presentProduct = (document: ProductDocument): Product => {
@@ -66,12 +26,11 @@ export const presentProduct = (document: ProductDocument): Product => {
         title: document.title,
         // The wire spelling: the stored Decimal128 forgot its trailing zeros; the shop's live currency fixes the places.
         price: padDecimal(document.price, shopCurrency()),
-        ...derivedStockFields(document),
+        currency: shopCurrency(),
+        actions: NO_PRODUCT_ACTIONS,
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.rateType === undefined ? {} : { rateType: document.rateType }),
         ...(document.sku === undefined ? {} : { sku: document.sku }),
-        ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
-        ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
         ...(document.description ? { description: document.description } : {}),
         ...(document.active === undefined ? {} : { active: document.active }),
         ...(document.purchasable === undefined ? {} : { purchasable: document.purchasable }),

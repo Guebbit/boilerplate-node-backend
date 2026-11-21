@@ -31,7 +31,6 @@ import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
 import { postCartMerge } from './controllers/post-cart-merge';
 import { putCartShippingMethod } from './controllers/put-cart-shipping-method';
-import { invalidateCache } from '@infrastructure/http/middlewares/cache';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { checkoutLimiter, mergeLimiter } from './rate-limits';
 
@@ -65,7 +64,6 @@ router.post(
      */
     checkoutLimiter,
     idempotencyKey,
-    invalidateCache(['products']),
     postCheckout
 );
 

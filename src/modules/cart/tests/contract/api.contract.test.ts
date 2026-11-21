@@ -751,10 +751,10 @@ describe('POST /cart/checkout', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        // The count is a stock reader's to see: the shopper gets only the in-stock flags.
+        // The count is a stock reader's to see, on the stock board.
         const { bearer: stockReader } = await authenticateAs('admin');
         const before = await api()
-            .get(`/products/${String(product._id)}`)
+            .get(`/inventory/levels/${String(product._id)}`)
             .set('Authorization', stockReader);
         // Both calls send the same body: a replay is only a replay for an identical request.
         const requestBody = { expectedTotal: await shownTotal(bearer) };
@@ -782,7 +782,7 @@ describe('POST /cart/checkout', () => {
 
         // The basket's stock was reserved once, not twice, by the replay.
         const after = await api()
-            .get(`/products/${String(product._id)}`)
+            .get(`/inventory/levels/${String(product._id)}`)
             .set('Authorization', stockReader);
         expect(after.body.available).toBe(before.body.available - 2);
     });

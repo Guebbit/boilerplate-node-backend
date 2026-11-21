@@ -165,7 +165,7 @@ describe('POST /products', () => {
         await settleOutboxNudges();
 
         expect(response.status).toBe(201);
-        const empty = await api().get(`/products/${id}`).set('Authorization', bearer);
+        const empty = await api().get(`/inventory/levels/${id}`).set('Authorization', bearer);
         expect(empty.body.onHand).toBe(0);
 
         const received = await api()
@@ -174,7 +174,7 @@ describe('POST /products', () => {
             .set('Authorization', bearer)
             .set('Idempotency-Key', 'opening-count-1')
             .send({ quantity: 7 });
-        const read = await api().get(`/products/${id}`).set('Authorization', bearer);
+        const read = await api().get(`/inventory/levels/${id}`).set('Authorization', bearer);
         const movements = await api()
             .get(`/inventory/movements?productId=${id}`)
             .set('Authorization', bearer);
@@ -260,7 +260,7 @@ describe('PUT /products/{id}', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(response.body.preorder).toBe(false);
+        expect(response.body.releaseDate).toBeUndefined();
         const after = await productRepository.findById(String(product._id));
         expect(after?.releaseDate).toBeUndefined();
     });
@@ -714,54 +714,42 @@ describe('GET /products/{id}, the translations map', () => {
 /** A create body titled in the fallback language. */
 const bodyTitled = (title: string) => ({ price: '10.00', translations: { en: { title } } });
 
-describe('the stock counters on the product writes follow read:StockLevel', () => {
-    /** The three counters only a stock reader sees. */
-    const COUNTERS = ['onHand', 'reserved', 'available'];
+describe('the product writes carry no stock, for any role', () => {
+    /** Every stock-shaped field the product answer used to carry. */
+    const STOCK_FIELDS = [
+        'onHand',
+        'reserved',
+        'available',
+        'inStock',
+        'lowStock',
+        'buyable',
+        'preorder',
+        'backorder'
+    ];
 
-    it('hides them from an editor who creates, and shows them to an admin', async () => {
+    it('answers a create by an editor and by an admin without them, and so does the read after', async () => {
         const editor = await authenticateAsRole('editor');
         const admin = await authenticateAsRole('admin');
 
         const byEditor = await api()
             .post('/products')
             .set('Authorization', editor.bearer)
-            .send({ price: '10.00', translations: { en: { title: 'Editor desk' } } });
+            .send(bodyTitled('Editor desk'));
         const byAdmin = await api()
             .post('/products')
             .set('Authorization', admin.bearer)
             .send(bodyTitled('Admin desk'));
 
         expect(byEditor.status).toBe(201);
-        expect(COUNTERS.filter((field) => field in byEditor.body)).toEqual([]);
         expect(byAdmin.status).toBe(201);
-
-        // The stock level opens through the outbox, so both are read once the relay has run.
-        await settleOutboxNudges();
-        const editorRead = await api()
-            .get(`/products/${String(byEditor.body.id)}`)
-            .set('Authorization', editor.bearer);
         const adminRead = await api()
             .get(`/products/${String(byAdmin.body.id)}`)
             .set('Authorization', admin.bearer);
-        expect(editorRead.body.inStock).toBe(false);
-        expect(adminRead.body).toMatchObject({ onHand: 0, available: 0 });
-    });
-
-    it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {
-        const product = await createProduct({ onHand: 9 });
-        const editor = await authenticateAsRole('editor');
-        const admin = await authenticateAsRole('admin');
-
-        const byEditor = await api()
-            .get(`/products/${product.id}`)
-            .set('Authorization', editor.bearer);
-        const byAdmin = await api()
-            .get(`/products/${product.id}`)
-            .set('Authorization', admin.bearer);
-
-        expect(COUNTERS.filter((field) => field in byEditor.body)).toEqual([]);
-        expect(byEditor.body.inStock).toBe(true);
-        expect(byAdmin.body).toMatchObject({ onHand: 9, available: 9 });
+        expect(
+            [byEditor.body, byAdmin.body, adminRead.body].flatMap((body: Record<string, unknown>) =>
+                STOCK_FIELDS.filter((field) => field in body)
+            )
+        ).toEqual([]);
     });
 });
 

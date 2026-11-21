@@ -6,7 +6,6 @@
 import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { counterDeltaFor, type HoldKind } from '../domain';
@@ -18,17 +17,15 @@ import { forgetAvailability } from './availability';
  * delete each product's `availability:<id>` entry (the availability reads' own cache, which a stock
  * move makes stale). Every id the caller gives loses its entry.
  *
- * One `$in` read for all of them, one sync per product, and ONE clear of the `products`
- * response-cache tag at the end: `GET /products/:id` and the lists carry `available`, so a stock
- * write that left them cached would keep showing the old count. Every stock write — receipt,
- * adjustment, hold, release, both sweeps, a return's restock — ends here.
+ * One `$in` read for all of them, one sync per product. The `products` response cache is left
+ * alone: the product answer carries no stock, so a stock move cannot make it stale. Every stock
+ * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
  *
  * Never rejects, the read included: the transition it follows already committed, and the next
  * transition on a product corrects its cache regardless. A failure must not skip what the
  * caller still owes (a hold given back, a refund).
  *
- * - A failed sync is logged; the other products still sync.
- * - The tag is cleared only if at least one sync landed.
+ * A failed sync is logged; the other products still sync.
  *
  * @param productIds - the products whose counters just moved; duplicates are read once
  */
@@ -43,7 +40,6 @@ export const refreshStockCacheForProducts = (productIds: readonly string[]): Pro
     return forgetAvailability(unique)
         .then(() => stockLevelRepository.findManyByProductIds(unique))
         .then(async (levels) => {
-            let synced = 0;
             for (const level of levels) {
                 const productId = String(level.productId);
                 await productService
@@ -54,9 +50,6 @@ export const refreshStockCacheForProducts = (productIds: readonly string[]): Pro
                         backordered: level.backordered,
                         version: level.version
                     })
-                    .then(() => {
-                        synced += 1;
-                    })
                     .catch((error: unknown) => {
                         // Stryker disable all
                         logger.error({
@@ -66,7 +59,6 @@ export const refreshStockCacheForProducts = (productIds: readonly string[]): Pro
                         // Stryker restore all
                     });
             }
-            if (synced > 0) await invalidateCacheTagsLogged(['products']);
         })
         .catch((error: unknown) => {
             // Stryker disable all

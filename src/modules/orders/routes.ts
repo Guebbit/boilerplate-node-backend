@@ -35,7 +35,7 @@ import { getOrderTimeline } from './controllers/get-order-timeline';
 import { postOrderNote, deleteOrderNote } from './controllers/order-notes';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderOverrideStatus } from './controllers/post-order-override-status';
-import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
@@ -86,28 +86,16 @@ router.get('/export', requirePermission('export', 'Order'), ordersExportLimiter,
 
 /**
  * POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
- * replay the SAME order rather than mint a second one. `products`, not `orders` — no route on
- * this router still tags a cache entry `orders`.
+ * replay the SAME order rather than mint a second one.
  */
-router.post(
-    '/',
-    requirePermission('create', 'Order'),
-    idempotencyKey,
-    invalidateCache(['products']),
-    createOrder
-);
+router.post('/', requirePermission('create', 'Order'), idempotencyKey, createOrder);
 
 /**
  * POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
  * the service's conditional write carries the caller's scope). An operator's cancel asks a fresh
  * session first, before the cache is touched: it is the door that can refund, or keep, the money.
  */
-router.post(
-    '/:id/cancel',
-    requireFreshAuthWhen(isOperatorCancel, 'critical'),
-    invalidateCache(['products']),
-    postCancelOrder
-);
+router.post('/:id/cancel', requireFreshAuthWhen(isOperatorCancel, 'critical'), postCancelOrder);
 
 // POST /orders/:id/override-status — must come before /:id
 router.post(

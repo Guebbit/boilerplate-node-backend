@@ -1,7 +1,7 @@
 /**
  * @module
- * A product's `releaseDate`, over HTTP: a future date makes it a preorder (derived, never
- * stored), the date is bounded to a year ahead, and moving it announces `product.release_date_changed`
+ * A product's `releaseDate`, over HTTP: a future date makes it a preorder (that is
+ * `availability`'s answer, not the product's), the date is bounded to a year ahead, and moving it announces `product.release_date_changed`
  * through the outbox in the edit's own transaction.
  *
  * @see docs/modules/products.md#preorder
@@ -31,40 +31,13 @@ const announced = () =>
 const announcedPayloads = () => announced().then((rows) => rows.map(({ payload }) => payload));
 
 describe('GET /products/:id', () => {
-    it('flags a product with a future release date as a preorder, and shows the date', async () => {
+    it('shows a future release date as the shop day', async () => {
         const releaseDate = inDays(30);
         const product = await createProduct({ releaseDate: stored(releaseDate) });
 
         const response = await api().get(`/products/${String(product._id)}`);
 
-        expect(response.body).toMatchObject({ preorder: true, releaseDate });
-    });
-
-    it('stops being a preorder once the date has passed, with nothing run', async () => {
-        const product = await createProduct({ releaseDate: stored(inDays(-1)) });
-
-        const response = await api().get(`/products/${String(product._id)}`);
-
-        expect(response.body.preorder).toBe(false);
-    });
-
-    it('is not a preorder when it is off sale', async () => {
-        const product = await createProduct({
-            releaseDate: stored(inDays(30)),
-            purchasable: false
-        });
-
-        const response = await api().get(`/products/${String(product._id)}`);
-
-        expect(response.body.preorder).toBe(false);
-    });
-
-    it('never calls a preorder low on stock', async () => {
-        const product = await createProduct({ releaseDate: stored(inDays(30)), onHand: 1 });
-
-        const response = await api().get(`/products/${String(product._id)}`);
-
-        expect(response.body).toMatchObject({ preorder: true, lowStock: false });
+        expect(response.body.releaseDate).toBe(releaseDate);
     });
 });
 
@@ -84,9 +57,8 @@ describe('PATCH /products/:id releaseDate', () => {
             .set('Authorization', bearer)
             .send({ releaseDate: null });
 
-        expect(set.body).toMatchObject({ preorder: true, releaseDate });
+        expect(set.body.releaseDate).toBe(releaseDate);
         expect(cleared.body.releaseDate).toBeUndefined();
-        expect(cleared.body.preorder).toBe(false);
         const payloads = await announcedPayloads();
         expect(payloads).toEqual([
             { productId: id, to: stored(releaseDate) },
@@ -153,7 +125,7 @@ describe('PATCH /products/:id releaseDate', () => {
             .send({ releaseDate: inDays(-5) });
 
         expect(response.status).toBe(200);
-        expect(response.body.preorder).toBe(false);
+        expect(response.body.releaseDate).toBe(inDays(-5));
     });
 });
 

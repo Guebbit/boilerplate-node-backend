@@ -162,13 +162,13 @@ describe('order routes — caching', () => {
         expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
     });
 
-    it('invalidates products wherever stock moves', () => {
+    it('leaves the products cache alone where stock moves', () => {
         /**
-         * Creating an order and cancelling one both change availability, so both must clear the
-         * catalogue.
+         * Creating an order and cancelling one both move stock, but the product answer carries no
+         * stock: availability has its own per-product entry, which inventory deletes itself.
          */
-        expect(chainOf(router, 'POST /')).toContain('invalidateCache([products])');
-        expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([products])');
+        expect(chainOf(router, 'POST /')).not.toContain('invalidateCache([products])');
+        expect(chainOf(router, 'POST /:id/cancel')).not.toContain('invalidateCache([products])');
     });
 
     it('reaches the hard delete only through the flag route', () => {

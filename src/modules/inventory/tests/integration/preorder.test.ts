@@ -8,6 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { api } from '@tests/http';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
@@ -376,22 +377,23 @@ describe('what a shopper may buy', () => {
     });
 });
 
-describe('what the catalogue shows for a preorder', () => {
-    it('counts the allowance down, and reads sold out the day it is full', async () => {
-        const product = await createProduct({
-            onHand: 0,
-            releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
-        });
+describe('what the shopper is told for a preorder', () => {
+    it('counts the allowance down, and reads out of stock the day it is full', async () => {
+        const releaseDate = new Date(Date.now() + 30 * 86_400_000);
+        const product = await createProduct({ onHand: 0, releaseDate: releaseDate.toISOString() });
         const productId = String(product._id);
-        const read = () => productService.getById(productId);
+        const read = () =>
+            api()
+                .get(`/products/${productId}/availability`)
+                .then((response) => response.body.availability as string);
 
-        expect(await read()).toMatchObject({ preorder: true, available: 0, inStock: false });
+        expect(await read()).toBe('out_of_stock');
 
         await inventoryService.setBackorderLimit(productId, 2);
-        expect(await read()).toMatchObject({ available: 2, inStock: true });
+        expect(await read()).toBe('preorder');
 
         await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
-        expect(await read()).toMatchObject({ available: 0, inStock: false });
+        expect(await read()).toBe('out_of_stock');
     });
 
     it('keeps the allowance off the wire', async () => {

@@ -1,12 +1,12 @@
 /**
  * @module
- * Every stock write clears the catalogue's response cache. `GET /products/:id` and the lists carry
- * `available`, so a receipt, an adjustment, a sweep or a return's restock that left them cached
- * would keep serving the old count until the TTL ran out.
+ * A stock write leaves the catalogue's response cache alone: the product answer carries no stock
+ * (availability is its own read, with its own per-product entry), so a receipt, an adjustment, a
+ * sweep or a return's restock cannot make `GET /products/:id` or a list stale. What a write does
+ * owe is the catalogue's synced copy of the counters, taken once per line of a multi-line checkout.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
@@ -40,61 +40,35 @@ let orderCounter = 0;
 /** A fresh order id; the letter pads the id so files never collide on one. */
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'c');
 
-describe('the products cache tag, cleared where stock is written', () => {
-    it('clears it when stock is received', async () => {
-        const product = await createProduct({ onHand: 1 });
-
-        await inventoryService.receive(String(product._id), 4, undefined, testCallerContext);
-
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
-    });
-
-    it('clears it when stock is adjusted', async () => {
+describe('the products cache tag, left alone by stock writes', () => {
+    it.each([
+        ['received', (id: string) => inventoryService.receive(id, 4, undefined, testCallerContext)],
+        ['adjusted', (id: string) => inventoryService.adjust(id, -2, undefined, testCallerContext)],
+        [
+            'put back by a return',
+            (id: string) =>
+                withTransaction((session) =>
+                    inventoryService.restockReturnedLines(
+                        [{ productId: id, quantity: 1 }],
+                        { reference: anOrderId(), note: 'return' },
+                        session
+                    )
+                ).then(() => inventoryService.refreshStockCacheForProducts([id]))
+        ]
+    ])('does not clear it when stock is %s', async (_how, write) => {
         const product = await createProduct({ onHand: 5 });
 
-        await inventoryService.adjust(String(product._id), -2, undefined, testCallerContext);
+        await write(String(product._id));
 
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
-    });
-
-    it('clears it when the sweep releases an expired hold', async () => {
-        const product = await createProduct({ onHand: 5 });
-        // A zero-minute window: the hold is stale the moment it is taken.
-        await withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
-            await inventoryService.reserveForOrder(anOrderId(), [
-                { productId: String(product._id), quantity: 1 }
-            ]);
-        });
-        jest.mocked(invalidateCacheTagsLogged).mockClear();
-
-        await expect(inventoryService.runReservationSweep()).resolves.toBe(1);
-
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
-    });
-
-    it('clears it when a return puts goods back on the shelf', async () => {
-        const product = await createProduct({ onHand: 5 });
-        const productId = String(product._id);
-
-        await withTransaction((session) =>
-            inventoryService.restockReturnedLines(
-                [{ productId, quantity: 1 }],
-                { reference: anOrderId(), note: 'return' },
-                session
-            )
-        );
-        await inventoryService.refreshStockCacheForProducts([productId]);
-
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
+        expect(invalidateCacheTagsLogged).not.toHaveBeenCalledWith(['products']);
     });
 });
 
-describe('a multi-line checkout refreshes the catalogue once', () => {
-    it('clears the tag once and syncs every line, however many lines it has', async () => {
+describe('a multi-line checkout syncs the catalogue copy of every line', () => {
+    it('syncs every line, however many lines it has', async () => {
         const first = await createProduct({ onHand: 3 });
         const second = await createProduct({ onHand: 3 });
         const third = await createProduct({ onHand: 3 });
-        jest.mocked(invalidateCacheTagsLogged).mockClear();
         const sync = jest.spyOn(productService, 'syncStockCache');
 
         const outcome = await inventoryService.reserveForOrder(
@@ -103,7 +77,6 @@ describe('a multi-line checkout refreshes the catalogue once', () => {
         );
 
         expect(outcome.held).toBe(true);
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledTimes(1);
         expect(sync).toHaveBeenCalledTimes(3);
         await expect(countersOf(String(third._id))).resolves.toMatchObject({ reserved: 1 });
     });
@@ -111,24 +84,20 @@ describe('a multi-line checkout refreshes the catalogue once', () => {
     it('never fails the checkout when the catalogue write fails', async () => {
         const product = await createProduct({ onHand: 3 });
         jest.spyOn(productService, 'syncStockCache').mockRejectedValue(new Error('catalogue down'));
-        jest.mocked(invalidateCacheTagsLogged).mockClear();
 
         const outcome = await inventoryService.reserveForOrder(anOrderId(), [
             { productId: String(product._id), quantity: 1 }
         ]);
 
         expect(outcome.held).toBe(true);
-        // No sync landed, so there is nothing stale to clear.
-        expect(invalidateCacheTagsLogged).not.toHaveBeenCalled();
     });
 
-    it('keeps syncing the other lines when one sync fails, and clears the tag once', async () => {
+    it('keeps syncing the other lines when one sync fails', async () => {
         const products = await Promise.all([
             createProduct({ onHand: 3 }),
             createProduct({ onHand: 3 }),
             createProduct({ onHand: 3 })
         ]);
-        jest.mocked(invalidateCacheTagsLogged).mockClear();
         const sync = jest
             .spyOn(productService, 'syncStockCache')
             .mockRejectedValueOnce(new Error('catalogue down'));
@@ -140,7 +109,6 @@ describe('a multi-line checkout refreshes the catalogue once', () => {
 
         expect(outcome.held).toBe(true);
         expect(sync).toHaveBeenCalledTimes(3);
-        expect(invalidateCacheTagsLogged).toHaveBeenCalledTimes(1);
     });
 
     it('refreshes the lines already taken when giving them back fails', async () => {

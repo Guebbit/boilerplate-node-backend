@@ -164,11 +164,12 @@ Write order matters and is deliberate: the counter and its ledger row commit fir
 regardless of whether the cache sync afterward succeeds. A failed sync is logged and left for the
 next transition on that product to correct — never a reason to fail the transition that already committed.
 
-The same sync also clears the `products` response-cache tag, because the product page and the
-lists carry `available`: every stock write (receipt, adjustment, hold, release, both sweeps, a
-return's restock) ends in `refreshStockCache`, so one call covers routes, jobs and webhooks alike.
-`GET /products/:id` is also `browserRevalidate`, so a browser checks first instead of keeping the
-page for an hour — see [Redis cache](../understand/redis-cache.md).
+The same call deletes each product's `availability:<id>` entry, the one cache a stock move makes
+stale: every stock write (receipt, adjustment, hold, release, both sweeps, a return's restock) ends
+in `refreshStockCache`, so one call covers routes, jobs and webhooks alike. It clears nothing in the
+`products` response cache, because the product answer carries no stock. `GET /products/:id` is
+`browserRevalidate`, so a browser checks first instead of keeping the page for an hour — see
+[Redis cache](../understand/redis-cache.md).
 
 One consequence worth naming: this module imports `products` (for a shortfall's title, and
 for the cache sync). Only `products → inventory` would be a cycle, and nothing creates it.

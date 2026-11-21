@@ -67,17 +67,21 @@ describe('product routes — what is mounted', () => {
     });
 });
 
-describe('product routes — the product page and its stock count', () => {
-    it('GET /:id makes the browser revalidate, so a stock change is not hidden for an hour', () => {
-        /**
-         * The page shows `available`, which a stock write changes. A server-side clear cannot
-         * reach a copy already in a browser, so the browser must check first (a 304 when equal).
-         */
-        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
-            tags: [TAG],
-            browserRevalidate: true
-        });
-    });
+describe('product routes — the browser re-checks every read', () => {
+    it.each(['GET /:id', 'GET /', 'POST /search'])(
+        '%s makes the browser revalidate, so a staff edit is not hidden for an hour',
+        (signature) => {
+            /**
+             * A server-side clear cannot reach a copy already in a browser, so the browser must
+             * check first (a 304 when equal). The POST spelling shares the list's declaration;
+             * `setCache` answers it `no-store` regardless.
+             */
+            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+                tags: [TAG],
+                browserRevalidate: true
+            });
+        }
+    );
 });
 
 describe('product routes — authorization', () => {

@@ -107,6 +107,17 @@ The key is built BEFORE the controller validates anything, so what feeds it is b
 
 Full detail: [The key is what the request asked for, not how it was written](./redis-cache-keys.md).
 
+## What the product answer caches
+
+The product details (`GET /products/{id}`, the list and search) are the one hot, public entry set
+that staff edit: Redis keeps them for the hour, any staff edit clears the whole `products` tag, and
+the browser is sent `public, no-cache` so it re-checks and gets a `304` instead of holding a copy no
+clear can reach. They carry no stock, so a stock move leaves them alone. Stock is
+[`inventory`'s availability read](../modules/inventory.md#the-availability-reads), with its own
+per-product entry that is deleted on every change and expires after 60 seconds. The rule that
+decides which fields may ride in which kind of answer is in
+[API standards](./api-standards.md#what-a-cached-answer-may-carry).
+
 ## Entry size is bounded
 
 Caching turns a cheap request into long-lived server state, and that is a different risk from

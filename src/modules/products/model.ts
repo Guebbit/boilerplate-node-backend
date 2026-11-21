@@ -1,10 +1,10 @@
 /**
  * @module
- * The product Mongoose schema, its Zod validation, and the serialization transform that derives
- * `available` from the two stock counters. `onHand` and `reserved` are declared here because this
+ * The product Mongoose schema, its Zod validation, and the serialization transform that stamps the
+ * derived `currency` and `actions`. `onHand` and `reserved` are declared here because this
  * module owns the collection but are written only by `@modules/inventory` — see that module's
- * docblock. `available` is never stored: `applyProductTransform` computes it at serialization
- * time so no writer can let it drift.
+ * docblock. They never reach the wire: a product answer carries no stock, and availability is
+ * `inventory`'s own read.
  *
  * @see docs/modules/products.md#order-line-snapshots-freeze-the-resolved-words
  */
@@ -19,26 +19,19 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import { fitsCurrency, minorUnitExponent } from '@domain-primitives/money';
 import { latestReleaseDate } from './domain/preorder';
-import { derivedStockFields } from './presenter';
+import { NO_PRODUCT_ACTIONS } from './domain/actions';
 import { RateType, TaxClass, type Product } from '@types';
 import { shopCurrency, shopDayOf, startOfShopDay } from '@modules/shop';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
- * `openapi.yaml` with its three dates as real `Date`s. the derived fields (`available`, `inStock`,
- * `lowStock`, `buyable`, `preorder`, `backorder`, `currency`, `actions`) are omitted: they are
- * computed at serialization, never persisted. Kept separate from `ProductDocument` so a plain
+ * `openapi.yaml` with its three dates as real `Date`s. The derived fields (`currency`, `actions`) are
+ * omitted: they are computed at serialization, never persisted. Kept separate from `ProductDocument` so a plain
  * object (a lean read, a fixture) can satisfy the shape without also satisfying `Document`.
  */
 export interface ProductRecord extends Omit<
     Product,
     | 'id'
-    | 'available'
-    | 'inStock'
-    | 'lowStock'
-    | 'buyable'
-    | 'preorder'
-    | 'backorder'
     | 'currency'
     | 'actions'
     | 'releaseDate'
@@ -49,15 +42,17 @@ export interface ProductRecord extends Omit<
 > {
     /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
     _id: Types.ObjectId;
-    /** When it ships from; `preorder` is derived from it and never stored. */
+    /** When it ships from. */
     releaseDate?: Date;
-    /** When stock is expected back, for a product that allows backorder; `backorder` is derived. */
+    /** When stock is expected back, for a product that allows backorder. */
     restockDate?: Date;
     /**
-     * The preorder allowance and the units already claimed against it, copied from `inventory`
-     * beside `onHand`/`reserved`. Internal: only a preorder's `available` is derived from them,
-     * and neither reaches the wire.
+     * The shelf counters, copied from `inventory`. Internal: the product answer carries no stock
+     * (availability is `inventory`'s own read), so none of these reaches the wire.
      */
+    onHand?: number;
+    reserved?: number;
+    /** The preorder allowance and the units already claimed against it, copied the same way. */
     backorderLimit?: number | null;
     backordered?: number;
     /** The stock level version the copy above was taken at; sync-only, never returned. */
@@ -480,48 +475,32 @@ productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_delete
 productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: true });
 
 /**
- * Derives `available` and `preorder` and stamps the live `currency`, at the single serialization
- * point every product response passes through — listing, detail, both write paths and an order's
- * embedded snapshots all agree. Neither is stored: `currency` is this deployment's CURRENT
- * `NODE_DEFAULT_CURRENCY`, read fresh rather than frozen onto the catalogue row.
+ * Stamps the live `currency` and the all-`false` `actions`, and drops the stock copy, at the
+ * single serialization point every product response passes through — listing, detail and both
+ * write paths agree. `currency` is this deployment's CURRENT `NODE_DEFAULT_CURRENCY`, read fresh
+ * rather than frozen onto the catalogue row.
  */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
-    Object.assign(
-        serialized,
-        derivedStockFields({
-            onHand: typeof serialized.onHand === 'number' ? serialized.onHand : undefined,
-            reserved: typeof serialized.reserved === 'number' ? serialized.reserved : undefined,
-            backorderLimit:
-                typeof serialized.backorderLimit === 'number' || serialized.backorderLimit === null
-                    ? serialized.backorderLimit
-                    : undefined,
-            backordered:
-                typeof serialized.backordered === 'number' ? serialized.backordered : undefined,
-            active: serialized.active === false ? false : undefined,
-            purchasable: serialized.purchasable === false ? false : undefined,
-            releaseDate:
-                serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined,
-            allowBackorder: serialized.allowBackorder === true ? true : undefined,
-            restockDate: serialized.restockDate instanceof Date ? serialized.restockDate : undefined
-        })
-    );
+    serialized.currency = shopCurrency();
+    serialized.actions = NO_PRODUCT_ACTIONS;
     /**
-     * The two promise dates go out as the shop's day, after the derivation above used the Date.
+     * The two promise dates go out as the shop's day.
      * Only a `Date` is converted, so a row that already went through here is left alone.
      */
     if (serialized.releaseDate instanceof Date)
         serialized.releaseDate = shopDayOf(serialized.releaseDate);
     if (serialized.restockDate instanceof Date)
         serialized.restockDate = shopDayOf(serialized.restockDate);
-    // Read above, never returned: the contract's `Product` does not carry the allowance.
+    // The stock copy never reaches the wire: the contract's `Product` carries no stock.
+    delete serialized.onHand;
+    delete serialized.reserved;
     delete serialized.backorderLimit;
     delete serialized.backordered;
     delete serialized.stockVersion;
 };
 
 /**
- * Normalizes a serialized product: shared `_id`→`id` and `__v` removal, plus deriving
- * `available`. Exported so lean/aggregate results (which bypass `toJSON`) can reuse it —
+ * Normalizes a serialized product: shared `_id`→`id` and `__v` removal, plus the derived block. Exported so lean/aggregate results (which bypass `toJSON`) can reuse it —
  * see `./repository`.
  */
 export const applyProductTransform = applySerialization(productSchema, {

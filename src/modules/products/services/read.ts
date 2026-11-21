@@ -9,7 +9,6 @@ import type { Product, CallerContext, Caller } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { presentProduct } from '../presenter';
-import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
 import { translationsWithFallback } from './lookups';
 import { canSeeTranslations } from './translation-view';
@@ -62,9 +61,8 @@ export const getById = (
 };
 
 /**
- * `GET /products/:id` — get a product, as `context.caller` may see it: the exact stock counters
- * stay for a holder of `read:StockLevel` (see `./stock-view`), and `translations` (every language,
- * drafts included) for a holder of `read:Translation` (see `./translation-view`).
+ * `GET /products/:id` — get a product, as `context.caller` may see it: `translations` (every
+ * language, drafts included) for a holder of `read:Translation` (see `./translation-view`).
  *
  * The top-level `title`/`description` are always the request's resolved language, even beside
  * `translations`: staff browsing the shop in Italian must not see the fallback language there.
@@ -95,14 +93,13 @@ export const getByIdForCaller = (
 
 /**
  * A stored product as `GET /products/:id` answers this caller: the request's language, the
- * `translations` for a holder of `read:Translation`, the stock counters for a holder of
- * `read:StockLevel`. The write routes answer with this too, so a write's body is the product's
+ * `translations` for a holder of `read:Translation`. The write routes answer with this too, so a write's body is the product's
  * own read (AIP-133/134/164).
  *
  * `actions` carries the caller's own keys: a write is never served from the shared cache.
  *
  * @param product - the stored document
- * @param caller - `request.caller`, or `undefined` for a path with no request (sees no counters)
+ * @param caller - `request.caller`, or `undefined` for a path with no request (sees no translations)
  */
 export const presentForCaller = (product: ProductDocument, caller?: Caller): Promise<Product> =>
     presentWithStanding(product, caller, standingOn(caller));
@@ -121,7 +118,6 @@ const presentWithStanding = (
 ): Promise<Product> =>
     resolveToLocale(product)
         .then((resolved) => withTranslations(product, resolved, caller))
-        .then((visible) => redactStock(visible, canSeeStock(caller)))
         .then((visible) => withActions(visible, standing));
 
 /**

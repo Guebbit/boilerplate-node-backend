@@ -1,8 +1,8 @@
 /**
  * @module
  * A product's `allowBackorder` and `restockDate`, over HTTP: the switch and the date are written
- * and read back, `backorder` is derived (never stored), the date is bounded to a year ahead, and a
- * passed date reads sold out.
+ * and read back, the date is bounded to a year ahead, and a passed date is accepted. What a backorder
+ * reads as is `availability`'s answer (`products/tests/unit/availability.test.ts`).
  *
  * @see docs/modules/products.md#backorder
  */
@@ -23,71 +23,6 @@ const inDays = (days: number): string => shopDayOf(new Date(Date.now() + days * 
 
 /** What a stored day is: the shop's midnight of it, as the ISO instant the factory takes. */
 const stored = (day: string): string => startOfShopDay(day).toISOString();
-
-/** A product with the switch on and room under a cap of five, as `inventory` syncs it. */
-const backorderProduct = async (overrides: Parameters<typeof createProduct>[0] = {}) => {
-    const product = await createProduct({ onHand: 0, allowBackorder: true, ...overrides });
-    await productModel.updateOne(
-        { _id: product._id },
-        { $set: { backorderLimit: 5, backordered: 0 } }
-    );
-    return String(product._id);
-};
-
-describe('GET /products/:id', () => {
-    it('flags a released product that allows backorder, with its restock date', async () => {
-        const restockDate = inDays(20);
-        const id = await backorderProduct({ restockDate: stored(restockDate) });
-
-        const response = await api().get(`/products/${id}`);
-
-        expect(response.body).toMatchObject({
-            backorder: true,
-            buyable: true,
-            inStock: false,
-            preorder: false,
-            allowBackorder: true,
-            restockDate
-        });
-    });
-
-    it('does not flag a product that never switched it on', async () => {
-        const product = await createProduct({ onHand: 0 });
-
-        const response = await api().get(`/products/${String(product._id)}`);
-
-        expect(response.body.backorder).toBe(false);
-    });
-
-    it('reads sold out once the restock date has passed, with nothing run', async () => {
-        const id = await backorderProduct({ restockDate: stored(inDays(-1)) });
-
-        const response = await api().get(`/products/${id}`);
-
-        expect(response.body).toMatchObject({
-            backorder: false,
-            inStock: false,
-            buyable: false
-        });
-    });
-
-    it('is a preorder, not a backorder, before its release date', async () => {
-        const id = await backorderProduct({ releaseDate: stored(inDays(30)) });
-
-        const response = await api().get(`/products/${id}`);
-
-        expect(response.body).toMatchObject({ preorder: true, backorder: false });
-    });
-
-    it('stops being open when the cap is full', async () => {
-        const id = await backorderProduct();
-        await productModel.updateOne({ _id: id }, { $set: { backordered: 5 } });
-
-        const response = await api().get(`/products/${id}`);
-
-        expect(response.body.backorder).toBe(false);
-    });
-});
 
 describe('PATCH /products/:id', () => {
     it('switches backorder on and sets, then clears, the restock date', async () => {
@@ -134,7 +69,7 @@ describe('PATCH /products/:id', () => {
             .send({ allowBackorder: true, restockDate: inDays(-5) });
 
         expect(response.status).toBe(200);
-        expect(response.body.backorder).toBe(false);
+        expect(response.body.restockDate).toBe(inDays(-5));
     });
 });
 

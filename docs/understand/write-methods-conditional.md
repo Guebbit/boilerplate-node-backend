@@ -134,7 +134,8 @@ that is safe, where a per-app counter could not describe the all-apps list at al
 The translations of an entity are fenced on the OWNER's counter (the product's or the example's
 `editRevision`), not on one of their own: a translation save already moves it, and a product read
 shows the translations. So a translation save and a product edit refuse each other's stale tag, on
-purpose; a stock move refuses neither. The read answers 404 for an entity that does not exist.
+purpose; a non-edit write (a stock move, a delivery's health stamp) refuses neither. The read
+answers 404 for an entity that does not exist.
 
 A webhook subscription's delivery bookkeeping (the failure streak, the auto-disable) writes with
 `timestamps: false`, so a delivery outcome never moves the edit counter and never refuses an open
@@ -176,8 +177,9 @@ Three rules keep it honest. Break any one and a lost update gets through:
       that every edit moves by one, in the same atomic update as the edit itself (`$inc`). A write's
       `If-Match` compares only this.
     - **The digest**: a short sha256 of the exact body sent, so the whole tag changes whenever the
-      bytes do (stock, price, language, a stock move) and a read can safely answer `304` on a match.
-      A write never compares it, so a sale never refuses an editor's open form. This is the one
+      bytes do (price, language, the caller's `actions`, a translation save) and a read can safely
+      answer `304` on a match. A write never compares it, so a non-edit write never refuses an
+      editor's open form. This is the one
       registered difference from RFC 9110 §13.1.1, `if-match-edit-version`
       (`docs/understand/api-standards.md`); FHIR's version-only `If-Match` is the same kind of choice.
     - A Redis copy stores the tag and replays it, so a hit and a miss send the same one.
@@ -234,7 +236,7 @@ Three rules keep it honest. Break any one and a lost update gets through:
 - **The body is validated first.** A 422 for a body the schema refuses wins over a 412.
 - **The whole tag validates reads; the edit part validates writes.** A versioned item read
   (`products`, `users`, `orders`, `examples`) answers `If-None-Match` with `304` when the whole tag
-  matches, on a Redis miss and a hit alike. The digest moves with prices, language and stock, so a
+  matches, on a Redis miss and a hit alike. The digest moves with price, language and the caller's `actions`, so a
   `304` is never stale; the edit part is the only thing a write checks.
 - **The cached reads are a separate case.** Two families answer `If-None-Match` with `304` on no
   change, through Express's own ETag check: the `privateNoCache` reads (`orders`, `users`,
