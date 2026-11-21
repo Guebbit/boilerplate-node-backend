@@ -12,7 +12,6 @@ import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { productService } from '@modules/products';
 import { cartService } from '../../services';
 import { orderService } from '@modules/orders';
 import { orderRepository, readOrder, countOrders } from '@modules/orders/tests/factories';
@@ -569,25 +568,5 @@ describe('a product with no stock-level row', () => {
 
         expect(result.success).toBe(false);
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
-    });
-});
-
-describe('a catalogue stock cache that sits low', () => {
-    it('does not refuse a sale the ledger covers', async () => {
-        const user = await createUser();
-        await giveAddress(user.id);
-        const product = await createProduct({ onHand: 10 });
-        // The cache lags the ledger (a missed sync): it says nothing is left, the level says 10.
-        await productService.syncStockCache(String(product._id), {
-            onHand: 0,
-            reserved: 0,
-            version: 0
-        });
-        await cartService.addItemById(user.id, String(product._id), 3);
-        await cartRepository.setShippingMethod(user.id, 'pickup');
-
-        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
-
-        expect(result.success).toBe(true);
     });
 });

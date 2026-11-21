@@ -108,9 +108,9 @@ this one.
 own `orderLineProductSchema` — the OpenAPI `OrderLineProduct` shape, not `Product` — populated at
 purchase time from [`products`](./products.md)'s live row, so a later edit cannot rewrite the
 history of an order placed last March. It is deliberately its OWN schema rather than a reuse of
-the catalogue's: `onHand` and `reserved` describe the warehouse right now, and an order line has no
-path to store either — the alternative is an invoice that quietly republishes live stock as if it
-were history.
+the catalogue's: `active`, `purchasable`, `allowBackorder` and `restockDate` describe the shelf right
+now, and an order line has no path to store any of them — the alternative is an invoice that quietly
+republishes the live shelf as if it were history.
 
 The snapshot's `title`/`description` are already RESOLVED, not the product's raw fallback-locale
 column: `items[].locale` (required on `OrderItem`) freezes which language they were resolved into at
@@ -196,7 +196,7 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-the order's claim window has closed (a never-paid order once canceled, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+the order's claim window has closed (a never-paid order that received no money, once canceled, a delivered one after `conformityUntil`, an undelivered paid one 540 days after `paidAt`, or after `moneyReceivedAt` when the money only landed after the cancel; [the rule](../understand/data-retention.md#orders-after-the-account)) — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
 ([why](../understand/data-retention.md#orders-kept-while-the-account-lives)). Each scrub is announced:
@@ -408,7 +408,7 @@ Full detail: [Withdrawal window, purchase hold and shop identity](./orders-withd
 | -------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_WITHDRAWAL_PERIOD_DAYS`                                        | `30`    | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30 |
 | `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE`                                | `0`     | Days after a delivered order's `conformityUntil` before `reap:orders` replaces its remaining personal data with placeholders (once the account is erased or minimised)                         |
-| `NODE_ORDER_PII_DAYS_UNDELIVERED`                                    | `540`   | The same for a paid order that ended without delivery, counted from `paidAt`                                                                                                                   |
+| `NODE_ORDER_PII_DAYS_UNDELIVERED`                                    | `540`   | The same for a paid order that ended without delivery, counted from `paidAt` (or from `moneyReceivedAt` when money landed after the cancel)                                                    |
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                               | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason, a staff note). The row stays                                        |
 | `NODE_ORDER_EXPORT_MAX_ROWS`                                         | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, `NODE_ORDER_NOTE_RATE_LIMIT_MAX` | —       | Per-account budgets: see [the rate-limit budgets](../understand/security.md#the-rate-limit-budgets)                                                                                            |

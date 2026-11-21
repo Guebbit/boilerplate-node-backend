@@ -19,7 +19,7 @@ import { allocateWithin } from './allocate';
  *
  * @param lines - what came back
  * @param context - `reference` names the order; `note` names the return
- * @param session - the caller's transaction; see `refreshStockCacheForProducts` in `./transition`.
+ * @param session - the caller's transaction; see `forgetAvailability` in `./transition`.
  *   The caller announces in it too, so the `backorder_allocated` rows it may write go out with its own nudge
  * @throws {Error} when a line's counters refuse the restock
  */

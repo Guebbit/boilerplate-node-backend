@@ -10,8 +10,7 @@
 import fc from 'fast-check';
 import { setupTestDb } from '@tests/setup-test-db';
 import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
-import { createProduct } from '@modules/products/tests/factories';
-import { productService } from '@modules/products';
+import { countersOf, createProduct } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
 import { inventoryService } from '../../services';
 import { stockMovementRepository } from '../../repository';
@@ -165,7 +164,7 @@ describe('the ledger reproduces the counters', () => {
 
                 await play(productId, steps);
 
-                const stored = await productService.findByIdRaw(productId);
+                const stored = await countersOf(productId);
                 const ledger = await replay(productId);
 
                 /**
@@ -173,8 +172,8 @@ describe('the ledger reproduces the counters', () => {
                  * the product was created, exactly as an account statement explains changes since
                  * its opening balance rather than inventing the whole history of the money.
                  */
-                expect(stored?.onHand).toBe(OPENING_ON_HAND + ledger.onHandDelta);
-                expect(stored?.reserved).toBe(0 + ledger.reservedDelta);
+                expect(stored.onHand).toBe(OPENING_ON_HAND + ledger.onHandDelta);
+                expect(stored.reserved).toBe(0 + ledger.reservedDelta);
             }),
             RUN
         );
@@ -188,14 +187,14 @@ describe('the ledger reproduces the counters', () => {
 
                 await play(productId, steps);
 
-                const stored = await productService.findByIdRaw(productId);
-                expect(stored?.onHand).toBeGreaterThanOrEqual(0);
-                expect(stored?.reserved).toBeGreaterThanOrEqual(0);
+                const stored = await countersOf(productId);
+                expect(stored.onHand).toBeGreaterThanOrEqual(0);
+                expect(stored.reserved).toBeGreaterThanOrEqual(0);
                 /**
                  * The invariant every guard in the repository exists to protect: you cannot have
                  * promised more units than you hold.
                  */
-                expect(stored?.reserved ?? 0).toBeLessThanOrEqual(stored?.onHand ?? 0);
+                expect(stored.reserved ?? 0).toBeLessThanOrEqual(stored.onHand ?? 0);
             }),
             RUN
         );

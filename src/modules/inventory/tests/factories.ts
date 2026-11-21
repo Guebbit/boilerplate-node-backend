@@ -20,8 +20,8 @@ export { removeLevel } from '../services/levels';
 export { stockLevelRepository, reservationRepository } from '../repository';
 
 /**
- * Overwrite a level row's counters, bypassing every stock rule and leaving the catalogue's cached
- * copy untouched — the one way a test reaches a ledger that disagrees with the cache.
+ * Overwrite a level row's counters, bypassing every stock rule — the one way a test moves stock
+ * behind a cart's back.
  * Never a production door: every real stock write goes through a conditional movement.
  */
 export const forceStockLevel = (productId: Types.ObjectId, onHand: number, reserved: number) =>

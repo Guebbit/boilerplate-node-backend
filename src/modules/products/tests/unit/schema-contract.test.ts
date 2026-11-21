@@ -1,30 +1,15 @@
 /**
  * @module
  * The product schema's contract, and what its serialization leaves off the wire. Each default
- * decides what a product means when a field was never set — e.g. `onHand: 0` keeps a freshly
- * created product honestly out-of-stock rather than phantom-stocked.
+ * decides what a product means when a field was never set — e.g. `active: true` publishes a new
+ * product unless it is told otherwise.
  */
 
 import { productSchema, applyProductTransform } from '@modules/products/model';
-import {
-    defaultOf,
-    indexOptionSpecs,
-    indexSpecs,
-    optionsOf,
-    pathOptions,
-    requiredPaths
-} from '@tests/schema';
+import { defaultOf, indexOptionSpecs, indexSpecs, optionsOf, requiredPaths } from '@tests/schema';
 
-/** One document as the transform receives it, with the whole stock copy on it. */
-const serialized = () =>
-    applyProductTransform({
-        _id: 'x',
-        onHand: 10,
-        reserved: 3,
-        backorderLimit: 5,
-        backordered: 1,
-        stockVersion: 7
-    });
+/** One bare document as the transform receives it. */
+const serialized = () => applyProductTransform({ _id: 'x' });
 
 describe('productSchema — what a product must carry', () => {
     it('requires a title and a price, and nothing else', () => {
@@ -35,18 +20,7 @@ describe('productSchema — what a product must carry', () => {
         expect(requiredPaths(productSchema)).toEqual(['price', 'title']);
     });
 
-    it('refuses negative stock counters', () => {
-        /**
-         * Negative stock is not a state the shop has: it would let `available` be computed from
-         * impossible inputs and would make the ledger's replay disagree with the counter.
-         */
-        for (const path of ['onHand', 'reserved'])
-            expect(pathOptions(productSchema, path).min).toBe(0);
-    });
-
-    it('publishes a new product with no stock and nothing reserved — 3.1 guarantees a real inventory row at creation', () => {
-        expect(defaultOf(productSchema, 'onHand')).toBe(0);
-        expect(defaultOf(productSchema, 'reserved')).toBe(0);
+    it('publishes a new product unless told otherwise', () => {
         expect(defaultOf(productSchema, 'active')).toBe(true);
     });
 
@@ -109,15 +83,6 @@ describe('productSchema — indexes', () => {
 });
 
 describe('applyProductTransform — the serialized product', () => {
-    it('leaves the stock copy off the wire: a product answer carries no stock', () => {
-        expect(serialized()).not.toHaveProperty('onHand');
-        expect(serialized()).not.toHaveProperty('reserved');
-        expect(serialized()).not.toHaveProperty('available');
-        expect(serialized()).not.toHaveProperty('backorderLimit');
-        expect(serialized()).not.toHaveProperty('backordered');
-        expect(serialized()).not.toHaveProperty('stockVersion');
-    });
-
     it('stamps the live currency and every action closed', () => {
         expect(serialized()).toMatchObject({
             currency: expect.any(String),

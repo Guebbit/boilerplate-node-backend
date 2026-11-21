@@ -18,9 +18,6 @@ export const PRODUCT_CREATED = 'product.created' satisfies DomainEventName;
 export const PRODUCT_RELEASE_DATE_CHANGED =
     'product.release_date_changed' satisfies DomainEventName;
 
-/** The event name stock alerts subscribe to when a product is buyable again. */
-export const PRODUCT_BUYABLE_AGAIN = 'product.buyable_again' satisfies DomainEventName;
-
 /** The event name `delivery` subscribes to for a moved restock date. */
 export const PRODUCT_RESTOCK_DATE_CHANGED =
     'product.restock_date_changed' satisfies DomainEventName;

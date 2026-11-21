@@ -23,14 +23,14 @@ import {
     releaseTopUpForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
-    refreshStockCacheForOrder,
+    forgetAvailabilityForOrder,
     extendHoldForOrder,
     isStockBoundToOrder,
     isHoldReleased
 } from './holds';
 import { reserveMoreForOrder } from './top-up';
 import { restockReturnedLines } from './returns';
-import { refreshStockCacheForProducts } from './transition';
+
 import { runReservationSweep } from './sweep';
 import {
     availableFor,
@@ -41,6 +41,7 @@ import {
     listPreorders
 } from './levels';
 import { receive, adjust, setBackorderLimit } from './admin';
+import { availabilityOfProducts, forgetAvailability } from './availability';
 
 export type { RetakeOutcome } from './holds';
 export type {
@@ -65,14 +66,15 @@ export const inventoryService = {
     releaseTopUpForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
-    refreshStockCacheForOrder,
+    forgetAvailabilityForOrder,
     restockReturnedLines,
-    refreshStockCacheForProducts,
+    forgetAvailability,
     extendHoldForOrder,
     isStockBoundToOrder,
     isHoldReleased,
     runReservationSweep,
     availableFor,
+    availabilityOfProducts,
     receive,
     adjust,
     setBackorderLimit,

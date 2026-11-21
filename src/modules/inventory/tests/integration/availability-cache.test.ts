@@ -34,7 +34,9 @@ import { randomUUID } from 'node:crypto';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct, readProduct, saveProduct } from '@modules/products/tests/factories';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { nudgeOutbox, settleOutboxNudges } from '@kernel/outbox';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { testCallerContext } from '@tests/callers';
 import { removeLevel } from '../factories';
 import { inventoryService } from '../../services';
 
@@ -138,8 +140,31 @@ describe('the availability entry', () => {
         await readAs(id);
         expect(mockEntries.has(keyOf(id))).toBe(true);
 
-        await inventoryService.refreshStockCacheForProducts([id]);
+        await inventoryService.forgetAvailability([id]);
 
+        expect(mockEntries.has(keyOf(id))).toBe(false);
+    });
+
+    it('is cleared by the announcement of a payment that serves a preorder, not by the transaction itself', async () => {
+        const product = await createProduct({ onHand: 0, allowBackorder: true });
+        const id = String(product._id);
+        await inventoryService.setBackorderLimit(id, 5);
+        const orderId = 'd'.repeat(24);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: id, quantity: 2, kind: 'backorder' }
+        ]);
+        // The receipt finds only an unpaid hold, so nothing is allocated yet.
+        await inventoryService.receive(id, 4, undefined, testCallerContext);
+        await readAs(id);
+        expect(mockEntries.has(keyOf(id))).toBe(true);
+
+        // The payer's transaction cannot roll back a cache delete, so it leaves the entry alone.
+        await withTransaction((session) => inventoryService.commitForOrder(orderId, session));
+        expect(mockEntries.has(keyOf(id))).toBe(true);
+
+        // Once it has committed and the relay delivers `inventory.backorder_allocated`, the entry goes.
+        nudgeOutbox();
+        await settleOutboxNudges();
         expect(mockEntries.has(keyOf(id))).toBe(false);
     });
 

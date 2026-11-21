@@ -28,6 +28,7 @@ import { fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
 import { asAdmin, callerContextAs } from '@tests/callers';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
+import { inventoryService } from '@modules/inventory';
 import { webhookSubscriptionModel } from '@modules/webhooks/model';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { userModel } from '@modules/users/model';
@@ -574,7 +575,7 @@ describe('the translations route of a product, fenced on the product', () => {
         const path = `/locales/translations/product/${product.id}`;
         const tag = etagOf(await api().get(path).set('Authorization', bearer));
 
-        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1, version: 0 });
+        await inventoryService.receive(product.id, 3, undefined, callerContextAs('admin'));
         const write = await api()
             .patch(path)
             .set('Authorization', bearer)
@@ -711,13 +712,13 @@ const shipUnits = async (orderId: string, productId: string, quantity: number) =
 };
 
 describe('writes that are not an edit leave the tag alone', () => {
-    it('lets a product edit through after the stock mirror moved', async () => {
+    it('lets a product edit through after a stock move', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         const path = `/products/${product.id}`;
         const tag = etagOf(await api().get(path).set('Authorization', bearer));
 
-        await productRepository.syncStockCache(product.id, { onHand: 3, reserved: 1, version: 0 });
+        await inventoryService.receive(product.id, 3, undefined, callerContextAs('admin'));
         const write = await api()
             .patch(path)
             .set('Authorization', bearer)

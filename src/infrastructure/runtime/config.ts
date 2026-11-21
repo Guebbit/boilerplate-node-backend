@@ -75,10 +75,8 @@ export const databaseConfig = defineConfig({
 });
 
 /**
- * The restock mark, declared once. Infrastructure, not a module's, because `inventory` (its stock
- * board) and `products` (the storefront's `lowStock` flag) both read it, and `inventory` depends
- * on `products`, so neither may import the other's config. One declaration keeps the badge and
- * the board agreeing on what "low" means.
+ * The restock mark `inventory`'s stock board flags a restock with, declared once so every reader of
+ * "low" agrees on what it means.
  */
 export const stockConfig = defineConfig({
     name: 'stock',

@@ -85,7 +85,7 @@ const linesOf = (taken: readonly TopUp[]): HoldLine[] =>
  *
  * @param orderId - the order whose parcel was lost
  * @param lines - what the lost shipment carried
- * @param session - the caller's transaction; the catalogue's stock cache is the caller's to
+ * @param session - the caller's transaction; the availability entry is the caller's to
  *   refresh once it has committed
  * @returns per product, the shelf part and the owed part
  * @throws {Error} when a counter or the hold refuses a write the snapshot said would land

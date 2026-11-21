@@ -60,7 +60,7 @@ const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 const holdStatusOf = (orderId: string) =>
     reservationRepository.findByOrderId(orderId).then((hold) => hold?.status);
 
-/** `stocklevels` itself — this module's source of truth, `countersOf` above only reads the mirror `syncStockCache` writes into `products`. */
+/** `stocklevels` itself, read through this module's own repository. */
 const levelOf = async (productId: string) => {
     const level = await stockLevelRepository.findByProductId(productId);
     return { onHand: level?.onHand, reserved: level?.reserved };
@@ -146,11 +146,6 @@ describe('reserveForOrder', () => {
             reserved: 3,
             available: 7
         });
-        /**
-         * The cache agreeing with itself twice isn't proof `syncStockCache` mirrored the real
-         * write — `stocklevels` is the row every other assertion in this file takes on faith.
-         */
-        expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
     it('holds for the caller-given window instead of NODE_RESERVATION_TTL_MINUTES, when given one', async () => {
@@ -229,31 +224,6 @@ describe('reserveForOrder', () => {
             available: 10
         });
         spy.mockRestore();
-    });
-
-    /**
-     * The stock write has committed by the time the catalogue's cache is refreshed: a failed read of
-     * the level there must not throw, or the units stay reserved against a hold nobody gave back.
-     */
-    it('still holds the units when the cache refresh cannot read the level afterwards', async () => {
-        const product = await createProduct({ onHand: 10 });
-        jest.spyOn(stockLevelRepository, 'findManyByProductIds').mockRejectedValue(
-            new Error('read failed')
-        );
-        const orderId = anOrderId();
-        const outcome = await inventoryService.reserveForOrder(orderId, [
-            { productId: String(product._id), quantity: 3 }
-        ]);
-        jest.restoreAllMocks();
-
-        expect(outcome.held).toBe(true);
-        /**
-         * The ledger's own level is the source of truth; the catalogue's copy catches up on the
-         * product's next stock change.
-         */
-        const level = await stockLevelRepository.findByProductId(String(product._id));
-        expect([level?.onHand, level?.reserved]).toEqual([10, 3]);
-        expect(await reservationRepository.findByOrderId(orderId)).not.toBeNull();
     });
 
     /**
@@ -352,9 +322,7 @@ describe('commitForOrder', () => {
 
         expect(await inventoryService.commitForOrder(orderId)).toBe(true);
         /**
-         * Paying moves nothing: the units are still on the shelf, still spoken for. Read from
-         * `stocklevels`, the source of truth: the catalogue's copy is refreshed only when units
-         * were allocated, so it would keep reading the old numbers even if the commit moved them.
+         * Paying moves nothing: the units are still on the shelf, still spoken for.
          */
         expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
@@ -583,7 +551,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const shipped = await withTransaction((session) =>
             inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
         );
-        await inventoryService.refreshStockCacheForProducts([productId]);
+        await inventoryService.forgetAvailability([productId]);
 
         expect(shipped).toBe(true);
         expect(await countersOf(productId)).toEqual({ onHand: 9, reserved: 2, available: 7 });
@@ -620,7 +588,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const released = await withTransaction((session) =>
             inventoryService.releaseLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
         );
-        await inventoryService.refreshStockCacheForProducts([productId]);
+        await inventoryService.forgetAvailability([productId]);
 
         expect(released).toBe(true);
         expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 1, available: 9 });

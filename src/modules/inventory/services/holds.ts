@@ -18,7 +18,8 @@ import { HOLD_ORPHANED, STOCK_RETAKEN } from '../events';
 import { inventoryCommitOrphanedTotal } from './orphan-counter';
 import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
-import { applyToEveryLine, applyTransition, refreshStockCacheForProducts } from './transition';
+import { applyToEveryLine, applyTransition } from './transition';
+import { forgetAvailability } from './availability';
 import { allocateWithin } from './allocate';
 import { HOUR_MS } from '@domain-primitives/time';
 
@@ -60,8 +61,8 @@ const serveQueueAfter = (
  * @param from - the status the hold must be in
  * @param to - the status it moves to
  * @param reason - which ledger movement every line records
- * @param session - the caller's transaction; without one, this opens its own and refreshes the
- *   catalogue's stock cache once it has committed (see {@link refreshStockCacheForOrder})
+ * @param session - the caller's transaction; without one, this opens its own and deletes the
+ *   availability entries once it has committed (see {@link forgetAvailabilityForOrder})
  * @returns whether this call was the one that claimed the hold
  * @throws {Error} when a line's counters refuse the movement; nothing is claimed
  */
@@ -85,7 +86,7 @@ const claimAndApply = (
     return withTransaction(claimAndMove).then(({ claimed, served }) => {
         if (!claimed) return false;
         if (served > 0) nudgeOutbox();
-        return refreshStockCacheForOrder(orderId).then(() => true);
+        return forgetAvailabilityForOrder(orderId).then(() => true);
     });
 };
 
@@ -144,7 +145,7 @@ export type RetakeOutcome = 'none' | 'retaken' | 'short';
  *
  * @param orderId - the order whose payment just landed
  * @param session - the payment's transaction. When units are taken, a `STOCK_RETAKEN` announcement
- *   rides in it, and this module refreshes the catalogue's stock copy once the commit has landed
+ *   rides in it, and this module deletes the availability entries once the commit has landed
  * @returns what happened; see {@link RetakeOutcome}
  */
 export const retakeReleasedForOrder = async (
@@ -285,7 +286,7 @@ export const commitForOrder = (orderId: string, session?: ClientSession): Promis
         ({ committed, allocated, retook, orphaned }) => {
             if (allocated === 0 && !retook && !orphaned) return committed;
             nudgeOutbox();
-            return refreshStockCacheForOrder(orderId).then(() => committed);
+            return forgetAvailabilityForOrder(orderId).then(() => committed);
         }
     );
 };
@@ -301,7 +302,7 @@ export const commitForOrder = (orderId: string, session?: ClientSession): Promis
  * benign (a remainder cancel emptied it after a partial shipment): both are silent.
  *
  * @param orderId - the order whose parcel left (or whose digital goods were fulfilled)
- * @param session - the status move's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the status move's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether this call was the one that shipped
  */
 export const shipForOrder = async (orderId: string, session?: ClientSession): Promise<boolean> => {
@@ -369,7 +370,7 @@ const takeLines = (
  *
  * @param orderId - the order whose units are leaving
  * @param lines - what the shipment carries
- * @param session - the shipment's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the shipment's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether an open hold was there
  */
 export const shipLinesForOrder = (
@@ -394,7 +395,7 @@ export const shipLinesForOrder = (
  *
  * @param orderId - the order whose units are given back
  * @param lines - the canceled remainder
- * @param session - the cancel's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the cancel's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether an open hold was there to take from
  */
 export const releaseLinesForOrder = (
@@ -410,7 +411,7 @@ export const releaseLinesForOrder = (
  *
  * @param orderId - the order whose parcel was found
  * @param lines - the shelf part as stock, the owed part as a `backorder` line
- * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the caller's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether an open hold was there to take from
  */
 export const releaseTopUpForOrder = (
@@ -428,7 +429,7 @@ export const releaseTopUpForOrder = (
  *
  * @param orderId - the order giving up its units
  * @param reason - `release` for a cancellation, `expire` for a hold that timed out
- * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the caller's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether this call was the one that released
  */
 export const releaseForOrder = async (
@@ -453,7 +454,7 @@ export const releaseForOrder = async (
  * see `orders/services/cancel.ts`.
  *
  * @param orderId - the order whose paid claim is being given up
- * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
+ * @param session - the caller's transaction; see {@link forgetAvailabilityForOrder}
  * @returns whether this call was the one that released
  */
 export const releaseCommittedForOrder = async (
@@ -463,28 +464,26 @@ export const releaseCommittedForOrder = async (
     claimAndApply(orderId, 'committed', 'released', StockMovementReason.release, session);
 
 /**
- * Bring the catalogue's stock cache into step for every line of an order's hold — the step a
- * caller that passed a `session` to {@link releaseForOrder}, {@link releaseCommittedForOrder} or {@link shipForOrder} owes once
- * its transaction has committed. The cache write leaves this module and cannot roll back, so it
- * waits for the commit instead of running inside it.
+ * Delete the availability entry of every line of an order's hold — the step a caller that passed a
+ * `session` to {@link releaseForOrder}, {@link releaseCommittedForOrder} or {@link shipForOrder}
+ * owes once its transaction has committed. The delete cannot roll back, so it waits for the
+ * commit instead of running inside it.
  *
  * Never rejects: every caller runs it after its commit, and a failed read here must not skip what
  * the caller still owes.
  *
  * @param orderId - the order whose hold just moved
  */
-export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
+export const forgetAvailabilityForOrder = (orderId: string): Promise<void> =>
     reservationRepository
         .findByOrderId(orderId)
         .then((hold) =>
-            refreshStockCacheForProducts(
-                (hold?.items ?? []).map(({ productId }) => String(productId))
-            )
+            forgetAvailability((hold?.items ?? []).map(({ productId }) => String(productId)))
         )
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
-                message: `Inventory: could not read the hold of order ${orderId} to refresh its stock cache`,
+                message: `Inventory: could not read the hold of order ${orderId} to clear its availability entries`,
                 error
             });
             // Stryker restore all

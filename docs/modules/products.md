@@ -8,9 +8,8 @@ audience: [developer]
 The catalogue, its search surface and its cache.
 
 ::: tip At a glance
-**Owns** — the catalogue: what the shop sells. `onHand`/`reserved` sit on every product row too, but
-as a read-only mirror that never reaches the wire — [`inventory`](./inventory.md) owns the counters
-and answers every question about stock.
+**Owns** — the catalogue: what the shop sells. It holds no stock: [`inventory`](./inventory.md) owns the
+counters and answers every question about stock.
 **Depends on** — only [`shop`](./shop.md), for the currency. It is the leaf several domains read as it is.
 **Breaks if you change** — `productSchema`. `orders` embeds it, so an order's history is literally this shape.
 :::
@@ -51,7 +50,6 @@ flowchart LR
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     products -. "product.terms_changed" .-> inventory
-    products -. "product.buyable_again" .-> stock_alerts
     products -. "product.deleted" .-> stock_alerts
     products -. "product.deleted" .-> wishlist
 
@@ -101,11 +99,10 @@ something back: when a product disappears, every cart and wishlist holding it ha
 reference. As an import that would be a cycle. As `product.deleted` it is products announcing and
 two modules listening, and the arrow still points one way.
 
-::: warning The one field-ownership split worth remembering
-`onHand`/`reserved` live on the product document so a catalogue read needs no join — but they are a
-MIRROR, not the source. [`inventory`](./inventory.md) owns the real counters in its own collection.
-What still reads the copy is the back-in-stock signal (`lookups.ts`), not a catalogue read. A write
-to either from anywhere but `inventory`'s own sync is a bug, not a shortcut.
+::: warning The product holds no stock
+There is no `onHand`, `reserved` or allowance on the product document, and no copy of one.
+[`inventory`](./inventory.md) owns the counters in its own collection, and a shopper's stock signal is its availability read
+([why](./inventory.md#why-products-holds-no-stock)).
 :::
 
 **The product answer carries no stock, for anyone.** No counter, no `inStock`, `lowStock`, `buyable`,
@@ -186,14 +183,11 @@ flowchart LR
     D --> C["Redis cache invalidated"]
     D -. "product.deleted" .-> CA["cart<br/><i>drops the line</i>"]
     D -. "product.deleted" .-> WI["wishlist<br/><i>drops the line</i>"]
-    IN["inventory"] -.->|"the only writer, ever"| ST["onHand · reserved<br/><i>fields on this document</i>"]
 
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef note fill:#f1f5f9,stroke:#94a3b8,color:#111827,stroke-dasharray:4 3;
     class D,R,C own;
-    class CA,WI,IN peer;
-    class ST note;
+    class CA,WI peer;
 ```
 
 ## Hiding, taking off sale, removing

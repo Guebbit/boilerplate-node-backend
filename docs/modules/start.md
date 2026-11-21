@@ -140,6 +140,7 @@ flowchart TD
     stats --> payments
     stats --> returns
     stats --> shop
+    stock_alerts --> inventory
     stock_alerts --> products
     stock_alerts --> users
     tasks --> access
@@ -168,17 +169,17 @@ flowchart TD
 | `access`        | —                                                                                                                  | account, api-keys, audit-logs, notifications, orders, payments, returns, tasks, users        |
 | `products`      | shop                                                                                                               | cart, delivery, inventory, orders, shop-tasks, sitemap, stock-alerts, wishlist               |
 | `users`         | access                                                                                                             | account, api-keys, cart, example, notifications, orders, stock-alerts, tasks                 |
+| `inventory`     | products, shop                                                                                                     | cart, delivery, orders, returns, shop-tasks, stock-alerts                                    |
 | `payments`      | access, orders, shop                                                                                               | cart, invoicing, returns, shop-tasks, stats                                                  |
 | `returns`       | access, delivery, inventory, orders, payments, shop                                                                | shop-tasks, stats                                                                            |
 | `account`       | access, users                                                                                                      | api-keys, invoicing, orders, shop, tasks                                                     |
 | `delivery`      | inventory, orders, products, shop                                                                                  | cart, returns, shop-tasks                                                                    |
-| `inventory`     | products, shop                                                                                                     | cart, delivery, orders, returns, shop-tasks                                                  |
 | `invoicing`     | account, orders, payments, shop                                                                                    | stats                                                                                        |
 | `notifications` | access, tasks, users, webhooks                                                                                     | shop-tasks                                                                                   |
 | `stats`         | invoicing, orders, payments, returns, shop                                                                         | —                                                                                            |
 | `tasks`         | access, account, users                                                                                             | notifications, shop-tasks                                                                    |
+| `stock-alerts`  | inventory, products, users                                                                                         | shop-tasks                                                                                   |
 | `api-keys`      | access, account, users                                                                                             | —                                                                                            |
-| `stock-alerts`  | products, users                                                                                                    | shop-tasks                                                                                   |
 | `wishlist`      | cart, products                                                                                                     | shop-tasks                                                                                   |
 | `audit-logs`    | access                                                                                                             | observability                                                                                |
 | `addresses`     | —                                                                                                                  | cart                                                                                         |
@@ -207,10 +208,9 @@ This graph is derived from `import` statements, so it shows only the coupling th
 Three kinds in this repo are real and invisible here, and each is written down in the docblock at
 the top of the relevant `module.ts` because nothing mechanical can find them:
 
-- **A shared fact, mirrored.** `inventory` owns `onHand` and `reserved` in its own `stocklevels`
-  collection, the only place they are written; `products` keeps a read-only mirror of both on its
-  own document so a catalogue read needs no join. `account` and `users` share the actual User
-  record between them instead — a genuine single document, not a mirrored pair.
+- **A shared fact.** `account` and `users` share the actual User record between them — a genuine
+  single document, not a mirrored pair. (Stock is not one: `inventory` owns `onHand` and `reserved`
+  in its own `stocklevels` collection and `products` holds no copy.)
 - **A name, not a symbol.** `observability` reads every domain's counters by string off the shared
   metrics registry, deliberately, so it can report on domains it may not import. Rename a counter
   and this compiles, lints and passes — and the dashboard goes flat.

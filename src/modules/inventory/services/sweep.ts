@@ -11,7 +11,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { reservationRepository } from '../repository';
 import { RESERVATION_EXPIRED } from '../events';
 import { inventoryAuditActions } from '../audit';
-import { refreshStockCacheForOrder, releaseForOrder } from './holds';
+import { forgetAvailabilityForOrder, releaseForOrder } from './holds';
 
 /** How many holds one batch of a sweep reads and expires. */
 const SWEEP_BATCH_SIZE = 200;
@@ -47,8 +47,8 @@ const expireOne = (orderId: string): Promise<boolean> =>
             aggregateId: written.orderId
         })
     ).then((written) =>
-        // The catalogue's stock cache is written outside the transaction, so only after it commits.
-        written === null ? false : refreshStockCacheForOrder(orderId).then(() => true)
+        // The availability entry is deleted outside the transaction, so only after it commits.
+        written === null ? false : forgetAvailabilityForOrder(orderId).then(() => true)
     );
 
 /**

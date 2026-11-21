@@ -2,14 +2,15 @@ summary: 'Back-in-stock requests: a signed-in buyer asks to be told once when a 
 subdomain: supporting
 group: shop
 dependsOn:
-    - products # a request names a product, and the product announces when it is orderable again
+    - products # a request names a product; its page and title for the mail
+    - inventory # the availability read: refuses notify-me unless out of stock, and the sweep asks it
     - users # the mail goes to the account's own address and language
 jobs:
     sweepStockAlerts:
         name: sweep:stock-alerts
-        # Hourly: a release date has no write to ride on, and an hour is soon enough for a
-        # courtesy mail. Idempotent: an answered request is deleted.
-        schedule: 35 * * * *
+        # Every 5 minutes: nothing announces a restock to this module, so the sweep is how it
+        # notices one, and it is soon enough for a courtesy mail. Idempotent: an answered request is deleted.
+        schedule: '*/5 * * * *'
         summary:
-            Answers waiting back-in-stock requests for a product that can be ordered again without
-            any write announcing it, such as a preorder whose release date passed.
+            Answers waiting back-in-stock requests for a product that is no longer out of stock,
+            asking inventory's availability read 100 products at a time.

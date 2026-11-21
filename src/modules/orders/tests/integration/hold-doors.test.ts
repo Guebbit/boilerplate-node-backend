@@ -107,7 +107,7 @@ describe('releaseStock', () => {
         const released = await withTransaction((session) =>
             releaseStock(orderId, [{ productId, quantity: 1 }], session)
         );
-        await inventoryService.refreshStockCacheForProducts([productId]);
+        await inventoryService.forgetAvailability([productId]);
 
         expect(released).toBe(true);
         expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 2, available: 8 });

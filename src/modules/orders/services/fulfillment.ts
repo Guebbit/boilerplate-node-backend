@@ -135,10 +135,10 @@ export const isPayableNow = (orderId: string): Promise<boolean> =>
         );
 
 /**
- * Bring the catalogue's stock cache into step after a transaction that moved these products'
- * counters has committed — the cache write cannot roll back, so it waits for the commit.
+ * Delete these products' availability entries after a transaction that moved their counters has
+ * committed — the delete cannot roll back, so it waits for the commit.
  *
  * @param productIds - the products whose counters just moved
  */
 export const refreshShelf = (productIds: readonly string[]): Promise<void> =>
-    inventoryService.refreshStockCacheForProducts(productIds);
+    inventoryService.forgetAvailability(productIds);

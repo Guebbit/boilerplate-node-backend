@@ -133,7 +133,7 @@ const shipAct = async (
 };
 
 /**
- * What follows a committed shipment: the shelf's stock cache and the audit row. The buyer's mail
+ * What follows a committed shipment: the shelf's availability entry and the audit row. The buyer's mail
  * rides `shipment.shipped`.
  * @param shipped - what the act left
  * @param context - the caller

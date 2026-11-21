@@ -265,7 +265,6 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * level is never overwritten. A product without a row yet genuinely has none, never a cached
      * count worth adopting.
      *
-     * @see docs/modules/inventory.md#why-products-still-carries-a-copy
      * @param session - the caller's transaction, so the insert and the stock booked after it commit together
      * @returns `true` when the row was inserted now, `false` when it was already there
      */

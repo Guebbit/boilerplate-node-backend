@@ -20,8 +20,8 @@ import { runInWaves } from './waves';
  * fewest sequential waves its `after` graph allows (`./waves`). Nothing can resolve a caller until
  * there is a shop to be a member of, which is why the access model runs before any of it.
  *
- * A shop seeded and never driven has an empty catalogue shelf — every product starts at
- * `onHand: 0` and takes delivery from the flow run.
+ * A shop seeded and never driven has an empty catalogue shelf — no product carries stock and
+ * each takes delivery from the flow run.
  */
 const seedShop = (): Promise<SeedOutcome[]> =>
     seedAccessModel()
