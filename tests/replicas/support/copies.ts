@@ -117,7 +117,7 @@ const bootCopy = (options: {
     child.stderr.on('data', capture);
 
     // One SIGTERM to this pid, like a kubelet; the app's own deadline is 15 s, `stopChild` waits past it.
-    const stop = (): Promise<void> => stopChild(child);
+    const stop = (): Promise<void> => stopChild(child).then(() => undefined);
 
     // One deadline for both waits: the second gets what the first left.
     const deadline = Date.now() + BOOT_TIMEOUT_MS;

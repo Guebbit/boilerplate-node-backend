@@ -276,11 +276,12 @@ happen in a single process.
 ## `tests/broker/` — a real RabbitMQ
 
 `queue.test.ts` mocks `amqplib`; these run the adapter against a real broker, so they see what
-RabbitMQ does with the arguments the unit suite only asserts we pass.
+RabbitMQ does with the arguments the unit suite only asserts we pass. `worker-shutdown.test.ts`
+spawns two real `src/worker.ts` processes and sends one SIGTERM mid-job.
 
-| Folder          | What lives here                           | Read next                             |
-| --------------- | ----------------------------------------- | ------------------------------------- |
-| `tests/broker/` | The queue adapter against a real RabbitMQ | [RabbitMQ](../understand/rabbitmq.md) |
+| Folder          | What lives here                                                             | Read next                                                                            |
+| --------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `tests/broker/` | The queue adapter against a real RabbitMQ; a worker's graceful stop mid-job | [RabbitMQ](../understand/rabbitmq.md) · [Broker testing](../build/broker-testing.md) |
 
 ## `tests/contract/` and `tests/fuzz/`
 
