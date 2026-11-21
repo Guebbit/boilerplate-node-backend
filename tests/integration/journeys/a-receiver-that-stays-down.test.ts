@@ -17,7 +17,6 @@ import {
     ListWebhookSubscriptions200Response
 } from '@api/schemas.zod';
 import { setupTestDb } from '@tests/setup-test-db';
-import { setEnvironment } from '@tests/environment';
 import { api, authenticateAs, loginBearer } from '@tests/http';
 import { advanceDate, freezeDate } from '@tests/clock';
 import { bodyOf } from '@tests/body-of';
@@ -28,13 +27,6 @@ import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
-
-/**
- * No broker for these cases: with one configured but down, the sweep skips due deliveries.
- */
-beforeEach(() => {
-    setEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
-});
 
 /** The webhook receiver the journey runs against; closed after each case. */
 let receiver: WebhookReceiver | undefined;

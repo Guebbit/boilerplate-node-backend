@@ -7,7 +7,8 @@
  * machine has to make; turning one up is how you hunt something specific.
  *
  * Read off `process.env`, which `jest.config.js` has already filled from `.env`: it promotes an
- * allowlist of exactly these names in the main process, before any worker forks. Nothing under
+ * allowlist of exactly these names in the main process, before any worker forks. (The workers
+ * themselves never load `.env`: see `docs/reference/tests.md#tests-never-load-env`.) Nothing under
  * `src/` reads them, so a knob changes what a suite ASKS, never what the code answers.
  *
  * @see docs/build/property-testing.md#running-budget

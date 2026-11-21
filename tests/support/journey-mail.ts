@@ -12,13 +12,12 @@ import { setEnvironment } from './environment';
 import { eventually } from './eventually';
 
 /**
- * Sends this case's mail to the in-memory outbox, with no broker to queue it on.
+ * Sends this case's mail to the in-memory outbox.
  *
- * Call it in `beforeEach`: overrides reset per case, and a reachable local broker would take the
- * mail off the inline path.
+ * Call it in `beforeEach`: overrides reset per case.
  */
 export const useOutboxMail = (): void => {
-    setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox', NODE_RABBITMQ_ENABLED: '0' });
+    setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 };
 
 /**
