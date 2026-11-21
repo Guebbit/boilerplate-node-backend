@@ -169,6 +169,21 @@ flowchart TD
 | Polylang Pro | Deactivated languages visible to logged-in editors                        |
 | Contentful   | A separate Preview API, with the delivery fallback rules                  |
 
+## What is cached, and what clears it
+
+The five public reads are kept in Redis for an hour and are [language-neutral](../understand/redis-cache-keys.md#language-neutral-routes):
+one entry for every visitor, no `Vary: Accept-Language`. Each is filed under a tag, and a write clears only what it changed.
+
+| Read                                                | Tag                |
+| --------------------------------------------------- | ------------------ |
+| `GET /locales`, `GET /locales/apps`                 | `locales:manifest` |
+| `GET /locales/{locale}`, `/messages`, `/dictionary` | `locale:<code>`    |
+
+Every write on a language (create, edit, switch on or off, delete, and each entry write) clears
+`locale:<code>` and `locales:manifest`: the manifest carries each language's `active` flag and entry
+count. The code is canonical, so `PT-br` and `pt-BR` are one tag. `/messages` and `/dictionary` name
+the language of the path in `Content-Language`.
+
 ## The pipeline
 
 The two tiers, and the two sinks they never share. Follow `app` and the whole module falls out.

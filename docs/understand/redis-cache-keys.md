@@ -14,12 +14,13 @@ flowchart LR
     P["path"] --> K(["cache key"])
     Q["query parameters<br/><i>only those the route declares</i>"] --> K
     S["scopeKey<br/><i>e.g. guest</i>"] --> K
-    L["locale"] --> K
+    L["locale<br/><i>or - on a language-neutral route</i>"] --> K
     X["undeclared parameter<br/>or different parameter order"] -.->|"changes nothing"| K
 ```
 
 Every route declares which query parameters change its answer, and the key is built from those
-plus the resolved `scopeKey` and the locale:
+plus the resolved `scopeKey` and the locale (a [language-neutral route](#language-neutral-routes)
+has none, so its segment is `-`):
 
 ```ts
 const cacheProductsSearch = searchCache(
@@ -142,7 +143,8 @@ no-cache` and `Vary: Authorization`, and no Redis entry from this middleware. It
 **The `Vary` headers:** `Authorization`, because `getAuth` derives `authContext` from it, or from
 the session cookie in cookie mode — without this, a shared cache could serve one anonymous response
 back to an admin, the same class of bug `GET /account` once had. `Accept-Language`, because
-`attachLocale` already sets it and a route reaching this by another path should still declare it.
+`attachLocale` already sets it and a route reaching this by another path should still declare it
+— except on a [language-neutral route](#language-neutral-routes), whose success has no words in it.
 `Cookie`, set by `getAuth` itself and only in cookie mode, since there the cookie is the credential;
 `cache.ts` may not import the kernel, so it cannot say it.
 
@@ -150,6 +152,43 @@ back to an admin, the same class of bug `GET /account` once had. `Accept-Languag
 caching. Left unchecked, the `Cache-Control` set here would REPLACE that header rather than merge —
 exactly how `GET /account` once cached a caller's profile for an hour behind a router-wide no-store
 mount.
+
+## Language-neutral routes
+
+A read whose success body is the same in every language says so, and is cached once:
+
+| Where              | What a language-neutral route does                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Key                | The language segment is `-`: one entry for every visitor (`GET:/shop?:guest:-`)                                |
+| `Vary`             | `Authorization` only. No `Accept-Language` on the success                                                      |
+| `Content-Language` | Absent, except the two dictionary reads, which name the language of the PATH (`/locales/it/dictionary` → `it`) |
+| Refusal            | Still translated into the visitor's language, so `rejectResponse` adds `Content-Language` and `Vary`           |
+| Hit                | The path language is stored in the entry (`contentLanguage`) and replayed, since nothing else sets it on a hit |
+
+The routes: `/config`, `/shop`, `/payments/methods`, `/delivery/methods`, `/products/facets`,
+`/locales`, `/locales/apps`, `/locales/{locale}`, `/locales/{locale}/messages` and
+`/locales/{locale}/dictionary`.
+
+`attachLocale` runs before routing, so it cannot read a flag off the route that will match. The
+list lives next to it (`LANGUAGE_NEUTRAL_READS`, `middlewares/locale.ts`), and each cached route
+also declares `languageNeutral: true` on its `setCache`. `tests/integration/language-neutral-routes.test.ts`
+fails when the two differ, and checks that two `Accept-Language` values get one body and one entry.
+
+`/shop`, `/payments/methods` and `/delivery/methods` mount `environmentCache`: their bodies come
+from the environment, so they are kept a minute, with no tag, and nothing clears them. An old copy
+lives about two minutes after a redeploy (60 s `max-age` plus 60 s `stale-while-revalidate`), longer while the origin is failing (`stale-if-error`, 5 min). The entry is in Redis, so a hit carries `Age`; `/config`
+is not (it sets its own `Cache-Control`), and sends none.
+
+## Tags that follow the request
+
+`tags` is a list, or a function of the request. The locales module files each language's answers
+under `locale:<code>` (its messages, its dictionary, its row) and the list-wide ones under
+`locales:manifest`. A write on one language clears its own tag and the manifest, so editing `it`
+leaves a cached `en` dictionary alone.
+
+- The code is canonical (`pt-br` and `PT-BR` are `pt-BR`), so a read and a write agree.
+- A function is read when an entry is stored, and when a write starts. Never when it finishes:
+  Express hands `request.params` back to the parent router by then.
 
 ## Keys this middleware does not own
 

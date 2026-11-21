@@ -57,3 +57,27 @@ export const cachedReadPolicies = (mounts: readonly RouteMount[]): [string, stri
             })
         )
         .toSorted();
+
+/**
+ * Every GET across one module's mounts whose `setCache` declares `languageNeutral`, as OpenAPI
+ * paths: the list `attachLocale`'s registry (`LANGUAGE_NEUTRAL_READS`) must equal.
+ *
+ * @param mounts - the module's `mounts`
+ * @returns the OpenAPI paths, sorted
+ */
+export const languageNeutralReads = (mounts: readonly RouteMount[]): string[] =>
+    mounts
+        .flatMap(({ basePath, routes }) =>
+            (routes.stack as Layer[]).flatMap<string>(({ route }) =>
+                route?.methods.get === true &&
+                route.stack.some(
+                    ({ handle }) =>
+                        isSetCache(handle) &&
+                        // `isSetCache` proved `handle` is the closure `setCache` returns, which carries `languageNeutral`.
+                        (handle as { languageNeutral?: boolean }).languageNeutral === true
+                )
+                    ? [toOpenApiPath(basePath, route.path)]
+                    : []
+            )
+        )
+        .toSorted();

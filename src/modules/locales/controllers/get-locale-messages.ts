@@ -15,7 +15,7 @@ import { hasAnonymousReadScope } from '@kernel/access/query';
  * GET /locales/:locale/messages
  * The client's dictionary for one language, built from the stored entries and served
  * nested to match GET /locales/:locale. Public and cacheable; every admin write
- * invalidates the `locales` tag, so an edit is visible on the next request. A caller whose read
+ * clears `locale:<code>` and `locales:manifest`, so an edit is visible on the next request. A caller whose read
  * scope differs from a stranger's (`display:Locale`) also gets inactive languages — the draft preview.
  */
 export const getLocaleMessages = (
@@ -40,6 +40,8 @@ export const getLocaleMessages = (
             )
             .then((result) => {
                 if (refused(response, result)) return;
+                // The language the words are in: the route is language-neutral, so no middleware labels it.
+                response.set('Content-Language', result.data.locale);
                 return successResponse<LocaleMessages>(response, result.data);
             })
             .catch(catchAs(response, 'getLocaleMessages'))
