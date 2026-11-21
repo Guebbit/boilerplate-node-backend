@@ -4,7 +4,10 @@
  * three edits here (the import, the {@link enabledModules} entry and the {@link ModuleName}
  * member), plus the conditional lists in `scripts/scaffold/central-edits.ts`; removing one is `rm -rf` plus deleting those, and any resulting break is real
  * coupling worth seeing (`docs/build/module-lifecycle.md`). Order is alphabetical only to keep
- * diffs boring — mount order, import resolution and `subscribe` timing don't depend on it. The
+ * diffs boring — import resolution and `subscribe` timing don't depend on it. Mount order does in
+ * exactly one place: `inventory` before `products`, which alphabetical order gives, so `GET
+ * /products/availability` is not read as `GET /products/{id}`
+ * (`src/modules/inventory/availability-routes.ts`). The
  * contract bundlers do not read this list: they run before `enabledModules` is even importable
  * (its modules import the generated `@api/` client the bundler produces), so they discover
  * modules from disk instead

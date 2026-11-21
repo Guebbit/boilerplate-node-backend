@@ -17,7 +17,7 @@ paths:
         get:
             tags: [Inventory]
             summary: Stock levels
-            description: The stock board — every product with its three counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+            description: The stock board — every product with its three counters and the availability derived from them. Admin (`read:StockLevel`), the raw counts. A customer sees `availability` and `availabilityDate` from `GET /products/{id}/availability`, never `onHand` or `reserved`. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
             operationId: listInventoryLevels
             security:
                 - bearerAuth: ['read:StockLevel']
@@ -73,7 +73,7 @@ paths:
         get:
             tags: [Inventory]
             summary: Get one product's stock level
-            description: One row of the stock board by product, with its counters and availability — the record `receive`, `adjust` and the `PATCH` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
+            description: One row of the stock board by product, with its raw counters and the `available` derived from them — the record `receive`, `adjust` and the `PATCH` act on. Same audience as the board (`read:StockLevel`). An unknown product, one with no level row and a malformed id are the same 404.
             operationId: getInventoryLevel
             security:
                 - bearerAuth: ['read:StockLevel']
@@ -278,6 +278,68 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
 
+    /products/availability:
+        # Inventory's second mount, under the catalogue's URL. It must be answered before products'
+        # `/{id}`, which would read the word `availability` as an id (see src/modules.ts).
+        get:
+            x-cache: revalidate
+            tags: [Inventory]
+            summary: Availability of many products
+            description: |
+                What a shopper is told about each product's stock, in Google Merchant's words: `availability` and, for a preorder or a backorder, the day it ships. One call for a catalogue page, a cart or a wishlist, at most 100 ids (a 101st is a 422).
+
+                A product the caller may not see, or that does not exist, is left out of `items`: the answer for the rest is still good, which is why this is not the strict 404 of Google AIP-231. The same product reads the same to every caller who may see it; staff see hidden products here, a guest does not.
+
+                The answer is kept for a minute and cleared by every stock move and every edit to the product's sale settings. A browser keeps nothing without asking: `Cache-Control: public, no-cache`, then a `304` while the ETag still matches.
+            operationId: listProductAvailability
+            security:
+                - {}
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
+            responses:
+                '200':
+                    description: The availability of every product asked for that the caller may see, in no particular order
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: a browser re-checks every time.'
+                            schema: { type: string }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductAvailabilityResponse'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+
+    /products/{id}/availability:
+        get:
+            x-cache: revalidate
+            tags: [Inventory]
+            summary: Availability of one product
+            description: |
+                What a shopper is told about one product's stock: `availability` and, for a preorder or a backorder, the day it ships. An unknown product, a hidden one the caller may not see and a malformed id are the same 404, the rule of `GET /products/{id}`.
+
+                `availability` is Google Merchant's: `in_stock`, `out_of_stock` (every case that cannot be ordered: sold out, not on sale, or a preorder whose allowance is full), `preorder` and `backorder`. `availabilityDate` is the release date of a preorder, or the restock date of a backorder (30 days from today when none is set).
+            operationId: getProductAvailability
+            security:
+                - {}
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The product's availability
+                    headers:
+                        Cache-Control:
+                            description: '`public, no-cache`: a browser re-checks every time.'
+                            schema: { type: string }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductAvailability'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
 components:
     schemas:
         # ── Inventory module ────────────────────────────────────────────────────
@@ -355,6 +417,40 @@ components:
         # One product's stock, as the admin board shows it. `available` is repeated from the
         # product rather than left to be computed by the client, for the same reason it is
         # derived server-side there: two subtractions in two codebases is one too many.
+        Availability:
+            type: string
+            enum: [in_stock, out_of_stock, preorder, backorder]
+            description: |
+                Google Merchant's `availability`: whether the item can be ordered now.
+                * `in_stock` — there are units to sell.
+                * `out_of_stock` — it cannot be ordered: sold out, not on sale, or a preorder whose allowance is full.
+                * `preorder` — it ships from its release date and can be ordered now.
+                * `backorder` — the shelf is empty but it can be ordered and ships when stock returns.
+
+        ProductAvailability:
+            type: object
+            additionalProperties: false
+            required: [productId, availability]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                availability:
+                    $ref: '#/components/schemas/Availability'
+                availabilityDate:
+                    type: string
+                    format: date
+                    description: Google's `availability_date`, a calendar day in the shop's time zone. Present only with `preorder` (the release date) and `backorder` (the restock date, or 30 days from today when none is set).
+
+        ProductAvailabilityResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProductAvailability'
+
         InventoryLevel:
             type: object
             additionalProperties: false

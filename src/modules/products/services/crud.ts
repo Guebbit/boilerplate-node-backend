@@ -33,7 +33,8 @@ import {
     PRODUCT_BUYABLE_AGAIN,
     PRODUCT_CREATED,
     PRODUCT_RELEASE_DATE_CHANGED,
-    PRODUCT_RESTOCK_DATE_CHANGED
+    PRODUCT_RESTOCK_DATE_CHANGED,
+    PRODUCT_TERMS_CHANGED
 } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
@@ -336,6 +337,21 @@ const announceDateChange = (
         : Promise.resolve();
 
 /**
+ * The settings that decide a product's availability, as one comparable string: `inventory` keeps an
+ * answer derived from exactly these and must be told when one moves.
+ *
+ * @param product - the product, before or after the edit
+ */
+const termsOf = (product: ProductDocument): string =>
+    [
+        product.active,
+        product.purchasable,
+        product.allowBackorder,
+        product.releaseDate?.getTime(),
+        product.restockDate?.getTime()
+    ].join('|');
+
+/**
  * Applies a change-set to a fetched product and saves it — inside the caller's transaction.
  *
  * @param product - the fetched document
@@ -354,6 +370,7 @@ const applyUpdate = (
     const imageBefore = product.imageUrl;
     // What a shopper could do before the edit, to tell whether it made the product orderable.
     const wasBuyable = isBuyable(product, new Date());
+    const termsBefore = termsOf(product);
     // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
     if (data.touch) product.markModified('updatedAt');
     // Apply incoming field changes
@@ -434,6 +451,16 @@ const applyUpdate = (
                               session
                           )
                         : undefined
+                )
+                .then(() =>
+                    termsOf(updated) === termsBefore
+                        ? undefined
+                        : enqueueOutboxEvent(
+                              PRODUCT_TERMS_CHANGED,
+                              { productId: String(updated._id) },
+                              String(updated._id),
+                              session
+                          )
                 )
                 .then(() => updated)
         )
