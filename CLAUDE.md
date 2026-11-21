@@ -12,6 +12,11 @@ Anything else a session or a test starts is temporary:
   volumes (`rm -v`), the network and any image built for the job.
 - Before finishing, check `podman ps -a --filter label=crew=boilerplate` shows nothing you started.
 
+**NEVER PRUNE.** No `podman` or `docker` `system prune`, `volume prune`, `image prune`, `container prune`,
+`network prune` or `builder prune`, and no removal by "unused", `--all` or a wide filter. This machine hosts
+unrelated projects, and a prune deletes their data with no undo. Remove only the items you created, by name or by
+the `crew=boilerplate` label. Anything else needs the user's yes for that exact item.
+
 ## The gate
 
 ```sh
