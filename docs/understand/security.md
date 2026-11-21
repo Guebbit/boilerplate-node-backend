@@ -57,14 +57,14 @@ Full detail: [Where token verification happens](./security-auth.md).
 `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH` are each an ordered, comma-separated **ring** of
 secrets, newest first — `account/session/config.ts`'s `getAccessTokenRing`/`getRefreshTokenRing`.
 
-Full detail: [Signing-key rotation](./security-rotation.md).
+Full detail: [Signing-key rotation](../operate/key-rotation.md#signing-keys).
 
 ## Database credential and key rotation
 
 Three separate secrets, three separate rotation procedures — none of them automated, all of them
 either a `mongosh` command or an env-var edit plus a deploy.
 
-Full detail: [Database credential and key rotation](./security-rotation.md).
+Full detail: [Database credential and key rotation](../operate/key-rotation.md#database-and-backup-credentials).
 
 ## Pseudonymised identifiers
 

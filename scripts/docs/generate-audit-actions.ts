@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The audit action reference table in `docs/operate/winston.md`. Same shape as
+ * The audit action reference table in `docs/modules/audit-logs.md`. Same shape as
  * `generate-role-matrix.ts`: markers in the page, prose around them untouched, `--check` in
  * `complete`.
  *
@@ -33,7 +33,7 @@ const checkOnly = hasFlag('check');
 const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
 
 /** The page the table lives in, right where the vocabulary is already described in prose. */
-const PAGE = path.join(ROOT, 'docs', 'operate', 'winston.md');
+const PAGE = path.join(ROOT, 'docs', 'modules', 'audit-logs.md');
 
 /** Opening marker of the audit actions block the generator rewrites in place. */
 const START = '<!-- audit-actions:start -->';

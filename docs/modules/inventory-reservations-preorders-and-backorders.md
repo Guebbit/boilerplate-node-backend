@@ -109,12 +109,12 @@ last week keeps waiting. An allocation is not undone: a typo (+50 for +5) alloca
 A parcel [reported lost](./delivery.md#lost-in-transit) leaves the order owed its units, and they left
 the shelf when the parcel shipped. `reserveMoreForOrder` tops the order's hold up, per line:
 
-| Part                        | What it does                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the shelf part              | reserves the free units, `available` drops. Never units held for another order: `available` already excludes them                                   |
-| the owed part               | an `owed` movement **outside the cap** (a ledger note says so): the cap limits new sales, not a promise already made                                |
-| a product with no stock row | claims nothing and does not fail: the loss is recorded elsewhere                                                                                    |
-| the hold                    | an open hold grows; a hold that ended (`shipped`, `released`) is reopened `committed` with only the added units, keeping the original `committedAt` |
+| Part                        | What it does                                                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the shelf part              | reserves the free units, `available` drops. Never units held for another order: `available` already excludes them                                                       |
+| the owed part               | an `owed` movement **outside the cap** (a ledger note says so): the cap limits new sales, not a promise already made                                                    |
+| a product with no stock row | claims nothing and does not fail: the loss is recorded elsewhere. A deleted product is this case: `shelf` 0, `owed` 0, no alert, since staff marked the loss themselves |
+| the hold                    | an open hold grows; a hold that ended (`shipped`, `released`) is reopened `committed` with only the added units, keeping the original `committedAt`                     |
 
 The owed claim is in the paid queue at the place of the original payment, so a stranger's checkout
 cannot take the next arriving unit. When the lost parcel turns up, `releaseTopUpForOrder` gives both

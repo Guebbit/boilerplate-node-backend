@@ -44,8 +44,9 @@ module.
    were sold in the meantime and could not be taken again.
 2. `none` means the database was edited or restored, not that a payment arrived late: no checkout
    door produces an order without a hold.
-3. **Stage `commit`:** if the units are on the shelf, restore the reservation by hand; if they are
-   not, cancel the order, which refunds it.
+3. **Stage `commit`:** no route restores a hold: if the units are on the shelf, that is a technician's database
+   edit, or cancel the order through the `paid_without_hold` to-do, which refunds it. If they are
+   not on the shelf, cancel the order.
 4. **Stage `ship`:** the units left the shelf without a hold behind them. Lower `onHand` with an
    `adjust` so the count is true again.
 5. Find out who changed the database or what restore put the order out of step with the stock.

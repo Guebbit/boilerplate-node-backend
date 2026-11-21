@@ -22,7 +22,7 @@ import type { FulfillmentLine, ProductQuantity } from '../domain';
 import { plainLine } from '../domain/fulfillment';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
-import { runAct, refuse, refuseMissing } from './act';
+import { runActOrThrow, refuse, refuseMissing } from './act';
 import { announceReleased } from './announce';
 import { reportProgress } from './progress';
 
@@ -160,9 +160,11 @@ const splitAct = async (
  *
  * @param fulfillmentOrderId - the fulfillment order held for stock
  * @param allocated - the units that arrived, per product; never more than remains of each
- * @returns the split, or `undefined` when nothing could be released — the fulfillment order is
- *   gone, its order was canceled, it is not held for stock, or the allocation asks for more than
- *   remains
+ * @returns the split, or `undefined` when there is nothing to release — the fulfillment order is
+ *   gone or its order was canceled
+ * @throws {ActRefusal} when the split lost a race or asks the impossible: it is not held for stock
+ *   (any more), or the allocation asks for more than remains. The caller is a listener, so the
+ *   outbox retries, and a dead event alerts staff
  */
 export const splitForAllocation = (
     fulfillmentOrderId: string,
@@ -174,8 +176,6 @@ export const splitForAllocation = (
         return orderService.getById(String(found.orderId)).then((order) => {
             // A canceled order has nothing left to release.
             if (!order || order.status === 'canceled') return undefined;
-            return runAct((session) => splitAct(fulfillmentOrderId, allocated, session)).then(
-                (result) => (result.refused ? undefined : result.value)
-            );
+            return runActOrThrow((session) => splitAct(fulfillmentOrderId, allocated, session));
         });
     });

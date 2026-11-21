@@ -20,6 +20,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import deliveryModule from '@modules/delivery/module';
 import { SHIPMENT_SHIPPED, SHIPMENT_DELIVERED } from '@modules/delivery/events';
 import { deliveryService } from '@modules/delivery/services';
+import { fulfillmentOrderRepository } from '@modules/delivery/repository';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import { asAdmin } from '@tests/callers';
 
@@ -126,6 +127,31 @@ describe('an override forward to shipped', () => {
         const { orderId } = await processingOrder();
         await override(orderId, OrderStatus.shipped);
         const at = await overriddenAt(orderId);
+
+        await deliveryService.syncWithOverride(orderId, OrderStatus.shipped, at);
+
+        expect(await shipmentsOf(orderId)).toHaveLength(1);
+    });
+});
+
+describe('an override the fulfillment records cannot follow', () => {
+    /**
+     * Spies on `claim`, an internal of the repository: another write winning the race for the
+     * fulfillment order cannot be staged through a door inside the one transaction.
+     */
+    it('throws the refusal so the outbox retries, and the retry ships the remainder', async () => {
+        const { orderId } = await processingOrder();
+        const at = new Date();
+        const claim = jest.spyOn(fulfillmentOrderRepository, 'claim').mockResolvedValueOnce(null);
+
+        try {
+            await expect(
+                deliveryService.syncWithOverride(orderId, OrderStatus.shipped, at)
+            ).rejects.toThrow('DELIVERY_NOT_SHIPPABLE');
+        } finally {
+            claim.mockRestore();
+        }
+        expect(await shipmentsOf(orderId)).toHaveLength(0);
 
         await deliveryService.syncWithOverride(orderId, OrderStatus.shipped, at);
 

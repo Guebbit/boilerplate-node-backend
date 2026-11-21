@@ -179,5 +179,5 @@ and the erasure, so they cannot disagree. The `{ subjectId }` and `{ email }` in
 - [Modules overview](./start.md) — the whole context map
 - [Email & PDF Rendering](../understand/email-and-rendering.md) — the triage notification
 - [Security](../understand/security.md) — the rate-limit budgets, including this module's own
-- [Winston & Audit Logs](../operate/winston.md) — what a triage action records
+- [Audit logs](./audit-logs.md#every-action) — what a triage action records
 - [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs `db:sync`

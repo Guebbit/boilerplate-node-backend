@@ -40,7 +40,7 @@ flowchart LR
     end
 
     Cache[("Redis cache\nGET: read · write: invalidate")]
-    Queue[("RabbitMQ\nemail · PDF jobs")]
+    Queue[("RabbitMQ\nemail · image · export jobs")]
     Resp(["Response"])
 
     Client --> Helmet
@@ -127,7 +127,7 @@ flowchart LR
 | Controller                            | Reads HTTP input, **validates it against the contract's Zod schema**, calls the service, answers with the resource, a list object or 204.                                                                          |
 | Service                               | Applies business rules over data that is already the right shape, and **emits the module's audit action** — the write and the record of it are decided in one place. Publishes async jobs to RabbitMQ when needed. |
 | Repository → Mongoose model → MongoDB | Runs the actual database query. Repositories own query shape; models own schema. Controllers never touch either directly.                                                                                          |
-| RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                                |
+| RabbitMQ                              | Receives heavy async jobs (email, webhook deliveries, image digests, account exports). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                 |
 
 A module records its audit action from `service.ts` or `services/*.ts`, beside the write itself.
 The exceptions are handlers that each argue in place why they have to emit themselves: the two
@@ -164,7 +164,7 @@ accepted, and never has to ask whether a field is a string. Which sources a cont
 
 ### Async offloading
 
-Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](rabbitmq.md) so the HTTP response returns immediately.
+Heavy tasks (email, webhook deliveries, image digests, account exports) are pushed to [RabbitMQ](rabbitmq.md) so the HTTP response returns immediately. The one exception is the invoice PDF: it renders during the request (`get-order-invoice.ts`), not on a worker.
 
 ### Fire-and-forget work
 

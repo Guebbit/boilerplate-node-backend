@@ -1160,20 +1160,22 @@ describe('a short stock delivery', () => {
         expect(await fulfillmentOrdersOf(orderId)).toHaveLength(1);
     });
 
-    it('refuses more than remains, an order not held for stock, and a missing one', async () => {
+    it('refuses more than remains and an order not held for stock, and does nothing for a missing one', async () => {
         const held = await awaitingStock(1);
         const plain = await processingOrderOf([1], {}, 'plain-split@example.com');
         const [plainFo] = await fulfillmentOrdersOf(String(plain.order._id));
 
-        const tooMany = await deliveryService.splitForAllocation(held.fulfillmentOrderId, [
+        const tooMany = deliveryService.splitForAllocation(held.fulfillmentOrderId, [
             { productId: held.productId, quantity: 2 }
         ]);
-        const notHeld = await deliveryService.splitForAllocation(String(plainFo._id), [
+        const notHeld = deliveryService.splitForAllocation(String(plainFo._id), [
             { productId: String(plain.products[0]._id), quantity: 1 }
         ]);
         const missing = await deliveryService.splitForAllocation('65dcdec2b18ad5e4bd597f01', []);
 
-        expect([tooMany, notHeld, missing]).toEqual([undefined, undefined, undefined]);
+        await expect(tooMany).rejects.toThrow('DELIVERY_LINES_INVALID');
+        await expect(notHeld).rejects.toThrow('DELIVERY_NOT_RELEASABLE');
+        expect(missing).toBeUndefined();
         const [after] = await fulfillmentOrdersOf(held.orderId);
         expect(after.lines[0].quantity).toBe(1);
     });

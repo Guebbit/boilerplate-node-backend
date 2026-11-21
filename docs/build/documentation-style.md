@@ -236,17 +236,33 @@ nothing else.
 The sweep has floors: one that silently reads zero pages would report a clean tree forever, which
 is worse than no sweep.
 
+## Module pages
+
+A page under `docs/modules/` has its own shape, the one `npm run scaffold:module` emits for a new module
+(`documentationPage` in `scripts/scaffold/templates-documentation-tests.ts`). Keep to it, and add
+story sections as the module needs them.
+
+| Part              | What goes there                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Lead              | One or two lines: what the module is for.                                                               |
+| At a glance       | A `tip` block: **Owns**, **Depends on**, **Breaks if you change**. One line each.                       |
+| Its neighbourhood | The module graph, between `module-graph:<name>` markers that `regenerate` fills. Never hand-edit it.    |
+| Who can do what   | The permissions table, between `permissions` markers, also generated.                                   |
+| Story sections    | The decisions not obvious from the code, and the traps. One section per idea; a diagram where it helps. |
+| Read next         | Links to the neighbours and the build pages.                                                            |
+
+A module whose story outgrows one page splits it into `<name>-<topic>.md` pages (see
+`payments-*.md`), and the main page keeps the lead, the glance block and the links.
+
 ## Bringing an old page up to this standard
 
-Over a hundred pages predate these rules, and a hundred-page rewrite is exactly the push this page
-warns against: a single sitting produces a hundred pages nobody re-read. So it is a trickle, and
-the trigger is deliberately not a schedule:
+Pages written before these rules are reworked as a trickle, not a sweep: a bulk rewrite produces
+pages nobody re-read. The trigger is deliberately not a schedule:
 
 > **You touched a module for another reason. Fix its doc page in the same sitting.**
 
-That way the page is reworked by whoever has the code fresh in their head, and the work rides along
-with a change that was happening anyway. This item is never "done" — only ever "next page off the
-list."
+The page is then reworked by whoever has the code fresh in their head, as part of a change that
+was happening anyway. This is never "done", only "next page off the list."
 
 ## What this page is not
 

@@ -2,7 +2,7 @@
 # Git has already built the merge tree, so fixes the gate stages would miss it: refuse instead, and
 # `git commit --no-edit` (which runs `pre-commit`) concludes the merge with them. See .husky/pre-commit.
 before=$(git write-tree)
-sh -e "$(dirname -- "$0")/pre-commit"
+sh -e "$(dirname -- "$0")/pre-commit" || { echo "the gate FAILED (not a fix); see above"; exit 1; }
 after=$(git write-tree)
 if [ "$before" != "$after" ]; then
     echo "the gate staged fixes; run git commit --no-edit to conclude the merge with them"

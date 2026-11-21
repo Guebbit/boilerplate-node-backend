@@ -17,6 +17,19 @@ One process, no Docker by default: `scenarios/run-server.ts` resolves a Mongo th
 
 The shop it serves is not a set of rows somebody wrote. It is [built by using the application](#how-a-scenario-is-built) — the catalogue is seeded, and then the orders, payments, shipments, refunds and audit entries are produced by driving the real endpoints at boot.
 
+## Start the frontend
+
+With the demo running on `:3000`, start the screens from the frontend checkout:
+
+```sh
+cd ../boilerplate-vue-frontend
+cp .env-example .env       # first time only: VITE_API_URL already points at http://localhost:3000
+npm install                # first time only
+npm run dev                # http://localhost:8080
+```
+
+A demo on another port (`NODE_PORT=3101`) needs `VITE_API_URL` changed to match. The sign-in accounts are in [The named accounts](#the-named-accounts).
+
 ## Who it is for
 
 **The paired frontend, mostly.** `boilerplate-vue-frontend`'s dev server and its default e2e suite run against this profile instead of a hand-written mock of this API — its shard runner boots one instance per shard (ports 3101+), so four Cypress processes each own a private universe. That is the deal the two repos struck when the frontend retired its MSW layer: one implementation of the behaviour, served by the code that owns it, with determinism coming from the seeds rather than from an imitation. See the frontend's `docs/build/demo-profile.md` for its half of the story, and [Testing & Docs](./testing-and-docs.md) for what the pairing catches.

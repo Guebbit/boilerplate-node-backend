@@ -624,7 +624,10 @@ export default defineConfig({
                 },
                 {
                     text: 'Configure',
-                    items: [{ text: 'Configuration', link: '/operate/configuration' }]
+                    items: [
+                        { text: 'Configuration', link: '/operate/configuration' },
+                        { text: 'Rotate keys and credentials', link: '/operate/key-rotation' }
+                    ]
                 },
                 {
                     text: 'Backups',

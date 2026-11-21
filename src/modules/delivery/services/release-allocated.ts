@@ -58,6 +58,8 @@ const heldFor = (orderId: string, productId: string): Promise<FulfillmentOrderDo
  * @param orderId - the order whose preorder was allocated
  * @param productId - the product that was allocated
  * @param waiting - what the order still claims of that product after the allocation
+ * @throws {ActRefusal} when a split is refused (it lost a race). The outbox retries the event and
+ *   this recounts what is still held, so the retry only releases what is left.
  */
 export const releaseAllocated = (
     orderId: string,
