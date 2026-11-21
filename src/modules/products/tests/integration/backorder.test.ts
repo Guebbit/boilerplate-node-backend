@@ -13,8 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { outboxEventModel } from '@kernel/outbox';
 import { shopDayOf, startOfShopDay } from '@modules/shop';
 import { productModel } from '../../model';
-import { productService } from '../../services';
-import { PRODUCT_BUYABLE_AGAIN, PRODUCT_RESTOCK_DATE_CHANGED } from '../../events';
+import { PRODUCT_RESTOCK_DATE_CHANGED } from '../../events';
 
 setupTestDb();
 
@@ -113,52 +112,5 @@ describe('PATCH /products/:id restockDate announcements', () => {
             .send({ restockDate });
 
         expect(await announced()).toEqual([]);
-    });
-});
-
-/** How many `product.buyable_again` rows exist for the product. */
-const fired = (id: string) =>
-    outboxEventModel.countDocuments({ name: PRODUCT_BUYABLE_AGAIN, aggregateId: id });
-
-/** The id of a freshly made product. */
-const idOf = (product: { _id: unknown }) => String(product._id);
-
-describe('product.buyable_again', () => {
-    it('fires once when synced stock makes a sold-out product orderable, and not again while it is', async () => {
-        const product = await createProduct({ onHand: 0 });
-        const id = String(product._id);
-
-        await productService.syncStockCache(id, { onHand: 4, reserved: 0, version: 1 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 0, version: 2 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 9, version: 3 });
-        await productService.syncStockCache(id, { onHand: 9, reserved: 0, version: 4 });
-
-        expect(await fired(id)).toBe(2);
-    });
-
-    it('fires when an edit switches backorder on, shows the product again, or moves a passed restock date', async () => {
-        const { bearer } = await authenticateAsRole('editor');
-        const patch = (id: string, body: object) =>
-            api().patch(`/products/${id}`).set('Authorization', bearer).send(body);
-        const switched = idOf(await createProduct({ onHand: 0 }));
-        await productModel.updateOne({ _id: switched }, { $set: { backorderLimit: 5 } });
-        const hidden = idOf(await createProduct({ onHand: 3, active: false }));
-        const missed = idOf(
-            await createProduct({
-                onHand: 0,
-                allowBackorder: true,
-                restockDate: stored(inDays(-2))
-            })
-        );
-        await productModel.updateOne({ _id: missed }, { $set: { backorderLimit: 5 } });
-
-        await patch(switched, { allowBackorder: true });
-        await patch(hidden, { active: true });
-        await patch(missed, { restockDate: inDays(10) });
-        await patch(switched, { description: 'unrelated' });
-
-        expect([await fired(switched), await fired(hidden), await fired(missed)]).toEqual([
-            1, 1, 1
-        ]);
     });
 });

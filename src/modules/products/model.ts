@@ -1,10 +1,8 @@
 /**
  * @module
  * The product Mongoose schema, its Zod validation, and the serialization transform that stamps the
- * derived `currency` and `actions`. `onHand` and `reserved` are declared here because this
- * module owns the collection but are written only by `@modules/inventory` — see that module's
- * docblock. They never reach the wire: a product answer carries no stock, and availability is
- * `inventory`'s own read.
+ * derived `currency` and `actions`. The product holds no stock: availability is `inventory`'s
+ * own read.
  *
  * @see docs/modules/products.md#order-line-snapshots-freeze-the-resolved-words
  */
@@ -46,42 +44,21 @@ export interface ProductRecord extends Omit<
     releaseDate?: Date;
     /** When stock is expected back, for a product that allows backorder. */
     restockDate?: Date;
-    /**
-     * The shelf counters, copied from `inventory`. Internal: the product answer carries no stock
-     * (availability is `inventory`'s own read), so none of these reaches the wire.
-     */
-    onHand?: number;
-    reserved?: number;
-    /** The preorder allowance and the units already claimed against it, copied the same way. */
-    backorderLimit?: number | null;
-    backordered?: number;
-    /** The stock level version the copy above was taken at; sync-only, never returned. */
-    stockVersion?: number;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
 }
 
 /**
- * A product as an ORDER LINE remembers it: `ProductRecord` without `onHand`/`reserved` — the two
- * fields that describe the WAREHOUSE, right now, rather than what a customer saw and bought.
- * `active` and `purchasable` are omitted too: a frozen
- * value would say nothing about the product that is on the shelf now.
- * `orders/model.ts` embeds a Mongoose schema that mirrors this shape (not `productSchema` itself,
- * so the two counters are never even reachable to store), and its `OrderDocumentItem.product` is
- * typed by this, not by `ProductRecord`.
+ * A product as an ORDER LINE remembers it: `ProductRecord` without the fields that describe the
+ * shelf right now (`active`, `purchasable`, `allowBackorder`, `restockDate`) rather than what a
+ * customer saw and bought: a frozen value would say nothing about the product on the shelf now.
+ * `orders/model.ts` embeds a Mongoose schema that mirrors this shape (not `productSchema` itself),
+ * and its `OrderDocumentItem.product` is typed by this, not by `ProductRecord`.
  */
 export type ProductSnapshot = Omit<
     ProductRecord,
-    | 'onHand'
-    | 'reserved'
-    | 'backorderLimit'
-    | 'backordered'
-    | 'stockVersion'
-    | 'active'
-    | 'purchasable'
-    | 'allowBackorder'
-    | 'restockDate'
+    'active' | 'purchasable' | 'allowBackorder' | 'restockDate'
 >;
 
 /**
@@ -285,50 +262,6 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         sku: {
             type: String
         },
-        /**
-         * `onHand` (units that exist) and `reserved` (units an open order has claimed) — not a
-         * single `stock` column, which would have to be decremented at order time and so remove
-         * unpaid units from the world rather than merely reserve them. `available` derives from
-         * both at serialization, never stored.
-         *
-         * NEITHER IS WRITTEN HERE: every change goes through `@modules/inventory`, which owns the
-         * transitions and ledger. This module only declares the columns, since it owns the
-         * collection.
-         */
-        onHand: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
-        reserved: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
-        /**
-         * The preorder allowance and what is claimed against it: a copy of `inventory`'s own
-         * counters, for the same reason `onHand` is one (the catalogue read must not call across).
-         * A preorder's `available` is what is left of the allowance, so the shelf stops selling
-         * the day it is full. Written only by `syncStockCache`, never returned.
-         */
-        backorderLimit: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
-        backordered: {
-            type: Number,
-            default: 0,
-            min: 0
-        },
-        /**
-         * Version of the stock level the counters were copied at. `syncStockCache` writes only a
-         * newer one. Default -1: a fresh product is older than the level's first snapshot (0).
-         */
-        stockVersion: {
-            type: Number,
-            default: -1
-        },
         // No default: a product with no description has no field, never `''`.
         description: {
             type: String
@@ -431,7 +364,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         /**
          * Grams, optional. Absent counts as 0 wherever a basket's weight is summed
          * (`delivery`'s shipping-method filter, `cart`'s checkout refusal) — not a concern of
-         * this module's own, which is why there is no default here the way `onHand` has one.
+         * this module's own, which is why there is no default here.
          */
         weight: {
             type: Number,
@@ -475,12 +408,12 @@ productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_delete
 productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: true });
 
 /**
- * Stamps the live `currency` and the all-`false` `actions`, and drops the stock copy, at the
+ * Stamps the live `currency` and the all-`false` `actions`, and the shop's day on the two dates, at the
  * single serialization point every product response passes through — listing, detail and both
  * write paths agree. `currency` is this deployment's CURRENT `NODE_DEFAULT_CURRENCY`, read fresh
  * rather than frozen onto the catalogue row.
  */
-const applyProductAvailability = (serialized: Record<string, unknown>) => {
+const applyProductDerivedFields = (serialized: Record<string, unknown>) => {
     serialized.currency = shopCurrency();
     serialized.actions = NO_PRODUCT_ACTIONS;
     /**
@@ -491,12 +424,6 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
         serialized.releaseDate = shopDayOf(serialized.releaseDate);
     if (serialized.restockDate instanceof Date)
         serialized.restockDate = shopDayOf(serialized.restockDate);
-    // The stock copy never reaches the wire: the contract's `Product` carries no stock.
-    delete serialized.onHand;
-    delete serialized.reserved;
-    delete serialized.backorderLimit;
-    delete serialized.backordered;
-    delete serialized.stockVersion;
 };
 
 /**
@@ -510,7 +437,7 @@ export const applyProductTransform = applySerialization(productSchema, {
      * `pendingImageKey` fail response validation rather than just look untidy.
      */
     omit: ['pendingImageKey'],
-    after: applyProductAvailability,
+    after: applyProductDerivedFields,
     // A product stores no currency: its price is in the shop's live one.
     currency: shopCurrency
 });

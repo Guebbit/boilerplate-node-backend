@@ -27,7 +27,7 @@ import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { countersOf, createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 import { cartService } from '@modules/cart/services';
@@ -277,8 +277,8 @@ describe('R2 — concurrent checkouts of one cart', () => {
         for (const loser of losers) expect(loser.body.errors[0].code).toBe('CART_CHANGED');
 
         // The winner's hold and nothing else — every loser's reserve was given back.
-        const stored = await productService.findByIdRaw(String(product._id));
-        expect(stored?.reserved).toBe(3);
+        const stored = await countersOf(product._id);
+        expect(stored.reserved).toBe(3);
     });
 
     it('still checks out normally when nothing is competing', async () => {

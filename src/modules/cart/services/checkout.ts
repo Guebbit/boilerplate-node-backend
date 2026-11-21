@@ -665,7 +665,7 @@ const runCheckout = async (
      * event reports this code, so it must stay stable and locale-independent
      * while `message` is translated for the user.
      */
-    // The ledger decides how much can be sold, never the catalogue's cached copy of it.
+    // The level decides how much can be sold: it is the only place stock lives.
     const positionByProduct = await inventoryService.availableFor(
         lines.map((line) => line.productId),
         preorderIdsOf(lines),

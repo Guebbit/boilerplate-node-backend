@@ -26,7 +26,7 @@ import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './prod
 export { fillerProductId } from './products-filler';
 import productImages from './products-images.generated.json';
 import { SEED_PRODUCT_IDS } from './product-ids';
-import { makeProduct, type ProductOverrides } from '@modules/products/factories';
+import { makeProduct } from '@modules/products/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
 import { getFallbackLocale } from '@infrastructure/i18n';
@@ -204,20 +204,6 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
 };
 
 /**
- * `makeProduct`, with the shelf empty.
- *
- * `onHand` already defaults to 0 in the schema, so this is a no-op override — kept as the one
- * place every row in this file passes through, stating once (rather than as a comment repeated on
- * each of the catalogue's rows) that the demo's stock arrives by opening receipt
- * (`scenarios/flows/shop-history.ts`), never seeded directly, so every unit on the shelf has a
- * movement behind it.
- *
- * @param overrides - exactly what `makeProduct` takes
- */
-const makeUnstockedProduct = (overrides: ProductOverrides) =>
-    makeProduct({ ...overrides, onHand: 0 });
-
-/**
  * Six named products, chosen to cover the branches the storefront and repositories actually
  * exercise rather than to look like a shop on their own — `./products-filler`'s filler rows are what
  * make the catalogue look like a shop. `categories` is non-empty on every RICH record, since a
@@ -225,7 +211,7 @@ const makeUnstockedProduct = (overrides: ProductOverrides) =>
  * `barebones` is the deliberate exception, see its note below.
  */
 const namedProducts = [
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.dogFoodStandard,
         title: NAMED_PRODUCT_COPY.dogFoodStandard.en.title,
         description: NAMED_PRODUCT_COPY.dogFoodStandard.en.description,
@@ -239,7 +225,7 @@ const namedProducts = [
      * repositories' soft-delete filters both check. Exactly one record carries it, independent of
      * the inactive one, so the dataset can tell the two states apart.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.heaterSoftDeleted,
         title: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.title,
         description: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.description,
@@ -250,13 +236,14 @@ const namedProducts = [
         ...productImages.heaterSoftDeleted
     }),
     /**
-     * The out-of-stock one. Every row here seeds at `onHand: 0`; this is the row that never gets
-     * an opening receipt (see {@link OPENING_STOCK}), so it is still at zero once the flows have
-     * run — the storefront's out-of-stock badge and checkout's refusal both need it. It's `onHand`
-     * itself that is zero, not just availability; the other way to be unbuyable (units held, all
-     * reserved) is what `order.otherPending` exercises instead.
+     * The out-of-stock one. No row here carries stock: the demo's stock arrives by opening receipt
+     * (`scenarios/flows/shop-history.ts`), so every unit on the shelf has a movement behind it.
+     * This is the row that never gets one (see {@link OPENING_STOCK}), so it is still at zero once
+     * the flows have run — the storefront's out-of-stock badge and checkout's refusal both need
+     * it. The other way to be unbuyable (units held, all reserved) is what `order.otherPending`
+     * exercises instead.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.scratchPostOutOfStock,
         title: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.title,
         description: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.description,
@@ -265,7 +252,7 @@ const namedProducts = [
         tags: ['scratching-post', 'heavy-duty'],
         ...productImages.scratchPostOutOfStock
     }),
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.dogBedPremium,
         title: NAMED_PRODUCT_COPY.dogBedPremium.en.title,
         description: NAMED_PRODUCT_COPY.dogBedPremium.en.description,
@@ -278,7 +265,7 @@ const namedProducts = [
      * The inactive one — soft-deleted's independent twin. `publicScope()` requires active AND not
      * deleted, so from outside these two behave identically while remaining distinct states.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.bundleInactive,
         title: NAMED_PRODUCT_COPY.bundleInactive.en.title,
         description: NAMED_PRODUCT_COPY.bundleInactive.en.description,
@@ -293,7 +280,7 @@ const namedProducts = [
      * product and checkout refuses it. Hidden's visible twin, and stocked, so the refusal cannot be
      * mistaken for a stock-out.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.bedOffSale,
         title: NAMED_PRODUCT_COPY.bedOffSale.en.title,
         description: NAMED_PRODUCT_COPY.bedOffSale.en.description,
@@ -308,7 +295,7 @@ const namedProducts = [
      * can't catch a card or filter chip that wrongly assumes a description, category or image is
      * present. Public on purpose, so it appears in every list the storefront actually renders.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.barebones,
         title: NAMED_PRODUCT_COPY.barebones.en.title,
         price: '9.00'
@@ -318,7 +305,7 @@ const namedProducts = [
      * digital-only branches all key off. No `imageUrl` in the fixed pool needs spending on it;
      * `barebones` above is the precedent for a named row with no image.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.puppyCourseDigital,
         title: NAMED_PRODUCT_COPY.puppyCourseDigital.en.title,
         description: NAMED_PRODUCT_COPY.puppyCourseDigital.en.description,
@@ -331,7 +318,7 @@ const namedProducts = [
      * The last-unit one — opens with a single unit on the shelf (see {@link OPENING_STOCK}) and
      * belongs to no seeded order, so one checkout holds it and a second shopper is refused.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.bowlLowStock,
         title: NAMED_PRODUCT_COPY.bowlLowStock.en.title,
         description: NAMED_PRODUCT_COPY.bowlLowStock.en.description,
@@ -344,7 +331,7 @@ const namedProducts = [
      * The made-to-order one — `noWithdrawal` (EU Art. 16(c), personalised goods), physical and
      * under standard's free-shipping line, so a cart of it still pays for delivery.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.bowlNoWithdrawal,
         title: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.title,
         description: NAMED_PRODUCT_COPY.bowlNoWithdrawal.en.description,
@@ -359,7 +346,7 @@ const namedProducts = [
      * 30 kg, so a cart holding it makes the express refusal reachable. Priced under standard's
      * free-shipping line, so a cart of one still pays for delivery.
      */
-    makeUnstockedProduct({
+    makeProduct({
         id: SEED_PRODUCT_IDS.catTreeHeavy,
         title: NAMED_PRODUCT_COPY.catTreeHeavy.en.title,
         description: NAMED_PRODUCT_COPY.catTreeHeavy.en.description,
@@ -378,7 +365,7 @@ const namedProducts = [
  */
 const fillerProductRows = FILLER_PRODUCTS.map(
     ({ translations: _translations, openingStock: _openingStock, ...product }, index) =>
-        makeUnstockedProduct({
+        makeProduct({
             id: fillerProductId(index),
             ...product,
             ...productImages[
@@ -395,7 +382,7 @@ export const productFixtures = [...namedProducts, ...fillerProductRows];
 /**
  * How many units each product's OPENING RECEIPT brings in — not a seeded column.
  *
- * Every row above seeds at the schema's `onHand: 0`, and `scenarios/flows/shop-history.ts` puts
+ * No row above carries stock, and `scenarios/flows/shop-history.ts` puts
  * these on the shelf through `POST /inventory/levels/{productId}/receive` before the first checkout, so the demo's
  * stock is stock the application itself received and every unit is accounted for by a movement
  * row. `scratchPostOutOfStock` is absent on purpose: a product that never took delivery.

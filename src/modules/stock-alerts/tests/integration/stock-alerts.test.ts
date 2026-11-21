@@ -1,13 +1,14 @@
 /**
  * @module
- * Back-in-stock requests, over HTTP and through the real wiring: asking, the refusal while the
- * product can be ordered, cancelling, and the signal that answers a waiting request with one mail
+ * Back-in-stock requests, over HTTP and through the real wiring: asking, the refusal unless the
+ * product is out of stock, cancelling, and the sweep that answers a waiting request with one mail
  * and deletes it. The real modules are registered so the wiring in `module.ts` is part of what is
  * tested.
  *
- * @see docs/modules/stock-alerts.md#the-signal
+ * @see docs/modules/stock-alerts.md#the-sweep
  */
 
+import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -147,6 +148,15 @@ describe('POST /stock-alerts', () => {
         expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 
+    it('answers 404 for a product that does not exist', async () => {
+        const { bearer } = await shopper();
+
+        const response = await ask(bearer, '65dc8a99604c307b702b5ccc');
+
+        expect(response.status).toBe(404);
+        expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
     it.each([
         ['hidden', { active: false }],
         ['soft-deleted', { deletedAt: new Date() }]
@@ -208,16 +218,16 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
     });
 });
 
-describe('the signal', () => {
+describe('the sweep after a restock', () => {
     it('answers a waiting request with one mail, one event and no request left, once', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         expect(mockEnqueueEmail.mock.calls[0]?.[1]).toBe('stock-alerts.back-in-stock');
@@ -233,7 +243,7 @@ describe('the signal', () => {
         await withEnvironmentOverrides({ NODE_FRONTEND_LINK_PRODUCT: 'shop/item-{id}' }, () =>
             inventoryService
                 .receive(productId, 3, undefined, testCallerContext)
-                .then(() => settleOutboxNudges())
+                .then(() => stockAlertService.sweepBuyable())
         );
 
         const data = mockEnqueueEmail.mock.calls[0]?.[2] as { linkUrl: string } | undefined;
@@ -262,7 +272,7 @@ describe('the signal', () => {
         );
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(await stockAlertModel.countDocuments()).toBe(0);
@@ -274,7 +284,7 @@ describe('the signal', () => {
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(await sentEvents()).toMatchObject([{ productId }]);
@@ -288,7 +298,7 @@ describe('the signal', () => {
         await userRepository.updateMany({ _id: user.id }, { $set: { verifiedAt: new Date() } });
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         expect(mockEnqueueEmail.mock.calls[0]?.[1]).toBe('stock-alerts.back-in-stock');
@@ -301,19 +311,19 @@ describe('the signal', () => {
         await api().delete(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(await sentEvents()).toEqual([]);
     });
 
-    it('does not mail a request twice when the signal is delivered twice', async () => {
+    it('does not mail a request twice when two runs answer the same product', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
-        await stockAlertService.onBuyableAgain(productId);
-        await stockAlertService.onBuyableAgain(productId);
+        await stockAlertService.answerWaiting(productId);
+        await stockAlertService.answerWaiting(productId);
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -330,7 +340,7 @@ describe('the signal', () => {
             .patch(`/products/${productId}`)
             .set('Authorization', editor.bearer)
             .send({ allowBackorder: true });
-        await settleOutboxNudges();
+        await stockAlertService.sweepBuyable();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
     });
@@ -350,15 +360,15 @@ const letTheDatePass = async (productId: string) => {
     await saveProduct(product!);
 };
 
-describe('the hourly sweep', () => {
+describe('the sweep', () => {
     it('answers a request once a release date passes, and a second run sends nothing', async () => {
         const { bearer } = await shopper();
         const productId = await unreleased();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
         await letTheDatePass(productId);
 
-        const first = await stockAlertService.sweepBuyable(new Date());
-        const second = await stockAlertService.sweepBuyable(new Date());
+        const first = await stockAlertService.sweepBuyable();
+        const second = await stockAlertService.sweepBuyable();
         await settleOutboxNudges();
 
         expect([first, second]).toEqual([1, 0]);
@@ -372,11 +382,48 @@ describe('the hourly sweep', () => {
         const waiting = await unreleased();
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId: waiting });
 
-        const answered = await stockAlertService.sweepBuyable(new Date());
+        const answered = await stockAlertService.sweepBuyable();
 
         expect(answered).toBe(0);
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(await stockAlertModel.countDocuments()).toBe(1);
+    });
+});
+
+describe('the sweep, further', () => {
+    it('leaves the request for a product that was hidden once it had stock', async () => {
+        const { bearer } = await shopper();
+        const productId = await soldOut();
+        await ask(bearer, productId);
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
+        const product = await readProduct(productId);
+        product!.active = false;
+        await saveProduct(product!);
+
+        const answered = await stockAlertService.sweepBuyable();
+
+        expect(answered).toBe(0);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(await stockAlertModel.countDocuments()).toBe(1);
+    });
+
+    it('reaches a product past the first hundred it waits for', async () => {
+        const { bearer, user } = await shopper();
+        const productId = await soldOut();
+        await ask(bearer, productId);
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
+        // 100 products that do not exist fill the first batch; the real one is in the next.
+        await stockAlertModel.insertMany(
+            Array.from({ length: 100 }, (_, index) => ({
+                userId: user.id,
+                productId: new Types.ObjectId(index.toString(16).padStart(24, '0'))
+            }))
+        );
+
+        const answered = await stockAlertService.sweepBuyable();
+
+        expect(answered).toBe(1);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
     });
 });
 

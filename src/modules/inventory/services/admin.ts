@@ -19,7 +19,8 @@ import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { ERROR_CODES } from '@api/error-codes';
 import { stockLevelRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { applyTransition, refreshStockCache } from './transition';
+import { applyTransition } from './transition';
+import { forgetAvailability } from './availability';
 import { allocateWithin } from './allocate';
 import { presentInventoryLevel } from '../presenter';
 
@@ -63,7 +64,7 @@ const receiveAndAllocate = (
     ).then((moved) => {
         if (!moved) return false;
         nudgeOutbox();
-        return refreshStockCache(productId).then(() => true);
+        return forgetAvailability([productId]).then(() => true);
     });
 
 /**
@@ -246,10 +247,10 @@ export const setBackorderLimit = (
                 )
                 .then((metadata) =>
                     /**
-                     * The catalogue's copy carries the allowance, which is what a preorder's
-                     * `available` counts down from: bring it into step with the new limit.
+                     * The availability entry holds the answer the allowance decides (a preorder
+                     * stops at a full one): delete it so the new limit is read.
                      */
-                    refreshStockCache(productId)
+                    forgetAvailability([productId])
                         .then(() => levelFor(productId, product.title))
                         .then((level) => ({ level, metadata }))
                 )

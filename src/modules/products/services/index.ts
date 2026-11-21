@@ -22,7 +22,6 @@ import {
     countPublic,
     listPublicPage,
     countListed,
-    syncStockCache,
     titlesOf,
     titlesById
 } from './lookups';
@@ -60,7 +59,6 @@ export const productService = {
     countPublic,
     listPublicPage,
     countListed,
-    syncStockCache,
     titlesOf,
     titlesById,
     /**

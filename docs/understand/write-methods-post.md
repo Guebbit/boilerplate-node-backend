@@ -76,8 +76,8 @@ Otherwise it is a field of `PUT` / `PATCH`.
 | an identity of its own: a sign-in or recovery channel, with a step-up and mails of its own | an action at its own door, never a field of the profile | `POST /account/email-change {email}`, `POST /account/password` |
 | consequences that come only from the state it leaves behind                                | a field                                                 | `Product.active`, `purchasable`, `allowBackorder`              |
 
-`product.buyable_again` does not make `active` an action: it follows the derived `buyable` state,
-whichever of five fields or a stock receipt changed it. The same test is written from the domain
+Being back in stock does not make `active` an action: availability is derived from the product's
+terms and its stock, whichever of five fields or a stock receipt changed it. The same test is written from the domain
 side in [`tactical-ddd.md`](tactical-ddd.md#action-endpoints-execute-update-does-not-decide).
 
 ### A line is written through its parent

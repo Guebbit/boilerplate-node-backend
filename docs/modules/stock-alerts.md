@@ -9,7 +9,7 @@ Back-in-stock requests: a signed-in buyer asks to be told once when a product th
 
 ::: tip At a glance
 **Owns** — back-in-stock requests: one row per user and product, used once, and the one mail they earn.
-**Depends on** — [`products`](./products.md), [`users`](./users.md).
+**Depends on** — [`inventory`](./inventory.md), [`products`](./products.md), [`users`](./users.md).
 **Breaks if you change** — `STOCK_ALERT_SENT`. [`notifications`](./notifications.md) imports that event name to write the inbox row.
 :::
 
@@ -24,14 +24,15 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     stock_alerts["stock-alerts<br/><i>this module</i>"]
+    inventory["inventory"]
     products["products"]
     shop_tasks["shop-tasks"]
     users["users"]
 
     shop_tasks --> stock_alerts
+    stock_alerts --> inventory
     stock_alerts --> products
     stock_alerts --> users
-    products -. "product.buyable_again" .-> stock_alerts
     products -. "product.deleted" .-> stock_alerts
     stock_alerts -. "stock_alert.sent" .-> shop_tasks
 
@@ -40,7 +41,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class products core;
-    class shop_tasks supporting;
+    class inventory,shop_tasks supporting;
     class users generic;
     class stock_alerts centre;
 ```
@@ -61,10 +62,11 @@ unverified gets the inbox row and never the mail, checked at send time (so verif
 restock is enough). Signed-in only: there is no guest double opt-in to run, and
 [account erase](./account.md) covers the rows through `personalData`.
 
-**The button only exists while the product cannot be ordered.** `POST /stock-alerts` (the product in the body) is
-refused with `STOCK_ALERT_PRODUCT_BUYABLE` when the product can be ordered now: shelf units, a
-backorder open under its cap and date, or a preorder with allowance left. One rule, `isBuyable`,
-decides it here and decides when to fire.
+**The button only exists while the product is `out_of_stock`.** `POST /stock-alerts` (the product in
+the body) is refused with `STOCK_ALERT_PRODUCT_BUYABLE` unless [`inventory`'s availability
+read](./inventory.md#the-availability-reads) says `out_of_stock`: shelf units, a backorder open
+under its cap and date, or a preorder with allowance left all read otherwise. An unknown, hidden or
+removed product is a `404`. One read, `availability`, decides both when to refuse and when to answer.
 
 ## The cap
 
@@ -76,40 +78,40 @@ concurrent asks for different products can overshoot the cap by one. That is acc
 would not stop it either, and a counter document is not worth the second write. The inbox's own cap of
 100 is a different thing and is not the reason for this number.
 
-## The signal
+## The sweep
 
-`products` announces `product.buyable_again` through the outbox, in the transaction of the write that
-made the product orderable, once per flip and never while it stays orderable. The flips: synced stock
-arriving, a backorder opening or its date moving on, the product shown or put back on sale.
-
-**One flip carries no write: a release date passing.** A preorder that becomes orderable because
-its date arrived is never saved, so nothing fires for it. `npm run job sweep:stock-alerts` runs hourly
-and answers the waiting requests of every product that `isBuyable` now: it takes the distinct
-products anyone waits for, keeps the orderable ones and hands each to the same answer the signal
-uses. Running it again sends nothing, since an answered request is deleted.
+Nothing announces that a product is orderable again: stock arrives, a backorder opens, a product is
+shown again, a release date passes, and none of it is told to this module. `npm run job
+sweep:stock-alerts` runs every five minutes. It takes the distinct products anyone waits for, asks
+`inventory` for their availability 100 at a time (the contract's bound on the batch read), and hands
+each one that is no longer `out_of_stock` to the answer. It calls the inventory service directly,
+with no caller: a sweep has no permissions to judge, and a hidden or removed product reads
+`out_of_stock`, so it is never answered. Running it again sends nothing, since an answered request
+is deleted. A restock is therefore noticed within five minutes, plus up to 60 seconds of the
+availability entry's own cache.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    S["stock arrives, backorder opens,<br/>product shown again"] --> P["products<br/><i>product.buyable_again</i>"]
-    P -. "outbox" .-> A["stock-alerts<br/><i>one transaction per request</i>"]
+    J["sweep:stock-alerts<br/><i>every 5 minutes</i>"] --> I["inventory<br/><i>availability, 100 at a time</i>"]
+    I --> A["stock-alerts<br/><i>one transaction per request</i>"]
     A --> D["request deleted"]
     A --> M["one mail"]
     A -. "stock_alert.sent" .-> N["notifications<br/><i>one inbox row</i>"]
 
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class A,D,M own;
-    class S,P,N peer;
+    class J,A,D,M own;
+    class I,N peer;
 ```
 
-The delete is the guard: a request cancelled meanwhile, or answered by a redelivery of the signal,
+The delete is the guard: a request cancelled meanwhile, or answered by a second run of the sweep,
 finds nothing to delete and sends nothing. A mail that fails is logged; the inbox row stands. An account that is locked (banned, or in the grace
 of its own deletion) or whose address is unverified is not mailed at all: the request is still answered and deleted, the inbox row
 stands.
 
 ## Read next
 
-- [`products`](./products.md) — owns the signal and the rule behind it
+- [`inventory`](./inventory.md#the-availability-reads) — the availability read the sweep and the refusal ask
 - [`notifications`](./notifications.md) — writes the inbox row
 - [Adding & Removing a Module](../build/module-lifecycle.md) — the deletability procedure

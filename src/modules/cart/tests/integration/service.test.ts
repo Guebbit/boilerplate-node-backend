@@ -30,7 +30,7 @@ const mailQueued = () =>
     eventually(() => settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0));
 
 import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { countersOf, createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { cartService } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
@@ -1120,9 +1120,9 @@ describe('orderConfirm', () => {
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_REQUIRED');
         // Nothing moved: no order, full shelf, full cart.
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
-        const stored = await productService.findByIdRaw(String(product._id));
-        expect(stored!.onHand).toBe(5);
-        expect(stored!.reserved).toBe(0);
+        const stored = await countersOf(product._id);
+        expect(stored.onHand).toBe(5);
+        expect(stored.reserved).toBe(0);
     });
 
     it('an omitted method leaves both shipping fields absent', async () => {

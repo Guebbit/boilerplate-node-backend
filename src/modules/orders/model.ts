@@ -43,9 +43,8 @@ import { OrderStatus, PaymentMethodId, RateType } from '@types';
 import type { Order } from '@types';
 
 /**
- * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as
- * `ProductSnapshot` itself omitting `onHand`/`reserved`: an order line freezes the RESOLVED rate,
- * never the class it came from, so the class must not even be reachable to store here.
+ * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate`: an order line freezes the
+ * RESOLVED rate, never the class it came from, so the class must not even be reachable to store here.
  *
  * `rateType` is NOT omitted — unlike `taxClass`, it has no resolved numeric form to stand in for
  * it, so it stays on `ProductSnapshot` and rides across untouched, the same as `sku`/`weight`.
@@ -265,10 +264,10 @@ const orderBillingAddressSchema = new Schema(
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
  * `OrderLineProduct`, not `Product`.
  *
- * No counters: no `onHand`, no `reserved`, and therefore nothing for a response to derive
- *              `available` FROM. Deliberately its own schema rather than `productSchema` reused:
- *              the two counters describe the warehouse right now, and an order line must not be
- *              ABLE to store them, not merely choose not to.
+ * No shelf state: no `active`, `purchasable`, `allowBackorder` or `restockDate`. Deliberately its
+ *              own schema rather than `productSchema` reused: they describe the product on the
+ *              shelf right now, and an order line must not be ABLE to store them, not merely
+ *              choose not to.
  * No picture:  no `imageUrl`/`thumbnailUrl` either — the picture is not a term of the sale, and
  *              freezing a url rather than the bytes never made it durable: the file it names can
  *              be replaced or unlinked at any time. `./current` resolves it LIVE instead, from
@@ -319,8 +318,7 @@ const orderLineProductSchema = new Schema(
 
 /**
  * The embedded snapshot's own wire-shape transform — `_id` → `id`, `__v` dropped, nothing derived:
- * unlike `applyProductTransform`, there is no `available` to compute, because there is no
- * `onHand`/`reserved` on this schema to compute it FROM.
+ * unlike `applyProductTransform`, there is no live currency or `actions` to stamp on a frozen line.
  */
 const applyOrderLineProductTransform = applySerialization(orderLineProductSchema, {
     after: (serialized) => {

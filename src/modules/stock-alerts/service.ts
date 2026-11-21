@@ -1,8 +1,9 @@
 /**
  * @module
- * Back-in-stock requests: ask, cancel, list your own, and answer the "buyable again" signal with
- * one mail and one inbox row per waiting request, then delete the request. The click on "Notify
- * me" is the buyer's consent for that single mail, so nothing else is ever sent on it.
+ * Back-in-stock requests: ask, cancel, list your own, and answer a product that is no longer
+ * `out_of_stock` with one mail and one inbox row per waiting request, then delete the request.
+ * The click on "Notify me" is the buyer's consent for that single mail, so nothing else is ever
+ * sent on it.
  *
  * @see docs/modules/stock-alerts.md#the-story
  */
@@ -20,7 +21,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { announceInTransaction } from '@kernel/outbox';
-import { isBuyable, productPagePath, productService } from '@modules/products';
+import { inventoryService } from '@modules/inventory';
+import { productPagePath, productService } from '@modules/products';
 import { userService, isAuthenticatable } from '@modules/users';
 import { ERROR_CODES } from '@api/error-codes';
 import type { StockAlertsResponse } from '@types';
@@ -36,9 +38,10 @@ const list = (userId: string): Promise<StockAlertsResponse> =>
 /**
  * Ask to be told when a product can be ordered again.
  *
- * Refused while the product can be ordered now: the button is only offered when it cannot, and a
- * mail for something already on sale would be noise. Asking twice is the same request. Refused with
- * 409 `STOCK_ALERT_LIMIT_REACHED` for a NEW product once the account holds `NODE_STOCK_ALERTS_MAX`.
+ * Refused unless the product is `out_of_stock` (inventory's own read): the button is only offered
+ * then, and a mail for something already on sale would be noise. Asking twice is the same
+ * request. Refused with 409 `STOCK_ALERT_LIMIT_REACHED` for a NEW product once the account holds
+ * `NODE_STOCK_ALERTS_MAX`.
  *
  * @see docs/modules/stock-alerts.md#the-cap
  * @param userId - the signed-in buyer
@@ -50,24 +53,27 @@ const ask = (
 ): Promise<ResponseSuccess<StockAlertsResponse> | ResponseReject> =>
     productService.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('stock-alerts.product-not-found')]);
-        if (isBuyable(product, new Date()))
-            return generateReject(409, [
-                {
-                    code: ERROR_CODES.STOCK_ALERT_PRODUCT_BUYABLE,
-                    message: t('stock-alerts.already-buyable')
-                }
-            ]);
 
-        return stockAlertRepository.ask(userId, productId).then((asked) =>
-            asked === STOCK_ALERT_LIMIT_REACHED
-                ? generateReject(409, [
-                      {
-                          code: ERROR_CODES.STOCK_ALERT_LIMIT_REACHED,
-                          message: t('stock-alerts.full')
-                      }
-                  ])
-                : list(userId).then((view) => generateSuccess(view, 200))
-        );
+        return inventoryService.availabilityOfProducts([productId]).then((states) => {
+            if (states.get(productId) !== 'out_of_stock')
+                return generateReject(409, [
+                    {
+                        code: ERROR_CODES.STOCK_ALERT_PRODUCT_BUYABLE,
+                        message: t('stock-alerts.already-buyable')
+                    }
+                ]);
+
+            return stockAlertRepository.ask(userId, productId).then((asked) =>
+                asked === STOCK_ALERT_LIMIT_REACHED
+                    ? generateReject(409, [
+                          {
+                              code: ERROR_CODES.STOCK_ALERT_LIMIT_REACHED,
+                              message: t('stock-alerts.full')
+                          }
+                      ])
+                    : list(userId).then((view) => generateSuccess(view, 200))
+            );
+        });
     });
 
 /**
@@ -187,12 +193,12 @@ const mailBuyer = (
         });
 
 /**
- * React to "buyable again": one mail and one inbox row per waiting request, then the request is
- * gone. One after another: each is its own transaction over its own row.
+ * One mail and one inbox row per request waiting for a product that is no longer `out_of_stock`,
+ * then the request is gone. One after another: each is its own transaction over its own row.
  *
  * @param productId - the product that can be ordered again
  */
-const onBuyableAgain = async (productId: string): Promise<void> => {
+const answerWaiting = async (productId: string): Promise<void> => {
     const waiting = await stockAlertRepository.findByProductId(productId);
     if (waiting.length === 0) return;
 
@@ -201,23 +207,31 @@ const onBuyableAgain = async (productId: string): Promise<void> => {
         await answerOne({ id: String(alert._id), userId: String(alert.userId), productId }, titles);
 };
 
+/** How many products one availability read answers: the contract's bound on `GET /products/availability`. */
+const SWEEP_BATCH = 100;
+
 /**
- * Answer every waiting request whose product can be ordered now. The "buyable again" signal fires
- * only on a write, and a preorder whose release date passes is never written to, so this pass is
- * what answers it. A run that finds nothing to answer is harmless, and a request answered here is
- * gone, so a second run sends nothing.
+ * Answer every waiting request whose product is no longer `out_of_stock`. Nothing announces a
+ * restock to this module, so this pass, run every five minutes, is what notices one. It asks
+ * inventory directly, `SWEEP_BATCH` products at a time, with no caller: a sweep has no permissions
+ * to judge, and a hidden or removed product reads `out_of_stock`. A run that finds nothing to
+ * answer is harmless, and a request answered here is gone, so a second run sends nothing.
  *
- * @see docs/modules/stock-alerts.md#the-signal
- * @param now - the instant of the sweep
+ * @see docs/modules/stock-alerts.md#the-sweep
  * @returns how many products had their waiting requests answered
  */
-const sweepBuyable = async (now: Date): Promise<number> => {
+const sweepBuyable = async (): Promise<number> => {
+    const waitingProductIds = await stockAlertRepository.distinctProductIds();
     let answered = 0;
-    for (const productId of await stockAlertRepository.distinctProductIds()) {
-        const product = await productService.findPublicById(productId);
-        if (!product || !isBuyable(product, now)) continue;
-        await onBuyableAgain(productId);
-        answered += 1;
+    for (let start = 0; start < waitingProductIds.length; start += SWEEP_BATCH) {
+        const states = await inventoryService.availabilityOfProducts(
+            waitingProductIds.slice(start, start + SWEEP_BATCH)
+        );
+        for (const [productId, availability] of states) {
+            if (availability === 'out_of_stock') continue;
+            await answerWaiting(productId);
+            answered += 1;
+        }
     }
     return answered;
 };
@@ -230,6 +244,6 @@ export const stockAlertService = {
     exportRows,
     removeByUserId,
     removeByProductId,
-    onBuyableAgain,
+    answerWaiting,
     sweepBuyable
 };

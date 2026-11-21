@@ -2,12 +2,9 @@
  * @module
  * The three collections this module owns: the stock level, the ledger, and the hold.
  *
- * The stock level is the source of truth for `onHand`/`reserved` — `products` keeps a synced copy
- * on its own document purely so a catalogue read needs no join, but never writes it and this
- * module never reads that copy back.
+ * The stock level is the only place `onHand`/`reserved` live: the product record holds no stock.
  *
  * @see docs/modules/inventory.md#the-pipeline
- * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -139,8 +136,7 @@ export interface StockLevelDocument extends Document {
      */
     backordered: number;
     /**
-     * Counts every write to this row. The catalogue's copy carries the version it was taken at,
-     * so a slower, older snapshot can never overwrite a newer one.
+     * Counts every write to this row.
      */
     version: number;
     createdAt?: Date;

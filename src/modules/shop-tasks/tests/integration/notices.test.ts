@@ -242,15 +242,14 @@ describe('the module subscriptions', () => {
     });
 
     describe('a back-in-stock request', () => {
-        it('tells the asker once, naming the product, when it can be ordered again', async () => {
+        it('tells the asker once, naming the product, when the sweep finds it can be ordered again', async () => {
             const { user: asker, bearer } = await authenticateAs();
             const product = await createProduct({ title: 'Red lamp', onHand: 0 });
             const productId = String(product._id);
             await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
             await inventoryService.receive(productId, 2, undefined, testCallerContext);
-            await settleOutboxNudges();
-            await stockAlertService.onBuyableAgain(productId);
+            await stockAlertService.sweepBuyable();
             await settleOutboxNudges();
 
             const [message, ...rest] = await inboxOf(asker.id);

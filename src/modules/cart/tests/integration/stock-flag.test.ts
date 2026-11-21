@@ -59,20 +59,6 @@ describe('GET /cart’s line availability', () => {
         await expect(flagOf(user.id)).resolves.toBe('insufficient_stock');
     });
 
-    it('reads the ledger, not the catalogue cache that sits low', async () => {
-        const user = await createUser();
-        const product = await createProduct({ onHand: 5 });
-        await cartService.addItemById(user.id, String(product._id), 4);
-
-        await productService.syncStockCache(String(product._id), {
-            onHand: 0,
-            reserved: 0,
-            version: 0
-        });
-
-        await expect(flagOf(user.id)).resolves.toBe('in_stock');
-    });
-
     it('treats a line equal to what is for sale as fitting', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 4 });

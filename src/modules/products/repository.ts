@@ -1,9 +1,8 @@
 /**
  * @module
  * Product repository: standard CRUD via the repository factory, plus the catalogue's own query
- * rules and the stock-cache mirror `@modules/inventory` writes through. The exported type is
- * written out because Mongoose's generics are too large for TypeScript to serialize an inferred
- * one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * rules. The exported type is written out because Mongoose's generics are too large for TypeScript
+ * to serialize an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
 import type { FacetCount, Product } from '@types';
@@ -15,7 +14,6 @@ import {
     type Lean,
     type Repository
 } from '@infrastructure/persistence/create-repository';
-import type { ClientSession } from 'mongoose';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
 import {
@@ -44,24 +42,7 @@ export interface ListedProduct {
     updatedAt?: Date;
 }
 
-/**
- * The stock numbers `inventory` copies onto a product, so a catalogue read needs no join: what is
- * on the shelf and claimed, and the preorder allowance and what is claimed against it.
- */
-export interface StockCounters {
-    /** Units that exist. */
-    onHand: number;
-    /** Units an open order has claimed. */
-    reserved: number;
-    /** How many units may be backordered at once; `null` is no cap; absent leaves the copy alone. */
-    backorderLimit?: number | null;
-    /** Units already claimed against that allowance. */
-    backordered?: number;
-    /** The stock level's `version` this snapshot was read at; the copy is written only if newer. */
-    version: number;
-}
-
-/** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the stock-cache mirror. */
+/** The catalogue's repository: base CRUD from the factory, extended with scoping and facets. */
 export const productRepository: Repository<ProductDocument, Product> & {
     publicScope: () => Record<string, unknown>;
     findByIdScoped: (
@@ -75,11 +56,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
     ) => Promise<Lean<ProductDocument> | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
     listedPage: (skip: number, limit: number) => Promise<ListedProduct[]>;
-    syncStockCache: (
-        productId: string,
-        counters: StockCounters,
-        session?: ClientSession
-    ) => Promise<Lean<ProductDocument> | null>;
     translatable: TranslatableColumns;
     writebackImage: ImageWriteback;
 } = {
@@ -199,28 +175,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
                 })),
                 tags: (results.at(0)?.tags ?? []).map(({ _id, count }) => ({ name: _id, count }))
             })),
-
-    /**
-     * Mirror `@modules/inventory`'s stock level onto this document. It decides nothing:
-     * `@modules/inventory` already decided, this only copies the answer. The one guard is
-     * ordering: the copy is written only if `counters.version` is newer than `stockVersion`, so a
-     * slow older snapshot cannot overwrite a newer one (lost update). `timestamps: false` — a
-     * stock change isn't an edit an admin made.
-     *
-     * @param counters - the values to write, verbatim
-     * @param session - the transaction the write joins, when the caller announces in it
-     * @returns the product as it stood BEFORE the write, `null` when there is none or the
-     *   snapshot was stale and nothing was written
-     */
-    syncStockCache: (productId, counters, session) =>
-        productModel
-            .findOneAndUpdate(
-                { _id: toObjectId(productId), stockVersion: { $not: { $gte: counters.version } } },
-                { $set: { ...counters, stockVersion: counters.version } },
-                { timestamps: false, returnDocument: 'before', session }
-            )
-            .lean<Lean<ProductDocument> | null>()
-            .exec(),
 
     translatable: translatableColumnsOf(productModel),
 

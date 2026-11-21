@@ -57,8 +57,8 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
 
 /**
  * The cancel's one atomic step: the conditional status move, and — only if it landed — the stock
- * coming back and the `order.canceled` outbox row. The catalogue's stock cache is refreshed after
- * the commit, since that write cannot roll back.
+ * coming back and the `order.canceled` outbox row. The availability entry is deleted after
+ * the commit, since that delete cannot roll back.
  * @param id - the order to cancel
  * @param from - the statuses the caller may cancel from
  * @param scope - the caller's ownership scope, riding in the same filter as the write
@@ -68,7 +68,7 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param informedAt - when the shop was told, for a cancel that is the buyer's own act; carried on
  *   the announcement as the start of the refund deadline
  * @param within - a transaction the caller already owns: the cancel joins it, and the caller
- *   commits, nudges the relay and refreshes the stock cache (see {@link withdrawWithin})
+ *   commits, nudges the relay and clears the availability entries (see {@link withdrawWithin})
  * @returns the canceled order, or `null` when the conditional move matched nothing
  */
 const moveToCanceled = (
@@ -111,7 +111,7 @@ const moveToCanceled = (
     });
     if (within) return announceWithin(within, write, announce);
     return announceInTransaction(write, announce).then((order) =>
-        order ? inventoryService.refreshStockCacheForOrder(id).then(() => order) : order
+        order ? inventoryService.forgetAvailabilityForOrder(id).then(() => order) : order
     );
 };
 
@@ -401,7 +401,7 @@ export const withdrawById = (
 
 /**
  * What {@link withdrawWithin} hands back: the cancel's refusal, or `settle` — the steps that
- * follow the owner's commit (stock cache, audit row, analytics event).
+ * follow the owner's commit (availability entries, audit row, analytics event).
  */
 export type WithinWithdrawal =
     ResponseReject | { success: true; settle: () => Promise<ResponseSuccess<OrderDocument>> };
@@ -414,7 +414,7 @@ export type WithinWithdrawal =
  * has checked the keys.
  *
  * Opens no transaction and reports nothing: the owner commits, nudges the outbox, then calls
- * `settle` for the stock cache, the audit row and the analytics event.
+ * `settle` for the availability entries, the audit row and the analytics event.
  *
  * @param session - the caller's open transaction
  * @param id - the order being withdrawn from
@@ -446,7 +446,7 @@ export const withdrawWithin = (
                   success: true as const,
                   settle: () =>
                       inventoryService
-                          .refreshStockCacheForOrder(id)
+                          .forgetAvailabilityForOrder(id)
                           .then(() => afterCancel(order, 'withdrawal', refund, context))
               }
             : refusalOf(id, scope)

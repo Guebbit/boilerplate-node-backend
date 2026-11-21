@@ -1,9 +1,9 @@
 /**
  * @module
- * `availableStock` and `stockFlags` — `src/modules/products/domain/stock.ts`. Pure, no database: every case a
+ * `availableStock` and `preorderAllowanceLeft` — `src/modules/products/domain/stock.ts`. Pure, no database: every case a
  * caller (`@modules/inventory`, `@modules/cart`) can hand it.
  */
-import { availableStock, preorderAllowanceLeft, stockFlags } from '../../domain/stock';
+import { availableStock, preorderAllowanceLeft } from '../../domain/stock';
 
 describe('availableStock', () => {
     it.each([
@@ -28,25 +28,6 @@ describe('availableStock', () => {
          */
         expect(availableStock(3, 8)).toBe(0);
     });
-});
-
-describe('stockFlags', () => {
-    it.each([
-        // [available, threshold, inStock, lowStock]
-        [0, 5, false, false],
-        [1, 5, true, true],
-        [5, 5, true, true],
-        [6, 5, true, false],
-        [100, 5, true, false],
-        // A threshold of zero: nothing is ever "low", only gone.
-        [1, 0, true, false],
-        [0, 0, false, false]
-    ])(
-        'reads %i available at threshold %i as inStock %j, lowStock %j',
-        (available, threshold, inStock, lowStock) => {
-            expect(stockFlags(available, threshold)).toEqual({ inStock, lowStock });
-        }
-    );
 });
 
 describe('preorderAllowanceLeft', () => {

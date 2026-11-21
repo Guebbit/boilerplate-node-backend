@@ -279,8 +279,8 @@ one caller runs the sequence**; a double-click and the reservation sweep cannot 
 
 The status move, the stock coming back and the `order.canceled` outbox row are one transaction
 (`moveToCanceled`), so a crash cannot leave a cancelled order holding stock or a cancel nobody
-heard of. What runs after the commit is the catalogue's stock cache, which is a mirror and cannot
-roll back; the next stock write refreshes it.
+heard of. What runs after the commit is the deletion of the availability entries, which cannot
+roll back; an entry that survives lives at most 60 seconds.
 
 ---
 

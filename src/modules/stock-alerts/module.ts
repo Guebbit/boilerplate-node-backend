@@ -2,9 +2,8 @@
  * @module
  * Stock alerts: a signed-in buyer asks to be told once when a product they cannot order can be
  * again. Owns the requests and the one mail; `notifications` writes the inbox row from this
- * module's event, and `products` announces when a product is orderable again (an event, so this
- * module reaches `products` and not the other way round). Account erase covers the rows through
- * `personalData` below.
+ * module's event. Nothing announces a restock: a five-minute sweep asks `inventory` which waiting
+ * products are no longer `out_of_stock`. Account erase covers the rows through `personalData` below.
  *
  * @see docs/modules/stock-alerts.md#its-neighbourhood
  */
@@ -12,7 +11,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { PRODUCT_BUYABLE_AGAIN, PRODUCT_DELETED, productService } from '@modules/products';
+import { PRODUCT_DELETED, productService } from '@modules/products';
 import { stockAlertsJobs } from './jobs';
 import { router } from './routes';
 import { stockAlertService } from './service';
@@ -33,9 +32,6 @@ export default {
         }
     ],
     subscribe: () => {
-        onDomainEvent(PRODUCT_BUYABLE_AGAIN, ({ productId }) =>
-            stockAlertService.onBuyableAgain(productId)
-        );
         /**
          * Skipped for a product that is live again: a retried delivery can arrive after a
          * restore, and the buyer's request still stands for a product on sale.

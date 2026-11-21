@@ -84,9 +84,9 @@ a shipped hold and stays silent. Goods a customer sends back are a separate door
 rows and claims nothing, because the hold is `shipped` for good.
 
 Both take an optional Mongo `session`. `orders`' cancel passes one so the status move, the release
-commits together or not at all; given a session, the catalogue's stock cache is
-not synced inside the transaction (that write cannot roll back), and the caller runs
-`refreshStockCacheForOrder` after the commit (which never rejects: a failed read there only leaves the catalogue copy stale until the next stock change).
+commits together or not at all; given a session, the availability entries are
+not deleted inside the transaction (that delete cannot roll back), and the caller runs
+`forgetAvailabilityForOrder` after the commit (which never rejects: a failed read there only leaves an entry for its own 60 seconds).
 
 Two more `reason` values exist and belong to no reservation at all: `receive`
 (`POST /inventory/levels/{productId}/receive`) and `adjust` (`POST /inventory/levels/{productId}/adjust`), which move `onHand`

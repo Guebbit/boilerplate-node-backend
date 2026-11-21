@@ -72,7 +72,7 @@ const writeDuringJoin = (write: () => Promise<unknown>): void => {
     );
 };
 
-/** The level row's counters, read from `stocklevels` itself, not the catalogue's cache of them. */
+/** The level row's counters, read from `stocklevels` itself. */
 const levelOf = (productId: unknown) =>
     stockLevelRepository
         .findByProductId(String(productId))

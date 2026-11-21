@@ -207,7 +207,7 @@ const refund = (order: OrderDocument, done: Canceled, context: CallerContext): P
         : Promise.resolve();
 
 /**
- * Everything a committed cancellation unlocks: the stock cache, the refund, the audit row, the
+ * Everything a committed cancellation unlocks: the availability entries, the refund, the audit row, the
  * order's return status. The buyer's acknowledgement mail rides `return.requested`.
  *
  * @param done - the cancellation just committed
@@ -223,7 +223,7 @@ const announceCanceled = (
     done.reportCanceled?.();
 
     return inventoryService
-        .refreshStockCacheForProducts(done.lines.map(({ productId }) => productId))
+        .forgetAvailability(done.lines.map(({ productId }) => productId))
         .then(() => syncReturnStatus(String(order._id)))
         .then(() => refund(order, done, context))
         .then((): CreateReturnOutcome => opened(done.created));

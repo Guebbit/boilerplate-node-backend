@@ -108,9 +108,9 @@ this one.
 own `orderLineProductSchema` — the OpenAPI `OrderLineProduct` shape, not `Product` — populated at
 purchase time from [`products`](./products.md)'s live row, so a later edit cannot rewrite the
 history of an order placed last March. It is deliberately its OWN schema rather than a reuse of
-the catalogue's: `onHand` and `reserved` describe the warehouse right now, and an order line has no
-path to store either — the alternative is an invoice that quietly republishes live stock as if it
-were history.
+the catalogue's: `active`, `purchasable`, `allowBackorder` and `restockDate` describe the shelf right
+now, and an order line has no path to store any of them — the alternative is an invoice that quietly
+republishes the live shelf as if it were history.
 
 The snapshot's `title`/`description` are already RESOLVED, not the product's raw fallback-locale
 column: `items[].locale` (required on `OrderItem`) freezes which language they were resolved into at

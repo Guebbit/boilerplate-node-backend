@@ -226,8 +226,8 @@ export interface FillerProduct {
     /** Price as decimal text. */
     price: string;
     /**
-     * What the opening receipt brings in, NOT a seeded column — `./products` writes every row at
-     * `onHand: 0` and `scenarios/flows/shop-history.ts` puts this on the shelf through
+     * What the opening receipt brings in, NOT a seeded column — `./products` writes no stock and
+     * `scenarios/flows/shop-history.ts` puts this on the shelf through
      * `POST /inventory/levels/{productId}/receive`, so the shop's stock is stock the app itself received.
      */
     openingStock: number;

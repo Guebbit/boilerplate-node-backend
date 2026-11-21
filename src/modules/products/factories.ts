@@ -15,10 +15,9 @@ import type { ProductDocument, ProductRecord } from './model';
  * What a caller may pin; everything absent is left to the schema. Derived from the generated
  * `Product` rather than restated, so a contract change can't drift out of sync. `currency` is
  * accepted but ignored — it is no schema path: pin `NODE_DEFAULT_CURRENCY`
- * (`withEnvironmentOverrides` in a test). The stock copy (`onHand`, `reserved`) is stored but not
- * part of the contract, so it is added by hand.
+ * (`withEnvironmentOverrides` in a test). A product holds no stock, so there is none to pin here.
  */
-export type ProductOverrides = OverridesFor<Product> & Pick<ProductRecord, 'onHand' | 'reserved'>;
+export type ProductOverrides = OverridesFor<Product>;
 
 /**
  * A product ready for `productRepository.create`. The three factory-set fields are required, not
