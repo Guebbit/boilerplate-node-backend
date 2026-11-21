@@ -68,24 +68,61 @@ export const refundOwedOpening = (
 });
 
 /**
+ * The `payment.amount_mismatch` event's payload, restated structurally: a domain file may not
+ * import the kernel's event map, and `tasks` hands the real payload in, where the compiler checks
+ * the match.
+ */
+export interface AmountMismatchFacts {
+    /** The payment that was frozen. */
+    paymentId: string;
+    /** The order that was canceled. */
+    orderId: string;
+    /** Which of amount, currency and paymentId disagreed. */
+    fields: string[];
+    /** The figures frozen at the intent. */
+    expected: { amount: string; currency: string };
+    /** What the provider reported; a figure it left out is absent. */
+    received: { amount?: string; currency?: string; paymentId?: string };
+}
+
+/** What a figure reads as when the provider left it out. */
+const reported = (value: string | undefined): string => value ?? 'not reported';
+
+/**
  * A provider success that is not the payment frozen for the order. Told to administrators only:
  * it is a question about the books, not a refund anyone else can settle.
  *
- * @param payment - the payment and its order
+ * The order is already canceled and its refund open. The text names what disagreed and the real
+ * doors to follow it; the provider's own payment id is shown as the plain text it is.
+ *
+ * @param payment - the payment and what the provider reported against it
+ * @param payment.paymentId - the payment that was frozen
  * @param payment.orderId - the order that was canceled
+ * @param payment.fields - which of amount, currency and paymentId disagreed
+ * @param payment.expected - the figures frozen at the intent
+ * @param payment.received - what the provider reported; a figure it left out is absent
  * @param dueAt - when it is overdue
  */
-export const amountMismatchOpening = (
-    payment: { paymentId: string; orderId: string },
-    dueAt: Date
-): ShopOpening => ({
-    kind: TaskKind.amount_mismatch,
-    routeSet: 'AuditDisplay',
-    link: { type: TaskLinkType.payment, id: payment.paymentId },
-    subject: 'Payment amount mismatch',
-    message: `The provider reported a success for order ${payment.orderId} that is not payment ${payment.paymentId}. The order was canceled and the money is being returned. Find out why, then close this.`,
-    dueAt
-});
+export const amountMismatchOpening = (payment: AmountMismatchFacts, dueAt: Date): ShopOpening => {
+    const { expected, received } = payment;
+    return {
+        kind: TaskKind.amount_mismatch,
+        routeSet: 'AuditDisplay',
+        link: { type: TaskLinkType.payment, id: payment.paymentId },
+        subject: 'Payment amount mismatch',
+        message: [
+            `The provider reported a success for order ${payment.orderId} that is not payment ${payment.paymentId} (differs: ${payment.fields.join(', ')}).`,
+            `Expected: ${expected.amount} ${expected.currency}. Received: ${reported(received.amount)} ${reported(received.currency)}, on payment id ${reported(received.paymentId)}.`,
+            // No amount reported: nothing was written over the frozen figures, so the refund asks for those.
+            received.amount === undefined
+                ? `The order was canceled. The refund is attempted with the original figures (${expected.amount} ${expected.currency}) and the provider may refuse it; the refund sweep retries, and a final refusal opens a refund_refused task.`
+                : 'The order was canceled and the money is being returned by itself: the refund sweep retries, and a final refusal opens its own task.',
+            `Next: GET /payments/${payment.paymentId} shows its refunds and whether the money went back; POST /payments/${payment.paymentId}/refunds/sync re-reads the provider's refunds; /audit holds the payment.amount_mismatch row; ask the provider why the figures differ.`,
+            'Close this once you know why.'
+        ].join(' '),
+        dueAt
+    };
+};
 
 /**
  * A refund made in the provider's own dashboard that the import could not record. The money

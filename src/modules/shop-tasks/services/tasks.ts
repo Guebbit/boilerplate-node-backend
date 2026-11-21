@@ -213,7 +213,7 @@ export const shopTasks = {
         guarded('payment.amount_mismatch', () =>
             open(
                 amountMismatchOpening(payload, attentionDueAt(new Date())),
-                orderWork(payload.orderId),
+                FRONTEND_LINK_RULES.staffPages.salesPayments,
                 meta
             )
         ),
