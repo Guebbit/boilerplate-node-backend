@@ -289,7 +289,7 @@ describe.each([
         proof.mockResolvedValue(SHOPPER);
         sessions.familyActivity.mockResolvedValue({ lastActiveAt: new Date() });
 
-        await expect(jwtStrategy[method]('a-token')).resolves.toEqual({ ok: SHOPPER });
+        await expect(jwtStrategy[method]('a-token')).resolves.toMatchObject({ ok: SHOPPER });
         expect(tokens[verifier]).toHaveBeenCalledWith('a-token');
         expect(proof).toHaveBeenCalledWith(USER_ID, { authTime: 1_700_000_000, amr: ['pwd'] });
     });
@@ -378,7 +378,7 @@ describe('watchCookie, the recheck of an open stream', () => {
 
         const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
 
-        await expect(recheck?.()).resolves.toEqual({ ok: SHOPPER });
+        await expect(recheck?.()).resolves.toMatchObject({ ok: SHOPPER });
         expect(sessions.familyActivity).toHaveBeenCalledWith(
             USER_ID,
             FAMILY_ID,

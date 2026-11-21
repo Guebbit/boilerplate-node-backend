@@ -1805,6 +1805,19 @@ components:
                     description: >-
                         How long the session may then sit unused before it ends. Absent when no idle
                         timeout applies to this account (a shopper, or the timeout is switched off).
+                idleRemainingSeconds:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        How many seconds of idle time are left, counted by the server from the stamp it
+                        judges the session by (OAuth's `expires_in` idea), so a client with a wrong clock
+                        still warns on time. Absent whenever `idleTimeoutSeconds` is.
+                lifetimeRemainingSeconds:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        How many seconds are left before the staff lifetime cap ends the session, which
+                        activity cannot extend. Absent for a shopper, and when the cap is switched off.
 
         Operator:
             type: object

@@ -88,6 +88,27 @@ export interface AuthContext {
      * for it. Carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate.
      */
     analyticsConsent?: boolean;
+    /**
+     * The session stamps this request was judged by; absent when no session carries it (a sign-in
+     * answer, an api key). The idle and lifetime countdowns a session answer reports read this, so
+     * the client's clock and the server's never disagree.
+     */
+    sessionClock?: SessionClock;
+}
+
+/**
+ * The two stamps a session's countdowns run from, as the request that read them saw them.
+ *
+ * @see docs/understand/sessions.md#the-staff-idle-timeout
+ */
+export interface SessionClock {
+    /**
+     * When the session last counted as active: now when this request writes the stamp, else the
+     * saved one (which lags real activity by up to one stamp interval).
+     */
+    lastActiveAt: Date;
+    /** When the session family signed in; a refresh keeps it. The staff lifetime cap runs from here. */
+    startedAt: Date;
 }
 
 /**

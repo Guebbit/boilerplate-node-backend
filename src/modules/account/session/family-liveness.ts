@@ -52,17 +52,26 @@ export const resolveInLiveFamily = (
                 return sessionRepository
                     .removeFamily(userId, familyId)
                     .then((): Resolution<AuthContext | undefined> => ({ miss: 'expired' }));
-            if (
-                ok &&
-                !options.passive &&
-                (!activity.stampedAt ||
-                    now.getTime() - activity.stampedAt.getTime() >= ACTIVITY_STAMP_INTERVAL_MS)
-            )
+            const stampDue =
+                !activity.stampedAt ||
+                now.getTime() - activity.stampedAt.getTime() >= ACTIVITY_STAMP_INTERVAL_MS;
+            const writesStamp = !options.passive && stampDue;
+            if (ok && writesStamp)
                 // Off the request's path: a lost stamp costs a stale reading only.
                 void sessionRepository
                     .touchFamily(userId, familyId, now, ACTIVITY_STAMP_INTERVAL_MS)
                     .catch(() => false);
-            return { ok };
+            return {
+                ok: ok && {
+                    ...ok,
+                    // The stamp this request was judged by: now only when it writes one, so the
+                    // countdown never promises more time than the server will grant.
+                    sessionClock: {
+                        lastActiveAt: writesStamp ? now : activity.lastActiveAt,
+                        startedAt: activity.startedAt
+                    }
+                }
+            };
         }
     );
 };

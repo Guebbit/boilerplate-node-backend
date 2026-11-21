@@ -186,7 +186,8 @@ const applySession = (
         twoFactorArmed: user.twoFactorArmed,
         authenticatorArmed: user.authenticatorArmed,
         verified: user.verified,
-        analyticsConsent: user.analyticsConsent
+        analyticsConsent: user.analyticsConsent,
+        sessionClock: user.sessionClock
     };
     request.sessionVia = via;
     // Resolved once, here, so nothing below turns two role names into keys again.

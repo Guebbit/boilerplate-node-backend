@@ -215,7 +215,7 @@ describe.each([
         sessions.findByHash.mockResolvedValue(liveRow({ amr: ['pwd', 'otp'] }));
         proof.mockResolvedValue(context);
 
-        await expect(resolve(SOME_ID)).resolves.toEqual({ ok: context });
+        await expect(resolve(SOME_ID)).resolves.toMatchObject({ ok: context });
         expect(proof).toHaveBeenCalledWith(USER_ID, {
             authTime: 1_700_000_000,
             amr: ['pwd', 'otp']
@@ -258,12 +258,35 @@ describe.each([
         expect(sessions.touch).toHaveBeenCalledTimes(1);
     });
 
+    it('hands the caller the clock it was judged by: now when it writes the stamp, else the saved one', async () => {
+        proof.mockResolvedValue(SHOPPER);
+        const saved = new Date(Date.now() - 20_000);
+        const startedAt = new Date(Date.now() - 500_000);
+        const clockOf = (resolved: Awaited<ReturnType<typeof resolve>>) =>
+            'ok' in resolved ? resolved.ok?.sessionClock : undefined;
+
+        sessions.findByHash.mockResolvedValue(liveRow({ lastUsedAt: saved, startedAt }));
+        expect(clockOf(await resolve(SOME_ID))).toEqual({ lastActiveAt: saved, startedAt });
+
+        // A passive request is judged but never stamps, so it keeps the saved stamp however old.
+        const stale = new Date(Date.now() - 120_000);
+        sessions.findByHash.mockResolvedValue(liveRow({ lastUsedAt: stale, startedAt }));
+        expect(clockOf(await resolve(SOME_ID, { passive: true }))).toEqual({
+            lastActiveAt: stale,
+            startedAt
+        });
+
+        // Stamp due: the request counts as activity now.
+        const due = clockOf(await resolve(SOME_ID));
+        expect(Date.now() - due!.lastActiveAt.getTime()).toBeLessThan(1000);
+    });
+
     it('still answers when the use stamp fails', async () => {
         sessions.findByHash.mockResolvedValue(liveRow());
         proof.mockResolvedValue(SHOPPER);
         sessions.touch.mockRejectedValue(new Error('store down'));
 
-        await expect(resolve(SOME_ID)).resolves.toEqual({ ok: SHOPPER });
+        await expect(resolve(SOME_ID)).resolves.toMatchObject({ ok: SHOPPER });
     });
 });
 
@@ -590,7 +613,7 @@ describe('watchCookie, the recheck of an open stream', () => {
         sessions.findByHash.mockResolvedValue(undefined);
         const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
 
-        await expect(recheck?.()).resolves.toEqual({ ok: SHOPPER });
+        await expect(recheck?.()).resolves.toMatchObject({ ok: SHOPPER });
         expect(sessions.familyActivity).toHaveBeenCalledWith(
             USER_ID,
             String(row.familyId),

@@ -58,6 +58,10 @@ beforeEach(() => {
     store.removeFamily.mockResolvedValue(1);
 });
 
+/** The clock of the caller a resolve answered. */
+const clockOf = (resolved: Awaited<ReturnType<typeof resolve>>) =>
+    'ok' in resolved ? resolved.ok?.sessionClock : undefined;
+
 describe('resolveInLiveFamily', () => {
     it('is revoked when the family has no live row', async () => {
         store.familyActivity.mockResolvedValue(undefined);
@@ -84,14 +88,14 @@ describe('resolveInLiveFamily', () => {
 
     it('lets a busy staff family inside the cap, and any family once the cap is off', async () => {
         store.familyActivity.mockResolvedValue({ startedAt: ago(86_000), lastActiveAt: ago(5) });
-        await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });
+        await expect(resolve(STAFF)).resolves.toMatchObject({ ok: STAFF });
 
         setEnvironment({ NODE_SESSION_LIFETIME_STAFF: '0' });
         store.familyActivity.mockResolvedValue({
             startedAt: ago(10_000_000),
             lastActiveAt: ago(5)
         });
-        await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });
+        await expect(resolve(STAFF)).resolves.toMatchObject({ ok: STAFF });
     });
 
     it('never ends a shopper’s family for age, however old', async () => {
@@ -100,14 +104,14 @@ describe('resolveInLiveFamily', () => {
             lastActiveAt: ago(5)
         });
 
-        await expect(resolve(SHOPPER)).resolves.toEqual({ ok: SHOPPER });
+        await expect(resolve(SHOPPER)).resolves.toMatchObject({ ok: SHOPPER });
         expect(store.removeFamily).not.toHaveBeenCalled();
     });
 
     it('never ends a shopper’s family, however idle', async () => {
         store.familyActivity.mockResolvedValue({ startedAt: ago(100), lastActiveAt: ago(100_000) });
 
-        await expect(resolve(SHOPPER)).resolves.toEqual({ ok: SHOPPER });
+        await expect(resolve(SHOPPER)).resolves.toMatchObject({ ok: SHOPPER });
         expect(store.removeFamily).not.toHaveBeenCalled();
     });
 
@@ -143,7 +147,7 @@ describe('resolveInLiveFamily', () => {
             stampedAt: ago(120)
         });
 
-        await expect(resolve(STAFF, true)).resolves.toEqual({ ok: STAFF });
+        await expect(resolve(STAFF, true)).resolves.toMatchObject({ ok: STAFF });
         expect(store.touchFamily).not.toHaveBeenCalled();
     });
 
@@ -155,6 +159,44 @@ describe('resolveInLiveFamily', () => {
         });
         store.touchFamily.mockRejectedValue(new Error('store down'));
 
-        await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });
+        await expect(resolve(STAFF)).resolves.toMatchObject({ ok: STAFF });
+    });
+
+    describe('the session clock it hands the caller', () => {
+        it('says "now" when this request writes the stamp, and keeps the family start', async () => {
+            const startedAt = ago(100);
+            store.familyActivity.mockResolvedValue({
+                startedAt,
+                lastActiveAt: ago(90),
+                stampedAt: ago(90)
+            });
+
+            const clock = clockOf(await resolve(STAFF));
+
+            expect(Date.now() - clock!.lastActiveAt.getTime()).toBeLessThan(1000);
+            expect(clock!.startedAt).toBe(startedAt);
+        });
+
+        it('keeps the SAVED stamp when it is still fresh, so the countdown never overstates', async () => {
+            const lastActiveAt = ago(40);
+            store.familyActivity.mockResolvedValue({
+                startedAt: ago(100),
+                lastActiveAt,
+                stampedAt: lastActiveAt
+            });
+
+            expect(clockOf(await resolve(STAFF))!.lastActiveAt).toBe(lastActiveAt);
+        });
+
+        it('keeps the saved stamp for a passive request, even a stale one', async () => {
+            const lastActiveAt = ago(120);
+            store.familyActivity.mockResolvedValue({
+                startedAt: ago(200),
+                lastActiveAt,
+                stampedAt: lastActiveAt
+            });
+
+            expect(clockOf(await resolve(STAFF, true))!.lastActiveAt).toBe(lastActiveAt);
+        });
     });
 });

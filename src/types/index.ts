@@ -23,6 +23,7 @@ export type {
     Resolution,
     ResolveMissReason,
     ResolveOptions,
+    SessionClock,
     PlatformCaller,
     TenantCaller,
     TenantCallerContext

@@ -30,6 +30,32 @@ describe('a password sign-in', () => {
         expect(typeof login.body.account.activity.lastActiveAt).toBe('string');
     });
 
+    it('answers a staff sign-in with the whole idle timeout and the whole lifetime cap left', async () => {
+        const user = await createUser(
+            { email: 'staff-clock@example.com', verifiedAt: new Date() },
+            'editor'
+        );
+
+        const login = await signIn(user.email);
+        const { activity } = login.body.account;
+
+        // No session has judged a brand-new sign-in yet, so nothing has been used up.
+        expect(activity.idleTimeoutSeconds).toBe(1800);
+        expect(activity.idleRemainingSeconds).toBe(1800);
+        // The config default (`NODE_SESSION_LIFETIME_STAFF`), whole because the session is new.
+        expect(activity.lifetimeRemainingSeconds).toBe(86_400);
+    });
+
+    it('leaves a shopper’s countdowns out of the sign-in answer', async () => {
+        const user = await createUser({ email: 'shopper-clock@example.com' });
+
+        const login = await signIn(user.email);
+        const { activity } = login.body.account;
+
+        expect(activity).not.toHaveProperty('idleRemainingSeconds');
+        expect(activity).not.toHaveProperty('lifetimeRemainingSeconds');
+    });
+
     it('carries the very abilities GET /account answers next', async () => {
         const user = await createUser({ email: 'same@example.com' });
 
