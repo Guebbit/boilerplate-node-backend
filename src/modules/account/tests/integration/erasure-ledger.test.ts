@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { testCallerContext } from '@tests/callers';
 import { observePort } from '@tests/ports';
-import { resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
 import { accountUserService } from '@modules/users/friends/account';
 import { userService } from '@modules/users';
@@ -22,6 +22,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import { erasureLedgerModel } from '../../model';
 import { accountAuditActions } from '../../audit';
 import { plantToken, tokenRowsOf } from '../factories';
+import { holdJob, jobModel } from '@infrastructure/persistence/job-store';
 
 jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
@@ -496,5 +497,78 @@ describe('restore doors take only the system caller', () => {
 
         const actions = auditSpy.mock.calls.map(([event]) => (event as { action: string }).action);
         expect(actions.filter((a) => a === 'system.user.deletion_lock_restored')).toHaveLength(1);
+    });
+});
+
+/** A held mail job addressed to `to`. */
+const mailTo = (to: string) => holdJob('worker.email.send', { request: { to }, templateName: 'x' });
+
+describe('the final pass over held jobs', () => {
+    it('removes a job that step 4 itself let into the queue, and logs its id, never the address', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'late@example.com' });
+        await eraseAsScheduled(user);
+        await restoreFromSnapshot(user.id, 'late@example.com');
+        // A restored pending outbox row is re-sent by step 4; its handler holds a mail for the address.
+        markDomainEventsWired();
+        onDomainEvent('user.erased', () => mailTo('late@example.com'));
+        auditSpy.mockClear();
+
+        const report = await reapplyErasures({ since: new Date(Date.now() - DAY) });
+
+        expect(await jobModel.countDocuments().exec()).toBe(0);
+        expect(report.heldJobsRemoved).toHaveLength(1);
+        const logged = JSON.stringify(
+            auditSpy.mock.calls
+                .map(([event]) => event)
+                .find(({ action }) => action === accountAuditActions.AUTH_ERASURES_REAPPLIED)
+        );
+        expect(logged).toContain(report.heldJobsRemoved[0]);
+        expect(logged).not.toContain('late@example.com');
+    });
+
+    it('leaves another person’s job alone', async () => {
+        const user = await createUser({ email: 'late@example.com' });
+        await eraseAsScheduled(user);
+        await restoreFromSnapshot(user.id, 'late@example.com');
+        markDomainEventsWired();
+        onDomainEvent('user.erased', () => mailTo('late@example.com'));
+        await mailTo('bystander@example.com');
+
+        await reapplyErasures({ since: new Date(Date.now() - DAY) });
+
+        expect(await jobModel.find().lean().exec()).toMatchObject([
+            { payload: { request: { to: 'bystander@example.com' } } }
+        ]);
+    });
+
+    it('still writes the restoration-log row, as a failure, when a sweep throws', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'sweep-fails@example.com' });
+        await eraseAsScheduled(user);
+        await restoreFromSnapshot(user.id, 'sweep-fails@example.com');
+        jest.spyOn(accountUserService, 'purgeHeldJobsOf').mockRejectedValueOnce(
+            new Error('simulated')
+        );
+        auditSpy.mockClear();
+
+        const report = await reapplyErasures({ since: new Date(Date.now() - DAY) });
+
+        expect(report.failed).toEqual([user.id]);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_ERASURES_REAPPLIED,
+                outcome: 'failure'
+            })
+        );
+    });
+
+    it('finds nothing to remove when no account was erased again', async () => {
+        await mailTo('bystander@example.com');
+
+        const report = await reapplyErasures({ since: new Date(Date.now() - DAY) });
+
+        expect(report.heldJobsRemoved).toEqual([]);
+        expect(await jobModel.countDocuments().exec()).toBe(1);
     });
 });

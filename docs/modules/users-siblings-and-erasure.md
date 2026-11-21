@@ -122,8 +122,18 @@ transaction as the row, so a failed erasure takes no role from an account that s
 
 Every erase hook receives the **subject** (`userId`, `email`, `emailVerified`, built once by
 `personalDataSubjectOf` from the stored account), not just the id: a module that also matches rows
-by address, as [`tasks`](./tasks.md) does, needs the address and whether it was proven. The
-cascade still writes exactly one `user.erased` outbox row per erasure, inside the same transaction.
+by address, as [`tasks`](./tasks.md) does, needs the address and whether it was proven. An
+**erasure's** subject also carries `pendingEmail` and `previousEmail` when the account has them; an export's
+never does, because nobody proved the pending address. The cascade still writes exactly one `user.erased`
+outbox row per erasure, inside the same transaction.
+
+After the module hooks, the cascade runs one step of its own: it deletes the **held jobs** (`jobs`, the
+fallback queue used while the broker is down) that mention any of the subject's addresses, of every status
+including `dead`. A mail job carries an address and no user id, so no module hook can find it, and the match is
+on the whole payload (`to`, `replyTo`, the template data), with addresses compared normalised. Each deleted mail
+job's spooled attachment file is removed by an `AfterErase` step, once the transaction has committed.
+`ops:reapply-erasures` repeats the sweep once at its end, for jobs the restore's own outbox re-send created
+([the runbook](../operate/backups-restoring.md#erasures-after-a-restore)).
 
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel

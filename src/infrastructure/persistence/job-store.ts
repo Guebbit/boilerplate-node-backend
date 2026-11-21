@@ -23,9 +23,10 @@
 
 import { randomUUID } from 'node:crypto';
 import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import type { ClientSession, Document, Model } from 'mongoose';
 import { DAY_MS } from '@domain-primitives/time';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { setHeldJobsReader } from '@infrastructure/observability/metrics-queue';
 
 /** Where a held job is in its life. `dead` is terminal and needs an operator. */
@@ -209,6 +210,91 @@ export const parkJob = (job: JobDocument, error: string): Promise<void> =>
             }
         )
         .then(() => undefined);
+
+/** A job {@link deleteJobsMentioning} removed, with the payload it carried. */
+interface DeletedJob {
+    id: string;
+    payload: unknown;
+}
+
+/** A character that can be part of an address, so a hit touching it is a different address. */
+const ADDRESS_CHAR = /[\w.+%-]/;
+
+/**
+ * Every string inside a payload, at any depth, lowercased. Matched one by one rather than on the
+ * JSON text, where a newline or tab before an address would read as `\n` and glue a letter to it.
+ */
+const stringsOf = (value: unknown): string[] => {
+    if (typeof value === 'string') return [value.toLowerCase()];
+    if (Array.isArray(value)) return value.flatMap((item: unknown) => stringsOf(item));
+    if (value !== null && typeof value === 'object')
+        return Object.values(value).flatMap((item: unknown) => stringsOf(item));
+    return [];
+};
+
+/**
+ * Whether `address` (already normalised) appears in `text` (already lowercased) as an address of
+ * its own: `bob@x.com` must not match inside `abob@x.com` or `bob@x.com.au`, because another
+ * person's job must survive.
+ */
+const mentionsAddress = (text: string, address: string): boolean => {
+    for (let at = text.indexOf(address); at !== -1; at = text.indexOf(address, at + 1)) {
+        const before = text.charAt(at - 1);
+        const after = text.charAt(at + address.length);
+        // A trailing dot ends a sentence; a dot and a letter continue the domain.
+        const continues =
+            after === '.'
+                ? ADDRESS_CHAR.test(text.charAt(at + address.length + 1))
+                : ADDRESS_CHAR.test(after);
+        if (!ADDRESS_CHAR.test(before) && !continues) return true;
+    }
+    return false;
+};
+
+/**
+ * Delete every job, of any status, whose payload mentions one of `emails` anywhere: `to`, `replyTo`,
+ * the template `data`, a staff notice naming the person. A dead job keeps its payload for a week,
+ * so it counts too.
+ *
+ * Scans the whole collection rather than querying: `payload` is free-form, and the collection is
+ * small by design (only jobs held while the broker was down, and dead ones for a week).
+ *
+ * @param emails - addresses to look for; any casing, they are normalised here
+ * @param session - the erasure's transaction, so the delete commits or rolls back with it
+ * @returns what was deleted, so the caller can clean up what the payloads pointed at
+ */
+export const deleteJobsMentioning = (
+    emails: readonly string[],
+    session?: ClientSession
+): Promise<DeletedJob[]> => {
+    const addresses = emails.map((email) => normalizeEmail(email));
+    if (addresses.length === 0) return Promise.resolve([]);
+
+    return jobModel
+        .find({}, { payload: 1 })
+        .session(session ?? null)
+        .lean()
+        .exec()
+        .then((rows) =>
+            rows
+                .filter((row) => {
+                    const texts = stringsOf(row.payload);
+                    return addresses.some((address) =>
+                        texts.some((text) => mentionsAddress(text, address))
+                    );
+                })
+                .map((row) => ({ id: String(row._id), payload: row.payload }))
+        )
+        .then((hits) =>
+            hits.length === 0
+                ? hits
+                : jobModel
+                      .deleteMany({ _id: { $in: hits.map(({ id }) => id) } })
+                      .session(session ?? null)
+                      .exec()
+                      .then(() => hits)
+        );
+};
 
 /**
  * What the held-jobs gauges read: per channel, how many pending jobs wait and since when the

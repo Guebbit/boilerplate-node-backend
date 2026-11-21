@@ -244,6 +244,17 @@ export interface PersonalDataSubject {
      * starts from the erasure. Absent: the erasure is happening now.
      */
     erasedAt?: Date;
+    /**
+     * The address a change of email is waiting on, unconfirmed. Set only on an ERASURE's subject,
+     * so a section that matches by address can find what a mail job still addressed to it holds.
+     * Never on an export's: nobody proved they control it.
+     */
+    pendingEmail?: string;
+    /**
+     * The address the account held before its last change, still valid for the undo link. Set only
+     * on an ERASURE's subject, for the same reason as {@link pendingEmail}.
+     */
+    previousEmail?: string;
 }
 
 /**

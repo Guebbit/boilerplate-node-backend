@@ -21,6 +21,7 @@ import { update, type SaveHook } from './update';
 import { remove, erase } from './remove';
 import { userRepository } from '../repository';
 import { markSessionsEnded } from './credentials';
+import { addressesOf, erasureSubjectOf } from './personal-data-subject';
 
 /**
  * What the owner may write on their own profile: everything an admin edit carries except `active`.
@@ -192,17 +193,23 @@ const requireSystemCaller = (context: CallerContext): void => {
  * @param erasedAt - the original erasure date, so the clocks the erasure starts do not restart
  * @param context - the operator's system context; any other caller is refused
  * @returns `null` when the restored database does not hold the account (nothing to erase), else
- *   whether THIS call erased it
+ *   the addresses it was reachable at, for the restore's final sweep of held jobs
  */
 export const eraseAgain = (
     userId: string,
     erasedAt: Date,
     context: CallerContext
-): Promise<boolean | null> => {
+): Promise<{ addresses: string[] } | null> => {
     requireSystemCaller(context);
-    return userRepository
-        .findById(userId)
-        .then((user) => (user ? erase(user, context, undefined, erasedAt) : null));
+    return userRepository.findById(userId).then((user) => {
+        if (!user) return null;
+        // Read before the erase: the document, and with it its addresses, is gone afterwards.
+        return erasureSubjectOf(user).then((subject) =>
+            erase(user, context, undefined, erasedAt).then(() => ({
+                addresses: addressesOf(subject)
+            }))
+        );
+    });
 };
 
 /**
