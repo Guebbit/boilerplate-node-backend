@@ -97,8 +97,7 @@ stateDiagram-v2
 A preorder sells against the **allowance**, not the shelf: what is left of `backorderLimit` after
 the units already claimed. Its `availability` reads `preorder` while any is left, and `out_of_stock`
 the day the allowance is full, or until staff set one (a new product's allowance is 0). The two
-numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved` by the same
-`syncStockCache` door, and never sent to a client.
+numbers are `inventory`'s own, on its stock level; the product holds no copy of them.
 
 Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
 transaction and only when the stored instant actually changed (the payload carries the two instants). `delivery` listens: buyers who already paid
@@ -131,10 +130,11 @@ evidence the shop lacks a basis to promise another one. Moving the date later te
 were promised it, by the same rule as a moved release date; a buyer promised the 30-day default is
 left alone, whatever the catalogue does.
 
-`product.buyable_again` is the signal [`stock-alerts`](./stock-alerts.md) listens to: it fires once when
-the product flips from not orderable to orderable, in the transaction of the write that caused it.
-A preorder whose release date passes is never written to, so no signal fires for it: the hourly
-`sweep:stock-alerts` job in `stock-alerts` answers its waiting requests instead.
+Nothing announces that a product is orderable again: [`stock-alerts`](./stock-alerts.md) runs a
+five-minute `sweep:stock-alerts` job that asks `inventory` which waiting products are no longer
+`out_of_stock` and answers their requests. A product edit that changes what a shopper may order
+announces `product.terms_changed`, which `inventory` listens to so its availability entry is read
+fresh.
 
 ## Read next
 

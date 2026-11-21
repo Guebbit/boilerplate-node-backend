@@ -59,7 +59,7 @@ const reopenLines = async (
  *
  * @param orderId - the order the goods came back to
  * @param lines - the units to send again, per product
- * @param session - the receipt's transaction; the catalogue's stock cache is the caller's to refresh
+ * @param session - the receipt's transaction; the availability entry is the caller's to refresh
  * @param actor - the staff member who received the goods
  * @throws {ActRefusal} 409 `DELIVERY_NOT_REOPENABLE` when the order shipped fewer units than come
  *   back, or is not in a state a replacement can leave from

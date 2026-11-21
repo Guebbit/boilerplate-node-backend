@@ -34,7 +34,7 @@ sequenceDiagram
     D->>D: shipment.shipped → the outbox
     Note over D: commit
     D-->>S: 201 + the shipment
-    D->>D: shipped email · audit · stock cache refresh
+    D->>D: shipped email · audit · availability entry cleared
 ```
 
 `orders` cannot import `delivery`, so the order carries a small **summary** (`fulfillment.shipped`,

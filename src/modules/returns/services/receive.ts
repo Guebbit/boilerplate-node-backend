@@ -530,7 +530,7 @@ const receiveFor = (
                 }));
                 // A replacement also sets units aside again, so every returned product's cache is stale.
                 return inventoryService
-                    .refreshStockCacheForProducts(
+                    .forgetAvailability(
                         restockedTo
                             .filter(
                                 ({ restocked }) => restocked > 0 || remedy === ReturnRemedy.replace

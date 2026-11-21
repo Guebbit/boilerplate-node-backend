@@ -10,9 +10,8 @@ The only writer of stock in the application.
 ::: tip At a glance
 **Owns** — the stock counters (its own `stocklevels` collection), the reservation lifecycle,
 and the ledger that explains both.
-**Depends on** — [`products`](./products.md), whose document keeps a read-only mirror of the
-counters this module writes, and whose settings (sale flags, backorder switch, dates) decide the
-availability this module tells shoppers.
+**Depends on** — [`products`](./products.md), whose settings (sale flags, backorder switch, dates)
+decide the availability this module tells shoppers. The level is the only place stock lives.
 **Breaks if you change** — any transition's conditional claim. It is what makes each one exactly-once.
 :::
 
@@ -34,12 +33,14 @@ flowchart LR
     returns["returns"]
     shop["shop"]
     shop_tasks["shop-tasks"]
+    stock_alerts["stock-alerts"]
 
     cart --> inventory
     delivery --> inventory
     orders --> inventory
     returns --> inventory
     shop_tasks --> inventory
+    stock_alerts --> inventory
     inventory --> products
     inventory --> shop
     products -. "product.created" .-> inventory
@@ -54,7 +55,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,returns,shop,shop_tasks supporting;
+    class delivery,returns,shop,shop_tasks,stock_alerts supporting;
     class inventory centre;
 ```
 
@@ -83,10 +84,9 @@ evaluator — [Authorization](../understand/authorization.md) explains the model
 ## The story
 
 The counters live in this module's own `stocklevels` collection — one row per product, written
-only by `applyTransition`, beside the ledger row that explains every move. `products` keeps a
-synced copy of `onHand`/`reserved` on its own document purely so a catalogue read still needs no
-join; that copy is never the source of truth and this module never reads it back. **Every change
-to a stock count is a transition here.**
+only by `applyTransition`, beside the ledger row that explains every move. `products` holds no
+stock at all: a shopper reads availability from this module ([below](#the-availability-reads)).
+**Every change to a stock count is a transition here.**
 
 A new product's stock level arrives as `product.created` through the outbox, which delivers at
 least once. `openLevel` inserts the row at zero and books nothing, so a redelivery finds it and
@@ -123,56 +123,44 @@ allowance instead of the shelf.
 Deleting this module leaves a shop that cannot sell. That is the honest consequence of owning
 something.
 
-## Why `products` still carries a copy
+## Why `products` holds no stock {#why-products-holds-no-stock}
 
-A catalogue read is the shop's most common query and must not need a join. Three shapes were weighed for how a product
-read keeps showing `available` once the counters move here:
+The product record carries no stock counts, and no copy of them. Three shapes were weighed for how
+a shopper still learns whether a product can be bought:
 
-1. **A separate `inventory` endpoint the storefront calls.** Chosen for what a shopper is told
-   (`availability`, [below](#the-availability-reads)): the product answer carries details, which
-   change on an edit, and the stock signal is its own read with its own short cache, so a busy
-   product stops having its details re-read on every sale. It was first rejected as two round
-   trips; the second request on a product page or a catalogue list is now accepted. The copy below
-   stays only until the product answer stops carrying stock.
-2. **`products` imports this module and reads live.** Rejected for the same reason: a live
-   cross-collection read at catalogue-read time is a join in every way that matters, just not
-   spelled `$lookup`.
-3. **`products` keeps a maintained projection.** Chosen. `onHand`/`reserved` stay columns on the
-   product document, but this module is still their only writer — `productService.syncStockCache`
-   sets them, and nothing else may.
-   The copy is written only if newer: each level write bumps a `version`, the copy remembers the
-   version it was taken at, and an older snapshot that arrives late matches nothing.
+1. **A separate availability read, answered here.** Chosen
+   ([below](#the-availability-reads)): the product answer carries details, which change on an edit,
+   and the stock signal is its own read with its own short cache, so a busy product stops having
+   its details re-read on every sale.
+2. **`products` imports this module and reads live.** Rejected: a live cross-collection read at
+   catalogue-read time is a join in every way that matters, just not spelled `$lookup`.
+3. **`products` keeps a maintained projection of the counters.** Tried first, then removed: every
+   stock write had to push the copy, a failed push left it lying until the next move, and the copy
+   needed a version to stop a late snapshot overwriting a newer one.
 
-The sync on a stock write is a **plain awaited function call inside `applyTransition`**, never a
-domain event. This module deliberately has no stock event (see "The story" above): an event a
-listener can miss is fine for a fact nothing depends on, and wrong for one a catalogue page reads.
+A caller that moves several products at once (a multi-line checkout, a hold's release) clears them
+in one batch. A payment that serves a preorder moves counters inside the payer's transaction, where
+a cache delete cannot roll back, so it announces `inventory.backorder_allocated` (and a payment on a
+released hold that takes its units again, `inventory.stock_retaken`, see
+[why](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again)) and this
+module deletes the entry once the commit has landed. A plain payment moves no counter, so it
+announces nothing.
 
-A caller that moves several products at once (a multi-line checkout, a hold's release) refreshes
-them in one batch: one read of all their levels, one sync per product, one clear of the `products`
-cache tag. It is still a plain awaited call that never rejects.
-
-One exception, and it is not a stock write: a payment that serves a preorder moves counters inside
-the payer's transaction, where the catalogue copy cannot be written (it would not roll back). That
-reaction is a listener on this module's own `inventory.backorder_allocated`, which refreshes the
-served product's copy once the commit has landed. A payment that lands on a released hold and takes
-its units again does the same through `inventory.stock_retaken`
-([why](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again)). A plain
-payment moves no counter, so it announces nothing and refreshes nothing. Eventual is fine there: the copy may already be stale (a failed
-sync is left for the next transition to correct), and no confirm response shows stock.
 Write order matters and is deliberate: the counter and its ledger row commit first, as
-`applyTransition` does it — the transition IS the source of truth the moment it commits,
-regardless of whether the cache sync afterward succeeds. A failed sync is logged and left for the
-next transition on that product to correct — never a reason to fail the transition that already committed.
+`applyTransition` does it — the transition IS the source of truth the moment it commits. The
+delete that follows never rejects and is never a reason to fail a transition that already
+committed; the entry's own 60 seconds bounds one that did not land.
 
 The same call deletes each product's `availability:<id>` entry, the one cache a stock move makes
 stale: every stock write (receipt, adjustment, hold, release, both sweeps, a return's restock) ends
-in `refreshStockCache`, so one call covers routes, jobs and webhooks alike. It clears nothing in the
+in `forgetAvailability`, so one call covers routes, jobs and webhooks alike. It clears nothing in the
 `products` response cache, because the product answer carries no stock. `GET /products/:id` is
 `browserRevalidate`, so a browser checks first instead of keeping the page for an hour — see
 [Redis cache](../understand/redis-cache.md).
 
-One consequence worth naming: this module imports `products` (for a shortfall's title, and
-for the cache sync). Only `products → inventory` would be a cycle, and nothing creates it.
+One consequence worth naming: this module imports `products` (for a shortfall's title, and for the
+terms the availability read judges). Only `products → inventory` would be a cycle, and nothing
+creates it.
 
 ## The availability reads {#the-availability-reads}
 
@@ -197,7 +185,7 @@ flowchart LR
     M -->|hit| F["filter per caller<br/><i>read:Product</i>"]
     M -->|miss| B["level + product<br/>availabilityOf"] --> S["store 60 s"] --> F
     F --> A["answer"]
-    W1["every stock move<br/><i>refreshStockCacheForProducts</i>"] -.->|delete| M
+    W1["every stock move<br/><i>forgetAvailability</i>"] -.->|delete| M
     W2["product.terms_changed<br/>product.deleted"] -.->|delete| M
 ```
 

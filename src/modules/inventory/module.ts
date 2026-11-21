@@ -5,13 +5,12 @@
  * via a conditionally claimed status, so a cancel racing the sweep or a duplicate webhook still
  * resolves to one winner.
  *
- * Depends on `products` for a title in a shortfall message, and to mirror every counter change
- * onto its document so a catalogue read still needs no join — see
- * `docs/modules/inventory.md#why-products-still-carries-a-copy`. A new product's opening stock
- * arrives the other way, as `PRODUCT_CREATED` — `products` cannot import this module back, so it
- * emits instead of calling in.
+ * Depends on `products` for a title in a shortfall message and for the terms its availability read
+ * judges. The product holds no stock. A new product's opening stock arrives the other way, as
+ * `PRODUCT_CREATED` — `products` cannot import this module back, so it emits instead of calling in.
  *
  * @see docs/modules/inventory.md#its-neighbourhood
+ * @see docs/modules/inventory.md#why-products-holds-no-stock
  */
 
 import path from 'node:path';
@@ -27,7 +26,6 @@ import './metrics';
 import { inventoryConfig } from './config';
 import { inventoryJobs } from './jobs';
 import { PREORDER_ALLOCATED, STOCK_RETAKEN } from './events';
-import { refreshStockCacheForProducts } from './services/transition';
 
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
@@ -70,16 +68,14 @@ export default {
         onDomainEvent(PRODUCT_TERMS_CHANGED, ({ productId }) => forgetAvailability([productId]));
         /**
          * This module's own announcement: a payment that serves a preorder moves counters inside the
-         * payer's transaction, where the catalogue copy cannot be written (it would not roll back).
-         * The cache's owner brings it into step once the commit has landed. A plain commit moves no
-         * counter, so it announces nothing and needs no refresh. Eventual is fine: the copy may
-         * already be stale, see `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+         * payer's transaction, where the availability entry cannot be deleted (it would not roll
+         * back). The cache's owner deletes it once the commit has landed. A plain commit moves no
+         * counter, so it announces nothing and needs no refresh. Eventual is fine: the entry's own
+         * 60 seconds bounds it, see `docs/modules/inventory.md#the-availability-reads`.
          */
-        onDomainEvent(PREORDER_ALLOCATED, ({ productId }) =>
-            refreshStockCacheForProducts([productId])
-        );
+        onDomainEvent(PREORDER_ALLOCATED, ({ productId }) => forgetAvailability([productId]));
         // Same reason for a late payment that took a released hold's units again.
-        onDomainEvent(STOCK_RETAKEN, ({ productIds }) => refreshStockCacheForProducts(productIds));
+        onDomainEvent(STOCK_RETAKEN, ({ productIds }) => forgetAvailability(productIds));
     },
     /**
      * No entry in `scenarios/index.ts`: a hold only exists once someone has checked out, so a

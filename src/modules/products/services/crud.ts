@@ -30,7 +30,6 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { startOfShopDay } from '@modules/shop';
 import { productsAuditActions } from '../audit';
 import {
-    PRODUCT_BUYABLE_AGAIN,
     PRODUCT_CREATED,
     PRODUCT_RELEASE_DATE_CHANGED,
     PRODUCT_RESTOCK_DATE_CHANGED,
@@ -38,7 +37,6 @@ import {
 } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
-import { isBuyable } from '../domain/buyable';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 
 /** Trim, drop blanks, and de-duplicate a category/tag list; `null`/non-array input becomes empty. */
@@ -149,7 +147,7 @@ const withoutDates = ({
 export const insertProduct = (
     /**
      * `currency` omitted: it's never stored, always read live at serialization — see `./model`'s
-     * `applyProductAvailability`.
+     * `applyProductDerivedFields`.
      */
     data: ProductCreateData,
     session: ClientSession
@@ -165,7 +163,6 @@ export const insertProduct = (
                 ...(data.restockDate === undefined
                     ? {}
                     : { restockDate: startOfShopDay(data.restockDate) }),
-                onHand: 0,
                 categories: sanitizeStringArray(data.categories),
                 tags: sanitizeStringArray(data.tags)
             },
@@ -362,8 +359,6 @@ const applyUpdate = (
     const changes: Record<string, FieldChange> = { ...audited.changes };
     const changedFields = [...(audited.changedFields ?? [])];
     const imageBefore = product.imageUrl;
-    // What a shopper could do before the edit, to tell whether it made the product orderable.
-    const wasBuyable = isBuyable(product, new Date());
     const termsBefore = termsOf(product);
     // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
     if (data.touch) product.markModified('updatedAt');
@@ -435,16 +430,6 @@ const applyUpdate = (
                         String(updated._id),
                         session
                     )
-                )
-                .then(() =>
-                    !wasBuyable && isBuyable(updated, new Date())
-                        ? enqueueOutboxEvent(
-                              PRODUCT_BUYABLE_AGAIN,
-                              { productId: String(updated._id) },
-                              String(updated._id),
-                              session
-                          )
-                        : undefined
                 )
                 .then(() =>
                     termsOf(updated) === termsBefore

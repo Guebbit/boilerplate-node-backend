@@ -58,7 +58,7 @@ export const readShelf = (productIds: readonly string[]): Promise<Map<string, Sh
 
 /**
  * The availability of a shelf's product — the cart's one precedence rule, on what the join and
- * the ledger returned. The ledger's count, never the catalogue's cached copy.
+ * the ledger returned. The level's count: the product holds none.
  *
  * @param shelf - the product and its ledger units
  * @param quantity - units the line holds; omit for a wishlist line or a bare "is it listed" test

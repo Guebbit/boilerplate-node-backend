@@ -5,8 +5,8 @@
  * contexts conform to; it reads only `shop` and emits `product.deleted` and `product.created`
  * instead of importing a sibling.
  *
- * Shares:  `onHand` and `reserved` with `inventory`: declared here, written ONLY there, including
- *          the opening count (`product.created` is how `inventory` gives a new product its stock).
+ * Holds no stock: `inventory` is the only place counts live (`product.created` is how it gives a
+ * new product its opening count).
  *
  * @see docs/modules/products.md#its-neighbourhood
  */

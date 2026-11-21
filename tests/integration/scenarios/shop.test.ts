@@ -27,7 +27,7 @@ import { createApp } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
 import { productModel } from '@modules/products/model';
-import { availableStock } from '@modules/products/domain/stock';
+import { countersOf } from '@modules/products/tests/factories';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { asCustomer, callerContextAs } from '@tests/callers';
@@ -39,7 +39,7 @@ import { userService } from '@modules/users';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
 import { decryptAddressItem } from '@modules/addresses/pii';
-import { reservationModel, stockMovementModel } from '@modules/inventory/model';
+import { reservationModel, stockLevelModel, stockMovementModel } from '@modules/inventory/model';
 import { Types } from 'mongoose';
 import { SEED_CUSTOMER_IDS } from '@scenarios/users';
 import {
@@ -96,6 +96,14 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 /** The subject map the build produced — guarantee name → row id. */
 let subjects: Readonly<Record<string, string>>;
 
+/** What a seeded product has available to buy, from its stock level. */
+const availableOf = (subject: string) =>
+    countersOf(subjects[subject]).then(({ available }) => available);
+
+/** What a seeded product has held by open orders, from its stock level. */
+const reservedOf = (subject: string) =>
+    countersOf(subjects[subject]).then(({ reserved }) => reserved);
+
 /**
  * `products.seed()` writes its rows' `translations` through the same write surface
  * `productService.create` does. `createApp()` below already registers every enabled
@@ -139,10 +147,10 @@ describe('each subject names a row that really has the property', () => {
 
         /**
          * `available`, not `onHand`: the storefront's badge reads the derived counter, which a row
-         * held entirely in reservations would also be zero on. `availableStock` is the rule the
-         * availability read applies to the same two counters.
+         * held entirely in reservations would also be zero on. Read off the stock level, where
+         * the counters live.
          */
-        expect(availableStock(product!.onHand, product!.reserved)).toBe(0);
+        expect(await availableOf('product.outOfStock')).toBe(0);
         // Public: an out-of-stock row nobody can reach demonstrates no badge at all.
         expect(product?.active).toBe(true);
         expect(product?.deletedAt).toBeUndefined();
@@ -155,13 +163,13 @@ describe('each subject names a row that really has the property', () => {
 
     it('product.inStock is buyable once the flows have finished shopping', async () => {
         const product = await productModel.findById(subjects['product.inStock']).exec();
-        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
+        expect(await availableOf('product.inStock')).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
     it('product.rich populates every optional field a detail page renders', async () => {
         const product = await productModel.findById(subjects['product.rich']).exec();
-        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
+        expect(await availableOf('product.rich')).toBeGreaterThan(0);
         expect(product?.description).toBeTruthy();
         expect(product?.categories?.length).toBeGreaterThan(0);
         expect(product?.tags?.length).toBeGreaterThan(0);
@@ -171,15 +179,15 @@ describe('each subject names a row that really has the property', () => {
     it('product.digital needs no shipping method — E16 has something real to check against', async () => {
         const product = await productModel.findById(subjects['product.digital']).exec();
         expect(product?.requiresShipping).toBe(false);
-        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
+        expect(await availableOf('product.digital')).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
     it('product.lowStock has exactly one unit free and nothing held against it', async () => {
         const product = await productModel.findById(subjects['product.lowStock']).exec();
-        expect(availableStock(product!.onHand, product!.reserved)).toBe(1);
+        expect(await availableOf('product.lowStock')).toBe(1);
         // No seeded order holds it: the one unit is the test's to take.
-        expect(product?.reserved).toBe(0);
+        expect(await reservedOf('product.lowStock')).toBe(0);
         expect(product?.active).toBe(true);
     });
 
@@ -187,7 +195,7 @@ describe('each subject names a row that really has the property', () => {
         const product = await productModel.findById(subjects['product.noWithdrawal']).exec();
         expect(product?.noWithdrawal).toBe(true);
         expect(product?.requiresShipping).not.toBe(false);
-        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
+        expect(await availableOf('product.noWithdrawal')).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
@@ -196,7 +204,7 @@ describe('each subject names a row that really has the property', () => {
         // `SHIPPING_METHODS`: express tops out at 5000 g, standard at 30000 g.
         expect(product?.weight).toBeGreaterThan(5000);
         expect(product?.weight).toBeLessThanOrEqual(30_000);
-        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
+        expect(await availableOf('product.heavy')).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
@@ -527,16 +535,14 @@ describe('the history reads as a history', () => {
     it('accounts for every unit of stock with a movement the app wrote', async () => {
         /**
          * Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
-         * `POST /inventory/levels/{productId}/receive`, so a product with stock and no receipt cannot exist. Rather
-         * than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
-         * `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
-         * the counter, which is the module's stated source of truth
-         * (see the `@see` below).
-         * @see docs/modules/inventory.md#why-products-still-carries-a-copy
+         * `POST /inventory/levels/{productId}/receive`, so a level with stock and no receipt
+         * cannot exist. This reconciles every level against the ledger beside it —
+         * `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows
+         * reproduces the counter.
          */
-        const stocked = await productModel
+        const stocked = await stockLevelModel
             .find({ onHand: { $gt: 0 } })
-            .select('_id onHand')
+            .select('productId onHand')
             .exec();
         expect(stocked.length).toBeGreaterThan(100);
 
@@ -544,13 +550,13 @@ describe('the history reads as a history', () => {
             _id: Types.ObjectId;
             total: number;
         }>([
-            { $match: { productId: { $in: stocked.map((product) => product._id) } } },
+            { $match: { productId: { $in: stocked.map((level) => level.productId) } } },
             { $group: { _id: '$productId', total: { $sum: '$onHandDelta' } } }
         ]);
         const totalByProductId = new Map(ledgerTotals.map((row) => [String(row._id), row.total]));
 
-        for (const product of stocked)
-            expect(totalByProductId.get(String(product._id))).toBe(product.onHand);
+        for (const level of stocked)
+            expect(totalByProductId.get(String(level.productId))).toBe(level.onHand);
     });
 });
 

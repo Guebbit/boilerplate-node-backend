@@ -5,79 +5,10 @@
 
 import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
-import { logger } from '@infrastructure/adapters/logger';
-import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { counterDeltaFor, type HoldKind } from '../domain';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import { forgetAvailability } from './availability';
-
-/**
- * Bring the catalogue's synced copy of these products' counters into step with the ledger's, and
- * delete each product's `availability:<id>` entry (the availability reads' own cache, which a stock
- * move makes stale). Every id the caller gives loses its entry.
- *
- * One `$in` read for all of them, one sync per product. The `products` response cache is left
- * alone: the product answer carries no stock, so a stock move cannot make it stale. Every stock
- * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
- *
- * Never rejects, the read included: the transition it follows already committed, and the next
- * transition on a product corrects its cache regardless. A failure must not skip what the
- * caller still owes (a hold given back, a refund).
- *
- * A failed sync is logged; the other products still sync.
- *
- * @param productIds - the products whose counters just moved; duplicates are read once
- */
-export const refreshStockCacheForProducts = (productIds: readonly string[]): Promise<void> => {
-    const unique = [...new Set(productIds)];
-    if (unique.length === 0) return Promise.resolve();
-
-    /**
-     * Every id, level row or not: the availability entry is a different cache from the catalogue
-     * copy synced below, and it must not outlive a move on any product the caller named.
-     */
-    return forgetAvailability(unique)
-        .then(() => stockLevelRepository.findManyByProductIds(unique))
-        .then(async (levels) => {
-            for (const level of levels) {
-                const productId = String(level.productId);
-                await productService
-                    .syncStockCache(productId, {
-                        onHand: level.onHand,
-                        reserved: level.reserved,
-                        backorderLimit: level.backorderLimit,
-                        backordered: level.backordered,
-                        version: level.version
-                    })
-                    .catch((error: unknown) => {
-                        // Stryker disable all
-                        logger.error({
-                            message: `Inventory: could not refresh the catalogue's stock cache for product ${productId}`,
-                            error
-                        });
-                        // Stryker restore all
-                    });
-            }
-        })
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Inventory: could not read the stock levels of ${unique.length} product(s) to refresh the catalogue's stock cache`,
-                error
-            });
-            // Stryker restore all
-        });
-};
-
-/**
- * Bring the catalogue's synced copy of one product's counters into step with the ledger's.
- * Never rejects; see {@link refreshStockCacheForProducts}.
- *
- * @param productId - the product whose cached counters are being refreshed
- */
-export const refreshStockCache = (productId: string): Promise<void> =>
-    refreshStockCacheForProducts([productId]);
 
 /**
  * Move one product's counters and record why, or do neither.
@@ -85,19 +16,17 @@ export const refreshStockCache = (productId: string): Promise<void> =>
  * The chokepoint every stock change in the application passes through. `insertIfAbsent` guarantees a row
  * exists first — a product with no level yet reads as all-zero, the correct starting point for
  * every transition including the very first `receive` — then the conditional write decides the
- * rest: a refusal is not a movement, so no row is written. Last, this product's synced copy on
- * `products` is brought into step; why that sync is a plain call here and never a domain event is
- * the linked page's.
+ * rest: a refusal is not a movement, so no row is written. Last, this product's availability entry
+ * is deleted.
  *
- * @see docs/modules/inventory.md#why-products-still-carries-a-copy
  * @param reason - the transition; decides the guard, the write and the deltas recorded
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
  * @param context - what to record on the row beyond the deltas; `kind` is not recorded, it only
  *   decides which counter a `release`/`expire` gives back (`backordered` for a preorder claim).
  * @param session - the caller's transaction. Given one, every read and write joins it, and the
- *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
- *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
+ *   availability entry is NOT deleted here: the delete leaves this module and cannot roll back, so
+ *   the caller runs {@link forgetAvailabilityForOrder} once its transaction commits
  * @returns whether the counters actually moved
  * @internal The step beneath every named transition this module publishes, which decide what may
  *   move; it never leaves the barrel.
@@ -163,7 +92,7 @@ export const applyTransition = async (
         session
     );
 
-    if (!session) await refreshStockCache(productId);
+    if (!session) await forgetAvailability([productId]);
 
     return true;
 };

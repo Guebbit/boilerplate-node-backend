@@ -19,8 +19,8 @@ import type { OrderDocument } from '../model';
  * Write a status move, take whatever is left of the order's hold off the shelf, and announce the
  * move: one transaction, so an order never reads `shipped` while its units still count as on hand.
  *
- * The catalogue's stock cache lives outside the transaction and cannot roll back, so it is
- * refreshed once the commit has landed.
+ * The availability entry lives outside the transaction and cannot roll back, so it is deleted
+ * once the commit has landed.
  *
  * @param orderId - the order that moves
  * @param write - the conditional status write; `null` when it matched nothing (a lost race)
@@ -39,5 +39,5 @@ export const announceMoveShippingStock = (
             ),
         announce
     ).then((order) =>
-        order ? inventoryService.refreshStockCacheForOrder(orderId).then(() => order) : order
+        order ? inventoryService.forgetAvailabilityForOrder(orderId).then(() => order) : order
     );

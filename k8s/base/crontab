@@ -51,8 +51,8 @@
 30 6 * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:staff-digest
 # Rewrites the late-preorder summary row for the staff who edit orders, and mails it when it appeared or grew.
 30 6 * * 1 cd /app && node --import tsx scripts/ops/run-job.ts sweep:staff-weekly
-# Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.
-35 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:stock-alerts
+# Answers waiting back-in-stock requests for a product that is no longer out of stock, asking inventory's availability read 100 products at a time.
+*/5 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:stock-alerts
 # Tells the staff who work a task's kind, once, that an open task is three days from its due date and once more that it passed it; a task closed before the sweep is skipped, and one already told is never told again.
 40 6 * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:tasks-overdue
 # Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.

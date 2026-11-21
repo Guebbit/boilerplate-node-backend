@@ -119,7 +119,7 @@ describe('a return whose refund the provider refuses', () => {
     it('leaves a durable record for the sweep when the work after the commit fails', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId, returnId } = await withdrawnOrder();
-            jest.spyOn(inventoryService, 'refreshStockCacheForProducts').mockRejectedValueOnce(
+            jest.spyOn(inventoryService, 'forgetAvailability').mockRejectedValueOnce(
                 new Error('cache down')
             );
 

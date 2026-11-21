@@ -103,7 +103,7 @@ export const deliverShipment = (
             targetId: String(shipment.orderId),
             metadata: { shipmentId, ...lostFlag }
         });
-        // A restore moved the stock hold: the catalogue's copy follows the commit.
+        // A restore moved the stock hold: the availability entry follows the commit.
         const shelf = result.value.wasLost
             ? orderService.refreshShelf(shipment.lines.map(({ productId }) => productId))
             : Promise.resolve();

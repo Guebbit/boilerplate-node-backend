@@ -15,11 +15,10 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { eventually } from '@tests/eventually';
 import { api, authenticateAs } from '@tests/http';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { countersOf, createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
-import { productService } from '@modules/products';
 import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempotency-model';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { notificationsService } from '@modules/notifications';
@@ -192,10 +191,7 @@ const CASES: Case[] = [
                         .send(verb === 'receive' ? { quantity: 5 } : { delta: -2 }),
                 subjectName: 'Cedar Toy',
                 subjectId: String(product._id),
-                effect: () =>
-                    productService
-                        .findManyByIds([String(product._id)])
-                        .then(([found]) => found.onHand)
+                effect: () => countersOf(product._id).then(({ onHand }) => onHand)
             };
         }
     }))

@@ -12,7 +12,6 @@
 import { defineConfig } from '@infrastructure/config/define';
 import { decimal, text } from '@infrastructure/config/fields';
 import { FRONTEND_LINK_RULES } from '@infrastructure/http/frontend-link';
-import { stockConfig } from '@infrastructure/runtime/config';
 
 /**
  * The two VAT rates.
@@ -54,14 +53,6 @@ export const vatRateDefault = (): number => productsConfig().NODE_VAT_RATE_DEFAU
  * @returns the configured decimal rate (0.1 for 10%)
  */
 export const vatRateReduced = (): number => productsConfig().NODE_VAT_RATE_REDUCED;
-
-/**
- * The availability at or under which a product reads as low on stock — the infrastructure's
- * `stockConfig`, which `inventory` flags a restock with too, so the storefront's badge and the
- * stock board agree. It turns an exact count into the `lowStock` flag a shopper may see.
- * @returns the configured threshold, in units
- */
-export const lowStockThreshold = (): number => stockConfig().NODE_LOW_STOCK_THRESHOLD;
 
 /**
  * The path of a product's page on the paired frontend, under the language segment: the

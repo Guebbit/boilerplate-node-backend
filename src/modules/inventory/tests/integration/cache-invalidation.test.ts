@@ -3,16 +3,16 @@
  * A stock write leaves the catalogue's response cache alone: the product answer carries no stock
  * (availability is its own read, with its own per-product entry), so a receipt, an adjustment, a
  * sweep or a return's restock cannot make `GET /products/:id` or a list stale. What a write does
- * owe is the catalogue's synced copy of the counters, taken once per line of a multi-line checkout.
+ * owe is the deletion of the availability entry of every product it moved, once per line of a
+ * multi-line checkout.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
-import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import { deleteCacheValues, invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { testCallerContext } from '@tests/callers';
-import { productService } from '@modules/products';
 import { reservationRepository } from '../../repository';
 import { countersOf } from '@modules/products/tests/factories';
 
@@ -25,12 +25,16 @@ jest.mock('@infrastructure/adapters/cache', () => ({
     ...jest.requireActual<typeof import('@infrastructure/adapters/cache')>(
         '@infrastructure/adapters/cache'
     ),
-    invalidateCacheTagsLogged: jest.fn(() => Promise.resolve())
+    invalidateCacheTagsLogged: jest.fn(() => Promise.resolve()),
+    deleteCacheValues: jest.fn(() => Promise.resolve())
 }));
 
 setupTestDb();
 
-beforeEach(() => jest.mocked(invalidateCacheTagsLogged).mockClear());
+beforeEach(() => {
+    jest.mocked(invalidateCacheTagsLogged).mockClear();
+    jest.mocked(deleteCacheValues).mockClear();
+});
 
 afterEach(() => jest.restoreAllMocks());
 
@@ -53,7 +57,7 @@ describe('the products cache tag, left alone by stock writes', () => {
                         { reference: anOrderId(), note: 'return' },
                         session
                     )
-                ).then(() => inventoryService.refreshStockCacheForProducts([id]))
+                ).then(() => inventoryService.forgetAvailability([id]))
         ]
     ])('does not clear it when stock is %s', async (_how, write) => {
         const product = await createProduct({ onHand: 5 });
@@ -64,43 +68,16 @@ describe('the products cache tag, left alone by stock writes', () => {
     });
 });
 
-describe('a multi-line checkout syncs the catalogue copy of every line', () => {
-    it('syncs every line, however many lines it has', async () => {
-        const first = await createProduct({ onHand: 3 });
-        const second = await createProduct({ onHand: 3 });
-        const third = await createProduct({ onHand: 3 });
-        const sync = jest.spyOn(productService, 'syncStockCache');
+/** The cache key of one product's availability entry, as the stock funnel names it. */
+const entryKeyOf = (product: { _id: unknown }) => `availability:${String(product._id)}`;
 
-        const outcome = await inventoryService.reserveForOrder(
-            anOrderId(),
-            [first, second, third].map((p) => ({ productId: String(p._id), quantity: 1 }))
-        );
-
-        expect(outcome.held).toBe(true);
-        expect(sync).toHaveBeenCalledTimes(3);
-        await expect(countersOf(String(third._id))).resolves.toMatchObject({ reserved: 1 });
-    });
-
-    it('never fails the checkout when the catalogue write fails', async () => {
-        const product = await createProduct({ onHand: 3 });
-        jest.spyOn(productService, 'syncStockCache').mockRejectedValue(new Error('catalogue down'));
-
-        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
-            { productId: String(product._id), quantity: 1 }
-        ]);
-
-        expect(outcome.held).toBe(true);
-    });
-
-    it('keeps syncing the other lines when one sync fails', async () => {
+describe('a multi-line checkout clears the availability entry of every line', () => {
+    it('clears every line, however many lines it has', async () => {
         const products = await Promise.all([
             createProduct({ onHand: 3 }),
             createProduct({ onHand: 3 }),
             createProduct({ onHand: 3 })
         ]);
-        const sync = jest
-            .spyOn(productService, 'syncStockCache')
-            .mockRejectedValueOnce(new Error('catalogue down'));
 
         const outcome = await inventoryService.reserveForOrder(
             anOrderId(),
@@ -108,10 +85,12 @@ describe('a multi-line checkout syncs the catalogue copy of every line', () => {
         );
 
         expect(outcome.held).toBe(true);
-        expect(sync).toHaveBeenCalledTimes(3);
+        const cleared = jest.mocked(deleteCacheValues).mock.calls.flatMap(([keys]) => keys);
+        expect(cleared).toEqual(expect.arrayContaining(products.map((p) => entryKeyOf(p))));
+        await expect(countersOf(String(products[2]._id))).resolves.toMatchObject({ reserved: 1 });
     });
 
-    it('refreshes the lines already taken when giving them back fails', async () => {
+    it('clears the lines already taken when giving them back fails', async () => {
         // Lines are taken in product-id order: the lower id is taken, the higher one is refused.
         const created = await Promise.all([
             createProduct({ onHand: 3 }),
@@ -124,7 +103,7 @@ describe('a multi-line checkout syncs the catalogue copy of every line', () => {
         jest.spyOn(reservationRepository, 'claimStatus').mockRejectedValue(
             new Error('release down')
         );
-        const sync = jest.spyOn(productService, 'syncStockCache');
+        jest.mocked(deleteCacheValues).mockClear();
 
         const outcome = await inventoryService.reserveForOrder(anOrderId(), [
             { productId: String(takenProduct._id), quantity: 1 },
@@ -132,9 +111,7 @@ describe('a multi-line checkout syncs the catalogue copy of every line', () => {
         ]);
 
         expect(outcome.held).toBe(false);
-        expect(sync).toHaveBeenCalledWith(
-            String(takenProduct._id),
-            expect.objectContaining({ reserved: 1 })
-        );
+        const cleared = jest.mocked(deleteCacheValues).mock.calls.flatMap(([keys]) => keys);
+        expect(cleared).toContain(entryKeyOf(takenProduct));
     });
 });

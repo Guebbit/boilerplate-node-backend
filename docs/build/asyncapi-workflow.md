@@ -272,7 +272,7 @@ A domain event is named `<prefix>.<what_happened>`:
 
 - the prefix is the resource or namespace the contract exposes (`account`, `inventory`, `order`…): it is kept as is, even where it is a module name;
 - snake_case inside each segment, never a dash (`account.sessions_revoked`, `user.setup_requested`, `user.deletion_canceled`);
-- the second segment is a past participle or a reached-state word (`product.buyable_again` stays, like Stripe `invoice.overdue`).
+- the second segment is a past participle or a reached-state word (like Stripe `invoice.overdue`).
 
 Two families are outside it: worker queues are imperative commands (`worker.email.send`), and SSE channels are `<stream>.<event>` (`notifications.created`, `observability.metrics.updated`, `observability.heartbeat`).
 

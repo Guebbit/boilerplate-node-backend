@@ -16,6 +16,7 @@ import { userModel } from '@modules/users/model';
 import { productService } from '@modules/products';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
+import { stockAlertService } from '@modules/stock-alerts';
 import { inventoryService } from '@modules/inventory';
 import { resolveTranslatables, registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
@@ -95,6 +96,7 @@ describe('a back-in-stock mail and its event', () => {
         await api().post('/stock-alerts').set('Authorization', bearer).send({ productId: id });
 
         await inventoryService.receive(id, 3, undefined, testCallerContext);
+        await stockAlertService.sweepBuyable();
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);

@@ -51,7 +51,7 @@ export const CARD = {
 
 /**
  * Bring `quantity` units of `productId` onto the shelf — the opening stock every product needs
- * before anyone can buy it, since the catalogue now seeds at `onHand: 0`.
+ * before anyone can buy it, since the catalogue seeds with no stock.
  *
  * @param owner - a caller holding `inventory.any.create`
  */

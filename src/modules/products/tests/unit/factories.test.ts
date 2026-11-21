@@ -51,14 +51,14 @@ describe('makeProduct', () => {
 
     it('keeps a false or zero override rather than treating it as unspecified', () => {
         /**
-         * `active: false` and `onHand: 0` are the two fixtures the visibility and out-of-stock
-         * branches need. Compacting on falsiness rather than on `undefined` would silently drop
-         * exactly those.
+         * `active: false` and `purchasable: false` are the two fixtures the visibility and
+         * off-sale branches need. Compacting on falsiness rather than on `undefined` would
+         * silently drop exactly those.
          */
-        const product = makeProduct({ active: false, onHand: 0 });
+        const product = makeProduct({ active: false, purchasable: false });
 
         expect(product.active).toBe(false);
-        expect(product.onHand).toBe(0);
+        expect(product.purchasable).toBe(false);
     });
 
     it('converts a soft-delete timestamp from the ISO string a seed file writes', () => {

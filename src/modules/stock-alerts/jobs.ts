@@ -1,7 +1,7 @@
 /**
  * @module
- * The scheduled job `stock-alerts` owns: the hourly pass that answers requests for a product that
- * became orderable without a write (a preorder whose release date passed).
+ * The scheduled job `stock-alerts` owns: the five-minute pass that answers requests for a product
+ * that is no longer `out_of_stock`.
  *
  * @see docs/reference/ops.md#scheduled-jobs
  */
@@ -17,7 +17,7 @@ export const stockAlertsJobs: readonly JobDeclaration[] = [
     {
         ...stockAlertsJobData.sweepStockAlerts,
         run: () =>
-            stockAlertService.sweepBuyable(new Date()).then((products) => {
+            stockAlertService.sweepBuyable().then((products) => {
                 logger.info({ message: 'Stock alert sweep done.', products });
             }),
         lease: { ttlMs: 30 * MINUTE_MS }

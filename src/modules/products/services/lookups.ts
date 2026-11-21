@@ -8,15 +8,11 @@ import { getFallbackLocale } from '@infrastructure/i18n';
 import { readAllTranslations, readServedTranslations } from '@kernel/translation';
 import type { ProductTranslationFields } from '@types';
 import type { ProductDocument } from '../model';
-import { withTransaction } from '@infrastructure/runtime/database';
-import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { becameBuyable } from '../domain/buyable';
-import { PRODUCT_BUYABLE_AGAIN } from '../events';
-import { productRepository, type ListedProduct, type StockCounters } from '../repository';
+import { productRepository, type ListedProduct } from '../repository';
 
 /**
- * The plain, untransformed document — `inventory` and `orders` read a product's live counters
- * this way, never through `getById`'s scoped/transformed shape.
+ * The plain, untransformed document — `inventory` and `orders` read a product's own columns this
+ * way, never through `getById`'s scoped/transformed shape.
  */
 export const findByIdRaw = (productId: string) => productRepository.findByIdRaw(productId);
 
@@ -85,31 +81,6 @@ export const countPublic = (
                       : {})
               })
           );
-
-/**
- * Mirror `@modules/inventory`'s stock level onto this product's own document, purely so a
- * catalogue read still needs no join. `@modules/inventory` is this function's only legitimate
- * caller — it is the sole writer of `onHand`/`reserved`, this is the door, never a place that
- * decides whether a change is legal.
- *
- * @see docs/modules/inventory.md#why-products-still-carries-a-copy
- *
- * @param productId - the product whose cached counters are being brought into step
- * @param counters - the values `@modules/inventory` just committed as the source of truth
- */
-export const syncStockCache = (productId: string, counters: StockCounters): Promise<void> =>
-    withTransaction(async (session) => {
-        const before = await productRepository.syncStockCache(productId, counters, session);
-        if (!before) return false;
-
-        // The copy changes, so the flip is judged on what the write left behind.
-        const flipped = becameBuyable(before, { ...before, ...counters }, new Date());
-        if (flipped)
-            await enqueueOutboxEvent(PRODUCT_BUYABLE_AGAIN, { productId }, productId, session);
-        return flipped;
-    }).then((flipped) => {
-        if (flipped) nudgeOutbox();
-    });
 
 /**
  * Lays a product's own columns under the translation rows it was given: they ARE the fallback

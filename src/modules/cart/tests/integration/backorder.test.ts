@@ -39,7 +39,7 @@ const backorderProduct = async (onHand: number, limit: number | null, restockInD
             ? {}
             : { restockDate: new Date(Date.now() + restockInDays * DAY_MS).toISOString() })
     });
-    // Also brings the catalogue's copy of the cap into step.
+    // The allowance lives on the level, never on the product.
     await inventoryService.setBackorderLimit(String(product._id), limit);
     return product;
 };

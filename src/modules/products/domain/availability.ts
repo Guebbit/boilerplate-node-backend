@@ -72,7 +72,10 @@ export const availabilityOf = (
 
     if (counts.available > 0) return { availability: 'in_stock' };
 
-    if (isBackorder({ ...terms, ...counts }, now))
+    if (
+        preorderAllowanceLeft(counts.backorderLimit, counts.backordered) > 0 &&
+        isBackorder(terms, now)
+    )
         return {
             availability: 'backorder',
             availabilityDate: terms.restockDate ?? new Date(now.getTime() + promiseDays * DAY_MS)

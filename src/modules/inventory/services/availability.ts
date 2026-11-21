@@ -18,7 +18,7 @@ import { generateReject, generateSuccess } from '@infrastructure/http/response';
 import { deleteCacheValues, getCacheValues, setCacheValue } from '@infrastructure/adapters/cache';
 import { anonymousCaller } from '@kernel/permissions';
 import { permitsOnRows } from '@kernel/ability';
-import { availabilityOf, productService } from '@modules/products';
+import { availabilityOf, productService, type Availability } from '@modules/products';
 import { BACKORDER_PROMISE_DAYS, shopDayOf } from '@modules/shop';
 import type { Caller, ProductAvailability, ProductAvailabilityResponse } from '@types';
 import { stockLevelRepository } from '../repository';
@@ -116,6 +116,28 @@ const build = (productIds: readonly string[]): Promise<Stored[]> =>
     });
 
 /**
+ * The entry of each product, from the cache where it is held and rebuilt where it is not. A product
+ * that does not exist has none. Nothing is judged about who may read it: see {@link readMany}.
+ *
+ * @param unique - well-formed ids, no duplicates
+ */
+const entriesOf = (unique: readonly string[]): Promise<Map<string, Stored>> =>
+    getCacheValues(unique.map((productId) => keyOf(productId))).then((raws) => {
+        const entries = new Map<string, Stored>();
+        const missing: string[] = [];
+        for (const [index, productId] of unique.entries()) {
+            const hit = parseStored(raws[index]);
+            if (hit) entries.set(productId, hit);
+            else missing.push(productId);
+        }
+
+        return (missing.length > 0 ? build(missing) : Promise.resolve([])).then((built) => {
+            for (const entry of built) entries.set(entry.productId, entry);
+            return entries;
+        });
+    });
+
+/**
  * The availability of each product the caller may read, in the order asked.
  *
  * One MGET for every entry, one rebuild for the missing ones. A hidden or removed product is
@@ -131,35 +153,39 @@ const readMany = (
 ): Promise<ProductAvailability[]> => {
     const unique = [...new Set(productIds)];
 
-    return getCacheValues(unique.map((productId) => keyOf(productId))).then((raws) => {
-        const entries = new Map<string, Stored>();
-        const missing: string[] = [];
-        for (const [index, productId] of unique.entries()) {
-            const hit = parseStored(raws[index]);
-            if (hit) entries.set(productId, hit);
-            else missing.push(productId);
-        }
-
-        return (missing.length > 0 ? build(missing) : Promise.resolve([])).then((built) => {
-            for (const entry of built) entries.set(entry.productId, entry);
-
-            // `read:Product` is "active and not deleted"; `display:Product` has no condition.
-            const permits = permitsOnRows(caller ?? anonymousCaller(), 'Product', ['read']);
-            return unique.flatMap((productId) => {
-                const entry = entries.get(productId);
-                if (!entry || !permits(entry).read) return [];
-                const { availability, availabilityDate } = entry;
-                return [
-                    {
-                        productId,
-                        availability,
-                        ...(availabilityDate === undefined ? {} : { availabilityDate })
-                    }
-                ];
-            });
+    return entriesOf(unique).then((entries) => {
+        // `read:Product` is "active and not deleted"; `display:Product` has no condition.
+        const permits = permitsOnRows(caller ?? anonymousCaller(), 'Product', ['read']);
+        return unique.flatMap((productId) => {
+            const entry = entries.get(productId);
+            if (!entry || !permits(entry).read) return [];
+            const { availability, availabilityDate } = entry;
+            return [
+                {
+                    productId,
+                    availability,
+                    ...(availabilityDate === undefined ? {} : { availabilityDate })
+                }
+            ];
         });
     });
 };
+
+/**
+ * The availability of each product that exists, for a caller that is the system itself (no
+ * request, so no permission to judge): the same entries the HTTP reads answer from. A hidden or
+ * removed product reads `out_of_stock`, so it is never mistaken for one that came back.
+ *
+ * @param productIds - well-formed ids; duplicates are answered once
+ * @returns product id → its availability; an id with no product is absent
+ */
+export const availabilityOfProducts = (
+    productIds: readonly string[]
+): Promise<Map<string, Availability>> =>
+    entriesOf([...new Set(productIds)]).then(
+        (entries) =>
+            new Map([...entries].map(([productId, entry]) => [productId, entry.availability]))
+    );
 
 /**
  * `GET /products/{id}/availability`.
@@ -191,10 +217,19 @@ export const listProductAvailability = (
     );
 
 /**
- * Forget these products' answers. Called after a write that could change one; never rejects, and
- * the entry's own 60 seconds bounds a delete that did not land.
+ * Delete each product's `availability:<id>` entry, which a stock move or a change to the product's
+ * terms makes stale. Every id the caller gives loses its entry, level row or not. Every stock
+ * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
  *
- * @param productIds - the products whose entry to delete; every id, whether it has an entry or not
+ * The `products` response cache is left alone: the product answer carries no stock, so a stock
+ * move cannot make it stale.
+ *
+ * Never rejects: the transition it follows already committed, and the entry's own 60 seconds
+ * bounds a delete that did not land. A failure must not skip what the caller still owes (a hold
+ * given back, a refund).
+ *
+ * @see docs/modules/inventory.md#the-availability-reads
+ * @param productIds - the products whose entry to delete; duplicates are deleted once
  */
 export const forgetAvailability = (productIds: readonly string[]): Promise<void> =>
     deleteCacheValues([...new Set(productIds)].map((productId) => keyOf(productId)));

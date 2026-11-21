@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { addressService } from '../../service';
 import { cartService } from '@modules/cart';
 import { countOrders } from '@modules/orders/tests/factories';
-import { createProduct, readProduct } from '@modules/products/tests/factories';
+import { countersOf, createProduct } from '@modules/products/tests/factories';
 import { HOME, OFFICE } from './fixtures';
 
 setupTestDb();
@@ -73,9 +73,9 @@ describe('checkout and the address', () => {
         expect(result.status).toBe(404);
         expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         // Nothing moved — the address check runs before anything is held.
-        const stored = await readProduct(String(product._id));
-        expect(stored?.onHand).toBe(10);
-        expect(stored?.reserved).toBe(0);
+        const stored = await countersOf(product._id);
+        expect(stored.onHand).toBe(10);
+        expect(stored.reserved).toBe(0);
         const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toHaveLength(1);
     });
@@ -104,9 +104,9 @@ describe('checkout and the address', () => {
         expect(result.status).toBe(404);
         expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         await expect(countOrders({ userId: stranger._id })).resolves.toBe(0);
-        const stored = await readProduct(String(product._id));
-        expect(stored?.onHand).toBe(10);
-        expect(stored?.reserved).toBe(0);
+        const stored = await countersOf(product._id);
+        expect(stored.onHand).toBe(10);
+        expect(stored.reserved).toBe(0);
     });
 
     it('a pickup order ships to no address but is still invoiced to the default', async () => {
@@ -136,8 +136,8 @@ describe('checkout and the address', () => {
         expect(result.status).toBe(422);
         expect(!result.success && result.errors[0]?.code).toBe('CART_BILLING_ADDRESS_REQUIRED');
         // Refused before the hold: nothing moved.
-        const stored = await readProduct(String(product._id));
-        expect(stored?.reserved).toBe(0);
+        const stored = await countersOf(product._id);
+        expect(stored.reserved).toBe(0);
     });
 });
 

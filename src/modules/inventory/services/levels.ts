@@ -53,9 +53,8 @@ export const removeLevel = (productId: string): Promise<void> =>
 /**
  * What can be sold of each product right now, read from the ledger.
  *
- * The checkout pre-flight asks this rather than the catalogue's cached copy: a cache that sits
- * low (a missed sync) would refuse a sale the shelf covers, and nothing would ever heal it, since
- * a refused checkout moves no stock. A level that never existed reads as nothing available.
+ * The level is the only source of stock: the checkout pre-flight asks this, and the product holds
+ * no count. A level that never existed reads as nothing available.
  *
  * A product the caller names in `preorderIds` is sold against its allowance, not the shelf: what
  * is left of `backorderLimit`, because its units do not exist yet. One in `backorderIds` is sold

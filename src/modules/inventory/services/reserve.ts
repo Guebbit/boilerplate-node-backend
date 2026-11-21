@@ -13,7 +13,8 @@ import { roomOn } from '../domain';
 import { stockLevelRepository, reservationRepository } from '../repository';
 import type { StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
-import { applyTransition, refreshStockCacheForProducts } from './transition';
+import { applyTransition } from './transition';
+import { forgetAvailability } from './availability';
 import { releaseForOrder } from './holds';
 import { MINUTE_MS } from '@domain-primitives/time';
 
@@ -27,8 +28,8 @@ import { MINUTE_MS } from '@domain-primitives/time';
  * what was held, and a release that threw leaves it `held` for the sweep to free later.
  * A failure is logged rather than thrown, so the caller still reports the original refusal.
  *
- * A release that succeeds refreshes the catalogue's stock cache itself. One that fails does not,
- * so the lines already taken are refreshed here, in that branch only: their counters moved and
+ * A release that succeeds clears the availability entries itself. One that fails does not,
+ * so the lines already taken are cleared here, in that branch only: their counters moved and
  * nothing else will say so before the sweep.
  *
  * @param orderId - the order whose reserve is being unwound
@@ -44,7 +45,7 @@ const giveBack = (orderId: string, takenProductIds: readonly string[]): Promise<
                 error
             });
             // Stryker restore all
-            return refreshStockCacheForProducts(takenProductIds);
+            return forgetAvailability(takenProductIds);
         });
 
 /**
@@ -220,7 +221,7 @@ const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] |
  *
  * A line that THROWS (a database hiccup, not a refusal) unwinds the same way, then rethrows.
  *
- * The catalogue's stock cache cannot roll back with a line's transaction, so it is refreshed once
+ * The availability entry cannot roll back with a line's transaction, so it is deleted once
  * for every line taken, after the last one. A refusal or a throw is refreshed by the release that
  * unwinds it.
  *
@@ -256,9 +257,8 @@ export const reserveForOrder = async (
                 /**
                  * Read the blocker back before unwinding, so the reported number is the one that
                  * actually refused this line, not what a pre-flight saw earlier. Read from this
-                 * module's own level, the source of truth — never the product's synced copy, which
-                 * can lag by one transition. A deleted product or a level that never existed reads
-                 * as nothing available, which is true either way.
+                 * module's own level, the source of truth. A deleted product or a level that never existed
+                 * reads as nothing available, which is true either way.
                  */
                 const [blockerLevel, blockerProduct] = await Promise.all([
                     stockLevelRepository.findByProductId(line.productId),
@@ -282,6 +282,6 @@ export const reserveForOrder = async (
         throw error;
     }
 
-    await refreshStockCacheForProducts(taken);
+    await forgetAvailability(taken);
     return { held: true, expiresAt, owed };
 };

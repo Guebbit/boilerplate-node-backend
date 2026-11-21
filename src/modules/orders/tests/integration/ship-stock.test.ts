@@ -82,7 +82,7 @@ describe('shipStock', () => {
         await withTransaction((session) =>
             shipStock(orderId, [{ productId, quantity: 1 }], session)
         );
-        // The catalogue's cache cannot roll back, so it is refreshed once the commit has landed.
+        // The availability entry cannot roll back, so it is deleted once the commit has landed.
         await refreshShelf([productId]);
 
         expect(await countersOf(productId)).toEqual({ onHand: 9, reserved: 2, available: 7 });
