@@ -118,16 +118,14 @@ permissions and gets exactly that.
 
 ## The words we used
 
-| Word                       | In plain terms                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Product permission**     | The whole Product record, unconditionally — price included.                                                               |
-| **Language permission**    | Every language, every screen phrase, unconditionally.                                                                     |
-| **Translation permission** | Write a translatable entity's words. Never grants a read or write on the entity's own record.                             |
-| **Switched off**           | Not deleted, just not currently for sale — an editor sees these, a visitor does not. → [products](../modules/products.md) |
-| **Soft delete**            | Hidden from customers, kept in the records, restorable.                                                                   |
-| **Locale**                 | One language the shop can speak. → [locales](../modules/locales.md)                                                       |
-| **Entry**                  | One phrase, in one language, in the shop's own dictionary — not a product's words.                                        |
-| **Translation**            | One entity's words, in one language — a product's title and description.                                                  |
+| Word                                              | In plain terms                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Product, language and translation permissions** | What each one grants to this role is in [the role table](./start.md#what-that-actually-grants).                           |
+| **Switched off**                                  | Not deleted, just not currently for sale — an editor sees these, a visitor does not. → [products](../modules/products.md) |
+| **Soft delete**                                   | Hidden from customers, kept in the records, restorable.                                                                   |
+| **Locale**                                        | One language the shop can speak. → [locales](../modules/locales.md)                                                       |
+| **Entry**                                         | One phrase, in one language, in the shop's own dictionary — not a product's words.                                        |
+| **Translation**                                   | One entity's words, in one language — a product's title and description.                                                  |
 
 ## Read next
 

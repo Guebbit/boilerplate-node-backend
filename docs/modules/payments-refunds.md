@@ -354,13 +354,14 @@ buyer mail happens: no money moved. What it does write, in one transaction:
 Which refunds may be voided is the hand-settle rule (`mayBeCanceled`), because both rest on the fact
 that the money provably did not move. `PaymentActions.cancelRefund` lists exactly those ids.
 
-| The refund                                                                                                                       | Cancel                             |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| a hand-paid payment's `pending` one                                                                                              | yes                                |
-| a card refund refused as `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed` | yes                                |
-| a card refund refused as `disputed`, once no dispute is open                                                                     | yes                                |
-| `succeeded` (the money moved), or already canceled                                                                               | no: 409 `PAYMENT_REFUND_NOT_OPEN`  |
-| a card refund `pending` (an attempt runs) or failed as `provider_unavailable` / `unknown`                                        | no: 409 `PAYMENT_REFUND_IN_FLIGHT` |
+| The refund                                                                                                                       | Cancel                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| a hand-paid payment's `pending` one                                                                                              | yes                                                                                      |
+| a card refund refused as `declined`, `insufficient_funds`, `expired_or_canceled_card`, `lost_or_stolen_card`, `provider_removed` | yes                                                                                      |
+| a card refund refused as `disputed`, once no dispute is open                                                                     | yes                                                                                      |
+| `succeeded` (the money moved), or already canceled                                                                               | no: 409 `PAYMENT_REFUND_NOT_OPEN`                                                        |
+| a refund a bank sent back after it settled (`reversedAt` set)                                                                    | no: 409 `PAYMENT_REFUND_IN_FLIGHT` (`refunds.ts:1131`), then press Mark returned instead |
+| a card refund `pending` (an attempt runs) or failed as `provider_unavailable` / `unknown`                                        | no: 409 `PAYMENT_REFUND_IN_FLIGHT`                                                       |
 
 A canceled record is closed for good: the refund sweep never claims it (`canceled` is not
 retryable), `isOpenRefund` is false for it, so it is on no attention list and does not make the

@@ -21,12 +21,9 @@ Every role's full rights are in [the role table](./start.md#what-that-actually-g
 
 ## Permission families, three jobs
 
-| Permission                               | Buys                                                                                                 |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Users: read, create, update, delete, ban | Add, edit, erase an account — and ban one.                                                           |
-| Orders: display and update               | Read and update any order in the shop, not only your own.                                            |
-| Payments: display, record, refund        | Read any payment, record one, and refund it.                                                         |
-| Returns: read and update                 | Read any return request; approve, decline or cancel it; open one or record a withdrawal for a buyer. |
+Accounts (including banning), orders and payments across the whole shop, and returns. Which letter
+of each this role holds is in [the role table](./start.md#what-that-actually-grants), the one place
+it is written down.
 
 ## Banning is its own key {#banning-is-its-own-key}
 
