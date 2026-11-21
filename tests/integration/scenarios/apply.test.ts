@@ -37,9 +37,6 @@ const NAMED_ACCOUNT_COUNT = Object.keys(seedCredentials).length;
 /**
  * Runs `scenarios/apply.ts` for real, against `dbUri` — a database on the same Mongo server every
  * other integration test shares (`NODE_TEST_MONGO_URI`), so no extra server is started for this.
- *
- * Redis and RabbitMQ forced off: neither is under test here, and left alone the `.env` this script
- * loads names the docker-compose hostnames, which cost a real (if short) DNS failure per run.
  */
 const runApply = (
     args: string[],
@@ -58,8 +55,6 @@ const runApply = (
                     ...process.env,
                     NODE_ENV: nodeEnv,
                     NODE_DB_URI: dbUri,
-                    NODE_REDIS_CACHE_ENABLED: '0',
-                    NODE_RABBITMQ_ENABLED: '0',
                     ...extraEnv
                 }
             },
@@ -105,7 +100,7 @@ const freshDbUri = (): string => {
 };
 
 describe('scenarios/apply.ts', () => {
-    // An empty value stands for "unset": `dotenv/config` would fill a truly absent one from `.env`.
+    // An empty value stands for "unset": the key is present but blank, so no environment name is given.
     it.each(['production', 'staging', ''])(
         'refuses to run with NODE_ENV=%p, and never opens the database',
         async (nodeEnv) => {
