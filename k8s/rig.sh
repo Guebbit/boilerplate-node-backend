@@ -6,7 +6,8 @@
 #   k8s/rig.sh down    delete the cluster
 #   k8s/rig.sh run     up, then drill, then down: the cluster is deleted however it ends
 #
-# kind runs Kubernetes inside one container, here rootless podman. The cluster is `boilerplate-rig`;
+# kind runs Kubernetes inside one container: rootless podman here, Docker on a GitHub runner
+# (CONTAINER_ENGINE=docker, .github/workflows/k8s-rig.yml). The cluster is `boilerplate-rig`;
 # it has its OWN kubeconfig (tmp/k8s-rig/kubeconfig), so it never touches your ~/.kube/config or
 # your current context, and every kubectl below also names `--context`.
 #
@@ -18,12 +19,20 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# kind reads this to pick podman. With it unset on a podman-only host kind falls back to docker and
-# fails with a misleading "requires setting systemd property Delegate=yes".
-# https://kind.sigs.k8s.io/docs/user/rootless/
-export KIND_EXPERIMENTAL_PROVIDER=podman
-
 ENGINE="${CONTAINER_ENGINE:-podman}"
+case "$ENGINE" in
+    podman | docker) ;;
+    *)
+        printf 'K8S RIG FAILED: CONTAINER_ENGINE must be podman or docker, got "%s"\n' "$ENGINE" >&2
+        exit 1
+        ;;
+esac
+
+# kind reads this to pick its provider, and it is the engine itself. With it unset on a podman-only
+# host kind falls back to docker and fails with a misleading "requires setting systemd property
+# Delegate=yes".
+# https://kind.sigs.k8s.io/docs/user/rootless/
+export KIND_EXPERIMENTAL_PROVIDER="$ENGINE"
 CLUSTER=boilerplate-rig
 CONTEXT="kind-$CLUSTER"
 NAMESPACE=boilerplate
@@ -81,11 +90,16 @@ need_tools() {
 }
 
 # Builds the runtime image here and loads it into the kind node, which has no registry to pull from.
-# `podman save` + `kind load image-archive`: `kind load docker-image` needs a Docker daemon.
+# Docker: `kind load docker-image` reads the image from the Docker daemon.
+# Podman: `podman save` + `kind load image-archive`, because there is no Docker daemon to read from.
 # https://kind.sigs.k8s.io/docs/user/quick-start/#loading-an-image-into-your-cluster
 load_image() {
     step "build $IMAGE and load it into the cluster"
     $ENGINE build -q -f docker/Dockerfile --target runtime -t "$IMAGE" . >/dev/null
+    if [ "$ENGINE" = docker ]; then
+        kind load docker-image "$IMAGE" --name "$CLUSTER"
+        return
+    fi
     rm -f "$STATE/app-image.tar"
     $ENGINE save --format docker-archive -o "$STATE/app-image.tar" "$IMAGE"
     kind load image-archive "$STATE/app-image.tar" --name "$CLUSTER"

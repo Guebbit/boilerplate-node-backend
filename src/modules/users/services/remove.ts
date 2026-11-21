@@ -26,7 +26,8 @@ import { usersAuditActions } from '../audit';
 import { USER_DELETION_CANCELED, USER_ERASED } from '../events';
 import { markSessionsEnded } from './credentials';
 import { withClearedAccount } from './cleared-account';
-import { personalDataSubjectOf } from './personal-data-subject';
+import { addressesOf, erasureSubjectOf } from './personal-data-subject';
+import { removeHeldJobs } from './held-jobs';
 
 /**
  * Runs every registered `personalData.erase` hook and then deletes the user document
@@ -46,11 +47,14 @@ const runErasureCascade = async (
     erasedAt?: Date
 ): Promise<AfterErase[]> => {
     const deferred: AfterErase[] = [];
-    const subject = personalDataSubjectOf(user, erasedAt);
+    const subject = await erasureSubjectOf(user, erasedAt, session);
     for (const erase of personalDataErasers()) {
         const afterErase = await erase(subject, session);
         if (afterErase) deferred.push(afterErase);
     }
+    // Jobs held while the broker was down keep an address, never an id: no eraser can find them.
+    const heldJobs = await removeHeldJobs(addressesOf(subject), session);
+    deferred.push(heldJobs.discardAttachments);
     // A hold this account placed on someone else keeps its force but loses the name.
     await userRepository.forgetHoldSetter(user.id, session);
     await userRepository.deleteOne(user, session);
