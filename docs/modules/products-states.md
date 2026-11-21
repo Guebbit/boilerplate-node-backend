@@ -11,13 +11,13 @@ The states a product lives in, what each one allows a buyer to do, and how backo
 
 Three independent questions, three fields. Stock is the third axis and is unchanged.
 
-| Field                 | Question                       | `false` / set means                        |
-| --------------------- | ------------------------------ | ------------------------------------------ |
-| `active`              | Can a shopper see it?          | hidden: 404 for shoppers, visible to staff |
-| `purchasable`         | Can it be bought, stock aside? | listed, "Not available right now"          |
-| `releaseDate`         | When does it ship from?        | a future date makes it a preorder          |
-| `available` (derived) | Is there stock?                | `0`: sold out                              |
-| `deletedAt`           | Was it removed?                | gone; carts and wishlists drop it          |
+| Field          | Question                       | `false` / set means                        |
+| -------------- | ------------------------------ | ------------------------------------------ |
+| `active`       | Can a shopper see it?          | hidden: 404 for shoppers, visible to staff |
+| `purchasable`  | Can it be bought, stock aside? | listed, "Not available right now"          |
+| `releaseDate`  | When does it ship from?        | a future date makes it a preorder          |
+| `availability` | Is there stock?                | `out_of_stock`: its own read, not a field  |
+| `deletedAt`    | Was it removed?                | gone; carts and wishlists drop it          |
 
 `purchasable` is ignored while `active` is `false`: hidden wins. `active` means visibility and
 nothing else, the same meaning it has on users and languages.
@@ -88,15 +88,15 @@ stateDiagram-v2
     Preorder --> OnSale: releaseDate passes<br/>(derived, no job)
 ```
 
-| Piece                             | Owner       | What it does                                                          |
-| --------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `releaseDate`, derived `preorder` | `products`  | the catalogue fact; a preorder is never "running low"                 |
-| allowance and allocation          | `inventory` | `backorderLimit` caps how many can be ordered; receipts allocate them |
-| the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives    |
+| Piece                    | Owner       | What it does                                                           |
+| ------------------------ | ----------- | ---------------------------------------------------------------------- |
+| `releaseDate`            | `products`  | the catalogue fact; a future date makes `availability` read `preorder` |
+| allowance and allocation | `inventory` | `backorderLimit` caps how many can be ordered; receipts allocate them  |
+| the "ships from" promise | `delivery`  | one fulfillment order per release day, on hold until stock arrives     |
 
-A preorder's `available` (and with it `inStock`) counts the **allowance**, not the shelf: what is
-left of `backorderLimit` after the units already claimed, so the product reads sold out the day the
-allowance is full, and out of stock until staff set one (a new product's allowance is 0). The two
+A preorder sells against the **allowance**, not the shelf: what is left of `backorderLimit` after
+the units already claimed. Its `availability` reads `preorder` while any is left, and `out_of_stock`
+the day the allowance is full, or until staff set one (a new product's allowance is 0). The two
 numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved` by the same
 `syncStockCache` door, and never sent to a client.
 
@@ -119,15 +119,14 @@ Not stored; how these states translate if a feed or JSON-LD is ever emitted.
 
 ## Backorder {#backorder}
 
-A released product the shop keeps selling while it is out of stock. Three fields and one derived flag:
+A released product the shop keeps selling while it is out of stock. Two fields, and a derived `availability`:
 
-| Field            | Meaning                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `allowBackorder` | the switch, off by default                                                                     |
-| `restockDate`    | optional, at most a year ahead; without it the shop promises "within 30 days"                  |
-| `backorder`      | derived, never stored: switch on, released, visible and buyable, date not passed, cap has room |
+| Field            | Meaning                                                                       |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `allowBackorder` | the switch, off by default                                                    |
+| `restockDate`    | optional, at most a year ahead; without it the shop promises "within 30 days" |
 
-**A passed restock date reads sold out**, until staff set a new date or clear it. A missed date is
+**A passed restock date reads `out_of_stock`**, until staff set a new date or clear it. A missed date is
 evidence the shop lacks a basis to promise another one. Moving the date later tells the buyers who
 were promised it, by the same rule as a moved release date; a buyer promised the 30-day default is
 left alone, whatever the catalogue does.

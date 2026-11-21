@@ -92,14 +92,6 @@ describe('cart routes — a merge is a hundred writes in one request', () => {
 });
 
 describe('cart routes — caching', () => {
-    it('clears products at checkout, where stock actually changes', () => {
-        /**
-         * Checkout is the one cart route with effects outside the cart: it commits reserved stock.
-         * Orders are never Redis-cached, so there is no `orders` entry to clear.
-         */
-        expect(chainOf(router, 'POST /checkout')).toContain('invalidateCache([products])');
-    });
-
     it('caches nothing, because a cart is per-caller state', () => {
         /**
          * A shared cache keyed without the caller would serve one shopper's cart to another. The

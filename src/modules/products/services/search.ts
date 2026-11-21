@@ -10,7 +10,6 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { toSearchPattern } from '@infrastructure/persistence/search';
 import { toObjectId, withScope } from '@infrastructure/persistence/create-repository';
 import { productRepository } from '../repository';
-import { canSeeStock, redactStock } from './stock-view';
 import { standingOnRead, withActions } from './actions';
 import { callerScope } from './read';
 
@@ -98,8 +97,7 @@ const searchWithTranslatedText = (
 };
 
 /**
- * `GET /products` / `POST /products/search` — search, as `context.caller` may see it: the exact
- * stock counters stay for a holder of `read:StockLevel` — see `./stock-view` — and each row's
+ * `GET /products` / `POST /products/search` — search, as `context.caller` may see it: each row's
  * `actions` is the caller's own, or all `false` for a caller answered from the shared cache.
  *
  * Wraps rather than folds into `search()`: every other caller of `search()` — unit tests among them
@@ -112,13 +110,10 @@ export const searchForCaller = (
     context: CallerContext
 ): Promise<{ items: Product[]; meta: PaginatedMeta }> =>
     search(filters, scope).then((result) => {
-        const seesStock = canSeeStock(context.caller);
         const standing = standingOnRead(callerScope, context.caller);
         return {
             ...result,
-            items: result.items.map((product) =>
-                withActions(redactStock(product, seesStock), standing)
-            )
+            items: result.items.map((product) => withActions(product, standing))
         };
     });
 

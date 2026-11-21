@@ -28,7 +28,6 @@ import { invalidateCache, searchCache, setCache } from '@infrastructure/http/mid
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { productService } from './services';
-import { canSeeStock } from './services/stock-view';
 import { canSeeTranslations } from './services/translation-view';
 import { HOUR_SECONDS } from '@domain-primitives/time';
 
@@ -47,15 +46,14 @@ router.use(getAuth);
 
 /**
  * A caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
- * sees more (admins — inactive products included, the exact stock counters, or every language's
- * `translations`) bypasses Redis entirely rather than risk serving or storing their wider answer
- * under that shared key. `hasAnonymousReadScope` is what makes the scope half safe BY
- * CONSTRUCTION — see its own docblock; the two field-level checks are separate on purpose, since
- * a custom API key can hold `read:Translation` or `read:StockLevel` alone.
+ * sees more (admins — inactive products included, or every language's `translations`) bypasses
+ * Redis entirely rather than risk serving or storing their wider answer under that shared key.
+ * `hasAnonymousReadScope` is what makes the scope half safe BY CONSTRUCTION — see its own
+ * docblock; the field-level check is separate on purpose, since a custom API key can hold
+ * `read:Translation` alone.
  */
 const cacheScopeKey = (request: Request): boolean =>
     hasAnonymousReadScope(productService.callerScope, request.caller) &&
-    !canSeeStock(request.caller) &&
     !canSeeTranslations(request.caller);
 
 /**
@@ -65,7 +63,8 @@ const cacheScopeKey = (request: Request): boolean =>
 
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that
- * change the answer.
+ * change the answer. `browserRevalidate`: Redis keeps the answer for the hour, a browser checks
+ * first and gets a 304 while nothing changed; the POST spelling answers `no-store` regardless.
  */
 const cacheProductsSearch = searchCache(
     'products',
@@ -74,7 +73,8 @@ const cacheProductsSearch = searchCache(
     undefined,
     {
         keyValues: searchProductsKeyValues,
-        orderedKeyParameters: searchProductsOrderedParameters
+        orderedKeyParameters: searchProductsOrderedParameters,
+        browserRevalidate: true
     }
 );
 
@@ -124,8 +124,8 @@ router.get(
     previewDraftLanguage,
     /**
      * `browserRevalidate`: the server keeps serving from Redis, but a browser must check first (a
-     * 304 when nothing changed), because the page shows `available`, which a stock write changes
-     * and no server-side clear can reach in someone's browser.
+     * 304 when nothing changed), because a staff edit clears Redis and no server-side clear can
+     * reach a copy already in someone's browser.
      */
     setCache(HOUR_SECONDS, {
         tags: ['products'],

@@ -344,8 +344,8 @@ components:
     schemas:
         # ── Inventory module ────────────────────────────────────────────────────
         # Owned by src/modules/inventory. This module is the ONLY writer of the three counters
-        # `Product.onHand`, `Product.reserved` and `backordered`; `products` declares them because it owns the
-        # collection, and reads them like everyone else.
+        # `onHand`, `reserved` and `backordered`; the product answer carries none of them, so
+        # they are read from `GET /inventory/levels/{productId}`.
 
         # Why the units moved. Each reason implies a fixed set of three deltas — see
         # `domain/transitions.ts`, which is the one place that mapping is written.

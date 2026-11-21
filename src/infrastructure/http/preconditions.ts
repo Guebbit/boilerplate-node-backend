@@ -96,7 +96,7 @@ export const keepEtag = (response: Response): void => {
  *
  * The header is set when `response.json` runs, because the digest needs the body. Express then
  * keeps this tag instead of minting its own and answers `If-None-Match` itself: a match on the
- * WHOLE tag is a 304, so a read is never stale (the digest moves with prices, stock, language).
+ * WHOLE tag is a 304, so a read is never stale (the digest moves with the body: price, language, the caller's `actions`).
  * A write's `If-Match` compares only the edit part (see `persistence/versioning.ts`).
  *
  * The wrapper is installed after the Redis cache's, so it runs first and the cache stores the tag.

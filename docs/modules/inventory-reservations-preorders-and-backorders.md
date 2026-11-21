@@ -63,8 +63,8 @@ that transaction. `waiting` is what the order still claims of that product, a st
 a redelivery is harmless: [`delivery`](./delivery.md) releases whatever it holds beyond `waiting`, and
 the second time there is nothing beyond it.
 
-A product that is a preorder never reads as "running low": its `lowStock` flag is false and the
-`products_low_stock_total` gauge leaves it out (`countPublic` with `excludePreorders`). The stock
+A product that is a preorder never counts as "running low": the `products_low_stock_total` gauge
+leaves it out (`countPublic` with `excludePreorders`). The stock
 board's `lowOnly` view is unchanged, since a restocker wants to see it.
 
 `GET /inventory/preorders` is the preorder board's read: per product the cap, `backordered`, its split

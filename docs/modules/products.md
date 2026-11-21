@@ -8,8 +8,9 @@ audience: [developer]
 The catalogue, its search surface and its cache.
 
 ::: tip At a glance
-**Owns** — the catalogue: what the shop sells. `onHand`/`reserved`/`available` sit on every product
-row too, but as a read-only mirror — [`inventory`](./inventory.md) owns the counters themselves.
+**Owns** — the catalogue: what the shop sells. `onHand`/`reserved` sit on every product row too, but
+as a read-only mirror that never reaches the wire — [`inventory`](./inventory.md) owns the counters
+and answers every question about stock.
 **Depends on** — only [`shop`](./shop.md), for the currency. It is the leaf several domains read as it is.
 **Breaks if you change** — `productSchema`. `orders` embeds it, so an order's history is literally this shape.
 :::
@@ -101,19 +102,19 @@ reference. As an import that would be a cycle. As `product.deleted` it is produc
 two modules listening, and the arrow still points one way.
 
 ::: warning The one field-ownership split worth remembering
-`onHand`/`reserved`/`available` live on the product document so a catalogue read needs no join —
-but they are a MIRROR, not the source. [`inventory`](./inventory.md) owns the real counters in its
-own collection, and the only reason this document carries a copy at all is read performance. A
-write to any of the three from anywhere but `inventory`'s own sync is a bug, not a shortcut.
+`onHand`/`reserved` live on the product document so a catalogue read needs no join — but they are a
+MIRROR, not the source. [`inventory`](./inventory.md) owns the real counters in its own collection.
+What still reads the copy is the back-in-stock signal (`lookups.ts`), not a catalogue read. A write
+to either from anywhere but `inventory`'s own sync is a bug, not a shortcut.
 :::
 
-**A shopper sees two flags, not the shelf.** The counters tell a competitor how fast a line sells
-and how much is left, so a response carries `onHand`, `reserved` and `available` only for a caller
-holding `read:StockLevel` (`canSeeStock` in `services/stock-view.ts`). Everyone else, a guest
-included, gets `inStock` (is anything available) and `lowStock` (available at or below
-`NODE_LOW_STOCK_THRESHOLD`), derived by `stockFlags` in `domain/stock.ts`. Both flags ride on every
-representation, so a client never has to guess from an absent number. A cached public list is
-keyed by the caller's reach, so one reader's counters are never served to another.
+**The product answer carries no stock, for anyone.** No counter, no `inStock`, `lowStock`, `buyable`,
+`preorder` or `backorder`: the answer is the same for every role, apart from what a role may see at
+all (the `actions` it holds, the `translations` a translator reads). A shopper's stock signal is the
+availability read below; a stock reader's counters are `GET /inventory/levels/{productId}`
+(`read:StockLevel`, which `canSeeStock` in `services/stock-view.ts` still names for the one other
+caller that needs it). The counters tell a competitor how fast a line sells and how much is left, so
+they stay behind that key.
 
 **Availability is its own read.** What a shopper is told about stock (`availability`, `availabilityDate`)
 is answered by [`inventory`](./inventory.md#the-availability-reads) under `/products/{id}/availability`
@@ -121,6 +122,15 @@ and `/products/availability`, with a one-minute cache of its own, from the rule 
 `domain/availability.ts`. This module announces `product.terms_changed` through the outbox when an
 edit moves `purchasable`, `allowBackorder`, `active`, `releaseDate` or `restockDate`, and on a
 restore, so that cache is cleared; it knows nothing else about it.
+
+**The details are cached for an hour, and the browser always re-checks.** `GET /products/{id}`, `GET /products`
+and `POST /products/search` stay in Redis for an hour, cleared by the global `products` tag on any
+staff edit (a product write, a translation save, an image upload). A stock move clears nothing
+here: the answer holds no stock, so a sale cannot make it stale. The browser is sent
+`public, no-cache` (the contract's `x-cache: revalidate`), so it asks every time and gets a `304`
+while the ETag still matches. The one `searchCache` declaration serves both spellings of the list;
+the `POST` answers `no-store` whatever it is told. The rule behind this is
+[What a cached answer may carry](../understand/api-standards.md#what-a-cached-answer-may-carry).
 
 **A new product has no stock.** `POST /products` takes no `onHand` (a body naming one is refused
 `422`): stock is not a product field, and units enter only through `POST /inventory/levels/{productId}/receive`, which
@@ -219,12 +229,12 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
 
 ## Configuration
 
-| Variable                     | Default         | Meaning                                                                                                                                                                                                          |
-| ---------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_VAT_RATE_DEFAULT`      | required        | The rate charged on a product with no `taxClass` — every product's fallback. Required at boot and range-checked: unset, or outside `[0, 1)`, refuses to start. `0.22` is only the `NODE_ENV=test` default        |
-| `NODE_VAT_RATE_REDUCED`      | required        | The rate charged on a product whose `taxClass` is `reduced`. Required and range-checked at boot like the default; `0.1` is only the `NODE_ENV=test` default                                                      |
-| `NODE_FRONTEND_LINK_PRODUCT` | `products/{id}` | Path of a product page under the language, `{id}` replaced by the product's id. The sitemap and the back-in-stock mail both link through it (`productPagePath`)                                                  |
-| `NODE_LOW_STOCK_THRESHOLD`   | `5`             | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
+| Variable                     | Default         | Meaning                                                                                                                                                                                                   |
+| ---------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_VAT_RATE_DEFAULT`      | required        | The rate charged on a product with no `taxClass` — every product's fallback. Required at boot and range-checked: unset, or outside `[0, 1)`, refuses to start. `0.22` is only the `NODE_ENV=test` default |
+| `NODE_VAT_RATE_REDUCED`      | required        | The rate charged on a product whose `taxClass` is `reduced`. Required and range-checked at boot like the default; `0.1` is only the `NODE_ENV=test` default                                               |
+| `NODE_FRONTEND_LINK_PRODUCT` | `products/{id}` | Path of a product page under the language, `{id}` replaced by the product's id. The sitemap and the back-in-stock mail both link through it (`productPagePath`)                                           |
+| `NODE_LOW_STOCK_THRESHOLD`   | `5`             | Availability at or under which a product counts as running low. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`)               |
 
 Both are read per call from one slice (`config.ts`), which parses a set value through a
 whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and by the slice itself

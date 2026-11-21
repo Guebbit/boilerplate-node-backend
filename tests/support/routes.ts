@@ -174,8 +174,15 @@ const mockSearchCache = (
     entity: string,
     keyParameters: readonly string[],
     _scopeKey: unknown,
-    seconds = HOUR_SECONDS
-) => mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
+    seconds = HOUR_SECONDS,
+    keying: { browserRevalidate?: boolean } = {}
+) =>
+    mockSetCache(seconds, {
+        tags: [entity],
+        keyParameters,
+        keyAs: `${entity}:search`,
+        browserRevalidate: keying.browserRevalidate
+    });
 
 /**
  * Factory for `jest.mock('@infrastructure/http/middlewares/cache', cacheMock)`: every cache

@@ -177,6 +177,26 @@ describe('GET /products', () => {
     });
 });
 
+describe('the browser re-checks the product reads', () => {
+    it('answers a guest GET /products with `public, no-cache`', async () => {
+        await createProduct();
+
+        const response = await api().get('/products');
+
+        expect(response.status).toBe(200);
+        expect(response.headers['cache-control']).toBe('public, no-cache');
+    });
+
+    it('answers POST /products/search 200 and `no-store`, whatever the shared declaration says', async () => {
+        await createProduct();
+
+        const response = await api().post('/products/search').send({ page: 1, pageSize: 10 });
+
+        expect(response.status).toBe(200);
+        expect(response.headers['cache-control']).toBe('no-store');
+    });
+});
+
 describe('POST /products/search', () => {
     it('matches the contract', async () => {
         await createProduct();

@@ -1,135 +1,99 @@
 /**
  * @module
- * Who sees how much stock. Everyone gets `inStock` and `lowStock`; the exact counters (`onHand`,
- * `reserved`, `available`) go only to a caller holding `read:StockLevel`, because exact numbers
- * leak sales velocity and help plan a denial of inventory. Asserted on the reads, for a guest, a
- * customer, a role with the product keys but no stock key (the editor), and each role that does
- * hold it. The writes that answer a product are in `tests/contract/product-write.test.ts`, which
- * already stands up the locales they need.
+ * The product answer carries no stock, for anyone: not the counters (`onHand`, `reserved`,
+ * `available`), not the shopper's flags (`inStock`, `lowStock`, `buyable`, `preorder`,
+ * `backorder`). Stock is `inventory`'s own read (`/products/{id}/availability` for a shopper,
+ * `/inventory/levels/{id}` for a stock reader), so the answer is the same for every role apart
+ * from what a role is allowed to see at all: the `actions` it holds and the `translations` a
+ * translator reads. Asserted on the detail and the list, for a guest, a customer, a role with the
+ * product keys but no stock key (the editor), and each role that holds the stock key. The writes
+ * that answer a product are in `tests/contract/product-write.test.ts`, which already stands up the
+ * locales they need.
  */
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
-import { setEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 
-/** The three counters only a stock reader sees. */
-const COUNTERS = ['onHand', 'reserved', 'available'];
-
-/** The two flags every caller sees. */
-const FLAGS = ['inStock', 'lowStock'];
-
-/** The rows of a list response. */
-const rows = (response: { body: { items: Record<string, unknown>[] } }) => response.body.items;
+/** Every stock-shaped field the product answer used to carry. */
+const STOCK_FIELDS = [
+    'onHand',
+    'reserved',
+    'available',
+    'inStock',
+    'lowStock',
+    'buyable',
+    'preorder',
+    'backorder'
+];
 
 /** The data object of a response. */
 const dataOf = (response: { body: unknown }) => response.body as Record<string, unknown>;
 
-describe('GET /products/{id} — the counters follow read:StockLevel', () => {
-    it.each([
-        ['a guest', undefined],
-        ['a customer', 'customer'],
-        ['an unverified account', 'unverified'],
-        ['an editor, who holds every product key but not the stock one', 'editor']
-    ])('hides the counters from %s, and still says whether it is in stock', async (_who, role) => {
-        const product = await createProduct({ onHand: 40 });
-        const caller = role ? await authenticateAsRole(role) : undefined;
-        const bearer = caller?.bearer;
+/** What differs by role on purpose: the caller's own `actions`, and the translator's `translations`. */
+const withoutRoleViews = ({
+    actions: _actions,
+    translations: _translations,
+    ...rest
+}: Record<string, unknown>) => rest;
 
-        const request = api().get(`/products/${product.id}`);
-        const response = await (bearer ? request.set('Authorization', bearer) : request);
+/** The roles a read is tried as; `undefined` is a guest. */
+const ROLES = [
+    ['a guest', undefined],
+    ['a customer', 'customer'],
+    ['an unverified account', 'unverified'],
+    ['an editor, who holds every product key but not the stock one', 'editor'],
+    ['a manager', 'manager'],
+    ['a warehouse worker', 'warehouse'],
+    ['an admin', 'admin']
+] as const;
+
+/**
+ * Reads `path` as `role` (a guest when absent).
+ *
+ * @param path - the product route
+ * @param role - the role to authenticate as, if any
+ */
+const readAs = async (path: string, role: string | undefined) => {
+    const request = api().get(path);
+    if (role === undefined) return request;
+    const { bearer } = await authenticateAsRole(role);
+    return request.set('Authorization', bearer);
+};
+
+describe('GET /products/{id} — no stock in the answer', () => {
+    it.each(ROLES)('carries none for %s', async (_who, role) => {
+        const product = await createProduct({ onHand: 40 });
+
+        const response = await readAs(`/products/${product.id}`, role);
 
         expect(response.status).toBe(200);
-        const data = dataOf(response);
-        expect(COUNTERS.filter((field) => field in data)).toEqual([]);
-        expect(FLAGS.map((field) => data[field])).toEqual([true, false]);
+        expect(STOCK_FIELDS.filter((field) => field in dataOf(response))).toEqual([]);
     });
 
-    it.each(['manager', 'warehouse', 'admin'])('shows the counters to a %s', async (role) => {
+    it('answers a stock reader the same as a guest, apart from the caller’s own actions', async () => {
         const product = await createProduct({ onHand: 40 });
-        const { bearer } = await authenticateAsRole(role);
 
-        const response = await api().get(`/products/${product.id}`).set('Authorization', bearer);
+        const guest = await readAs(`/products/${product.id}`, undefined);
+        const manager = await readAs(`/products/${product.id}`, 'manager');
 
-        expect(response.status).toBe(200);
-        expect(dataOf(response)).toMatchObject({
-            onHand: 40,
-            reserved: 0,
-            available: 40,
-            inStock: true,
-            lowStock: false
-        });
-    });
-});
-
-describe('inStock and lowStock', () => {
-    it('reads an empty shelf as out of stock, not as low', async () => {
-        const product = await createProduct({ onHand: 0 });
-
-        const response = await api().get(`/products/${product.id}`);
-
-        expect(FLAGS.map((field) => dataOf(response)[field])).toEqual([false, false]);
-    });
-
-    it('reads what is left as low at the threshold and not above it', async () => {
-        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
-        const atThreshold = await createProduct({ onHand: 5 });
-        const above = await createProduct({ onHand: 6 });
-
-        const [low, plenty] = await Promise.all([
-            api().get(`/products/${atThreshold.id}`),
-            api().get(`/products/${above.id}`)
-        ]);
-
-        expect([dataOf(low).lowStock, dataOf(plenty).lowStock]).toEqual([true, false]);
-    });
-
-    it('follows the configured threshold, shared with the stock board', async () => {
-        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '2' });
-        const product = await createProduct({ onHand: 4 });
-
-        const response = await api().get(`/products/${product.id}`);
-
-        expect(dataOf(response).lowStock).toBe(false);
+        expect(withoutRoleViews(dataOf(manager))).toEqual(withoutRoleViews(dataOf(guest)));
     });
 });
 
 describe('GET /products — the list follows the same rule', () => {
-    it('strips the counters from every row a guest reads, and keeps them for a stock reader', async () => {
+    it.each(ROLES)('carries no stock in any row for %s', async (_who, role) => {
         await createProduct({ onHand: 12 });
-        await createProduct({ onHand: 3 });
+        await createProduct({ onHand: 0 });
 
-        const guest = await api().get('/products');
-        const { bearer } = await authenticateAsRole('manager');
-        const manager = await api().get('/products').set('Authorization', bearer);
+        const response = await readAs('/products', role);
 
-        expect(rows(guest)).toHaveLength(2);
-        expect(rows(guest).flatMap((row) => COUNTERS.filter((field) => field in row))).toEqual([]);
-        expect(
-            rows(manager)
-                .map((row) => row.onHand)
-                .toSorted()
-        ).toEqual([12, 3].toSorted());
-    });
-
-    /**
-     * The guest's response is shared through the cache: warming it with a stock reader's answer
-     * first must never put the counters in front of the next guest.
-     */
-    it('keeps a stock reader’s answer out of the guest’s cached one', async () => {
-        await createProduct({ onHand: 12 });
-        const { bearer } = await authenticateAsRole('admin');
-
-        await api().get('/products').set('Authorization', bearer);
-        const guest = await api().get('/products');
-
-        expect(
-            (guest.body.items as Record<string, unknown>[]).flatMap((row) =>
-                COUNTERS.filter((field) => field in row)
-            )
-        ).toEqual([]);
+        expect(response.status).toBe(200);
+        const rows = response.body.items as Record<string, unknown>[];
+        expect(rows).toHaveLength(2);
+        expect(rows.flatMap((row) => STOCK_FIELDS.filter((field) => field in row))).toEqual([]);
     });
 });

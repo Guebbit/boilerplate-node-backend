@@ -223,6 +223,9 @@ interface CacheOptions {
      * `invalidateCache` clears Redis on write but cannot reach a copy in someone's browser, so for
      * data a person edits and revisits, `max-age` is wrong. This keeps Redis serving while the
      * browser revalidates and gets `304` when the ETag matches — one round trip, edit visible at once.
+     *
+     * GET only: a POST answer is `no-store` whatever this says, so a route that answers both
+     * spellings (`searchCache`) declares it once.
      */
     browserRevalidate?: boolean;
 
@@ -430,10 +433,10 @@ const replay = (response: Response, cached: CachedResponse): void => {
 
 /**
  * Set every cache-control header this middleware owns, and decide whether the request is even a
- * candidate for the Redis lookup {@link serveOrArm} does next. The two throws guard a mounting
- * mistake (`noStore` already set, or `browserRevalidate` on a POST), not a runtime condition —
- * see `docs/understand/redis-cache.md#response-headers` for the full reasoning behind every header set
- * here and the two throws.
+ * candidate for the Redis lookup {@link serveOrArm} does next. The throw guards a mounting
+ * mistake (`noStore` already set), not a runtime condition — see
+ * `docs/understand/redis-cache.md#response-headers` for the full reasoning behind every header set
+ * here and the throw.
  *
  * @param request - decides GET vs POST framing
  * @param response - headers are set on this response; `noStore` is read from it too
@@ -443,7 +446,7 @@ const replay = (response: Response, cached: CachedResponse): void => {
  * or is a draft preview —
  *   see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
- * @throws {Error} on either mounting mistake described above
+ * @throws {Error} on the mounting mistake described above
  */
 const applyCacheHeaders = (
     request: Request,
@@ -460,11 +463,6 @@ const applyCacheHeaders = (
         );
 
     const cacheableRead = request.method === 'GET';
-    if (!cacheableRead && options.browserRevalidate)
-        throw new Error(
-            'browserRevalidate is GET-only: a POST response is not browser-cacheable, so ' +
-                'there is nothing for the browser to revalidate. See the comment in this file.'
-        );
 
     response.set(
         'Cache-Control',
@@ -677,7 +675,7 @@ export const searchCache = (
     keyParameters: readonly string[],
     scopeKey: CacheOptions['scopeKey'],
     seconds = HOUR_SECONDS,
-    keying: Pick<CacheOptions, 'keyValues' | 'orderedKeyParameters'> = {}
+    keying: Pick<CacheOptions, 'keyValues' | 'orderedKeyParameters' | 'browserRevalidate'> = {}
 ) =>
     setCache(seconds, {
         tags: [entity],

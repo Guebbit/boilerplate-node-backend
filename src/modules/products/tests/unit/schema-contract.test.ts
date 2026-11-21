@@ -1,9 +1,8 @@
 /**
  * @module
- * The product schema's contract, and the availability it derives from the two stock counters
- * `inventory` writes. Each default decides what a product means when a field was never set —
- * e.g. `onHand: 0` keeps a freshly created product honestly out-of-stock rather than
- * phantom-stocked.
+ * The product schema's contract, and what its serialization leaves off the wire. Each default
+ * decides what a product means when a field was never set — e.g. `onHand: 0` keeps a freshly
+ * created product honestly out-of-stock rather than phantom-stocked.
  */
 
 import { productSchema, applyProductTransform } from '@modules/products/model';
@@ -16,11 +15,16 @@ import {
     requiredPaths
 } from '@tests/schema';
 
-/** A serialized product as the transform receives it, before `available` is added. */
-const serialize = (onHand: unknown, reserved: unknown) => {
-    const document: Record<string, unknown> = { _id: 'x', onHand, reserved };
-    return applyProductTransform(document).available;
-};
+/** One document as the transform receives it, with the whole stock copy on it. */
+const serialized = () =>
+    applyProductTransform({
+        _id: 'x',
+        onHand: 10,
+        reserved: 3,
+        backorderLimit: 5,
+        backordered: 1,
+        stockVersion: 7
+    });
 
 describe('productSchema — what a product must carry', () => {
     it('requires a title and a price, and nothing else', () => {
@@ -104,35 +108,20 @@ describe('productSchema — indexes', () => {
     });
 });
 
-describe('applyProductTransform — the derived availability', () => {
-    it('reports what is left after holds', () => {
-        expect(serialize(10, 3)).toBe(7);
+describe('applyProductTransform — the serialized product', () => {
+    it('leaves the stock copy off the wire: a product answer carries no stock', () => {
+        expect(serialized()).not.toHaveProperty('onHand');
+        expect(serialized()).not.toHaveProperty('reserved');
+        expect(serialized()).not.toHaveProperty('available');
+        expect(serialized()).not.toHaveProperty('backorderLimit');
+        expect(serialized()).not.toHaveProperty('backordered');
+        expect(serialized()).not.toHaveProperty('stockVersion');
     });
 
-    it('never reports a negative availability', () => {
-        /**
-         * Over-reservation is possible under a race the counters recover from; a negative number
-         * on the wire would be rendered by a storefront as a negative stock badge.
-         */
-        expect(serialize(3, 10)).toBe(0);
-    });
-
-    it('treats a missing counter as zero rather than propagating NaN', () => {
-        /**
-         * The defence the schema defaults make unnecessary in normal operation, and which still
-         * has to hold for documents written before those defaults existed. `undefined - 0` is
-         * `NaN`, which serializes as `null` and reads as "out of stock" everywhere.
-         */
-        expect(serialize(undefined, 2)).toBe(0);
-        expect(serialize(5, undefined)).toBe(5);
-        expect(serialize(undefined, undefined)).toBe(0);
-    });
-
-    it('ignores counters of the wrong type instead of coercing them', () => {
-        /**
-         * A string `onHand` would make `-` coerce and sometimes succeed, producing a plausible
-         * wrong number. Treating a non-number as zero fails visibly instead.
-         */
-        expect(serialize('12', 2)).toBe(0);
+    it('stamps the live currency and every action closed', () => {
+        expect(serialized()).toMatchObject({
+            currency: expect.any(String),
+            actions: { update: false, delete: false, restore: false, hardDelete: false }
+        });
     });
 });

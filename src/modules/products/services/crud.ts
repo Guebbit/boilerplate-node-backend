@@ -52,13 +52,7 @@ type ProductCreateData = Omit<
     Product,
     | 'id'
     | 'currency'
-    | 'inStock'
-    | 'lowStock'
-    | 'buyable'
-    | 'preorder'
-    | 'backorder'
     | 'actions'
-    | 'onHand'
     | 'releaseDate'
     | 'restockDate'
     | 'createdAt'

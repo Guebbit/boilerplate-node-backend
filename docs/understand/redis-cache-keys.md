@@ -126,8 +126,11 @@ opt-in was forgotten. An error answer is `no-store` too, whatever the route set 
 no-cache` and `Vary: Authorization`, and no Redis entry from this middleware. Its `x-cache` is
   `revalidate`.
 - A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
-  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead (`GET /products/:id` does: the
-  page shows a stock count, and inventory clears the `products` tag on every stock write).
+  a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead. The
+  product reads (`GET /products/:id`, `GET /products`) do: staff edits clear Redis but cannot reach a
+  copy in someone's browser, so the browser re-checks and gets a 304 while nothing changed.
+- `browserRevalidate` is read on a GET only. A POST answers `no-store` whatever it says, so a route
+  with a cached POST twin (`searchCache`) declares it once for both spellings.
 - `cacheScope === undefined` — this caller sees more than the shared answer, per
   [the scope-key rule above](./redis-cache.md#no-caching-depends-on-who-is-asking) — answers `private, no-cache`
   regardless of `browserRevalidate`: `serveOrArm` is about to bypass Redis for this same request,
@@ -143,13 +146,10 @@ back to an admin, the same class of bug `GET /account` once had. `Accept-Languag
 `Cookie`, set by `getAuth` itself and only in cookie mode, since there the cookie is the credential;
 `cache.ts` may not import the kernel, so it cannot say it.
 
-**Two throws guard a mounting mistake, not a runtime condition:**
-
-- `noStore` already forbade caching. Left unchecked, the `Cache-Control` set here would REPLACE
-  that header rather than merge — exactly how `GET /account` once cached a caller's profile for an
-  hour behind a router-wide no-store mount.
-- `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
-  conditions nothing here meets, so there would be nothing for the browser to revalidate.
+**One throw guards a mounting mistake, not a runtime condition:** `noStore` already forbade
+caching. Left unchecked, the `Cache-Control` set here would REPLACE that header rather than merge —
+exactly how `GET /account` once cached a caller's profile for an hour behind a router-wide no-store
+mount.
 
 ## Keys this middleware does not own
 

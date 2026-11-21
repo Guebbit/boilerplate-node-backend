@@ -840,12 +840,12 @@ describe('the ETag is two parts: reads compare all of it, writes the edit part',
         expect(etagOf(second)).toBe(etagOf(first));
     });
 
-    it('answers a 200 and a new tag once the body changed without an edit (a stock move)', async () => {
+    it('answers a 304 after a stock move: the product carries no stock, so its body and tag did not move', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         const path = `/products/${product.id}`;
         const old = await api().get(path).set('Authorization', bearer);
-        // A stock move is not an edit: no `editRevision` bump, but staff see the counters.
+        // A stock move is not an edit and the product answer carries no stock: nothing moved.
         await productModel.updateOne(
             { _id: product.id },
             { $set: { onHand: 123 } },
@@ -862,9 +862,8 @@ describe('the ETag is two parts: reads compare all of it, writes the edit part',
             .set('If-Match', etagOf(old))
             .send({ tags: ['after-stock-move'] });
 
-        expect(reread.status).toBe(200);
-        expect(etagOf(reread)).not.toBe(etagOf(old));
-        expect(editPartOf(reread)).toBe(editPartOf(old));
+        expect(reread.status).toBe(304);
+        expect(etagOf(reread)).toBe(etagOf(old));
         expect(write.status).toBe(200);
     });
 

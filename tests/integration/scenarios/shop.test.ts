@@ -27,7 +27,7 @@ import { createApp } from '../../../src/app';
 import { buildScenario } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
 import { productModel } from '@modules/products/model';
-import { presentProduct } from '@modules/products/presenter';
+import { availableStock } from '@modules/products/domain/stock';
 import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { asCustomer, callerContextAs } from '@tests/callers';
@@ -139,10 +139,10 @@ describe('each subject names a row that really has the property', () => {
 
         /**
          * `available`, not `onHand`: the storefront's badge reads the derived counter, which a row
-         * held entirely in reservations would also be zero on. `presentProduct` is the mapping a
-         * response goes through, so this reads it exactly where the consumer does.
+         * held entirely in reservations would also be zero on. `availableStock` is the rule the
+         * availability read applies to the same two counters.
          */
-        expect(presentProduct(product!).available).toBe(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBe(0);
         // Public: an out-of-stock row nobody can reach demonstrates no badge at all.
         expect(product?.active).toBe(true);
         expect(product?.deletedAt).toBeUndefined();
@@ -155,13 +155,13 @@ describe('each subject names a row that really has the property', () => {
 
     it('product.inStock is buyable once the flows have finished shopping', async () => {
         const product = await productModel.findById(subjects['product.inStock']).exec();
-        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
     it('product.rich populates every optional field a detail page renders', async () => {
         const product = await productModel.findById(subjects['product.rich']).exec();
-        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
         expect(product?.description).toBeTruthy();
         expect(product?.categories?.length).toBeGreaterThan(0);
         expect(product?.tags?.length).toBeGreaterThan(0);
@@ -171,13 +171,13 @@ describe('each subject names a row that really has the property', () => {
     it('product.digital needs no shipping method — E16 has something real to check against', async () => {
         const product = await productModel.findById(subjects['product.digital']).exec();
         expect(product?.requiresShipping).toBe(false);
-        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
     it('product.lowStock has exactly one unit free and nothing held against it', async () => {
         const product = await productModel.findById(subjects['product.lowStock']).exec();
-        expect(presentProduct(product!).available).toBe(1);
+        expect(availableStock(product!.onHand, product!.reserved)).toBe(1);
         // No seeded order holds it: the one unit is the test's to take.
         expect(product?.reserved).toBe(0);
         expect(product?.active).toBe(true);
@@ -187,7 +187,7 @@ describe('each subject names a row that really has the property', () => {
         const product = await productModel.findById(subjects['product.noWithdrawal']).exec();
         expect(product?.noWithdrawal).toBe(true);
         expect(product?.requiresShipping).not.toBe(false);
-        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 
@@ -196,7 +196,7 @@ describe('each subject names a row that really has the property', () => {
         // `SHIPPING_METHODS`: express tops out at 5000 g, standard at 30000 g.
         expect(product?.weight).toBeGreaterThan(5000);
         expect(product?.weight).toBeLessThanOrEqual(30_000);
-        expect(presentProduct(product!).available).toBeGreaterThan(0);
+        expect(availableStock(product!.onHand, product!.reserved)).toBeGreaterThan(0);
         expect(product?.active).toBe(true);
     });
 

@@ -19,18 +19,19 @@ import { shopCurrency } from '@modules/shop';
 
 /**
  * The product as it was when the order was placed — the generated `Product`, with the three
- * fields a snapshot must carry made required, `onHand`/`reserved` dropped (the embedded schema
- * has no path for either, so a fixture that pinned one would silently lose it on write), and
- * `taxClass` replaced by `taxRate` — an order line freezes the RESOLVED rate, never the class it
+ * fields a snapshot must carry made required, `preorder` added (the line's own frozen flag, which
+ * the product no longer carries), and `taxClass` replaced by `taxRate` — an order line freezes the RESOLVED rate, never the class it
  * came from, same as `freezeOrderLines` itself. `createdAt`/`updatedAt` are the CATALOGUE row's,
  * carried in explicitly: a subdocument's timestamps stamp on insert regardless of the parent's
  * `{ timestamps: false }`, which would otherwise leave the snapshot dated to when the ORDER was
  * placed rather than to the product row it is a snapshot of.
  */
-export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved' | 'taxClass'> &
+export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'taxClass'> &
     Required<Pick<Product, 'id' | 'title' | 'price'>> & {
         /** The decimal VAT rate this line was actually charged. */
         taxRate: number;
+        /** The line was sold before its release date, frozen at checkout. */
+        preorder?: boolean;
     };
 
 /**

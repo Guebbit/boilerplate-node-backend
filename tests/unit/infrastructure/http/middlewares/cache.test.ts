@@ -971,8 +971,8 @@ describe('setCache', () => {
             expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
         });
 
-        // There is nothing for a browser to revalidate on a response it may not store.
-        it('refuses browserRevalidate on a POST rather than ignoring it', () => {
+        // A route with a cached POST twin declares `browserRevalidate` once; the POST still says no-store.
+        it('ignores browserRevalidate on a POST: the answer stays no-store', async () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: [],
@@ -980,19 +980,21 @@ describe('setCache', () => {
                 browserRevalidate: true,
                 scopeKey: GUEST_SCOPE
             });
+            const { response, headers } = createResponse();
 
-            expect(() =>
-                middleware(
-                    asStub<Request>({
-                        method: 'POST',
-                        originalUrl: '/products/search',
-                        query: {},
-                        body: {}
-                    }),
-                    createResponse().response,
-                    jest.fn() as NextFunction
-                )
-            ).toThrow(/GET-only/);
+            await middleware(
+                asStub<Request>({
+                    method: 'POST',
+                    originalUrl: '/products/search',
+                    query: {},
+                    body: {},
+                    locale: 'en'
+                }),
+                response,
+                jest.fn() as NextFunction
+            );
+
+            expect(headers['cache-control']).toBe('no-store');
         });
     });
 

@@ -11,7 +11,7 @@ import {
     CreatePayment201Response,
     GetOrderById200Response,
     ListOrderPayments200Response,
-    GetProductById200Response,
+    GetInventoryLevel200Response,
     ListStockMovements200Response
 } from '@api/schemas.zod';
 import { api, loginBearer } from '@tests/http';
@@ -144,8 +144,8 @@ export const paymentOf = async (bearer: string, orderId: string) =>
  */
 export const stockOf = async (bearer: string, productId: string) => {
     const { onHand, reserved } = bodyOf(
-        await api().get(`/products/${productId}`).set('Authorization', bearer),
-        GetProductById200Response
+        await api().get(`/inventory/levels/${productId}`).set('Authorization', bearer),
+        GetInventoryLevel200Response
     );
 
     return { onHand, reserved };
