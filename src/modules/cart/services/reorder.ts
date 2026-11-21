@@ -23,7 +23,8 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { mergeLines, type MergeResult } from './merge';
-import { cartGetForBadge, lineLimitReached } from './items';
+import { lineLimitReached } from './items';
+import { toCartView } from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -60,7 +61,7 @@ export const reorderIntoCart = (
                 quantity: item.quantity
             }));
 
-            return mergeLines(userId, requested, context).then((lines) => {
+            return mergeLines(userId, requested, context).then(({ cart: written, lines }) => {
                 /**
                  * Nothing landed: every line is gone from the catalogue or found the cart full.
                  * A full cart is the news the shopper can act on, so it is the one named.
@@ -78,9 +79,7 @@ export const reorderIntoCart = (
                         }
                     ]);
 
-                return cartGetForBadge(userId).then((cart) =>
-                    generateSuccess({ cart, lines }, 200)
-                );
+                return toCartView(written).then((cart) => generateSuccess({ cart, lines }, 200));
             });
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))

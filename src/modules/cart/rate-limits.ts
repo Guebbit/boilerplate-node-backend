@@ -35,8 +35,8 @@ export const checkoutLimiter: RequestHandler = buildRateLimiter(CHECKOUT_BUDGET)
 /**
  * Merges one account may run per window.
  *
- * A merge is many `POST /cart/items`s in one request — a catalogue read and a cart write per line.
- * The global brake counts it as one request, which under-counts both costs. The size comes from
+ * A merge carries many lines in one request — one product read, then one cart write, however many.
+ * The global brake counts it as one request, which under-counts the work of a big one. The size comes from
  * `rate-limits.generated.ts`. A person merges once per sign-in, so the budget never touches a
  * legitimate flow. Keyed on the account, not the address: the route is
  * signed in, and an address key would reset per IP for a stolen session hammering the cart.

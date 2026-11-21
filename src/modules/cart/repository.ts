@@ -1,8 +1,9 @@
 /**
  * @module
- * Cart repository — the repository factory's standard CRUD, plus the six writes a cart actually
- * takes: upsert a line, remove a line, clear all lines (plain and version-guarded for checkout),
- * and the two cleanup writes owed to product and user deletion.
+ * Cart repository — the repository factory's standard CRUD, plus the writes a cart actually
+ * takes: upsert a line, replace all lines under a version guard (merge, reorder), remove a line,
+ * clear all lines (plain and version-guarded for checkout), and the two cleanup writes owed to
+ * product and user deletion.
  *
  * @see docs/modules/cart.md#the-pipeline
  */
@@ -295,6 +296,11 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
         version: number,
         session?: ClientSession
     ) => Promise<CartDocument | null>;
+    replaceLinesIfUnchanged: (
+        userId: string,
+        version: number | null,
+        lines: { productId: string; quantity: number }[]
+    ) => Promise<CartDocument | null>;
     setShippingMethod: (
         userId: string,
         shippingMethodId: string | null
@@ -386,6 +392,49 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
                 { returnDocument: 'after', timestamps: false, session: session ?? null }
             )
             .exec(),
+
+    /**
+     * Write a cart's whole line list in ONE operation, ONLY IF the cart is still at the version
+     * the caller planned the lines against.
+     *
+     * What a merge or a reorder needs: it plans every line in memory, then commits them together,
+     * so a failure leaves the cart as it was and a retry cannot add a line twice. The version is
+     * the guard instead of per-line filters, as in `clearLinesIfUnchanged`; the caps were already
+     * applied by the plan, against that same version.
+     *
+     * No cart yet (`version` `null`) is an insert: a cart created meanwhile hits the unique
+     * `userId` index, which reads as the same lost race.
+     *
+     * @param userId - whose cart
+     * @param version - the `__v` the caller read, or `null` when it read no cart
+     * @param lines - the cart's complete line list after the plan
+     * @returns the cart as written, or `null` when it moved and the caller must plan again
+     */
+    replaceLinesIfUnchanged: (
+        userId: string,
+        version: number | null,
+        lines: { productId: string; quantity: number }[]
+    ) => {
+        const items = lines.map(({ productId, quantity }) => ({
+            productId: toObjectId(productId),
+            quantity
+        }));
+        if (version === null)
+            return cartModel
+                .create({ userId: toObjectId(userId), items })
+                .catch((error: unknown) => {
+                    if (isDuplicateKey(error)) return null;
+                    throw error;
+                });
+        return cartModel
+            .findOneAndUpdate(
+                /* `__v` below is Mongoose's version key; the name belongs to the driver. */
+                { userId: toObjectId(userId), __v: version },
+                { $set: { items }, $inc: { __v: 1 } },
+                { returnDocument: 'after' }
+            )
+            .exec();
+    },
 
     /**
      * Choose or clear the cart's shipping method — `null` clears it, `upsert: true` since a

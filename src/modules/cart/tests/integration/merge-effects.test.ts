@@ -1,9 +1,8 @@
 /**
  * @module
- * What a merge DOES besides answering — its analytics events, and the one refusal that only a race
- * can cause — and what removing a product from carts announces. These are the observable effects
- * the answer's own tests do not reach: a dashboard series that silently stops, or an announcement
- * that fires with nobody to tell.
+ * What a merge DOES besides answering — its analytics events — and what removing a product from
+ * carts announces. These are the observable effects the answer's own tests do not reach: a
+ * dashboard series that silently stops, or an announcement that fires with nobody to tell.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -14,7 +13,6 @@ import { createProduct } from '@modules/products/tests/factories';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { cartAnalyticsEvents } from '../../analytics';
-import { cartRepository, QUANTITY_LIMIT } from '../../repository';
 import { CART_LINES_REMOVED } from '../../events';
 import { cartService } from '../../services';
 
@@ -84,37 +82,6 @@ describe('a merge’s analytics', () => {
             testCallerContext
         );
 
-        expect(emit).not.toHaveBeenCalled();
-    });
-});
-
-describe('a merge that loses a race at the cap', () => {
-    it('answers the line as capped, with what the cart holds, and counts nothing', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartService.addItemById(user.id, String(product._id), 5);
-        /**
-         * Between the rule's read and the write another request filled the line: the repository
-         * refuses the add. Only a race can say so, hence a stand-in for it.
-         */
-        jest.spyOn(cartRepository, 'upsertLine').mockResolvedValueOnce(QUANTITY_LIMIT);
-        const emit = observePort(analyticsPort.emitAnalyticsEvent);
-
-        const { lines } = await cartService.merge(
-            user.id,
-            [{ productId: String(product._id), quantity: 2 }],
-            testCallerContext
-        );
-
-        expect(lines).toEqual([
-            {
-                productId: String(product._id),
-                requested: 2,
-                resulting: 5,
-                reason: 'capped',
-                availability: 'in_stock'
-            }
-        ]);
         expect(emit).not.toHaveBeenCalled();
     });
 });

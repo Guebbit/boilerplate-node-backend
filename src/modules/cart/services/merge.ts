@@ -12,15 +12,17 @@
  */
 
 import { emitDomainEvent } from '@kernel/events';
+import { logger } from '@infrastructure/adapters/logger';
 import { productService } from '@modules/products';
-import type { CallerContext, AddCartItemRequest, MergeLineReason, MergeLineResult } from '@types';
+import type { CallerContext, AddCartItemRequest, MergeLineResult } from '@types';
 import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
 import { cartLineMax, cartMaxLines } from '../config';
-import { cartRepository, QUANTITY_LIMIT, LINE_LIMIT, NO_LINE } from '../repository';
-import { cartGetForBadge, trackLineWrite } from './items';
+import { cartRepository } from '../repository';
+import { trackLineWrite } from './items';
 import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
+import { toCartView } from './view';
 import type { CartView } from '../presenter';
 
 /** What a merge answers with: the cart as it now stands, and what became of each guest line. */
@@ -29,140 +31,160 @@ export interface MergeResult {
     lines: MergeLineResult[];
 }
 
-/** One line's outcome, and the cart document as the line left it — the next line's starting point. */
-interface MergeStep {
-    result: MergeLineResult;
+/**
+ * What {@link mergeLines} settled: the cart as written (or as read, when nothing needed writing),
+ * the result per line, and the shelves the plan read — kept so a caller that has to name products
+ * does not read them again.
+ */
+export interface MergeOutcome {
     cart: CartDocument | null;
+    lines: MergeLineResult[];
+    shelves: Map<string, Shelf>;
 }
 
-/** What `cart` holds of a product; zero for a cart that does not exist yet or has no such line. */
-const heldIn = (cart: CartDocument | null, productId: string): number =>
-    cart?.items.find((item) => String(item.productId) === productId)?.quantity ?? 0;
+/** What a plan decided: the whole line list to write, each line's result, and what actually grew. */
+interface MergePlanned {
+    items: { productId: string; quantity: number }[];
+    results: MergeLineResult[];
+    grown: { productId: string; added: number; created: boolean }[];
+}
 
-/** What a lost race at a cap reports: the reason the rule would have given had it seen the cart. */
-type Raced = Extract<MergeLineReason, 'capped' | 'cart_full'>;
-
-/**
- * Write what the rule decided. The cart's own conditional write is the caps' real guard, so a
- * `QUANTITY_LIMIT` or `LINE_LIMIT` here means a concurrent add used the room since the rule
- * looked: nothing was written, and the cart is re-read so `resulting` still says what it holds.
- */
-const writeAdd = (
-    userId: string,
-    productId: string,
-    quantity: number,
-    context: CallerContext
-): Promise<{ cart: CartDocument | null; raced?: Raced }> =>
-    cartRepository.upsertLine(userId, productId, quantity, 'add').then((write) => {
-        // `NO_LINE` is `'update'` mode's answer; an add never meets it, but the type does.
-        if (write === QUANTITY_LIMIT || write === LINE_LIMIT || write === NO_LINE)
-            return cartRepository.findByUserId(userId).then((cart) => ({
-                cart,
-                raced: write === LINE_LIMIT ? ('cart_full' as const) : ('capped' as const)
-            }));
-        trackLineWrite(context, productId, quantity, write.created);
-        return { cart: write.cart };
-    });
+/** A product no read found: the shelf of an id the catalogue never held. */
+const NO_SHELF: Shelf = { product: null, available: undefined, shelf: undefined };
 
 /**
- * One guest line: ask the rule, write what it allows, read `resulting` off the cart that came
- * back. `requested` is always the guest's number, and `resulting` always the cart's — so the two
- * stay truthful whatever the reason says. Stock only sets `availability`; it never changes
- * what is added.
+ * Plan every guest line against `cart` in memory, in request order: each line starts from what
+ * the lines before it left, so a product listed twice sees its first line's result. Nothing is
+ * written here, and one bad line is a result, never a throw: it must not strand the rest.
+ *
+ * `requested` is always the guest's number and `resulting` always the plan's, so the two stay
+ * truthful whatever the reason says. Stock only sets `availability`; it never changes what is added.
  */
-const mergeLine = (
-    userId: string,
-    { productId, quantity }: AddCartItemRequest,
-    shelf: Shelf,
+const planLines = (
     cart: CartDocument | null,
-    context: CallerContext
-): Promise<MergeStep> => {
-    const held = heldIn(cart, productId);
-    const plan = planMergeLine({
-        requested: quantity,
-        held,
-        listed: isListed(shelf),
-        lineMax: cartLineMax(),
-        lines: cart?.items.length ?? 0,
-        maxLines: cartMaxLines()
-    });
+    lines: AddCartItemRequest[],
+    shelves: Map<string, Shelf>
+): MergePlanned => {
+    // Insertion order is the cart's line order: the lines it holds, then new ones as they come.
+    const held = new Map(
+        (cart?.items ?? []).map((item) => [String(item.productId), item.quantity])
+    );
+    const results: MergeLineResult[] = [];
+    const grown: MergePlanned['grown'] = [];
 
-    const written =
-        plan.add > 0
-            ? writeAdd(userId, productId, plan.add, context)
-            : Promise.resolve<{ cart: CartDocument | null; raced?: Raced }>({ cart });
-    return written.then(({ cart: after, raced }) => {
-        /**
-         * A lost race at a cap is `capped` or `cart_full` whatever the rule predicted: the line
-         * was not grown, so `summed` would claim a sum the cart does not hold.
-         */
-        const reason = raced ?? plan.reason;
-        const resulting = heldIn(after, productId);
-        return {
-            cart: after,
-            result: {
-                productId,
-                requested: quantity,
-                resulting,
-                ...(reason ? { reason } : {}),
-                // The shared availability rule, on what the cart now holds: never the number.
-                availability: shelfAvailability(shelf, resulting)
-            }
-        };
-    });
+    for (const { productId, quantity } of lines) {
+        const shelf = shelves.get(productId) ?? NO_SHELF;
+        const before = held.get(productId) ?? 0;
+        const plan = planMergeLine({
+            requested: quantity,
+            held: before,
+            listed: isListed(shelf),
+            lineMax: cartLineMax(),
+            lines: held.size,
+            maxLines: cartMaxLines()
+        });
+
+        if (plan.add > 0) {
+            held.set(productId, before + plan.add);
+            grown.push({ productId, added: plan.add, created: before === 0 });
+        }
+        const resulting = held.get(productId) ?? 0;
+        results.push({
+            productId,
+            requested: quantity,
+            resulting,
+            ...(plan.reason ? { reason: plan.reason } : {}),
+            // The shared availability rule, on what the cart will hold: never the number.
+            availability: shelfAvailability(shelf, resulting)
+        });
+    }
+
+    return {
+        items: [...held].map(([productId, quantity]) => ({ productId, quantity })),
+        results,
+        grown
+    };
 };
 
+/** Plan-and-write attempts before a cart that keeps moving under the merge is given up on. */
+const MERGE_ATTEMPTS = 3;
+
 /**
- * Merge every guest line through {@link mergeLine} — one at a time, in request order, because each
- * add reads and rewrites the same cart document (`./reorder` reuses this loop for the same reason), and a
- * product listed twice must see its first line's result. One bad line is a result, never a throw:
- * it must not strand the rest.
+ * Merge every guest line in ONE write. The plan ({@link planLines}) is made against one read of
+ * the cart and committed only if the cart is still at that version; a cart that moved is read and
+ * planned again. So a failure leaves the cart exactly as it was, and a retry of the same request
+ * cannot add a line twice. `./reorder` reuses this for the same reason.
+ *
+ * Nothing to add (every line removed or refused) writes nothing, and bumps no version.
+ *
+ * @see docs/modules/cart.md#merging-a-guest-cart
+ * @throws {Error} when the cart moved on every one of {@link MERGE_ATTEMPTS} attempts
  */
-export const mergeLines = async (
+export const mergeLines = (
     userId: string,
     lines: AddCartItemRequest[],
     context: CallerContext
-): Promise<MergeLineResult[]> => {
+): Promise<MergeOutcome> => {
+    const attempt = (shelves: Map<string, Shelf>, attemptsLeft: number): Promise<MergeOutcome> =>
+        cartRepository.findByUserId(userId).then((cart) => {
+            const { items, results, grown } = planLines(cart, lines, shelves);
+            if (grown.length === 0) return { cart, lines: results, shelves };
+
+            return cartRepository
+                .replaceLinesIfUnchanged(userId, cart?.__v ?? null, items)
+                .then((written) => {
+                    if (!written) {
+                        if (attemptsLeft <= 1)
+                            throw new Error('cart: exhausted retries merging into a moving cart');
+                        return attempt(shelves, attemptsLeft - 1);
+                    }
+                    // After the write: a plan that was thrown away counts nothing.
+                    for (const { productId, added, created } of grown)
+                        trackLineWrite(context, productId, added, created);
+                    return { cart: written, lines: results, shelves };
+                });
+        });
+
     // One read of every product and of the ledger for the whole request, not one per line.
-    const shelves = await readShelf(lines.map(({ productId }) => productId));
-    let cart = await cartRepository.findByUserId(userId);
-    const results: MergeLineResult[] = [];
-    for (const line of lines) {
-        const step = await mergeLine(
-            userId,
-            line,
-            shelves.get(line.productId) ?? {
-                product: null,
-                available: undefined,
-                shelf: undefined
-            },
-            cart,
-            context
-        );
-        cart = step.cart;
-        results.push(step.result);
-    }
-    return results;
+    return readShelf(lines.map(({ productId }) => productId)).then((shelves) =>
+        attempt(shelves, MERGE_ATTEMPTS)
+    );
 };
 
 /**
  * Announce the lines that could not be added at all (products the catalogue does not show, and
- * new ones that found the cart full), each with the product's
- * names — such a product may be gone by the time anyone reads the message, so the names are copied in now.
- * `titlesById` answers an empty map for one that no longer exists, which the reader sees as "a
- * product that is no longer available". Says nothing when there is no such line: a changed
- * quantity is the answer's to show, not the inbox's.
+ * new ones that found the cart full), each with the product's names — such a product may be gone
+ * by the time anyone reads the message, so the names are copied in now. A product that no longer
+ * exists has no names to give: an empty map, which the reader sees as "a product that is no longer
+ * available". Says nothing when there is no such line: a changed quantity is the answer's to
+ * show, not the inbox's.
+ *
+ * A names lookup that fails is logged and answers the empty map for that line: the notice is
+ * a courtesy, so it must never turn a merge that already wrote into a 500.
  */
-const announceRemoved = (userId: string, results: MergeLineResult[]): Promise<unknown> => {
+const announceRemoved = (
+    userId: string,
+    { lines: results, shelves }: MergeOutcome
+): Promise<unknown> => {
     const removed = results.filter(({ reason }) => reason === 'removed' || reason === 'cart_full');
     if (removed.length === 0) return Promise.resolve();
 
     return Promise.all(
-        removed.map(({ productId, requested }) =>
-            productService
-                .titlesById(productId)
-                .then((titles) => ({ productId, requested, titles }))
-        )
+        removed.map(({ productId, requested }) => {
+            const product = shelves.get(productId)?.product;
+            return (product ? productService.titlesOf(product) : Promise.resolve({}))
+                .catch((error: unknown) => {
+                    // Stryker disable all
+                    logger.error({
+                        message: 'Merge notice: the product names could not be read; sent without.',
+                        productId,
+                        error
+                    });
+                    // Stryker restore all
+                    return {};
+                })
+                .then((titles) => ({ productId, requested, titles }));
+        })
     ).then((lines) => emitDomainEvent(CART_MERGE_REFUSED, { userId, lines }));
 };
 
@@ -184,8 +206,9 @@ export const cartMerge = (
     lines: AddCartItemRequest[],
     context: CallerContext
 ): Promise<MergeResult> =>
-    mergeLines(userId, lines, context).then((results) =>
-        announceRemoved(userId, results)
-            .then(() => cartGetForBadge(userId))
-            .then((cart) => ({ cart, lines: results }))
+    mergeLines(userId, lines, context).then((outcome) =>
+        announceRemoved(userId, outcome)
+            // The answer is the cart the write returned, not a second read of it.
+            .then(() => toCartView(outcome.cart))
+            .then((cart) => ({ cart, lines: outcome.lines }))
     );

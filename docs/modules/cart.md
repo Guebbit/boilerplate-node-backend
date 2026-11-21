@@ -246,10 +246,11 @@ sequenceDiagram
     participant N as notifications
     FE->>API: guest lines + Idempotency-Key
     API->>P: one read of every product and its stock
-    loop each line, in order
-        API->>C: add what POST /cart/items would (sum, cap)
-        API->>API: availability for what the cart now holds
+    API->>C: read the cart, with its version
+    loop each line, in order, in memory
+        API->>API: sum, cap and availability, on what the lines before left
     end
+    API->>C: ONE write of every line, only if the version is unchanged
     API-->>N: cart.merge_refused, only for hidden or deleted products and lines the full cart refused
     API-->>FE: cart + one result per line
     FE->>FE: alert for every line that is not as asked
@@ -267,8 +268,20 @@ sequenceDiagram
 
 One bad line is a result, never a failure: the call answers 200 and the rest still land. The
 request carries an `Idempotency-Key`, so a lost answer replays instead of adding twice (the server
-keeps keys 24 hours). Lines are merged one at a time because each add rewrites the same cart
-document; a product listed twice sees its first line's result.
+keeps keys 24 hours).
+
+**All lines land together or none do.** Every line is planned in memory, in request order (a product
+listed twice sees its first line's result), then written in ONE `findOneAndUpdate` on the cart
+document, filtered on the `__v` the plan was read at: the same optimistic guard checkout uses to
+empty the cart. A cart that changed meanwhile fails the filter, so the cart is read and planned again
+(three attempts, then an error). A failure therefore leaves the cart as it was, and a client that
+resends after a 5xx under a new key cannot add a line twice. No transaction is needed, and the answer
+is the document the write returned. Analytics events are sent after the write, one per line that
+grew. `POST /cart/reorder` goes through the same write.
+
+The `cart.merge_refused` notice is a courtesy to the shopper, not part of the merge: the names it
+carries come from the products the plan already read, and a name lookup that fails is logged and
+sends that line with no names, never a 500 for a cart that was already written.
 
 ## The pipeline
 
