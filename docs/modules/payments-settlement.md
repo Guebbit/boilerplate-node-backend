@@ -90,6 +90,16 @@ flowchart TD
     R --> A409["confirm and sync answer 409<br/>PAYMENT_ORDER_NOT_PAYABLE;<br/>the webhook acknowledges"]
 ```
 
+The `payment.amount_mismatch` event carries which fields differed, the frozen figures
+(`expected`) and what the provider reported (`received`, a figure it left out is absent; its
+payment id is cut to 64 characters). The admin-only to-do it opens prints both and the doors that
+exist to follow it: `GET /payments/{id}` (its `refunds`), the refunds sync route, `/audit`, and asking the
+provider. The refund is automatic: its sweep retries, and a final refusal opens its own to-do.
+
+A success that names a currency but no amount writes neither figure: an amount in a currency
+nobody paid in would be a refund of a sum nobody sent. The refund then asks the provider for the
+frozen figures, and the provider's answer decides.
+
 No stock is committed, no `payment.succeeded` is announced, no invoice is issued. The 409 is not a
 decline, so it spends no decline budget. A crash after the payment write leaves the order
 `pending`; the reservation expiry then cancels it and the same refund path returns the money. A

@@ -137,6 +137,22 @@ const returnMismatchedMoney = (orderId: string): Promise<void> =>
             // Stryker restore all
         });
 
+/** The longest provider payment id the mismatch event carries; the schema's `maxLength` says the same. */
+const PROVIDER_ID_MAX_LENGTH = 64;
+
+/**
+ * The figures a mismatch writes over the frozen ones, so the refund returns what was collected.
+ * A currency counts only with the amount it describes: the frozen amount in the provider's
+ * currency would be a refund of a sum nobody paid, so a success that names a currency and no
+ * amount keeps both frozen figures and the provider decides the refund.
+ *
+ * @param state - what the provider reported
+ */
+const mismatchFigures = (state: ProviderPaymentState): { amount?: string; currency?: string } =>
+    state.amountReceived === undefined
+        ? {}
+        : { amount: state.amountReceived, ...(state.currency ? { currency: state.currency } : {}) };
+
 /**
  * A provider-reported success that is not the payment we froze. Records what arrived, cancels the
  * order and lets the existing refund path return the money: nothing is paid, no stock is
@@ -164,8 +180,7 @@ const settleMismatch = (
             'succeeded',
             {
                 ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
-                ...(state.amountReceived === undefined ? {} : { amount: state.amountReceived }),
-                ...(state.currency ? { currency: state.currency } : {})
+                ...mismatchFigures(state)
             },
             session
         );
@@ -177,7 +192,22 @@ const settleMismatch = (
             await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
             await enqueueOutboxEvent(
                 PAYMENT_AMOUNT_MISMATCH,
-                { paymentId: String(payment._id), orderId },
+                {
+                    paymentId: String(payment._id),
+                    orderId,
+                    fields: [...fields],
+                    expected: { amount: payment.amount, currency: payment.currency },
+                    received: {
+                        ...(state.amountReceived === undefined
+                            ? {}
+                            : { amount: state.amountReceived }),
+                        ...(state.currency ? { currency: state.currency } : {}),
+                        // The provider's own string reaches a staff inbox: cut to a length no id needs.
+                        ...(state.paymentId
+                            ? { paymentId: state.paymentId.slice(0, PROVIDER_ID_MAX_LENGTH) }
+                            : {})
+                    }
+                },
                 orderId,
                 session
             );

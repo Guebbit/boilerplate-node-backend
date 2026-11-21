@@ -44,6 +44,15 @@ const PAYMENT = new Types.ObjectId().toString();
 /** An order that exists as an id: the system reads it back as an ObjectId to mail its buyer. */
 const ORDER = new Types.ObjectId().toString();
 
+/** A `payment.amount_mismatch` payload: the provider collected another amount than the one frozen. */
+const MISMATCH_PAYLOAD = {
+    paymentId: PAYMENT,
+    orderId: ORDER,
+    fields: ['amount'],
+    expected: { amount: '50.00', currency: 'EUR' },
+    received: { amount: '45.00', currency: 'EUR', paymentId: PAYMENT }
+};
+
 /** A return that exists as an id. */
 const RETURN = new Types.ObjectId().toString();
 
@@ -168,14 +177,12 @@ const OPENERS = [
     [
         'payment.amount_mismatch',
         () =>
-            emitDomainEvent(
-                'payment.amount_mismatch',
-                { paymentId: PAYMENT, orderId: ORDER },
-                { eventId: nextEventId() }
-            ),
+            emitDomainEvent('payment.amount_mismatch', MISMATCH_PAYLOAD, {
+                eventId: nextEventId()
+            }),
         TaskKind.amount_mismatch,
         'AuditDisplay',
-        `orders/${ORDER}`
+        'sales/payments'
     ],
     [
         'payment.refund_unrecorded',
@@ -235,6 +242,17 @@ describe('what opens a task', () => {
             expect(task.dueAt).toBeInstanceOf(Date);
         }
     );
+
+    it('writes the mismatch task with the expected and received figures and links the payment', async () => {
+        await emitDomainEvent('payment.amount_mismatch', MISMATCH_PAYLOAD, {
+            eventId: nextEventId()
+        });
+
+        const task = await onlyTask();
+        expect(task.message).toContain('Expected: 50.00 EUR');
+        expect(task.message).toContain('Received: 45.00 EUR');
+        expect(task.link).toMatchObject({ type: 'payment', id: PAYMENT });
+    });
 
     it('dates a dispute by the provider deadline', async () => {
         await emitDomainEvent('payment.dispute_opened', DISPUTE, { eventId: nextEventId() });
@@ -519,11 +537,9 @@ describe('what closes a task', () => {
     });
 
     it('leaves a mismatch for staff: no later event closes it', async () => {
-        await emitDomainEvent(
-            'payment.amount_mismatch',
-            { paymentId: PAYMENT, orderId: ORDER },
-            { eventId: nextEventId() }
-        );
+        await emitDomainEvent('payment.amount_mismatch', MISMATCH_PAYLOAD, {
+            eventId: nextEventId()
+        });
         await emitDomainEvent('payment.refunded', { ...REFUND, full: true });
         await emitDomainEvent('order.canceled', {
             orderId: ORDER,
@@ -616,19 +632,17 @@ describe('who is told, and where the alert takes them', () => {
         ]);
     });
 
-    it('tells administrators alone of an amount mismatch, and sends them to the order', async () => {
+    it('tells administrators alone of an amount mismatch, and sends them to the payments page', async () => {
         const moderator = await staff('moderator', 'mod@example.com');
         await staff('admin', 'admin@example.com');
 
-        await emitDomainEvent(
-            'payment.amount_mismatch',
-            { paymentId: PAYMENT, orderId: ORDER },
-            { eventId: nextEventId() }
-        );
+        await emitDomainEvent('payment.amount_mismatch', MISMATCH_PAYLOAD, {
+            eventId: nextEventId()
+        });
         await settleOutboxNudges();
 
         expect(linksMailedTo('admin@example.com')).toEqual([
-            expect.stringMatching(new RegExp(`/en/orders/${ORDER}$`))
+            expect.stringMatching(/\/en\/sales\/payments$/)
         ]);
         expect(linksMailedTo('mod@example.com')).toEqual([]);
         await expect(bellOf('moderator', moderator.id)).resolves.toEqual([]);
