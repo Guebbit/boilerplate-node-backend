@@ -55,7 +55,8 @@ export class WebhookRejected extends Error {
 }
 
 /**
- * The signing ring, read fresh so a rotation needs no restart. The first entry signs.
+ * The signing ring. The first entry signs. The config store reads it once per process, so a
+ * rotation takes effect after a restart.
  *
  * @throws {Error} when absent — verifying against an empty secret would authenticate every
  *   caller, which is worse than authenticating none.
