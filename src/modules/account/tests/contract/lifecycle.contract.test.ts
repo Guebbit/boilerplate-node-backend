@@ -196,6 +196,7 @@ describe('POST /account/password/check', () => {
         const response = await api().post('/account/password/check').send({ password: 'password' });
 
         expect(response.status).toBe(200);
+        expect(response.body).toEqual(expect.objectContaining({ breached: true }));
     });
 
     it('matches the contract for a candidate nobody has breached', async () => {

@@ -17,7 +17,7 @@ import { setEnvironment } from '@tests/environment';
 /** In the committed list — see `scripts/security/refresh-breached-passwords.ts`. */
 const IN_LIST_PASSWORD = 'Password1!';
 
-/** Composition-valid but not in the (filtered, ~20k-entry) bundled list. */
+/** Within the length bounds but not in the (top ~20k-entry) bundled list. */
 const NOT_IN_LIST_PASSWORD = 'Xk9$mQzR7pL2!';
 
 /** One mocked `fetch` text response. `ok = false` is how a case makes HIBP answer a non-200. */
@@ -36,7 +36,7 @@ describe('isInBundledBreachList', () => {
         expect(isInBundledBreachList(IN_LIST_PASSWORD)).toBe(true);
     });
 
-    it('misses a composition-valid password absent from the list', () => {
+    it('misses a password absent from the list', () => {
         expect(isInBundledBreachList(NOT_IN_LIST_PASSWORD)).toBe(false);
     });
 });
@@ -103,6 +103,16 @@ describe('checkHibpRange', () => {
 });
 
 describe('checkPasswordBreach', () => {
+    it.each(['12345678', 'password', 'iloveyou', 'qwertyuiop', 'password1'])(
+        'counts the common password %s as breached from the bundled list alone',
+        async (password) => {
+            setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
+            setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'off' });
+
+            await expect(checkPasswordBreach(password)).resolves.toEqual({ breached: true });
+        }
+    );
+
     it('short-circuits on rung 1 without calling fetch', async () => {
         setEnvironment({ NODE_PASSWORD_BREACH_LIST: 'on' });
         setEnvironment({ NODE_PASSWORD_BREACH_HIBP: 'on' });

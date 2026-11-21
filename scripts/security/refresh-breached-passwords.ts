@@ -3,16 +3,17 @@
  * @module
  * Rebuild the bundled breached-password list — `npm run refresh:breached-passwords`.
  *
- * Fetches SecLists' `Pwdb_top-10000000` (10M real breached passwords) and filters it through
- * `PasswordNew`'s own pattern, read straight out of the committed root `openapi.yaml` rather than
- * duplicated here — the two must never drift, and the contract is the one place the rule is
- * spelled out. Measured 2026-09-13: the composition rule already rejects 99.8% of the corpus, so
- * the filtered output is small enough to commit (~226 KB, ~20k entries) even though the source is
- * not (94 MB).
+ * Fetches SecLists' `Pwdb_top-10000000` (10M real breached passwords, most common first) and
+ * keeps the first `LIST_LIMIT` distinct lines whose length fits `PasswordNew`'s `minLength` and
+ * `maxLength`, read straight out of the bundled root `openapi.yaml` rather than duplicated
+ * here. There is no composition filter: the rule is length only, so the list is every common
+ * password the rule would accept, and the limit is what bounds its size.
  *
  * Run BY HAND, never scheduled: a top-N breach list changes on the order of years, not days.
- * Re-run it whenever `PasswordNew`'s pattern changes — nothing else notices that the list has
- * silently under-blocked in the meantime.
+ * Re-run it whenever `PasswordNew`'s length bounds change.
+ *
+ * Twin: the PHP backend's `RefreshBreachedPasswords` command reads the corpus the same way
+ * (split on `\n`, strip a trailing `\r`, count code points) and must produce the same bytes.
  *
  * @see docs/understand/defences/authentication.md#guessing-the-credential
  */
@@ -42,23 +43,28 @@ const SOURCE_SHA256 = '18dc49ca32b62455a61e3398f4ab9f93eb700ff142fa0d4b9fd11a727
 /** Where the filtered, committable list lives — loaded once at boot into a `Set`. */
 const OUTPUT_PATH = path.resolve(__dirname, '../../shared/rules/breached-passwords.txt');
 
-/** The committed root bundle, read for its resolved `PasswordNew` schema rather than a fragment. */
+/** The bundled root contract (generated, gitignored), read for its resolved `PasswordNew` schema rather than a fragment. */
 const ROOT_CONTRACT_PATH = path.resolve(__dirname, '../../openapi.yaml');
 
+/** How many distinct passwords the list keeps — the corpus is frequency-ordered, so this is the top N. */
+const LIST_LIMIT = 20_000;
+
 /**
- * The `PasswordNew` composition pattern, straight from the contract.
+ * `PasswordNew`'s length bounds, straight from the contract.
  *
- * @throws {Error} if the schema is missing or carries no `pattern` — the contract shape changed
- *   in a way this script no longer understands, and guessing a fallback would silently under- or
- *   over-filter the list it produces.
+ * @throws {TypeError} if the schema is missing or carries no numeric `minLength` and `maxLength` — the
+ *   contract shape changed in a way this script no longer understands, and guessing a fallback
+ *   would silently under- or over-filter the list it produces.
  */
-const passwordPatternFromContract = (): RegExp => {
+const passwordBoundsFromContract = (): { min: number; max: number } => {
+    // Narrowing a parsed YAML `unknown`: the `typeof` checks below prove both bounds are numbers.
     const document = parse(readFileSync(ROOT_CONTRACT_PATH, 'utf8')) as {
-        components?: { schemas?: { PasswordNew?: { pattern?: string } } };
+        components?: { schemas?: { PasswordNew?: { minLength?: unknown; maxLength?: unknown } } };
     };
-    const pattern = document.components?.schemas?.PasswordNew?.pattern;
-    if (!pattern) throw new Error(`PasswordNew.pattern not found in ${ROOT_CONTRACT_PATH}`);
-    return new RegExp(pattern);
+    const schema = document.components?.schemas?.PasswordNew;
+    if (typeof schema?.minLength !== 'number' || typeof schema.maxLength !== 'number')
+        throw new TypeError(`PasswordNew.minLength/maxLength not found in ${ROOT_CONTRACT_PATH}`);
+    return { min: schema.minLength, max: schema.maxLength };
 };
 
 /**
@@ -72,24 +78,36 @@ const downloadCorpus = async (): Promise<string[]> => {
     if (!response.ok) throw new Error(`${SOURCE_URL} -> HTTP ${String(response.status)}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
     assertCorpusDigest(bytes, SOURCE_SHA256, SOURCE_URL);
-    const text = new TextDecoder().decode(bytes);
-    return text.split('\n').map((line) => line.trimEnd());
+    // `fatal`: a byte sequence that is not UTF-8 throws instead of becoming U+FFFD in the list.
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    // Only a trailing carriage return goes — other trailing whitespace is part of a password.
+    return text.split('\n').map((line) => line.replace(/\r$/, ''));
 };
 
-/** Downloads the corpus, filters it to the contract's password shape, and writes the sorted survivors. */
+/** Downloads the corpus, keeps the first `LIST_LIMIT` distinct in-bounds lines, and writes them sorted. */
 const main = async (): Promise<void> => {
-    const pattern = passwordPatternFromContract();
+    const { min, max } = passwordBoundsFromContract();
     logger.info({ message: 'Downloading breach corpus.', url: SOURCE_URL });
     const lines = await downloadCorpus();
 
-    const survivors = new Set(lines.filter((line) => line.length > 0 && pattern.test(line)));
+    const survivors = new Set<string>();
+    let linesRead = 0;
+    for (const line of lines) {
+        linesRead++;
+        // Code points, not UTF-16 units: the contract's `maxLength` counts characters, and the
+        // PHP twin's `mb_strlen` does the same. Grapheme clusters would not match it.
+        // eslint-disable-next-line @typescript-eslint/no-misused-spread -- code points are the point
+        const { length } = [...line];
+        if (length >= min && length <= max) survivors.add(line);
+        if (survivors.size >= LIST_LIMIT) break;
+    }
     const sorted = [...survivors].toSorted();
     writeFileSync(OUTPUT_PATH, sorted.join('\n') + '\n', 'utf8');
 
     logger.info({
         message: 'Breached-password list refreshed.',
-        source: lines.length,
-        survivors: sorted.length,
+        linesRead,
+        kept: sorted.length,
         output: OUTPUT_PATH
     });
 };

@@ -129,9 +129,9 @@ describe('accountService.signup', () => {
         expect((result as ResponseReject).status).toBe(422);
     });
 
-    it('rejects a breached password even when it satisfies every composition rule', async () => {
+    it('rejects a breached password even when it is within the length bounds', async () => {
         /**
-         * `Password1!` is a listed, composition-valid entry in `shared/rules/breached-passwords.txt` —
+         * `Password1!` is a listed entry in `shared/rules/breached-passwords.txt` —
          * documented on `PLAIN_PASSWORD` above precisely so it stays available for this case.
          * `assertPasswordNotBreached` is unit-tested on its own; this is the only case proving
          * `accountService.signup` actually calls it.

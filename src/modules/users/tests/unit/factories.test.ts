@@ -110,7 +110,8 @@ describe('the password vocabulary', () => {
     it.each([
         ['PLAIN_PASSWORD', PLAIN_PASSWORD],
         ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
-        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD]
+        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD],
+        ['PASSPHRASE_PASSWORD', PASSPHRASE_PASSWORD]
     ])('keeps %s off the bundled breach list', (_name, password) => {
         /**
          * The signup/change/reset paths call `assertPasswordNotBreached` ahead of anything else —

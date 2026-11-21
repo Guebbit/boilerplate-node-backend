@@ -4,8 +4,8 @@
  * one being proved, so never on login, where refusing would just confirm a guess to an attacker
  * and lock out the very user this is meant to help:
  *
- *   1. a bundled list of already-composition-valid, previously-breached passwords, built by
- *      `scripts/security/refresh-breached-passwords.ts`
+ *   1. a bundled list of the most common previously-breached passwords that fit the length
+ *      bounds, built by `scripts/security/refresh-breached-passwords.ts`
  *   2. the HIBP k-anonymity range API, for the tail the bundled list misses
  *
  * Both fail OPEN — any failure accepts the password. Rung 3 (a strength meter) lives in the

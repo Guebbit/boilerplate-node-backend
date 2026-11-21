@@ -19,9 +19,8 @@ import type { PurchaseHoldRecord, TwoFactorMethodRecord, UserDocument } from './
  * The password every unpinned fixture gets. Exported so a test that logs in types the same
  * string the builder wrote, rather than a hard-coded copy that drifts. Satisfies the real signup
  * policy (`CreateUserBody.shape.password`) so fixtures can exercise real signup flows — and, since
- * the breached-password check, is deliberately NOT one of the composition-valid strings in
- * `shared/rules/breached-passwords.txt` (`Password1!` is a listed, composition-valid entry, and so unfit
- * for this purpose).
+ * the breached-password check, is deliberately NOT a string in `shared/rules/breached-passwords.txt`
+ * (`Password1!` is a listed entry, and so unfit for this purpose).
  */
 export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
 

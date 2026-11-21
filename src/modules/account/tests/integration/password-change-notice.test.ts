@@ -45,7 +45,7 @@ beforeEach(() => {
 /** The queued mails of one template. */
 const mailsOf = (template: string) => mockOutbox.filter((mail) => mail.template === template);
 
-/** On the bundled breach list and strong enough to clear the composition rules. */
+/** On the bundled breach list, and within the length bounds, so only the list can refuse it. */
 const BREACHED = 'Password1!';
 
 describe('the notice after a signed-in password change', () => {

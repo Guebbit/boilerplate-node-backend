@@ -1211,7 +1211,7 @@ describe('spendLiveToken', () => {
  * user, so it sits between the find and the atomic spend (`services/password-reset.ts`).
  */
 describe('completePasswordReset', () => {
-    /** On the bundled breach list and strong enough to clear the composition rules. */
+    /** On the bundled breach list, and within the length bounds, so only the list can refuse it. */
     const BREACHED = 'Password1!';
     const GOOD = 'Fresh_Secret_9!x';
 

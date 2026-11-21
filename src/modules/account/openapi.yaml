@@ -2190,7 +2190,7 @@ components:
                     type: string
                     maxLength: 128
                     minLength: 1
-                    description: A CANDIDATE password, not `PasswordNew` — this runs while someone is still typing, so it accepts anything non-empty rather than the contract's own composition rule.
+                    description: A CANDIDATE password, not `PasswordNew` — this runs while someone is still typing, so it accepts anything non-empty rather than `PasswordNew`'s length rule.
 
         PasswordCheck:
             type: object

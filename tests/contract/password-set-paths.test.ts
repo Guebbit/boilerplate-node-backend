@@ -27,8 +27,8 @@ import { REPO_ROOT } from '@tests/paths';
 setupTestDb();
 
 /**
- * A listed, composition-valid entry in `shared/rules/breached-passwords.txt` — same fixture every
- * existing breach case in this repo uses, so composition rules alone can't be what refuses it.
+ * A listed entry in `shared/rules/breached-passwords.txt` — same fixture every existing breach
+ * case in this repo uses, within the length bounds, so only the list can refuse it.
  */
 const BREACHED_PASSWORD = 'Password1!';
 
@@ -123,6 +123,20 @@ describe.each([signupPath, changePath, resetPath])(
         });
     }
 );
+
+describe('signup and the length-only rule', () => {
+    it('refuses a common password that satisfies the length bounds and nothing else', async () => {
+        const response = await api().post('/account/signup').send({
+            email: 'breach-numeric@example.com',
+            username: 'breachnumeric',
+            password: '12345678',
+            passwordConfirm: '12345678',
+            termsAccepted: true
+        });
+
+        expect(response.status).toBe(422);
+    });
+});
 
 /** The slice of the bundled contract the canary below reads. */
 interface RawSpec {
