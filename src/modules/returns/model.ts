@@ -103,6 +103,11 @@ export interface ReturnDocument extends Document {
     /** The carrier document's reference. Present exactly when `proofOfSendingAt` is. */
     proofReference?: string;
     /**
+     * Staff opened the refund of a defective or wrong-item return with its proof of sending, as a
+     * withdrawal's proof does. Set only when `true`, only with `proofOfSendingAt`, never changed after.
+     */
+    refundOnProof?: boolean;
+    /**
      * The delivery inside {@link refundAmount}: non-zero on the one return or cancellation that took
      * the last unit of the order. Internal — what keeps shipping from being refunded twice. Never on
      * the wire (see `applyReturnTransform`).
@@ -180,6 +185,7 @@ export const returnSchema = new Schema<ReturnDocument>(
         proofOfSendingAt: { type: Date },
         proofCarrier: { type: String, maxlength: 200 },
         proofReference: { type: String, maxlength: 200 },
+        refundOnProof: { type: Boolean },
         shippingRefund: moneyPath({ nonNegative: true }),
         closedAt: { type: Date },
         canceledAt: { type: Date }

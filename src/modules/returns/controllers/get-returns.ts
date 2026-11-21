@@ -14,10 +14,10 @@ export const getReturns = createListController({
     entity: 'returns',
     /**
      * `page`/`pageSize` swapped for the infra pair so an absent one stays absent; `sort` is split
-     * on commas by `csvLists`.
+     * on commas by `csvLists`, and `proofOfSending` read as a boolean.
      */
     schema: ListReturnsQueryParams.extend({ page: pageSchema, pageSize: pageSizeSchema }).partial(),
-    input: { csvLists: ['sort'] },
+    input: { csvLists: ['sort'], booleans: ['proofOfSending'] },
     // Auth context is guaranteed by the isAuth middleware.
     runList: (parsed, request) => returnService.listReturns(parsed, request.authContext!)
 });

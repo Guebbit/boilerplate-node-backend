@@ -73,6 +73,16 @@ export const SHOP_STAFF_ROUTES = {
         email: 'digest',
         severity: NotificationSeverity.warning
     },
+    /**
+     * A proof of sending is on file and the goods are late. Neutral on money: a refund may already
+     * have gone out (a withdrawal's proof, or a defect staff chose to refund on proof) or may be due.
+     * Goodwill returns (`other`) have no deadline and stay out.
+     */
+    'shop-tasks.staff.returns-proof-goods-late': {
+        sets: ['ReturnReceiving'],
+        email: 'digest',
+        severity: NotificationSeverity.warning
+    },
     'shop-tasks.staff.returns-undecided': {
         sets: ['ReturnManagement'],
         email: 'digest',
@@ -113,6 +123,7 @@ export const SUMMARY_PAGES = {
     'shop-tasks.staff.preorders-late': PAGES.preordersLate,
     'shop-tasks.staff.delivery-holds-open': PAGES.deliveryHoldsOpen,
     'shop-tasks.staff.returns-awaiting-goods': PAGES.returnsAwaitingGoods,
+    'shop-tasks.staff.returns-proof-goods-late': PAGES.returnsProofGoodsLate,
     'shop-tasks.staff.returns-undecided': PAGES.returnsUndecided,
     'shop-tasks.staff.low-stock': PAGES.lowStock,
     'shop-tasks.staff.unshipped': PAGES.unshipped,

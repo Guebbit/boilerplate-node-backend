@@ -1,7 +1,7 @@
 /**
  * @module
  * Who the shop tells, and where its notices point: every work notice the shop writes has a route
- * naming permission sets that exist, the ten summary rows point at the screen that lists what they
+ * naming permission sets that exist, the eleven summary rows point at the screen that lists what they
  * count, and the digest mail has its words in every served language.
  */
 import { PERMISSION_SETS } from '@kernel/permissions';
@@ -38,9 +38,9 @@ describe('SHOP_STAFF_ROUTES', () => {
         expect(SHOP_STAFF_ROUTES['shop-tasks.staff.return-requested'].email).toBe('none');
     });
 
-    it('lists the thirteen codes the shop writes: three announced, ten counted', () => {
-        expect(CODES).toHaveLength(13);
-        expect(Object.keys(SUMMARY_PAGES)).toHaveLength(10);
+    it('lists the fourteen codes the shop writes: three announced, eleven counted', () => {
+        expect(CODES).toHaveLength(14);
+        expect(Object.keys(SUMMARY_PAGES)).toHaveLength(11);
     });
 });
 
@@ -50,6 +50,7 @@ describe('summaryLinkOf', () => {
         ['shop-tasks.staff.preorders-late', PAGES.preordersLate],
         ['shop-tasks.staff.delivery-holds-open', PAGES.deliveryHoldsOpen],
         ['shop-tasks.staff.returns-awaiting-goods', PAGES.returnsAwaitingGoods],
+        ['shop-tasks.staff.returns-proof-goods-late', PAGES.returnsProofGoodsLate],
         ['shop-tasks.staff.returns-undecided', PAGES.returnsUndecided],
         ['shop-tasks.staff.low-stock', PAGES.lowStock],
         ['shop-tasks.staff.unshipped', PAGES.unshipped],
@@ -112,7 +113,7 @@ describe('the mails', () => {
         expect(mail.template).toBe('shop-tasks.staff-digest');
         expect(mail.subject).toBe(translator(locale)('shop-tasks.staff-mail.digest.subject'));
         const { lines } = mail.data as { lines: { text: string; link: string }[] };
-        expect(lines).toHaveLength(10);
+        expect(lines).toHaveLength(11);
         for (const line of lines) {
             expect(line.text).not.toContain('shop-tasks.staff-mail');
             expect(line.text).toContain('4');

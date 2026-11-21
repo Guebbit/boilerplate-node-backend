@@ -280,7 +280,14 @@ const claimAndRestock = (
                           }),
                     ...stampRestocked(restocked)
                 },
-                session
+                session,
+                /**
+                 * Atomic with the claim: the guards above read `returned` before this transaction, so a
+                 * proof saved since (it may open the refund) must make the claim lose, not be overwritten.
+                 */
+                returned.proofOfSendingAt === undefined
+                    ? { proofOfSendingAt: { $exists: false } }
+                    : {}
             );
             if (!received) return { kind: 'lost' };
 
@@ -454,6 +461,16 @@ const receiveFor = (
         return Promise.resolve(
             generateReject(422, [
                 fieldError('remedy', t('returns.remedy-invalid'), ERROR_CODES.RETURN_REMEDY_INVALID)
+            ])
+        );
+    // The proof of sending already paid (or opened) the refund: a repair or a replacement is off the table.
+    if (remedy !== ReturnRemedy.refund && proofOpenedRefund(returned))
+        return Promise.resolve(
+            generateReject(409, [
+                {
+                    code: ERROR_CODES.RETURN_REFUND_OPENED_ON_PROOF,
+                    message: t('returns.remedy-after-refund-on-proof')
+                }
             ])
         );
     if (

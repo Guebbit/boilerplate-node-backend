@@ -17,6 +17,8 @@
         "proof-date-in-future": "La data della prova di spedizione non può essere nel futuro.",
         "proof-already-recorded": "Per questo reso è già registrata una prova di spedizione.",
         "paid-outside-after-proof": "Il rimborso di questo reso è stato già aperto quando è stata registrata la prova di spedizione, quindi ora non si può registrare come pagato fuori dall'applicazione.",
+        "refund-on-proof-invalid": "Il rimborso alla prova di spedizione vale solo per un reso difettoso o con articolo sbagliato: la prova di un recesso apre già il rimborso.",
+        "remedy-after-refund-on-proof": "Il rimborso è stato aperto quando è stata registrata la prova di spedizione, quindi non si può più scegliere una riparazione o una sostituzione.",
         "refund-opened-on-proof": "Il rimborso è stato aperto quando è stata registrata la prova di spedizione, quindi non si può trattenere nulla per la gestione. Chiedilo all'acquirente a parte.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
         "nothing-to-cancel": "Qui non resta nulla da annullare. Se non è ancora partito nulla, annulla l'intero ordine.",

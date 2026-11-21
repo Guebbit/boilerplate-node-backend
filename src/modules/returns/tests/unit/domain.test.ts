@@ -194,6 +194,7 @@ describe('a replacement or a repair', () => {
             [
                 {
                     kind: 'return',
+                    reason: 'defective',
                     status: 'closed',
                     remedy: 'replace',
                     lines: [{ productId: id('a'), quantity: 2 }],
@@ -201,6 +202,7 @@ describe('a replacement or a repair', () => {
                 },
                 {
                     kind: 'return',
+                    reason: 'defective',
                     status: 'closed',
                     remedy: 'refund',
                     lines: [{ productId: id('b'), quantity: 1 }]
@@ -269,26 +271,35 @@ describe('accountsOf', () => {
             [
                 {
                     kind: 'cancellation',
+                    reason: 'defective',
                     status: 'closed',
                     lines: [{ productId: id('a'), quantity: 1 }],
                     shippingRefund: '4.00'
                 },
                 {
                     kind: 'return',
+                    reason: 'defective',
                     status: 'received',
                     lines: [{ productId: id('b'), quantity: 1 }]
                 },
                 {
                     kind: 'return',
+                    reason: 'defective',
                     status: 'approved',
                     lines: [{ productId: id('a'), quantity: 9 }]
                 },
                 {
                     kind: 'return',
+                    reason: 'defective',
                     status: 'declined',
                     lines: [{ productId: id('a'), quantity: 9 }]
                 },
-                { kind: 'return', status: 'canceled', lines: [{ productId: id('a'), quantity: 9 }] }
+                {
+                    kind: 'return',
+                    reason: 'defective',
+                    status: 'canceled',
+                    lines: [{ productId: id('a'), quantity: 9 }]
+                }
             ],
             'EUR'
         );
@@ -302,9 +313,27 @@ describe('accountsOf', () => {
     it('sums the delivery already refunded, from the ones that settled', () => {
         const accounts = accountsOf(
             [
-                { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: '4.00' },
-                { kind: 'return', status: 'closed', lines: [], shippingRefund: '1.50' },
-                { kind: 'return', status: 'requested', lines: [], shippingRefund: '99.00' }
+                {
+                    kind: 'cancellation',
+                    reason: 'defective',
+                    status: 'closed',
+                    lines: [],
+                    shippingRefund: '4.00'
+                },
+                {
+                    kind: 'return',
+                    reason: 'defective',
+                    status: 'closed',
+                    lines: [],
+                    shippingRefund: '1.50'
+                },
+                {
+                    kind: 'return',
+                    reason: 'defective',
+                    status: 'requested',
+                    lines: [],
+                    shippingRefund: '99.00'
+                }
             ],
             'EUR'
         );
@@ -315,12 +344,54 @@ describe('accountsOf', () => {
     it('sums in minor units, so thirds of a cent cannot drift', () => {
         const refunds = ['0.10', '0.20'].map((shippingRefund) => ({
             kind: 'return' as const,
+            reason: 'defective' as const,
             status: 'closed' as const,
             lines: [],
             shippingRefund
         }));
 
         expect(accountsOf(refunds, 'EUR').shippingRefunded).toBe('0.30');
+    });
+
+    it('counts a return whose refund opened on its proof of sending, though its goods are not back', () => {
+        const proofOfSendingAt = new Date('2026-03-02T09:00:00.000Z');
+        const accounts = accountsOf(
+            [
+                {
+                    kind: 'return',
+                    reason: 'withdrawal',
+                    status: 'approved',
+                    proofOfSendingAt,
+                    lines: [{ productId: id('a'), quantity: 1 }],
+                    shippingRefund: '0.00'
+                },
+                {
+                    kind: 'return',
+                    reason: 'defective',
+                    status: 'approved',
+                    proofOfSendingAt,
+                    refundOnProof: true,
+                    lines: [{ productId: id('b'), quantity: 1 }],
+                    shippingRefund: '2.00'
+                },
+                {
+                    // A faulty item's proof, with no choice made: nothing was opened, so nothing settled.
+                    kind: 'return',
+                    reason: 'defective',
+                    status: 'approved',
+                    proofOfSendingAt,
+                    lines: [{ productId: id('c'), quantity: 1 }],
+                    shippingRefund: '9.00'
+                }
+            ],
+            'EUR'
+        );
+
+        expect(accounts.accountedFor).toEqual([
+            { productId: 'a', quantity: 1 },
+            { productId: 'b', quantity: 1 }
+        ]);
+        expect(accounts.shippingRefunded).toBe('2.00');
     });
 
     it('is empty for an order with no returns', () => {
