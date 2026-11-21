@@ -2,7 +2,8 @@
  * An admin edit must reach the next anonymous reader.
  *
  * Risk:    the public dictionary is cached for an hour, so every write route in
- *          `src/modules/locales` wraps in `invalidateCache(['locales'])`. The tag the READ stores
+ *          `src/modules/locales` clears the tags of the language it changed (`locale:<code>`) and
+ *          the manifest (`locales:manifest`). The tag the READ stores
  *          under and the tag the WRITE clears are two declarations nothing type-checks against each
  *          other. A mismatch looks perfect in development (TTL clamped to thirty seconds, every
  *          manual check a fresh miss) and serves an hour-old translation in production.
@@ -95,7 +96,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         const { bearer } = await authenticateAs('admin');
         await givenPublishedLanguage(bearer);
 
-        // First read renders from Mongo and stores the response under the `locales` tag.
+        // First read renders from Mongo and stores the response under the `locale:pt` tag.
         const first = await api().get('/locales/pt/messages');
         expect(first.headers['cache-status']).toContain('fwd=miss');
         expect(first.body.messages).toEqual({ cart: { title: 'Carrinho' } });
@@ -147,6 +148,53 @@ describe('an admin write invalidates the cached public dictionary', () => {
         expect(afterCreate.body.locales.some(({ tag }: { tag: string }) => tag === 'pt')).toBe(
             true
         );
+    });
+});
+
+/** The `Cache-Status` of an anonymous read: a hit, or the miss that rebuilt it. */
+const cacheStatusOf = (path: string) =>
+    api()
+        .get(path)
+        .then((response) => response.headers['cache-status']);
+
+describe('an edit clears only its own language', () => {
+    it("leaves another language's cached dictionary and row alone, and clears the manifest", async () => {
+        const { bearer } = await authenticateAs('admin');
+        await givenPublishedLanguage(bearer);
+        // A second registered language, whose reads must outlive an edit to `pt`.
+        await api()
+            .post('/locales')
+            .set('Authorization', bearer)
+            .send({ tag: 'es', name: 'Spanish', nativeName: 'Español' });
+
+        for (const path of ['/locales/es/messages', '/locales/es', '/locales/pt', '/locales'])
+            await api().get(path);
+
+        await api()
+            .post('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ key: 'cart.total', value: 'Total' });
+
+        expect(await cacheStatusOf('/locales/es/messages')).toMatch(/; hit; ttl=\d+/);
+        expect(await cacheStatusOf('/locales/es')).toMatch(/; hit; ttl=\d+/);
+        expect(await cacheStatusOf('/locales/pt')).toContain('fwd=miss');
+        expect(await cacheStatusOf('/locales')).toContain('fwd=miss');
+    });
+
+    it('files a path spelt in another case under the same language', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await givenPublishedLanguage(bearer);
+        await api().get('/locales/PT/messages');
+        const warm = await api().get('/locales/PT/messages');
+        expect(warm.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
+
+        await api()
+            .post('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ key: 'cart.total', value: 'Total' });
+
+        const after = await api().get('/locales/PT/messages');
+        expect(after.headers['cache-status']).toContain('fwd=miss');
     });
 });
 

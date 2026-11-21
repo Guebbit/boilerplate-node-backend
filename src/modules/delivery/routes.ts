@@ -12,7 +12,7 @@ import {
     idempotencyKey,
     requireIdempotencyKey
 } from '@infrastructure/http/middlewares/idempotency';
-import { noStore } from '@infrastructure/http/middlewares/cache';
+import { environmentCache, noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
 import { postDeliverShipment } from './controllers/post-deliver-shipment';
@@ -35,7 +35,7 @@ import {
 export const router = Router();
 
 // GET /delivery/methods — public: what shipping costs is pre-purchase information
-router.get('/methods', getShippingMethods);
+router.get('/methods', environmentCache, getShippingMethods);
 
 /**
  * GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `read:Order`, the

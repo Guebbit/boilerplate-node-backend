@@ -16,6 +16,7 @@ import type { Response } from 'express';
 import type { ZodError } from 'zod';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
+import { labelNeutralRefusal } from '@infrastructure/http/middlewares/locale';
 
 /** Fields shared by both internal outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
@@ -467,6 +468,8 @@ export const rejectResponse = (
      * it. Overwrites what `setCache` set before the controller failed (a public max-age on a 5xx).
      */
     response.setHeader('Cache-Control', 'no-store');
+    // The refusal is written in the visitor's language even where a success is not.
+    labelNeutralRefusal(response);
     /**
      * Set before `.json()`, which only defaults the type when none is set: an export route's
      * earlier `text/csv` would otherwise leak onto its own error. An error is never an attachment.

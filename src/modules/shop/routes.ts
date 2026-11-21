@@ -5,10 +5,11 @@
  */
 
 import { Router } from 'express';
+import { environmentCache } from '@infrastructure/http/middlewares/cache';
 import { getShop } from './controllers/get-shop';
 
 /** Express router for shop endpoints. */
 export const router = Router();
 
 // GET /shop — the shop's identity, currency, ship-to countries and return address.
-router.get('/', getShop);
+router.get('/', environmentCache, getShop);

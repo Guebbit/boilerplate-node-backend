@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import {
+    environmentCache,
     invalidateCache,
     markDraftPreview,
     noStore,
@@ -252,6 +253,23 @@ const parsedKeyFor = async (
         jest.fn() as NextFunction
     );
     return mockedCache.getCacheValue.mock.calls.at(-1)?.[0];
+};
+
+/** One GET through a neutral `setCache`, in the given language; answers what it did. */
+const neutralGet = async (locale: string, cached?: string) => {
+    mockedCache.getCacheValue.mockResolvedValue(cached);
+    const middleware = setCache(60, {
+        keyParameters: [],
+        languageNeutral: true,
+        scopeKey: GUEST_SCOPE
+    });
+    const { response, headers } = createResponse();
+    await middleware(
+        asStub<Request>({ method: 'GET', originalUrl: '/shop', query: {}, locale }),
+        response,
+        jest.fn() as NextFunction
+    );
+    return { response, headers };
 };
 
 describe('setCache', () => {
@@ -662,6 +680,120 @@ describe('setCache', () => {
             'GET:/products?:guest:en',
             'GET:/products?:guest:it'
         ]);
+    });
+
+    describe('a language-neutral route', () => {
+        it('keeps one entry for every language: the key names none', async () => {
+            await neutralGet('en');
+            await neutralGet('it');
+
+            expect(mockedCache.getCacheValue.mock.calls.map(([key]) => key)).toEqual([
+                'GET:/shop?:guest:-',
+                'GET:/shop?:guest:-'
+            ]);
+        });
+
+        it('varies on who asks and on nothing about language', async () => {
+            const { headers } = await neutralGet('en');
+
+            expect(headers.vary).toBe('Authorization');
+        });
+
+        it('stores the label the controller set, and replays it on a hit', async () => {
+            const { response } = await neutralGet('en');
+            response.setHeader('Content-Language', 'it');
+            response.json({ locale: 'it' });
+
+            const [, stored] = mockedCache.setCacheValue.mock.calls.at(-1) ?? [];
+            expect(stored).toContain('"contentLanguage":"it"');
+
+            const hit = await neutralGet('en', stored);
+            expect(hit.response.setHeader).toHaveBeenCalledWith('Content-Language', 'it');
+        });
+
+        it('stores no label when the controller set none', async () => {
+            const { response } = await neutralGet('en');
+            response.json({ currency: 'EUR' });
+
+            const [, stored] = mockedCache.setCacheValue.mock.calls.at(-1) ?? [];
+            expect(stored).not.toContain('contentLanguage');
+        });
+
+        it('leaves a language-bound route as it was: Vary on language, no stored label', async () => {
+            mockedCache.getCacheValue.mockResolvedValue(undefined);
+            const middleware = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
+            const { response, headers } = createResponse();
+            await middleware(
+                asStub<Request>({ method: 'GET', originalUrl: '/p', query: {}, locale: 'en' }),
+                response,
+                jest.fn() as NextFunction
+            );
+            response.setHeader('Content-Language', 'en');
+            response.json({ id: 'p1' });
+
+            expect(headers.vary).toBe('Authorization, Accept-Language');
+            const [, stored] = mockedCache.setCacheValue.mock.calls.at(-1) ?? [];
+            expect(stored).not.toContain('contentLanguage');
+        });
+
+        it('shows its declaration on the middleware, for the route/registry guard', () => {
+            const declared = setCache(60, {
+                keyParameters: [],
+                languageNeutral: true,
+                scopeKey: GUEST_SCOPE
+            });
+            const bound = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
+
+            expect([declared.languageNeutral, bound.languageNeutral]).toEqual([true, false]);
+        });
+    });
+
+    describe('environmentCache', () => {
+        it('lets anyone keep the answer for a minute, in no language', async () => {
+            setEnvironment({ NODE_REDIS_CACHE_DEV_TTL_MAX: '0' });
+            mockedCache.getCacheValue.mockResolvedValue(undefined);
+            const { response, headers } = createResponse();
+
+            await environmentCache(
+                asStub<Request>({ method: 'GET', originalUrl: '/shop', query: {}, locale: 'it' }),
+                response,
+                jest.fn() as NextFunction
+            );
+
+            expect(headers['cache-control']).toMatch(/^public, max-age=60,/);
+            expect(headers.vary).toBe('Authorization');
+            expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/shop?:guest:-');
+            expect(environmentCache.cachePolicy).toBe('max-age: 60');
+        });
+    });
+
+    it('files an entry under the tags its route derives from the request', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const middleware = setCache(60, {
+            tags: (request) => [`locale:${String(request.params.locale)}`],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
+        const { response } = createResponse();
+        await middleware(
+            asStub<Request>({
+                method: 'GET',
+                originalUrl: '/locales/it',
+                query: {},
+                params: { locale: 'it' },
+                locale: 'en'
+            }),
+            response,
+            jest.fn() as NextFunction
+        );
+        response.json({ tag: 'it' });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.any(String),
+            expect.any(Number),
+            ['locale:it']
+        );
     });
 
     /**
@@ -1634,6 +1766,24 @@ describe('invalidateCache', () => {
         await Promise.resolve();
 
         expect(mockedCache.invalidateCacheTagsLogged).toHaveBeenCalledWith(['orders']);
+    });
+
+    it('clears the tags derived from the write itself', async () => {
+        const middleware = invalidateCache((request) => [
+            `locale:${String(request.params.locale)}`
+        ]);
+        const { response, listeners } = createResponse();
+
+        middleware(
+            asStub<Request>({ params: { locale: 'pt' } }),
+            response,
+            jest.fn() as NextFunction
+        );
+        response.statusCode = 200;
+        listeners.get('finish')?.();
+        await Promise.resolve();
+
+        expect(mockedCache.invalidateCacheTagsLogged).toHaveBeenCalledWith(['locale:pt']);
     });
 
     it('skips invalidation for failed responses', () => {

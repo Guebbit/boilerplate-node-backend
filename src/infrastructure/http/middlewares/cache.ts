@@ -37,6 +37,9 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
  * hit so a miss and a hit send the same tag. Absent on an unversioned read: Express mints its own.
  *
  * `savedAt` (epoch ms) is when the entry was written; a hit turns it into the `Age` header.
+ *
+ * `contentLanguage` is the label a language-neutral route's controller set (the path's language on
+ * a dictionary read), replayed on a hit because nothing else sets it there. Absent elsewhere.
  */
 interface CachedResponse {
     status: number;
@@ -44,6 +47,7 @@ interface CachedResponse {
     staleAt: number;
     savedAt: number;
     etag?: string;
+    contentLanguage?: string;
 }
 
 /**
@@ -76,6 +80,9 @@ const STALE_WHILE_REVALIDATE_SECONDS = 60;
  * this, since an origin that is down cannot also be the one enforcing it.
  */
 const STALE_IF_ERROR_SECONDS = 300;
+
+/** How long {@link environmentCache} keeps an answer: a redeploy shows within a minute. */
+const ENVIRONMENT_CACHE_SECONDS = 60;
 
 /**
  * Clamp a route's declared TTL to the development ceiling.
@@ -157,6 +164,7 @@ const isCachedResponse = (value: unknown): value is CachedResponse =>
     typeof (value as Record<string, unknown>).staleAt === 'number' &&
     'body' in value &&
     ['string', 'undefined'].includes(typeof (value as Record<string, unknown>).etag) &&
+    ['string', 'undefined'].includes(typeof (value as Record<string, unknown>).contentLanguage) &&
     typeof (value as Record<string, unknown>).savedAt === 'number';
 
 /**
@@ -175,11 +183,30 @@ const parseCachedResponse = (raw: string): CachedResponse | undefined => {
 };
 
 /**
+ * Invalidation tags, fixed for the route or derived from the request.
+ * The function form is read when an entry is stored (a 2xx answer) and when a write clears.
+ */
+export type CacheTags = readonly string[] | ((request: Request) => readonly string[]);
+
+/**
+ * The tags a request files its entry under, or clears.
+ * @param tags - the route's declaration
+ * @param request - the request the function form reads
+ * @returns the concrete tag list, `undefined` when none are declared
+ */
+const resolveTags = (tags: CacheTags | undefined, request: Request): string[] | undefined =>
+    typeof tags === 'function' ? [...tags(request)] : tags && [...tags];
+
+/**
  * Extra cache metadata for middleware users.
  */
 interface CacheOptions {
-    /** Invalidation tags this route's entries are cleared under — see {@link invalidateCache}. */
-    tags?: string[];
+    /**
+     * Invalidation tags this route's entries are cleared under — see {@link invalidateCache}.
+     * A function derives them from the request (`locale:<code>` from the path), so one route
+     * files each language's answer under its own tag.
+     */
+    tags?: CacheTags;
     /**
      * The query parameters this endpoint's answer actually depends on.
      *
@@ -216,6 +243,21 @@ interface CacheOptions {
      * the other.
      */
     keyAs?: string;
+
+    /**
+     * The success body does not depend on the visitor's language, so the answer is one entry for
+     * everyone and says nothing about language.
+     *
+     * Key:     the language segment is `-`, not `request.locale`.
+     * Headers: no `Vary: Accept-Language` from here. The global `attachLocale` skips its own for
+     *          the same path, which is why the route must also be in its registry
+     *          (`isLanguageNeutral`); a test keeps the two lists equal.
+     * Errors:  untouched. They are translated into the visitor's language and never cached, so
+     *          `rejectResponse` still labels them.
+     *
+     * @see docs/understand/redis-cache-keys.md#language-neutral-routes
+     */
+    languageNeutral?: boolean;
 
     /**
      * Let the SERVER hold the answer for the full TTL, but make the browser check first.
@@ -320,7 +362,8 @@ const keySegments = (
  *
  * The parameters are never stored raw: their values are hashed (`sha256`), so the key is a fixed
  * size however long the input was. Locale is in the key because it changes the body (translated
- * copy) — same reasoning as the `Vary` header `applyCacheHeaders` sets. The raw query
+ * copy) — same reasoning as the `Vary` header `applyCacheHeaders` sets — except on a
+ * `languageNeutral` route, whose segment is `-`: one entry for every language. The raw query
  * string is deliberately NOT part of the key: query-string order is not stable across clients, and
  * only `keyParameters` can reach the key, so `?anything=else` cannot mint its own entry.
  *
@@ -354,7 +397,7 @@ const getCacheKey = (
     const digest =
         segments.length > 0 ? createHash('sha256').update(segments.join('&')).digest('hex') : '';
 
-    return `${identity}?${digest}:guest:${request.locale ?? '-'}`;
+    return `${identity}?${digest}:guest:${options.languageNeutral ? '-' : (request.locale ?? '-')}`;
 };
 
 /**
@@ -369,13 +412,15 @@ const getCacheKey = (
  * @param graceSeconds - stale-but-servable window past `ttl` — the Redis entry itself lives for
  *   `ttl + graceSeconds`, clamped by `serveOrArm` to at most `ttl`
  * @param tags - invalidation tags to pass to `setCacheValue`
+ * @param storeContentLanguage - keep the `Content-Language` the controller set, for a hit to replay
  */
 const armCacheWrite = (
     response: Response,
     cacheKey: string,
     ttl: number,
     graceSeconds: number,
-    tags?: string[]
+    tags: string[] | undefined,
+    storeContentLanguage: boolean
 ): void => {
     const responseJson = response.json.bind(response);
     response.json = ((body: unknown) => {
@@ -398,7 +443,8 @@ const armCacheWrite = (
                 staleAt: savedAt + ttl * 1000,
                 savedAt,
                 // setEtag's json wrapper runs before this one, so the header is already set.
-                etag: response.get('ETag')
+                etag: response.get('ETag'),
+                contentLanguage: storeContentLanguage ? response.get('Content-Language') : undefined
             });
             if (payload !== undefined)
                 // eslint-disable-next-line @typescript-eslint/no-floating-promises -- setCacheValue never rejects (it logs a failed write)
@@ -427,6 +473,8 @@ const armCacheWrite = (
  */
 const replay = (response: Response, cached: CachedResponse): void => {
     if (cached.etag !== undefined) response.setHeader('ETag', cached.etag);
+    if (cached.contentLanguage !== undefined)
+        response.setHeader('Content-Language', cached.contentLanguage);
     response.set('Age', String(Math.max(0, Math.floor((Date.now() - cached.savedAt) / 1000))));
     response.status(cached.status).json(cached.body);
 };
@@ -477,7 +525,7 @@ const applyCacheHeaders = (
               : 'no-store'
     );
     response.vary('Authorization');
-    response.vary('Accept-Language');
+    if (!options.languageNeutral) response.vary('Accept-Language');
 
     return cacheableRead;
 };
@@ -542,7 +590,14 @@ const serveOrArm = (
                 if (!cachedResponse) {
                     response.set('Cache-Status', `${CACHE_STATUS_NAME}; fwd=miss`);
                     cacheRequestsTotal.inc({ result: 'miss' });
-                    armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                    armCacheWrite(
+                        response,
+                        cacheKey,
+                        ttl,
+                        graceSeconds,
+                        resolveTags(options.tags, request),
+                        options.languageNeutral === true
+                    );
                     next();
                     return;
                 }
@@ -579,7 +634,14 @@ const serveOrArm = (
 
                     response.set('Cache-Status', `${CACHE_STATUS_NAME}; fwd=stale`);
                     cacheRequestsTotal.inc({ result: 'refresh' });
-                    armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                    armCacheWrite(
+                        response,
+                        cacheKey,
+                        ttl,
+                        graceSeconds,
+                        resolveTags(options.tags, request),
+                        options.languageNeutral === true
+                    );
                     next();
                 });
             })
@@ -655,7 +717,8 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
      * production lifetime.
      */
     return Object.assign(setCacheMiddleware, {
-        cachePolicy: options.browserRevalidate ? 'revalidate' : `max-age: ${String(seconds)}`
+        cachePolicy: options.browserRevalidate ? 'revalidate' : `max-age: ${String(seconds)}`,
+        languageNeutral: options.languageNeutral === true
     });
 };
 
@@ -686,23 +749,44 @@ export const searchCache = (
     });
 
 /**
+ * For a public GET whose answer comes from environment settings only (`/shop`, the payment and
+ * delivery method lists): `setCache` for a minute, one entry for everyone, in no language.
+ *
+ * Tagless on purpose: the answer changes on a redeploy, never by a request, so nothing clears it
+ * and an old copy can outlive a redeploy by about two minutes (the 60 s `max-age` plus the 60 s
+ * stale-while-revalidate window), longer while the origin is failing (`stale-if-error`, 5 min). `scopeKey` is always true, since no caller sees more.
+ */
+export const environmentCache = setCache(ENVIRONMENT_CACHE_SECONDS, {
+    keyParameters: [],
+    languageNeutral: true,
+    scopeKey: () => true
+});
+
+/**
  * Clear Redis cache groups after successful write operations — e.g. after writing a product,
  * clear the `products` tag.
  *
  * One call covers every instance: the cached responses and tag sets live in shared Redis, so
  * deleting them here is visible to every other replica immediately.
  *
- * @param tags - the cache tags to clear, e.g. `['products']`
+ * @param tags - the cache tags to clear, e.g. `['products']`, or a function of the write's request
+ *   (`locale:<code>` from the path or the body)
  * @returns an Express middleware to mount after the write it invalidates
  */
 export const invalidateCache =
-    (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {
+    (tags: CacheTags) => (request: Request, response: Response, next: NextFunction) => {
+        /**
+         * Resolved now, not when the response finishes: Express hands `request.params` back to
+         * the parent router once the route is done, so by `finish` the path's language is gone.
+         */
+        const resolved = resolveTags(tags, request) ?? [];
+
         response.on('finish', () => {
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode < 200 || response.statusCode >= 300) return;
 
             // eslint-disable-next-line @typescript-eslint/no-floating-promises -- invalidateCacheTagsLogged never rejects (an unreachable Redis is logged and counted)
-            void invalidateCacheTagsLogged(tags);
+            void invalidateCacheTagsLogged(resolved);
         });
 
         next();

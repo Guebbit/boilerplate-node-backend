@@ -12,6 +12,7 @@ tags:
 paths:
     /shop:
         get:
+            x-cache: "max-age: 60"
             tags: [Shop]
             summary: The shop's commerce settings (currency, ship-to countries, return address)
             description: >-

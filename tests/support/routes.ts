@@ -21,7 +21,7 @@
  *
  *            `require` in the factory, because `jest.mock` factories may not close over scope.
  */
-import type { Router } from 'express';
+import type { Request, Router } from 'express';
 import { asStub } from '@tests/stub';
 import type { PermissionAction, PermissionSubject, StepUpTier } from '@kernel/permissions';
 import { HOUR_SECONDS } from '@domain-primitives/time';
@@ -97,6 +97,17 @@ const list = (values: readonly unknown[] | undefined): string =>
     values === undefined ? '·' : values.map(String).join('|');
 
 /**
+ * What a route's cache tags read as in a label. A function of the request (`locale:<code>` from
+ * the path or body) is called with a request that spells its path language `pt-br` and its body
+ * tag `sv-se`, so a label shows the canonical tag it would file the entry under (`locale:pt-BR`).
+ */
+const tagsLabel = (tags: unknown): string => {
+    if (typeof tags !== 'function') return list(tags as readonly unknown[] | undefined);
+    const sample = asStub<Request>({ params: { locale: 'pt-br' }, body: { tag: 'sv-se' } });
+    return list(tags(sample) as readonly unknown[]);
+};
+
+/**
  * The inverse of {@link text} and {@link list}: one rendered value, parsed back to what produced
  * it. Used only by {@link optionsOf} — see the stopgap note there.
  */
@@ -148,7 +159,7 @@ export const optionsOf = (chain: readonly string[], factory: string): Record<str
  */
 const mockSetCache = (ttl: number, options?: Record<string, unknown>) =>
     labelled(
-        `setCache(${ttl}, tags=[${list(options?.tags as unknown[])}], ` +
+        `setCache(${ttl}, tags=[${tagsLabel(options?.tags)}], ` +
             `keyParameters=[${list(options?.keyParameters as unknown[])}], ` +
             `keyAs=${text(options?.keyAs)}, ` +
             /**
@@ -156,7 +167,8 @@ const mockSetCache = (ttl: number, options?: Record<string, unknown>) =>
              * separate failure from a wrong tag — Redis is cleared either way, and the stale copy
              * is the one already in the browser — so it is recorded separately.
              */
-            `browserRevalidate=${text(options?.browserRevalidate ?? false)})`
+            `browserRevalidate=${text(options?.browserRevalidate ?? false)}, ` +
+            `languageNeutral=${text(options?.languageNeutral ?? false)})`
     );
 
 /**
@@ -202,7 +214,7 @@ export const cacheMock = () => ({
     __esModule: true,
     setCache: mockSetCache,
     searchCache: mockSearchCache,
-    invalidateCache: (tags: readonly string[]) => labelled(`invalidateCache([${list(tags)}])`)
+    invalidateCache: (tags: unknown) => labelled(`invalidateCache([${tagsLabel(tags)}])`)
 });
 
 /**

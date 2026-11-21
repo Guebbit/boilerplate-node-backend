@@ -1252,12 +1252,13 @@ describe('a locale only the API has', () => {
      * answered in once it is switched on. `Content-Language` names the audience the answer is
      * written for; the API's own messages have no Portuguese wording, so each falls back to the
      * default language, key by key. A switched-off one is never picked.
+     * Read off a refusal (`GET /locales/xx`): the manifest is language-neutral and names none.
      */
     it('answers in a language that exists only in the database, once it is switched on', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
-        const response = await api().get('/locales').set('Accept-Language', 'pt');
+        const response = await api().get('/locales/xx').set('Accept-Language', 'pt');
 
         expect(response.headers['content-language']).toBe('pt');
     });
@@ -1278,7 +1279,7 @@ describe('a locale only the API has', () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer, { ...PORTUGUESE, active: false });
 
-        const response = await api().get('/locales').set('Accept-Language', 'pt');
+        const response = await api().get('/locales/xx').set('Accept-Language', 'pt');
 
         expect(response.headers['content-language']).toBe(getFallbackLocale());
     });
@@ -1288,7 +1289,7 @@ describe('a locale only the API has', () => {
         await createLanguage(bearer);
         await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
-        const response = await api().get('/locales').set('Accept-Language', 'pt');
+        const response = await api().get('/locales/xx').set('Accept-Language', 'pt');
 
         expect(response.headers['content-language']).toBe(getFallbackLocale());
     });
