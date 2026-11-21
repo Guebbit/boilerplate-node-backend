@@ -98,8 +98,9 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
         - a bundler step (`scripts/contracts/openapi-bundle.ts`) adds `ETag`, `If-Match`, 412 and 304;
           `tests/integration/conditional-writes.test.ts`
         - `tests/cross-cutting/cache-policy-declared.test.ts`: each module's `x-cache` GETs (except
-          `no-store`, declared only) equal the routes that mount `setCache`/`privateNoCache`, and
-          every value is a known spelling. It does not see the root contract (`/config`, covered by
+          `no-store`, declared only) equal the routes that mount `setCache`/`privateNoCache`, value
+          for value (`privateNoCache`, `revalidate` or `max-age: N`), and every value is a known
+          spelling. It does not see the root contract (`/config`, covered by
           the contract test in `tests/contract/write-methods.test.ts`), reads left on the app
           default, or whether a declared 304 is really sent.
         - `cache.test.ts` and the cookie-mode integration tests guard the `setCache` branch of
@@ -175,7 +176,18 @@ Output goes to `tmp/reports/audit-<run>/api-http/<SCOPE>…`. `<run>` and `<SCOP
     - Part B: start from `src/infrastructure/http/middlewares/cache.ts` and
       `docs/understand/defences/http-and-caches.md`, then walk the GETs. `rfc9110-conditional-requests`:
       every operation on a resource that sends an `ETag` (reads for `If-None-Match`, writes for
-      `If-Match`)
+      `If-Match`).
+      Part B also reads the paired frontend, **read-only**, at `../boilerplate-vue-frontend` (as
+      `compliance-frontend` does; absent: say so and judge the backend half only): `src/infrastructure/http/etag.ts`
+      and the stores. Judgement items no test can see, each a verdict on `rfc9111-*` or
+      `rfc9110-conditional-requests`:
+        - a global tag where a per-record one is needed
+        - the language in the cache key, or `Vary: Accept-Language`, for a body that does not vary by it
+        - `public`, `private` or `no-store` chosen against who can read the answer
+        - fast data (stock, availability) in a shared-cached body
+        - the frontend keeping fast fields for an hour (its `staleTime` on a fast read)
+        - a save from a view that leaves its record without a tag (the frontend drops a held tag after
+          an answer that carries none, so the save then goes out unconditional)
     - Part C:
         - `rfc5789-*`: every `patch` operation; read each handler and its service. The body parsers:
           `JSON_BODY_TYPES` (`src/infrastructure/http/middlewares/json-depth.ts`, mounted in

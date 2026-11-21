@@ -7,6 +7,20 @@
 
 const path = require('node:path');
 
+/**
+ * Tests never load the developer's `.env`.
+ *
+ * `src/app.ts` imports `dotenv/config`, which would read `.env` inside every worker and spawned
+ * child — on a developer's machine only, since CI has none. dotenv reads `DOTENV_PATH` as the file
+ * to load, so a path that cannot exist makes every load a no-op. An EMPTY string does not: dotenv
+ * treats it as unset and falls back to `.env`.
+ *
+ * Top-level, not in a `setupFiles` entry: `jest.config.replicas.js` runs none, and this reaches
+ * every config that extends this one, plus the children tests spawn.
+ * https://github.com/motdotla/dotenv#config
+ */
+process.env.DOTENV_PATH = path.join(__dirname, 'tests', 'support', '.no-env-file-here');
+
 const { existsSync, readFileSync } = require('node:fs');
 
 const { parseEnv } = require('node:util');

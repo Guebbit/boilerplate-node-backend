@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { asStub } from '@tests/stub';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { outboxEventsDeadTotal } from '@infrastructure/observability/metrics-outbox';
 import {
@@ -109,6 +110,10 @@ describe('enqueueOutboxEvent', () => {
 });
 
 describe('relayOutbox', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it('delivers a committed event once, with the row id as its stable event id', async () => {
         subscribe();
         await write(1);
@@ -154,6 +159,46 @@ describe('relayOutbox', () => {
         await makeDue();
         await relayOutbox();
         expect(seen.map(({ n }) => n)).toEqual([3, 1, 2]);
+    });
+
+    it('does not dispatch a row rescheduled between the heads read and its claim', async () => {
+        subscribe();
+        await write(1, 'untouched');
+        await write(2, 'rescheduled');
+
+        /**
+         * Jest: wrap the model's `aggregate` (the heads read) so one aggregate's row is pushed into
+         * the future once the read has returned and before the claim runs.
+         * https://jestjs.io/docs/jest-object#jestspyonobject-methodname
+         */
+        const aggregate = outboxEventModel.aggregate.bind(outboxEventModel);
+        jest.spyOn(outboxEventModel, 'aggregate').mockImplementationOnce(
+            asStub<typeof outboxEventModel.aggregate>(
+                (...arguments_: Parameters<typeof aggregate>) => {
+                    const query = aggregate(...arguments_);
+                    const exec = query.exec.bind(query);
+                    query.exec = () =>
+                        exec().then((heads) =>
+                            outboxEventModel
+                                .updateOne(
+                                    { aggregateId: 'rescheduled' },
+                                    { $set: { nextAttemptAt: new Date(Date.now() + 60_000) } }
+                                )
+                                .exec()
+                                .then(() => heads)
+                        );
+                    return query;
+                }
+            )
+        );
+
+        const result = await relayOutbox();
+
+        // The pass ran and delivered the untouched row; only the rescheduled one waits.
+        expect(seen.map(({ n }) => n)).toEqual([1]);
+        expect(result).toEqual({ published: 1, retried: 0, dead: 0 });
+        const waiting = await outboxEventModel.findOne({ aggregateId: 'rescheduled' }).lean();
+        expect(waiting?.status).toBe('pending');
     });
 
     it('reschedules a failed dispatch with backoff, and parks it dead after the last attempt', async () => {

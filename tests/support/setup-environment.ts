@@ -188,7 +188,7 @@ process.env.NODE_PASSWORD_CHECK_RATE_LIMIT_BLOCK_MAX ??= '1000';
 
 /**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
- * both of these. Set here rather than left to a developer's `.env`: the `shop` scenario declares
+ * both of these. Set here, since a test run loads no `.env`: the `shop` scenario declares
  * an `order.awaitingTransfer` guarantee, so a suite that builds it against an unconfigured
  * environment fails on a missing payment method rather than on anything it is testing.
  */
@@ -213,19 +213,6 @@ process.env.NODE_VAT_RATE_DEFAULT ??= '0.22';
 process.env.NODE_VAT_RATE_REDUCED ??= '0.10';
 
 /**
- * The limiters count IN MEMORY here, never in Redis.
- *
- * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the
- * suite, and a limits URL there names a compose hostname that does not resolve from a test
- * runner. Every case asserting a 429 would then fail for a reason that has nothing to do with the
- * code under test. A blank value, set before dotenv runs, beats whatever `.env` carries.
- *
- * It is also the right answer on its own terms: a suite that shares counters with whatever else is
- * talking to that Redis is a suite whose result depends on who else is running.
- */
-process.env.NODE_RATE_LIMIT_REDIS_URL ??= '';
-
-/**
  * The per-query time limit stays wired in, at a ceiling a contended machine cannot trip: the real
  * 5 s default is a production number, and a suite that fails when the host is busy is not testing
  * the code. `tests/integration/persistence/query-time-limit.test.ts` sets its own, small one.
@@ -234,10 +221,10 @@ process.env.NODE_MONGO_MAX_TIME_MS ??= '60000';
 
 /**
  * Rung 2 of the breached-password check (`checkHibpRange`) is a REAL outbound call to
- * `api.pwnedpasswords.com`. This project's own `.env` turns it on so the demo exercises it, but a
- * suite must never depend on a live third party — it is slow enough to distort a race assertion
- * (`auth-races.test.ts` saw its atomic-claim test flip under the added latency), and it fails for a
- * reason that has nothing to do with the code under test the moment the runner has no egress.
+ * `api.pwnedpasswords.com`. A suite must never depend on a live third party: it is slow enough to
+ * distort a race assertion (`auth-races.test.ts` saw its atomic-claim test flip under the added
+ * latency), and it fails for a reason that has nothing to do with the code under test the moment
+ * the runner has no egress.
  *
  * `??=`, not a plain assignment: `../unit/infrastructure/security/breached-passwords/index.test.ts`
  * still turns it on inside individual cases, after this file has already run, to test rung 2 with
@@ -254,10 +241,9 @@ process.env.NODE_METRICS_TOKEN ??= 'test-metrics-token';
 
 /**
  * JWT signing secrets. `src/modules/account/session/config.ts` defaults both to `''` when unset,
- * and jose cannot import a zero-length HMAC key — so
- * any suite that signs in for real (`tests/contract`, most of `tests/integration`) needs these
- * set before the first login. A local `.env` supplies them via `dotenv/config` in `src/app.ts`;
- * CI has no `.env`, which is exactly what left `test-contract` failing there.
+ * and jose cannot import a zero-length HMAC key — so any suite that signs in for real
+ * (`tests/contract`, most of `tests/integration`) needs these set before the first login. A test
+ * run loads no `.env` (`jest.config.js`), so these are the only source.
  */
 process.env.NODE_TOKEN_ACCESS ??= 'test-access-secret';
 process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';

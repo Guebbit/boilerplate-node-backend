@@ -104,9 +104,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'account-export-'));
-    // No broker: the build runs inline after the response, as `settleInlineExports` expects. A
-    // reachable (or merely configured) local broker would send it to the queue or the held store.
-    setEnvironment({ NODE_ACCOUNT_EXPORT_STORE_PATH: root, NODE_RABBITMQ_ENABLED: '0' });
+    setEnvironment({ NODE_ACCOUNT_EXPORT_STORE_PATH: root });
     mockOutbox.length = 0;
     mockAudit.length = 0;
 });

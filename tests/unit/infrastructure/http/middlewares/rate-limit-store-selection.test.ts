@@ -10,8 +10,8 @@
  *           two approaches cannot share a file.
  * State:    `client`, `connecting` and `degraded` are module-scope, so every case re-imports the
  *           module with `jest.resetModules()` + `require()`, as `cache.test.ts` does.
- * Env:      `tests/support/setup-environment.ts` blanks `NODE_RATE_LIMIT_REDIS_URL` globally, so a
- *           case exercising the Redis path sets one explicitly.
+ * Env:      `NODE_RATE_LIMIT_REDIS_URL` is unset under tests, because no `.env` is loaded
+ *           (`jest.config.js`), so a case exercising the Redis path sets one explicitly.
  */
 /**
  * Also forces module scope for this file — otherwise its top-level `const`s collide, at the type

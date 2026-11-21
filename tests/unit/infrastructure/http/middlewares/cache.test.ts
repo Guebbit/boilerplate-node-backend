@@ -208,11 +208,11 @@ const storeThrough = async (body: unknown, seconds = 60) => {
 
 /** An entry still inside its soft TTL — the ordinary HIT path. */
 const freshEnvelope = (body: unknown) =>
-    JSON.stringify({ status: 200, body, staleAt: Date.now() + 60_000 });
+    JSON.stringify({ status: 200, body, savedAt: Date.now(), staleAt: Date.now() + 60_000 });
 
 /** An entry past its soft TTL but still inside Redis' own `ttl + grace` window. */
 const staleEnvelope = (body: unknown) =>
-    JSON.stringify({ status: 200, body, staleAt: Date.now() - 1000 });
+    JSON.stringify({ status: 200, body, savedAt: Date.now() - 61_000, staleAt: Date.now() - 1000 });
 
 /** A plain `GET /products` request — the refresh-ahead cases below don't care about the key. */
 const staleGetRequest = () =>
@@ -262,7 +262,12 @@ describe('setCache', () => {
 
     it('returns a cached response when Redis has a match', async () => {
         mockedCache.getCacheValue.mockResolvedValue(
-            JSON.stringify({ status: 200, body: { success: true }, staleAt: Date.now() + 60_000 })
+            JSON.stringify({
+                status: 200,
+                body: { success: true },
+                savedAt: Date.now(),
+                staleAt: Date.now() + 60_000
+            })
         );
 
         const middleware = setCache(60, {
@@ -295,6 +300,7 @@ describe('setCache', () => {
             JSON.stringify({
                 status: 200,
                 body: { id: 'p1' },
+                savedAt: Date.now(),
                 staleAt: Date.now() + 60_000,
                 etag: '"4.abc"'
             })
@@ -324,7 +330,12 @@ describe('setCache', () => {
 
     it('sends no tag for an entry stored without one: Express mints its own', async () => {
         mockedCache.getCacheValue.mockResolvedValue(
-            JSON.stringify({ status: 200, body: {}, staleAt: Date.now() + 60_000 })
+            JSON.stringify({
+                status: 200,
+                body: {},
+                savedAt: Date.now(),
+                staleAt: Date.now() + 60_000
+            })
         );
         const middleware = setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE });
         const { response } = createResponse();
@@ -336,6 +347,103 @@ describe('setCache', () => {
         );
 
         expect(response.setHeader).not.toHaveBeenCalled();
+    });
+
+    /**
+     * RFC 9111 §5.1: the hit says how long Redis already held the answer, so the browser keeps it
+     * for `max-age` minus that, not for a whole new `max-age`.
+     */
+    it('sends the seconds since the entry was saved as Age on a hit', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({
+                status: 200,
+                body: {},
+                savedAt: Date.now() - 12_000,
+                staleAt: Date.now() + 48_000
+            })
+        );
+        const { response, headers } = createResponse();
+
+        await setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(Number(headers.age)).toBeGreaterThanOrEqual(12);
+        expect(Number(headers.age)).toBeLessThanOrEqual(13);
+    });
+
+    it('sends Age on a stale hit served while another caller rebuilds', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({
+                status: 200,
+                body: {},
+                savedAt: Date.now() - 70_000,
+                staleAt: Date.now() - 10_000
+            })
+        );
+        mockedCache.claimCacheRefresh.mockResolvedValue(false);
+        const { response, headers } = createResponse();
+
+        await setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(Number(headers.age)).toBeGreaterThanOrEqual(70);
+        expect(Number(headers.age)).toBeLessThanOrEqual(71);
+    });
+
+    it('sends no Age on a miss', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const { response, headers } = createResponse();
+
+        await setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(headers).not.toHaveProperty('age');
+    });
+
+    it('serves an entry without a save time as a miss', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({ status: 200, body: {}, staleAt: Date.now() + 60_000 })
+        );
+        const { response, headers } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE })(
+            staleGetRequest(),
+            response,
+            next
+        );
+
+        expect(headers['cache-status']).toContain('fwd=miss');
+        expect(headers).not.toHaveProperty('age');
+        expect(next).toHaveBeenCalled();
+    });
+
+    it('stores the save time with the entry, so a hit can compute Age', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const { response } = createResponse();
+        await setCache(60, { keyParameters: [], scopeKey: GUEST_SCOPE })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        response.json({ id: 'p1' });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.stringMatching(/"savedAt":\d+/),
+            expect.any(Number),
+            undefined
+        );
     });
 
     it('stores the tag the miss sent, so a hit can replay it', async () => {

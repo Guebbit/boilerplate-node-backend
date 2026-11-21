@@ -218,6 +218,9 @@ const findHeads = (limit: number): Promise<OutboxRow[]> => {
 /**
  * Take the row's lease. One atomic write, so of two relays reaching the same row exactly one wins.
  *
+ * The filter repeats every predicate of {@link findHeads}' due check (retry time and lease), because
+ * the row may have been rescheduled or leased between that read and this write.
+ *
  * @returns the claim's fresh token and the row's attempts so far, or `null` when a peer holds it
  */
 const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | null> => {
@@ -228,6 +231,7 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
             {
                 _id: row._id,
                 status: 'pending',
+                nextAttemptAt: { $lte: now },
                 $or: [{ lockedUntil: { $exists: false } }, { lockedUntil: { $lt: now } }]
             },
             {

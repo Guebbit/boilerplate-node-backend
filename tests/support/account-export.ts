@@ -5,7 +5,6 @@
  * settle hook rather than a poll, and the download is the real route.
  */
 import { api } from '@tests/http';
-import { setEnvironment } from '@tests/environment';
 import { settleInlineExports } from '@modules/account/services/export';
 
 /** What a finished request-and-download resolves to. */
@@ -24,8 +23,6 @@ export interface DownloadedExport {
  * @param bearer - the caller's `Authorization` header value
  */
 export const requestAndDownloadExport = async (bearer: string): Promise<DownloadedExport> => {
-    // No broker: a configured one would send the build to the queue or the held store, not inline.
-    setEnvironment({ NODE_RABBITMQ_ENABLED: '0' });
     const requested = await api().post('/account/export').set('Authorization', bearer).send();
     const { id } = requested.body as { id: string };
 
