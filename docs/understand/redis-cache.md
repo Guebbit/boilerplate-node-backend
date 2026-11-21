@@ -99,7 +99,8 @@ Full detail: [Response headers](./redis-cache-keys.md).
 ## The key is what the request asked for, not how it was written
 
 Every route declares which query parameters change its answer, and the key is built from those
-plus the resolved `scopeKey` and the locale.
+plus the resolved `scopeKey` and the locale (none on a
+[language-neutral route](./redis-cache-keys.md#language-neutral-routes), where one entry serves every language).
 
 ### What reaches the key, and how
 

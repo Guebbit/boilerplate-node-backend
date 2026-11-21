@@ -34,6 +34,15 @@ const AGREED = '2030-06-01T00:00:00.000Z';
 /** One day in milliseconds. */
 const AGREED_PLUS_30 = new Date(new Date(AGREED).getTime() + 30 * DAY_MS);
 
+/** A mismatch where the provider collected another amount in another currency. */
+const MISMATCH = {
+    paymentId: 'p1',
+    orderId: 'o1',
+    fields: ['amount', 'currency'],
+    expected: { amount: '50.00', currency: 'EUR' },
+    received: { amount: '45.00', currency: 'USD', paymentId: 'pi_other' }
+};
+
 /** A delay notice, overridable. */
 const delay = (overrides = {}) => ({
     fulfillmentOrderId: 'fo1',
@@ -123,7 +132,7 @@ const UNRECORDED = {
 describe('the other openings', () => {
     const all: [string, SystemOpening][] = [
         ['refund owed', refundOwedOpening({ refundId: 'r1', orderId: 'o1' }, NOW)],
-        ['amount mismatch', amountMismatchOpening({ paymentId: 'p1', orderId: 'o1' }, NOW)],
+        ['amount mismatch', amountMismatchOpening(MISMATCH, NOW)],
         ['refund unrecorded', refundUnrecordedOpening(UNRECORDED, NOW)],
         [
             'return refund short',
@@ -168,9 +177,30 @@ describe('the other openings', () => {
     });
 
     it('tells administrators alone about an amount mismatch: it is a question about the books', () => {
-        expect(amountMismatchOpening({ paymentId: 'p1', orderId: 'o1' }, NOW).routeSet).toBe(
-            'AuditDisplay'
+        expect(amountMismatchOpening(MISMATCH, NOW).routeSet).toBe('AuditDisplay');
+    });
+
+    it('shows an amount mismatch as expected against received, with the doors that exist', () => {
+        const { message } = amountMismatchOpening(MISMATCH, NOW);
+
+        expect(message).toContain('differs: amount, currency');
+        expect(message).toContain('Expected: 50.00 EUR');
+        expect(message).toContain('Received: 45.00 USD, on payment id pi_other');
+        expect(message).toContain('GET /payments/p1 shows');
+        expect(message).toContain('the money is being returned by itself');
+        expect(message).toContain('POST /payments/p1/refunds/sync');
+        expect(message).toContain('/audit');
+    });
+
+    it('says "not reported" for a figure the provider left out, never "undefined"', () => {
+        const { message } = amountMismatchOpening({ ...MISMATCH, received: {} }, NOW);
+
+        expect(message).toContain(
+            'Received: not reported not reported, on payment id not reported'
         );
+        expect(message).not.toContain('undefined');
+        expect(message).toContain('attempted with the original figures (50.00 EUR)');
+        expect(message).toContain('may refuse it');
     });
 
     it('sends staff to Re-sync for a lost race, and to their books for another currency', () => {

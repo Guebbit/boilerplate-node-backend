@@ -658,11 +658,44 @@ components:
             required:
                 - paymentId
                 - orderId
+                - fields
+                - expected
+                - received
             properties:
                 paymentId:
                     type: string
                 orderId:
                     type: string
+                fields:
+                    type: array
+                    description: Which of `amount`, `currency` and `paymentId` the provider's success disagreed on.
+                    items:
+                        type: string
+                expected:
+                    type: object
+                    description: What was frozen at the intent, before the provider's figures were written over it.
+                    required:
+                        - amount
+                        - currency
+                    properties:
+                        amount:
+                            type: string
+                        currency:
+                            type: string
+                    additionalProperties: false
+                received:
+                    type: object
+                    description: What the provider reported. A figure it left out is absent.
+                    properties:
+                        amount:
+                            type: string
+                        currency:
+                            type: string
+                        paymentId:
+                            type: string
+                            maxLength: 64
+                            description: The id the provider echoed back, cut to 64 characters. Shown to staff as plain text.
+                    additionalProperties: false
             additionalProperties: false
         PaymentRefundUnrecordedDomainEventPayload:
             type: object

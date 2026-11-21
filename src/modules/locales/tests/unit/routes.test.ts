@@ -31,6 +31,12 @@ const PUBLIC = [
     'GET /:locale'
 ];
 
+/** The public reads about the list as a whole. */
+const MANIFEST_READS = ['GET /', 'GET /apps'];
+
+/** The public reads about one language, named in the path. */
+const LANGUAGE_READS = ['GET /:locale/messages', 'GET /:locale/dictionary', 'GET /:locale'];
+
 /** Everything that administers the dynamic tier, including the screen the writes are made from. */
 const ADMIN = [
     'POST /',
@@ -61,8 +67,8 @@ const ENTRY_READS = new Set([
 
 /**
  * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
- * clearing a registry-declared tag inside the service rather than `['locales']` via route
- * middleware — the tag varies with `entityType`, which the middleware's fixed array cannot say.
+ * clearing a registry-declared tag inside the service rather than a locale tag via route
+ * middleware: the tag comes from the registry per `entityType`, which this module does not know.
  */
 const TRANSLATIONS = new Set([
     'GET /translations/:entityType/:id',
@@ -145,9 +151,28 @@ describe('locale routes — caching', () => {
 
         expect(entry).toContain('setCache(3600');
         expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
-            tags: ['locales']
+            languageNeutral: true
         });
     });
+
+    it.each(MANIFEST_READS)('%s is filed under the list-wide tag', (signature) => {
+        expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+            tags: ['locales:manifest']
+        });
+    });
+
+    it.each(LANGUAGE_READS)(
+        '%s is filed under its own language tag, canonical whatever the path spelling',
+        (signature) => {
+            /**
+             * The sample request spells the language `pt-br`: the tag a write on `PT-BR` clears
+             * must be the one a read of `pt-br` stored under.
+             */
+            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+                tags: ['locale:pt-BR']
+            });
+        }
+    );
 
     it('tells browsers to revalidate, so a translator sees their own save', () => {
         /**
@@ -170,17 +195,33 @@ describe('locale routes — caching', () => {
     });
 
     it.each(
-        ADMIN.filter((signature) => !ENTRY_READS.has(signature) && !TRANSLATIONS.has(signature))
-    )('%s invalidates the locales tag it just changed', (signature) => {
+        ADMIN.filter(
+            (signature) =>
+                signature !== 'POST /' &&
+                !ENTRY_READS.has(signature) &&
+                !TRANSLATIONS.has(signature)
+        )
+    )('%s invalidates the language in its path and the manifest', (signature) => {
         /**
          * Every write changes what every visitor reads, and the tag reaches shared Redis, so
          * one call covers every app instance.
          */
-        expect(chainOf(router, signature)).toContain('invalidateCache([locales])');
+        expect(chainOf(router, signature)).toContain(
+            'invalidateCache([locale:pt-BR|locales:manifest])'
+        );
     });
 
-    it('does not invalidate the locales tag — its own cache tag is registry-declared, cleared inside the service', () => {
+    it('invalidates the language in the body, for the one write that has no path language', () => {
+        // The sample request names `sv-se` in its body and `pt-br` in its path.
+        expect(chainOf(router, 'POST /')).toContain(
+            'invalidateCache([locale:sv-SE|locales:manifest])'
+        );
+    });
+
+    it('does not invalidate a locale tag — its own cache tag is registry-declared, cleared inside the service', () => {
         for (const signature of TRANSLATIONS)
-            expect(chainOf(router, signature)).not.toContain('invalidateCache([locales])');
+            expect(
+                chainOf(router, signature).some((each) => each.startsWith('invalidateCache'))
+            ).toBe(false);
     });
 });

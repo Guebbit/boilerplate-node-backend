@@ -110,11 +110,17 @@ router.post(
  * for the same readability rule the create route follows. `() => true`, not `cacheScopeKey`:
  * `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
  * never reads more for an admin the way search/`:id` do, so every caller already shares one
- * answer and there is nobody to bypass the cache for.
+ * answer and there is nobody to bypass the cache for. `languageNeutral`: categories and tags are
+ * counted, not translated, so one entry serves every language.
  */
 router.get(
     '/facets',
-    setCache(HOUR_SECONDS, { tags: ['products'], keyParameters: [], scopeKey: () => true }),
+    setCache(HOUR_SECONDS, {
+        tags: ['products'],
+        keyParameters: [],
+        languageNeutral: true,
+        scopeKey: () => true
+    }),
     getCatalogFacets
 );
 

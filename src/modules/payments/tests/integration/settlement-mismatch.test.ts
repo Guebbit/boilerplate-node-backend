@@ -81,6 +81,8 @@ const MISMATCHES = [
 
 describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (field, receipt) => {
     it('cancels the order, returns the money once, and pays nothing — answering 409 to the confirm', async () => {
+        // The table's rows each set one field; the others default to what was frozen.
+        const sent: { amountReceived?: string; currency?: string; paymentId?: string } = receipt;
         const { user, product, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, receipt);
 
@@ -106,7 +108,18 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
             .lean()
             .exec();
         expect(more).toEqual([]);
-        expect(mismatch.payload).toEqual({ paymentId: String(payment!._id), orderId });
+        // It carries what staff need to see: the frozen figures against what the provider reported.
+        expect(mismatch.payload).toEqual({
+            paymentId: String(payment!._id),
+            orderId,
+            fields: [field],
+            expected: { amount: '50.00', currency: 'EUR' },
+            received: {
+                amount: sent.amountReceived ?? '50.00',
+                currency: sent.currency ?? 'EUR',
+                paymentId: sent.paymentId ?? String(payment!._id)
+            }
+        });
         expect(await invoicingService.findInvoiceForOrder(orderId)).toBeNull();
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
         // The field that differed is what the counter and the audit row name.
@@ -218,6 +231,50 @@ describe('the other doors into the same settlement', () => {
 
         expect((await orderService.getById(orderId))!.status).toBe('canceled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
+    });
+
+    it('cuts a provider payment id to 64 characters before it reaches the event', async () => {
+        const { user, orderId, paymentId, providerRef } = await openIntent();
+        setFakeReceipt(providerRef, { paymentId: 'x'.repeat(500) });
+
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
+
+        const mismatch = await outboxEventModel.findOne({ name: PAYMENT_AMOUNT_MISMATCH }).lean();
+        expect(mismatch?.payload).toMatchObject({
+            orderId,
+            received: { paymentId: 'x'.repeat(64) }
+        });
+    });
+
+    it('keeps the frozen amount AND currency when the provider names a currency but no amount', async () => {
+        const { user, orderId, paymentId } = await openIntent();
+        // The frozen amount in a currency nobody paid in would be a refund of a sum nobody sent.
+        jest.spyOn(fakePaymentProvider, 'confirm').mockResolvedValueOnce({
+            status: 'succeeded',
+            currency: 'USD',
+            paymentId
+        });
+
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
+
+        const payment = await paymentRepository.findByOrderId(orderId);
+        expect(payment).toMatchObject({ amount: '50.00', currency: 'EUR' });
+        const mismatch = await outboxEventModel.findOne({ name: PAYMENT_AMOUNT_MISMATCH }).lean();
+        expect(mismatch?.payload).toMatchObject({
+            fields: ['currency', 'amount'],
+            received: { currency: 'USD' }
+        });
+        expect(mismatch?.payload).not.toHaveProperty('received.amount');
     });
 
     it('treats a success that reports no figures at all as unverifiable, and refuses it', async () => {

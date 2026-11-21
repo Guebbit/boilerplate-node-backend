@@ -7,7 +7,12 @@
 import type { Request, Response } from 'express';
 import type { Language, LocaleCapabilities, LocaleDictionary } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { hasServedDictionary, readLocaleDictionary, t } from '@infrastructure/i18n';
+import {
+    canonicalLocale,
+    hasServedDictionary,
+    readLocaleDictionary,
+    t
+} from '@infrastructure/i18n';
 import { setEtag } from '@infrastructure/http/preconditions';
 import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -65,6 +70,8 @@ export const getLocaleDictionary = (request: Request<{ locale?: string }>, respo
     if (!locale || !hasServedDictionary(locale))
         return rejectResponse(response, 404, [t('generic.error-unprocessable-content')]);
 
+    // The language the messages are in: the route is language-neutral, so no middleware labels it.
+    response.set('Content-Language', canonicalLocale(locale));
     return successResponse<LocaleDictionary>(response, {
         locale,
         messages: readLocaleDictionary(locale)

@@ -12,7 +12,8 @@
 import type { Request } from 'express';
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, setCache, type CacheTags } from '@infrastructure/http/middlewares/cache';
+import { bodyRecordOf } from '@infrastructure/http/request';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { localeService } from './services';
 import { getLocales, getLocale, getLocaleDictionary } from './controllers/get-locales';
@@ -37,6 +38,7 @@ import {
     updateEntityTranslations
 } from './controllers/update-entity-translations';
 import { HOUR_SECONDS } from '@domain-primitives/time';
+import { canonicalLocale } from '@infrastructure/i18n';
 
 /**
  * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
@@ -44,11 +46,53 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
 export const router = Router();
 
 /**
+ * Tag of the answers about the list as a whole: the manifest and the apps. Every write on a
+ * language clears it, because the manifest carries each language's `active` flag and entry count.
+ */
+const MANIFEST_TAG = 'locales:manifest';
+
+/**
+ * One language's tag: its messages, its dictionary and its row. A write on the language clears
+ * only its own, so editing `it` leaves a cached `en` dictionary alone.
+ *
+ * @param locale - the tag as the request spelt it; canonical here, so `PT-br` and `pt-BR` agree
+ */
+const localeTag = (locale: string): string => `locale:${canonicalLocale(locale)}`;
+
+/**
+ * The tags one language's cached reads are filed under: its own, read off the path.
+ *
+ * @param request - a `/locales/:locale…` request
+ */
+const languageTags = (request: Request): string[] => [localeTag(String(request.params.locale))];
+
+/**
+ * What a write on `/locales/:locale…` clears: that language and the manifest.
+ *
+ * @param request - the write, whose path names the language
+ */
+const clearLanguage = invalidateCache((request) => [
+    localeTag(String(request.params.locale)),
+    MANIFEST_TAG
+]);
+
+/**
+ * What `POST /locales` clears: the new language (a deployed dictionary file may already answer
+ * for its tag) and the manifest. The tag is in the body, not the path.
+ */
+const clearCreatedLanguage = invalidateCache((request) => {
+    const { tag } = bodyRecordOf(request);
+    // Not yet validated: a body with no usable tag fails before the write, and clears nothing.
+    return typeof tag === 'string' ? [localeTag(tag), MANIFEST_TAG] : [MANIFEST_TAG];
+});
+
+/**
  * `/:locale/messages` answers per `?app=` — a dictionary is an app's own — so the app
  * is part of its cache key where the other public reads have none.
  */
 const messagesCache = setCache(HOUR_SECONDS, {
-    tags: ['locales'],
+    tags: languageTags,
+    languageNeutral: true,
     keyParameters: ['app'],
     browserRevalidate: true,
     scopeKey: (request: Request) => hasAnonymousReadScope(localeService.callerScope, request.caller)
@@ -66,22 +110,31 @@ const messagesCache = setCache(HOUR_SECONDS, {
  * and the messages read do take `getAuth`, for the inactive languages staff may see — `hasAnonymousReadScope` is what
  * tells that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
  */
-const publicLocaleCache = setCache(HOUR_SECONDS, {
-    tags: ['locales'],
-    keyParameters: [],
-    browserRevalidate: true,
-    scopeKey: (request: Request) => hasAnonymousReadScope(localeService.callerScope, request.caller)
-});
+const publicLocaleCache = (tags: CacheTags) =>
+    setCache(HOUR_SECONDS, {
+        tags,
+        languageNeutral: true,
+        keyParameters: [],
+        browserRevalidate: true,
+        scopeKey: (request: Request) =>
+            hasAnonymousReadScope(localeService.callerScope, request.caller)
+    });
+
+/** The list-wide reads (`GET /locales`, `/apps`), cleared by any write. */
+const manifestCache = publicLocaleCache([MANIFEST_TAG]);
+
+/** The reads of one language (its row, its dictionary), cleared by a write on it. */
+const languageCache = publicLocaleCache(languageTags);
 
 /**
  * GET /locales — which languages this deployment offers, and what each of them can do.
  * `getAuth` (and only that: no token still answers) so an admin's manifest can include the
  * inactive rows a visitor is not offered. Before the cache, whose `scopeKey` reads that caller.
  */
-router.get('/', getAuth, publicLocaleCache, getLocales);
+router.get('/', getAuth, manifestCache, getLocales);
 
 // GET /locales/apps — the keyspaces an entry can belong to. Before `/:locale`, see above.
-router.get('/apps', publicLocaleCache, getLocaleApps);
+router.get('/apps', manifestCache, getLocaleApps);
 
 /**
  * GET /locales/:locale/messages — the client's dictionary, out of the database.
@@ -90,13 +143,13 @@ router.get('/apps', publicLocaleCache, getLocaleApps);
 router.get('/:locale/messages', getAuth, messagesCache, getLocaleMessages);
 
 // GET /locales/:locale/dictionary — the API's own dictionary, off the filesystem.
-router.get('/:locale/dictionary', publicLocaleCache, getLocaleDictionary);
+router.get('/:locale/dictionary', languageCache, getLocaleDictionary);
 
 /**
  * GET /locales/:locale — one language, as the list shows it. `getAuth` for the same reason as the
  * list: staff see a switched-off language a visitor gets a 404 for.
  */
-router.get('/:locale', getAuth, publicLocaleCache, getLocale);
+router.get('/:locale', getAuth, languageCache, getLocale);
 
 /**
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
@@ -108,7 +161,7 @@ router.post(
     getAuth,
     isAuthOrCredential,
     requirePermission('create', 'Locale'),
-    invalidateCache(['locales']),
+    clearCreatedLanguage,
     createLocale
 );
 // PUT /locales/:locale — replace the language.
@@ -117,7 +170,7 @@ router.put(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     replaceLocale
 );
 
@@ -127,7 +180,7 @@ router.patch(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     updateLocale
 );
 
@@ -140,7 +193,7 @@ router.post(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     activateLocale
 );
 router.post(
@@ -148,7 +201,7 @@ router.post(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     deactivateLocale
 );
 
@@ -158,7 +211,7 @@ router.delete(
     getAuth,
     isAuthOrCredential,
     requirePermission('delete', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     deleteLocale
 );
 
@@ -193,7 +246,7 @@ router.post(
     getAuth,
     isAuthOrCredential,
     requirePermission('create', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     createLocaleEntry
 );
 
@@ -203,7 +256,7 @@ router.put(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     replaceLocaleEntries
 );
 
@@ -213,7 +266,7 @@ router.patch(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     updateLocaleEntries
 );
 
@@ -232,7 +285,7 @@ router.put(
     getAuth,
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     replaceLocaleEntry
 );
 
@@ -242,7 +295,7 @@ router.delete(
     getAuth,
     isAuthOrCredential,
     requirePermission('delete', 'Locale'),
-    invalidateCache(['locales']),
+    clearLanguage,
     deleteLocaleEntry
 );
 
@@ -250,8 +303,8 @@ router.delete(
  * The translator's door onto user-authored content — generic across whatever `translatables`
  * declares, `product` in V1. Uncached, like `/:locale/entries` above: this is the screen someone
  * is actively typing into. Its own cache tag (the registry-declared one, `products` today) is
- * invalidated inside the service, not by this route's middleware — the tag varies with
- * `entityType`, which `invalidateCache`'s fixed array cannot express.
+ * invalidated inside the service, not by this route's middleware: the tag comes from the registry
+ * per `entityType`, which this module does not know.
  */
 router.get(
     '/translations/:entityType/:id',
