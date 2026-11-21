@@ -238,3 +238,33 @@ cases:
           url: 'https://127.1/hook',
           expect: unsafe-address
       }
+    - {
+          name: a percent-encoded dot in a loopback host is decoded and refused,
+          kind: url,
+          url: 'https://127%2E0%2E0%2E1/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a percent-encoded digit in a loopback host is decoded and refused,
+          kind: url,
+          url: 'https://%31%32%37.0.0.1/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a percent-encoded digit in a public host is decoded and allowed,
+          kind: url,
+          url: 'https://%39%33.184.216.34/hook',
+          expect: allowed
+      }
+    - {
+          name: a double-encoded dot is not decoded twice and is refused as invalid,
+          kind: url,
+          url: 'https://127%252E0%252E0%252E1/hook',
+          expect: invalid-url
+      }
+    - {
+          name: an encoded slash after the host is refused as invalid,
+          kind: url,
+          url: 'https://169.254.169.254%2F/hook',
+          expect: invalid-url
+      }
