@@ -125,7 +125,7 @@ The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` req
     | `auth.password.changed`, `auth.password_reset.completed`, `auth.two_factor.*`, `auth.oauth.*`, `auth.email_change.*` | Tell those users (the audit rows name the account) to redo the change. Nothing is reset for them |
 
     With no surviving source, write it in the incident log, as for the erasures below. If a secret may have
-    leaked, also rotate it: [Key and credential rotation](../understand/security-rotation.md).
+    leaked, also rotate it: [Key and credential rotation](../operate/key-rotation.md).
 
     **4d · Clear the response cache.** The restored database moved under Redis, which keeps answering with what it
     cached. Same `--env-file` and `APP_IMAGE` as step 4; `limits` (the rate-limit Redis) is left alone:

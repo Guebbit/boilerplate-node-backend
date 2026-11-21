@@ -147,6 +147,8 @@ arrive.
    (the order goes back to _being prepared_ and forward again), or **cancel the rest** and refund the
    buyer if they would rather have the money. If nothing of the order ever arrived, a full refund makes
    the order show **Cancelled**, and its history reads **Lost in transit, refunded**, not _Delivered_.
+   A line whose product has since been deleted sets aside nothing and owes nothing, and nothing
+   tells you: you marked the loss yourself, so check the order's lines before you ship again.
 5. Claim the loss with the carrier in the carrier's own portal. The shipment, its tracking code and your
    note are the paper trail.
 

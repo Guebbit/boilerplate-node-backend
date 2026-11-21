@@ -133,7 +133,7 @@ const STEPS: readonly Step[] = [
         command: ['tsx', 'scripts/docs/generate-audit-actions.ts'],
         checks: true,
         because:
-            "docs/operate/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"
+            "docs/modules/audit-logs.md's audit action table, read off every module's audit.ts and its call sites' target types"
     }
 ];
 

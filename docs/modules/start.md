@@ -21,7 +21,7 @@ this site is the horizontal one.
 | :::                                                        |
 
 The division is one rule: **a horizontal page owns a mechanism, a module page owns a decision.**
-[Winston & Audit Logs](../operate/winston.md) explains what an audit action is; the
+[Audit logs](./audit-logs.md#audit-events) explains what an audit action is; the
 [`cart`](./cart.md) page lists which two cart writes and links back. Neither says the other's half.
 
 The test that keeps it honest is the one this architecture is already built on — delete

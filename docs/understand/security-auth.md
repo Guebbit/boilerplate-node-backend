@@ -21,6 +21,8 @@ flowchart LR
     H -- No --> J[401 Unauthorized]
 ```
 
+_The diagram shows the `jwt` session mode only; the `cookie` mode is in [Two ways to stay signed in](sessions.md)._
+
 ## Auth architecture (current backend pattern)
 
 A deployment runs one of two session modes, picked by `NODE_SESSION_MODE` and explained in
