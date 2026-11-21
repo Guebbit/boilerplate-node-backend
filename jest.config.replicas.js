@@ -4,10 +4,10 @@
  * A separate config rather than another directory under the main one, because every default in
  * `jest.config.js` is wrong here and each for a stated reason:
  *
- *   `setupFiles`     `tests/support/setup.ts` blanks `NODE_RATE_LIMIT_REDIS_URL` and raises
- *                    the budgets, which is right for every in-process suite and is precisely what
- *                    this one is measuring. It also would not reach the child anyway — these tests
- *                    hand a whole environment to a process they spawn.
+ *   `setupFiles`     `tests/support/setup.ts` raises the budgets, which is right for every
+ *                    in-process suite and is precisely what this one is measuring. It also would
+ *                    not reach the child anyway — these tests hand a whole environment to a
+ *                    process they spawn.
  *   `globalSetup`    starts one shared in-memory mongod for the run. These tests boot their own,
  *                    because their workers connect over TCP from another process and cannot be
  *                    handed this one's mongoose connection.

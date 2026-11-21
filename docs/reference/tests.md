@@ -62,6 +62,14 @@ of gating on it. Not part of `npm run test` or the merge gate: it runs nightly i
 `.github/workflows/order-random.yml`, and is cheap enough to run by hand after touching shared test
 fixtures or module-level state. `--showSeed` prints the seed a red run needs to reproduce.
 
+## Tests never load .env
+
+Tests ignore `.env`: `jest.config.js` points `DOTENV_PATH` at a file that does not exist, so the app's
+`dotenv/config` import loads nothing in any worker or spawned child. A local run and CI therefore
+see the same settings. To run with a value, set it in the shell (`NODE_X=1 npx jest <file>`); the
+defaults a suite needs live in `tests/support/setup-environment.ts`.
+`tests/cross-cutting/tests-ignore-the-env-file.test.ts` guards it.
+
 ## Warnings fail the case
 
 A warning printed to a green run is read by nobody, and a deprecation is cheapest to fix the day it first appears. `tests/support/setup-fail-on-warning.ts` (a `setupFilesAfterEnv` entry) wraps `console.warn` and `console.error` and listens for `process` `'warning'` events (a `DeprecationWarning`, a `MaxListenersExceededWarning`, a driver warning) around every case, and fails the case that caused one it did not declare.

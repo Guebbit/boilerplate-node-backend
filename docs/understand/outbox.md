@@ -29,7 +29,7 @@ sequenceDiagram
     DB-->>Svc: commit
     Svc-)Relay: nudgeOutbox() — fast path
     Note over Relay: sweep:outbox every minute — backstop
-    Relay->>DB: claim row (lockedUntil lease)
+    Relay->>DB: claim row (lockedUntil lease; re-checks nextAttemptAt)
     Relay->>Bus: emitDomainEvent(name, payload, eventId)
     Bus->>Sub: handler(payload, meta.eventId)
     alt every handler returned

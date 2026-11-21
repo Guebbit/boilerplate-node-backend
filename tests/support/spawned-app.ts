@@ -72,10 +72,9 @@ export const bootableEnvironment = ({
     NODE_TOKEN_REFRESH: '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
     /**
      * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
-     * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
-     * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
-     * CI has none, so the child refuses to boot without them
-     * (`src/kernel/module-config.ts`).
+     * unlike every other suite, which sets `NODE_ENV=test` and skips it. They are set here
+     * because tests load no `.env` (the child inherits `DOTENV_PATH`), so the child refuses to
+     * boot without them (`src/kernel/module-config.ts`).
      */
     NODE_URL: `http://127.0.0.1:${String(port)}`,
     NODE_TOTP_ENCRYPTION_KEY: '92f71a95c55be9af2dace04afc34b7b8da824f58b7225bc8e289da7f6677581a',
