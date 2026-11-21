@@ -2,7 +2,7 @@
  * @module
  * What every suite that boots the real app as a child process shares: a free port, a wait for the
  * listener, an environment that boots like a fresh checkout, a marker watch over the child's
- * output and one way to stop it. Used by `tests/replicas/`.
+ * output and one way to stop it. Used by `tests/replicas/` and `tests/broker/`.
  */
 
 import type { ChildProcess } from 'node:child_process';
@@ -139,18 +139,20 @@ const STOP_GRACE_MS = 30_000;
 /**
  * Stops a spawned child: sends SIGTERM to its own pid, waits for it to exit, and SIGKILLs after 30 s.
  *
- * @param child - the child to stop; one that already exited resolves at once
+ * @param child - the child to stop; one that already exited resolves at once with its code
+ * @returns the exit code the child ended with: 0 for a clean shutdown, `null` when a signal ended
+ *   it, which includes the SIGKILL this function sends after the grace period
  */
-export const stopChild = (child: ChildProcess): Promise<void> =>
-    new Promise<void>((resolve) => {
+export const stopChild = (child: ChildProcess): Promise<number | null> =>
+    new Promise<number | null>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) {
-            resolve();
+            resolve(child.exitCode);
             return;
         }
-        child.once('exit', () => resolve());
+        child.once('exit', (code) => resolve(code));
         child.kill('SIGTERM');
         setTimeout(() => {
             child.kill('SIGKILL');
-            resolve();
+            resolve(null);
         }, STOP_GRACE_MS).unref();
     });

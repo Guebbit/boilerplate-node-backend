@@ -277,6 +277,7 @@ sections from disk, so there is no section list to edit:
 src/modules/<name>/openapi.yaml      its operations, and the types only it uses
 src/modules/<name>/asyncapi.yaml     its public events and server — one whole document
 src/modules/<name>/asyncapi.internal.yaml  a queue it owns outright (backend-only)
+src/modules/<name>/asyncapi.domain-events.yaml  the domain events it emits (backend-only)
 src/modules/<name>/analytics.ts      the events it emits
 src/modules/<name>/factories.ts       how demo/test records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe

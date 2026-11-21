@@ -300,7 +300,7 @@ carries on. A consumer is not re-bound on a channel a reconnect opens after that
 
 `stopQueue()` runs later in the sequence (after the HTTP server closes). It waits for handlers
 still running, up to its share of the shutdown budget (20 %, so 3 s by default), then closes the
-AMQP connection. A handler that outlives the wait is redelivered.
+AMQP channel and then the connection. A handler that outlives the wait is redelivered.
 
 See [Health checks](../operate/health-checks.md#shutting-down-behind-a-load-balancer).
 

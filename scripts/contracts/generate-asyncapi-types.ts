@@ -10,9 +10,10 @@
  *          only the backend's output carries the queue payloads.
  * Schemas: one the bundler copied in from the REST contract (`x-openapi-schema: <Name>`) is
  *          imported from the REST models, not declared again; only that marker decides.
- * Emits:   the payload interfaces, message aliases, per-namespace channel constants and unions, and
- *          the SSE event name/payload maps. An export a repo does not use is harmless: tree-shaken
- *          there, type-only here.
+ * Emits:   the payload interfaces, message aliases, per-namespace channel constants and unions, the
+ *          SSE event name/payload maps, and (backend only) the domain events' name list, payload
+ *          map and validators: channels tagged `x-transport: outbox | in-process`, keyed by
+ *          `address`. An export a repo does not use is harmless: tree-shaken there, type-only here.
  * `--check`: writes nothing and exits 1 on a mismatch, so a repo cannot ship types for a contract
  *          it no longer has.
  *
@@ -21,6 +22,7 @@
  * @see docs/build/asyncapi-workflow.md#generated-typescript-types
  */
 import {
+    TS_DESCRIPTION_PRESET,
     TypeScriptGenerator,
     typeScriptDefaultModelNameConstraints,
     type OutputModel
@@ -34,6 +36,8 @@ import { writeOrCheck } from './generated-file';
 
 /** The slice of an AsyncAPI 3.0 channel this generator reads. */
 interface AsyncApiChannel {
+    /** The name the channel is known by on the wire. A domain event's channel key is `domain.<event>`; its address is the event's own name. */
+    address?: string;
     /** 3.0: a channel declares its message(s) once, direction lives on the operations that bind to it. */
     messages?: Record<string, { $ref?: string }>;
     /** Which of `document.servers` this channel is reachable on — how a transport is told apart from a name. */
@@ -42,7 +46,8 @@ interface AsyncApiChannel {
      * Vendor extension: `sse` for a channel pushed over the observability dashboard's EventSource
      * connection, rather than read off which SERVER it binds to. AsyncAPI 3.0 channels omitting
      * `servers` bind to every server the document declares, so `sseLocal` alone cannot tell an SSE
-     * channel apart from one meant for every transport — this says so directly instead.
+     * channel apart from one meant for every transport — this says so directly instead. `outbox`
+     * and `in-process` mark a domain event: stored and relayed, or a plain emit.
      */
     'x-transport'?: string;
 }
@@ -190,7 +195,8 @@ const collectChannelMessageEntries = (
             const ref = Object.values(channel.messages ?? {})[0]?.$ref;
             const messageName = ref ? lastRefSegment(ref) : '';
             return {
-                channelName,
+                // The wire name: for an SSE channel it is the key, for a domain event the event's own name.
+                channelName: channel.address ?? channelName,
                 messageType: messageName
                     ? resolveMessagePayloadType(messageName, messages)
                     : 'unknown'
@@ -274,6 +280,31 @@ const renderPayloadMap = (
 };
 
 /**
+ * Renders the domain events' runtime validators, keyed by event name.
+ *
+ * Typed by the map, so a payload schema that stops matching its interface fails to compile
+ * instead of validating a shape the types do not describe.
+ *
+ * @param entries Domain-event entries (event name, payload type).
+ * @returns TypeScript source for the validator map.
+ */
+const renderDomainEventSchemas = (
+    entries: { channelName: string; messageType: string }[]
+): string => {
+    const rows = entries
+        .map(
+            ({ channelName, messageType }) =>
+                `    ${JSON.stringify(channelName)}: ${messageType}Schema,`
+        )
+        .join('\n');
+    return [
+        'export const DOMAIN_EVENT_SCHEMAS = {',
+        rows,
+        '} as const satisfies { [TName in DomainEventName]: z.ZodType<DomainEventMap[TName]> };'
+    ].join('\n');
+};
+
+/**
  * Turns a channel name into the SCREAMING_SNAKE key used inside its namespace constant.
  * `observability.metrics.snapshot` under `observability.` becomes `METRICS_SNAPSHOT`.
  *
@@ -353,6 +384,8 @@ const generator = new TypeScriptGenerator({
     enumType: 'union',
     mapType: 'indexedObject',
     rawPropertyNames: true,
+    // Turns each schema's `description` into the JSDoc above its interface and its fields.
+    presets: [TS_DESCRIPTION_PRESET],
     constraints: {
         modelName: modelNameConstraints
     }
@@ -413,22 +446,41 @@ const sseEntries = collectChannelMessageEntries(
     (_name, channel) => channel['x-transport'] === 'sse'
 );
 
+/** The `x-transport` values that mark a domain event: stored through the outbox, or emitted in-process. */
+const DOMAIN_EVENT_TRANSPORTS: ReadonlySet<string> = new Set(['outbox', 'in-process']);
+
+/** The messages carried by domain-event channels, keyed by the event's name (`address`). */
+const domainEventEntries = collectChannelMessageEntries(channels, messages, (_name, channel) =>
+    DOMAIN_EVENT_TRANSPORTS.has(channel['x-transport'] ?? '')
+);
+
 /**
  * Payload schemas that back a QUEUE message — any channel bound to an AMQP server. These get a
  * TOLERANT Zod reader (unknown fields dropped, never rejected) instead of `.strict()`: a producer
  * adding a field during a rolling deploy is a normal, non-breaking change, and a `.strict()`
- * schema would make every consumer reject the message outright the moment one ships it.
+ * schema would make every consumer reject the message outright the moment one ships it. A domain
+ * event's payload (`x-transport: outbox | in-process`) reads the same way: a row written by the
+ * newer build is read by the older one during a rolling deploy.
  */
 const queuePayloadSchemaNames = new Set(
     Object.values(channels)
-        .filter((channel) => channelProtocols(channel, servers).includes('amqp'))
+        .filter(
+            (channel) =>
+                channelProtocols(channel, servers).includes('amqp') ||
+                DOMAIN_EVENT_TRANSPORTS.has(channel['x-transport'] ?? '')
+        )
         .flatMap((channel) => channelPayloadSchemaNames(channel, messages))
 );
 
 /** One generated `namespace` block per channel family (the dotted prefix of a channel name). */
-const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels))].map(
-    ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)
-);
+const channelNamespaceBlocks = [
+    ...groupChannelsByNamespace(
+        // A domain event is named by its address, not by a channel constant: `DOMAIN_EVENT_NAMES` is its list.
+        Object.entries(channels)
+            .filter(([, channel]) => !DOMAIN_EVENT_TRANSPORTS.has(channel['x-transport'] ?? ''))
+            .map(([channelName]) => channelName)
+    )
+].map(([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames));
 
 /** One `export type Alias = Payload;` line per message whose name differs from its payload type. */
 const messageTypeBlocks = Object.keys(messages)
@@ -610,6 +662,14 @@ const buildOutput = (modelBlocks: string[], restModels: string[]): string => {
         'export type SseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];',
         renderPayloadMap('SseEventPayloadMap', sseEntries),
         'export type SseEventPayload<TEventName extends SseEventName> = SseEventPayloadMap[TEventName];',
+        '',
+        renderLiteralArray(
+            'DOMAIN_EVENT_NAMES',
+            domainEventEntries.map(({ channelName }) => channelName)
+        ),
+        'export type DomainEventName = (typeof DOMAIN_EVENT_NAMES)[number];',
+        renderPayloadMap('DomainEventMap', domainEventEntries),
+        renderDomainEventSchemas(domainEventEntries),
         ''
     ];
 
@@ -625,9 +685,15 @@ generator
         const restModels = models.flatMap((model) => restSchemaOf(model) ?? []);
         const modelBlocks = models
             .filter((model) => restSchemaOf(model) === undefined)
-            .map(
-                (model) =>
-                    `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`
+            .map((model) =>
+                /**
+                 * `export` goes after the description's JSDoc, not before it: the description preset
+                 * puts the comment ahead of the declaration, and an `export` before the comment reads badly.
+                 */
+                `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`.replace(
+                    /^export (\/\*\*[\s\S]*?\*\/\n)/u,
+                    '$1export '
+                )
             );
         const output = buildOutput(modelBlocks, restModels);
 

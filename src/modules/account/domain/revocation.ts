@@ -7,6 +7,8 @@
  * @see docs/modules/account-sessions.md#revocation
  */
 
+import type { SessionsRevokedReason as ContractedReason } from '@types';
+
 /**
  * What one cause does. Every cause ends every session of the account.
  *
@@ -104,6 +106,16 @@ export type RevocationCause = keyof typeof REVOCATION;
 export type SessionsRevokedReason = {
     [Cause in RevocationCause]: (typeof REVOCATION)[Cause]['announce'] extends true ? Cause : never;
 }[RevocationCause];
+
+/** Resolves to `true` only when two unions name exactly the same members. */
+type SameMembers<TA, TB> = [TA] extends [TB] ? ([TB] extends [TA] ? true : false) : false;
+
+/**
+ * Compile-time proof that the reasons `REVOCATION` announces and the contract's `reason` enum
+ * (`asyncapi.domain-events.yaml`) list the same causes. A cause that starts announcing, or an enum
+ * value no cause announces, fails `tsc`, so the two cannot drift apart in either direction.
+ */
+export const REASONS_MATCH_CONTRACT: SameMembers<SessionsRevokedReason, ContractedReason> = true;
 
 /**
  * Whether a cause announces `account.sessions_revoked`, narrowing it to a reason.

@@ -14,7 +14,7 @@
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
-import type { AuthContext } from '@types';
+import type { AuthContext, OrderCancelCause } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -118,16 +118,11 @@ const moveToCanceled = (
 /**
  * Why an order was canceled. One value per reason, never inferred from which argument happens to
  * be missing: it decides the lifecycle column, the mail, the analytics name and the refund rule
- * from {@link CANCEL_CAUSES}, and names who did it on the order's timeline.
+ * from {@link CANCEL_CAUSES}, and names who did it on the order's timeline. The values are the
+ * contract's (`order.canceled`'s `cause` in `asyncapi.domain-events.yaml`), so a cause added there
+ * fails `CANCEL_CAUSES`'s `satisfies` until it has rules.
  */
-export type CancelCause =
-    | 'customer'
-    | 'operator'
-    | 'withdrawal'
-    | 'reservation_expired'
-    | 'erasure'
-    | 'payment_mismatch'
-    | 'lost';
+export type CancelCause = OrderCancelCause;
 
 /** What one {@link CancelCause} decides. */
 interface CauseRules {

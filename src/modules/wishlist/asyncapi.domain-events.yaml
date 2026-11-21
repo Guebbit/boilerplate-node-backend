@@ -1,0 +1,50 @@
+# The domain events the wishlist module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.wishlist.items_removed:
+        address: wishlist.items_removed
+        description: >-
+            A product left the catalogue and was pulled out of these users' wishlists. Emitted once
+            per product deletion, after the pull, and only when at least one wishlist held it.
+
+
+            `titles` is the product's name by locale, copied from `product.deleted` — the product is
+            gone, so a listener that wants to name it can only quote this.
+        x-transport: in-process
+        messages:
+            WishlistItemsRemovedDomainEvent:
+                $ref: '#/components/messages/WishlistItemsRemovedDomainEvent'
+operations:
+    domainWishlistItemsRemoved:
+        action: send
+        channel:
+            $ref: '#/channels/domain.wishlist.items_removed'
+        summary: A product left the catalogue and was pulled out of these users' wishlists.
+        messages:
+            - $ref: '#/channels/domain.wishlist.items_removed/messages/WishlistItemsRemovedDomainEvent'
+components:
+    messages:
+        WishlistItemsRemovedDomainEvent:
+            name: WishlistItemsRemovedDomainEvent
+            title: Wishlist items removed
+            payload:
+                $ref: '#/components/schemas/WishlistItemsRemovedDomainEventPayload'
+    schemas:
+        WishlistItemsRemovedDomainEventPayload:
+            type: object
+            required:
+                - userIds
+                - productId
+                - titles
+            properties:
+                userIds:
+                    type: array
+                    items:
+                        type: string
+                productId:
+                    type: string
+                titles:
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false

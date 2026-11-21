@@ -1,0 +1,416 @@
+# The domain events the delivery module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.shipment.shipped:
+        address: shipment.shipped
+        description:
+            "A shipment left: some or all of an order's goods. Fires once per shipment, so an order
+            shipped in two goes fires it twice. Not fired for the forced shipments an admin status
+            override brings in step: nothing left that anyone recorded. This module mails the buyer
+            from it (`./services/notify.ts`)."
+        x-transport: outbox
+        messages:
+            ShipmentShippedDomainEvent:
+                $ref: '#/components/messages/ShipmentShippedDomainEvent'
+    domain.shipment.delivered:
+        address: shipment.delivered
+        description: A shipment arrived. A digital fulfillment fires it right after `shipment.shipped`.
+        x-transport: outbox
+        messages:
+            ShipmentDeliveredDomainEvent:
+                $ref: '#/components/messages/ShipmentDeliveredDomainEvent'
+    domain.shipment.lost:
+        address: shipment.lost
+        description:
+            Staff reported a shipment lost or damaged in transit. Written in the transaction of the
+            act that reopened its units, so it exists exactly when the loss does. This module mails
+            the buyer from it and `notifications` writes the inbox row.
+        x-transport: outbox
+        messages:
+            ShipmentLostDomainEvent:
+                $ref: '#/components/messages/ShipmentLostDomainEvent'
+    domain.fulfillment_order.held:
+        address: fulfillment_order.held
+        description: Staff put a fulfillment order on hold, or the stock it awaits did not arrive.
+        x-transport: outbox
+        messages:
+            FulfillmentOrderHeldDomainEvent:
+                $ref: '#/components/messages/FulfillmentOrderHeldDomainEvent'
+    domain.fulfillment_order.hold_noticed:
+        address: fulfillment_order.hold_noticed
+        description:
+            'A hold the buyer has something to do or read about: an address to check, or a message
+            staff wrote for them. A bare delay and `awaiting_stock` fire nothing. `notifications`
+            turns it into an inbox row (`fulfillment-held`); this module mails the same from it.'
+        x-transport: outbox
+        messages:
+            FulfillmentOrderHoldNoticedDomainEvent:
+                $ref: '#/components/messages/FulfillmentOrderHoldNoticedDomainEvent'
+    domain.fulfillment_order.released:
+        address: fulfillment_order.released
+        description: A hold ended and the fulfillment order may ship.
+        x-transport: outbox
+        messages:
+            FulfillmentOrderReleasedDomainEvent:
+                $ref: '#/components/messages/FulfillmentOrderReleasedDomainEvent'
+    domain.fulfillment_order.canceled:
+        address: fulfillment_order.canceled
+        description: A fulfillment order's remainder was canceled, or its order was.
+        x-transport: outbox
+        messages:
+            FulfillmentOrderCanceledDomainEvent:
+                $ref: '#/components/messages/FulfillmentOrderCanceledDomainEvent'
+    domain.fulfillment_order.delayed:
+        address: fulfillment_order.delayed
+        description:
+            "A waiting preorder's buyer was told its date moved or will be missed. Written in the
+            same transaction as the change to the fulfillment order. `notifications` turns it into
+            an inbox row, `fulfillment-delayed`; the email is sent by this module from the same
+            event. The shop only tells: it asks nothing and cancels nothing on its own."
+        x-transport: outbox
+        messages:
+            FulfillmentOrderDelayedDomainEvent:
+                $ref: '#/components/messages/FulfillmentOrderDelayedDomainEvent'
+operations:
+    domainShipmentShipped:
+        action: send
+        channel:
+            $ref: '#/channels/domain.shipment.shipped'
+        summary: "A shipment left: some or all of an order's goods."
+        messages:
+            - $ref: '#/channels/domain.shipment.shipped/messages/ShipmentShippedDomainEvent'
+    domainShipmentDelivered:
+        action: send
+        channel:
+            $ref: '#/channels/domain.shipment.delivered'
+        summary: A shipment arrived.
+        messages:
+            - $ref: '#/channels/domain.shipment.delivered/messages/ShipmentDeliveredDomainEvent'
+    domainShipmentLost:
+        action: send
+        channel:
+            $ref: '#/channels/domain.shipment.lost'
+        summary: Staff reported a shipment lost or damaged in transit.
+        messages:
+            - $ref: '#/channels/domain.shipment.lost/messages/ShipmentLostDomainEvent'
+    domainFulfillmentOrderHeld:
+        action: send
+        channel:
+            $ref: '#/channels/domain.fulfillment_order.held'
+        summary: Staff put a fulfillment order on hold, or the stock it awaits did not arrive.
+        messages:
+            - $ref: '#/channels/domain.fulfillment_order.held/messages/FulfillmentOrderHeldDomainEvent'
+    domainFulfillmentOrderHoldNoticed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.fulfillment_order.hold_noticed'
+        summary:
+            'A hold the buyer has something to do or read about: an address to check, or a message
+            staff wrote for them.'
+        messages:
+            - $ref:
+                  "#/channels/domain.fulfillment_order.hold_noticed/messages/FulfillmentOrderHoldNoticedDomainE\
+                  vent"
+    domainFulfillmentOrderReleased:
+        action: send
+        channel:
+            $ref: '#/channels/domain.fulfillment_order.released'
+        summary: A hold ended and the fulfillment order may ship.
+        messages:
+            - $ref: '#/channels/domain.fulfillment_order.released/messages/FulfillmentOrderReleasedDomainEvent'
+    domainFulfillmentOrderCanceled:
+        action: send
+        channel:
+            $ref: '#/channels/domain.fulfillment_order.canceled'
+        summary: A fulfillment order's remainder was canceled, or its order was.
+        messages:
+            - $ref: '#/channels/domain.fulfillment_order.canceled/messages/FulfillmentOrderCanceledDomainEvent'
+    domainFulfillmentOrderDelayed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.fulfillment_order.delayed'
+        summary: A waiting preorder's buyer was told its date moved or will be missed.
+        messages:
+            - $ref: '#/channels/domain.fulfillment_order.delayed/messages/FulfillmentOrderDelayedDomainEvent'
+components:
+    messages:
+        ShipmentShippedDomainEvent:
+            name: ShipmentShippedDomainEvent
+            title: Shipment shipped
+            payload:
+                $ref: '#/components/schemas/ShipmentShippedDomainEventPayload'
+        ShipmentDeliveredDomainEvent:
+            name: ShipmentDeliveredDomainEvent
+            title: Shipment delivered
+            payload:
+                $ref: '#/components/schemas/ShipmentDeliveredDomainEventPayload'
+        ShipmentLostDomainEvent:
+            name: ShipmentLostDomainEvent
+            title: Shipment lost
+            payload:
+                $ref: '#/components/schemas/ShipmentLostDomainEventPayload'
+        FulfillmentOrderHeldDomainEvent:
+            name: FulfillmentOrderHeldDomainEvent
+            title: Fulfillment order held
+            payload:
+                $ref: '#/components/schemas/FulfillmentOrderHeldDomainEventPayload'
+        FulfillmentOrderHoldNoticedDomainEvent:
+            name: FulfillmentOrderHoldNoticedDomainEvent
+            title: Fulfillment order hold noticed
+            payload:
+                $ref: '#/components/schemas/FulfillmentOrderHoldNoticedDomainEventPayload'
+        FulfillmentOrderReleasedDomainEvent:
+            name: FulfillmentOrderReleasedDomainEvent
+            title: Fulfillment order released
+            payload:
+                $ref: '#/components/schemas/FulfillmentOrderReleasedDomainEventPayload'
+        FulfillmentOrderCanceledDomainEvent:
+            name: FulfillmentOrderCanceledDomainEvent
+            title: Fulfillment order canceled
+            payload:
+                $ref: '#/components/schemas/FulfillmentOrderCanceledDomainEventPayload'
+        FulfillmentOrderDelayedDomainEvent:
+            name: FulfillmentOrderDelayedDomainEvent
+            title: Fulfillment order delayed
+            payload:
+                $ref: '#/components/schemas/FulfillmentOrderDelayedDomainEventPayload'
+    schemas:
+        ShipmentShippedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - fulfillmentOrderId
+                - lines
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                lines:
+                    type: array
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - quantity
+                        properties:
+                            productId:
+                                type: string
+                            quantity:
+                                type: number
+                        additionalProperties: false
+                remainingUnits:
+                    type: number
+                    description:
+                        'Units still to come in later shipments. Absent for a digital fulfillment, which is
+                        born delivered: its arrival mail is the only one the buyer gets. Internal —
+                        the webhook omits it.'
+            additionalProperties: false
+        ShipmentDeliveredDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - fulfillmentOrderId
+                - lines
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                lines:
+                    type: array
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - quantity
+                        properties:
+                            productId:
+                                type: string
+                            quantity:
+                                type: number
+                        additionalProperties: false
+            additionalProperties: false
+        ShipmentLostDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - fulfillmentOrderId
+                - lines
+                - orderNumber
+                - reason
+                - owed
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                lines:
+                    type: array
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - quantity
+                        properties:
+                            productId:
+                                type: string
+                            quantity:
+                                type: number
+                        additionalProperties: false
+                orderNumber:
+                    type: string
+                    description: "The order's number, as the buyer knows it: what a notice names the order by."
+                reason:
+                    $ref: ./openapi.yaml#/components/schemas/ShipmentLostReason
+                userId:
+                    type: string
+                    description: The buyer; absent once the account was erased, so there is no inbox to write to.
+                message:
+                    type: string
+                    description: The sentence staff wrote for the buyer, if any.
+                owed:
+                    type: array
+                    items:
+                        type: object
+                        required:
+                            - title
+                            - quantity
+                        properties:
+                            title:
+                                type: string
+                            quantity:
+                                type: number
+                        additionalProperties: false
+                    description:
+                        Units the shelf could not cover again; empty when everything ships again from the
+                        shelf.
+                expectedAt:
+                    type: string
+                    description: When the owed units are expected (ISO 8601); present exactly when `owed` is not empty.
+            additionalProperties: false
+        FulfillmentOrderHeldDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - reason
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                reason:
+                    type: string
+            additionalProperties: false
+        FulfillmentOrderHoldNoticedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - orderNumber
+                - fulfillmentOrderId
+                - notice
+            properties:
+                orderId:
+                    type: string
+                orderNumber:
+                    type: string
+                    description: "The order's number, as the buyer knows it: what a notice names the order by."
+                fulfillmentOrderId:
+                    type: string
+                userId:
+                    type: string
+                    description: The buyer; absent once the account was erased, so there is no inbox to write to.
+                notice:
+                    title: FulfillmentHeldNotice
+                    type: string
+                    enum:
+                        - check_address
+                        - delayed
+                    description: '`check_address` when the address needs a look, else `delayed`.'
+                message:
+                    type: string
+                    description: What staff wrote for the buyer, if anything.
+            additionalProperties: false
+        FulfillmentOrderReleasedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+            additionalProperties: false
+        FulfillmentOrderCanceledDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+            additionalProperties: false
+        FulfillmentOrderDelayedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - orderNumber
+                - fulfillmentOrderId
+                - titles
+                - agreedAt
+                - reason
+            properties:
+                orderId:
+                    type: string
+                orderNumber:
+                    type: string
+                    description: "The order's number, as the buyer knows it: what a notice names the order by."
+                fulfillmentOrderId:
+                    type: string
+                userId:
+                    type: string
+                    description: The buyer; absent once the account was erased, so there is no inbox to write to.
+                titles:
+                    type: array
+                    items:
+                        type: string
+                    description: The product titles waiting, as the order froze them.
+                agreedAt:
+                    type: string
+                    description: The date promised when ordering (ISO 8601).
+                promisedAt:
+                    type: string
+                    description:
+                        The date the buyer held before this notice (ISO 8601); absent once an earlier notice
+                        told them there was no date yet. With `shipCountry`, what `tasks` decides a
+                        consent reminder on.
+                shipCountry:
+                    type: string
+                    description:
+                        The country the order ships to (ISO 3166-1 alpha-2); absent for a pickup or digital
+                        order.
+                expectedAt:
+                    type: string
+                    description: The date now expected, absent when there is none (the date was cleared).
+                reason:
+                    type: string
+                    enum:
+                        - moved
+                        - due
+                    description:
+                        '`moved`: the date was changed. `due`: the expected date is a day away or gone and
+                        there is still no stock.'
+            additionalProperties: false

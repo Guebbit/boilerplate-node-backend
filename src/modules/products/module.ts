@@ -18,7 +18,6 @@ import { productRepository } from './repository';
 import { productTranslationFieldRules } from './model';
 import { productsConfig } from './config';
 import { productsBrowserEvents } from './browser-events';
-import './events';
 
 /** This module's manifest entry: routes, its VAT config gate, locales, the image target and the translatable fields. */
 export default {

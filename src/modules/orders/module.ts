@@ -25,11 +25,7 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
 import { orderService } from './services';
-/**
- * Also registers this module's event declarations (ORDER_CANCELED, ORDER_CREATED,
- * ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
- * module's own barrel (CLAUDE.md, "Module barrels").
- */
+/** Reached directly, never through this module's own barrel (CLAUDE.md, "Module barrels"). */
 import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';

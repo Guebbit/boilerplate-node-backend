@@ -18,15 +18,16 @@ Current scope of `asyncapi.yaml`:
 - The webhook event catalogue (`order.*`, `payment.*`, `return.*`, ...), served by `GET /webhooks/events`
 - RabbitMQ worker queues: the domainless ones (`worker.email.send`, `worker.image.digest`) plus
   each module's own (`webhooks`' `worker.webhook.deliver`, `account`'s `worker.account.export`)
+- The [domain events](#domain-events) modules tell each other (`domain.*`), backend-only
 
 ## Two bundles: the whole contract, and the shared half
 
 The async contract is published twice, from one set of sources:
 
-| File                   | Holds                                  | Who reads it                                    |
-| ---------------------- | -------------------------------------- | ----------------------------------------------- |
-| `asyncapi.yaml`        | every channel — SSE **and** the queues | this repo: `gen:asyncapi`, `lint:asyncapi`      |
-| `asyncapi.public.yaml` | every channel except the queues        | the paired frontend, as its own `asyncapi.yaml` |
+| File                   | Holds                                                 | Who reads it                                    |
+| ---------------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| `asyncapi.yaml`        | every channel — SSE, the queues, the domain events    | this repo: `gen:asyncapi`, `lint:asyncapi`      |
+| `asyncapi.public.yaml` | every channel except the queues and the domain events | the paired frontend, as its own `asyncapi.yaml` |
 
 The queues are backend-only because a browser can neither publish to nor consume from RabbitMQ. A
 frontend holding `EmailJobPayload` would carry the shape of a message it cannot send, and read as a
@@ -65,6 +66,9 @@ src/modules/<module>/asyncapi.yaml             a module's public events (observa
 src/modules/<module>/asyncapi.internal.yaml    a module's own queue (webhooks, account)
 src/modules/<module>/asyncapi.webhooks.yaml    a module's own webhook events, merged into the
                                                `webhooks` section (delivery, orders, payments, returns, example)
+src/modules/<module>/asyncapi.domain-events.yaml  the domain events a module emits, merged into the
+                                               `domain-events` section (backend-only)
+shared/contracts/asyncapi.domain-events.yaml   that section's own document: the kernel's `outbox.event_dead`
 shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong to no domain
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```
@@ -229,6 +233,35 @@ See
 [Redis Cache → Why there is no cross-instance broadcast](../understand/redis-cache.md#why-there-is-no-cross-instance-broadcast)
 for what a cross-instance broadcast would take.
 
+## Domain events {#domain-events}
+
+Every event on the in-process bus has a payload schema, written in YAML by the module that emits
+it and generated into `src/types/asyncapi.generated.ts` like the rest of the contract. The outbox
+checks a stored row against it before any handler runs.
+
+| What              | Where                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| A module's events | `src/modules/<module>/asyncapi.domain-events.yaml`, a fragment of the `domain-events` section |
+| The kernel's own  | `shared/contracts/asyncapi.domain-events.yaml` (`outbox.event_dead`), the section's document  |
+| Channel key       | `domain.<event>`; `address` is the event's own name (`order.canceled`)                        |
+| Message, payload  | `<Pascal>DomainEvent`, `<Pascal>DomainEventPayload`; operation `domain<Pascal>` (`send`)      |
+| `x-transport`     | `outbox`: stored as a row and relayed. `in-process`: a plain `emitDomainEvent`, never stored  |
+| Servers           | none: neither transport is a broker                                                           |
+
+```mermaid
+flowchart LR
+    Y["module/asyncapi.domain-events.yaml<br/>+ shared/contracts/asyncapi.domain-events.yaml"] -->|npm run contracts:bundle| B["asyncapi.yaml<br/>(not asyncapi.public.yaml)"]
+    B -->|npm run gen:asyncapi| G["asyncapi.generated.ts<br/>DomainEventMap · DOMAIN_EVENT_NAMES · DOMAIN_EVENT_SCHEMAS"]
+    G --> K["kernel/events.ts<br/>types the bus"]
+    G --> O["kernel/outbox.ts<br/>dispatch: safeParse, then emit"]
+```
+
+- **It stays out of `asyncapi.public.yaml`.** The section is in `ASYNC_SECTION_ORDER` and never in `SHARED_SECTIONS`, so the frontend never receives it. A domain event is not a promise to an API client; a webhook event is, and those are `asyncapi.webhooks.yaml`.
+- **The reader is tolerant.** A payload's Zod schema drops a field it does not know (an `additionalProperties: false` becomes no `.strict()` for `outbox` and `in-process` channels, as for the queues): a row written by the newer build during a rolling deploy is still read by the older one.
+- **A bad row fails like a consumer would.** An unknown name, or a payload that fails its schema, makes the dispatch fail: the row is retried with backoff, then parked `dead` (an alert and an administrators' notice). Retried, not dead at once, because the retry may land on the newer build that knows the event. See [the outbox](../understand/outbox.md#using-it).
+- **A closed set is declared once.** A payload field with a closed set of values `$ref`s the owning module's `openapi.yaml` schema when there is one (`OrderStatus`). Where the set is the module's own rule table, the code derives its type from the table and a compile-time check proves it against the generated enum (`REASONS_MATCH_CONTRACT` in `account/domain/revocation.ts`); `CancelCause` is simply the generated `OrderCancelCause`.
+- **Adding an event** is a channel, an operation, a message and a payload in the module's fragment, a name constant in `events.ts`, then `npm run regenerate`. The compiler then knows the name and the payload everywhere.
+
 ## Naming convention
 
 Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names). Names are US English (`canceled`, `catalog`, `fulfillment`): `npm run lint:asyncapi:names` refuses the British forms in channels, messages, operations, schemas, properties and enum values.
@@ -243,9 +276,11 @@ A domain event is named `<prefix>.<what_happened>`:
 
 Two families are outside it: worker queues are imperative commands (`worker.email.send`), and SSE channels are `<stream>.<event>` (`notifications.created`, `observability.metrics.updated`, `observability.heartbeat`).
 
+A domain event's CHANNEL key is `domain.<event>`; the event keeps the name above as its `address`.
+
 The standards behind it: Stripe ("`resource.event`"), Solidus (`:order_finalized`) and Zalando #213 (a domain prefix).
 
-Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel.
+Every channel here describes something that crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue, a row the outbox stores. The one exception is a domain event emitted in-process (`x-transport: in-process`): it is declared so the list of events and their payloads is one place, not because anything crosses. See [Domain events](#domain-events).
 
 ## Realtime event names
 

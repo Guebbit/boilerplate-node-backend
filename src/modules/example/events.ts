@@ -1,20 +1,13 @@
 /**
  * @module
- * In any module: the domain events it emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list.
+ * In any module: the domain events it emits, declared in `./asyncapi.domain-events.yaml`.
  * Here: `example.published`, which also becomes a public webhook through `module.ts`'s `publicEvents`.
  * Delete it if: the module announces nothing to the rest of the app.
  *
  * @see docs/understand/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
 
-/** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        /** An example moved to `published`, for the first time or after being archived. */
-        'example.published': { exampleId: string; userId: string; title: string };
-    }
-}
+import type { DomainEventName } from '@kernel/events';
 
-/** See `DomainEventMap['example.published']` above. */
-export const EXAMPLE_PUBLISHED = 'example.published';
+/** See the `example.published` channel in `asyncapi.domain-events.yaml`. */
+export const EXAMPLE_PUBLISHED = 'example.published' satisfies DomainEventName;

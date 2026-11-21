@@ -189,7 +189,7 @@ prefix first; not checked against VIES).
   `reencrypt`). The staff-only timeline row `billing_corrected` and the audit row
   `admin.order.billing_corrected` name **who**, never what it says.
 - **Announced.** The write, its timeline row and the outbox event `order.billing_corrected` commit
-  together. The event is internal: no webhook, no AsyncAPI channel. `invoicing` listens and
+  together. The event is internal: no webhook, only a backend-only `domain-events` channel. `invoicing` listens and
   [cancels and reissues the invoice](./invoicing.md#correcting-the-buyer).
 - **No mail.** Invoices are never mailed (the buyer downloads them), so nothing is sent for a corrected one.
 

@@ -51,3 +51,8 @@ overrides:
           - '../../src/modules/webhooks/asyncapi.yaml'
       rules:
           asyncapi-unused-components-schema: off
+    # `domain-events` binds to no server on purpose: an event is stored through the outbox or emitted in-process, not sent on a broker.
+    - files:
+          - 'asyncapi.domain-events.yaml'
+      rules:
+          asyncapi-servers: off
