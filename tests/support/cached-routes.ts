@@ -21,6 +21,16 @@ interface Layer {
 const isSetCache = (handle: unknown): boolean =>
     typeof handle === 'function' && handle.name === 'setCacheMiddleware';
 
+/**
+ * The `x-cache` spelling a route handler declares: `privateNoCache` is `private-no-cache`, a
+ * `setCache` carries its own `cachePolicy`, anything else declares none.
+ */
+const policyOf = (handle: unknown): string | undefined => {
+    if (handle === privateNoCache) return 'private-no-cache';
+    // `isSetCache` proved `handle` is the closure `setCache` returns, which carries `cachePolicy`.
+    return isSetCache(handle) ? (handle as { cachePolicy?: string }).cachePolicy : undefined;
+};
+
 /** Express `/:id` to OpenAPI `/{id}`, and no trailing slash. */
 const toOpenApiPath = (basePath: string, routePath: string): string => {
     const joined = `${basePath}${routePath}`.replaceAll(/:(\w+)/g, '{$1}');
@@ -28,19 +38,20 @@ const toOpenApiPath = (basePath: string, routePath: string): string => {
 };
 
 /**
- * Every `privateNoCache` or `setCache` GET across one module's mounts.
+ * Every `privateNoCache` or `setCache` GET across one module's mounts, with the `x-cache` value
+ * its middleware declares.
  *
  * @param mounts - the module's `mounts`
- * @returns sorted OpenAPI paths
+ * @returns `[OpenAPI path, x-cache value]` pairs, sorted
  */
-export const cachedReadPaths = (mounts: readonly RouteMount[]): string[] =>
+export const cachedReadPolicies = (mounts: readonly RouteMount[]): [string, string][] =>
     mounts
         .flatMap(({ basePath, routes }) =>
-            (routes.stack as Layer[]).flatMap(({ route }) =>
-                route?.methods.get === true &&
-                route.stack.some(({ handle }) => handle === privateNoCache || isSetCache(handle))
-                    ? [toOpenApiPath(basePath, route.path)]
-                    : []
-            )
+            (routes.stack as Layer[]).flatMap<[string, string]>(({ route }) => {
+                const policy = route?.stack.map(({ handle }) => policyOf(handle)).find(Boolean);
+                return route?.methods.get === true && policy !== undefined
+                    ? [[toOpenApiPath(basePath, route.path), policy]]
+                    : [];
+            })
         )
         .toSorted();

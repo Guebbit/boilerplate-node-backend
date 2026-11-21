@@ -1,11 +1,11 @@
 /**
- * The contract's `x-cache` and the routers must name the same GETs: the bundler adds the shared
- * `304` from `x-cache` alone (it cannot boot the app), so a drift either way is a documented
- * answer the route never gives, or a `304` the contract never mentions.
+ * The contract's `x-cache` and the routers must name the same GETs, with the same value: the
+ * bundler adds the shared `304` from `x-cache` alone (it cannot boot the app), so a drift either
+ * way is a documented answer the route never gives, or a `304` the contract never mentions.
  */
 import { existsSync } from 'node:fs';
 import { enabledModules } from '../../src/modules';
-import { cachedReadPaths } from '@tests/cached-routes';
+import { cachedReadPolicies } from '@tests/cached-routes';
 import { MODULES_ROOT } from '../../scripts/modules-on-disk';
 import { readModuleFragment } from '../../scripts/contracts/fragments';
 
@@ -37,22 +37,21 @@ const contracted = enabledModules.filter(({ name }) =>
 describe('x-cache is declared exactly where a router mounts a cache policy', () => {
     it('finds cached reads to compare (canary against a vacuous walk)', () => {
         expect(
-            contracted.flatMap(({ mounts = [] }) => cachedReadPaths(mounts)).length
+            contracted.flatMap(({ mounts = [] }) => cachedReadPolicies(mounts)).length
         ).toBeGreaterThan(0);
     });
 
     it.each(contracted.map(({ name }) => name))(
-        '%s: mounted privateNoCache/setCache GETs equal its x-cache operations',
+        '%s: mounted privateNoCache/setCache GETs equal its x-cache operations, value for value',
         (name) => {
             const mounts = contracted.find((each) => each.name === name)?.mounts ?? [];
             const declared = declaredReads(name);
 
-            const mountedPolicies = Object.entries(declared)
+            const declaredPolicies = Object.entries(declared)
                 .filter(([, policy]) => policy !== undefined && isMounted(policy))
-                .map(([route]) => route)
                 .toSorted();
 
-            expect(mountedPolicies).toEqual(cachedReadPaths(mounts));
+            expect(declaredPolicies).toEqual(cachedReadPolicies(mounts));
             for (const value of Object.values(declared)) expect(value).toMatch(X_CACHE_VALUE);
         }
     );

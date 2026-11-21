@@ -35,11 +35,14 @@ import { HOUR_SECONDS } from '@domain-primitives/time';
  *
  * `etag` is the tag the miss sent (a versioned read's `"<editRevision>.<digest>"`), replayed on a
  * hit so a miss and a hit send the same tag. Absent on an unversioned read: Express mints its own.
+ *
+ * `savedAt` (epoch ms) is when the entry was written; a hit turns it into the `Age` header.
  */
 interface CachedResponse {
     status: number;
     body: unknown;
     staleAt: number;
+    savedAt: number;
     etag?: string;
 }
 
@@ -153,7 +156,8 @@ const isCachedResponse = (value: unknown): value is CachedResponse =>
     typeof (value as Record<string, unknown>).status === 'number' &&
     typeof (value as Record<string, unknown>).staleAt === 'number' &&
     'body' in value &&
-    ['string', 'undefined'].includes(typeof (value as Record<string, unknown>).etag);
+    ['string', 'undefined'].includes(typeof (value as Record<string, unknown>).etag) &&
+    typeof (value as Record<string, unknown>).savedAt === 'number';
 
 /**
  * Read one stored envelope back.
@@ -384,10 +388,12 @@ const armCacheWrite = (
             response.statusCode !== 202 &&
             !isDraftPreview(response)
         ) {
+            const savedAt = Date.now();
             const payload = serializeCachedResponse(cacheKey, {
                 status: response.statusCode,
                 body,
-                staleAt: Date.now() + ttl * 1000,
+                staleAt: savedAt + ttl * 1000,
+                savedAt,
                 // setEtag's json wrapper runs before this one, so the header is already set.
                 etag: response.get('ETag')
             });
@@ -405,14 +411,20 @@ const armCacheWrite = (
 };
 
 /**
- * Send a stored entry: its status, the tag the original answer carried (if any), and its body.
- * With the tag set, Express skips minting one and still answers a matching `If-None-Match` 304.
+ * Send a stored entry: its status, the tag the original answer carried (if any), its `Age`, and
+ * its body. With the tag set, Express skips minting one and still answers a matching
+ * `If-None-Match` 304.
+ *
+ * `Age` is the whole seconds since the entry was saved (RFC 9111 §5.1). The `Cache-Control` sent
+ * with it is the route's own, so a browser keeps the answer for `max-age` minus `Age` instead of
+ * starting a fresh `max-age` on top of the time Redis already held it. A miss sends none.
  *
  * @param response - the response to answer
  * @param cached - the stored envelope
  */
 const replay = (response: Response, cached: CachedResponse): void => {
     if (cached.etag !== undefined) response.setHeader('ETag', cached.etag);
+    response.set('Age', String(Math.max(0, Math.floor((Date.now() - cached.savedAt) / 1000))));
     response.status(cached.status).json(cached.body);
 };
 
@@ -638,7 +650,15 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             cacheable
         );
     };
-    return setCacheMiddleware;
+    /**
+     * The contract's `x-cache` spelling of what this route declared, read back by the
+     * `cache-policy-declared` test (`tests/support/cached-routes.ts`) to compare VALUES, not only
+     * which paths are cached. The declared TTL, not the dev-clamped one: the contract states the
+     * production lifetime.
+     */
+    return Object.assign(setCacheMiddleware, {
+        cachePolicy: options.browserRevalidate ? 'revalidate' : `max-age: ${String(seconds)}`
+    });
 };
 
 /**

@@ -90,7 +90,7 @@ rules:
       standard: rfc9110
       section: conditional requests
       rule: An origin server that receives `If-Match` MUST evaluate it before performing the method, using the strong comparison (§13.1.1), and one that receives `If-None-Match` on a request that selects a representation MUST evaluate it, answering a GET or HEAD whose tag matches with 304 (§13.1.2).
-      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, and the versioned-resources table lists exactly the `x-versioned` paths (docs/understand/write-methods.md#conditional-writes-etag-and-if-match). A PUT answer carries no validator (§9.3.4).
+      house: Every read the contract declares a `304` on (`x-cache` other than `no-store`) sends an `ETag` (RFC 9110 §8.8.3 SHOULD), the two-part `"<editRevision>.<digest>"` one on a versioned item read, each item's own and never one global tag for several records; the versioned-resources table lists exactly the `x-versioned` paths, a PUT answer carries no validator (§9.3.4), and a DELETE's `If-Match` is optional (docs/understand/write-methods-conditional.md#which-resources-are-versioned).
       source:
           [
               https://www.rfc-editor.org/rfc/rfc9110#section-13.1.1,
@@ -104,7 +104,10 @@ rules:
               src/infrastructure/http/preconditions.ts,
               src/infrastructure/persistence/versioning.ts,
               src/infrastructure/http/middlewares/cache.ts,
-              src/app/security.ts
+              src/app/security.ts,
+              '../boilerplate-vue-frontend/src/infrastructure/http/etag.ts (read-only: what the frontend does with a tag)',
+              '../boilerplate-vue-frontend/src/modules/*/store.ts (read-only: a save from a view that leaves without a tag)',
+              '../boilerplate-vue-frontend/src/modules/*/stores/*.ts (read-only: the same, in a module with several stores)'
           ]
       lint: no
       difference: [if-match-edit-version, unversioned-writes]

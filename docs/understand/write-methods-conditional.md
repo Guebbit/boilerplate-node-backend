@@ -97,6 +97,10 @@ state change with its own 409, not an overwrite, so two callers naming different
 and the last write wins. It still moves the row's `editRevision`, so an edit holding an older tag is
 refused.
 
+On a versioned `DELETE`, `If-Match` is optional: without it the delete runs, with it a mismatch deletes
+nothing and answers 412 (RFC 9110 §13.1.1). Our frontend sends none, so staff deleting from its screens
+are never refused for a stale version.
+
 Not versioned: a resource with one owner or one field (an address in its book), no item read to take a
 tag from (the cart), or its own concurrency rule (cart lines, stock, a task's status doors). A `PUT` or
 `DELETE` with `If-Match` on one of those is simply not declared; the reasons are in

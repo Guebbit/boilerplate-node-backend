@@ -72,6 +72,10 @@ curl see it anyway).
 | STALE   | `Cache-Status: api-redis; hit; ttl=-N` (seconds past `staleAt`, RFC 9211's stale-hit form) |
 | REFRESH | `Cache-Status: api-redis; fwd=stale`                                                       |
 
+A HIT or STALE answer also carries `Age: N`, the whole seconds since the entry was saved (RFC 9111
+§5.1), beside the route's own `Cache-Control`. The browser then keeps it for `max-age` minus `Age`,
+not for a fresh `max-age` on top of the time Redis held it. A miss sends none.
+
 `fwd=miss` rather than `uri-miss`: the key also folds in locale and the cacheable gate, so a URI
 miss cannot be told from a vary miss.
 
