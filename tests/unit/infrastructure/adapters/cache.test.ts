@@ -51,6 +51,9 @@ const mockExpire = jest.fn();
 /** Stands in for the client's `Get`; the cases assert how it was called. */
 const mockGet = jest.fn();
 
+/** Stands in for the client's `MGet`; the cases assert how it was called. */
+const mockMGet = jest.fn();
+
 /** Stands in for the client's `ZRange`; the cases assert how it was called. */
 const mockZRange = jest.fn();
 
@@ -71,6 +74,7 @@ const mockClient = {
     zRemRangeByScore: mockZRemRangeByScore,
     expire: mockExpire,
     get: mockGet,
+    mGet: mockMGet,
     zRange: mockZRange,
     close: mockQuit,
     destroy: mockDestroy,
@@ -242,6 +246,82 @@ describe('getCacheValue', () => {
 
         await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
         expect(mockConnect).not.toHaveBeenCalled();
+    });
+});
+
+describe('getCacheValues', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
+        mockConnect.mockImplementation(() => Promise.resolve());
+    });
+
+    it('reads every key in one round trip, one slot per key, a miss as undefined', async () => {
+        // node-redis answers `null` in the slot of an absent key.
+        mockMGet.mockImplementation(() => Promise.resolve(['{"a":1}', null]));
+
+        const values = await freshCache().getCacheValues(['availability:1', 'availability:2']);
+
+        expect(values).toEqual(['{"a":1}', undefined]);
+        expect(mockMGet).toHaveBeenCalledTimes(1);
+        expect(mockMGet).toHaveBeenCalledWith([
+            expect.stringContaining(':key:availability:1'),
+            expect.stringContaining(':key:availability:2')
+        ]);
+    });
+
+    it('asks Redis nothing for no keys', async () => {
+        await expect(freshCache().getCacheValues([])).resolves.toEqual([]);
+        expect(mockMGet).not.toHaveBeenCalled();
+    });
+
+    it('answers every slot undefined when Redis fails', async () => {
+        mockMGet.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        await expect(freshCache().getCacheValues(['a', 'b'])).resolves.toEqual([
+            undefined,
+            undefined
+        ]);
+    });
+
+    it('answers every slot undefined when caching is switched off, without connecting', async () => {
+        setEnvironment({ NODE_REDIS_URL: undefined });
+        setEnvironment({ NODE_REDIS_PORT: undefined });
+
+        await expect(freshCache().getCacheValues(['a', 'b'])).resolves.toEqual([
+            undefined,
+            undefined
+        ]);
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+});
+
+describe('deleteCacheValues', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_REDIS_URL: 'redis://localhost:6379' });
+        mockConnect.mockImplementation(() => Promise.resolve());
+        mockDel.mockImplementation(() => Promise.resolve(2));
+    });
+
+    it('deletes namespaced keys in one DEL', async () => {
+        await freshCache().deleteCacheValues(['availability:1', 'availability:2']);
+
+        expect(mockDel).toHaveBeenCalledTimes(1);
+        expect(mockDel).toHaveBeenCalledWith([
+            expect.stringContaining(':key:availability:1'),
+            expect.stringContaining(':key:availability:2')
+        ]);
+    });
+
+    it('does not issue a DEL with no arguments', async () => {
+        await freshCache().deleteCacheValues([]);
+
+        expect(mockDel).not.toHaveBeenCalled();
+    });
+
+    it('resolves rather than rejecting when Redis fails', async () => {
+        mockDel.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        await expect(freshCache().deleteCacheValues(['a'])).resolves.toBeUndefined();
     });
 });
 

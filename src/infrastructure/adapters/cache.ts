@@ -131,6 +131,69 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
         });
 
 /**
+ * Read many cached values in one round trip. Same fail-open rule as {@link getCacheValue}: the
+ * answer has one slot per key, in order, and every slot is `undefined` on a miss, a Redis failure
+ * or when caching is disabled.
+ *
+ * @param keys - the cache keys, namespaced by the caller's own scheme; duplicates read twice
+ */
+export const getCacheValues = (keys: readonly string[]): Promise<(string | undefined)[]> => {
+    if (keys.length === 0) return Promise.resolve([]);
+
+    return cacheConnection
+        .get()
+        .then((redisClient) => {
+            if (!redisClient) return keys.map(() => undefined);
+
+            /**
+             * Redis MGET: every key's value in one reply, `null` in the slot of an absent key.
+             * https://redis.io/docs/latest/commands/mget/
+             */
+            return redisClient
+                .mGet(keys.map((key) => prefix(`key:${key}`)))
+                .then((raws) => raws.map((raw) => raw ?? undefined));
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.warn({
+                message: 'Redis cache multi-read failed.',
+                keys,
+                error
+            });
+            // Stryker restore all
+            return keys.map(() => undefined);
+        });
+};
+
+/**
+ * Delete cached values by key, in one round trip. For an entry that has no tag to clear it by.
+ * Never rejects: a failed delete is logged, and the entry's own TTL bounds how long it can lie.
+ *
+ * @param keys - the cache keys, namespaced by the caller's own scheme
+ */
+export const deleteCacheValues = (keys: readonly string[]): Promise<void> => {
+    if (keys.length === 0) return Promise.resolve();
+
+    return cacheConnection
+        .get()
+        .then((redisClient) => {
+            if (!redisClient) return;
+
+            // Variadic DEL; guarded above because DEL with zero arguments is a protocol error.
+            return redisClient.del(keys.map((key) => prefix(`key:${key}`))).then(() => undefined);
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.warn({
+                message: 'Redis cache delete failed.',
+                keys,
+                error
+            });
+            // Stryker restore all
+        });
+};
+
+/**
  * Save one value in Redis and attach it to one or more "tags". Never rejects: a failed write is
  * logged.
  * Tags let us delete groups of cached entries later (example: all "products" cache).

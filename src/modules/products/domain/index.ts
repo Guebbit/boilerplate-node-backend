@@ -13,6 +13,13 @@ export { availableStock, stockFlags } from './stock';
 export { isPreorder, latestReleaseDate } from './preorder';
 export { isBackorder } from './backorder';
 export { isBuyable, becameBuyable } from './buyable';
+export { availabilityOf } from './availability';
+export type {
+    Availability,
+    AvailabilityCounts,
+    AvailabilityTerms,
+    AvailabilityFacts
+} from './availability';
 export type { BuyableFacts } from './buyable';
 export type { BackorderFacts } from './backorder';
 export type { PreorderFacts } from './preorder';

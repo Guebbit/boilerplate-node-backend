@@ -49,6 +49,7 @@ flowchart LR
     products -. "product.restock_date_changed" .-> delivery
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
+    products -. "product.terms_changed" .-> inventory
     products -. "product.buyable_again" .-> stock_alerts
     products -. "product.deleted" .-> stock_alerts
     products -. "product.deleted" .-> wishlist
@@ -113,6 +114,13 @@ included, gets `inStock` (is anything available) and `lowStock` (available at or
 `NODE_LOW_STOCK_THRESHOLD`), derived by `stockFlags` in `domain/stock.ts`. Both flags ride on every
 representation, so a client never has to guess from an absent number. A cached public list is
 keyed by the caller's reach, so one reader's counters are never served to another.
+
+**Availability is its own read.** What a shopper is told about stock (`availability`, `availabilityDate`)
+is answered by [`inventory`](./inventory.md#the-availability-reads) under `/products/{id}/availability`
+and `/products/availability`, with a one-minute cache of its own, from the rule `availabilityOf` in
+`domain/availability.ts`. This module announces `product.terms_changed` through the outbox when an
+edit moves `purchasable`, `allowBackorder`, `active`, `releaseDate` or `restockDate`, and on a
+restore, so that cache is cleared; it knows nothing else about it.
 
 **A new product has no stock.** `POST /products` takes no `onHand` (a body naming one is refused
 `422`): stock is not a product field, and units enter only through `POST /inventory/levels/{productId}/receive`, which

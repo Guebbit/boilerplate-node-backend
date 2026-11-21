@@ -24,3 +24,6 @@ export const PRODUCT_BUYABLE_AGAIN = 'product.buyable_again' satisfies DomainEve
 /** The event name `delivery` subscribes to for a moved restock date. */
 export const PRODUCT_RESTOCK_DATE_CHANGED =
     'product.restock_date_changed' satisfies DomainEventName;
+
+/** The event name `inventory` subscribes to when anything that decides a product's availability changed. */
+export const PRODUCT_TERMS_CHANGED = 'product.terms_changed' satisfies DomainEventName;

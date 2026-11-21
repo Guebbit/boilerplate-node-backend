@@ -1,11 +1,11 @@
 /**
- * The GET routes a module mounts behind `privateNoCache` or `setCache`, as OpenAPI paths.
+ * The GET routes a module mounts behind `privateNoCache`, `publicNoCache` or `setCache`, as OpenAPI paths.
  *
  * Reads the real routers back, so it needs the app's modules loaded: it belongs to tests, never
  * to the contract bundler (which would have to boot the app before the files that app imports exist).
  */
 import type { RouteMount } from '@kernel/registry';
-import { privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { privateNoCache, publicNoCache } from '@infrastructure/http/middlewares/cache';
 
 /** The slice of an Express router layer this walk reads (undocumented internals, pinned by `router-internals.test.ts`). */
 interface Layer {
@@ -22,11 +22,13 @@ const isSetCache = (handle: unknown): boolean =>
     typeof handle === 'function' && handle.name === 'setCacheMiddleware';
 
 /**
- * The `x-cache` spelling a route handler declares: `privateNoCache` is `private-no-cache`, a
- * `setCache` carries its own `cachePolicy`, anything else declares none.
+ * The `x-cache` spelling a route handler declares: `privateNoCache` is `private-no-cache`,
+ * `publicNoCache` is `revalidate`, a `setCache` carries its own `cachePolicy`, anything else
+ * declares none.
  */
 const policyOf = (handle: unknown): string | undefined => {
     if (handle === privateNoCache) return 'private-no-cache';
+    if (handle === publicNoCache) return 'revalidate';
     // `isSetCache` proved `handle` is the closure `setCache` returns, which carries `cachePolicy`.
     return isSetCache(handle) ? (handle as { cachePolicy?: string }).cachePolicy : undefined;
 };
@@ -38,7 +40,7 @@ const toOpenApiPath = (basePath: string, routePath: string): string => {
 };
 
 /**
- * Every `privateNoCache` or `setCache` GET across one module's mounts, with the `x-cache` value
+ * Every `privateNoCache`, `publicNoCache` or `setCache` GET across one module's mounts, with the `x-cache` value
  * its middleware declares.
  *
  * @param mounts - the module's `mounts`
