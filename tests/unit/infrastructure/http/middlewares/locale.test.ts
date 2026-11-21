@@ -20,7 +20,11 @@
 import { asStub } from '@tests/stub';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { attachLocale } from '@infrastructure/http/middlewares/locale';
+import {
+    attachLocale,
+    isLanguageNeutral,
+    labelNeutralRefusal
+} from '@infrastructure/http/middlewares/locale';
 import {
     getCurrentLocale,
     getFallbackLocale,
@@ -261,5 +265,77 @@ describe('attachLocale against the served languages', () => {
     it('serves exactly the deployed files before any refresh has landed', () => {
         expect(negotiate('es')).toBe(getFallbackLocale());
         expect(negotiate('it')).toBe('it');
+    });
+});
+
+/** A GET of `path` in Italian, as `attachLocale` sees it. */
+const getOf = (path: string, method = 'GET') =>
+    // `path` is a getter on Express's request prototype, so it is shadowed, not assigned.
+    Object.defineProperties(makeRequest('it'), {
+        method: { value: method },
+        path: { value: path }
+    });
+
+describe('a language-neutral read', () => {
+    it.each([
+        '/config',
+        '/shop',
+        '/payments/methods',
+        '/delivery/methods',
+        '/products/facets',
+        '/locales',
+        '/locales/apps',
+        '/locales/it',
+        '/locales/it/messages',
+        '/locales/it/dictionary',
+        '/locales/it/dictionary/'
+    ])('is recognised: GET %s', (path) => {
+        expect(isLanguageNeutral(getOf(path))).toBe(true);
+    });
+
+    it.each([
+        '/products',
+        '/products/p1',
+        '/locales/it/entries',
+        '/locales/translations/product/p1'
+    ])('is not mistaken for a language-bound read: GET %s', (path) => {
+        expect(isLanguageNeutral(getOf(path))).toBe(false);
+    });
+
+    it("is a read only: a write to the same path is answered in the visitor's language", () => {
+        expect(isLanguageNeutral(getOf('/locales/it', 'PUT'))).toBe(false);
+    });
+
+    it('treats a HEAD like the GET it is served through', () => {
+        expect(isLanguageNeutral(getOf('/shop', 'HEAD'))).toBe(true);
+    });
+
+    it('sets neither header on the success, and says nothing about language', () => {
+        const response = makeResponse();
+
+        attachLocale(getOf('/shop'), response, jest.fn() as NextFunction);
+
+        expect(response.set).not.toHaveBeenCalled();
+        expect(response.vary).not.toHaveBeenCalled();
+    });
+
+    it('labels its refusal with the language the visitor was answered in', () => {
+        const response = makeResponse();
+        attachLocale(getOf('/shop'), response, jest.fn() as NextFunction);
+
+        labelNeutralRefusal(response);
+
+        expect(response.set).toHaveBeenCalledWith('Content-Language', 'it');
+        expect(response.vary).toHaveBeenCalledWith('Accept-Language');
+    });
+
+    it('leaves a response attachLocale already labelled alone', () => {
+        const response = makeResponse();
+        attachLocale(getOf('/products'), response, jest.fn() as NextFunction);
+        response.set.mockClear();
+
+        labelNeutralRefusal(response);
+
+        expect(response.set).not.toHaveBeenCalled();
     });
 });

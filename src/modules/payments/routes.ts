@@ -56,7 +56,7 @@ import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
 import { getRefunds } from './controllers/get-refunds';
 import { getPaymentAttention } from './controllers/get-payment-attention';
-import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
+import { environmentCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 
 /** Express router for payment operations (intent, confirm, sync, webhook, read back). */
 export const router = Router();
@@ -72,7 +72,7 @@ router.post('/webhook/:provider', webhookLimiter, postPaymentWebhook);
  * GET /payments/methods — public: which methods are offered is pre-purchase information, same
  * reasoning as GET /delivery/methods. MUST stay above the auth wall below.
  */
-router.get('/methods', getPaymentMethods);
+router.get('/methods', environmentCache, getPaymentMethods);
 
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);

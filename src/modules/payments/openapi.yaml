@@ -33,6 +33,7 @@ x-personal-data:
 paths:
     /payments/methods:
         get:
+            x-cache: "max-age: 60"
             tags: [Payments]
             summary: List payment methods
             description: 'Which methods this deployment offers, so the frontend hard-codes none. `card` is present only when a card payment provider is configured; `bank_transfer` only once its beneficiary and IBAN are configured. With neither the list is empty, and checkout is off until a method is configured. Public — like `GET /delivery/methods`, this is pre-purchase information. Unpaged: at most one per payment method kind.'

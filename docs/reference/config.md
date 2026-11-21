@@ -24,6 +24,10 @@ to neither owner: `app` composes, the modules do not reach each other.
 None of it changes while the process runs, so a success answers `Cache-Control: public, max-age=60`.
 A refusal (an unknown `NODE_ANTIBOT_PROVIDER`, say, answers 500) keeps the app-wide `no-store`.
 
+`GET /shop`, `GET /payments/methods` and `GET /delivery/methods` are kept for the same minute, for the same
+reason (they are read from the environment), through `environmentCache`. See
+[language-neutral routes](../understand/redis-cache-keys.md#language-neutral-routes).
+
 `GET /shop` is **not** in it. The shop is removable (`demo:remove`), and a foundation answer may not
 reach it, so the client asks for both in parallel. That is why the operator's legal identity is here
 and not on `/shop`: a project without the shop still prints it.

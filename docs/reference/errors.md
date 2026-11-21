@@ -128,7 +128,9 @@ caught.
 
 `detail` and `errors[].message` follow `Accept-Language`; `title` is always English.
 `Content-Language` and `Vary: Accept-Language` are set on every response, errors included, because
-the language is negotiated before the request is parsed.
+the language is negotiated before the request is parsed. The one exception is the success of a
+[language-neutral read](../understand/redis-cache-keys.md#language-neutral-routes); its errors
+carry both.
 
 ## Headers on an error
 

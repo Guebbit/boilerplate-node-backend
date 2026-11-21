@@ -17,7 +17,13 @@ info:
         as `errors[].code`. A message the API has no wording for in that language falls back to
         the default language, one message at a time. An unknown or switched-off language falls
         back instead of erroring; `Content-Language` states the language picked, the audience the
-        answer is written for (RFC 9110 section 8.5), and `Vary: Accept-Language` is always set.
+        answer is written for (RFC 9110 section 8.5), and `Vary: Accept-Language` is set with it.
+        Exception: a read whose answer carries no words in any language (`GET /config`, `/shop`,
+        `/payments/methods`, `/delivery/methods`, `/products/facets`, and the `/locales` reads) is
+        the same for every caller. Its success sets neither header, and a shared cache keeps one
+        copy; the two dictionary reads (`/locales/{locale}/messages` and `/dictionary`) name the
+        language of the path in `Content-Language`. A refusal on those routes is still translated,
+        so it carries both.
         One exception, for staff: a caller allowed to read draft languages (`display:Locale`) whose
         FIRST `Accept-Language` choice is a switched-off language is answered in it by the product
         reads (`GET /products`, `POST /products/search`, `GET /products/{id}`) and the example
@@ -562,7 +568,9 @@ components:
             required: false
             description: >-
                 The language the answer was written in (RFC 9110 section 8.5), chosen from the caller's
-                `Accept-Language` or its stored locale. Absent on an answer no locale was resolved for.
+                `Accept-Language` or its stored locale. Absent on an answer no locale was resolved for,
+                and on the success of a language-neutral read (the root description says which); the two
+                dictionary reads send the language of their path.
             schema:
                 type: string
 
@@ -570,7 +578,8 @@ components:
             required: false
             description: >-
                 The request headers the answer depends on (RFC 9110 section 12.5.5), so a cache keeps
-                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body, plus
+                one copy per value: always `Origin`, plus `Accept-Language` where the locale picks the body (not
+                on the success of a language-neutral read), plus
                 `Authorization` on every cached or private read, plus `Cookie` there in cookie mode.
             schema:
                 type: string
