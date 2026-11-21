@@ -121,6 +121,10 @@ opt-in was forgotten. An error answer is `no-store` too, whatever the route set 
 - A cached POST (`POST /x/search`, keyed the same as its GET twin) is a SERVER-side arrangement
   only — the wire always says `no-store`, since a shared cache holding a POST response could
   answer a later POST from it, including a real write on some other route.
+- A GET whose module owns the answer and stores it itself (the availability reads, see
+  [inventory](../modules/inventory.md#the-availability-reads)) mounts `publicNoCache`: `public,
+no-cache` and `Vary: Authorization`, and no Redis entry from this middleware. Its `x-cache` is
+  `revalidate`.
 - A cacheable GET gets `max-age`/`stale-*` (a shared cache in front of this server is what absorbs
   a guest-scope stampede), or `no-cache` when the route asked for `browserRevalidate` instead (`GET /products/:id` does: the
   page shows a stock count, and inventory clears the `products` tag on every stock write).
@@ -146,6 +150,13 @@ back to an admin, the same class of bug `GET /account` once had. `Accept-Languag
   hour behind a router-wide no-store mount.
 - `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
   conditions nothing here meets, so there would be nothing for the browser to revalidate.
+
+## Keys this middleware does not own
+
+`availability:<id>` is a plain value in the same Redis, with no tag and a 60 second life, written
+and deleted by `inventory` through `getCacheValues`, `setCacheValue` and `deleteCacheValues` in the
+adapter, not by `setCache`. It is not cleared by `invalidateCache(['products'])`: a stock move or a
+`product.terms_changed` clears it ([why](../modules/inventory.md#the-availability-reads)).
 
 ## Read next
 

@@ -11,7 +11,8 @@ The only writer of stock in the application.
 **Owns** — the stock counters (its own `stocklevels` collection), the reservation lifecycle,
 and the ledger that explains both.
 **Depends on** — [`products`](./products.md), whose document keeps a read-only mirror of the
-counters this module writes, so a catalogue read needs no join.
+counters this module writes, and whose settings (sale flags, backorder switch, dates) decide the
+availability this module tells shoppers.
 **Breaks if you change** — any transition's conditional claim. It is what makes each one exactly-once.
 :::
 
@@ -43,6 +44,7 @@ flowchart LR
     inventory --> shop
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
+    products -. "product.terms_changed" .-> inventory
     inventory -. "inventory.backorder_allocated" .-> delivery
     inventory -. "inventory.reservation_expired" .-> orders
     inventory -. "inventory.hold_orphaned" .-> shop_tasks
@@ -126,9 +128,12 @@ something.
 A catalogue read is the shop's most common query and must not need a join. Three shapes were weighed for how a product
 read keeps showing `available` once the counters move here:
 
-1. **A separate `inventory` endpoint the storefront calls.** Rejected: it turns one catalogue read
-   into two round trips, which costs the same as the join the constraint exists to avoid — worse,
-   from the client's own timing.
+1. **A separate `inventory` endpoint the storefront calls.** Chosen for what a shopper is told
+   (`availability`, [below](#the-availability-reads)): the product answer carries details, which
+   change on an edit, and the stock signal is its own read with its own short cache, so a busy
+   product stops having its details re-read on every sale. It was first rejected as two round
+   trips; the second request on a product page or a catalogue list is now accepted. The copy below
+   stays only until the product answer stops carrying stock.
 2. **`products` imports this module and reads live.** Rejected for the same reason: a live
    cross-collection read at catalogue-read time is a join in every way that matters, just not
    spelled `$lookup`.
@@ -167,6 +172,55 @@ page for an hour — see [Redis cache](../understand/redis-cache.md).
 
 One consequence worth naming: this module imports `products` (for a shortfall's title, and
 for the cache sync). Only `products → inventory` would be a cycle, and nothing creates it.
+
+## The availability reads {#the-availability-reads}
+
+What a shopper is told about a product's stock, in Google Merchant's words: `availability`
+(`in_stock`, `out_of_stock`, `preorder`, `backorder`) and, with the last two, `availabilityDate`.
+This module answers it under the catalogue's URL, through its own router mounted at `/products`
+(the pattern of `payments` serving `/orders/{id}/payments`):
+
+| Request                                | Answer                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `GET /products/{id}/availability`      | one product; an unknown or hidden one is a `404`, as for `/{id}`               |
+| `GET /products/availability?id=a&id=b` | many, at most 100 ids (a 101st is a `422`); unknown or hidden ids are left out |
+
+The rule that turns settings and counts into a value is `availabilityOf` in the `products` domain
+(`out_of_stock` covers every "cannot be ordered": sold out, not on sale, a preorder whose allowance
+is full). `availabilityDate` is the release day of a preorder, or the restock day of a backorder,
+or `BACKORDER_PROMISE_DAYS` from today when it names none.
+
+```mermaid
+flowchart LR
+    R["GET availability"] --> M{"MGET<br/>availability:&lt;id&gt;"}
+    M -->|hit| F["filter per caller<br/><i>read:Product</i>"]
+    M -->|miss| B["level + product<br/>availabilityOf"] --> S["store 60 s"] --> F
+    F --> A["answer"]
+    W1["every stock move<br/><i>refreshStockCacheForProducts</i>"] -.->|delete| M
+    W2["product.terms_changed<br/>product.deleted"] -.->|delete| M
+```
+
+**One Redis entry per product, `availability:<id>`, 60 seconds, no tags.** A batch reads every entry
+at once, computes only the missing ones and stores each under its own key, so id order and
+duplicates do not matter and the language is not part of the key. This module owns the whole cache:
+
+- **Stock moves** delete the key in the funnel every stock write ends in, for every id it is given.
+- **Edits to the product** reach it through `product.terms_changed` (a change to `purchasable`,
+  `allowBackorder`, `active`, `releaseDate` or `restockDate`, and a restore) and `product.deleted`,
+  both outbox events, so the delete lands when the relay delivers them, not at commit.
+- **The 60 seconds** covers what nothing announces: a release or restock date passing, and the
+  shop's calendar day turning over. A read in flight can still store an old answer after a delete,
+  for at most those 60 seconds.
+
+The entry holds the product's `active` and `deletedAt`, because the cache has no caller in its key:
+after the read, each caller is judged with `read:Product`, so a guest never gets a hidden product
+from a hit and staff (`display:Product`) do. The browser always re-checks: `public, no-cache` and an
+ETag, so an unchanged answer is a `304`.
+
+Mount order matters here and nowhere else in the app. `products` mounts `/:id`, which would read
+the word `availability` as an id and answer `404`, so `inventory` must be mounted first. The
+registry lists modules alphabetically, which gives that order, and
+`tests/integration/availability-route-order.test.ts` fails if it ever flips.
 
 ## The pipeline
 

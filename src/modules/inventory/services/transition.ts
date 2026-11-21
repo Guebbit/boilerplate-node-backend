@@ -11,9 +11,12 @@ import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { counterDeltaFor, type HoldKind } from '../domain';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
+import { forgetAvailability } from './availability';
 
 /**
- * Bring the catalogue's synced copy of these products' counters into step with the ledger's.
+ * Bring the catalogue's synced copy of these products' counters into step with the ledger's, and
+ * delete each product's `availability:<id>` entry (the availability reads' own cache, which a stock
+ * move makes stale). Every id the caller gives loses its entry.
  *
  * One `$in` read for all of them, one sync per product, and ONE clear of the `products`
  * response-cache tag at the end: `GET /products/:id` and the lists carry `available`, so a stock
@@ -33,8 +36,12 @@ export const refreshStockCacheForProducts = (productIds: readonly string[]): Pro
     const unique = [...new Set(productIds)];
     if (unique.length === 0) return Promise.resolve();
 
-    return stockLevelRepository
-        .findManyByProductIds(unique)
+    /**
+     * Every id, level row or not: the availability entry is a different cache from the catalogue
+     * copy synced below, and it must not outlive a move on any product the caller named.
+     */
+    return forgetAvailability(unique)
+        .then(() => stockLevelRepository.findManyByProductIds(unique))
         .then(async (levels) => {
             let synced = 0;
             for (const level of levels) {

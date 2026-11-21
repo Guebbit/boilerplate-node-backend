@@ -17,9 +17,11 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { PRODUCT_CREATED, PRODUCT_DELETED } from '@modules/products';
+import { PRODUCT_CREATED, PRODUCT_DELETED, PRODUCT_TERMS_CHANGED } from '@modules/products';
 import { router } from './routes';
+import { availabilityRouter } from './availability-routes';
 import { openLevel, removeLevel } from './services/levels';
+import { forgetAvailability } from './services/availability';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
 import { inventoryConfig } from './config';
@@ -30,7 +32,15 @@ import { refreshStockCacheForProducts } from './services/transition';
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
     name: 'inventory',
-    mounts: [{ basePath: '/inventory', routes: router }],
+    /**
+     * `/inventory` first: `security.ts` reads the first mount's base path for `rawBodyPaths`. The
+     * second is the availability reads, under the catalogue's URL; why it sits ahead of `products`
+     * is in `./availability-routes.ts`.
+     */
+    mounts: [
+        { basePath: '/inventory', routes: router },
+        { basePath: '/products', routes: availabilityRouter }
+    ],
     jobs: inventoryJobs,
     config: [inventoryConfig.slice],
     /**
@@ -48,8 +58,16 @@ export default {
          * where a restore has to come back to them. See `removeLevel`'s own docblock.
          */
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
-            hardDelete ? removeLevel(productId) : undefined
+            // The level row goes only on a hard delete; the cached answer goes either way.
+            (hardDelete ? removeLevel(productId) : Promise.resolve()).then(() =>
+                forgetAvailability([productId])
+            )
         );
+        /**
+         * An edit to what decides availability (sale flags, backorder switch, dates), or a restore.
+         * No stock moved, so the funnel never ran; this is the other way an entry goes stale.
+         */
+        onDomainEvent(PRODUCT_TERMS_CHANGED, ({ productId }) => forgetAvailability([productId]));
         /**
          * This module's own announcement: a payment that serves a preorder moves counters inside the
          * payer's transaction, where the catalogue copy cannot be written (it would not roll back).

@@ -107,7 +107,7 @@ otherwise, and both failure modes are silent:
 The correct value is the **number of proxies you actually run**, so Express counts back from the
 right-hand end of `X-Forwarded-For` — the part a client cannot forge. `NODE_TRUST_PROXY_HOPS`
 carries it, and `0` (the default) means "no proxy, use the socket address", which is right for local
-development and for the compose stack, where the API is published directly. An operator behind a proxy sets it to `1` (`.env-example` leaves it commented).
+development and the dev compose stack, where the API is published directly. The production compose stack binds the API to loopback for your TLS proxy, so a production deployment sets it to `1` (`.env-example` leaves it commented; [first deploy](../operate/first-deploy-proxy-and-storage.md) says where).
 
 `0` is handed to Express as `false`, and that is what lets express-rate-limit spot the one mistake
 worth a warning: an `X-Forwarded-For` arriving while no proxy is counted. The library checks **once

@@ -18,7 +18,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
-import { PRODUCT_DELETED } from '../events';
+import { PRODUCT_DELETED, PRODUCT_TERMS_CHANGED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { titlesOf } from './lookups';
@@ -127,9 +127,10 @@ export const removeById = (
         );
 
 /**
- * Undo a soft delete. Announces nothing: what the delete set in motion (carts and
- * wishlists emptied) stays done — a restore clears `deletedAt` only, so the product comes back
- * as it was (on sale, off sale or hidden), not the past.
+ * Undo a soft delete. A restore clears `deletedAt` only, so the product comes back as it was (on
+ * sale, off sale or hidden), not the past: what the delete set in motion (carts and wishlists
+ * emptied) stays done. It announces `product.terms_changed`, in the same transaction, because the
+ * product can be ordered again and `inventory` holds an answer that says it cannot.
  *
  * @param id - the product to restore
  * @param context - records `ADMIN_PRODUCT_RESTORED`; omit for a caller with no request behind it
@@ -146,7 +147,14 @@ export const restoreById = (
                 { code: ERROR_CODES.PRODUCT_NOT_DELETED, message: t('products.not-deleted') }
             ]);
         product.deletedAt = undefined;
-        return productRepository.save(product).then((saved) => {
+        return announceInTransaction(
+            (session) => productRepository.save(product, session),
+            () => ({
+                name: PRODUCT_TERMS_CHANGED,
+                payload: { productId: id },
+                aggregateId: id
+            })
+        ).then((saved) => {
             recordAudit(context, {
                 action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
                 outcome: 'success',
