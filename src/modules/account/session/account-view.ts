@@ -28,7 +28,7 @@ import type {
     PackedRules,
     SessionActivity
 } from '@types';
-import { idleLimitMilliseconds } from './idle';
+import { idleLimitMilliseconds, staffCapEndsAt } from './idle';
 import { resolveProof } from './auth-context';
 import type { IssuedSession } from './strategy';
 
@@ -88,16 +88,37 @@ const abilitiesOf = (context: AuthContext): Abilities => {
 };
 
 /**
+ * Whole seconds from `now` to `until`, rounded DOWN so a client's countdown never outlasts the
+ * server's, and never below zero.
+ */
+const secondsUntil = (until: number, now: number): number =>
+    Math.max(0, Math.floor((until - now) / 1000));
+
+/**
  * The session's idle clock as it stands now.
  *
+ * With no clock on the context (a sign-in answer, which no session has judged yet) the session is
+ * brand new, so both countdowns are whole.
+ *
  * @param context - the resolved signed-in caller
- * @returns `idleTimeoutSeconds` is absent for a caller no idle timeout applies to
+ * @returns the timeout and its remaining seconds are absent for a caller no idle timeout applies
+ *   to; the lifetime remainder is absent for a shopper or with the cap off
  */
 export const activityOf = (context: AuthContext): SessionActivity => {
+    const now = Date.now();
     const limitMilliseconds = idleLimitMilliseconds(context.roles);
+    const lastActive = context.sessionClock?.lastActiveAt.getTime() ?? now;
+    const capEndsAt = staffCapEndsAt(
+        context.sessionClock?.startedAt ?? new Date(now),
+        context.roles
+    );
     return {
-        lastActiveAt: new Date().toISOString(),
-        ...(limitMilliseconds > 0 && { idleTimeoutSeconds: limitMilliseconds / 1000 })
+        lastActiveAt: new Date(now).toISOString(),
+        ...(limitMilliseconds > 0 && {
+            idleTimeoutSeconds: limitMilliseconds / 1000,
+            idleRemainingSeconds: secondsUntil(lastActive + limitMilliseconds, now)
+        }),
+        ...(capEndsAt && { lifetimeRemainingSeconds: secondsUntil(capEndsAt.getTime(), now) })
     };
 };
 

@@ -3,6 +3,15 @@
 The engine is **podman** (rootless); `docker` here is its shim. `CONTAINER_ENGINE` defaults to
 `podman`. A hung `docker run` means the podman service is wedged, not that the image is missing.
 
+The only standing containers are the project's own compose stack (`boilerplate-node-backend_*`).
+Anything else a session or a test starts is temporary:
+
+- Reuse an existing stack or script first (the compose file, the live e2e stack) instead of a new ad-hoc container.
+- When one is really needed, name it `boilerplate-<purpose>-*` and label it `crew=boilerplate`, so its owner is obvious.
+- Remove it when the job ends, on failure too: `--rm`, or a `trap` that removes the containers, their anonymous
+  volumes (`rm -v`), the network and any image built for the job.
+- Before finishing, check `podman ps -a --filter label=crew=boilerplate` shows nothing you started.
+
 ## The gate
 
 ```sh

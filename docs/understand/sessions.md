@@ -139,6 +139,21 @@ What counts as activity is a real request. What does not: a request sent with
 a refresh, which renews a token and carries the clock over unchanged. A refresh is still judged: a staff family idle past the limit gets `401 SESSION_IDLE` from `POST /account/refresh` and the family is removed. `POST /account/sessions/current/touch`
 counts and answers the clock, which is how a client asks "still there?" from server numbers.
 
+### The countdowns a session answer carries
+
+`activity` (`GET /account`, the three sign-in answers, the email-change answer and the touch) says
+how long is left, so a client counts down on its own clock instead of comparing the server's
+timestamp with the browser's:
+
+- `idleRemainingSeconds`: the idle limit minus the age of the stamp this request was judged by. The
+  stamp is written at most once a minute, so "now" is used only when this request writes it; any
+  other request reports from the saved one, and the answer never promises time the server will not grant.
+- `lifetimeRemainingSeconds`: the time to the staff cap below, from the family's start. Activity
+  cannot extend it. Absent for a shopper and when the cap is off.
+- A sign-in answer reports both whole: nothing has been used yet. A refresh carries no `activity`.
+
+Both are whole seconds, rounded down. The client warns before whichever ends first.
+
 The idle answer is not kept for private pages. A public page (a product, a search) refuses an idle
 bearer with the same `401 SESSION_IDLE` instead of serving the person as a guest, so the client
 learns why the session ended and an editor who only browses is not silently logged out by the

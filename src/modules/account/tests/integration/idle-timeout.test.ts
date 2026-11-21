@@ -123,6 +123,66 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
         expect(Date.now() - row.lastUsedAt!.getTime()).toBeGreaterThan(590_000);
     });
 
+    it('counts the idle time left from the saved stamp when the request does not write one', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await idleFor(user.id, 600);
+
+        const response = await api()
+            .get('/account')
+            .set('Authorization', bearer)
+            .set('Session-Passive', 'true')
+            .expect(200);
+
+        // Floored, so the client's countdown never outlasts the server's.
+        expect(response.body.activity.idleTimeoutSeconds).toBe(LIMIT);
+        expect(response.body.activity.idleRemainingSeconds).toBeGreaterThanOrEqual(LIMIT - 601);
+        expect(response.body.activity.idleRemainingSeconds).toBeLessThanOrEqual(LIMIT - 600);
+    });
+
+    it('counts the idle time left from now when this request writes the stamp', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await idleFor(user.id, 600);
+
+        const response = await api().get('/account').set('Authorization', bearer).expect(200);
+
+        expect(response.body.activity.idleRemainingSeconds).toBeGreaterThanOrEqual(LIMIT - 2);
+        expect(response.body.activity.idleRemainingSeconds).toBeLessThanOrEqual(LIMIT);
+    });
+
+    it('answers the lifetime left under the staff cap, which a shopper does not have', async () => {
+        const cap = 86_400;
+        setEnvironment({ NODE_SESSION_LIFETIME_STAFF: String(cap) });
+        const staff = await signInAs('editor');
+        const shopper = await signInAs('customer');
+        await sessionModel
+            .updateMany(
+                { userId: staff.user.id },
+                { $set: { startedAt: new Date(Date.now() - 3600 * 1000), lastUsedAt: new Date() } }
+            )
+            .exec();
+
+        const forStaff = await api().get('/account').set('Authorization', staff.bearer).expect(200);
+        const forShopper = await api()
+            .get('/account')
+            .set('Authorization', shopper.bearer)
+            .expect(200);
+
+        expect(forStaff.body.activity.lifetimeRemainingSeconds).toBeGreaterThanOrEqual(cap - 3602);
+        expect(forStaff.body.activity.lifetimeRemainingSeconds).toBeLessThanOrEqual(cap - 3600);
+        expect(forShopper.body.activity).not.toHaveProperty('lifetimeRemainingSeconds');
+        expect(forShopper.body.activity).not.toHaveProperty('idleRemainingSeconds');
+    });
+
+    it('leaves the lifetime left out while the cap is switched off', async () => {
+        setEnvironment({ NODE_SESSION_LIFETIME_STAFF: '0' });
+        const { bearer } = await signInAs('editor');
+
+        const response = await api().get('/account').set('Authorization', bearer).expect(200);
+
+        expect(response.body.activity).not.toHaveProperty('lifetimeRemainingSeconds');
+        expect(response.body.activity.idleRemainingSeconds).toEqual(expect.any(Number));
+    });
+
     it('answers the idle clock on a touch: the limit for staff, none for a shopper', async () => {
         const staff = await signInAs('editor');
         const shopper = await signInAs('customer');
@@ -136,7 +196,9 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
 
         expect(forStaff.status).toBe(200);
         expect(forStaff.body.idleTimeoutSeconds).toBe(LIMIT);
+        expect(forStaff.body.idleRemainingSeconds).toBeGreaterThanOrEqual(LIMIT - 2);
         expect(forShopper.body).not.toHaveProperty('idleTimeoutSeconds');
+        expect(forShopper.body).not.toHaveProperty('idleRemainingSeconds');
         expect(forShopper.body.lastActiveAt).toEqual(expect.any(String));
     });
 });

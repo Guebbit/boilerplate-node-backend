@@ -255,14 +255,27 @@ const resolveSession = (
                  * Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
                  * throttle is checked on the row already in hand, so a busy tab costs no extra query.
                  */
-                if (ok && !options.passive && stampDue(row))
+                const writesStamp = !options.passive && stampDue(row);
+                if (ok && writesStamp)
                     void sessionRepository
                         .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)
                         .then((wrote) => (wrote ? recordActivity(String(row.userId)) : undefined))
                         .catch((error: unknown) => {
                             logger.warn({ message: 'Could not stamp a session as used.', error });
                         });
-                return { ok };
+                return {
+                    ok: ok && {
+                        ...ok,
+                        // The stamp this request was judged by: now only when it writes one, so
+                        // the countdown never promises more time than the server will grant.
+                        sessionClock: {
+                            lastActiveAt: writesStamp
+                                ? new Date()
+                                : (row.lastUsedAt ?? row.startedAt),
+                            startedAt: row.startedAt
+                        }
+                    }
+                };
             }
         );
     });
