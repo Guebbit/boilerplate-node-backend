@@ -1,0 +1,68 @@
+# The domain events that belong to no module — today only the outbox's own `outbox.event_dead`.
+# Every other event is declared by the module that emits it, in
+# `src/modules/<module>/asyncapi.domain-events.yaml`, and merged into this section by the bundler.
+#
+# A BACKEND-ONLY section: it never reaches `asyncapi.public.yaml`, so the paired frontend never
+# receives it. A domain event is not a promise to an API client; a webhook event is, and those live
+# in `asyncapi.webhooks.yaml`.
+#
+# Binding: no `servers`. An event travels one of two ways, said by `x-transport`:
+#   outbox      stored as an outbox row and dispatched by the relay (`src/kernel/outbox.ts`); the
+#               dispatch validates the stored payload against the schema below before any handler runs.
+#   in-process  a plain `emitDomainEvent`, never stored; nothing crosses a process.
+#
+# Naming: channel `domain.<event>`, `address` the event's own name, message `<Pascal>DomainEvent`,
+# payload `<Pascal>DomainEventPayload`, operation `domain<Pascal>`.
+#
+# A payload is a TOLERANT reader: the generator drops an unknown field instead of refusing it, so a
+# producer that adds one during a rolling deploy does not strand the rows already written.
+asyncapi: 3.0.0
+info:
+    title: Domain events
+    version: 0.1.0
+    description: The events modules emit to each other, stored through the outbox or emitted in-process.
+channels:
+    domain.outbox.event_dead:
+        address: outbox.event_dead
+        description: >-
+            An outbox row ran out of attempts and was parked as `dead`. A plain in-process emit, not
+            an outbox row: an outbox row about the outbox could itself die and loop. `notifications`
+            tells the administrators.
+        x-transport: in-process
+        messages:
+            OutboxEventDeadDomainEvent:
+                $ref: '#/components/messages/OutboxEventDeadDomainEvent'
+operations:
+    domainOutboxEventDead:
+        action: send
+        channel:
+            $ref: '#/channels/domain.outbox.event_dead'
+        summary: An outbox row was parked as dead.
+        description: Emitted by the relay once per row, after its last failed attempt.
+        messages:
+            - $ref: '#/channels/domain.outbox.event_dead/messages/OutboxEventDeadDomainEvent'
+components:
+    messages:
+        OutboxEventDeadDomainEvent:
+            name: OutboxEventDeadDomainEvent
+            title: Outbox row parked as dead
+            payload:
+                $ref: '#/components/schemas/OutboxEventDeadDomainEventPayload'
+    schemas:
+        OutboxEventDeadDomainEventPayload:
+            type: object
+            required:
+                - eventId
+                - eventName
+                - aggregateId
+            properties:
+                eventId:
+                    type: string
+                    description: The dead outbox row's id.
+                eventName:
+                    type: string
+                    description: The stored event's name.
+                aggregateId:
+                    type: string
+                    description: What the event was about.
+            additionalProperties: false

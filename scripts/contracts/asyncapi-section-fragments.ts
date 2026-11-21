@@ -1,6 +1,7 @@
 /**
  * The AsyncAPI fragments modules ship for a section they do not own: the webhook events each
- * module owns (`webhooks`), and the notice payloads a module adds to `notifications`.
+ * module owns (`webhooks`), the notice payloads a module adds to `notifications`, and the domain
+ * events each module emits (`domain-events`, backend-only).
  *
  * Merge:    `src/modules/<m>/asyncapi.<section>.yaml` merges into that section's document, only.
  * Extends:  a fragment may carry `x-extends: { <Schema>: [<SchemaName>, ...] }`; each name is

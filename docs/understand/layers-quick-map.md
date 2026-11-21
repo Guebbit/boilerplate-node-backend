@@ -144,7 +144,7 @@ both call it.
 
 A module may also carry module-owned declarations, each named for what it is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `events.ts` (its
 domain events) and `locales/` (its copy, in every language it ships). None of these is enumerated
-anywhere central — `audit.ts`, `metrics.ts` and `events.ts` register or augment themselves, while
+anywhere central — `audit.ts` and `metrics.ts` register or augment themselves, `events.ts` holds the names of its events (their payloads are `asyncapi.domain-events.yaml`), while
 `locales` is declared in the manifest so the i18n boot can walk the registry without naming a
 domain. A module's slice of the demo records lives in `scenarios/<name>.ts` instead, deliberately
 outside this list — see [Data](../reference/data.md#the-demo-records).

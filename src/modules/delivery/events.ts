@@ -1,171 +1,60 @@
 /**
  * @module
- * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. Every one rides the
+ * Domain events this module emits, declared in `./asyncapi.domain-events.yaml`. Every one rides the
  * transactional outbox, written in the transaction of the act that caused it, so it exists exactly
  * when the act does. `shipment.*` is projected into `webhooks`' public catalogue by `module.ts`'s
  * `publicEvents`; the `fulfillment_order.*` events are internal.
  */
 
-import type { FulfillmentHeldParamsNotice, ShipmentLostReason } from '@types';
+import type { DomainEventMap, DomainEventName } from '@kernel/events';
 
-/** What a shipment carries, per product — the lines of a `shipment.*` payload. */
-export interface ShipmentEventLine {
-    productId: string;
-    quantity: number;
-}
+/**
+ * The payloads below are the generated ones (`asyncapi.domain-events.yaml`), kept under the names
+ * the module's callers already use.
+ */
 
 /** The payload of both `shipment.*` events. */
-export interface ShipmentEventPayload {
-    orderId: string;
-    shipmentId: string;
-    fulfillmentOrderId: string;
-    lines: ShipmentEventLine[];
-}
+export type ShipmentEventPayload = DomainEventMap['shipment.delivered'];
+
+/** What a shipment carries, per product — the lines of a `shipment.*` payload. */
+export type ShipmentEventLine = ShipmentEventPayload['lines'][number];
+
+/** The payload of `shipment.lost`: the shared one, plus the reason and what the buyer is told. */
+export type ShipmentLostPayload = DomainEventMap['shipment.lost'];
 
 /** What the buyer is told is still owed after a loss: a product the shelf could not cover. */
-export interface ShipmentLostOwedLine {
-    title: string;
-    quantity: number;
-}
-
-/**
- * The payload of `shipment.lost`: the shared one, plus the reason and what the buyer is told.
- * The webhook projects only the shared part and the reason — never `message`, which is free text.
- */
-export interface ShipmentLostPayload extends ShipmentEventPayload {
-    /** The order's number, as the buyer knows it: what a notice names the order by. */
-    orderNumber: string;
-    /** Why the parcel will not arrive. */
-    reason: ShipmentLostReason;
-    /** The buyer; absent once the account was erased, so there is no inbox to write to. */
-    userId?: string;
-    /** The sentence staff wrote for the buyer, if any. */
-    message?: string;
-    /** Units the shelf could not cover again; empty when everything ships again from the shelf. */
-    owed: ShipmentLostOwedLine[];
-    /** When the owed units are expected (ISO 8601); present exactly when `owed` is not empty. */
-    expectedAt?: string;
-}
+export type ShipmentLostOwedLine = ShipmentLostPayload['owed'][number];
 
 /** The payload of `shipment.shipped`: the shared one, plus what the buyer's mail says. */
-export interface ShipmentShippedPayload extends ShipmentEventPayload {
-    /**
-     * Units still to come in later shipments. Absent for a digital fulfillment, which is born
-     * delivered: its arrival mail is the only one the buyer gets. Internal — the webhook omits it.
-     */
-    remainingUnits?: number;
-}
+export type ShipmentShippedPayload = DomainEventMap['shipment.shipped'];
 
 /** What a `fulfillment_order.delayed` event tells: the dates, and nothing the buyer must answer. */
-export interface FulfillmentOrderDelayed {
-    orderId: string;
-    /** The order's number, as the buyer knows it: what a notice names the order by. */
-    orderNumber: string;
-    fulfillmentOrderId: string;
-    /** The buyer; absent once the account was erased, so there is no inbox to write to. */
-    userId?: string;
-    /** The product titles waiting, as the order froze them. */
-    titles: string[];
-    /** The date promised when ordering (ISO 8601). */
-    agreedAt: string;
-    /**
-     * The date the buyer held before this notice (ISO 8601); absent once an earlier notice told
-     * them there was no date yet. With `shipCountry`, what `tasks` decides a consent reminder on.
-     */
-    promisedAt?: string;
-    /** The country the order ships to (ISO 3166-1 alpha-2); absent for a pickup or digital order. */
-    shipCountry?: string;
-    /** The date now expected, absent when there is none (the date was cleared). */
-    expectedAt?: string;
-    /** `moved`: the date was changed. `due`: the expected date is a day away or gone and there is still no stock. */
-    reason: 'moved' | 'due';
-}
+export type FulfillmentOrderDelayed = DomainEventMap['fulfillment_order.delayed'];
 
-/**
- * What a `fulfillment_order.hold_noticed` event tells: a hold the buyer can act on or should read
- * about. Buyer-safe by construction: the notice, never staff's reason or note.
- */
-export interface FulfillmentOrderHoldNoticed {
-    orderId: string;
-    /** The order's number, as the buyer knows it: what a notice names the order by. */
-    orderNumber: string;
-    fulfillmentOrderId: string;
-    /** The buyer; absent once the account was erased, so there is no inbox to write to. */
-    userId?: string;
-    /** `check_address` when the address needs a look, else `delayed`. */
-    notice: FulfillmentHeldParamsNotice;
-    /** What staff wrote for the buyer, if anything. */
-    message?: string;
-}
+/** What a `fulfillment_order.hold_noticed` event tells: a hold the buyer can act on or should read about. */
+export type FulfillmentOrderHoldNoticed = DomainEventMap['fulfillment_order.hold_noticed'];
 
-/** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        /**
-         * A shipment left: some or all of an order's goods. Fires once per shipment, so an order
-         * shipped in two goes fires it twice. Not fired for the forced shipments an admin status
-         * override brings in step: nothing left that anyone recorded. This module mails the buyer
-         * from it (`./services/notify.ts`).
-         */
-        'shipment.shipped': ShipmentShippedPayload;
+/** See the `shipment.shipped` channel in `asyncapi.domain-events.yaml`. */
+export const SHIPMENT_SHIPPED = 'shipment.shipped' satisfies DomainEventName;
 
-        /** A shipment arrived. A digital fulfillment fires it right after `shipment.shipped`. */
-        'shipment.delivered': ShipmentEventPayload;
+/** See the `shipment.delivered` channel in `asyncapi.domain-events.yaml`. */
+export const SHIPMENT_DELIVERED = 'shipment.delivered' satisfies DomainEventName;
 
-        /**
-         * Staff reported a shipment lost or damaged in transit. Written in the transaction of the
-         * act that reopened its units, so it exists exactly when the loss does. This module mails
-         * the buyer from it and `notifications` writes the inbox row.
-         */
-        'shipment.lost': ShipmentLostPayload;
+/** See the `shipment.lost` channel in `asyncapi.domain-events.yaml`. */
+export const SHIPMENT_LOST = 'shipment.lost' satisfies DomainEventName;
 
-        /** Staff put a fulfillment order on hold, or the stock it awaits did not arrive. */
-        'fulfillment_order.held': { orderId: string; fulfillmentOrderId: string; reason: string };
+/** See the `fulfillment_order.held` channel in `asyncapi.domain-events.yaml`. */
+export const FULFILLMENT_ORDER_HELD = 'fulfillment_order.held' satisfies DomainEventName;
 
-        /**
-         * A hold the buyer has something to do or read about: an address to check, or a message
-         * staff wrote for them. A bare delay and `awaiting_stock` fire nothing. `notifications`
-         * turns it into an inbox row (`fulfillment-held`); this module mails the same from it.
-         */
-        'fulfillment_order.hold_noticed': FulfillmentOrderHoldNoticed;
+/** See the `fulfillment_order.hold_noticed` channel in `asyncapi.domain-events.yaml`. */
+export const FULFILLMENT_ORDER_HOLD_NOTICED =
+    'fulfillment_order.hold_noticed' satisfies DomainEventName;
 
-        /** A hold ended and the fulfillment order may ship. */
-        'fulfillment_order.released': { orderId: string; fulfillmentOrderId: string };
+/** See the `fulfillment_order.released` channel in `asyncapi.domain-events.yaml`. */
+export const FULFILLMENT_ORDER_RELEASED = 'fulfillment_order.released' satisfies DomainEventName;
 
-        /** A fulfillment order's remainder was canceled, or its order was. */
-        'fulfillment_order.canceled': { orderId: string; fulfillmentOrderId: string };
+/** See the `fulfillment_order.canceled` channel in `asyncapi.domain-events.yaml`. */
+export const FULFILLMENT_ORDER_CANCELED = 'fulfillment_order.canceled' satisfies DomainEventName;
 
-        /**
-         * A waiting preorder's buyer was told its date moved or will be missed. Written
-         * in the same transaction as the change to the fulfillment order. `notifications` turns it
-         * into an inbox row, `fulfillment-delayed`; the email is sent by this module from the same
-         * event. The shop only tells: it asks nothing and cancels nothing on its own.
-         */
-        'fulfillment_order.delayed': FulfillmentOrderDelayed;
-    }
-}
-
-/** See `DomainEventMap['shipment.shipped']` above. */
-export const SHIPMENT_SHIPPED = 'shipment.shipped';
-
-/** See `DomainEventMap['shipment.delivered']` above. */
-export const SHIPMENT_DELIVERED = 'shipment.delivered';
-
-/** See `DomainEventMap['shipment.lost']` above. */
-export const SHIPMENT_LOST = 'shipment.lost';
-
-/** See `DomainEventMap['fulfillment_order.held']` above. */
-export const FULFILLMENT_ORDER_HELD = 'fulfillment_order.held';
-
-/** See `DomainEventMap['fulfillment_order.hold_noticed']` above. */
-export const FULFILLMENT_ORDER_HOLD_NOTICED = 'fulfillment_order.hold_noticed';
-
-/** See `DomainEventMap['fulfillment_order.released']` above. */
-export const FULFILLMENT_ORDER_RELEASED = 'fulfillment_order.released';
-
-/** See `DomainEventMap['fulfillment_order.canceled']` above. */
-export const FULFILLMENT_ORDER_CANCELED = 'fulfillment_order.canceled';
-
-/** See `DomainEventMap['fulfillment_order.delayed']` above. */
-export const FULFILLMENT_ORDER_DELAYED = 'fulfillment_order.delayed';
+/** See the `fulfillment_order.delayed` channel in `asyncapi.domain-events.yaml`. */
+export const FULFILLMENT_ORDER_DELAYED = 'fulfillment_order.delayed' satisfies DomainEventName;

@@ -1,0 +1,48 @@
+# The domain events the webhooks module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.webhook.subscription_auto_disabled:
+        address: webhook.subscription_auto_disabled
+        description:
+            Repeated delivery failures switched a subscription off (`./services/attempt.ts`),
+            emitted once, by the call that actually disabled it. `notifications` turns it into a
+            work notice for the staff who manage webhooks.
+        x-transport: in-process
+        messages:
+            WebhookSubscriptionAutoDisabledDomainEvent:
+                $ref: '#/components/messages/WebhookSubscriptionAutoDisabledDomainEvent'
+operations:
+    domainWebhookSubscriptionAutoDisabled:
+        action: send
+        channel:
+            $ref: '#/channels/domain.webhook.subscription_auto_disabled'
+        summary:
+            Repeated delivery failures switched a subscription off (`./services/attempt.ts`), emitted
+            once, by the call that actually disabled it.
+        messages:
+            - $ref:
+                  "#/channels/domain.webhook.subscription_auto_disabled/messages/WebhookSubscriptionAutoDisable\
+                  dDomainEvent"
+components:
+    messages:
+        WebhookSubscriptionAutoDisabledDomainEvent:
+            name: WebhookSubscriptionAutoDisabledDomainEvent
+            title: Webhook subscription auto disabled
+            payload:
+                $ref: '#/components/schemas/WebhookSubscriptionAutoDisabledDomainEventPayload'
+    schemas:
+        WebhookSubscriptionAutoDisabledDomainEventPayload:
+            type: object
+            required:
+                - tenantId
+                - subscriptionId
+                - disabledAt
+            properties:
+                tenantId:
+                    type: string
+                subscriptionId:
+                    type: string
+                disabledAt:
+                    type: string
+                    description: 'ISO instant it was disabled: a later re-enable and disable is a new situation.'
+            additionalProperties: false

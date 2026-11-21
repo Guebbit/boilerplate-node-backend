@@ -67,11 +67,20 @@ const internalSections = (): AsyncSectionName[] =>
         (name): AsyncSectionName => `${name}${INTERNAL_SUFFIX}`
     );
 
+/**
+ * The section every outbox and in-process domain event is declared in: backend-only, so it is in
+ * {@link ASYNC_SECTION_ORDER} and never in {@link SHARED_SECTIONS}. Its modules' own events merge in
+ * as `asyncapi.domain-events.yaml` fragments (`./asyncapi-section-fragments`). Last, because its
+ * schemas may reference the enums an earlier section declares, and the Zod emitter declares in order.
+ */
+const DOMAIN_EVENTS_SECTION = 'domain-events';
+
 /** The order sections are merged in, and therefore the order they appear in the output. */
 const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
     ...resolveModuleAsyncSections(),
     ...internalSections(),
-    'workers'
+    'workers',
+    DOMAIN_EVENTS_SECTION
 ];
 
 /**
@@ -93,13 +102,16 @@ const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
         : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.has(section));
 
 /**
- * Where a section's document lives: the shared file for the domainless queues, a module's own
+ * Where a section's document lives: the shared file for the domainless queues and the domain
+ * events, a module's own
  * `asyncapi.internal.yaml` for a queue that module owns, or its `asyncapi.yaml` for everything
  * else — a module's public event catalogue, or `observability`'s one all-public section.
  */
 const asyncSectionDocument = (section: AsyncSectionName): string => {
     if (section === 'workers')
         return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
+    if (section === DOMAIN_EVENTS_SECTION)
+        return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.domain-events.yaml');
     if (section.endsWith(INTERNAL_SUFFIX))
         return path.join(
             REPO_ROOT,

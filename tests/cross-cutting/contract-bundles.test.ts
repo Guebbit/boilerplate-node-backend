@@ -28,6 +28,7 @@ import {
 import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
 import { allProbes } from '../../scripts/contracts/client-collections-bundle';
 import { SHARED_FILES } from '../../scripts/pairing/spec-identity';
+import * as generatedTypes from '../../src/types/asyncapi.generated';
 import { enabledModules } from '../../src/modules';
 import { REPO_ROOT } from '../../scripts/modules-on-disk';
 
@@ -162,7 +163,12 @@ const asyncDocument = (
     servers: Record<string, { protocol: string }>;
     channels: Record<
         string,
-        { messages?: Record<string, { $ref?: string }>; servers?: { $ref: string }[] }
+        {
+            address?: string;
+            'x-transport'?: string;
+            messages?: Record<string, { $ref?: string }>;
+            servers?: { $ref: string }[];
+        }
     >;
     operations: Record<
         string,
@@ -249,6 +255,10 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
     });
 });
 
+/** A channel the public bundle must not carry: a queue, or a domain event. */
+const backendOnly = (channel: string): boolean =>
+    channel.startsWith('worker.') || channel.startsWith('domain.');
+
 describe('the public AsyncAPI bundle', () => {
     it('carries the SSE channels and none of the backend-only ones', () => {
         /**
@@ -260,8 +270,20 @@ describe('the public AsyncAPI bundle', () => {
         const full = Object.keys(asyncDocument('asyncapi').channels);
         const shared = Object.keys(asyncDocument('asyncapi-public').channels);
 
-        expect(shared).toEqual(full.filter((channel) => !channel.startsWith('worker.')));
+        expect(shared).toEqual(full.filter((channel) => !backendOnly(channel)));
         expect(full.some((channel) => channel.startsWith('worker.'))).toBe(true);
+    });
+
+    it('never carries the domain events, which are not a promise to an API client', () => {
+        /**
+         * A domain event is the modules' own business: the outbox validates against it and no
+         * client subscribes to it. The partner-facing webhook catalogue is a different section.
+         */
+        const full = Object.keys(asyncDocument('asyncapi').channels);
+        const shared = Object.keys(asyncDocument('asyncapi-public').channels);
+
+        expect(full.some((channel) => channel.startsWith('domain.'))).toBe(true);
+        expect(shared.filter((channel) => channel.startsWith('domain.'))).toEqual([]);
     });
 
     it('is a strict subset of the full contract, preamble included', () => {
@@ -280,6 +302,70 @@ describe('the public AsyncAPI bundle', () => {
             expect(full.operations[operationId]).toEqual(definition);
         for (const [message, definition] of Object.entries(shared.components.messages))
             expect(full.components.messages[message]).toEqual(definition);
+    });
+});
+
+describe('the domain-events section', () => {
+    /** The in-process events, as decided: every other domain event is stored through the outbox. */
+    const IN_PROCESS_EVENTS = [
+        'cart.lines_removed',
+        'cart.merge_refused',
+        'order.purchase_hold_placed',
+        'outbox.event_dead',
+        'webhook.subscription_auto_disabled',
+        'wishlist.items_removed'
+    ];
+
+    /** Every `domain.*` channel of the full bundle, by key. */
+    const domainChannels = Object.entries(asyncDocument('asyncapi').channels).filter(([key]) =>
+        key.startsWith('domain.')
+    );
+
+    it('binds no channel to a server, and tags each one outbox or in-process', () => {
+        /**
+         * Neither transport is a broker. A server here would put a domain event on a transport it
+         * never travels, and the generator reads `x-transport`, not a server, to find it.
+         */
+        expect(domainChannels.length).toBeGreaterThan(0);
+        for (const [key, channel] of domainChannels) {
+            expect([key, channel.servers]).toEqual([key, undefined]);
+            expect(['outbox', 'in-process']).toContain(channel['x-transport']);
+        }
+    });
+
+    it('names each channel after its address, and the address is what the outbox stores', () => {
+        for (const [key, channel] of domainChannels)
+            expect([key, channel.address]).toEqual([key, key.replace(/^domain\./u, '')]);
+    });
+
+    it('lists exactly the declared channels in the generated name list', () => {
+        const addresses = domainChannels.map(([, channel]) => channel.address).toSorted();
+
+        expect([...generatedTypes.DOMAIN_EVENT_NAMES].toSorted()).toEqual(addresses);
+    });
+
+    it('stores every event except the six decided in-process ones', () => {
+        const inProcess = domainChannels
+            .filter(([, channel]) => channel['x-transport'] === 'in-process')
+            .map(([, channel]) => channel.address)
+            .toSorted();
+
+        expect(inProcess).toEqual(IN_PROCESS_EVENTS);
+    });
+
+    it('has no channel constant of its own: an event is named by its address', () => {
+        /**
+         * A `DOMAIN_CHANNELS` group would be a second list of the same names, and the webhook
+         * namespaces (`order.*`, `payment.*`) must not pick up a `domain.` key either.
+         */
+        expect(generatedTypes).not.toHaveProperty('DOMAIN_CHANNELS');
+        const constants = Object.entries(generatedTypes)
+            .filter(([name]) => name.endsWith('_CHANNELS'))
+            .flatMap(([, group]) =>
+                typeof group === 'object' ? Object.values(group).map(String) : []
+            );
+
+        expect(constants.filter((channel) => channel.startsWith('domain.'))).toEqual([]);
     });
 });
 

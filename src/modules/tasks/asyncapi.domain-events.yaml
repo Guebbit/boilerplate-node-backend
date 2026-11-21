@@ -1,0 +1,196 @@
+# The domain events the tasks module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.task.opened:
+        address: task.opened
+        description:
+            'A task was inserted (not a repeat of an open one, not spam). Closed codes and ids
+            only: the task page has the rest, and no visitor text rides a bus the outbox persists.'
+        x-transport: outbox
+        messages:
+            TaskOpenedDomainEvent:
+                $ref: '#/components/messages/TaskOpenedDomainEvent'
+    domain.task.overdue:
+        address: task.overdue
+        description:
+            'An open task passed its due date and was claimed by the overdue sweep: said once per
+            task, never again. Same shape and same audience as `task.opened`.'
+        x-transport: outbox
+        messages:
+            TaskOverdueDomainEvent:
+                $ref: '#/components/messages/TaskOverdueDomainEvent'
+    domain.task.due_soon:
+        address: task.due_soon
+        description:
+            'An open task is within three days of its due date and was claimed by the same sweep:
+            said once per task, never again. Same shape and same audience as `task.opened`.'
+        x-transport: outbox
+        messages:
+            TaskDueSoonDomainEvent:
+                $ref: '#/components/messages/TaskDueSoonDomainEvent'
+    domain.task.assigned:
+        address: task.assigned
+        description: Someone gave a task to a colleague (taking your own task does not emit this).
+        x-transport: outbox
+        messages:
+            TaskAssignedDomainEvent:
+                $ref: '#/components/messages/TaskAssignedDomainEvent'
+operations:
+    domainTaskOpened:
+        action: send
+        channel:
+            $ref: '#/channels/domain.task.opened'
+        summary: A task was inserted (not a repeat of an open one, not spam).
+        messages:
+            - $ref: '#/channels/domain.task.opened/messages/TaskOpenedDomainEvent'
+    domainTaskOverdue:
+        action: send
+        channel:
+            $ref: '#/channels/domain.task.overdue'
+        summary:
+            'An open task passed its due date and was claimed by the overdue sweep: said once per task,
+            never again.'
+        messages:
+            - $ref: '#/channels/domain.task.overdue/messages/TaskOverdueDomainEvent'
+    domainTaskDueSoon:
+        action: send
+        channel:
+            $ref: '#/channels/domain.task.due_soon'
+        summary:
+            'An open task is within three days of its due date and was claimed by the same sweep: said
+            once per task, never again.'
+        messages:
+            - $ref: '#/channels/domain.task.due_soon/messages/TaskDueSoonDomainEvent'
+    domainTaskAssigned:
+        action: send
+        channel:
+            $ref: '#/channels/domain.task.assigned'
+        summary: Someone gave a task to a colleague (taking your own task does not emit this).
+        messages:
+            - $ref: '#/channels/domain.task.assigned/messages/TaskAssignedDomainEvent'
+components:
+    messages:
+        TaskOpenedDomainEvent:
+            name: TaskOpenedDomainEvent
+            title: Task opened
+            payload:
+                $ref: '#/components/schemas/TaskOpenedDomainEventPayload'
+        TaskOverdueDomainEvent:
+            name: TaskOverdueDomainEvent
+            title: Task overdue
+            payload:
+                $ref: '#/components/schemas/TaskOverdueDomainEventPayload'
+        TaskDueSoonDomainEvent:
+            name: TaskDueSoonDomainEvent
+            title: Task due soon
+            payload:
+                $ref: '#/components/schemas/TaskDueSoonDomainEventPayload'
+        TaskAssignedDomainEvent:
+            name: TaskAssignedDomainEvent
+            title: Task assigned
+            payload:
+                $ref: '#/components/schemas/TaskAssignedDomainEventPayload'
+    schemas:
+        TaskOpenedDomainEventPayload:
+            type: object
+            required:
+                - tenantId
+                - taskId
+                - kind
+                - routeSet
+            properties:
+                tenantId:
+                    type: string
+                taskId:
+                    type: string
+                kind:
+                    type: string
+                routeSet:
+                    type: string
+                    description: The permission set that works it; its holders are who hear of it.
+                category:
+                    type: string
+                    description: A contact task's category, when the visitor chose one.
+                work:
+                    type: string
+                    description:
+                        'The staff screen that does the work, when the opener named one: see
+                        `TaskDocument.work`.'
+            additionalProperties: false
+        TaskOverdueDomainEventPayload:
+            type: object
+            required:
+                - tenantId
+                - taskId
+                - kind
+                - routeSet
+            properties:
+                tenantId:
+                    type: string
+                taskId:
+                    type: string
+                kind:
+                    type: string
+                routeSet:
+                    type: string
+                    description: The permission set that works it; its holders are who hear of it.
+                category:
+                    type: string
+                    description: A contact task's category, when the visitor chose one.
+                work:
+                    type: string
+                    description:
+                        'The staff screen that does the work, when the opener named one: see
+                        `TaskDocument.work`.'
+            additionalProperties: false
+        TaskDueSoonDomainEventPayload:
+            type: object
+            required:
+                - tenantId
+                - taskId
+                - kind
+                - routeSet
+            properties:
+                tenantId:
+                    type: string
+                taskId:
+                    type: string
+                kind:
+                    type: string
+                routeSet:
+                    type: string
+                    description: The permission set that works it; its holders are who hear of it.
+                category:
+                    type: string
+                    description: A contact task's category, when the visitor chose one.
+                work:
+                    type: string
+                    description:
+                        'The staff screen that does the work, when the opener named one: see
+                        `TaskDocument.work`.'
+            additionalProperties: false
+        TaskAssignedDomainEventPayload:
+            type: object
+            required:
+                - tenantId
+                - taskId
+                - kind
+                - routeSet
+                - assigneeId
+                - assignedAt
+            properties:
+                tenantId:
+                    type: string
+                taskId:
+                    type: string
+                kind:
+                    type: string
+                routeSet:
+                    type: string
+                assigneeId:
+                    type: string
+                    description: Who now holds it, and the only person told.
+                assignedAt:
+                    type: string
+                    description: 'ISO instant of the assignment: a task handed back and forth tells each time.'
+            additionalProperties: false

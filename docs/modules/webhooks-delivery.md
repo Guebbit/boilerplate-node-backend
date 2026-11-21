@@ -41,7 +41,7 @@ published) from ever going stale inside the queue.
 
 **Staff who manage webhooks hear about an endpoint; operators hear a fleet-wide signal, never a per-endpoint one.**
 Once a subscription auto-disables, `services/attempt.ts#announceAutoDisable` audits it and emits
-`webhook.subscription_auto_disabled` (internal: no channel, no webhook). `notifications` turns that
+`webhook.subscription_auto_disabled` (internal: no webhook, only a backend-only `domain-events` channel). `notifications` turns that
 into a work notice in the bell of every member whose role lists `WebhookManagement`, and every
 administrator ([how](./notifications.md#work-notices-for-staff)). No mail: a dead endpoint is worth
 a look, not an interruption. The notice replaces the old mail to whoever created the subscription;

@@ -22,6 +22,14 @@ to, so a bundle that leaves a section out leaves its transport out with it — w
 `shared/contracts/asyncapi.root.yaml` holds what describes the deployment rather than a domain, and
 no channels.
 
+**The domain events are a section too**, and the only one assembled the other way round. Every module that
+emits one ships `src/modules/<name>/asyncapi.domain-events.yaml`, a fragment merged by
+`withSectionFragments` into the `domain-events` section, whose own document
+(`shared/contracts/asyncapi.domain-events.yaml`) holds the kernel's `outbox.event_dead`. The section is
+`backend`-scoped, so it never reaches `asyncapi.public.yaml` and the paired frontend never receives it. It
+binds to no server: `x-transport` says whether an event is stored through the outbox or emitted
+in-process. See [Domain events](./asyncapi-workflow.md#domain-events).
+
 `observability` and `notifications` own their SSE channels because the module serving the stream
 decides what it pushes down it. The `worker.email.send`/`worker.image.digest` queues are shared
 because those two workers are substrate, enqueued by whichever domain needs one sent.
@@ -30,7 +38,9 @@ those queues outright, in a PRIVATE `asyncapi.internal.yaml` section — `backen
 shared queues file, but a module's, so deleting the module deletes the queue's contract along with
 everything else that names it.
 
-Each public section is valid on its own — lintable by `npm run lint:asyncapi:modules`. (A private
+Each public section is valid on its own — lintable by `npm run lint:asyncapi:modules`, which also
+lints the domain-events base document (its one Spectral override waives the "must declare servers"
+rule, since no server serves it). (A private
 `asyncapi.internal.yaml` is the one deliberate exception: it declares no `servers` of its own — its
 channel binds to the shared queues file's `rabbitmqLocal` — so it is valid only once merged, and is
 left out of that glob for that reason.)

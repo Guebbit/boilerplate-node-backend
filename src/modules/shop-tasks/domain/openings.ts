@@ -275,9 +275,9 @@ export interface RefundOwedAfterDispute {
     /** The currency of a kept dispute in another currency than the payment's, if there is one. */
     otherCurrency?: string | undefined;
     /** `true` when staff had marked the refund returned and a late win makes it owed again. */
-    markedReturned?: true | undefined;
+    markedReturned?: boolean | undefined;
     /** `true` when a lost dispute flipped to won, for the wording. */
-    followsFlip?: true | undefined;
+    followsFlip?: boolean | undefined;
 }
 
 /**

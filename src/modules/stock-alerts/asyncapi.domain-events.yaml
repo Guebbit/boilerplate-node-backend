@@ -1,0 +1,46 @@
+# The domain events the stock-alerts module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.stock_alert.sent:
+        address: stock_alert.sent
+        description:
+            "A buyer who asked to be told was told: the mail is queued and the request is gone.
+            Goes through the outbox in the transaction that deleted the request, so the inbox row
+            exists exactly when the request does not. `titles` is the product's name by locale, so
+            the row can name it even after the product is gone."
+        x-transport: outbox
+        messages:
+            StockAlertSentDomainEvent:
+                $ref: '#/components/messages/StockAlertSentDomainEvent'
+operations:
+    domainStockAlertSent:
+        action: send
+        channel:
+            $ref: '#/channels/domain.stock_alert.sent'
+        summary: 'A buyer who asked to be told was told: the mail is queued and the request is gone.'
+        messages:
+            - $ref: '#/channels/domain.stock_alert.sent/messages/StockAlertSentDomainEvent'
+components:
+    messages:
+        StockAlertSentDomainEvent:
+            name: StockAlertSentDomainEvent
+            title: Stock alert sent
+            payload:
+                $ref: '#/components/schemas/StockAlertSentDomainEventPayload'
+    schemas:
+        StockAlertSentDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - productId
+                - titles
+            properties:
+                userId:
+                    type: string
+                productId:
+                    type: string
+                titles:
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false

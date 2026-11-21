@@ -1,0 +1,203 @@
+# The domain events the returns module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.return.requested:
+        address: return.requested
+        description:
+            A return was opened — a withdrawal (born approved, or born closed when it reached the
+            order before dispatch) or a request awaiting staff.
+        x-transport: outbox
+        messages:
+            ReturnRequestedDomainEvent:
+                $ref: '#/components/messages/ReturnRequestedDomainEvent'
+    domain.return.decided:
+        address: return.decided
+        description:
+            "Staff answered a request: approved it or declined it. Written with the decision, so
+            the customer's mail is sent exactly when a decision stood. Internal —"
+        x-transport: outbox
+        messages:
+            ReturnDecidedDomainEvent:
+                $ref: '#/components/messages/ReturnDecidedDomainEvent'
+    domain.return.received:
+        address: return.received
+        description:
+            The goods arrived and went back on sale — one `restock` movement per line, in the same
+            transaction as the status move.
+        x-transport: outbox
+        messages:
+            ReturnReceivedDomainEvent:
+                $ref: '#/components/messages/ReturnReceivedDomainEvent'
+    domain.return.closed:
+        address: return.closed
+        description:
+            "The return is finished: the money went back (or there was none to return). Fires when
+            the refund settles — straight away, or later when the payment sweep completes it. A
+            withdrawal before dispatch fires it at birth, right after `return.requested`: the
+            order's own cancel carries the refund."
+        x-transport: outbox
+        messages:
+            ReturnClosedDomainEvent:
+                $ref: '#/components/messages/ReturnClosedDomainEvent'
+    domain.return.closed_by_hand:
+        address: return.closed_by_hand
+        description:
+            'Staff closed a received return by hand, once they had checked the money themselves. No
+            money moved and the buyer is not mailed, so it is NOT `return.closed`; it only lets
+            `tasks` clear the to-do that asked staff to check. Written with the status move, through
+            the outbox: at-least-once, so a listener dedupes on `meta.eventId`.'
+        x-transport: outbox
+        messages:
+            ReturnClosedByHandDomainEvent:
+                $ref: '#/components/messages/ReturnClosedByHandDomainEvent'
+operations:
+    domainReturnRequested:
+        action: send
+        channel:
+            $ref: '#/channels/domain.return.requested'
+        summary:
+            A return was opened — a withdrawal (born approved, or born closed when it reached the order
+            before dispatch) or a request awaiting staff.
+        messages:
+            - $ref: '#/channels/domain.return.requested/messages/ReturnRequestedDomainEvent'
+    domainReturnDecided:
+        action: send
+        channel:
+            $ref: '#/channels/domain.return.decided'
+        summary: 'Staff answered a request: approved it or declined it.'
+        messages:
+            - $ref: '#/channels/domain.return.decided/messages/ReturnDecidedDomainEvent'
+    domainReturnReceived:
+        action: send
+        channel:
+            $ref: '#/channels/domain.return.received'
+        summary:
+            The goods arrived and went back on sale — one `restock` movement per line, in the same
+            transaction as the status move.
+        messages:
+            - $ref: '#/channels/domain.return.received/messages/ReturnReceivedDomainEvent'
+    domainReturnClosed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.return.closed'
+        summary: 'The return is finished: the money went back (or there was none to return).'
+        messages:
+            - $ref: '#/channels/domain.return.closed/messages/ReturnClosedDomainEvent'
+    domainReturnClosedByHand:
+        action: send
+        channel:
+            $ref: '#/channels/domain.return.closed_by_hand'
+        summary: Staff closed a received return by hand, once they had checked the money themselves.
+        messages:
+            - $ref: '#/channels/domain.return.closed_by_hand/messages/ReturnClosedByHandDomainEvent'
+components:
+    messages:
+        ReturnRequestedDomainEvent:
+            name: ReturnRequestedDomainEvent
+            title: Return requested
+            payload:
+                $ref: '#/components/schemas/ReturnRequestedDomainEventPayload'
+        ReturnDecidedDomainEvent:
+            name: ReturnDecidedDomainEvent
+            title: Return decided
+            payload:
+                $ref: '#/components/schemas/ReturnDecidedDomainEventPayload'
+        ReturnReceivedDomainEvent:
+            name: ReturnReceivedDomainEvent
+            title: Return received
+            payload:
+                $ref: '#/components/schemas/ReturnReceivedDomainEventPayload'
+        ReturnClosedDomainEvent:
+            name: ReturnClosedDomainEvent
+            title: Return closed
+            payload:
+                $ref: '#/components/schemas/ReturnClosedDomainEventPayload'
+        ReturnClosedByHandDomainEvent:
+            name: ReturnClosedByHandDomainEvent
+            title: Return closed by hand
+            payload:
+                $ref: '#/components/schemas/ReturnClosedByHandDomainEventPayload'
+    schemas:
+        ReturnRequestedDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - orderNumber
+                - reason
+                - requestedAt
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                orderNumber:
+                    type: string
+                    description: "The order's number, as the buyer knows it: what a notice names the order by."
+                reason:
+                    $ref: '#/components/schemas/ReturnReason'
+                requestedAt:
+                    type: string
+                    description: When the buyer asked or stated it (ISO), not when the shop recorded it.
+                statedVia:
+                    type: string
+                    description: How a withdrawal was stated; absent on any other reason.
+            additionalProperties: false
+        ReturnDecidedDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - decision
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                decision:
+                    type: string
+                    enum:
+                        - approved
+                        - declined
+            additionalProperties: false
+        ReturnReceivedDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        ReturnClosedDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - refundAmount
+                - currency
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                refundAmount:
+                    type: string
+                currency:
+                    type: string
+                remedy:
+                    $ref: '#/components/schemas/ReturnRemedy'
+            additionalProperties: false
+        ReturnClosedByHandDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false

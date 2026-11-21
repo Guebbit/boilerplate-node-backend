@@ -1,0 +1,725 @@
+# The domain events the payments module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.payment.succeeded:
+        address: payment.succeeded
+        description: >-
+            A payment settled. Emitted alongside `order.status_changed` (`to: 'paid'`), from the
+            same at-most-once write — `webhooks` is the first listener that needs this as its own
+            fact rather than inferred from the order's status.
+
+
+            Delivered through the transactional outbox (`./services/announce.ts`), not emitted
+            inline: at-least-once, so a listener dedupes on `meta.eventId`. It can arrive after the
+            settlement's response, and — when a settlement died after charging — minutes later.
+        x-transport: outbox
+        messages:
+            PaymentSucceededDomainEvent:
+                $ref: '#/components/messages/PaymentSucceededDomainEvent'
+    domain.payment.failed:
+        address: payment.failed
+        description: >-
+            The provider declined the method. Retryable with another method (see
+            `CONFIRMABLE_PAYMENT_STATUSES`), so this can fire more than once for the same order —
+            each attempt is its own fact, same as `paymentsAuditActions.PAYMENT_FAILED`.
+
+
+            Delivered through the transactional outbox (`./services/announce.ts`'s `recordDecline`),
+            written with the `declined` status move: at-least-once, so a listener dedupes on
+            `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentFailedDomainEvent:
+                $ref: '#/components/messages/PaymentFailedDomainEvent'
+    domain.payment.refunded:
+        address: payment.refunded
+        description: >-
+            One refund settled — emitted from `./services/refund-settlement.ts`'s `settleRefund`, on
+            the same at-most-once write, whether an operator asked for it (`refundPayment`) or the
+            automatic `order.canceled` listener did. A payment can raise it more than once: each
+            partial refund is its own fact. `invoicing` is the listener that issues a credit note
+            from it. Absent while a hand-paid refund waits for an operator (`leaveForOperator`): its
+            record is open and nothing has settled yet.
+
+
+            `amount` is THIS refund's, not the payment's. `full` says the refund is the whole
+            payment, the one case where a credit note mirrors the invoice instead of apportioning
+            it.
+
+
+            Delivered through the transactional outbox, written in the transaction that settles the
+            refund record (`./services/refunds.ts`): at-least-once, so a listener dedupes on
+            `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundedDomainEvent:
+                $ref: '#/components/messages/PaymentRefundedDomainEvent'
+    domain.payment.refund_canceled:
+        address: payment.refund_canceled
+        description: >-
+            Staff voided a refund that must never be paid (`./services/refunds.ts`'s
+            `cancelRefund`). No money moved and none will: the record is closed and its share is
+            refundable again. Nothing is credited and no webhook carries it; a staff task or
+            attention row that waited on that refund closes on it.
+
+
+            Delivered through the transactional outbox, written in the transaction that voids the
+            record: at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundCanceledDomainEvent:
+                $ref: '#/components/messages/PaymentRefundCanceledDomainEvent'
+    domain.payment.refund_failed:
+        address: payment.refund_failed
+        description: >-
+            The provider refused a refund, or reported one failed. `final` says whether the refusal
+            ends the retrying (`FINAL_REFUND_FAILURES`): the money has to go back another way, and
+            the buyer is told so. A transient refusal (`final: false`) is retried by the sweep and
+            only worth a digest line. Emitted once per NEW refusal (the first, or a changed reason),
+            so a retry that fails the same way is silent.
+
+
+            `failureReason` is the closed code, never the provider's wording.
+
+
+            Delivered through the transactional outbox, written in the transaction that records the
+            refusal: at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundFailedDomainEvent:
+                $ref: '#/components/messages/PaymentRefundFailedDomainEvent'
+    domain.payment.refund_reversed:
+        address: payment.refund_reversed
+        description: >-
+            The provider took back a refund it had settled (a bank sent the money back). The credit
+            note and a closed return stay; the record is open again and owed another way until staff
+            mark it returned, which fires `payment.refunded` once more for the same `refundId`.
+
+
+            Delivered through the transactional outbox, written in the transaction that reverses the
+            record: at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundReversedDomainEvent:
+                $ref: '#/components/messages/PaymentRefundReversedDomainEvent'
+    domain.payment.dispute_opened:
+        address: payment.dispute_opened
+        description: >-
+            The buyer's bank disputed a card payment, first reported (an inquiry or a chargeback).
+            It is not a refund: nothing is credited and the order does not change. The shop answers
+            in the provider's dashboard before `evidenceDueBy`; a staff task opens on this.
+
+
+            Delivered through the transactional outbox, written in the transaction that stores the
+            dispute: at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentDisputeOpenedDomainEvent:
+                $ref: '#/components/messages/PaymentDisputeOpenedDomainEvent'
+    domain.payment.dispute_updated:
+        address: payment.dispute_updated
+        description: >-
+            A newer report of a dispute already on file: evidence under review, decided, accepted,
+            or a closed one reopened (a late win, a second chargeback). `status` says where it is; a
+            repeated or older report announces nothing.
+
+
+            Delivered through the transactional outbox, written in the transaction that replaces the
+            stored dispute: at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentDisputeUpdatedDomainEvent:
+                $ref: '#/components/messages/PaymentDisputeUpdatedDomainEvent'
+    domain.payment.refund_owed_after_dispute:
+        address: payment.refund_owed_after_dispute
+        description: >-
+            A dispute ended and a refund it had refused (`failureReason: disputed`) is owed again:
+            one event PER refund, written in the transaction that records the dispute's end, so a
+            redelivery or a crash after the commit opens each to-do exactly once. Raised only when
+            no other dispute on the payment is still open. `bankKept` says whether ANY dispute on
+            the payment kept money (the buyer already has it, or the shop kept it); `otherCurrency`
+            is set when a kept dispute is in another currency than the payment's, which the app
+            never subtracted. A dispute the bank had kept money in that then flips to won raises one
+            more per refund staff had marked returned for it (`markedReturned`): the bank took the
+            money back from the buyer, so it is owed again. It also raises the event again for each
+            refund still refused as `disputed`, with `followsFlip` (it only words the to-do: "first
+            lost, then won"). `tasks` replaces a refund's open to-do whenever a new event of this
+            name words it differently.
+
+
+            Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+            `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundOwedAfterDisputeDomainEvent:
+                $ref: '#/components/messages/PaymentRefundOwedAfterDisputeDomainEvent'
+    domain.payment.refund_owed_by_hand:
+        address: payment.refund_owed_by_hand
+        description: >-
+            A refund of a hand-recorded payment opened, so the money is owed outside the app (cash,
+            a transfer): nothing here can send it, and a person has to. Written in the transaction
+            that opens the record; the refund closes on `payment.refunded` or
+            `payment.refund_canceled`.
+
+
+            Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+            `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundOwedByHandDomainEvent:
+                $ref: '#/components/messages/PaymentRefundOwedByHandDomainEvent'
+    domain.payment.amount_mismatch:
+        address: payment.amount_mismatch
+        description: >-
+            The provider reported a success that is not the payment frozen for the order (another
+            amount, currency or payment id). The order was canceled and the refund opened; a person
+            has to look at why. Written in the settlement's transaction.
+
+
+            Delivered through the transactional outbox: at-least-once, so a listener dedupes on
+            `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentAmountMismatchDomainEvent:
+                $ref: '#/components/messages/PaymentAmountMismatchDomainEvent'
+    domain.payment.refund_unrecorded:
+        address: payment.refund_unrecorded
+        description: >-
+            A refund made in the provider's own dashboard that the import could not record: it lost
+            the race on the running total on every attempt (`lost_race`), or it is in another
+            currency than the payment and is never converted (`other_currency`). Money moved at the
+            provider and the books do not show it; `tasks` opens a staff to-do, and "Re-sync
+            refunds" (`POST /payments/{id}/refunds/sync`) runs the import again.
+
+
+            Delivered through the transactional outbox, written in a transaction of its own:
+            at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentRefundUnrecordedDomainEvent:
+                $ref: '#/components/messages/PaymentRefundUnrecordedDomainEvent'
+    domain.payment.return_refund_short:
+        address: payment.return_refund_short
+        description: >-
+            A return asked for money and the payment could not give all of it: part of it already
+            went back another way (goodwill, a dashboard refund, a lost chargeback), or none of it
+            can (`opened` is `0.00`: no succeeded payment, or nothing left on it). `tasks` opens a
+            staff to-do on the return; staff check whether the buyer is owed the rest.
+
+
+            Delivered through the transactional outbox, written in the return's own transaction:
+            at-least-once, so a listener dedupes on `meta.eventId`.
+        x-transport: outbox
+        messages:
+            PaymentReturnRefundShortDomainEvent:
+                $ref: '#/components/messages/PaymentReturnRefundShortDomainEvent'
+operations:
+    domainPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.succeeded'
+        summary: A payment settled.
+        messages:
+            - $ref: '#/channels/domain.payment.succeeded/messages/PaymentSucceededDomainEvent'
+    domainPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.failed'
+        summary: The provider declined the method.
+        messages:
+            - $ref: '#/channels/domain.payment.failed/messages/PaymentFailedDomainEvent'
+    domainPaymentRefunded:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refunded'
+        summary: One refund settled.
+        messages:
+            - $ref: '#/channels/domain.payment.refunded/messages/PaymentRefundedDomainEvent'
+    domainPaymentRefundCanceled:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_canceled'
+        summary: Staff voided a refund that must never be paid (`./services/refunds.ts`'s `cancelRefund`).
+        messages:
+            - $ref: '#/channels/domain.payment.refund_canceled/messages/PaymentRefundCanceledDomainEvent'
+    domainPaymentRefundFailed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_failed'
+        summary: The provider refused a refund, or reported one failed.
+        messages:
+            - $ref: '#/channels/domain.payment.refund_failed/messages/PaymentRefundFailedDomainEvent'
+    domainPaymentRefundReversed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_reversed'
+        summary: The provider took back a refund it had settled (a bank sent the money back).
+        messages:
+            - $ref: '#/channels/domain.payment.refund_reversed/messages/PaymentRefundReversedDomainEvent'
+    domainPaymentDisputeOpened:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.dispute_opened'
+        summary: The buyer's bank disputed a card payment, first reported (an inquiry or a chargeback).
+        messages:
+            - $ref: '#/channels/domain.payment.dispute_opened/messages/PaymentDisputeOpenedDomainEvent'
+    domainPaymentDisputeUpdated:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.dispute_updated'
+        summary:
+            'A newer report of a dispute already on file: evidence under review, decided, accepted, or
+            a closed one reopened (a late win, a second chargeback).'
+        messages:
+            - $ref: '#/channels/domain.payment.dispute_updated/messages/PaymentDisputeUpdatedDomainEvent'
+    domainPaymentRefundOwedAfterDispute:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_owed_after_dispute'
+        summary: A dispute ended and a refund it had refused is owed again.
+        messages:
+            - $ref:
+                  "#/channels/domain.payment.refund_owed_after_dispute/messages/PaymentRefundOwedAfterDisputeDo\
+                  mainEvent"
+    domainPaymentRefundOwedByHand:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_owed_by_hand'
+        summary:
+            'A refund of a hand-recorded payment opened, so the money is owed outside the app (cash, a
+            transfer): nothing here can send it, and a person has to.'
+        messages:
+            - $ref: '#/channels/domain.payment.refund_owed_by_hand/messages/PaymentRefundOwedByHandDomainEvent'
+    domainPaymentAmountMismatch:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.amount_mismatch'
+        summary:
+            The provider reported a success that is not the payment frozen for the order (another
+            amount, currency or payment id).
+        messages:
+            - $ref: '#/channels/domain.payment.amount_mismatch/messages/PaymentAmountMismatchDomainEvent'
+    domainPaymentRefundUnrecorded:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.refund_unrecorded'
+        summary: A refund made in the provider's dashboard could not be recorded.
+        messages:
+            - $ref: '#/channels/domain.payment.refund_unrecorded/messages/PaymentRefundUnrecordedDomainEvent'
+    domainPaymentReturnRefundShort:
+        action: send
+        channel:
+            $ref: '#/channels/domain.payment.return_refund_short'
+        summary: A return asked for money and the payment could not give all of it.
+        messages:
+            - $ref: '#/channels/domain.payment.return_refund_short/messages/PaymentReturnRefundShortDomainEvent'
+components:
+    messages:
+        PaymentSucceededDomainEvent:
+            name: PaymentSucceededDomainEvent
+            title: Payment succeeded
+            payload:
+                $ref: '#/components/schemas/PaymentSucceededDomainEventPayload'
+        PaymentFailedDomainEvent:
+            name: PaymentFailedDomainEvent
+            title: Payment failed
+            payload:
+                $ref: '#/components/schemas/PaymentFailedDomainEventPayload'
+        PaymentRefundedDomainEvent:
+            name: PaymentRefundedDomainEvent
+            title: Payment refunded
+            payload:
+                $ref: '#/components/schemas/PaymentRefundedDomainEventPayload'
+        PaymentRefundCanceledDomainEvent:
+            name: PaymentRefundCanceledDomainEvent
+            title: Payment refund canceled
+            payload:
+                $ref: '#/components/schemas/PaymentRefundCanceledDomainEventPayload'
+        PaymentRefundFailedDomainEvent:
+            name: PaymentRefundFailedDomainEvent
+            title: Payment refund failed
+            payload:
+                $ref: '#/components/schemas/PaymentRefundFailedDomainEventPayload'
+        PaymentRefundReversedDomainEvent:
+            name: PaymentRefundReversedDomainEvent
+            title: Payment refund reversed
+            payload:
+                $ref: '#/components/schemas/PaymentRefundReversedDomainEventPayload'
+        PaymentDisputeOpenedDomainEvent:
+            name: PaymentDisputeOpenedDomainEvent
+            title: Payment dispute opened
+            payload:
+                $ref: '#/components/schemas/PaymentDisputeOpenedDomainEventPayload'
+        PaymentDisputeUpdatedDomainEvent:
+            name: PaymentDisputeUpdatedDomainEvent
+            title: Payment dispute updated
+            payload:
+                $ref: '#/components/schemas/PaymentDisputeUpdatedDomainEventPayload'
+        PaymentRefundOwedAfterDisputeDomainEvent:
+            name: PaymentRefundOwedAfterDisputeDomainEvent
+            title: Payment refund owed after dispute
+            payload:
+                $ref: '#/components/schemas/PaymentRefundOwedAfterDisputeDomainEventPayload'
+        PaymentRefundOwedByHandDomainEvent:
+            name: PaymentRefundOwedByHandDomainEvent
+            title: Payment refund owed by hand
+            payload:
+                $ref: '#/components/schemas/PaymentRefundOwedByHandDomainEventPayload'
+        PaymentAmountMismatchDomainEvent:
+            name: PaymentAmountMismatchDomainEvent
+            title: Payment amount mismatch
+            payload:
+                $ref: '#/components/schemas/PaymentAmountMismatchDomainEventPayload'
+        PaymentRefundUnrecordedDomainEvent:
+            name: PaymentRefundUnrecordedDomainEvent
+            title: Payment refund unrecorded
+            payload:
+                $ref: '#/components/schemas/PaymentRefundUnrecordedDomainEventPayload'
+        PaymentReturnRefundShortDomainEvent:
+            name: PaymentReturnRefundShortDomainEvent
+            title: Payment return refund short
+            payload:
+                $ref: '#/components/schemas/PaymentReturnRefundShortDomainEventPayload'
+    schemas:
+        PaymentSucceededDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        PaymentFailedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        PaymentRefundedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+                - full
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                returnId:
+                    type: string
+                    description: The return this refund pays for, when it is one — `returns` closes it on this.
+                goods:
+                    type: object
+                    required:
+                        - lines
+                        - shipping
+                    properties:
+                        lines:
+                            type: array
+                            items:
+                                type: object
+                                required:
+                                    - productId
+                                    - quantity
+                                properties:
+                                    productId:
+                                        type: string
+                                    quantity:
+                                        type: number
+                                additionalProperties: false
+                        shipping:
+                            type: string
+                            description: The delivery cost inside `amount`, a decimal.
+                    additionalProperties: false
+                    description:
+                        The goods and delivery this refund pays back, when it pays for specific ones — so
+                        `invoicing` credits each line at its own VAT rate. Absent for goodwill and
+                        cancellation refunds, which a credit note spreads across every rate instead.
+                amount:
+                    type: string
+                currency:
+                    type: string
+                full:
+                    type: boolean
+            additionalProperties: false
+        PaymentRefundCanceledDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: string
+                currency:
+                    type: string
+            additionalProperties: false
+        PaymentRefundFailedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+                - failureReason
+                - final
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: string
+                currency:
+                    type: string
+                failureReason:
+                    $ref: '#/components/schemas/RefundFailureReason'
+                final:
+                    type: boolean
+            additionalProperties: false
+        PaymentRefundReversedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+                - failureReason
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: string
+                currency:
+                    type: string
+                failureReason:
+                    $ref: '#/components/schemas/RefundFailureReason'
+            additionalProperties: false
+        PaymentDisputeOpenedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - disputeId
+                - kind
+                - status
+                - reason
+                - amount
+                - currency
+                - fundsWithdrawn
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                disputeId:
+                    type: string
+                    description: The provider's dispute id.
+                kind:
+                    $ref: '#/components/schemas/DisputeKind'
+                status:
+                    $ref: '#/components/schemas/DisputeStatus'
+                reason:
+                    $ref: '#/components/schemas/DisputeReason'
+                amount:
+                    type: string
+                currency:
+                    type: string
+                fundsWithdrawn:
+                    type: boolean
+                evidenceDueBy:
+                    type: string
+            additionalProperties: false
+        PaymentDisputeUpdatedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - disputeId
+                - kind
+                - status
+                - reason
+                - amount
+                - currency
+                - fundsWithdrawn
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                disputeId:
+                    type: string
+                    description: The provider's dispute id.
+                kind:
+                    $ref: '#/components/schemas/DisputeKind'
+                status:
+                    $ref: '#/components/schemas/DisputeStatus'
+                reason:
+                    $ref: '#/components/schemas/DisputeReason'
+                amount:
+                    type: string
+                currency:
+                    type: string
+                fundsWithdrawn:
+                    type: boolean
+                evidenceDueBy:
+                    type: string
+            additionalProperties: false
+        PaymentRefundOwedAfterDisputeDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - disputeId
+                - amount
+                - currency
+                - reversed
+                - bankKept
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                disputeId:
+                    type: string
+                amount:
+                    type: string
+                currency:
+                    type: string
+                reversed:
+                    type: boolean
+                    description: '`true` when the bank had taken the refund back after it settled, else it was refused.'
+                bankKept:
+                    type: boolean
+                otherCurrency:
+                    type: string
+                markedReturned:
+                    type: boolean
+                    description: '`true` when staff had marked the refund returned and a late win makes it owed again.'
+                followsFlip:
+                    type: boolean
+                    description: '`true` when a lost dispute flipped to won, for the wording.'
+            additionalProperties: false
+        PaymentRefundOwedByHandDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                amount:
+                    type: string
+                currency:
+                    type: string
+            additionalProperties: false
+        PaymentAmountMismatchDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        PaymentRefundUnrecordedDomainEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundRef
+                - amount
+                - currency
+                - reason
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundRef:
+                    type: string
+                    description: The provider's refund id, to find it in the dashboard.
+                amount:
+                    type: string
+                currency:
+                    type: string
+                reason:
+                    type: string
+                    enum:
+                        - lost_race
+                        - other_currency
+            additionalProperties: false
+        PaymentReturnRefundShortDomainEventPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - asked
+                - opened
+                - currency
+                - cause
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                asked:
+                    type: string
+                    description: What the return asked for, a decimal in `currency`.
+                opened:
+                    type: string
+                    description: What the refund record opened for, a decimal; `0.00` when none was opened.
+                currency:
+                    type: string
+                cause:
+                    type: string
+                    enum:
+                        - no_payment
+                        - used_up
+                    description:
+                        'Why it came up short: `no_payment` when no succeeded payment stands behind the order,
+                        `used_up` when the payment had less left than asked (it went back another
+                        way).'
+            additionalProperties: false

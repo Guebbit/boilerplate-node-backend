@@ -1,0 +1,156 @@
+# The domain events the inventory module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.inventory.reservation_expired:
+        address: inventory.reservation_expired
+        description:
+            A hold's window closed before the order was paid for; its units are already released.
+            Emitted AFTER the release, past tense on purpose — the listener (`orders`) cancels the
+            order rather than approving a plan, so it doesn't stay `pending` with its stock gone.
+        x-transport: outbox
+        messages:
+            InventoryReservationExpiredDomainEvent:
+                $ref: '#/components/messages/InventoryReservationExpiredDomainEvent'
+    domain.inventory.backorder_allocated:
+        address: inventory.backorder_allocated
+        description: >-
+            Stock arrived for a paid preorder: some of an order's preorder units of one product just
+            became real, set-aside units. Written through the outbox in the receipt's own
+            transaction, so it exists exactly when the allocation does.
+
+
+            `waiting` is what is STILL a preorder claim on that order for that product after this
+            allocation — a state, not a delta, so a redelivery is harmless: `delivery` releases
+            whatever it holds beyond `waiting` and, the second time, finds nothing beyond it. `0`
+            means the order's preorder units of that product are all covered.
+        x-transport: outbox
+        messages:
+            InventoryBackorderAllocatedDomainEvent:
+                $ref: '#/components/messages/InventoryBackorderAllocatedDomainEvent'
+    domain.inventory.stock_retaken:
+        address: inventory.stock_retaken
+        description:
+            "A payment landed on a hold that had been released, and its units were taken again
+            inside the payment's transaction. The counters moved there, where the catalogue's stock
+            copy cannot be written (it would not roll back), so this module refreshes it on the
+            announcement. Eventual is fine, and a redelivery is harmless: it only re-reads."
+        x-transport: outbox
+        messages:
+            InventoryStockRetakenDomainEvent:
+                $ref: '#/components/messages/InventoryStockRetakenDomainEvent'
+    domain.inventory.hold_orphaned:
+        address: inventory.hold_orphaned
+        description:
+            "An order was paid and nothing was set aside for it: its hold never existed, or was
+            given up and the shelf could not cover it again. Written in the payment's own
+            transaction. `tasks` opens the work from it and closes it when the order is canceled or
+            ships."
+        x-transport: outbox
+        messages:
+            InventoryHoldOrphanedDomainEvent:
+                $ref: '#/components/messages/InventoryHoldOrphanedDomainEvent'
+operations:
+    domainInventoryReservationExpired:
+        action: send
+        channel:
+            $ref: '#/channels/domain.inventory.reservation_expired'
+        summary: A hold's window closed before the order was paid for; its units are already released.
+        messages:
+            - $ref:
+                  "#/channels/domain.inventory.reservation_expired/messages/InventoryReservationExpiredDomainEv\
+                  ent"
+    domainInventoryBackorderAllocated:
+        action: send
+        channel:
+            $ref: '#/channels/domain.inventory.backorder_allocated'
+        summary:
+            "Stock arrived for a paid preorder: some of an order's preorder units of one product just
+            became real, set-aside units."
+        messages:
+            - $ref:
+                  "#/channels/domain.inventory.backorder_allocated/messages/InventoryBackorderAllocatedDomainEv\
+                  ent"
+    domainInventoryStockRetaken:
+        action: send
+        channel:
+            $ref: '#/channels/domain.inventory.stock_retaken'
+        summary:
+            A payment landed on a hold that had been released, and its units were taken again inside
+            the payment's transaction.
+        messages:
+            - $ref: '#/channels/domain.inventory.stock_retaken/messages/InventoryStockRetakenDomainEvent'
+    domainInventoryHoldOrphaned:
+        action: send
+        channel:
+            $ref: '#/channels/domain.inventory.hold_orphaned'
+        summary:
+            'An order was paid and nothing was set aside for it: its hold never existed, or was given
+            up and the shelf could not cover it again.'
+        messages:
+            - $ref: '#/channels/domain.inventory.hold_orphaned/messages/InventoryHoldOrphanedDomainEvent'
+components:
+    messages:
+        InventoryReservationExpiredDomainEvent:
+            name: InventoryReservationExpiredDomainEvent
+            title: Inventory reservation expired
+            payload:
+                $ref: '#/components/schemas/InventoryReservationExpiredDomainEventPayload'
+        InventoryBackorderAllocatedDomainEvent:
+            name: InventoryBackorderAllocatedDomainEvent
+            title: Inventory backorder allocated
+            payload:
+                $ref: '#/components/schemas/InventoryBackorderAllocatedDomainEventPayload'
+        InventoryStockRetakenDomainEvent:
+            name: InventoryStockRetakenDomainEvent
+            title: Inventory stock retaken
+            payload:
+                $ref: '#/components/schemas/InventoryStockRetakenDomainEventPayload'
+        InventoryHoldOrphanedDomainEvent:
+            name: InventoryHoldOrphanedDomainEvent
+            title: Inventory hold orphaned
+            payload:
+                $ref: '#/components/schemas/InventoryHoldOrphanedDomainEventPayload'
+    schemas:
+        InventoryReservationExpiredDomainEventPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+            additionalProperties: false
+        InventoryBackorderAllocatedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - productId
+                - waiting
+            properties:
+                orderId:
+                    type: string
+                productId:
+                    type: string
+                waiting:
+                    type: number
+            additionalProperties: false
+        InventoryStockRetakenDomainEventPayload:
+            type: object
+            required:
+                - orderId
+                - productIds
+            properties:
+                orderId:
+                    type: string
+                productIds:
+                    type: array
+                    items:
+                        type: string
+            additionalProperties: false
+        InventoryHoldOrphanedDomainEventPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+            additionalProperties: false

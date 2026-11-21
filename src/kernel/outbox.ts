@@ -29,30 +29,23 @@ import {
     outboxEventsRetriedTotal,
     setOutboxPendingReader
 } from '@infrastructure/observability/metrics-outbox';
+import { domainEventsWired, emitDomainEvent } from './events';
 import {
-    domainEventsWired,
-    emitDomainEvent,
+    DOMAIN_EVENT_NAMES,
+    DOMAIN_EVENT_SCHEMAS,
     type DomainEventMap,
     type DomainEventName
-} from './events';
+} from '@types';
 import { outboxConfig } from '@kernel/config';
 import { outboxRuleData } from './outbox.generated';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { DAY_SECONDS } from '@domain-primitives/time';
 
-declare module './events' {
-    interface DomainEventMap {
-        /**
-         * An outbox row ran out of attempts and was parked as `dead`. A plain in-process emit, not an
-         * outbox row: an outbox row about the outbox could itself die and loop. Internal — no channel
-         * carries it; `notifications` tells the administrators.
-         */
-        'outbox.event_dead': { eventId: string; eventName: string; aggregateId: string };
-    }
-}
-
-/** See `DomainEventMap['outbox.event_dead']` above. */
+/**
+ * See the `outbox.event_dead` channel in `shared/contracts/asyncapi.domain-events.yaml`: a plain
+ * in-process emit, not an outbox row, because a row about the outbox could itself die and loop.
+ */
 export const OUTBOX_EVENT_DEAD = 'outbox.event_dead';
 
 /** Every state an outbox row can be in — the schema's `enum`, and the source of {@link OutboxStatus}. */
@@ -101,7 +94,15 @@ const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventModel>(
         lastError: { type: String },
         publishedAt: { type: Date }
     },
-    { timestamps: { createdAt: true, updatedAt: false } }
+    {
+        timestamps: { createdAt: true, updatedAt: false },
+        /**
+         * Mongoose drops an empty object on save by default. A payload's `{}` is a fact (a
+         * hard-deleted product has no `titles`), and the row would then fail its own schema.
+         * https://mongoosejs.com/docs/guide.html#minimize
+         */
+        minimize: false
+    }
 );
 
 /**
@@ -248,28 +249,38 @@ const claim = (row: OutboxRow): Promise<{ token: string; attempts: number } | nu
         .then((claimed) => (claimed === null ? null : { token, attempts: claimed.attempts }));
 };
 
+/** Whether a stored name is one the `domain-events` contract declares. */
+const isDomainEventName = (name: string): name is DomainEventName =>
+    DOMAIN_EVENT_NAMES.some((known) => known === name);
+
 /**
  * Hand one row to the event bus. Never rejects.
  *
+ * The stored payload is checked against its contract first. A name or a shape the contract does not
+ * know fails the row like a consumer would: retried, then dead. Retried rather than dead at once,
+ * because during a rolling deploy the retry may land on the newer build that does know it.
+ * An unknown field is dropped, not refused (the schemas are tolerant readers).
+ *
  * @returns `undefined` when every consumer succeeded, otherwise what to record as the failure
  */
-const dispatch = (row: OutboxRow): Promise<string | undefined> =>
+const dispatch = (row: OutboxRow): Promise<string | undefined> => {
+    if (!isDomainEventName(row.name)) return Promise.resolve(`unknown event name "${row.name}"`);
+
     /**
-     * Both casts name what `enqueue` stored: `name` was a `DomainEventName` and `payload` the map's
-     * value for it (the row is written only through `enqueue`, which is typed). The compiler cannot
-     * see through the stored string and `Mixed`. A name nobody subscribes to any more has no
-     * handlers.
+     * Zod: `safeParse` returns a result instead of throwing. On success `data` is the payload with
+     * unknown fields dropped. https://zod.dev/api#safeparse
      */
-    emitDomainEvent<DomainEventName>(
-        row.name as DomainEventName,
-        row.payload as DomainEventMap[DomainEventName],
-        {
-            eventId: String(row._id)
-        }
-    ).then(
+    const parsed = DOMAIN_EVENT_SCHEMAS[row.name].safeParse(row.payload);
+    if (!parsed.success)
+        return Promise.resolve(`payload fails its schema: ${parsed.error.message}`);
+
+    return emitDomainEvent<DomainEventName>(row.name, parsed.data, {
+        eventId: String(row._id)
+    }).then(
         (settled) => (settled ? undefined : 'a consumer failed'),
         (error: unknown) => extractErrorMessage(error, String(error))
     );
+};
 
 /** Logged when a result write misses: the claim lapsed and a peer owns the row now. */
 const warnLeaseLost = (row: OutboxRow): void => {

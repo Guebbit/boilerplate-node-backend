@@ -1,0 +1,178 @@
+# The domain events the account module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.account.sessions_revoked:
+        address: account.sessions_revoked
+        description:
+            'The account''s owner ended every session (logout everywhere), recovered the account
+            through a password reset, or reported an email change as not theirs: each means "I may
+            be compromised". `api-keys` is the subscriber, revoking what the person minted, since a
+            key outlives every session.'
+        x-transport: outbox
+        messages:
+            AccountSessionsRevokedDomainEvent:
+                $ref: '#/components/messages/AccountSessionsRevokedDomainEvent'
+    domain.account.authenticator_removed:
+        address: account.authenticator_removed
+        description:
+            "A staff member's last authenticator app was removed: their role grants nothing from
+            now on, and `api-keys` revokes what they minted under it. Not a compromise, so it is not
+            a session revocation."
+        x-transport: outbox
+        messages:
+            AccountAuthenticatorRemovedDomainEvent:
+                $ref: '#/components/messages/AccountAuthenticatorRemovedDomainEvent'
+    domain.account.analytics_consent_withdrawn:
+        address: account.analytics_consent_withdrawn
+        description:
+            'The owner withdrew analytics consent (`true` → `false`), committed with the profile
+            save. `account` is its own subscriber: it asks the analytics provider to forget the id,
+            since what was captured under the consent is no longer lawful to keep (GDPR Art. 7(3),
+            17).'
+        x-transport: outbox
+        messages:
+            AccountAnalyticsConsentWithdrawnDomainEvent:
+                $ref: '#/components/messages/AccountAnalyticsConsentWithdrawnDomainEvent'
+    domain.account.export_failed:
+        address: account.export_failed
+        description:
+            'A data export could not be built (GDPR Art. 12(3): the person is owed their file
+            within a month), committed with the move of its row to `failed`. `tasks` opens the work
+            from it.'
+        x-transport: outbox
+        messages:
+            AccountExportFailedDomainEvent:
+                $ref: '#/components/messages/AccountExportFailedDomainEvent'
+    domain.account.export_ready:
+        address: account.export_ready
+        description:
+            A data export is ready, committed with the move of its row to `ready`. A later ready
+            export is what closes the work an earlier failure opened.
+        x-transport: outbox
+        messages:
+            AccountExportReadyDomainEvent:
+                $ref: '#/components/messages/AccountExportReadyDomainEvent'
+operations:
+    domainAccountSessionsRevoked:
+        action: send
+        channel:
+            $ref: '#/channels/domain.account.sessions_revoked'
+        summary: The account's owner may be compromised, so what their sessions minted is revoked.
+        messages:
+            - $ref: '#/channels/domain.account.sessions_revoked/messages/AccountSessionsRevokedDomainEvent'
+    domainAccountAuthenticatorRemoved:
+        action: send
+        channel:
+            $ref: '#/channels/domain.account.authenticator_removed'
+        summary:
+            "A staff member's last authenticator app was removed: their role grants nothing from now
+            on, and `api-keys` revokes what they minted under it."
+        messages:
+            - $ref:
+                  "#/channels/domain.account.authenticator_removed/messages/AccountAuthenticatorRemovedDomainEv\
+                  ent"
+    domainAccountAnalyticsConsentWithdrawn:
+        action: send
+        channel:
+            $ref: '#/channels/domain.account.analytics_consent_withdrawn'
+        summary: The owner withdrew analytics consent (`true` → `false`), committed with the profile save.
+        messages:
+            - $ref:
+                  "#/channels/domain.account.analytics_consent_withdrawn/messages/AccountAnalyticsConsentWithdr\
+                  awnDomainEvent"
+    domainAccountExportFailed:
+        action: send
+        channel:
+            $ref: '#/channels/domain.account.export_failed'
+        summary: A data export could not be built (GDPR Art.
+        messages:
+            - $ref: '#/channels/domain.account.export_failed/messages/AccountExportFailedDomainEvent'
+    domainAccountExportReady:
+        action: send
+        channel:
+            $ref: '#/channels/domain.account.export_ready'
+        summary: A data export is ready, committed with the move of its row to `ready`.
+        messages:
+            - $ref: '#/channels/domain.account.export_ready/messages/AccountExportReadyDomainEvent'
+components:
+    messages:
+        AccountSessionsRevokedDomainEvent:
+            name: AccountSessionsRevokedDomainEvent
+            title: Account sessions revoked
+            payload:
+                $ref: '#/components/schemas/AccountSessionsRevokedDomainEventPayload'
+        AccountAuthenticatorRemovedDomainEvent:
+            name: AccountAuthenticatorRemovedDomainEvent
+            title: Account authenticator removed
+            payload:
+                $ref: '#/components/schemas/AccountAuthenticatorRemovedDomainEventPayload'
+        AccountAnalyticsConsentWithdrawnDomainEvent:
+            name: AccountAnalyticsConsentWithdrawnDomainEvent
+            title: Account analytics consent withdrawn
+            payload:
+                $ref: '#/components/schemas/AccountAnalyticsConsentWithdrawnDomainEventPayload'
+        AccountExportFailedDomainEvent:
+            name: AccountExportFailedDomainEvent
+            title: Account export failed
+            payload:
+                $ref: '#/components/schemas/AccountExportFailedDomainEventPayload'
+        AccountExportReadyDomainEvent:
+            name: AccountExportReadyDomainEvent
+            title: Account export ready
+            payload:
+                $ref: '#/components/schemas/AccountExportReadyDomainEventPayload'
+    schemas:
+        AccountSessionsRevokedDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - reason
+            properties:
+                userId:
+                    type: string
+                reason:
+                    title: SessionsRevokedReason
+                    type: string
+                    enum:
+                        - password-reset
+                        - logout-all
+                        - email-change-undo
+            additionalProperties: false
+        AccountAuthenticatorRemovedDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        AccountAnalyticsConsentWithdrawnDomainEventPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        AccountExportFailedDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - exportId
+            properties:
+                userId:
+                    type: string
+                exportId:
+                    type: string
+            additionalProperties: false
+        AccountExportReadyDomainEventPayload:
+            type: object
+            required:
+                - userId
+                - exportId
+            properties:
+                userId:
+                    type: string
+                exportId:
+                    type: string
+            additionalProperties: false

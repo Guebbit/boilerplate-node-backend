@@ -1,80 +1,22 @@
 /**
  * @module
- * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. Each one is
+ * Domain events this module emits, declared in `./asyncapi.domain-events.yaml`. Each one is
  * projected into `webhooks`' public catalogue by `module.ts`'s `publicEvents`.
  */
 
-import type { ReturnReason, ReturnRemedy } from '@types';
+import type { DomainEventName } from '@kernel/events';
 
-/** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
-declare module '@kernel/events' {
-    interface DomainEventMap {
-        /**
-         * A return was opened — a withdrawal (born approved, or born closed when it reached the
-         * order before dispatch) or a request awaiting staff.
-         */
-        'return.requested': {
-            returnId: string;
-            orderId: string;
-            /** The order's number, as the buyer knows it: what a notice names the order by. */
-            orderNumber: string;
-            reason: ReturnReason;
-            /** When the buyer asked or stated it (ISO), not when the shop recorded it. */
-            requestedAt: string;
-            /** How a withdrawal was stated; absent on any other reason. */
-            statedVia?: string;
-        };
+/** See the `return.requested` channel in `asyncapi.domain-events.yaml`. */
+export const RETURN_REQUESTED = 'return.requested' satisfies DomainEventName;
 
-        /**
-         * Staff answered a request: approved it or declined it. Written with the decision, so the
-         * customer's mail is sent exactly when a decision stood. Internal — no AsyncAPI channel
-         * carries it.
-         */
-        'return.decided': { returnId: string; orderId: string; decision: 'approved' | 'declined' };
+/** See the `return.received` channel in `asyncapi.domain-events.yaml`. */
+export const RETURN_RECEIVED = 'return.received' satisfies DomainEventName;
 
-        /**
-         * The goods arrived and went back on sale — one `restock` movement per line, in the same
-         * transaction as the status move.
-         */
-        'return.received': { returnId: string; orderId: string };
+/** See the `return.closed` channel in `asyncapi.domain-events.yaml`. */
+export const RETURN_CLOSED = 'return.closed' satisfies DomainEventName;
 
-        /**
-         * The return is finished: the money went back (or there was none to return). Fires when
-         * the refund settles — straight away, or later when the payment sweep completes it. A
-         * withdrawal before dispatch fires it at birth, right after `return.requested`: the order's
-         * own cancel carries the refund.
-         */
-        'return.closed': {
-            returnId: string;
-            orderId: string;
-            refundAmount: string;
-            currency: string;
-            /** What the buyer was given; absent on a return born closed. */
-            remedy?: ReturnRemedy;
-        };
+/** See the `return.decided` channel in `asyncapi.domain-events.yaml`. */
+export const RETURN_DECIDED = 'return.decided' satisfies DomainEventName;
 
-        /**
-         * Staff closed a received return by hand, once they had checked the money themselves. No
-         * money moved and the buyer is not mailed, so it is NOT `return.closed`; it only lets `tasks`
-         * clear the to-do that asked staff to check. Written with the status move, through the
-         * outbox: at-least-once, so a listener dedupes on `meta.eventId`. Internal only.
-         */
-        'return.closed_by_hand': { returnId: string; orderId: string };
-    }
-}
-
-/** See `DomainEventMap['return.requested']` above. */
-export const RETURN_REQUESTED = 'return.requested';
-
-/** See `DomainEventMap['return.received']` above. */
-export const RETURN_RECEIVED = 'return.received';
-
-/** See `DomainEventMap['return.closed']` above. */
-export const RETURN_CLOSED = 'return.closed';
-
-/** See `DomainEventMap['return.decided']` above. */
-export const RETURN_DECIDED = 'return.decided';
-
-/** See `DomainEventMap['return.closed_by_hand']` above. */
-export const RETURN_CLOSED_BY_HAND = 'return.closed_by_hand';
+/** See the `return.closed_by_hand` channel in `asyncapi.domain-events.yaml`. */
+export const RETURN_CLOSED_BY_HAND = 'return.closed_by_hand' satisfies DomainEventName;

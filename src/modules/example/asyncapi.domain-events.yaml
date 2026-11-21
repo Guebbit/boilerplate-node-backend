@@ -1,0 +1,40 @@
+# The domain events the example module emits — merged into the `domain-events` section
+# (`shared/contracts/asyncapi.domain-events.yaml`), backend-only. A fragment, not a document.
+channels:
+    domain.example.published:
+        address: example.published
+        description: An example moved to `published`, for the first time or after being archived.
+        x-transport: outbox
+        messages:
+            ExamplePublishedDomainEvent:
+                $ref: '#/components/messages/ExamplePublishedDomainEvent'
+operations:
+    domainExamplePublished:
+        action: send
+        channel:
+            $ref: '#/channels/domain.example.published'
+        summary: An example moved to `published`, for the first time or after being archived.
+        messages:
+            - $ref: '#/channels/domain.example.published/messages/ExamplePublishedDomainEvent'
+components:
+    messages:
+        ExamplePublishedDomainEvent:
+            name: ExamplePublishedDomainEvent
+            title: Example published
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedDomainEventPayload'
+    schemas:
+        ExamplePublishedDomainEventPayload:
+            type: object
+            required:
+                - exampleId
+                - userId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                userId:
+                    type: string
+                title:
+                    type: string
+            additionalProperties: false
