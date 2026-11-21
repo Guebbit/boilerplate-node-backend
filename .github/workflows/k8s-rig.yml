@@ -1,0 +1,93 @@
+name: Kubernetes rig
+
+# The real-cluster half of the Kubernetes coverage: `k8s/rig.sh run` builds the runtime image, creates a
+# kind cluster, deploys `k8s/base` through the kind overlay and drills a rolling restart under load.
+# The cheap half (the `_FILE` secret names agree across the manifests, compose and the rig) is a test
+# in `tests/cross-cutting/production-topology.test.ts` and runs on every PR in `ci.yml`.
+#
+# Its own workflow on purpose, so it gates no merge: it takes minutes and ~3 GB, and `ci.yml`'s `ci`
+# aggregate cannot depend on a job in another workflow anyway.
+#
+# What each file proves, and the local way to run it: docs/build/kubernetes-testing.md#in-ci
+
+on:
+    schedule:
+        # Monday, after the image scan (06:00): the base images and kind move between merges too.
+        - cron: '30 6 * * 1'
+    pull_request:
+        paths:
+            - 'k8s/**'
+            - 'docker/Dockerfile'
+            - '.github/workflows/k8s-rig.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: k8s-rig-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    # kind v0.33.0 and the Kubernetes release it is drilled against. kubectl may differ from the node
+    # by one minor at most; the node is pinned to 1.35.8 in k8s/overlays/kind/kind-cluster.yaml.
+    # A new release: bump the version and the sha together, from the release's own checksum file.
+    # https://kind.sigs.k8s.io/docs/user/quick-start/#installation
+    KIND_VERSION: v0.33.0
+    KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+    # https://kubernetes.io/releases/download/#binaries
+    KUBECTL_VERSION: v1.35.8
+    KUBECTL_SHA256: 874d5e72dbb819f43cff16bcd1e4f8bac5b7f2361fe1e55049b0a6c676fb0cbf
+
+jobs:
+    rig:
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Setup
+              uses: ./.github/actions/setup
+
+            # Downloaded, checked against the sha above, then installed. A mismatch fails the step
+            # before anything is made executable.
+            - name: Install kind and kubectl
+              run: |
+                  curl -fsSL -o kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+                  echo "${KIND_SHA256}  kind" | sha256sum --check --strict
+                  curl -fsSL -o kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+                  echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check --strict
+                  sudo install -m 0755 kind kubectl /usr/local/bin/
+                  kind version
+                  kubectl version --client
+
+            # `run` deletes the cluster however it ends, and prints the pod states and the logs of
+            # whatever is not Running when a wait fails.
+            - name: Build the image, create the cluster and drill a rolling restart
+              env:
+                  CONTAINER_ENGINE: docker
+              run: npm run k8s:rig -- run
+
+    rig-notify:
+        # Only the scheduled run speaks: a PR run shows its own red square. One issue, updated in
+        # place. Separate from `rig` so the job that runs a cluster holds no `issues: write`.
+        needs: [rig]
+        if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            issues: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+            - name: Open or update the rig-failure issue
+              uses: ./.github/actions/notify-failure
+              with:
+                  title: 'Weekly Kubernetes rig failed'
+                  label: 'k8s-rig'
+                  workflow-name: 'Kubernetes rig'
