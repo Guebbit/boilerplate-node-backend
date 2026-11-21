@@ -49,7 +49,7 @@ describe('GET /products in cookie mode', () => {
         const response = await api().get('/products');
 
         expect(response.headers['set-cookie']).toBeUndefined();
-        expect(response.headers['cache-control']).toMatch(/^public, max-age=/);
+        expect(response.headers['cache-control']).toBe('public, no-cache');
     });
 });
 
