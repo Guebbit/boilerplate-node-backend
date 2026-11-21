@@ -235,6 +235,11 @@ email". A forward override to `shipped` or `delivered` is **refused while any un
 (`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the ledger never counted out. A move to
 `processing` ships nothing and is allowed.
 
+If the fulfillment records cannot follow the override (a unit changed state in between), the listener
+throws instead of dropping the refusal: the outbox retries, and a persistent failure is a dead event
+(`OutboxEventsDead`, the admin `outbox-dead` bell). Until then the order reads `shipped` while a
+fulfillment order is still open, so staff watch for that bell after an override.
+
 ## Cancelling what has not shipped
 
 A cancel of the whole order is only possible while nothing has shipped; this module hears

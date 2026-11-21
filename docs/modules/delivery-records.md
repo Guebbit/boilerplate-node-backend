@@ -145,6 +145,13 @@ shipment): waiting for all three would hold back goods already on the shelf, and
 refused. Staff have no button for it — they can still hold the new `open` order to ship everything
 together. No route reaches it: `inventory` allocates, and this module listens.
 
+**A refused split is not dropped.** If the split loses a race (the hold changed under it) the
+listener throws, so the outbox retries the event; each retry recounts what is still held, so it only
+releases what is left. A split that never succeeds ends as a dead event: the `OutboxEventsDead`
+alert fires and the admin `outbox-dead` bell rings. Staff cannot release an `awaiting_stock` hold by
+hand (the ledger never counted those goods out): the instrument is to [revive the dead event](../understand/outbox.md#poison-events), or to
+cancel what has not shipped.
+
 ```mermaid
 sequenceDiagram
     participant A as Admin

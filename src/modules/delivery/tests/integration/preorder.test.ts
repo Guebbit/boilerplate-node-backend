@@ -20,6 +20,7 @@ import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { deliveryService } from '@modules/delivery/services';
+import { fulfillmentOrderRepository } from '@modules/delivery/repository';
 import deliveryModule from '@modules/delivery/module';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
@@ -140,6 +141,38 @@ describe('stock arriving for a paid preorder', () => {
             [1, 'on_hold'],
             [2, 'open']
         ]);
+    });
+
+    /**
+     * Spies on `claim`, an internal of the repository: a write winning the race for the held
+     * fulfillment order cannot be staged through a door inside the one transaction.
+     */
+    it('throws a split that loses its race, and the retry releases what is still held', async () => {
+        const { orderId, productIds } = await paidPreorderOrder([
+            { quantity: 3, releaseDate: inDays(30) }
+        ]);
+        await fulfillmentOrdersOf(orderId);
+        // The event is called by hand: a real receipt would announce it and the listener would race.
+        const claim = jest.spyOn(fulfillmentOrderRepository, 'claim').mockResolvedValueOnce(null);
+
+        try {
+            await expect(
+                deliveryService.releaseAllocated(orderId, productIds[0], 1)
+            ).rejects.toThrow('DELIVERY_NOT_RELEASABLE');
+        } finally {
+            claim.mockRestore();
+        }
+        expect(await fulfillmentOrdersOf(orderId)).toHaveLength(1);
+
+        await deliveryService.releaseAllocated(orderId, productIds[0], 1);
+
+        const all = await fulfillmentOrdersOf(orderId);
+        expect(all.map(({ number, status }) => [number, status])).toEqual([
+            [1, 'on_hold'],
+            [2, 'open']
+        ]);
+        // Two of the three units move; a split that released one would leave two held.
+        expect(all.map(({ lines }) => lines[0].quantity)).toEqual([1, 2]);
     });
 
     it('serves the earliest promise first when an order holds the same product for two dates', async () => {

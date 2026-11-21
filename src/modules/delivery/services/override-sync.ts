@@ -17,7 +17,7 @@ import { OrderStatus } from '@types';
 import { remainderLines, remainingOf } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
-import { runAct } from './act';
+import { runActOrThrow } from './act';
 import { cutShipment } from './cut';
 import { reportProgress } from './progress';
 
@@ -71,15 +71,17 @@ const deliverOutstanding = async (
  * @param orderId - the order that was overridden
  * @param to - the status it was overridden to; only `shipped` and `delivered` change anything
  * @param at - the override's instant
+ * @throws {ActRefusal} when a fulfillment order cannot ship its remainder (it changed since the
+ *   override was recorded): the outbox retries, and a dead event alerts staff
  */
 export const syncWithOverride = (orderId: string, to: OrderStatus, at: Date): Promise<void> => {
     if (to !== OrderStatus.shipped && to !== OrderStatus.delivered) return Promise.resolve();
 
-    return runAct(async (session) => {
+    return runActOrThrow(async (session) => {
         const all = await fulfillmentOrderRepository.findByOrderId(orderId, session);
         // One after another: a transaction's session does not take parallel operations.
         for (const fulfillmentOrder of all) await shipRemainder(fulfillmentOrder, to, at, session);
         if (to === OrderStatus.delivered) await deliverOutstanding(orderId, at, session);
         await reportProgress(orderId, session);
-    }).then(() => undefined);
+    });
 };

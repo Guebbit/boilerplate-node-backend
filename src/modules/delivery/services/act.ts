@@ -32,7 +32,7 @@ export class ActRefusal extends Error {
      * @param reject - the refusal to answer with
      */
     constructor(reject: ResponseReject) {
-        super('delivery act refused');
+        super(`delivery act refused: ${reject.errors.map(({ code }) => code).join(', ')}`);
         this.reject = reject;
     }
 }
@@ -78,6 +78,21 @@ export const runAct = <T>(work: (session: ClientSession) => Promise<T>): Promise
             if (error instanceof ActRefusal) return { refused: true, reject: error.reject };
             throw error instanceof Error ? error : new Error(String(error));
         });
+
+/**
+ * Run one act for a LISTENER: the refusal is thrown, not handed back. A listener has no client to
+ * answer, so a refusal swallowed here is a refusal nobody hears — the outbox must see the throw to
+ * retry, and to fire `OutboxEventsDead` and the admin `outbox-dead` bell when the retries run out.
+ *
+ * @param work - the act; every write passes `session`
+ * @returns what `work` returned
+ * @throws {ActRefusal} when the act refused
+ */
+export const runActOrThrow = <T>(work: (session: ClientSession) => Promise<T>): Promise<T> =>
+    runAct(work).then((result) => {
+        if (result.refused) throw new ActRefusal(result.reject);
+        return result.value;
+    });
 
 /**
  * Read a fulfillment order and its order in the act's snapshot, refusing a 404 for either. The
