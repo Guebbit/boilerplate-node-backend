@@ -654,7 +654,7 @@ jobs:
         #
         # A matrix, ONE SLICE PER RUNNER: the whole suite on one 4-vCPU runner measured ~178 min of
         # Cypress time against a 75-minute limit, so every run was cancelled. `E2E_SLICE` names the
-        # slice this job owns (the frontend's boilerplate-vue-frontend/docs/tools/live-e2e.md#ci-slices): shard 1..5 of its
+        # slice this job owns (the frontend's boilerplate-vue-frontend/docs/build/live-e2e.md#ci-slices): shard 1..5 of its
         # balanced split, plus `antibot`, the specs that need the human-challenge provider on. This
         # job is jwt only; the frontend's own CI covers both session modes. The slice count (5) is
         # also in `E2E_SLICE` below; change both. The frontend must be pushed first: a runner
