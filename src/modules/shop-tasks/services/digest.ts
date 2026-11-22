@@ -64,6 +64,11 @@ const SUMMARIES: readonly Summary[] = [
         count: (f) => f.returns.returnsAwaitingGoods
     },
     {
+        code: 'shop-tasks.staff.returns-proof-goods-late',
+        run: 'daily',
+        count: (f) => f.returns.returnsProofGoodsLate
+    },
+    {
         code: 'shop-tasks.staff.delivery-holds-open',
         run: 'daily',
         count: (f) => f.delivery.holdsOpen
@@ -94,7 +99,9 @@ const readFigures = (now: Date): Promise<Figures> => {
         returnService.returnsDigest(now, {
             decisionDays: config.NODE_STAFF_RETURN_DECISION_DAYS,
             // The buyer's days to send the goods, plus the post's: past that, ask for proof.
-            sendBackOverdueDays: WITHDRAWAL_SEND_BACK_DAYS + config.NODE_STAFF_RETURN_TRANSIT_DAYS
+            sendBackOverdueDays: WITHDRAWAL_SEND_BACK_DAYS + config.NODE_STAFF_RETURN_TRANSIT_DAYS,
+            // A proof of sending dates the parcel: the post's days alone are left to run out.
+            transitDays: config.NODE_STAFF_RETURN_TRANSIT_DAYS
         }),
         deliveryService.deliveryDigest(now, {
             holdDays: config.NODE_STAFF_HOLD_OPEN_DAYS,

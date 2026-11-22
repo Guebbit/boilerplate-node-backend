@@ -128,14 +128,14 @@ one from `order.canceled`), is stamped with its legal deadline when the record o
 `dueRule` for why. The stamp is stored, not recomputed, so a later change of time zone or setting
 never moves a date a buyer was already owed.
 
-| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by                               |
-| --------------------------------------------- | ------------------------------------------------------- | ------------ | ---------------------------------------- |
-| withdrawal return, goods or proof in time     | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on the proof, else on receipt |
-| withdrawal return, goods or proof after that  | the moment they arrived: pay now                        | `withdrawal` | `returns`, same                          |
-| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`                                |
-| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`                               |
-| defective or wrong item                       | the moment the goods or the proof came, the earlier     | `faulty`     | `returns`, on receipt                    |
-| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                                     |
+| Case                                          | `dueBy`                                                 | `dueRule`    | Stamped by                                                  |
+| --------------------------------------------- | ------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
+| withdrawal return, goods or proof in time     | end of the shop's day, 14 days after the shop was told  | `withdrawal` | `returns`, on the proof, else on receipt                    |
+| withdrawal return, goods or proof after that  | the moment they arrived: pay now                        | `withdrawal` | `returns`, same                                             |
+| remainder cancel (withdrawal)                 | as the first row; staff back-dating is honoured         | `withdrawal` | `returns`                                                   |
+| withdrawal before dispatch, paid buyer cancel | as the first row, from `informedAt` on `order.canceled` | `withdrawal` | `payments`                                                  |
+| defective or wrong item                       | the moment the goods or the proof came, the earlier     | `faulty`     | `returns`, on receipt, or on the proof with `refundOnProof` |
+| goodwill (`other`), the shop's own cancel     | none                                                    | none         | none                                                        |
 
 The table is `refundDueByOf` (`domain/refund-due.ts`); `services/refund-due.ts` adds the one thing a
 domain file cannot reach, the shop's calendar. The shop may wait for the goods, whichever comes
@@ -150,16 +150,31 @@ reference. It needs `receive:Return`, the key that receives the goods, and an `a
 is recorded **once** (a second call is a 409 `RETURN_PROOF_ALREADY_RECORDED`) and leaves the return
 `approved`. The return's `actions.recordProof` says whether it is offered.
 
-| Reason                  | What the proof does                                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| withdrawal              | opens the refund now, quoted with no handling deduction, so money can go back before the parcel arrives (Art. 13(3): goods or proof, the earlier) |
-| defective or wrong item | records the proof only: the remedy (refund, repair, replace) is decided at receipt; a refund picked then is due the earlier of goods and proof    |
+| Reason                                         | What the proof does                                                                                                                                                  |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| withdrawal                                     | opens the refund now, quoted with no handling deduction, so money can go back before the parcel arrives (Art. 13(3): goods or proof, the earlier)                    |
+| defective or wrong item                        | records the proof only: the remedy (refund, repair, replace) is decided at receipt; a refund picked then is due the earlier of goods and proof                       |
+| defective or wrong item, `refundOnProof: true` | opens the refund now, as a withdrawal's does: staff accept the buyer's termination (Directive 2019/771 Art. 13(4), 16(3)(b)); the refund is due the day on the proof |
 
 A `sentAt` in the future is a 422 `RETURN_PROOF_DATE_INVALID`. Staff **cannot cancel** a return whose
 proof opened its refund: that is a 409 `RETURN_REFUND_OPEN`, because the refund is owed and a canceled
-return would no longer add up (the check rides in the cancel's own conditional write). The return's
-`actions.cancel` is false from then on, so no client offers the button. A proof on a
-faulty item opens nothing, so that return can still be canceled.
+return would no longer add up (the check rides in the cancel's own conditional write, and names both
+the withdrawal and the `refundOnProof` case). The return's `actions.cancel` is false from then on, so
+no client offers the button. A proof on a faulty item that did not choose `refundOnProof` opens
+nothing, so that return can still be canceled.
+
+**Refund on proof** is staff's choice, made when they record the proof, for a defective or wrong item
+only (any other reason with it is a 422 `RETURN_REFUND_ON_PROOF_INVALID`). It is not automatic: a
+faulty item may be repaired or replaced first (Art. 13(2)-(3)), and only the buyer's termination
+makes the refund due on proof, so staff choose it with the claim in front of them. The flag is
+stored as `refundOnProof` on the return, shown on the `Return` response (so a client can lock the
+remedy at receipt) and written on the proof's audit row. Once the refund opened on proof, receipt
+refuses a repair or a replacement with a 409 `RETURN_REFUND_OPENED_ON_PROOF`.
+
+A return whose refund opened on proof counts as **settled** for the order's accounts, though its
+parcel may not have arrived: its units and the delivery it quoted are already accounted for, so the
+next return or cancel on the order sees them and the delivery is refunded exactly once, by whichever
+takes the last unit ([the accounts](./returns-remedies.md#the-delivery-across-several-cancels-and-returns)).
 
 After a proof on a withdrawal, **receiving the goods** restocks as usual and opens no second refund.
 It also refuses a handling deduction above 0 with a 409 `RETURN_REFUND_OPENED_ON_PROOF`: the shop can

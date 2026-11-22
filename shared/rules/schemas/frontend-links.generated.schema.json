@@ -117,6 +117,10 @@
           "type": "string",
           "minLength": 1
         },
+        "returnsProofGoodsLate": {
+          "type": "string",
+          "minLength": 1
+        },
         "returnsUndecided": {
           "type": "string",
           "minLength": 1
@@ -154,6 +158,7 @@
         "preordersLate",
         "deliveryHoldsOpen",
         "returnsAwaitingGoods",
+        "returnsProofGoodsLate",
         "returnsUndecided",
         "lowStock",
         "unshipped",

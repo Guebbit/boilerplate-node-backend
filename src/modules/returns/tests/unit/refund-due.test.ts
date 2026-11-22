@@ -123,4 +123,13 @@ describe('proofOpenedRefund', () => {
     it('does not hold for a faulty item, whose proof only records', () => {
         expect(proofOpenedRefund({ reason: 'defective', proofOfSendingAt })).toBe(false);
     });
+
+    it('holds for a faulty or wrong item once staff chose refund on proof', () => {
+        for (const reason of ['defective', 'wrong_item'] as const)
+            expect(proofOpenedRefund({ reason, proofOfSendingAt, refundOnProof: true })).toBe(true);
+    });
+
+    it('does not hold for the choice alone: with no proof on the return nothing opened', () => {
+        expect(proofOpenedRefund({ reason: 'defective', refundOnProof: true })).toBe(false);
+    });
 });

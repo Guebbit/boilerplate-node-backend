@@ -61,15 +61,18 @@ export const proofOpensRefund = (reason: ReturnReason): boolean =>
 
 /**
  * Whether the refund of this return was already opened by its proof of sending: a proof is on it
- * and the reason is one a proof opens a refund for. Receiving the goods then neither quotes nor
- * opens a refund again.
- * @param returned - the return's reason and the date of its proof, when one was recorded
+ * and either the reason is one a proof opens a refund for, or staff chose `refundOnProof` when
+ * they recorded it. Receiving the goods then neither quotes nor opens a refund again.
+ * @param returned - the return's reason, the date of its proof when one was recorded, and staff's choice
  */
 export const proofOpenedRefund = (returned: {
     reason: ReturnReason;
     // Only its presence is read, so a wire row's ISO string counts as much as a stored Date.
     proofOfSendingAt?: Date | string | undefined;
-}): boolean => returned.proofOfSendingAt !== undefined && proofOpensRefund(returned.reason);
+    refundOnProof?: boolean | undefined;
+}): boolean =>
+    returned.proofOfSendingAt !== undefined &&
+    (proofOpensRefund(returned.reason) || returned.refundOnProof === true);
 
 /**
  * The legal deadline of a return's refund, with the rule behind it.
