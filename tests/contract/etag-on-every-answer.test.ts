@@ -112,7 +112,7 @@ const DOORS: Door[] = [
             const { bearer } = await authenticateAs('admin');
             const answer = await post('/products', bearer, {
                 price: '24.90',
-                translations: { en: { title: 'Memory Foam Bed' } }
+                title: 'Memory Foam Bed'
             });
             return {
                 answer,

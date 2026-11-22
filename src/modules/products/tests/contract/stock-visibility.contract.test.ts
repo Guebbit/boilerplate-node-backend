@@ -33,10 +33,11 @@ const STOCK_FIELDS = [
 /** The data object of a response. */
 const dataOf = (response: { body: unknown }) => response.body as Record<string, unknown>;
 
-/** What differs by role on purpose: the caller's own `actions`, and the translator's `translations`. */
+/** What differs by role on purpose: the caller's own `actions`, and the translator's `translations` and `source`. */
 const withoutRoleViews = ({
     actions: _actions,
     translations: _translations,
+    source: _source,
     ...rest
 }: Record<string, unknown>) => rest;
 

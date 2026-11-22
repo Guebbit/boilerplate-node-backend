@@ -100,11 +100,11 @@ publishing, and none refuses the write. A tag this deployment has no language fo
 
 | Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read (except to staff [previewing it](#previewing-a-draft))                                                                                                                                                                                                                                                     |
+| A product's translated title and description on a read                                                                        | Not served: the product's own (default-language) text answers. Only the languages that are on are read (except to staff [previewing it](#previewing-a-draft))                                                                                                                                                                                                                                                 |
 | Free-text search                                                                                                              | Not searched: a draft word finds nothing (except to staff previewing it)                                                                                                                                                                                                                                                                                                                                      |
 | The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                                                                                                                                                                                       |
 | A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                                                                                                                                                                                           |
-| `translations` on `GET /products/{id}`, for a holder of `read:Translation`                                                    | Lists every row, drafts included                                                                                                                                                                                                                                                                                                                                                                              |
+| `translations` on `GET /products/{id}`, for a holder of `read:Translation`                                                    | Lists every row but the default's, drafts included                                                                                                                                                                                                                                                                                                                                                            |
 | `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                                                                                                                                                                                          |
 | The manifest, `GET /locales`                                                                                                  | Listed `active: false`, a language with a deployed file (`shared/locales/it.json`) included: the frontend bundles that file, and the flag is how it learns to stop offering it. A registered language is absent for a visitor. Staff holding `display:Locale` see every row                                                                                                                                   |
 | The sitemap                                                                                                                   | Lists the active languages only: the switched-off one has no page and no `hreflang`                                                                                                                                                                                                                                                                                                                           |
@@ -221,38 +221,49 @@ too, though nothing about it is a tier — see
 1's fallback locale and tier 2's `locales` collection.
 
 One row per `(entityType, entityId, locale)`, unique on that triple
-(`translations_entity_locale` in `src/modules/locales/model.ts`), including the fallback-language
-row — there is no separate "source" flag, only the row whose `locale` equals the deployment's
-fallback locale.
+(`translations_entity_locale` in `src/modules/locales/model.ts`). Rows exist for the OTHER
+languages only: the default language (`NODE_FALLBACK_LOCALE`) is the entity's own text, as in
+Shopify, Medusa, Saleor and Magento. A leftover row in the default language is ignored by every read
+(the repository's lookups and search skip that locale), so it can never shadow the entity's text.
 
-| field          | what it is                                                                                                                                                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `entityType`   | A `translatables` registry key — generic over whatever modules register.                                                                                                                                                                |
-| `entityId`     | The translated document's id.                                                                                                                                                                                                           |
-| `fields`       | `Record<string, string>` — `{ title, description }` for a product.                                                                                                                                                                      |
-| `sourceDigest` | Hash of the fallback row's `fields` at the moment THIS row was translated. Absent on the fallback row itself — it can't be stale relative to its own content. A mismatch means the source changed since; nothing recomputes it on read. |
-| `origin`       | `machine` or `human` — what a reviewer would prioritise. No workflow gate behind either: a write is live immediately. Required on a PATCH entry; a PUT entry that leaves it out is stored `human`.                                      |
-| `translatedBy` | Whoever last wrote the row, for the audit trail. Unset when that account is erased: the text stays, the person goes.                                                                                                                    |
+| field          | what it is                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `entityType`   | A `translatables` registry key — generic over whatever modules register.                                                                                                                               |
+| `entityId`     | The translated document's id.                                                                                                                                                                          |
+| `fields`       | `Record<string, string>` — `{ title, description }` for a product.                                                                                                                                     |
+| `sourceDigest` | Hash of the entity's own text (the default language) at the moment THIS row was written, read from the record. The admin read compares it with the current text's digest and flags the row `outdated`. |
+| `origin`       | `machine` or `human` — what a reviewer would prioritise. No workflow gate behind either: a write is live immediately. Required on a PATCH entry; a PUT entry that leaves it out is stored `human`.     |
+| `translatedBy` | Whoever last wrote the row, for the audit trail. Unset when that account is erased: the text stays, the person goes.                                                                                   |
 
 `src/modules/locales/services/translations.ts` owns the write path: `planTranslationWrites`
 validates a whole PATCH-shaped batch — the locale exists (active or not: a draft language is where
 content is written before it goes live), every field name is one the registry declares for that
 `entityType` — before anything is written; `writePlannedTranslations`
-applies it, and is also the one place that updates an entity's derived index column (its own
-`title`/`description`, kept for sort and search only — see [`products`](./products.md)), so that
-write can never vary by caller.
+applies it, stamping each row with the digest of the entity's text as the record holds it, read
+inside the same transaction after the owner wrote its own document (see
+[`products`](./products.md#writing-translated-content)).
+
+The registry's `sourceOf` is how `locales` reads that text without importing the owning module's
+model; `markEdited` moves the owner's version. Neither writes the entity's text.
 
 ### The generic translations door, and why it's not the only one
 
 `GET`/`PUT`/`PATCH /locales/translations/{entityType}/{id}` is generic across whatever
 `translatables` declares — words only, any registered entity, and it has no way to touch anything
 else about that entity. PUT replaces the whole set (a stored locale the body doesn't name is
-deleted, and the fallback locale is required), PATCH merges — the same replace/merge split
+deleted; the default language is never one of them), PATCH merges — the same replace/merge split
 `/locales/{locale}/apps/{app}/entries` already uses for its own bulk import (body
 `{ entries: { <key>: text } }`; under PATCH a `null` deletes its key, and a `null` for a key that is not stored does
 nothing; an empty PATCH map changes nothing and answers 200). A product also has its own write
 surface, [`POST /products` / `PUT`/`PATCH /products/{id}`](./products.md#writing-translated-content),
-which writes the SAME rows but alongside price, stock flags and the image, in one request.
+which writes the SAME rows but alongside the default-language text, price, stock flags and the
+image, in one request.
+
+The read answers the entity's `source` (`{ fields, digest }`, the default-language text) beside
+`translations`, and each row carries `outdated`: true when its `sourceDigest` differs from
+`source.digest`. That is Shopify's `Translation.outdated`. The door holds no digest of its own to
+check a write against: the entity's version (`ETag`) is the one fence, and a price edit therefore
+refuses a stale translation save with a 412 (rare, and accepted: the tag is shared on purpose).
 The generic door applies the entity's own `fieldRules` (its write contract's rules for one locale's
 fields), and stores the parsed value, so it cannot land what the entity's own door would refuse.
 
@@ -273,8 +284,9 @@ template — gets no product-shaped write surface of its own.
 
 ::: warning A locale slot's three states, on either door
 Absent leaves that language's row untouched; a `{ fields, … }` object upserts it; `null` deletes
-it. An empty `fields` object is a 422, never treated as a delete, and `null` on the fallback locale
-is a 422 too — deleting it would leave the entity with nothing to fall back to.
+it. An empty `fields` object is a 422, never treated as a delete. Any slot for the default
+language, `null` included, is a 422 too: that language is the entity's own text, written through
+the entity's own door.
 :::
 
 ### What happens when the translated thing goes away
@@ -285,16 +297,22 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 | A product is **hard**-deleted  | Rows are removed in the SAME transaction as the product row and its outbox event, through `@kernel/translation`'s port — never via the `product.deleted` event, which fires on both delete paths and carries `hardDelete`, not the rows to remove. |
 | A language is deleted          | Its rows cascade with it, the way `localeEntrySchema` rows already do (`src/modules/locales/repository.ts`'s `deleteLocaleCascade`), reported back as a count.                                                                                     |
 | A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                                                                     |
-| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                                                                   |
+| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's own text is written in it.                                                                                                |
 
 ## Removing it
 
 Deleting this module does not break the shop — it becomes monolingual. `@kernel/translation`
-ships its own fallback: a write naming only `NODE_FALLBACK_LOCALE`'s locale plans a single
-upsert straight through, and one naming any other locale, or leaving the fallback slot empty or
-deleted, is a 422. Admin overrides, other
-languages and `/locales*` are simply absent. A product's own row still carries its `title`/
-`description`, since the read path treats no provider as "nothing to overlay," not an error.
+ships its own fallback: an empty `translations` batch plans nothing, and one naming any locale —
+the default language included — is a 422. Admin overrides, other languages and `/locales*` are
+simply absent. A product's own row still carries its `title`/`description`, since the read path
+treats no provider as "nothing to overlay," not an error.
+
+### Changing the default language
+
+`NODE_FALLBACK_LOCALE` is the language of the entities' own text. Changing it relabels that text as
+the new language, and the old rows in the new default language are ignored from then on (Shopify:
+"Changing your default language deletes your existing translations for the language that you switch
+to"). There is no swap script. The product's title sort and search use the default language only.
 
 ## Read next
 

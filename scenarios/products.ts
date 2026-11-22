@@ -11,9 +11,9 @@
  *             pet-supply retailer, not a list of edge cases. Filler rows cycle a fixed pool of
  *             images (`FILLER_IMAGE_ROLE_KEYS`), so a larger grid never means a new download.
  * Images:     all from `./products-images.generated.json` (`npm run scenario:images`); none hand-placed.
- * Copy:       every `title`/`description` is written twice: flat on the product document, as its
- *             derived index column (what `text`/`title=` search and the stock board's sort read),
- *             and as a `translations` row per locale ({@link seedProductsCollection}).
+ * Copy:       the English `title`/`description` are the product document's own (the default
+ *             language: what `text`/`title=` search and the stock board's sort read); the other
+ *             languages are `translations` rows ({@link seedProductsCollection}).
  */
 
 import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './products-filler';
@@ -29,7 +29,6 @@ import { SEED_PRODUCT_IDS } from './product-ids';
 import { makeProduct } from '@modules/products/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
-import { getFallbackLocale } from '@infrastructure/i18n';
 import {
     isTranslationAvailable,
     isTranslationPlan,
@@ -42,10 +41,10 @@ import type { ProductTranslationFields } from '@types';
 /**
  * One product's copy, per locale.
  *
- * `en` is required and `it` is not: `en` is the fallback, the one locale `planTranslations` will
- * not let a row be deleted in, and the one the product document's own derived index column is
- * written from. Every other locale is a fixture author's choice — a product shipped in English
- * alone is a legitimate state of a real catalogue, and the seeder writes exactly what it finds.
+ * `en` is required and `it` is not: `en` is the default language, the product document's own text
+ * (never a translation row). Every other locale is a fixture author's choice — a product shipped
+ * in English alone is a legitimate state of a real catalogue, and the seeder writes exactly what
+ * it finds.
  */
 interface ProductCopy {
     /** The default-locale copy, which every product has. */
@@ -439,21 +438,18 @@ const localeFields = (entry: ProductTranslationFields): Record<string, string> =
         : { title: entry.title, description: entry.description };
 
 /**
- * One product's copy, reshaped for `@infrastructure/i18n`'s `plan`/`write` primitives — the
- * fallback locale keyed by {@link getFallbackLocale} rather than a hardcoded `'en'`, and every
- * other locale included only when the fixture states one.
+ * One product's translations, reshaped for `@infrastructure/i18n`'s `plan`/`write` primitives —
+ * the other languages only, included only when the fixture states one: the default language is the
+ * product document's own text.
  */
-const toUpsertTranslationsRequest = (copy: ProductCopy): TranslationBatch => ({
-    [getFallbackLocale()]: { fields: localeFields(copy.en) },
-    ...(copy.it ? { it: { fields: localeFields(copy.it) } } : {})
-});
+const toUpsertTranslationsRequest = (copy: ProductCopy): TranslationBatch =>
+    copy.it ? { it: { fields: localeFields(copy.it) } } : {};
 
 /**
- * Write one freshly-created product's fallback and Italian rows, through the write surface's own
- * validate/apply primitives (`planTranslations`/`writeTranslations`) rather than a raw repository
- * insert — the derived index column on the product document is already correct (it was written by
- * `insertIfAbsent` above, from the same `title`/`description` this batch also carries), this call adds
- * the `translations` rows a real editor's write would have produced alongside it.
+ * Write one freshly-created product's Italian row, through the write surface's own validate/apply
+ * primitives (`planTranslations`/`writeTranslations`) rather than a raw repository insert — the
+ * product document already holds the English text (written by `insertIfAbsent` above), this call
+ * adds the `translations` row a real editor's write would have produced alongside it.
  *
  * A no-op, writing nothing, when no translation provider is registered: `locales`
  * deleted makes the shop monolingual, not the seed step a failure.
@@ -480,17 +476,17 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
 /**
  * Seed this collection. Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  *
- * Writes:   twice per row: {@link insertIfAbsent} for the product document (`title`/`description`
- *           are the derived index column, in the fallback locale), then
- *           {@link writeSeedTranslations} for its `translations` rows, only when the product was
- *           `'created'`, so a re-run does not redo a write `insertIfAbsent` skipped.
+ * Writes:   twice per row: {@link insertIfAbsent} for the product document (its `title`/`description`
+ *           are the default language), then {@link writeSeedTranslations} for its `translations`
+ *           rows (the other languages), only when the product was `'created'`, so a re-run does
+ *           not redo a write `insertIfAbsent` skipped.
  * Not `productService.create`: that service validates against `zodProductCreateSchema` (generated
  *           from `POST /products`), which has no `id` and always mints a fresh one. This dataset
  *           needs the factory's PINNED id, for idempotent re-seeding and because `./wishlist` and
  *           the flow runner address rows by known id. `planTranslations`/`writeTranslations` are
  *           the two primitives that service composes: the closest a seeder with its own id gets
  *           to "the new write surface".
- * Needs:    `./locales` already seeded with the fallback and `it` rows; `scenarios/apply.ts` seeds
+ * Needs:    `./locales` already seeded with the `it` row; `scenarios/apply.ts` seeds
  *           `locales` before every other module for this reason.
  */
 const seedProductsCollection = (): Promise<SeedOutcome[]> =>
@@ -508,7 +504,7 @@ const seedProductsCollection = (): Promise<SeedOutcome[]> =>
 /**
  * This module's entry in the `shop` fixture table. Picked up by `npm run regenerate`
  * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
- * Waits for `locales`: a product write goes through `planTranslations`/`writeTranslations`, which needs the
- * fallback locale to already exist as an ACTIVE row (`@modules/locales/services/translations.ts`'s `planSlot`).
+ * Waits for `locales`: a product write goes through `planTranslations`/`writeTranslations`, which needs every
+ * language the write names (`it`) to already exist as a registered row (`@modules/locales/services/translations.ts`'s `planSlot`).
  */
 export const shopModule = { seed: seedProductsCollection, after: ['locales'] };

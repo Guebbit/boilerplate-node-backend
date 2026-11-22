@@ -1,12 +1,18 @@
 /**
  * @module
  * The translator's door: reading every locale an entity has, and writing a PATCH or PUT into it.
- * Generic across whatever `translatables` declares, and never reaches the
- * entity's own collection except through the derived-index-column write the registry names.
+ * Generic across whatever `translatables` declares, and never writes the entity's own collection
+ * except to stamp it edited: the entity's text IS the default language, so only the other
+ * languages are rows here.
  */
 
 import type { ClientSession } from 'mongoose';
-import type { Translation, TranslationOrigin, ReplaceEntityTranslationsRequest } from '@types';
+import type {
+    Translation,
+    TranslationOrigin,
+    TranslationSource,
+    ReplaceEntityTranslationsRequest
+} from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { canonicalLocale, getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
@@ -40,6 +46,8 @@ import { translatableTarget } from './translatables';
 export interface EntityTranslationsResult {
     entityType: string;
     entityId: string;
+    /** The entity's own text, in the default language: what every row is a copy of. */
+    source: TranslationSource;
     translations: Translation[];
     /** Every field name the `translatables` registry declares for this `entityType`. */
     fields: readonly string[];
@@ -107,7 +115,7 @@ type LocaleWrite = TranslationBatch[string];
 
 /**
  * Validate one locale slot against the `locales` collection, the registry's declared fields, and
- * the fallback-locale delete guard. Returns the planned write, or the rejection.
+ * the default-language refusal. Returns the planned write, or the rejection.
  */
 const planSlot = (
     entityType: string,
@@ -116,13 +124,16 @@ const planSlot = (
     locale: string,
     value: LocaleWrite
 ): Promise<PlannedWrite | ResponseReject> => {
-    if (value === null) {
-        if (locale === fallbackLocale)
-            return Promise.resolve(
-                slotRejection('locales.error-translation-fallback-required', { locale }, locale)
-            );
-        return Promise.resolve({ locale, kind: 'delete' });
-    }
+    /**
+     * The default language is the entity's own text, written through the entity's own door: a row
+     * for it, or a delete of one, has no meaning here. `null` included, so nothing can "delete" it.
+     */
+    if (locale === fallbackLocale)
+        return Promise.resolve(
+            slotRejection('translation.error-default-language', { locale }, locale)
+        );
+
+    if (value === null) return Promise.resolve({ locale, kind: 'delete' });
 
     const planFields = (): PlannedWrite | ResponseReject => {
         if (Object.keys(value.fields).length === 0)
@@ -159,13 +170,6 @@ const planSlot = (
         return { locale, kind: 'upsert', fields, origin: value.origin ?? 'human' };
     };
 
-    /**
-     * The fallback locale can't be deleted or deactivated, so writing it never needs the
-     * `locales` collection lookup — this is what still stores fallback-language content once
-     * `locales` is uninstalled entirely (`kernel/translation.ts`'s own fallback path).
-     */
-    if (locale === fallbackLocale) return Promise.resolve(planFields());
-
     return localeRepository.findByTag(locale).then((language) => {
         if (!language)
             return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
@@ -195,8 +199,8 @@ const withCanonicalKeys = <TValue>(payload: Record<string, TValue>): Record<stri
 
 /**
  * Validate a whole batch — the same `ReplaceEntityTranslationsRequest` shape PUT and PATCH both send —
- * against the `locales` collection, the registry's declared fields, and the fallback-locale delete
- * guard: the pre-flight half of a write, with no entity id at all. Every check here is about the
+ * against the `locales` collection, the registry's declared fields, and the default-language
+ * refusal: the pre-flight half of a write, with no entity id at all. Every check here is about the
  * LOCALE and the FIELD NAMES, never about a specific row, so this runs the same whether the entity
  * already exists or is still being created in the same request (`productService.create`'s
  * `POST /products`, notably).
@@ -210,9 +214,7 @@ const withCanonicalKeys = <TValue>(payload: Record<string, TValue>): Record<stri
 const planTranslationWrites = async (
     entityType: string,
     payload: Record<string, LocaleWrite>
-): Promise<
-    ResponseReject | { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] }
-> => {
+): Promise<ResponseReject | { target: TranslatableTarget; planned: PlannedWrite[] }> => {
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);
 
@@ -225,7 +227,7 @@ const planTranslationWrites = async (
         planned.push(result);
     }
 
-    return { target, fallbackLocale, planned };
+    return { target, planned };
 };
 
 /**
@@ -235,10 +237,11 @@ const planTranslationWrites = async (
  * `updateEntityTranslations` below is the generic door's own caller, and still owns that pair for
  * itself.
  *
- * The derived index column IS written here, not left to each caller: it is the one invariant that
- * cannot vary by door — `title`/`description` on a translatable entity's own document must always
- * reflect its fallback-locale row, in every caller, so there is exactly one place deciding when
- * that write happens rather than one per caller that could drift.
+ * A row whose own text changes (or is new) is stamped with the digest of the entity's text AS IT
+ * STANDS NOW; a row re-sent unchanged keeps its stored digest, so it stays `outdated` until
+ * someone actually changes it. A caller writing its own document in the same transaction
+ * (`productService.create`/`updateById`) writes that first, so the digest is the one of the text the
+ * translator saw saved — read from the record, never from a row that may not be written yet.
  *
  * Never validates. A caller that skips {@link planTranslationWrites} first can corrupt data.
  *
@@ -247,18 +250,15 @@ const planTranslationWrites = async (
 const writePlannedTranslations = async (
     entityType: string,
     entityId: string,
-    fallbackLocale: string,
     planned: readonly PlannedWrite[],
     translatedBy: string | undefined,
     session?: ClientSession
 ): Promise<void> => {
-    const fallbackRow = await translationRepository.findEntityLocale(
-        entityType,
-        entityId,
-        fallbackLocale,
-        session
-    );
-    const fallbackDigest = fallbackRow ? deriveSourceDigest(fallbackRow.fields) : undefined;
+    const target = translatableTarget(entityType);
+    const source = target
+        ? await target.sourceOf(entityId, declaredFields(target), session)
+        : undefined;
+    const sourceDigest = source ? deriveSourceDigest(source) : undefined;
 
     for (const slot of planned) {
         if (slot.kind === 'delete') {
@@ -271,6 +271,22 @@ const writePlannedTranslations = async (
             continue;
         }
 
+        /**
+         * A row whose own text this write leaves as it is keeps the digest it had: a form sends
+         * every open tab, and re-sending an untouched translation is not a review of it.
+         */
+        const stored = await translationRepository.findEntityLocale(
+            entityType,
+            entityId,
+            slot.locale,
+            session
+        );
+        const textUnchanged =
+            stored !== null &&
+            Object.entries(slot.fields).every(([name, value]) =>
+                value === null ? !(name in stored.fields) : stored.fields[name] === value
+            );
+
         await translationRepository.upsertEntityLocale(
             entityType,
             entityId,
@@ -278,17 +294,10 @@ const writePlannedTranslations = async (
             slot.fields,
             slot.origin,
             translatedBy,
-            slot.locale === fallbackLocale ? undefined : fallbackDigest,
+            textUnchanged ? stored.sourceDigest : sourceDigest,
             session
         );
     }
-
-    const fallbackWrite = planned.find(
-        (slot): slot is Extract<PlannedWrite, { kind: 'upsert' }> =>
-            slot.kind === 'upsert' && slot.locale === fallbackLocale
-    );
-    const target = translatableTarget(entityType);
-    if (fallbackWrite && target) await target.writeDerived(entityId, fallbackWrite.fields, session);
 };
 
 /**
@@ -306,7 +315,6 @@ export const planForPort = (
         isRejection(plan)
             ? plan
             : {
-                  fallbackLocale: plan.fallbackLocale,
                   planned: plan.planned.map((slot): TranslationWriteSlot =>
                       slot.kind === 'upsert'
                           ? { locale: slot.locale, kind: 'upsert', fields: slot.fields }
@@ -329,7 +337,6 @@ export const writeForPort = (
     writePlannedTranslations(
         entityType,
         entityId,
-        writePlan.fallbackLocale,
         writePlan.planned.map((slot): PlannedWrite =>
             slot.kind === 'upsert'
                 ? { locale: slot.locale, kind: 'upsert', fields: slot.fields, origin: 'human' }
@@ -360,7 +367,7 @@ const applyTranslationBatch = async (
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
     const plan = await planTranslationWrites(entityType, payload);
     if (isRejection(plan)) return plan;
-    const { target, fallbackLocale, planned } = plan;
+    const { target, planned } = plan;
 
     /**
      * Checked before any write: a missing (or malformed) entity id must never leave orphan
@@ -371,9 +378,8 @@ const applyTranslationBatch = async (
 
     const translatedBy = context?.caller.id ?? undefined;
     /**
-     * One transaction: the document's tag, the rows and the derived index column (see
-     * `writePlannedTranslations`'s docblock). Rows outside the document changed, so its tag must
-     * move with them, and no `PUT` carrying the still-valid tag may land between the writes.
+     * One transaction: the document's tag and the rows. Rows outside the document changed, so its
+     * tag must move with them, and no `PUT` carrying the still-valid tag may land between the writes.
      */
     await withTransaction(async (session) => {
         /**
@@ -386,14 +392,7 @@ const applyTranslationBatch = async (
          * the OWNER's counter: a translation save and a product edit refuse each other on purpose.
          */
         await target.markEdited(entityId, session);
-        await writePlannedTranslations(
-            entityType,
-            entityId,
-            fallbackLocale,
-            planned,
-            translatedBy,
-            session
-        );
+        await writePlannedTranslations(entityType, entityId, planned, translatedBy, session);
     });
 
     await invalidateCacheTagsLogged([target.cacheTag]);
@@ -451,14 +450,9 @@ const clearOmittedInPayload = (
  * Replace the whole set for a PUT: every locale currently stored but absent from the body is
  * deleted, by turning "absent" into an explicit `null` before handing the batch to
  * {@link applyTranslationBatch} — the same validation `updateEntityTranslations` already runs
- * (including the fallback-locale delete guard, so a body that omits it is refused the same way
- * an explicit `null` on it already is) then treats a planned `null` as a delete.
- *
- * The fallback locale is checked whether or not a row for it exists yet: a brand-new entity with
- * no translations at all must still name it in a PUT, the same way `POST /products` already
- * requires it on create — otherwise a caller could replace-in only non-fallback locales and leave
- * the entity with nothing to fall back to, with no existing row for {@link planSlot}'s guard to
- * turn into a deletion.
+ * then treats a planned `null` as a delete. The default language is never among the stored
+ * locales ({@link translationRepository}'s reads leave a stray row in it out), so a PUT can
+ * neither delete nor require it.
  */
 export const replaceEntityTranslations = async (
     entityType: string,
@@ -471,11 +465,10 @@ export const replaceEntityTranslations = async (
 
     const canonicalPayload = withCanonicalKeys(payload);
     const existing = await translationRepository.findEntityTranslations(entityType, entityId);
-    const checkedLocales = new Set(existing.map((row) => row.locale));
-    checkedLocales.add(getFallbackLocale());
 
     const deletions = Object.fromEntries(
-        [...checkedLocales]
+        existing
+            .map((row) => row.locale)
             .filter((locale) => !(locale in canonicalPayload))
             .map((locale) => [locale, null])
     );
@@ -488,7 +481,11 @@ export const replaceEntityTranslations = async (
     );
 };
 
-/** Every locale row an entity has, in the admin shape. */
+/**
+ * Every language but the default an entity has a row for, beside the entity's own text, in the
+ * admin shape. A row is `outdated` when it was written from a text that is not the entity's
+ * current one (Shopify's `Translation.outdated`).
+ */
 export const getEntityTranslations = (
     entityType: string,
     entityId: string
@@ -498,9 +495,13 @@ export const getEntityTranslations = (
 
     return Promise.all([
         target.revisionOf(entityId),
+        target.sourceOf(entityId, declaredFields(target)),
         translationRepository.findEntityTranslations(entityType, entityId)
-    ]).then(([revision, rows]) => {
-        if (revision === undefined) return entityNotFound(entityType, entityId);
+    ]).then(([revision, sourceFields, rows]) => {
+        // Both answer `undefined` for a document that is not there (or an id that is no id).
+        if (revision === undefined || sourceFields === undefined)
+            return entityNotFound(entityType, entityId);
+        const source = { fields: sourceFields, digest: deriveSourceDigest(sourceFields) };
         // The owner's counter rides beside the result, so the `ETag` can be derived from it.
         return generateSuccess(
             carryVersion(
@@ -508,7 +509,10 @@ export const getEntityTranslations = (
                 {
                     entityType,
                     entityId,
-                    translations: translationRepository.normalize(rows),
+                    source,
+                    translations: translationRepository
+                        .normalize(rows)
+                        .map((row) => ({ ...row, outdated: row.sourceDigest !== source.digest })),
                     fields: declaredFields(target)
                 }
             )

@@ -10,7 +10,7 @@ import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { presentProduct } from '../presenter';
 import { productRepository } from '../repository';
-import { translationsWithFallback } from './lookups';
+import { sourceOf, translationsOf } from './lookups';
 import { canSeeTranslations } from './translation-view';
 import { standingOn, standingOnRead, withActions } from './actions';
 import type { ProductStanding } from '../domain/actions';
@@ -62,10 +62,12 @@ export const getById = (
 
 /**
  * `GET /products/:id` — get a product, as `context.caller` may see it: `translations` (every
- * language, drafts included) for a holder of `read:Translation` (see `./translation-view`).
+ * other language, drafts included) and `source` (the stored default-language text) for a holder
+ * of `read:Translation` (see `./translation-view`).
  *
  * The top-level `title`/`description` are always the request's resolved language, even beside
- * `translations`: staff browsing the shop in Italian must not see the fallback language there.
+ * `translations`: staff browsing the shop in Italian must not see the default language there.
+ * `source` is where the editor's form reads that default text from.
  *
  * Wraps rather than folds into `getById()`: most callers (unit tests, other services resolving a
  * product they already know about) have no `CallerContext`. A view is NOT reported from here: the
@@ -121,8 +123,8 @@ const presentWithStanding = (
         .then((visible) => withActions(visible, standing));
 
 /**
- * The resolved product plus its `translations`, for a caller who may read them; untouched
- * otherwise.
+ * The resolved product plus its `translations` and `source`, for a caller who may read them;
+ * untouched otherwise.
  *
  * @param product - the stored document, whose rows are read
  * @param resolved - the same product in the request's language
@@ -135,7 +137,7 @@ const withTranslations = (
 ): Promise<Product> => {
     if (!canSeeTranslations(caller)) return Promise.resolve(resolved);
 
-    return translationsWithFallback(product).then((translations) =>
-        carryVersion(resolved, { ...resolved, translations })
+    return translationsOf(product).then((translations) =>
+        carryVersion(resolved, { ...resolved, translations, source: sourceOf(product) })
     );
 };

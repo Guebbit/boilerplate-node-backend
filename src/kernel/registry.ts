@@ -99,7 +99,7 @@ export interface ModuleConsumer {
  * translation row and the `/translations/{entityType}/{id}` route both use.
  */
 export interface TranslatableTarget {
-    /** The mongo collection a translation write updates a derived, sortable/indexable copy on. */
+    /** The mongo collection the entity lives in. */
     collection: string;
 
     /**
@@ -107,7 +107,7 @@ export interface TranslatableTarget {
      * {@link collection}, or `undefined` when it names none. Read before ANY translation write, so
      * a missing entity answers the contract's declared 404 instead of writing orphan translation
      * rows first; and it is the version the translations' `ETag` is derived from. Supplied by the
-     * OWNING module, same reasoning as {@link writeDerived}: `locales` cannot resolve the target's
+     * OWNING module, same reasoning as {@link sourceOf}: `locales` cannot resolve the target's
      * Mongoose model by collection name to read this itself.
      *
      * @param entityId - the id exactly as it arrived on the request path — may be malformed
@@ -123,24 +123,26 @@ export interface TranslatableTarget {
     cacheTag: string;
 
     /**
-     * Copies the fallback-locale row's fields onto this entity's own document — the derived,
-     * sortable/indexable column a translated write also updates. Supplied by the OWNING module
-     * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
-     * target's Mongoose model by collection name to reach it. `session` joins the write to the
-     * caller's transaction (a product write commits its row, its translations and this together).
-     * A `null` field is removed from the document, never stored as `''`.
+     * The entity's own text in the default language, field by field: the source every translation
+     * is a copy of, and what an out-of-date check digests. Supplied by the OWNING module, like the
+     * rest, so `locales` never finds the target's Mongoose model by collection name.
+     *
+     * @param entityId - the id exactly as it arrived on the request path — may be malformed
+     * @param fields - the translatable field names ({@link fieldRules}'s keys)
+     * @param session - reads inside the caller's transaction, so a write just made is seen
+     * @returns the fields the document holds a string for (an absent field has no key), or
+     *   `undefined` when `entityId` names no document
      */
-    writeDerived: (
+    sourceOf: (
         entityId: string,
-        fields: Record<string, string | null>,
+        fields: readonly string[],
         session?: ClientSession
-    ) => Promise<void>;
+    ) => Promise<Record<string, string> | undefined>;
 
     /**
      * Stamps this entity's own document as edited, so its version (the `ETag`) moves. A translation
-     * edit changes rows OUTSIDE the document, and {@link writeDerived} only runs when the fallback
-     * locale changed — without this, an editor holding the old tag could still replace the
-     * translations another editor just wrote. Supplied by the OWNING module, like the rest.
+     * edit changes rows OUTSIDE the document — without this, an editor holding the old tag could
+     * still replace the translations another editor just wrote. Supplied by the OWNING module, like the rest.
      * `session` joins the write to the caller's transaction, so the rows and the tag move together.
      */
     markEdited: (entityId: string, session?: ClientSession) => Promise<void>;

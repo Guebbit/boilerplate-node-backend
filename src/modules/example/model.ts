@@ -47,8 +47,8 @@ export const exampleSchema = new Schema<ExampleDocument, ExampleModel>(
     {
         userId: { type: Schema.Types.ObjectId, required: true },
         /**
-         * The fallback-language title. Other languages live in `locales`' translation rows, and a
-         * fallback-language write is copied back here (`repository.writeTranslatedFields`).
+         * The default-language title. Other languages live in `locales`' translation rows; the
+         * default has no row, this column is it.
          */
         title: { type: String, required: true },
         body: { type: String, required: true },
@@ -90,7 +90,7 @@ export const exampleModel = model<ExampleDocument, ExampleModel>('Example', exam
 
 /**
  * The rules for the one translatable field, as the `translatables` registry's `fieldRules`: not
- * nullable, so the fallback title can never be cleared through the translator's door.
+ * nullable, so a translated title can never be cleared through the translator's door.
  */
 export const exampleTranslationFieldRules = z.strictObject({
     title: trimmedExampleTitle.optional()

@@ -19,9 +19,6 @@ import type { ProductDocument } from '../../model';
 
 setupTestDb();
 
-/** `en` is the fallback locale in every environment this suite runs in. */
-const FALLBACK = 'en';
-
 /** What the port's `write` does; swapped per test. */
 let write: jest.Mock;
 
@@ -31,11 +28,7 @@ beforeEach(() => {
         resolve: () => Promise.resolve(new Map()),
         removeAll: () => Promise.resolve(0),
         search: () => Promise.resolve([]),
-        plan: () =>
-            Promise.resolve({
-                fallbackLocale: FALLBACK,
-                planned: [{ locale: FALLBACK, kind: 'upsert', fields: {} }]
-            }),
+        plan: () => Promise.resolve({ planned: [{ locale: 'it', kind: 'upsert', fields: {} }] }),
         write: (...args) => write(...args) as Promise<void>,
         readAll: () => Promise.resolve(new Map()),
         readServed: () => Promise.resolve(new Map()),
@@ -58,7 +51,7 @@ describe('productService.create is one transaction', () => {
             productService.create(
                 productService.zodProductCreateSchema.parse({
                     price: '12.00',
-                    translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                    title: 'Standing Desk'
                 }),
                 testCallerContext
             )
@@ -72,7 +65,7 @@ describe('productService.create is one transaction', () => {
         const result = (await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: '12.00',
-                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                title: 'Standing Desk'
             }),
             callerContextAs('admin')
         )) as ResponseSuccess<ProductDocument>;
@@ -99,7 +92,7 @@ describe('productService.create after its commit', () => {
         const result = (await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: '12.00',
-                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                title: 'Standing Desk'
             }),
             callerContextAs('admin')
         )) as ResponseSuccess<ProductDocument>;
@@ -129,7 +122,8 @@ describe('productService.updateById is one transaction', () => {
                 {
                     price: '99.00',
                     active: false,
-                    translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                    title: 'Standing Desk',
+                    translations: { it: { title: 'Scrivania' } }
                 },
                 testCallerContext
             )

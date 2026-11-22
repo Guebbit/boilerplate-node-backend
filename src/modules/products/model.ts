@@ -10,7 +10,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
-import { getFallbackLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -91,34 +91,6 @@ export type ProductModel = Model<ProductDocument, Record<string, never>, unknown
 export const productTranslationFieldRules =
     UpdateProductByIdBody.shape.translations.unwrap().valueType.options[0];
 
-/**
- * The fallback locale (`NODE_FALLBACK_LOCALE`) MUST NOT be `null` — deleting it would leave the
- * product with nothing to fall back to. Shared by create, PUT and PATCH; `mustBePresent` is the
- * one thing that differs: create and PUT send the whole set, so they also refuse its ABSENCE,
- * where a PATCH's omission only leaves the stored row alone.
- */
-const refineFallbackLocale = (
-    translations: Record<string, unknown> | undefined,
-    context: z.RefinementCtx,
-    mustBePresent: boolean
-): void => {
-    const fallback = getFallbackLocale();
-    const entry = translations?.[fallback];
-
-    if (entry === null)
-        context.addIssue({
-            code: 'custom',
-            message: t('products.field-translations-fallback-null', { locale: fallback }),
-            path: ['translations', fallback]
-        });
-    else if (mustBePresent && entry === undefined)
-        context.addIssue({
-            code: 'custom',
-            message: t('products.field-translations-fallback-required', { locale: fallback }),
-            path: ['translations', fallback]
-        });
-};
-
 /** The refusal text for each date a product carries, keyed by the field it sits on. */
 const DATE_TOO_FAR_MESSAGES = {
     releaseDate: 'products.field-release-date-too-far',
@@ -176,7 +148,6 @@ const refinePricePlaces = (price: string | undefined, context: z.RefinementCtx):
 
 /** The body fields the product business refinements read; every generated body is a superset. */
 interface RefinableProduct {
-    translations?: Record<string, unknown>;
     releaseDate?: string | null;
     restockDate?: string | null;
     price?: string;
@@ -187,14 +158,8 @@ interface RefinableProduct {
  *
  * @param data - the parsed body
  * @param context - the Zod context to report into
- * @param mustBePresent - whether the fallback locale must be in `translations` (create and PUT)
  */
-const refineProduct = (
-    data: RefinableProduct,
-    context: z.RefinementCtx,
-    mustBePresent: boolean
-): void => {
-    refineFallbackLocale(data.translations, context, mustBePresent);
+const refineProduct = (data: RefinableProduct, context: z.RefinementCtx): void => {
     refineDateWithinYear('releaseDate', data.releaseDate, context);
     refineDateWithinYear('restockDate', data.restockDate, context);
     refinePricePlaces(data.price, context);
@@ -202,27 +167,24 @@ const refineProduct = (
 
 /**
  * Zod schema for a product CREATE: the generated `CreateProductBody`, which already carries every
- * field rule, plus the four business refinements it cannot express ({@link refineProduct}).
+ * field rule, plus the three business refinements it cannot express ({@link refineProduct}).
  */
 export const zodProductCreateSchema = CreateProductBody.superRefine((data, context) => {
-    refineProduct(data, context, true);
+    refineProduct(data, context);
 });
 
 /**
- * Zod schema for a product PUT: the generated `ReplaceProductByIdBody` plus the same four
- * refinements. `mustBePresent: true`, as on create: a PUT's `translations` is the whole set, so a
- * locale it omits is deleted — and the fallback one can never be.
+ * Zod schema for a product PUT: the generated `ReplaceProductByIdBody` plus the same refinements.
  */
 export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data, context) => {
-    refineProduct(data, context, true);
+    refineProduct(data, context);
 });
 
 /**
- * Zod schema for a product PATCH: the generated `UpdateProductByIdBody` plus the same four
- * refinements; the fallback-locale guard stays a refusal even though the field is optional.
+ * Zod schema for a product PATCH: the generated `UpdateProductByIdBody` plus the same refinements.
  */
 export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, context) => {
-    refineProduct(data, context, false);
+    refineProduct(data, context);
 });
 
 /**

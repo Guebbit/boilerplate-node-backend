@@ -15,9 +15,9 @@ import { createLanguage } from './support';
 setupTestDb();
 
 describe('GET & PATCH /locales/translations/:entityType/:id', () => {
-    it('answers an empty list matching the spec for an entity with no rows yet', async () => {
+    it('answers the source and an empty list matching the spec for an entity with no rows yet', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct();
+        const product = await createProduct({ title: 'Cozy Bed' });
 
         const response = await api()
             .get(`/locales/translations/product/${String(product._id)}`)
@@ -25,6 +25,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.translations).toEqual([]);
+        expect(response.body.source.fields).toEqual({ title: 'Cozy Bed' });
     });
 
     it('upserts a locale and matches the spec', async () => {
@@ -42,7 +43,8 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         expect(response.body.translations[0]).toMatchObject({
             locale: 'pt',
             fields: { title: 'Cama boa' },
-            origin: 'human'
+            origin: 'human',
+            outdated: false
         });
     });
 
@@ -83,71 +85,53 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         }
     );
 
-    it('422s a null on the fallback locale, matching the spec', async () => {
+    it.each([
+        ['null', null],
+        ['an entry', { fields: { title: 'Cozy Bed' }, origin: 'human' }]
+    ])('422s %s on the default language, matching the spec', async (_label, slot) => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ en: null });
+            .send({ en: slot });
 
         expect(response.status).toBe(422);
     });
 });
 
 describe('PUT /locales/translations/:entityType/:id', () => {
-    /**
-     * Every slot, fallback included, is checked against a real `locales` row — `en` needs one
-     * registered here the same way `pt` does, since nothing else in this suite ever upserts it.
-     */
-    const FALLBACK = { tag: 'en', name: 'English', nativeName: 'English' };
-
     it('deletes a locale the body does not name, matching the spec', async () => {
         const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer, FALLBACK);
         await createLanguage(bearer);
+        await createLanguage(bearer, { tag: 'de', name: 'German', nativeName: 'Deutsch' });
         const product = await createProduct();
 
-        // Seeds both `en` and `pt` first — the PUT below names only `en`.
+        // Seeds both `pt` and `de` first — the PUT below names only `pt`.
         await api()
             .patch(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({
-                en: { fields: { title: 'Cozy Bed' }, origin: 'human' },
-                pt: { fields: { title: 'Cama boa' }, origin: 'human' }
+                pt: { fields: { title: 'Cama boa' }, origin: 'human' },
+                de: { fields: { title: 'Hundekorb' }, origin: 'human' }
             });
 
         const response = await api()
             .put(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Bed, replaced' } } });
+            .send({ pt: { fields: { title: 'Cama, replaced' } } });
 
         expect(response.status).toBe(200);
         expect(response.body.translations).toHaveLength(1);
         expect(response.body.translations[0]).toMatchObject({
-            locale: 'en',
-            fields: { title: 'Bed, replaced' }
+            locale: 'pt',
+            fields: { title: 'Cama, replaced' }
         });
     });
 
     it('stores origin human when a replace leaves it out', async () => {
         const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer, FALLBACK);
-        const product = await createProduct();
-
-        const response = await api()
-            .put(`/locales/translations/product/${String(product._id)}`)
-            .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed' } } });
-
-        expect(response.status).toBe(200);
-        expect(response.body.translations[0]).toMatchObject({ locale: 'en', origin: 'human' });
-    });
-
-    it('refuses a replace that omits the fallback locale', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer, FALLBACK);
         await createLanguage(bearer);
         const product = await createProduct();
 
@@ -155,6 +139,19 @@ describe('PUT /locales/translations/:entityType/:id', () => {
             .put(`/locales/translations/product/${String(product._id)}`)
             .set('Authorization', bearer)
             .send({ pt: { fields: { title: 'Cama boa' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.translations[0]).toMatchObject({ locale: 'pt', origin: 'human' });
+    });
+
+    it('refuses a replace that names the default language', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed' } } });
 
         expect(response.status).toBe(422);
     });

@@ -122,7 +122,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
         await productService.updateById(
             String(product._id),
             {
-                translations: { en: { title: 'A different title' } },
+                title: 'A different title',
                 releaseDate: '2031-01-01'
             },
             callerContextAs('admin')
@@ -142,7 +142,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
         await productService.updateById(
             String(product._id),
-            { price: '10.00', active: true, translations: { en: { title: 'Renamed' } } },
+            { price: '10.00', active: true, title: 'Renamed' },
             callerContextAs('admin')
         );
 

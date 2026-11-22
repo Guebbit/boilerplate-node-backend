@@ -30,7 +30,7 @@ const fakeTranslationPort = (overrides: Partial<TranslationPort> = {}): Translat
     resolve: jest.fn().mockResolvedValue(new Map()),
     removeAll: jest.fn().mockResolvedValue(0),
     search: jest.fn().mockResolvedValue([]),
-    plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
+    plan: jest.fn().mockResolvedValue({ planned: [] }),
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
@@ -292,7 +292,8 @@ describe('productService.updateById', () => {
             id,
             {
                 price: '49.99',
-                translations: { en: { title: 'Updated Title', description: 'New description' } }
+                title: 'Updated Title',
+                description: 'New description'
             },
             testCallerContext
         );
@@ -336,7 +337,7 @@ describe('productService.updateById', () => {
 
         const result = await productService.updateById(
             id,
-            { translations: { en: { title: 'Renamed Product' } } },
+            { title: 'Renamed Product' },
             testCallerContext
         );
 
@@ -364,7 +365,7 @@ describe('productService.updateById', () => {
          */
         const result = await productService.updateById(
             '000000000000000000000000',
-            { translations: { en: { title: 'X' } } },
+            { title: 'X' },
             testCallerContext
         );
 
