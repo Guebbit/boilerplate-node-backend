@@ -6,8 +6,10 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { setEnvironment } from '@tests/environment';
 import { TaskCategory } from '@types';
 import { zammadService } from '../../services';
+import { groupsVerified } from '../../repository';
 import { useZammad } from '../harness';
 
 setupTestDb();
@@ -91,5 +93,82 @@ describe('setupTicketFields', () => {
         await expect(zammadService.setupTicketFields('wrong')).rejects.toMatchObject({
             status: 401
         });
+    });
+});
+
+/** The writes the stub saw for the integration role. */
+const roleWrites = () =>
+    zammad().requests.filter(({ method, path }) => method === 'PUT' && path === '/roles/9');
+
+describe('the integration role', () => {
+    it('is given read on every group, and create and change on the intake group only, then marks the groups verified', async () => {
+        const report = await zammadService.setupTicketFields(zammad().token);
+
+        expect(report.roleGranted).toEqual([
+            'Support: +read',
+            'Support: +create',
+            'Support: +change',
+            'Billing: +read'
+        ]);
+        expect(zammad().roles.get(9)?.group_ids).toEqual({
+            '1': ['read', 'create', 'change'],
+            '2': ['read']
+        });
+        expect(await groupsVerified()).toBe(true);
+    });
+
+    it('adds only what is missing: a second run writes nothing, and `full` counts as every access', async () => {
+        await zammadService.setupTicketFields(zammad().token);
+        const writesAfterFirst = roleWrites().length;
+
+        const second = await zammadService.setupTicketFields(zammad().token);
+        expect(second.roleGranted).toEqual([]);
+        expect(roleWrites()).toHaveLength(writesAfterFirst);
+
+        // A role that holds `full` on a group needs nothing more there.
+        zammad().roles.set(9, { id: 9, name: 'Shop integration', group_ids: { '1': ['full'] } });
+        const third = await zammadService.setupTicketFields(zammad().token);
+        expect(third.roleGranted).toEqual(['Billing: +read']);
+        expect(zammad().roles.get(9)?.group_ids['1']).toEqual(['full']);
+    });
+
+    it('leaves no marker when a later run fails: a new group the role cannot read', async () => {
+        await zammadService.setupTicketFields(zammad().token);
+        expect(await groupsVerified()).toBe(true);
+
+        zammad().groups.set(3, { id: 3, name: 'Escalations' });
+        zammad().ignoreRoleWrites();
+        await expect(zammadService.setupTicketFields(zammad().token)).rejects.toThrow(
+            /cannot read: Escalations/u
+        );
+
+        expect(await groupsVerified()).toBe(false);
+    });
+
+    it('fails, with no marker, when the intake group does not exist', async () => {
+        setEnvironment({ NODE_ZAMMAD_GROUP: 'No such group' });
+
+        await expect(zammadService.setupTicketFields(zammad().token)).rejects.toThrow(
+            /no group named "No such group"/u
+        );
+        expect(await groupsVerified()).toBe(false);
+    });
+
+    it('fails, with no marker, when the role does not exist', async () => {
+        zammad().roles.clear();
+
+        await expect(zammadService.setupTicketFields(zammad().token)).rejects.toThrow(
+            /no role named "Shop integration"/u
+        );
+        expect(await groupsVerified()).toBe(false);
+    });
+
+    it('fails closed, with no marker, when Zammad leaves a group unreadable after the grant', async () => {
+        zammad().ignoreRoleWrites();
+
+        await expect(zammadService.setupTicketFields(zammad().token)).rejects.toThrow(
+            /cannot read: Support, Billing/u
+        );
+        expect(await groupsVerified()).toBe(false);
     });
 });

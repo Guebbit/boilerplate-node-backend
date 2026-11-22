@@ -61,7 +61,7 @@
 * * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:webhook-retries
 # Hands every contact message that is due to Zammad as a ticket, retrying by the outbox's backoff; after the last retry the message becomes a to-do and a link-only mail instead.
 * * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:zammad-contacts
-# Overwrites the Zammad customer of each account whose profile changed with the account's current address and name; a change that Zammad refuses for good is logged and dropped.
+# Overwrites the Zammad customer of each account whose profile changed with the account's current address; a change that Zammad refuses for good is logged and dropped.
 */5 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:zammad-profiles
 # Files and follows the Zammad deletion task of every erased account's customer until Zammad reports it completed; a task that failed or stays unfinished raises the alert.
 * * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:zammad-erasures

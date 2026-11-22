@@ -9,7 +9,10 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { logger } from '@infrastructure/adapters/logger';
+import { createUser } from '@modules/users/tests/factories';
 import { zammadJobs } from '../../jobs';
+import { zammadCustomerModel, zammadSetupModel } from '../../model';
+import { markGroupsVerified, upsertCustomer } from '../../repository';
 import { useZammad } from '../harness';
 
 setupTestDb();
@@ -17,8 +20,10 @@ setupTestDb();
 /** The stub of the case that is running. */
 const zammad = useZammad();
 
-beforeEach(() => {
+beforeEach(async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    // `zammad:setup` confirmed the integration role reads every group, as it has on a real install.
+    await markGroupsVerified(new Date());
 });
 
 afterEach(() => {
@@ -69,6 +74,18 @@ describe('tickets', () => {
         expect(ids).not.toContain(young.id);
     });
 
+    it('counts the customer’s own last message, not an agent’s later reply', async () => {
+        zammad().addUser({ id: 1000, email: 'a@example.com' });
+        const answered = zammad().addTicket({ customerId: 1000, createdAt: daysAgo(900) });
+        // An agent replied yesterday; the customer last wrote 800 days ago.
+        answered.last_contact_at = daysAgo(1);
+        answered.last_contact_customer_at = daysAgo(800);
+
+        await run();
+
+        expect(filed()).toContainEqual(['Ticket', answered.id]);
+    });
+
     it('falls back to the creation date when there was no contact', async () => {
         zammad().addUser({ id: 1000, email: 'a@example.com' });
         const old = zammad().addTicket({ customerId: 1000, createdAt: daysAgo(800) });
@@ -91,6 +108,19 @@ describe('tickets', () => {
     });
 });
 
+describe('before zammad:setup confirmed the groups', () => {
+    it('reaps no customer and fails the run, but still files the tickets that are due', async () => {
+        await zammadSetupModel.deleteMany({});
+        zammad().addUser({ id: 2000, email: 'old@example.com', created_at: daysAgo(900) });
+        zammad().addUser({ id: 1000, email: 'a@example.com' });
+        const stale = zammad().addTicket({ customerId: 1000, createdAt: daysAgo(900) });
+
+        await expect(run()).rejects.toThrow(/zammad:setup/u);
+
+        expect(filed()).toEqual([['Ticket', stale.id]]);
+    });
+});
+
 describe('customers', () => {
     it('deletes a customer created before the cutoff who has no ticket left', async () => {
         zammad().addUser({ id: 2000, email: 'old@example.com', created_at: daysAgo(900) });
@@ -101,6 +131,21 @@ describe('customers', () => {
         await run();
 
         expect(filed()).toEqual([['User', 2000]]);
+    });
+
+    it('drops the account mapping of a customer it reaps and keeps the one of a customer it spares', async () => {
+        const reaped = await createUser({ email: 'old@example.com' });
+        const spared = await createUser({ email: 'has-ticket@example.com' });
+        zammad().addUser({ id: 2000, email: 'old@example.com', created_at: daysAgo(900) });
+        zammad().addUser({ id: 2001, email: 'has-ticket@example.com', created_at: daysAgo(900) });
+        zammad().addTicket({ customerId: 2001, createdAt: daysAgo(10) });
+        await upsertCustomer(reaped.id, 2000);
+        await upsertCustomer(spared.id, 2001);
+
+        await run();
+
+        const left = await zammadCustomerModel.find().lean();
+        expect(left.map(({ zammadUserId }) => zammadUserId)).toEqual([2001]);
     });
 
     it('never deletes a user who is not a plain customer: an agent, an admin, the integration user', async () => {

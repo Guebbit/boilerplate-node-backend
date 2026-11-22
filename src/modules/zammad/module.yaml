@@ -19,7 +19,7 @@ jobs:
         schedule: '*/5 * * * *'
         summary:
             Overwrites the Zammad customer of each account whose profile changed with the account's
-            current address and name; a change that Zammad refuses for good is logged and dropped.
+            current address; a change that Zammad refuses for good is logged and dropped.
     sweepZammadErasures:
         name: sweep:zammad-erasures
         # Every minute: files a data-privacy task for an erased account's Zammad customer and polls

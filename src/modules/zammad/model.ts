@@ -1,9 +1,10 @@
 /**
  * @module
- * The four collections this module owns, all small and all about delivery and erasure, never about tickets:
+ * The five collections this module owns, all small and all about delivery and erasure, never about tickets:
  * `zammadcontacts` (a message waiting to be handed over), `zammadcustomers` (which Zammad customer
  * a signed-in account is), `zammadprofilesyncs` (an account whose profile Zammad must be told
- * about) and `zammaderasejobs` (a person Zammad must forget, and the proof it did).
+ * about), `zammaderasejobs` (a person Zammad must forget, and the proof it did) and `zammadsetups`
+ * (when `zammad:setup` last confirmed the integration role reads every group).
  *
  * @see docs/modules/zammad.md#the-hand-over
  */
@@ -262,4 +263,28 @@ applySerialization(zammadEraseJobSchema, { omit: ['leaseToken', 'leaseExpiresAt'
 export const zammadEraseJobModel = model<ZammadEraseJobDocument, Model<ZammadEraseJobDocument>>(
     'ZammadEraseJob',
     zammadEraseJobSchema
+);
+
+/**
+ * One fact `zammad:setup` leaves for the runtime: the integration role was confirmed able to read
+ * every group. Retention reads it before it deletes a customer, because a customer whose tickets
+ * sit in a group the role cannot read looks ticketless.
+ */
+export interface ZammadSetupDocument extends Document {
+    /** What was confirmed; today only `groups-verified`. */
+    key: string;
+    /** When the setup run confirmed it. */
+    at: Date;
+}
+
+/** Setup marker schema: one row per fact, keyed by name. */
+export const zammadSetupSchema = new Schema<ZammadSetupDocument>({
+    key: { type: String, required: true, unique: true },
+    at: { type: Date, required: true }
+});
+
+/** Setup marker model entrypoint. Collection `zammadsetups`. */
+export const zammadSetupModel = model<ZammadSetupDocument, Model<ZammadSetupDocument>>(
+    'ZammadSetup',
+    zammadSetupSchema
 );

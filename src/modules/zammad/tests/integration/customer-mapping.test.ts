@@ -9,6 +9,7 @@ import { taskService } from '@modules/tasks';
 import { createUser } from '@modules/users/tests/factories';
 import { zammadService } from '../../services';
 import { zammadCustomerModel } from '../../model';
+import { upsertCustomer } from '../../repository';
 import { useZammad } from '../harness';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -44,7 +45,7 @@ describe('the signed-in-sender rule', () => {
         ]);
     });
 
-    it('sends the mapped customer by id from the second message on', async () => {
+    it('sends the verified address on every message, never the stored id, and keeps the mapping on the customer used', async () => {
         const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
         await send('ada@example.com', user.id);
         const [first] = zammad().tickets;
@@ -52,10 +53,27 @@ describe('the signed-in-sender rule', () => {
         await send('ada@example.com', user.id);
 
         const second = zammad().tickets[1];
-        expect(second.body).toMatchObject({ customer: { id: first.customer_id } });
-        expect(second.body).not.toHaveProperty('customer_id');
+        expect(second.body).toMatchObject({ customer_id: 'guess:ada@example.com' });
+        expect(second.body).not.toHaveProperty('customer');
         expect(second.customer_id).toBe(first.customer_id);
         expect(await zammadCustomerModel.countDocuments()).toBe(1);
+    });
+
+    it('lands on the customer matching the verified address when the stored id is dead or a stranger’s', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        const stranger = zammad().addUser({ id: 777, email: 'stranger@example.com' });
+        // A restore left the mapping pointing at an id that now belongs to somebody else.
+        await upsertCustomer(user.id, stranger.id);
+
+        await send('ada@example.com', user.id);
+
+        const [ticket] = zammad().tickets;
+        expect(ticket.customer_id).not.toBe(stranger.id);
+        expect(zammad().users.get(stranger.id)?.email).toBe('stranger@example.com');
+        // The mapping is rewritten to the customer Zammad actually used.
+        expect(await zammadCustomerModel.find().lean()).toMatchObject([
+            { userId: user._id, zammadUserId: ticket.customer_id }
+        ]);
     });
 
     it('links nothing for an account that never proved its address', async () => {

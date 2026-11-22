@@ -9,8 +9,8 @@
  *            `inline`      no broker is configured at all (a development box, an integration test),
  *                          so nobody consumes a queue: the caller runs the work itself, as it
  *                          always did.
- * Why:       a broker outage used to push every job back onto the web process, where a mail's SMTP
- *            wait, an image decode and a whole-account export all landed on request threads.
+ * Why:       without the held queue a broker outage would push every job onto the web process, where
+ *            a mail's SMTP wait, an image decode and a whole-account export land on request threads.
  *
  * @see docs/understand/rabbitmq.md#when-the-broker-is-down
  */

@@ -32,6 +32,7 @@ import {
 import { zammadContactModel, zammadCustomerModel, zammadEraseJobModel } from '../../model';
 import { zammadService } from '../../services';
 import { ensureTicketFields } from '../../services/setup';
+import { markGroupsVerified, upsertCustomer } from '../../repository';
 import { eraseAccount } from '../harness';
 import {
     addArticle,
@@ -41,6 +42,7 @@ import {
     realZammad,
     registerAllModules,
     settingsFor,
+    makeUser,
     statusOf
 } from './support';
 
@@ -64,6 +66,10 @@ const integration = settingsFor(zammad, 'integration');
 const run = randomUUID().slice(0, 8);
 
 beforeAll(() => ensureTicketFields(settingsFor(zammad, 'admin')));
+
+// `ensureTicketFields` read the integration role back and found every group readable: leave the
+// marker `zammad:setup` would, which the erase hook and retention check. A fresh database per case.
+beforeEach(() => markGroupsVerified(new Date()).then(() => undefined));
 
 beforeEach(() => {
     pointModuleAt(zammad);
@@ -144,6 +150,25 @@ describe('POST /tasks with Zammad on', () => {
             expect(ticket).toMatchObject({ customer_id: customerId, shop_sender_verified: true });
             expect(ticket.shop_account).toContain(user.id);
         }
+        expect(await zammadCustomerModel.find().lean()).toMatchObject([
+            { userId: user._id, zammadUserId: customerId }
+        ]);
+    });
+
+    it('files under the verified address when the stored mapping points at a stranger’s customer', async () => {
+        const email = `journey-${run}-g@example.com`;
+        const user = await createUser({ email, verifiedAt: new Date() });
+        // A restore left the mapping on an id another person holds now.
+        const stranger = await makeUser(zammad, `journey-${run}-g-stranger@example.com`);
+        await upsertCustomer(user.id, stranger);
+
+        await taskService.submit({ email, subject: 'Mapped wrongly', message: 'One' }, user.id);
+        await zammadService.settleHandovers();
+
+        const { customerId, ticketIds } = await ticketsOf(email);
+        expect(ticketIds).toHaveLength(1);
+        expect(customerId).not.toBe(stranger);
+        // The mapping is rewritten to the customer Zammad actually used.
         expect(await zammadCustomerModel.find().lean()).toMatchObject([
             { userId: user._id, zammadUserId: customerId }
         ]);

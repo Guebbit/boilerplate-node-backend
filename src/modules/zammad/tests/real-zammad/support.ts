@@ -169,6 +169,19 @@ export const readTicket = (zammad: RealZammad, id: number): Promise<TicketRead> 
 export const lastContactOf = (zammad: RealZammad, id: number): Promise<string | null | undefined> =>
     readTicket(zammad, id).then(({ last_contact_at: lastContact }) => lastContact);
 
+/**
+ * When the customer last wrote, as Zammad measures it: what the retention pass reads. An agent's
+ * public reply moves {@link lastContactOf}, never this.
+ *
+ * @param zammad - the booted Zammad
+ * @param id - Zammad's own id of the ticket
+ */
+export const lastCustomerContactOf = (
+    zammad: RealZammad,
+    id: number
+): Promise<string | null | undefined> =>
+    readTicket(zammad, id).then(({ last_contact_customer_at: contact }) => contact);
+
 /** One file for an article: Zammad takes it as base64 with its media type. */
 export interface FileUpload {
     filename: string;
