@@ -17,10 +17,10 @@ x-error-codes:
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
     CART_LINE_LIMIT_REACHED: { status: 409, description: 'The cart already holds `NODE_CART_MAX_LINES` lines (100 by default), so a NEW product cannot be added — remove one first. Raising a line already there is never refused.' }
-    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`read:StockLevel`).' }
+    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and `quantityAvailable`, how many of it can be bought now (`0` for a sold-out or off-sale product). The same line shape `ORDER_INSUFFICIENT_STOCK` carries, for every caller.' }
     CART_OPEN_ORDER_LIMIT_REACHED: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
-    CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
+    CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added. A product merely taken off sale is refused as `CART_INSUFFICIENT_STOCK`, with `quantityAvailable: 0`.' }
     CART_PURCHASE_HOLD: { status: 409, description: 'The account is under a purchase hold: a protective pause after repeated cancellations, or one set by staff. `errors[].details` carries `until` (when checkout opens again), `reason` (`repeated_cancellations` or `staff`) and, for a staff hold, the `note` written for the buyer. Paying an existing order, cancelling, a withdrawal and a return are never blocked; the buyer can contest it through the contact form.' }
     CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
     CART_SHIPPING_METHOD_NOT_FOUND: { status: 404, description: 'The named shipping method does not exist or is not offered.' }
@@ -73,7 +73,10 @@ paths:
                 `/cart/add`, commercetools' `addLineItem`). A line is written through its parent, so
                 the answer is always 200 with the whole cart: no `Location`, no read of a line. The
                 line may not pass the per-line cap (422), and a NEW product is refused (409
-                `CART_LINE_LIMIT_REACHED`) once the cart holds `NODE_CART_MAX_LINES` lines. A retry after a lost answer carries the SAME
+                `CART_LINE_LIMIT_REACHED`) once the cart holds `NODE_CART_MAX_LINES` lines. A quantity
+                above what can be bought (`quantityAvailable`) is not a failure: the write succeeds,
+                clamped to the most that can be bought, and `warnings` says so (Shopify's cart
+                warnings). Checkout stays the real gate: nothing is reserved by a cart. A retry after a lost answer carries the SAME
                 `Idempotency-Key` and gets the first answer back; a deliberate second click is a new
                 intent with a new key, and adds again. To SET a quantity,
                 `PATCH /cart/items/{productId}`.
@@ -127,7 +130,7 @@ paths:
         patch:
             tags: [Cart]
             summary: Set cart item quantity
-            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. Returns the updated cart.
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. A quantity above what can be bought is clamped, with a `warnings` entry, as for `POST /cart/items`; lowering a line is always allowed, even one above the number. Returns the updated cart.
             operationId: updateCartItemByProductId
             x-error-codes:
                 '422': [CART_QUANTITY_LIMIT]
@@ -280,12 +283,12 @@ paths:
                 LINE, in request order, saying what the line asked for (`requested`), what the cart
                 holds for that product now (`resulting`) and, when the two differ or the line did
                 not land cleanly, why (`reason`). A line the cart cannot take is not a failure: the
-                call still answers 200, because one bad line must not strand the rest. Stock is CHECKED,
-                not enforced: a line that is short is still added (a stock-out is temporary) and
-                flagged through its `availability` (`insufficient_stock`, `out_of_stock`, or `unavailable` for a
-                product taken off sale), with the quantity left as the sum, so the answer never
-                says how many are for sale. The same rule runs at checkout, which refuses, and in
-                `GET /cart`, which flags, all three reading the stock ledger. Lines that could not be
+                call still answers 200, because one bad line must not strand the rest. Stock CLAMPS
+                the way `POST /cart/items` does: a line that asks for more than can be bought
+                (`quantityAvailable`) is added up to that number, and `warnings` names each such line
+                (one entry per clamped line, in request order); a product that cannot be bought at all
+                adds nothing and is warned `MERCHANDISE_OUT_OF_STOCK`. The same rule runs at checkout,
+                which refuses, and in `GET /cart`, which shows each line's own numbers. Lines that could not be
                 added at all (`removed`: the product is deleted or hidden; `cart_full`: no line is left for it) are also written as ONE notification
                 (`shop-tasks.cart-merge-refused`); nothing is written when there are none. Safe to
                 retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
@@ -320,7 +323,7 @@ paths:
         post:
             tags: [Cart]
             summary: Reorder (refill cart from a past order)
-            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, and `warnings` for a line clamped by stock). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
             x-error-codes:
                 '409': [IDEMPOTENCY_IN_FLIGHT, REORDER_UNAVAILABLE, CART_LINE_LIMIT_REACHED]
@@ -402,30 +405,42 @@ components:
                     items:
                         $ref: '#/components/schemas/AddCartItemRequest'
 
-        # One value for a cart line, a wishlist line and a merge result. Google's feed vocabulary.
-        # First match wins: removed, unavailable, out_of_stock, insufficient_stock, preorder, backorder, in_stock.
-        LineAvailability:
+        # Shopify's `CartWarning` (Storefront API 2024-10). The codes are spelled as Shopify spells them, a
+        # value another standard defines (`docs/build/openapi-workflow.md`, enum values).
+        CartWarningCode:
             type: string
             description: >-
-                Whether a saved line can be bought right now.
+                Why a cart write did not land exactly as asked. A warning confirms the write succeeded.
 
-                - `in_stock`: buyable, enough stock.
-                - `preorder`: buyable before its release date; it ships from `releaseDate`. Judged
-                  against the preorder allowance, so `out_of_stock` and `insufficient_stock` mean
-                  the allowance is full or short, not that the shelf is empty.
-                - `backorder`: a released product the shop keeps selling while it is out of stock.
-                  The shelf covers less than the line asks for (or nothing, for a wishlist line), and
-                  the rest is owed, to arrive by the product's `restockDate` or within 30 days. Judged
-                  against the shelf and the room under the cap together, so `out_of_stock` and
-                  `insufficient_stock` mean both are used up.
-                - `insufficient_stock`: some left, fewer than the line wants (cart lines only).
-                - `out_of_stock`: none left.
-                - `unavailable`: the product is taken off sale (`purchasable: false`).
-                - `removed`: the product is hidden (`active: false`) or deleted. The line is kept,
-                  and returns to a stock value if the product is shown again.
+                - `MERCHANDISE_NOT_ENOUGH_STOCK`: some can be bought, fewer than asked for; the line holds
+                  the most that can be bought (or what it already held, when that is more).
+                - `MERCHANDISE_OUT_OF_STOCK`: none can be bought (sold out, or not on sale); nothing was added.
+            enum: [MERCHANDISE_NOT_ENOUGH_STOCK, MERCHANDISE_OUT_OF_STOCK]
 
-                Never a number: exact stock stays behind `read:StockLevel`.
-            enum: [in_stock, preorder, backorder, insufficient_stock, out_of_stock, unavailable, removed]
+        CartWarning:
+            type: object
+            additionalProperties: false
+            required: [code, productId, requested, resulting]
+            properties:
+                code:
+                    $ref: '#/components/schemas/CartWarningCode'
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                requested:
+                    type: integer
+                    minimum: 1
+                    description: What the line would hold without the stock limit (the quantity a `PATCH` set, the sum an add or a merge reached, never past the per-line cap).
+                resulting:
+                    type: integer
+                    minimum: 0
+                    description: What the line holds after the write.
+
+        CartWarnings:
+            type: array
+            minItems: 1
+            description: One entry per line a write clamped or could not add, in the order the lines were written. Absent when the write landed as asked.
+            items:
+                $ref: '#/components/schemas/CartWarning'
 
         MergeLineReason:
             type: string
@@ -438,14 +453,14 @@ components:
                   `NODE_CART_MAX_LINES` lines; nothing was added, `resulting` is 0.
                 - `removed`: the product is not publicly visible any more (deleted or hidden);
                   nothing was added, `resulting` is what the cart already held (often 0). A product
-                  that is merely sold out, or taken off sale, is NOT removed: it is added and
-                  flagged through `availability`.
+                  that is merely sold out, or taken off sale, is NOT removed: nothing is added and
+                  `warnings` says why.
             enum: [summed, capped, cart_full, removed]
 
         MergeLineResult:
             type: object
             additionalProperties: false
-            required: [productId, requested, resulting, availability]
+            required: [productId, requested, resulting]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -459,10 +474,6 @@ components:
                     description: What the cart holds for this product after the merge or reorder.
                 reason:
                     $ref: '#/components/schemas/MergeLineReason'
-                # What `resulting` can do right now. Never the number left. Independent of
-                # `reason`: a line can be `summed` and short.
-                availability:
-                    $ref: '#/components/schemas/LineAvailability'
 
         MergeCartResponse:
             type: object
@@ -476,6 +487,8 @@ components:
                     description: One result per submitted line, in request order.
                     items:
                         $ref: '#/components/schemas/MergeLineResult'
+                warnings:
+                    $ref: '#/components/schemas/CartWarnings'
 
         ReorderResponse:
             type: object
@@ -489,6 +502,8 @@ components:
                     description: One result per order line, in the order's own order.
                     items:
                         $ref: '#/components/schemas/MergeLineResult'
+                warnings:
+                    $ref: '#/components/schemas/CartWarnings'
 
         UpdateCartItemByProductIdRequest:
             type: object
@@ -633,41 +648,55 @@ components:
                 checkoutable:
                     type: boolean
                     description: >-
-                        Whether every line can be bought as it stands (each line's `availability`
-                        is `in_stock`, `preorder` or `backorder`) and the cart is not empty. Checkout
-                        refuses the others (`CART_INSUFFICIENT_STOCK`, `CART_PRODUCT_UNAVAILABLE`);
-                        a shipping method and an address are separate steps and not part of this.
+                        Whether every line can be bought as it stands (each line holds no more than
+                        its `quantityAvailable`, and its product is on sale and shown) and the cart is
+                        not empty. Checkout refuses the others (`CART_INSUFFICIENT_STOCK`,
+                        `CART_PRODUCT_UNAVAILABLE`); a shipping method and an address are separate
+                        steps and not part of this.
+                warnings:
+                    $ref: '#/components/schemas/CartWarnings'
 
         CartResponseItem:
             type: object
             additionalProperties: false
             required: [productId, quantity, availability, canIncrease]
             description: >-
-                One line of the basket as the cart answers it: the stored line plus whether it can
-                be bought as it stands. Not `CartItem`, which stays the bare stored line the export and the
-                order request use.
+                One line of the basket as the cart answers it: the stored line plus the product's
+                own stock answer, the same words and numbers as `GET /products/{id}/availability`
+                (Google's `availability` and `availabilityDate`, Shopify's `quantityAvailable`).
+                Not `CartItem`, which stays the bare stored line the export and the order request use.
+                A cart reserves nothing, so a line can hold more than `quantityAvailable` after a
+                sale: the client works that out as `quantity > quantityAvailable`. Which of removed,
+                off sale and sold out a product is, the client reads from the product details it
+                already holds.
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     type: integer
                     minimum: 1
-                # Whether `quantity` can be bought right now, never the number left: exact
-                # stock is for callers holding `read:StockLevel`, the same level of
-                # disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
-                # ledger and the catalogue by the cart view, the merge and checkout
-                # through one rule; `POST /cart/items` and `PATCH` do not refuse a line for stock
-                # or for being off sale, so a client polling `GET /cart` is how it learns
-                # a line has gone short or unavailable.
                 availability:
-                    $ref: '#/components/schemas/LineAvailability'
+                    $ref: '../inventory/openapi.yaml#/components/schemas/Availability'
+                availabilityDate:
+                    type: string
+                    format: date
+                    description: The product's own `availabilityDate`, the release date of a preorder or the restock date of a backorder.
+                quantityAvailable:
+                    type: integer
+                    minimum: 0
+                    description: The product's own `quantityAvailable`. `0` exactly when `availability` is `out_of_stock` (a removed or hard-deleted product reads so too). Absent means no limit.
+                quantityBackordered:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        How many units of THIS line ship later, beyond the shelf (Magento's `qty_backordered`): all of a preorder's,
+                        and what a backorder line asks past the shelf. Absent when none. `availabilityDate` is their date.
                 canIncrease:
                     type: boolean
                     description: >-
                         Whether the line can hold one more unit: `quantity` is below the shop's
-                        per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`). Stock plays no part, as for
-                        `POST /cart/items`. A client disables its "+" on `false` instead of copying
-                        the ceiling.
+                        per-line ceiling (`NODE_CART_LINE_MAX_QUANTITY`) and below `quantityAvailable`.
+                        A client disables its "+" on `false` instead of copying either number.
 
         CartShippingOption:
             type: object

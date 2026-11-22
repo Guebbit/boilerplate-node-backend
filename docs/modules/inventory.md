@@ -165,7 +165,8 @@ creates it.
 ## The availability reads {#the-availability-reads}
 
 What a shopper is told about a product's stock, in Google Merchant's words: `availability`
-(`in_stock`, `out_of_stock`, `preorder`, `backorder`) and, with the last two, `availabilityDate`.
+(`in_stock`, `out_of_stock`, `preorder`, `backorder`), with the last two `availabilityDate`, and
+`quantityAvailable`, how many can be bought now (Shopify's `ProductVariant.quantityAvailable`).
 This module answers it under the catalogue's URL, through its own router mounted at `/products`
 (the pattern of `payments` serving `/orders/{id}/payments`):
 
@@ -178,6 +179,13 @@ The rule that turns settings and counts into a value is `availabilityOf` in the 
 (`out_of_stock` covers every "cannot be ordered": sold out, not on sale, a preorder whose allowance
 is full). `availabilityDate` is the release day of a preorder, or the restock day of a backorder,
 or `BACKORDER_PROMISE_DAYS` from today when it names none.
+
+`quantityAvailable` is the shelf, plus the room left under the backorder cap while the product is
+open to backorder; only the room for a preorder. It is `0` exactly when the answer is `out_of_stock`
+(not on sale included), and **absent when there is no limit** (an uncapped backorder; `Infinity` is
+never served). The raw `onHand` and `reserved` stay behind `read:StockLevel`. The rule, with the
+judging order, is `availabilityOf` and `shared/cases/availability.cases.yaml`. The cart reads the same
+judgement uncached (`liveAvailabilityOf`), so a clamp never works from a number a stock move has changed.
 
 ```mermaid
 flowchart LR

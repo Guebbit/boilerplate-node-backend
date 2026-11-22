@@ -5,17 +5,23 @@
  * them, including the flags a client would otherwise re-derive (`canIncrease`, `checkoutable`).
  */
 
-import type { CartResponse, CartShipping, LineAvailability } from '@types';
-import { isBuyable } from './domain';
+import type { Availability, CartResponse, CartShipping, CartWarning } from '@types';
 
 /** The cart as `openapi.yaml` declares it: `CartResponse`, built rather than serialized. */
 export type CartView = CartResponse;
 
-/** A stored line with the availability the shared rule judged for it. */
+/** A stored line with the product's own stock answer and whether checkout would take it as it stands. */
 export interface JudgedCartLine {
     productId: string;
     quantity: number;
-    availability: LineAvailability;
+    availability: Availability;
+    availabilityDate?: string;
+    /** How many can be bought now; absent is no limit. */
+    quantityAvailable?: number;
+    /** Units of this line that ship later; absent for none. */
+    quantityBackordered?: number;
+    /** The product is shown, on sale, and the line holds no more than can be bought. */
+    buyable: boolean;
 }
 
 /** What the presenter needs; every number already computed by the services. */
@@ -32,6 +38,8 @@ export interface CartFacts {
     shipping: CartShipping;
     /** The shop's per-line ceiling, `cartLineMax()`. */
     lineMax: number;
+    /** What the write clamped or could not add; absent for a read and for a write that landed as asked. */
+    warnings?: readonly CartWarning[] | undefined;
 }
 
 /**
@@ -49,14 +57,30 @@ export const presentCart = ({
     totalPrice,
     currency,
     shipping,
-    lineMax
+    lineMax,
+    warnings
 }: CartFacts): CartView => ({
-    items: lines.map(({ productId, quantity: lineQuantity, availability }) => ({
-        productId,
-        quantity: lineQuantity,
-        availability,
-        canIncrease: lineQuantity < lineMax
-    })),
+    items: lines.map(
+        ({
+            productId,
+            quantity: lineQuantity,
+            availability,
+            availabilityDate,
+            quantityAvailable,
+            quantityBackordered
+        }) => ({
+            productId,
+            quantity: lineQuantity,
+            availability,
+            ...(availabilityDate === undefined ? {} : { availabilityDate }),
+            ...(quantityAvailable === undefined ? {} : { quantityAvailable }),
+            ...(quantityBackordered === undefined ? {} : { quantityBackordered }),
+            // Stops at the shop's ceiling and at what can be bought, whichever comes first.
+            canIncrease:
+                lineQuantity < lineMax &&
+                (quantityAvailable === undefined || lineQuantity < quantityAvailable)
+        })
+    ),
     summary: {
         itemsCount: count,
         totalQuantity: quantity,
@@ -66,5 +90,6 @@ export const presentCart = ({
         currency
     },
     shipping,
-    checkoutable: lines.length > 0 && lines.every(({ availability }) => isBuyable(availability))
+    checkoutable: lines.length > 0 && lines.every(({ buyable }) => buyable),
+    ...(warnings && warnings.length > 0 ? { warnings: [...warnings] } : {})
 });

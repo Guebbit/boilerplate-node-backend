@@ -20,13 +20,27 @@ const EARLIER = new Date('2026-09-01T00:00:00.000Z');
 
 describe('availabilityOf', () => {
     it.each([
-        ['units on the shelf', {}, { available: 3 }, { availability: 'in_stock' }],
-        ['an empty shelf', {}, { available: 0 }, { availability: 'out_of_stock' }],
+        [
+            'units on the shelf',
+            {},
+            { available: 3 },
+            { availability: 'in_stock', quantityAvailable: 3 }
+        ],
+        [
+            'an empty shelf',
+            {},
+            { available: 0 },
+            { availability: 'out_of_stock', quantityAvailable: 0 }
+        ],
         [
             'an empty shelf with backorder open and no restock date',
             { allowBackorder: true },
             { available: 0, backorderLimit: 5 },
-            { availability: 'backorder', availabilityDate: new Date('2026-11-11T10:00:00.000Z') }
+            {
+                availability: 'backorder',
+                availabilityDate: new Date('2026-11-11T10:00:00.000Z'),
+                quantityAvailable: 5
+            }
         ],
         [
             'an empty shelf with backorder open and a restock date',
@@ -38,61 +52,73 @@ describe('availabilityOf', () => {
             'backorder on with its cap full',
             { allowBackorder: true },
             { available: 0, backorderLimit: 2, backordered: 2 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'backorder on with its restock date passed',
             { allowBackorder: true, restockDate: EARLIER },
             { available: 0, backorderLimit: 5 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'shelf units, even with backorder open',
             { allowBackorder: true },
             { available: 2, backorderLimit: 5 },
+            { availability: 'in_stock', quantityAvailable: 7 }
+        ],
+        [
+            'shelf units under an uncapped backorder have no limit',
+            { allowBackorder: true },
+            { available: 2, backorderLimit: null },
             { availability: 'in_stock' }
+        ],
+        [
+            'a preorder with no cap has no limit',
+            { releaseDate: LATER },
+            { available: 0, backorderLimit: null },
+            { availability: 'preorder', availabilityDate: LATER }
         ],
         [
             'a preorder with allowance left',
             { releaseDate: LATER },
             { available: 9, backorderLimit: 3 },
-            { availability: 'preorder', availabilityDate: LATER }
+            { availability: 'preorder', availabilityDate: LATER, quantityAvailable: 3 }
         ],
         [
             'a preorder with its allowance full',
             { releaseDate: LATER },
             { available: 9, backorderLimit: 3, backordered: 3 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'a preorder with no allowance set',
             { releaseDate: LATER },
             { available: 9 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'a released product, its release date behind it',
             { releaseDate: EARLIER },
             { available: 1 },
-            { availability: 'in_stock' }
+            { availability: 'in_stock', quantityAvailable: 1 }
         ],
         [
             'a hidden product with stock',
             { active: false },
             { available: 3 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'an off-sale product with stock',
             { purchasable: false },
             { available: 3 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ],
         [
             'a soft-deleted product with stock',
             { deletedAt: EARLIER },
             { available: 3 },
-            { availability: 'out_of_stock' }
+            { availability: 'out_of_stock', quantityAvailable: 0 }
         ]
     ])('%s', (_name, terms, counts, expected) => {
         expect(availabilityOf(terms, counts, NOW, PROMISE_DAYS)).toEqual(expected);
@@ -110,7 +136,8 @@ describe('availabilityOf', () => {
             )
         ).toEqual({
             availability: 'backorder',
-            availabilityDate: new Date('2027-01-19T12:00:00.000Z')
+            availabilityDate: new Date('2027-01-19T12:00:00.000Z'),
+            quantityAvailable: 5
         });
     });
 });

@@ -104,7 +104,7 @@ Enum values are lowercase snake_case. Four exceptions:
 - JSON:API sort tokens (`-createdAt`).
 - i18n message keys (`notifications.staff.webhook-disabled`).
 - Event names (`order.created`, and `*` for every event): [Internal event names](./asyncapi-workflow.md#internal-event-names).
-- A value another standard defines (`no-store` from RFC 9111, `about:blank` from RFC 9457).
+- A value another standard defines (`no-store` from RFC 9111, `about:blank` from RFC 9457, and `MERCHANDISE_NOT_ENOUGH_STOCK` / `MERCHANDISE_OUT_OF_STOCK`, Shopify's `CartWarning` codes).
 
 ## Commands used in this repo
 

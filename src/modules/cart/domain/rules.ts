@@ -5,7 +5,6 @@
  * @see docs/understand/domain-layer.md#the-rule-enforced-by-lint
  */
 
-import type { LineAvailability } from '@types';
 import { isBuyable, lineAvailability } from './availability';
 
 /**
@@ -48,15 +47,15 @@ export interface UnavailableCartLine {
 }
 
 /**
- * One line the cart cannot check out. Names the product and what was asked for, never the number
- * left: exact stock is for whoever holds `read:StockLevel`, and no shopper does.
+ * One line the cart cannot check out: the product, what was asked for and how many can be bought
+ * now, the number any shopper may read (`GET /products/{id}/availability`).
  */
 export interface CheckoutShortfall {
     productId: string;
     title: string;
     requested: number;
-    /** Why the line is refused, so the client picks the message. Never `in_stock` or `removed`. */
-    availability: Exclude<LineAvailability, 'in_stock' | 'preorder' | 'backorder' | 'removed'>;
+    /** How many can be bought now; `0` for a sold-out or off-sale product. */
+    quantityAvailable: number;
 }
 
 /** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
@@ -180,7 +179,7 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
     if (unavailable.length > 0)
         return { ok: false, reason: 'product-unavailable', lines: unavailable };
 
-    // Off sale and sold out join the stock refusal, each naming its own availability.
+    // Off sale and sold out join the stock refusal, each with the number that can be bought.
     const shortfalls = judged.flatMap(({ line, availability }) =>
         isBuyable(availability) || availability === 'removed'
             ? []
@@ -189,7 +188,9 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
                       productId: line.productId ?? '',
                       title: line.product?.title ?? '',
                       requested: line.quantity ?? 0,
-                      availability
+                      // Off sale sells nothing, whatever the ledger still holds.
+                      quantityAvailable:
+                          availability === 'unavailable' ? 0 : (line.product?.available ?? 0)
                   }
               ]
     );

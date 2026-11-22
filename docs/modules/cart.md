@@ -138,96 +138,105 @@ wishlist's "move to cart".
 
 ## Stock checked in three places
 
-One rule answers "what can this line do right now", in the cart's domain layer
-(`src/modules/cart/domain/availability.ts`), and three callers share it. All three read the **stock ledger**
-(`inventoryService.availableFor`, one batched read per request), never the catalogue's cached copy,
-so a line cannot read as fitting and then be refused at checkout.
+Stock is read from the **stock ledger**, never the catalogue's cached copy
+(`inventoryService.liveAvailabilityOf` for the view and the writes, `availableFor` for checkout; one
+batched read per request), so a line cannot read as fitting and then be refused at checkout. A cart
+reserves nothing: a sale can land between any read and any write, so checkout stays the real gate.
 
-| Where        | When                               | What happens on a line that cannot be bought as it stands                   |
-| ------------ | ---------------------------------- | --------------------------------------------------------------------------- |
-| **Checkout** | `POST /cart/checkout`              | Refused, naming the line, the quantity asked for and its `availability`     |
-| **Merge**    | `POST /cart/merge`                 | The line keeps its quantity and comes back with its `availability`          |
-| **View**     | every answer that carries the cart | The line carries its `availability`; a client polling `GET /cart` learns it |
+| Where                | When                                                              | What happens on a line that cannot be bought as it stands                                |
+| -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Checkout**         | `POST /cart/checkout`                                             | Refused (409), naming the line, the quantity asked for and `quantityAvailable`           |
+| **Writes and merge** | `POST`/`PATCH /cart/items`, wishlist move-to-cart, merge, reorder | **Clamped**: the write succeeds at the most that can be bought, and `warnings[]` says so |
+| **View**             | every answer that carries the cart                                | The line carries the product's own stock answer; a client polling `GET /cart` learns it  |
 
-**No number is ever disclosed.** The value says short, not how many are left: exact stock is for
-callers holding `read:StockLevel` ([Reading the shelf](../understand/defences/authorization.md)).
-That is also why the merge never lowers a short line: lowering it to what is for sale would let
-anyone read the stock by merging 999.
+**The number is public.** `quantityAvailable` is the shopper's number (Shopify's
+`ProductVariant.quantityAvailable`): the shelf, plus the room under the backorder cap for a product
+open to backorder, or only the room for a preorder. Absent means no limit (an uncapped backorder),
+`0` means it cannot be bought. What stays behind `read:StockLevel` is the raw `onHand`, `reserved`
+and the movements ([Reading the shelf](../understand/defences/authorization.md)).
 
-`POST /cart/items` and `PATCH /cart/items/{productId}` do not refuse a line for stock or for being off sale, so the gate that
-refuses is checkout.
+### The clamp
+
+A write that asks for more than `quantityAvailable` still answers 200, with the line at the most
+that can be bought (and never above `NODE_CART_LINE_MAX_QUANTITY`), plus a `warnings[]` entry, the
+shape of Shopify's `CartWarning`: `{code, productId, requested, resulting}`.
+
+| Code                           | Means                                                      |
+| ------------------------------ | ---------------------------------------------------------- |
+| `MERCHANDISE_NOT_ENOUGH_STOCK` | some can be bought, fewer than asked: the line holds that  |
+| `MERCHANDISE_OUT_OF_STOCK`     | none can be bought (sold out, off sale): nothing was added |
+
+The codes are spelled as Shopify spells them, a value another standard defines
+([enum values](../build/openapi-workflow.md#generated-output-api-generated)). Every clamp is also logged at info.
+
+- A line **above** the number (a sale lowered it) is never lowered by a write that did not ask for
+  it: raising it stops at what it holds, lowering is always allowed.
+- A new line that clamps to nothing is not created.
+- The write reads stock first and then writes, so a sale can slip between the two. That is the
+  accepted race; checkout is the gate.
+
+`PATCH /cart/items/{productId}` of a line the cart does not hold stays a 404, not a stock matter.
 
 ## Line availability
 
-One derived value on every cart line, wishlist line and merge result. The names are Google's feed
-vocabulary.
+Every signed-in cart line carries the product's **own** stock answer, the same words and numbers as
+`GET /products/{id}/availability` ([inventory](./inventory.md#the-availability-reads)):
 
-| `availability`       | Means                                                                                            | Shopper copy (frontend)               | Checkout |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------- | -------- |
-| `in_stock`           | buyable, enough stock                                                                            | none                                  | ok       |
-| `preorder`           | buyable before its release date, the allowance covers it                                         | "Preorder, ships from {date}"         | ok       |
-| `backorder`          | released, out of stock, kept on sale: the shelf covers less than the line asks, the rest is owed | "Backorder", always with its promise  | ok       |
-| `insufficient_stock` | some left, fewer than the line wants (cart lines only)                                           | "Only fewer left, lower the quantity" | refused  |
-| `out_of_stock`       | none left                                                                                        | "Sold out"                            | refused  |
-| `unavailable`        | taken off sale (`purchasable: false`)                                                            | "Not available right now"             | refused  |
-| `removed`            | hidden (`active: false`), or deleted and not yet pulled                                          | "No longer available", no title       | refused  |
-
-First match wins, in this order: removed, unavailable, out_of_stock, insufficient_stock, preorder,
-backorder, in_stock. The wishlist asks the same function without a quantity, so it never yields
-`insufficient_stock`.
-
-A preorder product (`active && purchasable && releaseDate > now`, see
-[products](./products.md#preorder)) is judged against its **allowance**, not the shelf: the cart
-tells `inventory` which products are preorders (`availableFor(ids, preorderIds, backorderIds)`, the third being the products open to backorder) and gets back what
-is left of `backorderLimit`. So `out_of_stock` on a preorder line means the allowance is full, however
-much sits on the shelf, and `insufficient_stock` means it has fewer left than the line wants. Nothing
-else changes: a basket may mix a preorder with goods in stock, since the order splits into fulfillment
-orders by release date (see [delivery](./delivery.md)).
-
-A released product the shop keeps selling while it is out of stock (`allowBackorder`, see
-[products](./products.md#backorder)) is judged against the shelf **and** the room under the cap
-together. `availableFor` answers two numbers per product, what can be sold and what is on the shelf,
-and the rule needs both:
-
-| Shelf | Room on the cap | The line asks | Reads                | Why                                |
-| ----- | --------------- | ------------- | -------------------- | ---------------------------------- |
-| 5     | any             | 3             | `in_stock`           | the shelf covers it                |
-| 2     | 10              | 3             | `backorder`          | two now, one owed                  |
-| 0     | 10              | 3             | `backorder`          | all owed                           |
-| 0     | 2               | 3             | `insufficient_stock` | shelf and room together fall short |
-| 0     | 0               | 1             | `out_of_stock`       | nothing to sell                    |
-| any   | 5               | wishlist      | `backorder` at 0     | a wishlist line has no quantity    |
-
-The cart shows the bare label, never "2 now, 1 later": buyers are not told a stock number, and "2
-now" is one. After ordering, the order page's fulfillment orders show what ships when.
-
-```mermaid
-flowchart TD
-    A[line] --> B{product row found<br/>and not deleted?}
-    B -- no --> R[removed]
-    B -- yes --> C{active?}
-    C -- no --> R
-    C -- yes --> D{purchasable?}
-    D -- no --> U[unavailable]
-    D -- yes --> E{available = 0?<br/>allowance left, for a preorder}
-    E -- yes --> O[out_of_stock]
-    E -- no --> F{quantity > available?<br/>cart only}
-    F -- yes --> I[insufficient_stock]
-    F -- no --> P{preorder?}
-    P -- yes --> PO[preorder]
-    P -- no --> K{backorder product,<br/>quantity > shelf?}
-    K -- yes --> BO[backorder]
-    K -- no --> S[in_stock]
+```json
+{
+    "productId": "…",
+    "quantity": 3,
+    "availability": "in_stock",
+    "quantityAvailable": 12,
+    "quantityBackordered": 1,
+    "canIncrease": true
+}
 ```
 
-Adding a hidden product stays a 404 (`POST /cart/items`, a wishlist add, `PATCH /cart/items/{id}`): a new add
-must not reveal that a hidden product exists. An off-sale product is accepted, as a sold-out one
-is. The states themselves are in [products](./products.md#product-states).
+| Field                 | Means                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `availability`        | Google's four: `in_stock`, `out_of_stock`, `preorder`, `backorder`                                                                |
+| `availabilityDate`    | the release date of a preorder, the restock date of a backorder                                                                   |
+| `quantityAvailable`   | how many can be bought now; `0` exactly when `out_of_stock`; absent is no limit                                                   |
+| `quantityBackordered` | units of THIS line that ship later (Magento's `qty_backordered`): a preorder's all, a backorder's past the shelf; absent for none |
+| `canIncrease`         | `quantity` is below both the shop's line ceiling and `quantityAvailable`                                                          |
 
-The cart answers two flags so a client holds no copy of the rule: each line's `canIncrease`
-(`quantity` below `NODE_CART_LINE_MAX_QUANTITY`) and the cart's `checkoutable` (not empty, every line
-`in_stock`, `preorder` or `backorder`: `isBuyable` in `domain/availability.ts`, the same test
-checkout's refusal uses). A shipping method and an address are separate steps and not part of it.
+One meaning per word, so `out_of_stock` ⇔ `quantityAvailable: 0`, and that covers a product that is
+hidden, deleted or off sale. A client tells those apart from the product details it already holds
+(`purchasable: false`, a missing or `active: false` product, else sold out). "Too many in the line"
+is `quantity > quantityAvailable`, worked out by the client the way Shopify does.
+
+The judge is the server for the signed-in cart and the frontend, from the cached availability read,
+for the guest cart. A guest cart cannot know `quantityBackordered` (no shelf is served), so "ships
+later" appears after sign-in.
+
+A line has no `removed`, `unavailable` or `insufficient_stock` any more. Checkout still names each
+case for itself through its refusal ([checkout](./cart-checkout.md#which-lines-are-refused-and-as-what)).
+
+A preorder product (`active && purchasable && releaseDate > now`, see
+[products](./products.md#preorder)) is judged against its **allowance**, not the shelf, and a
+released product kept on sale while out of stock (`allowBackorder`, see
+[products](./products.md#backorder)) against the shelf **and** the room under the cap together;
+inventory's availability read does both, so the cart does not repeat it.
+
+| Shelf | Room on the cap | Reads          | `quantityAvailable` | A line of 3 holds `quantityBackordered` |
+| ----- | --------------- | -------------- | ------------------- | --------------------------------------- |
+| 5     | any             | `in_stock`     | 5 + room            | none                                    |
+| 2     | 10              | `in_stock`     | 12                  | 1                                       |
+| 0     | 10              | `backorder`    | 10                  | 3                                       |
+| 0     | 0               | `out_of_stock` | 0                   | the line cannot be added                |
+
+The judging order itself is pinned for both backends by `shared/cases/availability.cases.yaml`.
+
+Adding a hidden product stays a 404 (`POST /cart/items`, a wishlist add, `PATCH /cart/items/{id}`): a new add
+must not reveal that a hidden product exists. An off-sale product cannot be added either: its
+`quantityAvailable` is 0, so the add succeeds with nothing added and a `MERCHANDISE_OUT_OF_STOCK`
+warning. The states themselves are in [products](./products.md#product-states).
+
+The cart answers two flags so a client holds no copy of the rule: each line's `canIncrease` and the
+cart's `checkoutable` (not empty, and every line on sale, shown and no larger than its
+`quantityAvailable`: the same verdict checkout's refusal reaches). A shipping method and an address
+are separate steps and not part of it.
 
 ## Merging a guest cart
 
@@ -235,7 +244,8 @@ A cart built while signed out lives in the browser. At sign-in the client sends 
 `POST /cart/merge`, and the cart folds it in by `POST /cart/items`' own rule: a product held in both
 carts ends at the sum, capped at `NODE_CART_LINE_MAX_QUANTITY`. The answer is the cart as it now stands plus
 **one result per submitted line, in request order**: what the guest asked for (`requested`), what the
-cart holds now (`resulting`), a `reason` when the two differ, and the line's `availability`.
+cart holds now (`resulting`) and a `reason` when the two differ. A line stock held back is also named in
+`warnings[]`, as for [`POST /cart/items`](#the-clamp).
 
 ```mermaid
 sequenceDiagram
@@ -248,7 +258,7 @@ sequenceDiagram
     API->>P: one read of every product and its stock
     API->>C: read the cart, with its version
     loop each line, in order, in memory
-        API->>API: sum, cap and availability, on what the lines before left
+        API->>API: sum, cap and stock clamp, on what the lines before left
     end
     API->>C: ONE write of every line, only if the version is unchanged
     API-->>N: cart.merge_refused, only for hidden or deleted products and lines the full cart refused
@@ -256,15 +266,15 @@ sequenceDiagram
     FE->>FE: alert for every line that is not as asked
 ```
 
-| Line                                             | Result                                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------ |
-| a new product                                    | added; no `reason`                                                 |
-| already in the cart                              | added to the line, `reason: summed`                                |
-| the sum passes the ceiling                       | the line stops at the ceiling, `reason: capped`                    |
-| sold out, or short                               | added anyway, `availability: out_of_stock` or `insufficient_stock` |
-| taken off sale                                   | added anyway, `availability: unavailable`                          |
-| not shown by the catalogue (deleted or hidden)   | nothing added, `reason: removed`, one notification                 |
-| a new product, and the cart holds the most lines | nothing added, `reason: cart_full`, one notification               |
+| Line                                             | Result                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| a new product                                    | added; no `reason`                                                        |
+| already in the cart                              | added to the line, `reason: summed`                                       |
+| the sum passes the ceiling                       | the line stops at the ceiling, `reason: capped`                           |
+| short                                            | added up to `quantityAvailable`, a `MERCHANDISE_NOT_ENOUGH_STOCK` warning |
+| sold out, or taken off sale                      | nothing added, a `MERCHANDISE_OUT_OF_STOCK` warning                       |
+| not shown by the catalogue (deleted or hidden)   | nothing added, `reason: removed`, one notification                        |
+| a new product, and the cart holds the most lines | nothing added, `reason: cart_full`, one notification                      |
 
 One bad line is a result, never a failure: the call answers 200 and the rest still land. The
 request carries an `Idempotency-Key`, so a lost answer replays instead of adding twice (the server

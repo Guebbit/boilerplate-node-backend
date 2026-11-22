@@ -27,8 +27,8 @@ paths:
             tags: [Wishlist]
             summary: Get wishlist
             description: >-
-                Returns the authenticated user's saved products — ids only, like the cart's lines;
-                clients render them from their own product store. Absence and emptiness are the same
+                Returns the authenticated user's saved products — ids only;
+                clients render them from their own product store and read their availability in one batch (`GET /products/availability`). Absence and emptiness are the same
                 state, so this never answers 404. Never paginated, a wishlist holds at most
                 `NODE_WISHLIST_MAX` products (250 by default).
             operationId: getWishlist
@@ -109,7 +109,9 @@ paths:
             description: >-
                 The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart
                 already holds the product) and leaves the wishlist. The cart is written before the wishlist line
-                is removed, so a failure part-way leaves the product SAVED rather than lost. Any signed-in
+                is removed, so a failure part-way leaves the product SAVED rather than lost. Stock clamps as it does
+                for `POST /cart/items`: when nothing could be added (sold out, not on sale, or the line already
+                holds all that can be bought) the line stays saved and `warnings` says why. Any signed-in
                 account may move it, staff included. Returns the updated
                 wishlist; read the cart for its own new state.
             operationId: moveWishlistItemToCart
@@ -152,18 +154,15 @@ components:
 
         # A line is a product reference and nothing else — no quantity, deliberately: a wishlist
         # answers "do I want this", not "how many". The moment an amount matters the line belongs
-        # in the cart, which is what the move-to-cart operation is for.
+        # in the cart, which is what the move-to-cart operation is for. What a product can do right
+        # now is the availability read's answer (`GET /products/availability?id=…`), asked once for the whole list.
         WishlistItem:
             type: object
             additionalProperties: false
-            required: [productId, availability]
+            required: [productId]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                # Never `insufficient_stock`: a wishlist line holds no quantity to fall short of.
-                # `removed` keeps the line, and it returns to a stock value on reactivation.
-                availability:
-                    $ref: '../cart/openapi.yaml#/components/schemas/LineAvailability'
 
         # The stored line alone, as the personal-data export carries it: availability is the shop's
         # live opinion of a product, not something the account holder saved.
@@ -184,4 +183,6 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/WishlistItem'
+                warnings:
+                    $ref: '../cart/openapi.yaml#/components/schemas/CartWarnings'
 

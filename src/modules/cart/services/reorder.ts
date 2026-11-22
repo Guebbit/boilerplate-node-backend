@@ -61,26 +61,33 @@ export const reorderIntoCart = (
                 quantity: item.quantity
             }));
 
-            return mergeLines(userId, requested, context).then(({ cart: written, lines }) => {
-                /**
-                 * Nothing landed: every line is gone from the catalogue or found the cart full.
-                 * A full cart is the news the shopper can act on, so it is the one named.
-                 */
-                const unaddable = lines.every(
-                    ({ reason }) => reason === 'removed' || reason === 'cart_full'
-                );
-                if (unaddable && lines.some(({ reason }) => reason === 'cart_full'))
-                    return lineLimitReached();
-                if (unaddable)
-                    return generateReject(409, [
-                        {
-                            code: ERROR_CODES.REORDER_UNAVAILABLE,
-                            message: t('cart.reorder.unavailable')
-                        }
-                    ]);
+            return mergeLines(userId, requested, context).then(
+                ({ cart: written, lines, warnings }) => {
+                    /**
+                     * Nothing landed: every line is gone from the catalogue or found the cart full.
+                     * A full cart is the news the shopper can act on, so it is the one named.
+                     */
+                    const unaddable = lines.every(
+                        ({ reason }) => reason === 'removed' || reason === 'cart_full'
+                    );
+                    if (unaddable && lines.some(({ reason }) => reason === 'cart_full'))
+                        return lineLimitReached();
+                    if (unaddable)
+                        return generateReject(409, [
+                            {
+                                code: ERROR_CODES.REORDER_UNAVAILABLE,
+                                message: t('cart.reorder.unavailable')
+                            }
+                        ]);
 
-                return toCartView(written).then((cart) => generateSuccess({ cart, lines }, 200));
-            });
+                    return toCartView(written).then((cart) =>
+                        generateSuccess(
+                            { cart, lines, ...(warnings.length > 0 ? { warnings } : {}) },
+                            200
+                        )
+                    );
+                }
+            );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {

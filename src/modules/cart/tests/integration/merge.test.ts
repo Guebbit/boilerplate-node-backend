@@ -2,9 +2,9 @@
  * @module
  * `merge` — a guest cart folded into the signed-in one. The rule is `POST /cart`'s, applied
  * line by line: quantities add up, a line the cart cannot take as asked is ANSWERED rather than
- * failed, and one bad line never strands the rest. Stock never changes what is added: a short or
- * sold-out line is added and FLAGGED, and the flag is never the number. What it announces for the
- * lines that could not be added at all is the contract with `notifications`.
+ * failed, and one bad line never strands the rest. Stock clamps, as `POST /cart/items` does: a short
+ * line is added up to what can be bought and WARNED, a sold-out one adds nothing and is warned. What
+ * it announces for the lines that could not be added at all is the contract with `notifications`.
  *
  * Every case reads the cart back for what it holds, never trusting the answer to describe itself.
  */
@@ -73,8 +73,7 @@ describe('merge', () => {
                 {
                     productId: String(product._id),
                     requested: 2,
-                    resulting: 2,
-                    availability: 'in_stock'
+                    resulting: 2
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 2 });
@@ -96,8 +95,7 @@ describe('merge', () => {
                     productId: String(product._id),
                     requested: 4,
                     resulting: 7,
-                    reason: 'summed',
-                    availability: 'in_stock'
+                    reason: 'summed'
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 7 });
@@ -119,8 +117,7 @@ describe('merge', () => {
                     productId: String(product._id),
                     requested: 5,
                     resulting: 999,
-                    reason: 'capped',
-                    availability: 'in_stock'
+                    reason: 'capped'
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 999 });
@@ -145,11 +142,7 @@ describe('merge', () => {
                 String(scarce._id)
             ]);
             expect(lines.map(({ reason }) => reason)).toEqual(['removed', undefined, undefined]);
-            expect(lines.map(({ availability }) => availability)).toEqual([
-                'removed',
-                'in_stock',
-                'insufficient_stock'
-            ]);
+            expect(lines.map(({ resulting }) => resulting)).toEqual([0, 2, 1]);
         });
 
         it('answers a product listed twice as two results, the second seeing the first', async () => {
@@ -166,15 +159,13 @@ describe('merge', () => {
                 {
                     productId: String(product._id),
                     requested: 1,
-                    resulting: 1,
-                    availability: 'in_stock'
+                    resulting: 1
                 },
                 {
                     productId: String(product._id),
                     requested: 2,
                     resulting: 3,
-                    reason: 'summed',
-                    availability: 'in_stock'
+                    reason: 'summed'
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 3 });
@@ -194,118 +185,126 @@ describe('merge', () => {
         });
     });
 
-    describe('stock flags a line and never changes it', () => {
-        it('adds a short line in full and flags it, with no reason', async () => {
+    describe('stock clamps a line and warns', () => {
+        it('adds a short line up to what can be bought, with no reason and one warning', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
                 [lineOf(product, 8)],
                 testCallerContext
             );
 
-            expect(lines).toEqual([
+            expect(lines).toEqual([{ productId: String(product._id), requested: 8, resulting: 5 }]);
+            expect(warnings).toEqual([
                 {
+                    code: 'MERCHANDISE_NOT_ENOUGH_STOCK',
                     productId: String(product._id),
                     requested: 8,
-                    resulting: 8,
-                    availability: 'insufficient_stock'
+                    resulting: 5
                 }
             ]);
-            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 8 });
+            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 5 });
         });
 
-        it('does not flag a line that fits exactly what is for sale', async () => {
+        it('does not warn for a line that fits exactly what can be bought', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
                 [lineOf(product, 5)],
                 testCallerContext
             );
 
-            expect(lines[0]).toMatchObject({ resulting: 5, availability: 'in_stock' });
+            expect(lines[0]).toMatchObject({ resulting: 5 });
+            expect(warnings).toBeUndefined();
         });
 
-        it('counts the summed quantity against what is for sale, and keeps the sum', async () => {
+        it('counts the summed quantity against what can be bought', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
             await cartService.addItemById(user.id, String(product._id), 3);
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
                 [lineOf(product, 4)],
                 testCallerContext
             );
 
-            expect(lines[0]).toMatchObject({
-                resulting: 7,
-                reason: 'summed',
-                availability: 'insufficient_stock'
-            });
-            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 7 });
+            expect(lines[0]).toMatchObject({ resulting: 5, reason: 'summed' });
+            expect(warnings).toEqual([
+                {
+                    code: 'MERCHANDISE_NOT_ENOUGH_STOCK',
+                    productId: String(product._id),
+                    requested: 7,
+                    resulting: 5
+                }
+            ]);
+            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 5 });
         });
 
-        it('never lowers a line the cart already holds above what is for sale', async () => {
+        it('never lowers a line the cart already holds above what can be bought', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 10 });
             await cartService.addItemById(user.id, String(product._id), 8);
             // Five of the ten leave the shelf, through the ledger the merge reads.
             await inventoryService.adjust(String(product._id), -5, 'stocktake', testCallerContext);
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
                 [lineOf(product, 1)],
                 testCallerContext
             );
 
-            expect(lines[0]).toMatchObject({
-                resulting: 9,
-                reason: 'summed',
-                availability: 'insufficient_stock'
-            });
-            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 9 });
+            expect(lines[0]).toMatchObject({ resulting: 8, reason: 'summed' });
+            expect(warnings).toMatchObject([
+                { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', requested: 9, resulting: 8 }
+            ]);
+            await expect(quantities(user.id)).resolves.toEqual({ [String(product._id)]: 8 });
         });
 
-        it('adds a sold-out product like POST /cart would, and flags it, not "removed"', async () => {
+        it('adds nothing of a sold-out product, warns it is out of stock, and does not call it removed', async () => {
             const user = await createUser();
             const sold = await createProduct({ onHand: 0 });
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
                 [lineOf(sold, 2)],
                 testCallerContext
             );
 
-            expect(lines).toEqual([
+            expect(lines).toEqual([{ productId: String(sold._id), requested: 2, resulting: 0 }]);
+            expect(warnings).toEqual([
                 {
+                    code: 'MERCHANDISE_OUT_OF_STOCK',
                     productId: String(sold._id),
                     requested: 2,
-                    resulting: 2,
-                    availability: 'out_of_stock'
+                    resulting: 0
                 }
             ]);
-            await expect(quantities(user.id)).resolves.toEqual({ [String(sold._id)]: 2 });
+            await expect(quantities(user.id)).resolves.toEqual({});
+            expect(announced).not.toHaveBeenCalled();
         });
 
-        it('flags a capped line that is also short, keeping the reason the cap gave', async () => {
+        it('warns a capped line that is also short, keeping the reason the cap gave', async () => {
             const user = await createUser();
-            const product = await createProduct({ onHand: 10 });
-            await cartService.addItemById(user.id, String(product._id), 998);
+            const product = await createProduct({ onHand: 1000 });
+            await cartService.addItemById(user.id, String(product._id), 995);
+            await inventoryService.adjust(String(product._id), -3, 'stocktake', testCallerContext);
 
-            const { lines } = await cartService.merge(
+            const { lines, warnings } = await cartService.merge(
                 user.id,
-                [lineOf(product, 5)],
+                [lineOf(product, 10)],
                 testCallerContext
             );
 
-            expect(lines[0]).toMatchObject({
-                resulting: 999,
-                reason: 'capped',
-                availability: 'insufficient_stock'
-            });
+            // 997 can be bought, the cap is 999: the cap leaves 4 to add, stock 2 of them.
+            expect(lines[0]).toMatchObject({ resulting: 997, reason: 'capped' });
+            expect(warnings).toMatchObject([
+                { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', requested: 999, resulting: 997 }
+            ]);
         });
 
         it('counts a hold another shopper’s checkout put on the shelf', async () => {
@@ -325,56 +324,35 @@ describe('merge', () => {
             const fits = await cartService.merge(guest.id, [lineOf(product, 4)], testCallerContext);
             const over = await cartService.merge(guest.id, [lineOf(product, 1)], testCallerContext);
 
-            // 10 on the shelf, 6 held by the open order: 4 left to sell. Four fit, five do not.
-            expect(fits.lines[0]).toMatchObject({ resulting: 4, availability: 'in_stock' });
-            expect(over.lines[0]).toMatchObject({
-                resulting: 5,
-                availability: 'insufficient_stock'
-            });
-        });
-    });
-
-    describe('the flag never carries a number', () => {
-        it('answers the same body for a line short by one as for a line short by hundreds', async () => {
-            const user = await createUser();
-            const nearly = await createProduct({ onHand: 4 });
-            const hardly = await createProduct({ onHand: 1 });
-
-            const { lines } = await cartService.merge(
-                user.id,
-                [lineOf(nearly, 5), lineOf(hardly, 5)],
-                testCallerContext
-            );
-
-            const [first, second] = lines;
-            expect({ ...first, productId: '' }).toEqual({ ...second, productId: '' });
-            expect(Object.keys(first ?? {}).toSorted()).toEqual([
-                'availability',
-                'productId',
-                'requested',
-                'resulting'
+            // 10 on the shelf, 6 held by the open order: 4 left to buy. Four fit, a fifth does not.
+            expect(fits.lines[0]).toMatchObject({ resulting: 4 });
+            expect(fits.warnings).toBeUndefined();
+            expect(over.lines[0]).toMatchObject({ resulting: 4 });
+            expect(over.warnings).toMatchObject([
+                { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', requested: 5, resulting: 4 }
             ]);
         });
 
-        it('tells a sold-out line from a nearly sold-out one by name, never by number', async () => {
+        it('warns each clamped line once, in request order, and lets the rest land', async () => {
             const user = await createUser();
+            const fine = await createProduct({ onHand: 50 });
+            const scarce = await createProduct({ onHand: 1 });
             const none = await createProduct({ onHand: 0 });
-            const one = await createProduct({ onHand: 1 });
 
-            const { lines } = await cartService.merge(
+            const { warnings } = await cartService.merge(
                 user.id,
-                [lineOf(none, 3), lineOf(one, 3)],
+                [lineOf(fine, 2), lineOf(scarce, 3), lineOf(none, 1)],
                 testCallerContext
             );
 
-            expect(lines.map(({ availability }) => availability)).toEqual([
-                'out_of_stock',
-                'insufficient_stock'
+            expect(warnings?.map(({ code, productId }) => [code, productId])).toEqual([
+                ['MERCHANDISE_NOT_ENOUGH_STOCK', String(scarce._id)],
+                ['MERCHANDISE_OUT_OF_STOCK', String(none._id)]
             ]);
-            expect(lines.map((line) => Object.keys(line).toSorted())).toEqual([
-                ['availability', 'productId', 'requested', 'resulting'],
-                ['availability', 'productId', 'requested', 'resulting']
-            ]);
+            await expect(quantities(user.id)).resolves.toEqual({
+                [String(fine._id)]: 2,
+                [String(scarce._id)]: 1
+            });
         });
     });
 
@@ -397,14 +375,12 @@ describe('merge', () => {
                     productId: String(hidden._id),
                     requested: 1,
                     resulting: 2,
-                    reason: 'removed',
-                    availability: 'removed'
+                    reason: 'removed'
                 },
                 {
                     productId: String(fine._id),
                     requested: 1,
-                    resulting: 1,
-                    availability: 'in_stock'
+                    resulting: 1
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({
@@ -429,8 +405,7 @@ describe('merge', () => {
                     productId: String(gone._id),
                     requested: 3,
                     resulting: 0,
-                    reason: 'removed',
-                    availability: 'removed'
+                    reason: 'removed'
                 }
             ]);
             await expect(quantities(user.id)).resolves.toEqual({});

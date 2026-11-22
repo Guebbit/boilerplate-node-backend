@@ -14,31 +14,37 @@
 import { emitDomainEvent } from '@kernel/events';
 import { logger } from '@infrastructure/adapters/logger';
 import { productService } from '@modules/products';
-import type { CallerContext, AddCartItemRequest, MergeLineResult } from '@types';
+import type { CallerContext, AddCartItemRequest, CartWarning, MergeLineResult } from '@types';
 import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
 import { cartLineMax, cartMaxLines } from '../config';
 import { cartRepository } from '../repository';
 import { trackLineWrite } from './items';
-import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
+import { stockWarning } from './clamp';
+import { isListed, readShelf, type Shelf } from './shelf';
 import { toCartView } from './view';
 import type { CartView } from '../presenter';
 
-/** What a merge answers with: the cart as it now stands, and what became of each guest line. */
+/**
+ * What a merge answers with: the cart as it now stands, what became of each guest line, and a
+ * warning for each line that stock held back.
+ */
 export interface MergeResult {
     cart: CartView;
     lines: MergeLineResult[];
+    warnings?: CartWarning[];
 }
 
 /**
  * What {@link mergeLines} settled: the cart as written (or as read, when nothing needed writing),
- * the result per line, and the shelves the plan read — kept so a caller that has to name products
- * does not read them again.
+ * the result per line, the warnings, and the shelves the plan read — kept so a caller that has to
+ * name products does not read them again.
  */
 export interface MergeOutcome {
     cart: CartDocument | null;
     lines: MergeLineResult[];
+    warnings: CartWarning[];
     shelves: Map<string, Shelf>;
 }
 
@@ -46,11 +52,12 @@ export interface MergeOutcome {
 interface MergePlanned {
     items: { productId: string; quantity: number }[];
     results: MergeLineResult[];
+    warnings: CartWarning[];
     grown: { productId: string; added: number; created: boolean }[];
 }
 
 /** A product no read found: the shelf of an id the catalogue never held. */
-const NO_SHELF: Shelf = { product: null, available: undefined, shelf: undefined };
+const NO_SHELF: Shelf = { product: null, quantityAvailable: 0 };
 
 /**
  * Plan every guest line against `cart` in memory, in request order: each line starts from what
@@ -58,7 +65,7 @@ const NO_SHELF: Shelf = { product: null, available: undefined, shelf: undefined 
  * written here, and one bad line is a result, never a throw: it must not strand the rest.
  *
  * `requested` is always the guest's number and `resulting` always the plan's, so the two stay
- * truthful whatever the reason says. Stock only sets `availability`; it never changes what is added.
+ * truthful whatever the reason says. Stock clamps inside the plan, one warning per clamped line.
  */
 const planLines = (
     cart: CartDocument | null,
@@ -70,6 +77,7 @@ const planLines = (
         (cart?.items ?? []).map((item) => [String(item.productId), item.quantity])
     );
     const results: MergeLineResult[] = [];
+    const warnings: CartWarning[] = [];
     const grown: MergePlanned['grown'] = [];
 
     for (const { productId, quantity } of lines) {
@@ -81,7 +89,8 @@ const planLines = (
             listed: isListed(shelf),
             lineMax: cartLineMax(),
             lines: held.size,
-            maxLines: cartMaxLines()
+            maxLines: cartMaxLines(),
+            quantityAvailable: shelf.quantityAvailable
         });
 
         if (plan.add > 0) {
@@ -93,15 +102,24 @@ const planLines = (
             productId,
             requested: quantity,
             resulting,
-            ...(plan.reason ? { reason: plan.reason } : {}),
-            // The shared availability rule, on what the cart will hold: never the number.
-            availability: shelfAvailability(shelf, resulting)
+            ...(plan.reason ? { reason: plan.reason } : {})
         });
+        if (plan.stock)
+            warnings.push(
+                stockWarning(
+                    productId,
+                    plan.stock.code,
+                    plan.stock.wanted,
+                    resulting,
+                    shelf.quantityAvailable
+                )
+            );
     }
 
     return {
         items: [...held].map(([productId, quantity]) => ({ productId, quantity })),
         results,
+        warnings,
         grown
     };
 };
@@ -127,8 +145,8 @@ export const mergeLines = (
 ): Promise<MergeOutcome> => {
     const attempt = (shelves: Map<string, Shelf>, attemptsLeft: number): Promise<MergeOutcome> =>
         cartRepository.findByUserId(userId).then((cart) => {
-            const { items, results, grown } = planLines(cart, lines, shelves);
-            if (grown.length === 0) return { cart, lines: results, shelves };
+            const { items, results, warnings, grown } = planLines(cart, lines, shelves);
+            if (grown.length === 0) return { cart, lines: results, warnings, shelves };
 
             return cartRepository
                 .replaceLinesIfUnchanged(userId, cart?.__v ?? null, items)
@@ -141,7 +159,7 @@ export const mergeLines = (
                     // After the write: a plan that was thrown away counts nothing.
                     for (const { productId, added, created } of grown)
                         trackLineWrite(context, productId, added, created);
-                    return { cart: written, lines: results, shelves };
+                    return { cart: written, lines: results, warnings, shelves };
                 });
         });
 
@@ -191,9 +209,8 @@ const announceRemoved = (
 /**
  * `POST /cart/merge`. Quantities add up exactly as `POST /cart/items` would — a product in both carts
  * ends at the sum, capped at the line maximum — and only a product the catalogue does not show is
- * refused. Stock lowers nothing: a short line keeps its quantity and comes back with its
- * `availability`, read from the stock ledger and the catalogue. Lowering a short line would let a caller read
- * exact stock by merging 999 Checkout stays the one real stock gate.
+ * refused. Stock clamps, as `POST /cart/items` does: a line is added up to what can be bought and
+ * each clamped line comes back as a warning. Checkout stays the one real stock gate.
  *
  * @see docs/modules/cart.md#stock-checked-in-three-places
  * @param userId - the signed-in caller
@@ -210,5 +227,9 @@ export const cartMerge = (
         announceRemoved(userId, outcome)
             // The answer is the cart the write returned, not a second read of it.
             .then(() => toCartView(outcome.cart))
-            .then((cart) => ({ cart, lines: outcome.lines }))
+            .then((cart) => ({
+                cart,
+                lines: outcome.lines,
+                ...(outcome.warnings.length > 0 ? { warnings: outcome.warnings } : {})
+            }))
     );

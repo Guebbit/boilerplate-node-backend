@@ -118,23 +118,23 @@ the whole basket is what keeps `inventory` from ever learning what a cart is.
 
 ## Which lines are refused, and as what
 
-Checkout judges every line with the cart's [availability rule](./cart.md#line-availability) and
-refuses everything that is not `in_stock`, `preorder` or `backorder`. The code depends on the line's value, so a client can
-word each case differently:
+Checkout judges every line against the ledger (the cart's internal precedence rule, `domain/availability.ts`) and
+refuses everything the shopper cannot buy as it stands. The code depends on the case, so a client can
+word each one differently:
 
-| `availability`       | Error code                 | Status | `details.lines[]` carries                                |
-| -------------------- | -------------------------- | ------ | -------------------------------------------------------- |
-| `removed`            | `CART_PRODUCT_UNAVAILABLE` | 409    | `productId`, `title` (absent for a hard-deleted product) |
-| `unavailable`        | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
-| `out_of_stock`       | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
-| `insufficient_stock` | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
+| The line                                                  | Error code                 | Status | `details.lines[]` carries                                            |
+| --------------------------------------------------------- | -------------------------- | ------ | -------------------------------------------------------------------- |
+| the product is hidden, or deleted and not yet pulled      | `CART_PRODUCT_UNAVAILABLE` | 409    | `productId`, `title` (absent for a hard-deleted product)             |
+| off sale, sold out, or asking for more than can be bought | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `quantityAvailable` (0 when none) |
+
+`quantityAvailable` is the shopper's number ([cart](./cart.md#stock-checked-in-three-places)), so the
+client caps the line to it; the refusal carries the same four fields for a customer and for staff, and
+`ORDER_INSUFFICIENT_STOCK` (an admin-created order) the same ones.
 
 A `backorder` line passes too: `reserveForOrder` takes the shelf units there are and claims the rest against the cap in one transaction ([the spill](./inventory-reservations.md#backorders)), and the order freezes `backorderedQuantity` and `promisedAt` (the product's `restockDate`, else the day it was placed plus 30 days) on the line before it is written. A `preorder` line passes: it claims the product's allowance when the order is placed, not a shelf
-unit, and the order freezes `preorder` and the promised `releaseDate` onto the line. An off-sale product is "stock 0" with its own message, so it joins the stock refusal. A removed
+unit, and the order freezes `preorder` and the promised `releaseDate` onto the line. An off-sale product is "stock 0", so it joins the stock refusal with `quantityAvailable: 0`. A removed
 line outranks the rest: one hidden line answers `CART_PRODUCT_UNAVAILABLE` even when another line is also short. Every refusal is a 409: the request conflicts with the product's current state, whether it is gone or only short.
-`CART_INSUFFICIENT_STOCK` lists every refused line at once, never the number left. The same
-refusal comes back from the reserve when a race takes the last unit between the pre-flight and the
-hold, so a sold-out line then reads `out_of_stock` and a short one `insufficient_stock`.
+`CART_INSUFFICIENT_STOCK` lists every refused line at once (the pre-flight; the reserve, when a race takes the last unit between the pre-flight and the hold, lists the one it refused, read back at that moment), each with how many can be bought.
 
 ## The price check
 

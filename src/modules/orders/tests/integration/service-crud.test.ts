@@ -582,13 +582,13 @@ describe('create', () => {
     });
 
     describe('the stock refusal', () => {
-        it('says how many are left to a caller who reads stock', async () => {
+        it('says how many can be bought to a caller who reads stock', async () => {
             await expect(refusedLines(callerAs('manager'))).resolves.toEqual([
-                expect.objectContaining({ requested: 5, available: 1 })
+                expect.objectContaining({ requested: 5, quantityAvailable: 1 })
             ]);
         });
 
-        it('leaves the number out for a caller who may create orders but not read stock', async () => {
+        it('says the same to a caller who may create orders but not read stock: the number is public', async () => {
             const manager = callerAs('manager');
             const blind = {
                 ...manager,
@@ -597,7 +597,9 @@ describe('create', () => {
 
             const lines = await refusedLines(blind);
 
-            expect(lines).toEqual([expect.objectContaining({ requested: 5 })]);
+            expect(lines).toEqual([
+                expect.objectContaining({ requested: 5, quantityAvailable: 1 })
+            ]);
             expect(lines[0]).not.toHaveProperty('available');
         });
     });

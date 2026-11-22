@@ -16,6 +16,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
+import { inventoryService } from '@modules/inventory';
 import { findShippingMethod, methodFitsWeight } from '@modules/delivery';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -24,6 +25,7 @@ import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT, LINE_LIMIT, NO_LINE } from '../repository';
+import { clampLine } from './clamp';
 import { cartLineMax } from '../config';
 import { readCartLines, toCartView, isJoined, type CartLine } from './view';
 import type { CartView } from '../presenter';
@@ -80,8 +82,11 @@ export const lineLimitReached = (): ResponseReject =>
  * The catalogue gate — may this product be in a cart — lives here, not in a controller, so every
  * single-product caller (`POST /cart/items`, `PATCH /cart/items/{productId}`, wishlist move-to-cart) inherits it
  * via `findPublicById`. `./reorder` goes through the merge's rule instead, because it reports an unavailable
- * line rather than refusing. Stock is deliberately excluded here — checked only at checkout,
- * where units are actually held.
+ * line rather than refusing.
+ *
+ * Stock is read first and CLAMPS the write ({@link clampLine}): a quantity above what can be bought
+ * succeeds at the most that can be, with a warning, and a write that could add nothing leaves the
+ * cart as it was. The read can race a sale; checkout is the real gate, where units are actually held.
  *
  * The envelope's status is the SERVICE's signal, not the route's: 201 says this write made the
  * line (it picks the analytics event), 200 that one already there changed. Every route answers 200:
@@ -89,10 +94,10 @@ export const lineLimitReached = (): ResponseReject =>
  *
  * `'update'` is `'set'` that never creates: a cart without the line answers 404.
  *
- * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX_QUANTITY`) is enforced here for `'set'` — the
- * contract only bounds a request to its hard 999, so a shop's lower number is checked before
- * anything is written — and by the repository for `'add'`, a new line and an existing one alike,
- * since every caller that adds goes through it. Both answer 422 `CART_QUANTITY_LIMIT`. A NEW line in
+ * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX_QUANTITY`) is enforced here before the
+ * clamp, for `'set'` — the contract only bounds a request to its hard 999, so a shop's lower number
+ * is checked before anything is written — and for `'add'`, the line's quantity after the add; the
+ * repository checks it again atomically. Both answer 422 `CART_QUANTITY_LIMIT`. A NEW product in
  * a cart already holding `cartMaxLines()` is refused by the repository: 409 `CART_LINE_LIMIT_REACHED`.
  */
 const upsertCartItem = (
@@ -105,15 +110,49 @@ const upsertCartItem = (
         if (!product) return generateReject(404, [t('products.not-found')]);
         if (mode !== 'add' && quantity > cartLineMax()) return quantityLimit();
 
-        return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
-            if (result === QUANTITY_LIMIT) return quantityLimit();
-            if (result === LINE_LIMIT) return lineLimitReached();
-            if (result === NO_LINE) return generateReject(404, [t('cart.item-not-found')]);
+        return Promise.all([
+            cartRepository.findByUserId(userId),
+            inventoryService.liveAvailabilityOf([id])
+        ]).then(([cart, stock]) => {
+            const held = cart?.items.find((item) => String(item.productId) === id)?.quantity ?? 0;
+            const wanted = mode === 'add' ? held + quantity : quantity;
+            if (mode === 'add' && wanted > cartLineMax()) return quantityLimit();
 
-            // 201 says a line was created; 200 that one already there changed or was left as it was.
-            return toCartView(result.cart).then((view) =>
-                generateSuccess(view, result.created ? 201 : 200)
-            );
+            // An `'update'` of a line the cart does not hold is the repository's 404, not a stock matter.
+            const clamped =
+                mode === 'update' && held === 0
+                    ? { quantity: wanted }
+                    : clampLine(
+                          id,
+                          wanted,
+                          held,
+                          // Absent is no limit; a product with no availability at all has nothing to buy.
+                          stock.has(id) ? stock.get(id)?.quantityAvailable : 0
+                      );
+            const warnings = clamped.warning ? [clamped.warning] : undefined;
+
+            // Nothing to write: the clamp left the line where it is (or never made it).
+            if (clamped.quantity === held)
+                return toCartView(cart, warnings).then((view) => generateSuccess(view, 200));
+
+            return cartRepository
+                .upsertLine(
+                    userId,
+                    id,
+                    // An add writes the increment, so concurrent adds still sum atomically.
+                    mode === 'add' ? clamped.quantity - held : clamped.quantity,
+                    mode
+                )
+                .then((result) => {
+                    if (result === QUANTITY_LIMIT) return quantityLimit();
+                    if (result === LINE_LIMIT) return lineLimitReached();
+                    if (result === NO_LINE) return generateReject(404, [t('cart.item-not-found')]);
+
+                    // 201 says a line was created; 200 that one already there changed or was left as it was.
+                    return toCartView(result.cart, warnings).then((view) =>
+                        generateSuccess(view, result.created ? 201 : 200)
+                    );
+                });
         });
     });
 
