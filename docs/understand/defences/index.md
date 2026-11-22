@@ -131,7 +131,7 @@ Full detail: [Every attack, A to Z](./a-to-z.md).
   should update its row in the same commit; a control removed without removing its row here is
   worse than never having written the row.
 - **Not the frontend's answer.** The paired Vue repo walks the browser rows on its own
-  [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
+  [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/understand/web-attack-defences.md)
   page. The rows that need both halves are marked **shared** in [Client-side](client-side.md).
 
 ## Read next
