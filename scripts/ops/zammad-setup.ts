@@ -1,6 +1,7 @@
 /**
  * @module
- * Create or update the ticket fields our hand-over writes into Zammad — `npm run zammad:setup`.
+ * Create or update the ticket fields our hand-over writes into Zammad, and set the Zammad setting
+ * the retention clock rests on — `npm run zammad:setup`.
  *
  * Why: Zammad drops a field it does not know, so without `shop_category`, `order_number`,
  * `request_ref`, `shop_sender_verified` and `shop_account` the hand-over would store nothing of them.
@@ -9,6 +10,8 @@
  *
  * Needs `ZAMMAD_ADMIN_TOKEN`, an Admin user's token used for this run only. It is deliberately not
  * a `NODE_` variable: the app never reads it, and the runtime token has no `admin.object`.
+ * The setting is `ticket_last_contact_behaviour = based_on_customer_reaction`, written only when
+ * Zammad holds another value, and reported in `settingsChanged`.
  * Not scheduled: run once when the module is turned on, and again when a category is added.
  *
  * @see docs/modules/zammad.md#setup
@@ -25,9 +28,10 @@ const main = (): Promise<void> => {
 
     return zammadService.setupTicketFields(adminToken).then((report) => {
         logger.info({
-            message: 'Zammad ticket fields are set up.',
+            message: 'Zammad ticket fields and settings are set up.',
             created: report.created,
             updated: report.updated,
+            settingsChanged: report.settingsChanged,
             restartNeeded: report.created.length > 0
         });
     });

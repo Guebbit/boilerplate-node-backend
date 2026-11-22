@@ -103,6 +103,8 @@ export interface ZammadStub {
     privacyTasks: StubPrivacyTask[];
     /** The custom attributes the object manager holds, by name. */
     attributes: Map<string, { id: number; body: Record<string, unknown> }>;
+    /** The system settings held, by key: Zammad's own default until `zammad:setup` changes it. */
+    settings: Map<string, { id: number; value: unknown }>;
     /** How many times the pending-migration endpoint was called. */
     migrations: () => number;
     /** The next ticket create(s) misbehave, one entry each, then it behaves again. */
@@ -196,6 +198,9 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
         const attributes = new Map<string, { id: number; body: Record<string, unknown> }>(
             options.fieldsExist === false ? [] : [['request_ref', { id: 1, body: {} }]]
         );
+        const settings = new Map<string, { id: number; value: unknown }>([
+            ['ticket_last_contact_behaviour', { id: 60, value: 'check_if_agent_already_replied' }]
+        ]);
         /** Customer ids by address, made on first sight like `guess:` does. */
         const customers = new Map<string, number>();
         const held = new Map<string, number>();
@@ -561,6 +566,35 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                         return;
                     }
 
+                    if (request.method === 'GET' && path === '/settings') {
+                        answer(
+                            response,
+                            200,
+                            [...settings].map(([name, { id, value }]) => ({
+                                id,
+                                name,
+                                state_current: { value }
+                            }))
+                        );
+                        return;
+                    }
+                    const setting = /^\/settings\/(\d+)$/.exec(path);
+                    if (request.method === 'PUT' && setting) {
+                        const row = [...settings.values()].find(
+                            ({ id }) => id === Number(setting[1])
+                        );
+                        if (!row) {
+                            answer(response, 404, { error: 'Setting not found' });
+                            return;
+                        }
+                        const next = body?.state_current;
+                        row.value =
+                            typeof next === 'object' && next !== null && 'value' in next
+                                ? next.value
+                                : undefined;
+                        answer(response, 200, { id: row.id });
+                        return;
+                    }
                     if (request.method === 'GET' && path === '/object_manager_attributes') {
                         answer(
                             response,
@@ -617,6 +651,7 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 users,
                 privacyTasks,
                 attributes,
+                settings,
                 migrations: () => migrationCalls,
                 misbehave: (...next) => {
                     queue = [...next];

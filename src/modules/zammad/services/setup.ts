@@ -8,6 +8,8 @@
  * Creating a field forces one Zammad restart (its own `auto_shutdown`; compose brings it back).
  * Changing a select's options later is configuration only: no migration, no restart.
  *
+ * It also sets the one Zammad system setting our retention clock rests on (`LAST_CONTACT_SETTING`).
+ *
  * @see docs/modules/zammad.md#setup
  */
 
@@ -80,16 +82,66 @@ const existingAttributes = z.array(
 /** What Zammad answers to a save: the saved attribute. */
 const savedAttribute = z.object({ id: z.number() });
 
+/** The one Zammad system setting we need: its key. */
+const LAST_CONTACT_SETTING = 'ticket_last_contact_behaviour';
+
+/**
+ * Its wanted value. Zammad's default (`check_if_agent_already_replied`) ignores a customer's
+ * second message, so the retention clock would not move on it. `based_on_customer_reaction` moves
+ * it on every customer message and not on an internal note.
+ */
+const LAST_CONTACT_VALUE = 'based_on_customer_reaction';
+
+/**
+ * The settings Zammad lists: key, id and the value held now. Zammad lists ~300 and some hold a
+ * `state_current` with no `value`, so `value` is optional: only our own key is ever read.
+ */
+const settingRows = z.array(
+    z.object({
+        id: z.number(),
+        name: z.string(),
+        state_current: z.object({ value: z.unknown().optional() }).optional()
+    })
+);
+
 /** What a run did. */
 export interface SetupReport {
     /** Fields that did not exist and were created: a Zammad restart follows. */
     created: string[];
     /** Fields that existed and were brought up to date. */
     updated: string[];
+    /** System settings that held another value and were changed; one already right is left alone. */
+    settingsChanged: string[];
 }
 
 /**
- * Create or update every field, then run the pending migration when a field was created.
+ * Set the last-contact setting, writing only when Zammad holds another value.
+ *
+ * @param settings - Zammad's address and an ADMIN token
+ * @returns the key when it was changed, nothing when it was already right
+ * @throws {Error} when Zammad does not list the setting
+ * @throws {ZammadRequestError} when Zammad refuses a call
+ */
+const ensureLastContactSetting = async (settings: ZammadSettings): Promise<string[]> => {
+    const rows = await callZammad(settings, 'GET', '/settings', undefined, settingRows);
+    const row = rows.find((setting) => setting.name === LAST_CONTACT_SETTING);
+    if (!row) throw new Error(`Zammad has no setting ${LAST_CONTACT_SETTING}.`);
+    if (row.state_current?.value === LAST_CONTACT_VALUE) return [];
+
+    // `state_current.value` is the whole write: Zammad's admin screen sends the same body.
+    await callZammad(
+        settings,
+        'PUT',
+        `/settings/${String(row.id)}`,
+        { state_current: { value: LAST_CONTACT_VALUE } },
+        z.unknown()
+    );
+    return [LAST_CONTACT_SETTING];
+};
+
+/**
+ * Create or update every field, run the pending migration when a field was created, then set the
+ * system settings.
  *
  * @param settings - Zammad's address and an ADMIN token
  * @returns what changed
@@ -103,7 +155,7 @@ export const ensureTicketFields = async (settings: ZammadSettings): Promise<Setu
         undefined,
         existingAttributes
     );
-    const report: SetupReport = { created: [], updated: [] };
+    const report: SetupReport = { created: [], updated: [], settingsChanged: [] };
 
     // Sequential: one object-manager write at a time, as Zammad's own admin screen does.
     for (const spec of fieldSpecs()) {
@@ -142,6 +194,8 @@ export const ensureTicketFields = async (settings: ZammadSettings): Promise<Setu
             {},
             z.unknown()
         );
+
+    report.settingsChanged = await ensureLastContactSetting(settings);
 
     return report;
 };

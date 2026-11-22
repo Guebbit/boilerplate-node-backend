@@ -25,7 +25,6 @@ import { zammadService } from '../../services';
 import { ensureTicketFields } from '../../services/setup';
 import {
     addArticle,
-    applySetting,
     lastContactOf,
     makeUser,
     pause,
@@ -50,9 +49,9 @@ const run = randomUUID().slice(0, 8);
 const DAY_MS = 86_400_000;
 
 beforeAll(async () => {
+    // The setup step the suite relies on: our fields, and the last-contact setting (the retention
+    // clock is a customer's last message).
     await ensureTicketFields(settingsFor(zammad, 'admin'));
-    // The runbook's setting: the retention clock is a customer's last message.
-    await applySetting(zammad, 'ticket_last_contact_behaviour', 'based_on_customer_reaction');
 });
 
 beforeEach(() => {

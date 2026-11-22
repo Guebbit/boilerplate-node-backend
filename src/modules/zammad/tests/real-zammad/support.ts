@@ -224,31 +224,6 @@ export const addArticle = (
         createdArticle
     ).then(({ id }) => id);
 
-/** The setting row Zammad lists. */
-const settingRow = z.array(z.object({ id: z.number(), name: z.string() }));
-
-/**
- * Apply a Zammad system setting through the admin token, as the runbook's setup step does.
- *
- * @param zammad - the booted Zammad
- * @param name - the setting's key, as Zammad's admin screen lists it
- * @param value - the new value, as text
- */
-export const applySetting = (zammad: RealZammad, name: string, value: string): Promise<void> => {
-    const admin = settingsFor(zammad, 'admin');
-    return callZammad(admin, 'GET', '/settings', undefined, settingRow).then((rows) => {
-        const row = rows.find((setting) => setting.name === name);
-        if (!row) throw new Error(`Zammad has no setting ${name}`);
-        return callZammad(
-            admin,
-            'PUT',
-            `/settings/${String(row.id)}`,
-            { state_current: { value } },
-            z.unknown()
-        ).then(() => undefined);
-    });
-};
-
 /** A throwaway agent that watches the group, so a notification has someone to reach. */
 export interface Watcher {
     email: string;
