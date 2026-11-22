@@ -196,6 +196,36 @@ are "this payment method settles over days", the same fact under two names. Guar
 `status: 'held'`, the same as every other lifecycle write here, so a hold already claimed has
 nothing left on it to extend.
 
+### When a hold keeps failing to expire {#when-a-hold-keeps-failing-to-expire}
+
+One hold failing does not stop the batch: it rolls back, stays due, and the sweep moves on, so the
+job still records a success and `FrequentSweepStale` stays quiet. Each failure is logged
+(`Reservation sweep: could not expire the hold for order <id>`). The sweep runs as a one-shot job
+in the `cron` container, which Prometheus does not scrape, so the alert reads the database
+instead: `inventory_overdue_holds` is a gauge the app computes at scrape time, the holds still
+`held` more than 10 minutes past their `expiresAt`. `ReservationExpiryFailing` fires when it stays
+above zero for 15 minutes. Until it is fixed the hold's units stay reserved and it takes one batch
+slot on every run.
+
+1. Find the order id in the `cron` container's log (the sweep runs there), on the line above. Or
+   query it: the holds with `status: 'held'` and `expiresAt` more than 10 minutes ago.
+2. Compare the hold (`reservations`, by `orderId`) with its `stocklevels` rows. The sweep releases
+   a plain line against `reserved` and a `kind: 'backorder'` line against `backordered`, and
+   refuses when that counter is lower than the line's quantity. The usual cause is a counter
+   knocked out of step by a hand edit or a restore.
+3. This is a technician's database edit, there is no route for it. Put the counter back to what the
+   open holds add up to ("open" is `held` plus `committed`), and keep `available` equal to
+   `onHand - reserved`: the stock level's invariant, which nothing recomputes after the fact. The
+   next tick expires the hold and `orders` cancels the order.
+4. If the order was already settled by hand, set the hold's `status` to match instead, and move
+   the counters that status implies:
+    - `released`: the units go back, but the counter is already below the line's quantity (that is
+      why the sweep refused), so do not subtract. Set `reserved` (`backordered` for a backorder
+      line) to the sum of the remaining open holds, as in step 3, then `available` to
+      `onHand - reserved`.
+    - `committed`: the order is paid and keeps its units, so no counter moves; set `committedAt`
+      to the payment date, since the preorder queue is ordered by it.
+
 ## The threshold, and its two readers
 
 `NODE_LOW_STOCK_THRESHOLD` (5 by default, declared once as the infrastructure's `stockConfig` slice) has two readers that deliberately count **different
