@@ -1,8 +1,8 @@
 /**
  * @module
- * Product states as the cart sees them: a hidden product's line is KEPT and reads `removed`, an
- * off-sale product's line is kept and reads `unavailable`, and checkout refuses both for its own
- * reason. Nothing here removes a line — only a deletion does.
+ * Product states as the cart sees them: a hidden or off-sale product's line is KEPT and reads
+ * `out_of_stock` with nothing to buy, and checkout refuses each for its own reason. A new add of an
+ * off-sale product is clamped to nothing. Nothing here removes a line — only a deletion does.
  *
  * @see docs/modules/cart.md#line-availability
  */
@@ -27,9 +27,13 @@ beforeEach(() => {
     registerCheckoutModules([paymentsModule]);
 });
 
-/** The availability of the one line in the user's cart. */
-const availabilityOf = (userId: string) =>
-    cartService.getForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
+/** The stock answer of the one line in the user's cart. */
+const stockOf = (userId: string) =>
+    cartService.getForView(userId, testCallerContext).then(({ items, checkoutable }) => ({
+        availability: items[0]?.availability,
+        quantityAvailable: items[0]?.quantityAvailable,
+        checkoutable
+    }));
 
 /** The quantities the cart holds, as `productId → quantity`. */
 const heldBy = (userId: string) =>
@@ -44,17 +48,25 @@ const edit = (id: unknown, data: { active?: boolean; purchasable?: boolean }) =>
     productService.updateById(String(id), data, testCallerContext);
 
 describe('a hidden product (active: false)', () => {
-    it('keeps the line, reads removed, and returns to in_stock on reactivation', async () => {
+    it('keeps the line, reads nothing to buy, and returns to in_stock on reactivation', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
         await cartService.addItemById(user.id, String(product._id), 2);
 
         await edit(product._id, { active: false });
-        await expect(availabilityOf(user.id)).resolves.toBe('removed');
+        await expect(stockOf(user.id)).resolves.toEqual({
+            availability: 'out_of_stock',
+            quantityAvailable: 0,
+            checkoutable: false
+        });
         await expect(heldBy(user.id)).resolves.toEqual({ [String(product._id)]: 2 });
 
         await edit(product._id, { active: true });
-        await expect(availabilityOf(user.id)).resolves.toBe('in_stock');
+        await expect(stockOf(user.id)).resolves.toEqual({
+            availability: 'in_stock',
+            quantityAvailable: 5,
+            checkoutable: true
+        });
     });
 
     it('refuses a new add as a 404, so a hidden product is not revealed', async () => {
@@ -86,34 +98,51 @@ describe('a hidden product (active: false)', () => {
 });
 
 describe('an off-sale product (purchasable: false)', () => {
-    it('is accepted into the cart like a sold-out product, and reads unavailable', async () => {
+    it('is not added to the cart: the write succeeds with nothing added and says why', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5, purchasable: false });
 
         const added = await cartService.addItemById(user.id, String(product._id), 2);
 
-        expect(added.success).toBe(true);
-        await expect(availabilityOf(user.id)).resolves.toBe('unavailable');
+        expect(added.success && added.data.items).toEqual([]);
+        expect(added.success && added.data.warnings).toEqual([
+            {
+                code: 'MERCHANDISE_OUT_OF_STOCK',
+                productId: String(product._id),
+                requested: 2,
+                resulting: 0
+            }
+        ]);
+        await expect(heldBy(user.id)).resolves.toEqual({});
     });
 
-    it('reads in_stock again once it is put back on sale', async () => {
+    it('keeps a line already in the cart, reading nothing to buy until it is back on sale', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
         await cartService.addItemById(user.id, String(product._id), 2);
 
         await edit(product._id, { purchasable: false });
-        await expect(availabilityOf(user.id)).resolves.toBe('unavailable');
+        await expect(stockOf(user.id)).resolves.toEqual({
+            availability: 'out_of_stock',
+            quantityAvailable: 0,
+            checkoutable: false
+        });
 
         await edit(product._id, { purchasable: true });
-        await expect(availabilityOf(user.id)).resolves.toBe('in_stock');
+        await expect(stockOf(user.id)).resolves.toEqual({
+            availability: 'in_stock',
+            quantityAvailable: 5,
+            checkoutable: true
+        });
     });
 
-    it('is refused by checkout under the stock refusal, naming it unavailable', async () => {
+    it('is refused by checkout under the stock refusal, with nothing to buy', async () => {
         const user = await createUser();
         await giveAddress(user.id);
-        const product = await createProduct({ onHand: 5, purchasable: false, title: 'Heated Bed' });
+        const product = await createProduct({ onHand: 5, title: 'Heated Bed' });
         await cartService.addItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
+        await edit(product._id, { purchasable: false });
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -126,7 +155,7 @@ describe('an off-sale product (purchasable: false)', () => {
                         productId: String(product._id),
                         title: 'Heated Bed',
                         requested: 1,
-                        availability: 'unavailable'
+                        quantityAvailable: 0
                     }
                 ]
             }
@@ -136,9 +165,10 @@ describe('an off-sale product (purchasable: false)', () => {
     it('places no hold on the shelf when checkout refuses it', async () => {
         const user = await createUser();
         await giveAddress(user.id);
-        const product = await createProduct({ onHand: 5, purchasable: false });
+        const product = await createProduct({ onHand: 5 });
         await cartService.addItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
+        await edit(product._id, { purchasable: false });
 
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -154,46 +184,43 @@ describe('merge, by product state', () => {
         onDomainEvent(CART_MERGE_REFUSED, announced);
     });
 
-    it('adds an off-sale product, flagged unavailable, and announces nothing', async () => {
+    it('adds nothing of an off-sale product, warns it is out of stock, and announces nothing', async () => {
         const user = await createUser();
         const offSale = await createProduct({ onHand: 5, purchasable: false });
 
-        const { lines } = await cartService.merge(
+        const { lines, warnings } = await cartService.merge(
             user.id,
             [{ productId: String(offSale._id), quantity: 2 }],
             testCallerContext
         );
 
-        expect(lines).toEqual([
+        expect(lines).toEqual([{ productId: String(offSale._id), requested: 2, resulting: 0 }]);
+        expect(warnings).toEqual([
             {
+                code: 'MERCHANDISE_OUT_OF_STOCK',
                 productId: String(offSale._id),
                 requested: 2,
-                resulting: 2,
-                availability: 'unavailable'
+                resulting: 0
             }
         ]);
+        await expect(heldBy(user.id)).resolves.toEqual({});
         expect(announced).not.toHaveBeenCalled();
     });
 
-    it('does not add a hidden product: reason removed, availability removed, announced', async () => {
+    it('does not add a hidden product: reason removed, no stock warning, announced', async () => {
         const user = await createUser();
         const hidden = await createProduct({ onHand: 5, active: false });
 
-        const { lines } = await cartService.merge(
+        const { lines, warnings } = await cartService.merge(
             user.id,
             [{ productId: String(hidden._id), quantity: 2 }],
             testCallerContext
         );
 
         expect(lines).toEqual([
-            {
-                productId: String(hidden._id),
-                requested: 2,
-                resulting: 0,
-                reason: 'removed',
-                availability: 'removed'
-            }
+            { productId: String(hidden._id), requested: 2, resulting: 0, reason: 'removed' }
         ]);
+        expect(warnings).toBeUndefined();
         await expect(heldBy(user.id)).resolves.toEqual({});
         expect(announced).toHaveBeenCalledTimes(1);
     });

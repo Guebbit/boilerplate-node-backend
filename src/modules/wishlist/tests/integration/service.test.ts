@@ -56,8 +56,8 @@ describe('wishlistRepository.addLine', () => {
     });
 });
 
-describe('get: availability per line', () => {
-    it('names each saved product by what it can do right now', async () => {
+describe('get: ids only', () => {
+    it('answers each saved product as its id and nothing else, whatever state the product is in', async () => {
         const user = await createUser();
         const onSale = await createProduct({ onHand: 5 });
         const soldOut = await createProduct({ onHand: 0 });
@@ -69,41 +69,15 @@ describe('get: availability per line', () => {
 
         const view = await wishlistService.get(user.id);
 
-        expect(view.items).toEqual([
-            { productId: String(onSale._id), availability: 'in_stock' },
-            { productId: String(soldOut._id), availability: 'out_of_stock' },
-            { productId: String(offSale._id), availability: 'unavailable' },
-            { productId: String(hidden._id), availability: 'removed' }
-        ]);
+        // What each product can do is the availability read's answer, asked once for the list.
+        expect(view).toEqual({
+            items: [onSale, soldOut, offSale, hidden].map((product) => ({
+                productId: String(product._id)
+            }))
+        });
     });
 
-    it('never says insufficient_stock: a wishlist line holds no quantity', async () => {
-        const user = await createUser();
-        const scarce = await createProduct({ onHand: 1 });
-        await wishlistRepository.addLine(user.id, String(scarce._id));
-
-        const view = await wishlistService.get(user.id);
-
-        expect(view.items[0].availability).toBe('in_stock');
-    });
-
-    it('returns a hidden line to a stock value once the product is shown again', async () => {
-        const user = await createUser();
-        const product = await createProduct({ onHand: 5 });
-        await wishlistRepository.addLine(user.id, String(product._id));
-
-        await productService.updateById(String(product._id), { active: false }, testCallerContext);
-        const hidden = await wishlistService.get(user.id);
-        await productService.updateById(String(product._id), { active: true }, testCallerContext);
-        const shown = await wishlistService.get(user.id);
-
-        expect([hidden.items[0].availability, shown.items[0].availability]).toEqual([
-            'removed',
-            'in_stock'
-        ]);
-    });
-
-    it('lets an off-sale product be saved, and moves it to the cart like a sold-out one', async () => {
+    it('lets an off-sale product be saved, and keeps it saved when the move adds nothing', async () => {
         const user = await createUser();
         const offSale = await createProduct({ onHand: 5, purchasable: false });
 
@@ -115,16 +89,21 @@ describe('get: availability per line', () => {
         );
 
         expect(saved.success).toBe(true);
-        expect(moved.success).toBe(true);
-        const cart = await cartService.getForBadge(user.id);
-        expect(cart.items).toEqual([
-            {
-                productId: String(offSale._id),
-                quantity: 1,
-                availability: 'unavailable',
-                canIncrease: true
-            }
-        ]);
+        // Nothing can be bought of it: the answer is the wishlist, still holding the line, and why.
+        expect(moved.success && moved.data).toEqual({
+            items: [{ productId: String(offSale._id) }],
+            warnings: [
+                {
+                    code: 'MERCHANDISE_OUT_OF_STOCK',
+                    productId: String(offSale._id),
+                    requested: 1,
+                    resulting: 0
+                }
+            ]
+        });
+        const { items } = await cartService.getForBadge(user.id);
+        expect(items).toEqual([]);
+        expect(await savedIds(user.id)).toEqual([String(offSale._id)]);
     });
 });
 
@@ -319,9 +298,56 @@ describe('moveToCart', () => {
                 productId: String(product._id),
                 quantity: 1,
                 availability: 'in_stock',
+                quantityAvailable: 10,
                 canIncrease: true
             }
         ]);
+    });
+
+    it('moves an uncapped backorder product: no limit is not nothing', async () => {
+        const user = await createUser();
+        const product = await createProduct({
+            onHand: 0,
+            allowBackorder: true,
+            backorderLimit: null
+        });
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
+
+        const result = await wishlistService.moveToCart(
+            user.id,
+            String(product._id),
+            testCallerContext
+        );
+
+        expect(result.success && result.data.warnings).toBeUndefined();
+        expect(await savedIds(user.id)).toEqual([]);
+        const { items } = await cartService.getForBadge(user.id);
+        expect(items[0]?.quantity).toBe(1);
+    });
+
+    it('keeps the line saved, with a warning, when the cart already holds all that can be bought', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 2 });
+        await cartService.addItemById(user.id, String(product._id), 2);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
+
+        const result = await wishlistService.moveToCart(
+            user.id,
+            String(product._id),
+            testCallerContext
+        );
+
+        expect(result.success && result.data.warnings).toEqual([
+            {
+                code: 'MERCHANDISE_NOT_ENOUGH_STOCK',
+                productId: String(product._id),
+                requested: 3,
+                resulting: 2
+            }
+        ]);
+        expect(await savedIds(user.id)).toEqual([String(product._id)]);
+        const { items } = await cartService.getForBadge(user.id);
+        expect(items[0]?.quantity).toBe(2);
     });
 
     it('increments a line the cart already holds', async () => {
@@ -338,6 +364,7 @@ describe('moveToCart', () => {
                 productId: String(product._id),
                 quantity: 3,
                 availability: 'in_stock',
+                quantityAvailable: 10,
                 canIncrease: true
             }
         ]);

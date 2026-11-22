@@ -37,6 +37,8 @@ const storedSchema = z.object({
     productId: z.string(),
     availability: z.enum(['in_stock', 'out_of_stock', 'preorder', 'backorder']),
     availabilityDate: z.string().optional(),
+    // Absent is "no limit" (an uncapped backorder), never a missing field to default.
+    quantityAvailable: z.number().int().min(0).optional(),
     active: z.boolean(),
     // `null` is a live product; a soft-deleted one holds the day it went.
     deletedAt: z.string().nullable()
@@ -58,13 +60,16 @@ const parseStored = (raw: string | undefined): Stored | undefined => {
     return parsed.success ? parsed.data : undefined;
 };
 
+/** An entry with the shelf it was judged from, which the cache never holds and no HTTP read serves. */
+type Judged = Stored & { shelf: number };
+
 /**
- * Work out and store the entries for products the cache did not hold: one read of their levels,
- * one of their products. A product that does not exist has no entry.
+ * Judge each product from its level and its terms, reading both and storing nothing. A product that
+ * does not exist has no result.
  *
  * @param productIds - well-formed ids, no duplicates
  */
-const build = (productIds: readonly string[]): Promise<Stored[]> =>
+const judge = (productIds: readonly string[]): Promise<Judged[]> =>
     Promise.all([
         stockLevelRepository.findManyByProductIds(productIds),
         productService.findManyByIds(productIds)
@@ -72,10 +77,10 @@ const build = (productIds: readonly string[]): Promise<Stored[]> =>
         const levelOf = new Map(levels.map((level) => [String(level.productId), level]));
         const now = new Date();
 
-        const entries = products.map((product): Stored => {
+        return products.map((product): Judged => {
             const productId = String(product._id);
             const level = levelOf.get(productId);
-            const { availability, availabilityDate } = availabilityOf(
+            const { availability, availabilityDate, quantityAvailable } = availabilityOf(
                 {
                     active: product.active,
                     purchasable: product.purchasable,
@@ -99,11 +104,23 @@ const build = (productIds: readonly string[]): Promise<Stored[]> =>
                 ...(availabilityDate === undefined
                     ? {}
                     : { availabilityDate: shopDayOf(availabilityDate) }),
+                ...(quantityAvailable === undefined ? {} : { quantityAvailable }),
                 active: product.active !== false,
-                deletedAt: product.deletedAt ? product.deletedAt.toISOString() : null
+                deletedAt: product.deletedAt ? product.deletedAt.toISOString() : null,
+                shelf: level?.available ?? 0
             };
         });
+    });
 
+/**
+ * Work out and store the entries for products the cache did not hold: one read of their levels,
+ * one of their products. A product that does not exist has no entry.
+ *
+ * @param productIds - well-formed ids, no duplicates
+ */
+const build = (productIds: readonly string[]): Promise<Stored[]> =>
+    judge(productIds).then((judged) => {
+        const entries = judged.map(({ shelf: _shelf, ...entry }): Stored => entry);
         return Promise.all(
             entries.map((entry) =>
                 setCacheValue(
@@ -159,12 +176,13 @@ const readMany = (
         return unique.flatMap((productId) => {
             const entry = entries.get(productId);
             if (!entry || !permits(entry).read) return [];
-            const { availability, availabilityDate } = entry;
+            const { availability, availabilityDate, quantityAvailable } = entry;
             return [
                 {
                     productId,
                     availability,
-                    ...(availabilityDate === undefined ? {} : { availabilityDate })
+                    ...(availabilityDate === undefined ? {} : { availabilityDate }),
+                    ...(quantityAvailable === undefined ? {} : { quantityAvailable })
                 }
             ];
         });
@@ -185,6 +203,45 @@ export const availabilityOfProducts = (
     entriesOf([...new Set(productIds)]).then(
         (entries) =>
             new Map([...entries].map(([productId, entry]) => [productId, entry.availability]))
+    );
+
+/** What {@link liveAvailabilityOf} answers for one product: the shopper's answer and the shelf behind it. */
+export interface LiveAvailability {
+    availability: Availability;
+    /** The shop's calendar day, as the HTTP read serves it; only with `preorder` and `backorder`. */
+    availabilityDate?: string;
+    /** Units that can be bought now; absent is no limit. `0` exactly when `availability` is `out_of_stock`. */
+    quantityAvailable?: number;
+    /** Units on the shelf nobody has claimed, which tells a line the shelf covers from one that spills. */
+    shelf: number;
+}
+
+/**
+ * The availability of each product that exists, read from the ledger now and never from the cache:
+ * a cart write that clamps a quantity must not judge a number a move has already changed. The same
+ * judgement as the HTTP reads (one function builds both), for a caller that is the system itself.
+ *
+ * @param productIds - well-formed ids; duplicates are answered once
+ * @returns product id → its availability; an id with no product is absent
+ */
+export const liveAvailabilityOf = (
+    productIds: readonly string[]
+): Promise<Map<string, LiveAvailability>> =>
+    judge([...new Set(productIds)]).then(
+        (judged) =>
+            new Map(
+                judged.map(
+                    ({ productId, availability, availabilityDate, quantityAvailable, shelf }) => [
+                        productId,
+                        {
+                            availability,
+                            ...(availabilityDate === undefined ? {} : { availabilityDate }),
+                            ...(quantityAvailable === undefined ? {} : { quantityAvailable }),
+                            shelf
+                        }
+                    ]
+                )
+            )
     );
 
 /**

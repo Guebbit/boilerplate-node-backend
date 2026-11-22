@@ -16,6 +16,7 @@ import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
+import { forceStockLevel } from '@modules/inventory/tests/factories';
 import { testCallerContext } from '@tests/callers';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -63,13 +64,15 @@ describe('GET /cart', () => {
         expect(response.body.items).toHaveLength(1);
     });
 
-    it('matches the contract for a line over what is for sale: CartResponseItem flags it, no number', async () => {
+    it('matches the contract for a line over what can be bought: CartResponseItem carries the number', async () => {
         const { bearer } = await authenticateAs('user');
-        const scarce = await createProduct({ onHand: 1 });
+        const scarce = await createProduct({ onHand: 10 });
         await api()
             .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(scarce._id), quantity: 3 });
+        // A sale after the add: a cart reserves nothing.
+        await forceStockLevel(scarce._id, 1, 0);
 
         const response = await api().get('/cart').set('Authorization', bearer);
 
@@ -78,11 +81,44 @@ describe('GET /cart', () => {
             {
                 productId: String(scarce._id),
                 quantity: 3,
-                availability: 'insufficient_stock',
-                canIncrease: true
+                availability: 'in_stock',
+                quantityAvailable: 1,
+                canIncrease: false
             }
         ]);
         expect(response.body.checkoutable).toBe(false);
+    });
+
+    it('clamps POST and PATCH /cart/items to what can be bought, answering 200 with a warning', async () => {
+        const { bearer } = await authenticateAs('user');
+        const scarce = await createProduct({ onHand: 3 });
+        const productId = String(scarce._id);
+
+        const added = await api()
+            .post('/cart/items')
+            .set('Authorization', bearer)
+            .send({ productId, quantity: 5 });
+        const raised = await api()
+            .patch(`/cart/items/${productId}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 4 });
+        const lowered = await api()
+            .patch(`/cart/items/${productId}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 2 });
+
+        expect(added.status).toBe(200);
+        expect(added.body.items[0]).toMatchObject({ quantity: 3, quantityAvailable: 3 });
+        expect(added.body.warnings).toEqual([
+            { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', productId, requested: 5, resulting: 3 }
+        ]);
+        expect(raised.body.items[0].quantity).toBe(3);
+        expect(raised.body.warnings).toEqual([
+            { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', productId, requested: 4, resulting: 3 }
+        ]);
+        // Lowering is always allowed, and a write that landed as asked carries no warning.
+        expect(lowered.body.items[0].quantity).toBe(2);
+        expect(lowered.body.warnings).toBeUndefined();
     });
 
     it('says a line at the per-line ceiling cannot grow, and a buyable cart is checkoutable', async () => {
@@ -263,13 +299,9 @@ describe('POST /cart/merge', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.lines).toEqual([
-            {
-                productId: String(product._id),
-                requested: 2,
-                resulting: 2,
-                availability: 'in_stock'
-            }
+            { productId: String(product._id), requested: 2, resulting: 2 }
         ]);
+        expect(response.body.warnings).toBeUndefined();
         expect(response.body.cart.items).toHaveLength(1);
     });
 
@@ -315,22 +347,18 @@ describe('POST /cart/merge', () => {
                 productId: String(held._id),
                 requested: 2,
                 resulting: 3,
-                reason: 'summed',
-                availability: 'in_stock'
+                reason: 'summed'
             },
-            // Short, and kept at what was asked: the name is all a shopper is told.
+            // Short: added up to what can be bought, and warned below.
+            { productId: String(scarce._id), requested: 5, resulting: 3 },
+            { productId: MISSING_ID, requested: 1, resulting: 0, reason: 'removed' }
+        ]);
+        expect(response.body.warnings).toEqual([
             {
+                code: 'MERCHANDISE_NOT_ENOUGH_STOCK',
                 productId: String(scarce._id),
                 requested: 5,
-                resulting: 5,
-                availability: 'insufficient_stock'
-            },
-            {
-                productId: MISSING_ID,
-                requested: 1,
-                resulting: 0,
-                reason: 'removed',
-                availability: 'removed'
+                resulting: 3
             }
         ]);
     });
@@ -964,11 +992,12 @@ describe('POST /cart/checkout', () => {
 
     it('matches the error contract when a line exceeds the shelf', async () => {
         const { bearer } = await authenticateAs('user');
-        const scarce = await createProduct({ onHand: 1 });
+        const scarce = await createProduct({ onHand: 10 });
         await api()
             .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(scarce._id), quantity: 2 });
+        await forceStockLevel(scarce._id, 1, 0);
 
         const response = await checkoutAs(bearer);
 
@@ -976,7 +1005,7 @@ describe('POST /cart/checkout', () => {
         expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
         /**
          * The refusal has to be actionable over the wire, not just in the service: which line, how
-         * much was asked for and why it was refused — never the exact number left, which is for stock readers only.
+         * much was asked for and how many can be bought: the shopper's own number.
          * `ErrorItem.details` is `additionalProperties: true`, so this rides the existing contract
          * rather than widening it.
          */
@@ -985,7 +1014,7 @@ describe('POST /cart/checkout', () => {
                 productId: String(scarce._id),
                 title: expect.any(String),
                 requested: 2,
-                availability: 'insufficient_stock'
+                quantityAvailable: 1
             }
         ]);
     });

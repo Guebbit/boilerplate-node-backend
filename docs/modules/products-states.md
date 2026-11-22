@@ -47,16 +47,16 @@ stateDiagram-v2
 
 What each state does to the rest of the shop:
 
-| State    | Catalogue (shopper) | Cart / wishlist line       | New add | Checkout      | Admin order   | Placed orders |
-| -------- | ------------------- | -------------------------- | ------- | ------------- | ------------- | ------------- |
-| On sale  | listed              | `in_stock` / stock values  | ok      | stock decides | stock decides | untouched     |
-| Off sale | listed, flagged     | `unavailable`              | ok      | refused       | ok            | untouched     |
-| Hidden   | 404                 | `removed`, kept            | 404     | refused       | ok (staff)    | untouched     |
-| Removed  | 404                 | pulled (`product.deleted`) | 404     | n/a           | refused (409) | untouched     |
+| State    | Catalogue (shopper) | Cart / wishlist line       | New add       | Checkout      | Admin order   | Placed orders |
+| -------- | ------------------- | -------------------------- | ------------- | ------------- | ------------- | ------------- |
+| On sale  | listed              | the product's own answer   | ok            | stock decides | stock decides | untouched     |
+| Off sale | listed, flagged     | `out_of_stock`, 0, kept    | nothing added | refused       | ok            | untouched     |
+| Hidden   | 404                 | `out_of_stock`, 0, kept    | 404           | refused       | ok (staff)    | untouched     |
+| Removed  | 404                 | pulled (`product.deleted`) | 404           | n/a           | refused (409) | untouched     |
 
 Who sees a hidden product is settled by `display:Product` (`manager`, `warehouse`, `editor`,
 `admin`); an off-sale product is public, so `GET /products?purchasable=` is open to everyone. The
-line values and their precedence live in [cart](./cart.md#line-availability).
+line's stock answer lives in [cart](./cart.md#line-availability).
 
 ### Preorder
 

@@ -35,12 +35,27 @@ export interface AvailabilityCounts {
     backordered?: number | undefined;
 }
 
-/** What a shopper reads: Google's two fields. */
+/** What a shopper reads: Google's two fields and Shopify's `quantityAvailable`. */
 export interface AvailabilityFacts {
     availability: Availability;
     /** An instant the caller shows as the shop's calendar day; present only with `preorder` or `backorder`. */
     availabilityDate?: Date;
+    /**
+     * How many units can be bought now: `0` exactly when `availability` is `out_of_stock`. Absent
+     * means no limit (an uncapped backorder); `Infinity` is never returned.
+     */
+    quantityAvailable?: number;
 }
+
+/**
+ * Units the cap still lets through, or `undefined` for no cap (`null`). Absent counts read closed.
+ * Not `preorderAllowanceLeft`, whose 999 999 stand-in for "no cap" is a number a shopper could read.
+ */
+const roomLeft = (
+    backorderLimit: number | null | undefined,
+    backordered: number | undefined
+): number | undefined =>
+    backorderLimit === null ? undefined : Math.max(0, (backorderLimit ?? 0) - (backordered ?? 0));
 
 /**
  * Can the product be ordered at `now`, and if so how?
@@ -49,6 +64,10 @@ export interface AvailabilityFacts {
  * is a `preorder` while the allowance has room (a full one is `out_of_stock`); with shelf units it
  * is `in_stock`; with none, a `backorder` while its switch is on, its restock date has not passed
  * and the cap has room; otherwise `out_of_stock`.
+ *
+ * `quantityAvailable` follows the same order: `0` for every `out_of_stock`; the room under the cap
+ * for a preorder; the shelf, plus that room while the product is open to backorder, otherwise.
+ * No cap leaves it absent (no limit).
  *
  * @param terms - the product's own settings
  * @param counts - the inventory level's counts
@@ -62,24 +81,37 @@ export const availabilityOf = (
     promiseDays: number
 ): AvailabilityFacts => {
     if (terms.deletedAt !== undefined || terms.active === false || terms.purchasable === false)
-        return { availability: 'out_of_stock' };
+        return { availability: 'out_of_stock', quantityAvailable: 0 };
+
+    const room = roomLeft(counts.backorderLimit, counts.backordered);
 
     if (isPreorder(terms, now))
         return preorderAllowanceLeft(counts.backorderLimit, counts.backordered) > 0 &&
             terms.releaseDate
-            ? { availability: 'preorder', availabilityDate: terms.releaseDate }
-            : { availability: 'out_of_stock' };
+            ? {
+                  availability: 'preorder',
+                  availabilityDate: terms.releaseDate,
+                  ...(room === undefined ? {} : { quantityAvailable: room })
+              }
+            : { availability: 'out_of_stock', quantityAvailable: 0 };
 
-    if (counts.available > 0) return { availability: 'in_stock' };
+    // The room only counts while the product is open to backorder: a closed one sells its shelf.
+    const open = isBackorder(terms, now);
+    const shelfAndRoom =
+        open && room === undefined ? undefined : counts.available + (open ? (room ?? 0) : 0);
 
-    if (
-        preorderAllowanceLeft(counts.backorderLimit, counts.backordered) > 0 &&
-        isBackorder(terms, now)
-    )
+    if (counts.available > 0)
         return {
-            availability: 'backorder',
-            availabilityDate: terms.restockDate ?? new Date(now.getTime() + promiseDays * DAY_MS)
+            availability: 'in_stock',
+            ...(shelfAndRoom === undefined ? {} : { quantityAvailable: shelfAndRoom })
         };
 
-    return { availability: 'out_of_stock' };
+    if (preorderAllowanceLeft(counts.backorderLimit, counts.backordered) > 0 && open)
+        return {
+            availability: 'backorder',
+            availabilityDate: terms.restockDate ?? new Date(now.getTime() + promiseDays * DAY_MS),
+            ...(shelfAndRoom === undefined ? {} : { quantityAvailable: shelfAndRoom })
+        };
+
+    return { availability: 'out_of_stock', quantityAvailable: 0 };
 };

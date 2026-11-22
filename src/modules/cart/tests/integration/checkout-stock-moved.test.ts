@@ -67,7 +67,7 @@ describe('the level moves after the line was added to the cart', () => {
                     productId: String(product._id),
                     title: product.title,
                     requested: 3,
-                    availability: 'insufficient_stock'
+                    quantityAvailable: 2
                 }
             ]
         });

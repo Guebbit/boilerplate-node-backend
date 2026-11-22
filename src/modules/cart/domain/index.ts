@@ -14,11 +14,12 @@ export {
 
 export { planMergeLine } from './merge';
 
-export { fitsStock } from './stock';
+export { fitsStock, clampToStock, unitsShippingLater } from './stock';
+export type { ShipsLaterFacts, StockClamp, StockWarningCode } from './stock';
 
 export { lineAvailability, isBuyable } from './availability';
 
-export type { AvailabilityFacts, AvailabilityProduct } from './availability';
+export type { AvailabilityFacts, AvailabilityProduct, LineAvailability } from './availability';
 
 export type { MergeLineFacts, MergePlan } from './merge';
 

@@ -1,0 +1,113 @@
+# What a shopper is told about one product's stock, judged at now = 2026-10-12T10:00:00Z, with 30
+# days promised when a backorder names no restock date. Google Merchant's `availability` and
+# `availability_date`, plus Shopify's `quantityAvailable` (how many units can be bought now).
+#
+# First match wins, in this order:
+#   1. hidden, soft-deleted or off sale                    -> out_of_stock, 0
+#   2. before its release date (a preorder)                -> preorder while the allowance has room
+#                                                             (quantityAvailable = the room), else out_of_stock, 0
+#   3. units on the shelf                                  -> in_stock (quantityAvailable = the shelf, plus the
+#                                                             room under the cap while open to backorder)
+#   4. empty shelf, open to backorder, room under the cap  -> backorder (quantityAvailable = the room)
+#   5. otherwise                                           -> out_of_stock, 0
+#
+# Fields:
+#   terms     the product's settings. All optional: active, purchasable, deleted (true = soft-deleted),
+#             releaseDate, allowBackorder, restockDate (ISO instants).
+#   counts    the inventory level: available = units on the shelf nobody claimed; backorderLimit = the
+#             cap on owed units (null = no cap, absent = closed); backordered = units already owed.
+#   expect    availability; availabilityDate (an instant, only with preorder and backorder; each client shows it as the shop's calendar day);
+#             quantityAvailable. An ABSENT quantityAvailable means "no limit" (no cap): `Infinity` is
+#             never published. `out_of_stock` is exactly `quantityAvailable: 0`.
+cases:
+    - name: shelf units are in stock and are the number
+      terms: {}
+      counts: { available: 3 }
+      expect: { availability: in_stock, quantityAvailable: 3 }
+    - name: an empty shelf is out of stock, never absent
+      terms: {}
+      counts: { available: 0 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: a hidden product with stock is out of stock
+      terms: { active: false }
+      counts: { available: 3 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: a soft-deleted product with stock is out of stock
+      terms: { deleted: true }
+      counts: { available: 3 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: an off-sale product with stock is out of stock
+      terms: { purchasable: false }
+      counts: { available: 3 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: an off-sale preorder is out of stock (off sale is judged before the release date)
+      terms: { purchasable: false, releaseDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 0, backorderLimit: 3 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: a preorder reads the room left in its allowance, never the shelf
+      terms: { releaseDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 9, backorderLimit: 5, backordered: 2 }
+      expect:
+          {
+              availability: preorder,
+              availabilityDate: '2026-12-01T00:00:00.000Z',
+              quantityAvailable: 3
+          }
+    - name: a preorder with a full allowance is out of stock
+      terms: { releaseDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 9, backorderLimit: 3, backordered: 3 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: a preorder with no allowance set is out of stock
+      terms: { releaseDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 9 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: a preorder with no cap has no limit
+      terms: { releaseDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 0, backorderLimit: null }
+      expect: { availability: preorder, availabilityDate: '2026-12-01T00:00:00.000Z' }
+    - name: a released product sells its shelf
+      terms: { releaseDate: '2026-09-01T00:00:00.000Z' }
+      counts: { available: 1 }
+      expect: { availability: in_stock, quantityAvailable: 1 }
+    - name: an empty shelf open to backorder is a backorder, sold up to the room
+      terms: { allowBackorder: true }
+      counts: { available: 0, backorderLimit: 5, backordered: 1 }
+      expect:
+          {
+              availability: backorder,
+              availabilityDate: '2026-11-11T10:00:00.000Z',
+              quantityAvailable: 4
+          }
+    - name: a backorder with a restock date ships on that day
+      terms: { allowBackorder: true, restockDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 0, backorderLimit: 2 }
+      expect:
+          {
+              availability: backorder,
+              availabilityDate: '2026-12-01T00:00:00.000Z',
+              quantityAvailable: 2
+          }
+    - name: an uncapped backorder has no limit
+      terms: { allowBackorder: true, restockDate: '2026-12-01T00:00:00.000Z' }
+      counts: { available: 0, backorderLimit: null }
+      expect: { availability: backorder, availabilityDate: '2026-12-01T00:00:00.000Z' }
+    - name: shelf units under an open backorder add the room to the number
+      terms: { allowBackorder: true }
+      counts: { available: 2, backorderLimit: 5, backordered: 1 }
+      expect: { availability: in_stock, quantityAvailable: 6 }
+    - name: shelf units under an uncapped backorder have no limit
+      terms: { allowBackorder: true }
+      counts: { available: 2, backorderLimit: null }
+      expect: { availability: in_stock }
+    - name: backorder on with its cap full is out of stock
+      terms: { allowBackorder: true }
+      counts: { available: 0, backorderLimit: 2, backordered: 2 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: backorder on with its restock date passed is out of stock
+      terms: { allowBackorder: true, restockDate: '2026-09-01T00:00:00.000Z' }
+      counts: { available: 0, backorderLimit: 5 }
+      expect: { availability: out_of_stock, quantityAvailable: 0 }
+    - name: shelf units with the restock date passed are only the shelf
+      terms: { allowBackorder: true, restockDate: '2026-09-01T00:00:00.000Z' }
+      counts: { available: 2, backorderLimit: 5 }
+      expect: { availability: in_stock, quantityAvailable: 2 }

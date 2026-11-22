@@ -1,19 +1,16 @@
 /**
  * @module
- * The cart view's line availability: every answer that carries the cart gives each line an
- * `availability`, from the same rule checkout and the merge use and the same sources, the stock
- * ledger and the catalogue.
+ * The cart line's own stock answer: every answer that carries the cart gives each line the
+ * product's `availability`, `quantityAvailable` and, where a line ships later, `quantityBackordered`
+ * — the same words and numbers as `GET /products/{id}/availability`, read from the stock ledger and
+ * the catalogue. A cart reserves nothing, so a line can hold more than the number after a sale.
  *
- * The second invariant matters as much as the first: the value is a name and NEVER the number
- * left. The authorization defences page ("Reading the shelf") gives exact stock to
- * `read:StockLevel` only, so no field of any cart answer may vary with what is on the shelf
- * beyond that one name.
+ * @see docs/modules/cart.md#line-availability
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { overrideEnvironment, resetEnvironmentOverrides } from '@infrastructure/config/store';
 import { testCallerContext } from '@tests/callers';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -36,43 +33,64 @@ afterEach(() => {
     resetEnvironmentOverrides();
 });
 
-/** The availability of the one line in the user's cart. */
-const flagOf = (userId: string) =>
-    cartService.getForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
+/** The first line of the user's cart as the view answers it. */
+const lineOf = (userId: string) =>
+    cartService.getForView(userId, testCallerContext).then(({ items }) => items[0]);
 
-/** Every key that appears anywhere in a JSON value, nested objects and arrays included. */
-const keysOf = (value: unknown): string[] => {
-    if (Array.isArray(value)) return value.flatMap((entry) => keysOf(entry));
-    if (typeof value !== 'object' || value === null) return [];
-    return Object.entries(value).flatMap(([key, entry]) => [key, ...keysOf(entry)]);
-};
-
-describe('GET /cart’s line availability', () => {
-    it('is in_stock while the line fits, and insufficient_stock once it no longer does', async () => {
+describe('GET /cart’s line stock answer', () => {
+    it('carries the shelf as the number, and lets the line grow up to it', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
         await cartService.addItemById(user.id, String(product._id), 4);
-        await expect(flagOf(user.id)).resolves.toBe('in_stock');
 
-        await inventoryService.adjust(String(product._id), -2, 'stocktake', testCallerContext);
-
-        await expect(flagOf(user.id)).resolves.toBe('insufficient_stock');
+        await expect(lineOf(user.id)).resolves.toEqual({
+            productId: String(product._id),
+            quantity: 4,
+            availability: 'in_stock',
+            quantityAvailable: 5,
+            canIncrease: true
+        });
     });
 
-    it('treats a line equal to what is for sale as fitting', async () => {
+    it('stops the "+" at the number, and at the number a line equal to it still fits', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 4 });
         await cartService.addItemById(user.id, String(product._id), 4);
 
-        await expect(flagOf(user.id)).resolves.toBe('in_stock');
+        const view = await cartService.getForView(user.id, testCallerContext);
+
+        expect(view.items[0]).toMatchObject({ quantityAvailable: 4, canIncrease: false });
+        expect(view.checkoutable).toBe(true);
     });
 
-    it('names a sold-out line out_of_stock', async () => {
+    it('reads a line above the number after a sale, and is no longer checkoutable', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 0 });
-        await cartService.addItemById(user.id, String(product._id), 1);
+        const product = await createProduct({ onHand: 5 });
+        await cartService.addItemById(user.id, String(product._id), 4);
 
-        await expect(flagOf(user.id)).resolves.toBe('out_of_stock');
+        await inventoryService.adjust(String(product._id), -2, 'stocktake', testCallerContext);
+
+        const view = await cartService.getForView(user.id, testCallerContext);
+        expect(view.items[0]).toMatchObject({
+            quantity: 4,
+            availability: 'in_stock',
+            quantityAvailable: 3,
+            canIncrease: false
+        });
+        expect(view.checkoutable).toBe(false);
+    });
+
+    it('names a sold-out line out_of_stock with 0', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        await cartService.addItemById(user.id, String(product._id), 1);
+        await inventoryService.adjust(String(product._id), -5, 'stocktake', testCallerContext);
+
+        await expect(lineOf(user.id)).resolves.toMatchObject({
+            availability: 'out_of_stock',
+            quantityAvailable: 0,
+            canIncrease: false
+        });
     });
 
     it('counts units another order holds as not for sale', async () => {
@@ -91,14 +109,10 @@ describe('GET /cart’s line availability', () => {
 
         const shopper = await createUser({ email: 'shopper@example.com' });
         await cartService.addItemById(shopper.id, String(product._id), 4);
-        await expect(flagOf(shopper.id)).resolves.toBe('in_stock');
-        await cartService.addItemById(shopper.id, String(product._id), 1);
-
-        // 10 on the shelf, 6 held by the open order: 4 fit, 5 do not.
-        await expect(flagOf(shopper.id)).resolves.toBe('insufficient_stock');
+        await expect(lineOf(shopper.id)).resolves.toMatchObject({ quantityAvailable: 4 });
     });
 
-    it('names a line whose product is no longer shown removed, in the window before the pull', async () => {
+    it('names a line whose product is no longer shown out_of_stock, in the window before the pull', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartService.addItemById(user.id, String(product._id), 1);
@@ -110,10 +124,13 @@ describe('GET /cart’s line availability', () => {
 
         await productService.removeById(String(product._id), false);
 
-        await expect(flagOf(user.id)).resolves.toBe('removed');
+        await expect(lineOf(user.id)).resolves.toMatchObject({
+            availability: 'out_of_stock',
+            quantityAvailable: 0
+        });
     });
 
-    it('names a hard-deleted product’s line removed too', async () => {
+    it('names a hard-deleted product’s line out_of_stock too', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartService.addItemById(user.id, String(product._id), 1);
@@ -121,69 +138,20 @@ describe('GET /cart’s line availability', () => {
 
         await productService.removeById(String(product._id), true);
 
-        await expect(flagOf(user.id)).resolves.toBe('removed');
+        const view = await cartService.getForView(user.id, testCallerContext);
+        expect(view.items[0]).toMatchObject({ availability: 'out_of_stock', quantityAvailable: 0 });
+        expect(view.checkoutable).toBe(false);
     });
 
     it('names each line on its own, in one answer', async () => {
         const user = await createUser();
         const plenty = await createProduct({ onHand: 50 });
-        const scarce = await createProduct({ onHand: 1 });
+        const scarce = await createProduct({ onHand: 3 });
         await cartService.addItemById(user.id, String(plenty._id), 2);
         await cartService.addItemById(user.id, String(scarce._id), 2);
 
         const { items } = await cartService.getForView(user.id, testCallerContext);
 
-        expect(items.map(({ availability }) => availability)).toEqual([
-            'in_stock',
-            'insufficient_stock'
-        ]);
-    });
-});
-
-/** One product on the shelf at `onHand`, 999 of it in the caller's cart: short either way. */
-const shortCartBody = async (onHand: number, bearer: string) => {
-    const product = await createProduct({ onHand });
-    await api()
-        .post('/cart/items')
-        .set('Authorization', bearer)
-        .send({ productId: String(product._id), quantity: 999 });
-
-    const view = await api().get('/cart').set('Authorization', bearer);
-    const merge = await api()
-        .post('/cart/merge')
-        .set('Authorization', bearer)
-        .send({ lines: [{ productId: String(product._id), quantity: 1 }] });
-    return { id: String(product._id), view: view.body, merge: merge.body };
-};
-
-/** A body with the product id blanked, so two products' answers can be compared. */
-const anonymised = (body: unknown, id: string): unknown =>
-    JSON.parse(JSON.stringify(body).replaceAll(id, 'PRODUCT'));
-
-describe('the availability never carries a number', () => {
-    it('answers GET /cart and POST /cart/merge identically for 1 on the shelf and 500', async () => {
-        const first = await authenticateAs('user');
-        const second = await authenticateAsRole('customer');
-        const nearlyGone = await shortCartBody(1, first.bearer);
-        const plenty = await shortCartBody(500, second.bearer);
-
-        expect(anonymised(nearlyGone.view, nearlyGone.id)).toEqual(
-            anonymised(plenty.view, plenty.id)
-        );
-        expect(anonymised(nearlyGone.merge, nearlyGone.id)).toEqual(
-            anonymised(plenty.merge, plenty.id)
-        );
-        expect(nearlyGone.view.items[0].availability).toBe('insufficient_stock');
-        expect(nearlyGone.merge.lines[0].availability).toBe('insufficient_stock');
-    });
-
-    it('has no stock-like field anywhere in either answer', async () => {
-        const { bearer } = await authenticateAs('user');
-        const { view, merge } = await shortCartBody(7, bearer);
-
-        const stockLike = /available|onhand|reserved|remaining|left|stock/i;
-        const offending = [...keysOf(view), ...keysOf(merge)].filter((key) => stockLike.test(key));
-
-        expect(offending).toEqual([]);
+        expect(items.map(({ quantityAvailable }) => quantityAvailable)).toEqual([50, 3]);
     });
 });

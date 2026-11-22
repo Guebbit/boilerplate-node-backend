@@ -10,7 +10,7 @@ tags:
       description: Placing, reading and managing orders and their lifecycle.
 
 x-error-codes:
-    ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`read:StockLevel`).' }
+    ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title`, `requested` quantity and `quantityAvailable`, how many of it can be bought now, the same line shape as `CART_INSUFFICIENT_STOCK`.' }
     ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'An admin-created order names a product that has been removed (soft-deleted). Hidden and off-sale products can be sold by hand, so only a removed one is refused. `errors[].details.productIds` names each one.' }
     ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }

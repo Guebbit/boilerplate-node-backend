@@ -91,7 +91,7 @@ describe('reserveForOrder', () => {
                     productId: String(scarce._id),
                     title: 'Scarce',
                     requested: 5,
-                    available: 1
+                    quantityAvailable: 1
                 }
             ]
         });
@@ -300,7 +300,7 @@ describe('reserveForOrder', () => {
                     productId: String(product._id),
                     title: expect.any(String),
                     requested: 1,
-                    available: 0
+                    quantityAvailable: 0
                 }
             ]
         });

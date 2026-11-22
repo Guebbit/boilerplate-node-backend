@@ -41,9 +41,10 @@ import {
     listPreorders
 } from './levels';
 import { receive, adjust, setBackorderLimit } from './admin';
-import { availabilityOfProducts, forgetAvailability } from './availability';
+import { availabilityOfProducts, forgetAvailability, liveAvailabilityOf } from './availability';
 
 export type { RetakeOutcome } from './holds';
+export type { LiveAvailability } from './availability';
 export type {
     StockLine,
     TopUp,
@@ -75,6 +76,7 @@ export const inventoryService = {
     runReservationSweep,
     availableFor,
     availabilityOfProducts,
+    liveAvailabilityOf,
     receive,
     adjust,
     setBackorderLimit,

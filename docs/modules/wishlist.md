@@ -84,18 +84,21 @@ reason in [the pipeline](#the-pipeline). Moving a product into a full cart answe
 
 ## Line availability
 
-Each line comes back as `{ productId, availability }`: the cart's own rule decides, so a wishlist
-line and a cart line never disagree about a product (see
-[line availability](./cart.md#line-availability)). A wishlist line holds no quantity, so it never
-reads `insufficient_stock`.
+Each line comes back as `{ productId }` and nothing else. The frontend reads what each product can
+do from its one availability store, through the batch read (`GET /products/availability?id=…`, 100
+ids a call, so 250 lines are three calls): the same answer a cart line carries, so the two never
+disagree (see [line availability](./cart.md#line-availability)). Serving it on the line too would
+state one answer twice. A product the batch leaves out is removed (hidden or deleted).
 
-| `availability` | The line shows            | Move to cart                                         |
-| -------------- | ------------------------- | ---------------------------------------------------- |
-| `in_stock`     | normal                    | ok                                                   |
-| `preorder`     | "Preorder, ships from"    | ok                                                   |
-| `out_of_stock` | "Sold out"                | ok, as `POST /cart/items` accepts a sold-out product |
-| `unavailable`  | "Not available right now" | ok, an off-sale product moves like a sold-out one    |
-| `removed`      | "No longer available"     | refused: a hidden product is a 404                   |
+| The product reads                   | The line shows                  | Move to cart                                                              |
+| ----------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `in_stock`, `preorder`, `backorder` | normal / "Preorder, ships from" | ok                                                                        |
+| `out_of_stock` (sold out)           | "Sold out"                      | nothing added: the line stays saved, a `MERCHANDISE_OUT_OF_STOCK` warning |
+| `out_of_stock` (off sale)           | "Not available right now"       | the same                                                                  |
+| left out of the batch               | "No longer available"           | refused: a hidden product is a 404                                        |
+
+A move that stock held back (nothing added) answers 200 with the wishlist and `warnings[]`; the
+product is removed from the list only when the cart actually took it.
 
 A hidden product's line is kept and returns to a stock value when the product is shown again;
 only a delete pulls it. Saving a hidden product stays a 404, so a new add never reveals one.

@@ -97,7 +97,7 @@ describe('reserving a preorder', () => {
 
         expect(outcome).toMatchObject({
             held: false,
-            shortfalls: [{ productId, requested: 3, available: 2 }]
+            shortfalls: [{ productId, requested: 3, quantityAvailable: 2 }]
         });
         expect(await levelOf(productId)).toMatchObject({ backordered: 3 });
     });
@@ -119,7 +119,7 @@ describe('reserving a preorder', () => {
 
         const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
-        expect(outcome).toMatchObject({ held: false, shortfalls: [{ available: 2 }] });
+        expect(outcome).toMatchObject({ held: false, shortfalls: [{ quantityAvailable: 2 }] });
     });
 
     it('records the claim in its own ledger column', async () => {

@@ -1,8 +1,8 @@
 /**
  * @module
- * The view every endpoint answers with is `{ items: [{ productId, availability }] }` — ids and
- * what each product can do right now, like the cart's: the client renders from its own product
- * store, and shipping a product per line is over-serialization the contract suite fails on.
+ * The view every endpoint answers with is `{ items: [{ productId }] }` — ids only: the client
+ * renders from its own product store and reads availability from the one batch read, and shipping
+ * a product per line is over-serialization the contract suite fails on.
  *
  * @see docs/modules/wishlist.md#the-pipeline
  */
@@ -23,24 +23,14 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { wishlistAnalyticsEvents } from './analytics';
 import { WISHLIST_ITEMS_REMOVED } from './events';
 import { ERROR_CODES } from '@api/error-codes';
-import type { WishlistDocument } from './model';
 import { wishlistRepository, WISHLIST_LIMIT_REACHED } from './repository';
 import { presentWishlist, savedProductIds, type WishlistView } from './presenter';
-
-/**
- * The wishlist as the contract declares it: each saved line with what its product can do right
- * now. The cart's rule decides, so a cart line and a wishlist line never disagree about a product.
- */
-const present = (wishlist: WishlistDocument | null): Promise<WishlistView> =>
-    cartService
-        .productAvailabilityFor(savedProductIds(wishlist))
-        .then((availability) => presentWishlist(wishlist, availability));
 
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
 const get = (userId: string): Promise<WishlistView> =>
-    wishlistRepository.findByUserId(userId).then(present);
+    wishlistRepository.findByUserId(userId).then((wishlist) => presentWishlist(wishlist));
 
 /**
  * The saved lines exactly as stored — product ids, no availability — for the personal-data export:
@@ -80,7 +70,7 @@ const add = (
                     event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                     properties: { product_id: productId }
                 });
-            return present(wishlist).then((view) => generateSuccess(view, 200));
+            return generateSuccess(presentWishlist(wishlist), 200);
         });
     });
 
@@ -102,7 +92,7 @@ const remove = (
             event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
             properties: { product_id: productId }
         });
-        return present(wishlist).then((view) => generateSuccess(view, 200));
+        return generateSuccess(presentWishlist(wishlist), 200);
     });
 
 /**
@@ -140,13 +130,21 @@ const moveToCart = (
                     ? added
                     : generateReject(404, [t('wishlist.product-not-found')]);
 
+            /**
+             * A warning on a one-unit add means stock added nothing (sold out, not on sale, or
+             * the line already holds all that can be bought): the product did not move, so it
+             * stays saved and the answer says why.
+             */
+            if (added.data.warnings)
+                return generateSuccess(presentWishlist(wishlist, added.data.warnings), 200);
+
             return wishlistRepository.removeLine(userId, productId).then((updated) => {
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
                     properties: { product_id: productId }
                 });
-                return present(updated).then((view) => generateSuccess(view, 200));
+                return generateSuccess(presentWishlist(updated), 200);
             });
         });
     });

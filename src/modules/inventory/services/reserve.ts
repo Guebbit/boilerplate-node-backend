@@ -268,7 +268,7 @@ export const reserveForOrder = async (
                     productId: line.productId,
                     title: blockerProduct?.title ?? '',
                     requested: line.quantity,
-                    available: leftFor(line, blockerLevel)
+                    quantityAvailable: leftFor(line, blockerLevel)
                 };
 
                 await giveBack(orderId, taken);

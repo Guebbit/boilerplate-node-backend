@@ -92,7 +92,7 @@ describe('reserving a line that may spill', () => {
 
         expect(outcome).toMatchObject({
             held: false,
-            shortfalls: [{ productId, requested: 3, available: 2 }]
+            shortfalls: [{ productId, requested: 3, quantityAvailable: 2 }]
         });
         expect(await levelOf(productId)).toEqual({ reserved: 0, available: 2, backordered: 0 });
         const held = await reservationRepository.findByOrderId(orderId);
