@@ -59,3 +59,7 @@
 12 2 * * * cd /app && node --import tsx scripts/ops/run-job.ts reap:purchase-holds
 # Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.
 * * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:webhook-retries
+# Hands every contact message that is due to Zammad as a ticket, retrying by the outbox's backoff; after the last retry the message becomes a to-do and a link-only mail instead.
+* * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:zammad-contacts
+# Overwrites the Zammad customer of each account whose profile changed with the account's current address and name; a change that Zammad refuses for good is logged and dropped.
+*/5 * * * * cd /app && node --import tsx scripts/ops/run-job.ts sweep:zammad-profiles

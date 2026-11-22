@@ -1698,6 +1698,7 @@ export default defineConfig(
             '.dependency-cruiser.bootstrap.cjs',
             'jest.config.replicas.js',
             'jest.config.broker.js',
+            'jest.config.zammad.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
         extends: [tseslint.configs.disableTypeChecked],

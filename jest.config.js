@@ -148,13 +148,15 @@ module.exports = {
      * the app as child processes, all over one Mongo (and Redis as the case needs), and a proxy in front of them,
      * so none of this file's setup applies.
      * `tests/broker` runs under `jest.config.broker.js`: it needs a real RabbitMQ and no database.
+     * `src/modules/zammad/tests/real-zammad` runs under `jest.config.zammad.js`: it needs a booted Zammad.
      */
     testPathIgnorePatterns: [
         '/node_modules/',
         '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
         '<rootDir>/tests/replicas/',
-        '<rootDir>/tests/broker/'
+        '<rootDir>/tests/broker/',
+        '<rootDir>/src/modules/[^/]+/tests/real-zammad/'
     ],
     modulePathIgnorePatterns: ['<rootDir>/tmp/', '<rootDir>/.claude/worktrees/'],
     globalSetup: '<rootDir>/tests/support/global-setup.ts',

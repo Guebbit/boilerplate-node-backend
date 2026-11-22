@@ -9,6 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
 import { observePort } from '@tests/ports';
 import { taskService } from '@modules/tasks/services';
+import { registerContactDelivery, type ContactDelivery } from '@modules/tasks/contact-delivery';
 import { taskRepository } from '@modules/tasks/repository';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -477,5 +478,129 @@ describe('removeById', () => {
                 targetId: String(task._id)
             })
         );
+    });
+});
+
+/** The port the cases install; `accepted` is what its `accept` answers. */
+const makePort = (accepted: boolean) => {
+    const taken: unknown[] = [];
+    const port: ContactDelivery = {
+        accept: (message) => {
+            taken.push(message);
+            return Promise.resolve(accepted);
+        },
+        mailboxIsHelpdesk: () => accepted
+    };
+    return { port, taken };
+};
+
+describe('submit with a contact-delivery port', () => {
+    afterEach(() => {
+        registerContactDelivery(undefined);
+    });
+
+    it('files the to-do as usual when no port is installed', async () => {
+        await taskService.submit(makePayload());
+
+        expect(await taskRepository.count({})).toBe(1);
+    });
+
+    it('hands a message to a port that takes it, and files no to-do', async () => {
+        const { port, taken } = makePort(true);
+        registerContactDelivery(port);
+
+        await taskService.submit(
+            makePayload({ email: 'Ada@Example.COM', category: 'account' }),
+            'u1'
+        );
+
+        expect(taken).toEqual([
+            {
+                name: 'Ada Lovelace',
+                email: 'ada@example.com',
+                subject: 'Broken checkout',
+                message: 'The cart total is wrong.',
+                category: 'account',
+                subjectId: 'u1',
+                receivedAt: expect.any(Date)
+            }
+        ]);
+        await settleOutboxNudges();
+        expect(await taskRepository.count({})).toBe(0);
+        expect(opened).toEqual([]);
+    });
+
+    it('files the to-do when the port declines: the module is inert', async () => {
+        const { port, taken } = makePort(false);
+        registerContactDelivery(port);
+
+        await taskService.submit(makePayload());
+
+        await settleOutboxNudges();
+        expect(taken).toHaveLength(1);
+        expect(await taskRepository.count({})).toBe(1);
+        expect(opened).toHaveLength(1);
+    });
+
+    it('never offers a honeypot catch to the port: spam stays local', async () => {
+        const { port, taken } = makePort(true);
+        registerContactDelivery(port);
+
+        await taskService.submit({ ...makePayload(), website: 'http://spam.example' });
+
+        await settleOutboxNudges();
+        expect(taken).toEqual([]);
+        expect(await taskRepository.count({ resolution: 'spam' })).toBe(1);
+        expect(opened).toEqual([]);
+    });
+});
+
+describe('mailMainMailbox while the mailbox is a help desk', () => {
+    afterEach(() => {
+        registerContactDelivery(undefined);
+    });
+
+    it('sends the link only: no customer data, no Reply-To', async () => {
+        registerContactDelivery({
+            accept: () => Promise.resolve(true),
+            mailboxIsHelpdesk: () => true
+        });
+        const task = await taskService.create(makePayload({ category: 'privacy' }));
+
+        await taskService.mailMainMailbox(String(task._id));
+
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(template).toBe('tasks.contact-waiting');
+        expect(envelope).toMatchObject({
+            to: 'admin@example.com',
+            noReplyTo: true,
+            subject: `Contact message waiting — do not reply [#${String(task._id).slice(-8)}]`,
+            messageId: `<task-${String(task._id)}@example.com>`
+        });
+        expect(envelope).not.toHaveProperty('replyTo');
+        const sent = JSON.stringify([envelope, data]);
+        for (const secret of [
+            'ada@example.com',
+            'Ada Lovelace',
+            'The cart total is wrong.',
+            'Broken checkout'
+        ])
+            expect(sent).not.toContain(secret);
+        expect(envelope.text).toContain(`/tasks/${String(task._id)}`);
+    });
+
+    it('threads the link-only reminder under the first mail', async () => {
+        registerContactDelivery({
+            accept: () => Promise.resolve(true),
+            mailboxIsHelpdesk: () => true
+        });
+        const task = await taskService.create(makePayload());
+
+        await taskService.mailMainMailbox(String(task._id));
+        await taskService.mailMainMailbox(String(task._id), 'overdue');
+
+        const [[first], [reminder]] = mockEnqueueEmail.mock.calls;
+        expect(reminder).toMatchObject({ noReplyTo: true, inReplyTo: first.messageId });
+        expect(reminder.subject).toContain('overdue');
     });
 });

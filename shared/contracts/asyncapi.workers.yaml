@@ -177,6 +177,12 @@ components:
                                 Bare address replies go to, set as the `Reply-To` header. The
                                 producer has already validated it; `From` stays the configured
                                 sender either way.
+                        noReplyTo:
+                            type: boolean
+                            description: >-
+                                `true` sends no `Reply-To` header at all, instead of the support
+                                address a mail that names no `replyTo` gets. For a mail whose
+                                replies must reach nobody; leaves `replyTo` unread when both are set.
                         messageId:
                             type: string
                             pattern: '^<[^<>\s@]+@[^<>\s@]+>$'

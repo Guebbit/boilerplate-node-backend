@@ -56,6 +56,8 @@ holds it, and the administrator holds every set, with no special case.
 
 The shop's kinds route to the sets listed in [shop-tasks](./shop-tasks.md#the-shop-s-to-dos).
 
+A `contact` task exists only when no help desk took the message: with [`zammad`](./zammad.md) on, the message is a Zammad ticket and the same people answer it there ([with a help desk on](#help-desk)).
+
 A visitor task is the inbox's: anyone who may read tasks reads it. A system task is visible
 and workable only to a caller who holds its route set; to anyone else it is a **404**, not a 403 (it
 does not admit to existing). Every route also asks the plain `Task` rule, so today the people who
@@ -64,6 +66,27 @@ routed set (a warehouse worker and a shop to-do) needs the route guard widened f
 Assignment is stricter on purpose: an assignee needs the route set and `update:Task`, so with the
 preset roles only `admin` can be handed a system task, and `support` can also be handed a contact
 message (a contact message is a visitor task).
+
+## With a help desk on {#help-desk}
+
+While the [`zammad`](./zammad.md) module is on (`NODE_ZAMMAD_URL` set), a contact message that is not
+spam does **not** become a task. `POST /tasks` still answers `202`; the message is handed to
+Zammad as a ticket and staff answer it there. The task exists only when the hand-over failed
+after its last retry: then it is an ordinary contact task, and the mail to the support mailbox is the
+link-only one. Spam is filed here as always, in both modes.
+
+```mermaid
+flowchart LR
+    V["visitor form"] --> S{"spam?"}
+    S -->|yes| SP["spam task<br/><i>closed at birth</i>"]
+    S -->|no| M{"help desk on?"}
+    M -->|no| N["new task"]
+    M -->|yes| Z["Zammad ticket"]
+    Z -->|"last retry failed"| N
+```
+
+The port that decides this lives in `contact-delivery.ts`: a module installs it from its
+`onRegistered`, and `tasks` names no module.
 
 ## Lifecycle {#lifecycle}
 

@@ -19,6 +19,7 @@ import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../../../modules';
 import { taskService } from '../../services';
 import { taskRef } from '../../emails';
+import { registerContactDelivery } from '../../contact-delivery';
 import { findAllTasks } from '../factories';
 
 // The queue, not the copy.
@@ -88,6 +89,26 @@ describe.each(doors)('erased by %s', (_name, erase) => {
 
         await erase(user);
 
+        expect(notices()).toEqual([]);
+    });
+});
+
+describe('erased while the support mailbox is a help desk', () => {
+    afterEach(() => {
+        registerContactDelivery(undefined);
+    });
+
+    it('sends no notice: it would land there as a ticket', async () => {
+        registerContactDelivery({
+            accept: () => Promise.resolve(true),
+            mailboxIsHelpdesk: () => true
+        });
+        const user = await createUser({ email: 'victim@example.com' });
+        await messageFrom(user.id, 'victim@example.com', 'Secret subject');
+
+        await eraseAsScheduled(user);
+
+        expect(await findAllTasks()).toEqual([]);
         expect(notices()).toEqual([]);
     });
 });

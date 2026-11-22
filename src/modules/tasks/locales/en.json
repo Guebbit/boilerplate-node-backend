@@ -18,6 +18,17 @@
             "label-order-number": "Order number",
             "label-link": "Open it"
         },
+        "email-contact-waiting": {
+            "subject": "Contact message waiting — do not reply",
+            "subject-overdue": "Contact message overdue — do not reply",
+            "subject-due-soon": "Contact message due soon — do not reply",
+            "meta-title": "Contact message waiting",
+            "title": "A contact message is waiting in the shop admin. It could not be handed to the help desk.",
+            "title-overdue": "Contact message #{{ref}} is still unanswered and was never handed to the help desk: answer it in the shop admin.",
+            "title-due-soon": "Contact message #{{ref}} is due in 3 days and was never handed to the help desk: answer it in the shop admin.",
+            "explain": "This mail holds no customer data and replying to it reaches nobody. Open the message in the shop admin.",
+            "label-link": "Open it in the admin"
+        },
         "email-erasure": {
             "subject": "An account was erased: delete the mails for {{refs}}",
             "meta-title": "An account was erased",

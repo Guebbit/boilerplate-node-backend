@@ -16,6 +16,7 @@
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
                 "<rootDir>/tests/replicas/",
                 "<rootDir>/tests/broker/",
+                "<rootDir>/src/modules/[^/]+/tests/real-zammad/",
                 "<rootDir>/tmp/",
                 "<rootDir>/.claude/worktrees/"
             ]

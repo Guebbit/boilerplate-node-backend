@@ -29,9 +29,11 @@ flowchart LR
     notifications["notifications"]
     shop_tasks["shop-tasks"]
     users["users"]
+    zammad["zammad"]
 
     notifications --> tasks
     shop_tasks --> tasks
+    zammad --> tasks
     tasks --> access
     tasks --> account
     tasks --> users
@@ -49,7 +51,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class notifications,shop_tasks supporting;
-    class access,account,users generic;
+    class access,account,users,zammad generic;
     class tasks centre;
 ```
 
@@ -141,6 +143,8 @@ and one that passes it as `task.overdue` (both with the payload of `task.opened`
 so a situation is one task kind or one notice code, never both.
 
 Full detail: [Task notices and the staff badge](./tasks-notices.md#who-is-told).
+
+**With the [`zammad`](./zammad.md) module on**, a contact message becomes a Zammad ticket instead of a task, so none of this applies to it. A message that fell back after the last retry is a normal task, and the mail to the main mailbox is the link-only one: `[#ref]` and the admin link, no customer data, no `Reply-To` ([the hand-over](./zammad.md#the-hand-over)). The erasure notice is not sent either: it would land in the help desk as a ticket.
 
 ## The overdue reminder {#the-overdue-reminder}
 

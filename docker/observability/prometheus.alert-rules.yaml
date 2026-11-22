@@ -198,6 +198,30 @@ groups:
                 summary: 'Webhook retries are not being swept'
                 description: 'webhook_deliveries_overdue has stayed above zero for 15 minutes — the retry sweep cron may not be running.'
 
+          # The help-desk hand-over (`zammad/metrics.ts`, read from the database at scrape time).
+          # A contact message older than 15 minutes means `sweep:zammad-contacts` is not running or
+          # Zammad keeps refusing: the visitor was told 202 and nobody has the message yet.
+          - alert: ZammadHandoverStuck
+            expr: zammad_contacts_oldest_pending_seconds > 900
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A contact message has waited over 15 minutes for the help desk'
+                description: 'zammad_contacts_oldest_pending_seconds is above 900: the contact sweep is not running, or Zammad refuses the tickets. After the last retry the message falls back to a to-do, so nothing is lost.'
+
+          # A message gave up on Zammad and became a to-do plus a link-only mail (`zammad_handover_fallbacks`
+          # counts the markers of the last 7 days). Someone must look at Zammad; the to-do is answered in
+          # our admin as in basic mode.
+          - alert: ZammadHandoverFellBack
+            expr: zammad_handover_fallbacks > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A contact message fell back to basic mode'
+                description: 'zammad_handover_fallbacks is above zero: Zammad did not take a message after every retry. Check the help desk; the message waits as a to-do in the shop admin.'
+
           # Every NIGHTLY `docker/crontab` line: three jobs run every 5 minutes or every minute
           # instead, each already covered by its own purpose-built alert (this one and the two
           # below), so a shared 48-hour threshold would either fire on them constantly or, worse,

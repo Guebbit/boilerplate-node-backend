@@ -202,6 +202,7 @@ x-app-key-env: &app-key-env
     NODE_ANTIBOT_ALTCHA_SECRET_FILE: '/run/secrets/antibot_altcha_secret'
     NODE_ANTIBOT_TURNSTILE_SECRET_FILE: '/run/secrets/antibot_turnstile_secret'
     NODE_POSTHOG_PERSONAL_API_KEY_FILE: '/run/secrets/posthog_personal_api_key'
+    NODE_ZAMMAD_API_TOKEN_FILE: '/run/secrets/zammad_api_token'
 
 # The queue, cache and limits clients: `app` and `cron` reach both Redis instances and RabbitMQ,
 # `setup` (indexes and the shop row, Mongo only) does not, and so is given no password.
@@ -231,6 +232,7 @@ x-service-secrets: &service-secrets
     - antibot_altcha_secret
     - antibot_turnstile_secret
     - posthog_personal_api_key
+    - zammad_api_token
 
 services:
     app:
@@ -609,6 +611,7 @@ services:
             - antibot_altcha_secret
             - antibot_turnstile_secret
             - posthog_personal_api_key
+            - zammad_api_token
         environment:
             <<: [*app-env, *app-key-env]
             # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
@@ -1179,6 +1182,8 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/antibot_turnstile_secret
     posthog_personal_api_key:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/posthog_personal_api_key
+    zammad_api_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/zammad_api_token
     alert_webhook_url:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_webhook_url
     alert_heartbeat_token:

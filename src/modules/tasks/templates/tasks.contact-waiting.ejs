@@ -1,0 +1,16 @@
+<!doctype html>
+<%#
+    Operator-facing and link-only: the support mailbox is a help desk, so this mail carries no
+    customer data. Copy resolved in NODE_DEFAULT_LOCALE by `modules/tasks/emails.ts`.
+%>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8" />
+        <title><%= pageMetaTitle %></title>
+    </head>
+    <body>
+        <h2><%= title %></h2>
+        <p><%= explain %></p>
+        <p><a href="<%= link %>"><%= labelLink %></a></p>
+    </body>
+</html>

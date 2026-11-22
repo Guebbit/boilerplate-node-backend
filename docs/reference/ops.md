@@ -115,6 +115,8 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run job sweep:tasks-overdue`      | 06:40 nightly  | Yes    | Tells the staff who work a task's kind, once, that an open task is three days from its due date and once more that it passed it; a task closed before the sweep is skipped, and one already told is never told again.          |
 | `npm run job reap:purchase-holds`      | 02:12 nightly  | Yes    | Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.                                                                                                    |
 | `npm run job sweep:webhook-retries`    | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                                                                          |
+| `npm run job sweep:zammad-contacts`    | every minute   | Yes    | Hands every contact message that is due to Zammad as a ticket, retrying by the outbox's backoff; after the last retry the message becomes a to-do and a link-only mail instead.                                                |
+| `npm run job sweep:zammad-profiles`    | every 5 min    | Yes    | Overwrites the Zammad customer of each account whose profile changed with the account's current address and name; a change that Zammad refuses for good is logged and dropped.                                                 |
 
 <!-- jobs:end -->
 

@@ -137,7 +137,7 @@ done
 : >"$DIR/secrets/restic_repository_env"
 # The integration secrets are optional: an empty file is unset.
 for name in payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
-    antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key \
+    antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key zammad_api_token \
     alert_webhook_url alert_heartbeat_token backup_heartbeat_token; do
     : >"$DIR/secrets/$name"
 done

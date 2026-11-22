@@ -35,7 +35,11 @@ import {
     exportFailedEmail,
     exportReadyEmail
 } from '@modules/account/emails';
-import { contactRequestEmail, erasureNoticeEmail } from '@modules/tasks/emails';
+import {
+    contactRequestEmail,
+    contactWaitingEmail,
+    erasureNoticeEmail
+} from '@modules/tasks/emails';
 import { examplePublishedEmail } from '@modules/example';
 import { orderConfirmEmail, holdExpiredEmail, orderCanceledEmail } from '@modules/orders/emails';
 import {
@@ -263,6 +267,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         message: 'A message',
         createdAt: '2026-08-06T00:00:00.000Z'
     }),
+    'tasks.contact-waiting': contactWaitingEmail(locale, { id: '6ad69a48f753b902e5b98dfe' }),
     'tasks.erasure-notice': erasureNoticeEmail(locale, ['6ad69a48f753b902e5b98dfe'])
 });
 

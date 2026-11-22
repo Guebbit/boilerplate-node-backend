@@ -33,6 +33,8 @@ const config: KnipConfig = {
         'jest.config.mutation.js',
         // Named by the `--config` flag of `npm run test:replicas`, never imported.
         'jest.config.replicas.js',
+        // Named by the `--config` flag of `npm run test:zammad`, never imported.
+        'jest.config.zammad.js',
         // Spawned by file path from `tests/replicas/notification-fanout.test.ts`, never imported.
         'tests/replicas/support/write-notification.ts',
         // Loaded by VitePress from its own conventional paths; knip cannot read the `.vue` file that

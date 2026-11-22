@@ -40,7 +40,7 @@ export const postTask = (
     if (!body) return;
 
     /**
-     * The support notification is `taskService.create`'s: who gets told, and in which
+     * The support notification is `taskService.submit`'s: who gets told, and in which
      * language, are facts about the task rather than about the request that filed it.
      *
      * `authContext` is set only for a signed-in session (`getAuth` upstream; an expired token or no
@@ -48,7 +48,7 @@ export const postTask = (
      * `subjectId`, so the export and the erasure follow the message to the account.
      */
     return taskService
-        .create(body, request.authContext?.id)
+        .submit(body, request.authContext?.id)
         .then(() => acceptedResponse(response))
         .catch(catchAs(response, 'postTask'));
 };

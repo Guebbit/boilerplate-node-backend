@@ -109,6 +109,18 @@ endpoints:
           - '[STATUS] == 200'
       alerts:
           - type: ntfy
+    # The help desk, when the `zammad` module is on: Zammad's own health check also goes red when its
+    # email channel (IMAP) is failing or its background jobs have stopped. The token is a monitoring
+    # token made in Zammad's admin (Settings > System > Monitoring), not the integration token.
+    - name: acme-helpdesk
+      group: clients
+      url: https://helpdesk.acme.example/api/v1/monitoring/health_check?token=A_MONITORING_TOKEN
+      interval: 5m
+      conditions:
+          - '[STATUS] == 200'
+          - '[BODY].healthy == true'
+      alerts:
+          - type: ntfy
     # The real read path a shopper hits first, with no login.
     - name: acme-products
       group: clients

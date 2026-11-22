@@ -131,9 +131,10 @@ const renderMessage = (
         /**
          * nodemailer `replyTo`: sets the Reply-To header — https://nodemailer.com/message/
          * A mail that names none gets the support address, so a customer's reply reaches a person
-         * (the sender is a `noreply@` by default).
+         * (the sender is a `noreply@` by default). `noReplyTo` sends none: a mail whose replies
+         * must reach nobody.
          */
-        replyTo: envelope.replyTo ?? supportEmail(),
+        ...(envelope.noReplyTo ? {} : { replyTo: envelope.replyTo ?? supportEmail() }),
         /**
          * nodemailer `messageId`, `inReplyTo` and `references`: the thread headers.
          * `References` repeats the one parent, which is all a two-mail thread needs.

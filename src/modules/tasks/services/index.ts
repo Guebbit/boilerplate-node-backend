@@ -8,7 +8,7 @@
  * @see docs/modules/tasks.md#its-neighbourhood
  */
 
-import { create, mailMainMailbox } from './contact';
+import { create, submit, mailMainMailbox } from './contact';
 import { search, getById } from './read';
 import { removeById } from './remove';
 import {
@@ -21,9 +21,13 @@ import { workflow } from './workflow';
 import { remindDueSoon, remindOverdue } from './overdue';
 import { clearSystemTasks, openSystemTask } from './system';
 
+export { registerContactDelivery } from '../contact-delivery';
+export type { ContactDelivery, ContactMessage } from '../contact-delivery';
+
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const taskService = {
     create,
+    submit,
     mailMainMailbox,
     remindOverdue,
     remindDueSoon,

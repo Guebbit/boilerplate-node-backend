@@ -18,6 +18,17 @@
             "label-order-number": "Numero d'ordine",
             "label-link": "Aprilo"
         },
+        "email-contact-waiting": {
+            "subject": "Messaggio di contatto in attesa — non rispondere",
+            "subject-overdue": "Messaggio di contatto in ritardo — non rispondere",
+            "subject-due-soon": "Messaggio di contatto in scadenza — non rispondere",
+            "meta-title": "Messaggio di contatto in attesa",
+            "title": "Un messaggio di contatto è in attesa nell'area admin del negozio. Non è stato possibile passarlo all'help desk.",
+            "title-overdue": "Il messaggio di contatto #{{ref}} è ancora senza risposta e non è mai arrivato all'help desk: rispondi dall'area admin.",
+            "title-due-soon": "Il messaggio di contatto #{{ref}} scade tra 3 giorni e non è mai arrivato all'help desk: rispondi dall'area admin.",
+            "explain": "Questa email non contiene dati del cliente e rispondere non raggiunge nessuno. Apri il messaggio nell'area admin del negozio.",
+            "label-link": "Aprilo nell'admin"
+        },
         "email-erasure": {
             "subject": "Un account è stato cancellato: elimina le email per {{refs}}",
             "meta-title": "Un account è stato cancellato",

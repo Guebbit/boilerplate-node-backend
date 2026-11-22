@@ -33,6 +33,7 @@ flowchart LR
     orders["orders"]
     stock_alerts["stock-alerts"]
     tasks["tasks"]
+    zammad["zammad"]
 
     account --> users
     api_keys --> users
@@ -42,12 +43,14 @@ flowchart LR
     orders --> users
     stock_alerts --> users
     tasks --> users
+    zammad --> users
     users --> access
     users -. "user.deactivated" .-> account
     users -. "user.deletion_canceled" .-> account
     users -. "user.setup_requested" .-> account
     users -. "user.review_cleared" .-> tasks
     users -. "user.review_flagged" .-> tasks
+    users -. "user.profile_changed" .-> zammad
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -55,7 +58,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class notifications,stock_alerts supporting;
-    class access,account,api_keys,example,tasks generic;
+    class access,account,api_keys,example,tasks,zammad generic;
     class users centre;
 ```
 
@@ -312,7 +315,7 @@ a value, so the delivery log never holds a fresh copy of the person's data.
 `user.updated` is projected from the outbox event `user.profile_changed`, written in the save's own
 transaction (`services/update.ts`, `services/credentials.ts`). A recipient that syncs customers
 stores our `userId`, drops what it holds on `user.erased`, and refetches on `user.updated`. The
-catalogue and the delivery pipeline are [`webhooks`](./webhooks.md).
+catalogue and the delivery pipeline are [`webhooks`](./webhooks.md). In process, [`zammad`](./zammad.md#profile-sync) hears the same event to keep its copy of a customer current.
 
 ## What this module adds to the data export {#what-this-module-adds-to-the-data-export}
 

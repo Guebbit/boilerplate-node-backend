@@ -482,6 +482,40 @@ tests:
                       description: "webhook_deliveries_overdue has stayed above zero for 15 minutes \u2014 the retry sweep cron may not be running."
     - interval: 1m
       input_series:
+          - series: zammad_contacts_oldest_pending_seconds
+            values: 1200x30
+      alert_rule_test:
+          - eval_time: 20m
+            alertname: ZammadHandoverStuck
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A contact message has waited over 15 minutes for the help desk
+                      description: 'zammad_contacts_oldest_pending_seconds is above 900: the contact sweep is not running, or Zammad refuses the tickets. After the last retry the message falls back to a to-do, so nothing is lost.'
+    - interval: 1m
+      input_series:
+          - series: zammad_contacts_oldest_pending_seconds
+            values: 60x30
+      alert_rule_test:
+          - eval_time: 20m
+            alertname: ZammadHandoverStuck
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: zammad_handover_fallbacks
+            values: 1x5
+      alert_rule_test:
+          - eval_time: 2m
+            alertname: ZammadHandoverFellBack
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A contact message fell back to basic mode
+                      description: 'zammad_handover_fallbacks is above zero: Zammad did not take a message after every retry. Check the help desk; the message waits as a to-do in the shop admin.'
+    - interval: 1m
+      input_series:
           - series: job_last_success_timestamp_seconds{task="reap:orders"}
             values: '0x3000'
           - series: job_last_success_timestamp_seconds{task="sweep:outbox"}

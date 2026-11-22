@@ -83,6 +83,23 @@ went out? Add a note. If they disagree, the second person sends one line saying 
 stands.
 :::
 
+### With the help desk on {#helpdesk}
+
+When your shop runs a help desk (Zammad), messages from the contact form arrive there as tickets
+and you answer them there. This inbox then holds only what could not be handed over. Four things are
+yours to do by hand:
+
+- **A to-do that says "do not reply".** The help desk did not take the message after every retry,
+  so the message waits here. Answer it from this admin as before, then **Resolve** it. The mail you
+  got carries only the reference and a link: the customer's words are in the task, not the mail.
+- **The same person twice.** If one customer ends up with two entries in the help desk, merge the
+  tickets there by hand. Zammad cannot merge customers.
+- **"Email address already used" after a customer changed their email.** The new address already
+  belongs to another customer in the help desk, so their profile did not follow. Move their tickets
+  to the right customer by hand.
+- **Writing about a person in a ticket.** Write the order number, not the name: a mention on someone
+  else's ticket cannot be found and erased with the person.
+
 ### How long you have {#deadlines}
 
 | What the message is about | You have  |

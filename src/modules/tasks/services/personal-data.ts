@@ -19,6 +19,7 @@ import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
 import { erasureNoticeEmail } from '../emails';
 import { ownTasksFilter } from '../domain';
+import { supportMailboxIsHelpdesk } from '../contact-delivery';
 
 /**
  * Tell the support mailbox which messages an erasure deleted, by `[#ref]` alone, so staff can
@@ -157,5 +158,11 @@ export const eraseOwnTasks = async (
     await taskRepository.deleteSystemAbout(subject.userId, session);
     await taskRepository.detachSubject(subject.userId, session);
     await taskRepository.forgetStaff(subject.userId, session);
-    return deletedIds.length > 0 ? () => mailErasureNotice(deletedIds) : undefined;
+    /**
+     * Not while the support mailbox is a help desk: the notice would land there as a ticket
+     * listing task references. The help desk module keeps its own record of the erasure.
+     */
+    return deletedIds.length > 0 && !supportMailboxIsHelpdesk()
+        ? () => mailErasureNotice(deletedIds)
+        : undefined;
 };

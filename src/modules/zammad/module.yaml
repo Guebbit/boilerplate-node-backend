@@ -1,0 +1,21 @@
+summary: "An optional help desk: hands contact-form messages to a self-hosted Zammad, and keeps its copy of a customer inside the shop's erasure, export and profile rules."
+subdomain: generic
+group: foundation
+dependsOn:
+    - tasks # the contact seam: the port it installs, and the to-do a failed hand-over falls back to
+    - users # the signed-in sender's verified address, and the profile it keeps current
+jobs:
+    sweepZammadContacts:
+        name: sweep:zammad-contacts
+        # Every minute: the in-process nudge after the `202` is the fast path, this is the safety
+        # net for a crash, a Zammad outage and every retry. Idempotent: a row is claimed with a lease.
+        schedule: '* * * * *'
+        summary:
+            Hands every contact message that is due to Zammad as a ticket, retrying by the outbox's
+            backoff; after the last retry the message becomes a to-do and a link-only mail instead.
+    sweepZammadProfiles:
+        name: sweep:zammad-profiles
+        schedule: '*/5 * * * *'
+        summary:
+            Overwrites the Zammad customer of each account whose profile changed with the account's
+            current address and name; a change that Zammad refuses for good is logged and dropped.

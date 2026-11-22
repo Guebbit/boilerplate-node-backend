@@ -74,6 +74,7 @@ flowchart TD
     users
     webhooks
     wishlist
+    zammad
 
     account --> access
     account --> users
@@ -149,6 +150,8 @@ flowchart TD
     users --> access
     wishlist --> cart
     wishlist --> products
+    zammad --> tasks
+    zammad --> users
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -156,7 +159,7 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,notifications,payments,returns,shop,shop_tasks,stats,stock_alerts,wishlist supporting;
-    class access,account,api_keys,audit_logs,example,observability,sitemap,tasks,users,webhooks generic;
+    class access,account,api_keys,audit_logs,example,observability,sitemap,tasks,users,webhooks,zammad generic;
     class analytics,antibot,locales isolated;
 ```
 
@@ -166,22 +169,23 @@ flowchart TD
 | `shop-tasks`    | cart, delivery, inventory, notifications, orders, payments, products, returns, shop, stock-alerts, tasks, wishlist | —                                                                                            |
 | `shop`          | account                                                                                                            | cart, delivery, inventory, invoicing, orders, payments, products, returns, shop-tasks, stats |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users                                            | shop-tasks, wishlist                                                                         |
+| `users`         | access                                                                                                             | account, api-keys, cart, example, notifications, orders, stock-alerts, tasks, zammad         |
 | `access`        | —                                                                                                                  | account, api-keys, audit-logs, notifications, orders, payments, returns, tasks, users        |
 | `products`      | shop                                                                                                               | cart, delivery, inventory, orders, shop-tasks, sitemap, stock-alerts, wishlist               |
-| `users`         | access                                                                                                             | account, api-keys, cart, example, notifications, orders, stock-alerts, tasks                 |
 | `inventory`     | products, shop                                                                                                     | cart, delivery, orders, returns, shop-tasks, stock-alerts                                    |
 | `payments`      | access, orders, shop                                                                                               | cart, invoicing, returns, shop-tasks, stats                                                  |
 | `returns`       | access, delivery, inventory, orders, payments, shop                                                                | shop-tasks, stats                                                                            |
 | `account`       | access, users                                                                                                      | api-keys, invoicing, orders, shop, tasks                                                     |
 | `delivery`      | inventory, orders, products, shop                                                                                  | cart, returns, shop-tasks                                                                    |
+| `tasks`         | access, account, users                                                                                             | notifications, shop-tasks, zammad                                                            |
 | `invoicing`     | account, orders, payments, shop                                                                                    | stats                                                                                        |
 | `notifications` | access, tasks, users, webhooks                                                                                     | shop-tasks                                                                                   |
 | `stats`         | invoicing, orders, payments, returns, shop                                                                         | —                                                                                            |
-| `tasks`         | access, account, users                                                                                             | notifications, shop-tasks                                                                    |
 | `stock-alerts`  | inventory, products, users                                                                                         | shop-tasks                                                                                   |
 | `api-keys`      | access, account, users                                                                                             | —                                                                                            |
 | `wishlist`      | cart, products                                                                                                     | shop-tasks                                                                                   |
 | `audit-logs`    | access                                                                                                             | observability                                                                                |
+| `zammad`        | tasks, users                                                                                                       | —                                                                                            |
 | `addresses`     | —                                                                                                                  | cart                                                                                         |
 | `example`       | users                                                                                                              | —                                                                                            |
 | `observability` | audit-logs                                                                                                         | —                                                                                            |
@@ -256,6 +260,7 @@ Ships with every deployment, whatever the project becomes.
 - [`tasks`](./tasks.md) — Situations someone must take and close: contact messages and system-opened tasks, routed to the staff who hold the matching permission set. Deeper: [Task kinds, jurisdiction and lifecycle](./tasks-lifecycle.md), [Task notices and the staff badge](./tasks-notices.md).
 - [`users`](./users.md) — Admin-side user management; the self-service half is account. Deeper: [Sibling doors, purchase hold and erasure](./users-siblings-and-erasure.md).
 - [`webhooks`](./webhooks.md) — Outbound event delivery to a subscriber's own URL. Deeper: [Webhook delivery, switches and updates](./webhooks-delivery.md).
+- [`zammad`](./zammad.md) — An optional help desk: hands contact-form messages to a self-hosted Zammad, and keeps its copy of a customer inside the shop's erasure, export and profile rules.
 
 ### Demo shop
 

@@ -43,6 +43,7 @@ import tasks from './modules/tasks/module';
 import users from './modules/users/module';
 import webhooks from './modules/webhooks/module';
 import wishlist from './modules/wishlist/module';
+import zammad from './modules/zammad/module';
 
 /** Every module this build serves, in the one list the app tier, docs and scripts all walk. */
 export const enabledModules: AppModule[] = [
@@ -73,7 +74,8 @@ export const enabledModules: AppModule[] = [
     tasks,
     users,
     webhooks,
-    wishlist
+    wishlist,
+    zammad
 ];
 
 /**
@@ -136,4 +138,5 @@ export type ModuleName =
     | 'tasks'
     | 'users'
     | 'webhooks'
-    | 'wishlist';
+    | 'wishlist'
+    | 'zammad';

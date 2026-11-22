@@ -19,10 +19,11 @@ import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import type { TaskDocument } from '../model';
 import { taskRepository } from '../repository';
-import { contactRequestEmail, type ContactReminder } from '../emails';
+import { contactRequestEmail, contactWaitingEmail, type ContactReminder } from '../emails';
 import { initialTaskStatus, CONTACT_ROUTE_SET } from '../domain';
 import { tasksConfig } from '../config';
 import { TASK_OPENED, taskFactOf } from '../events';
+import { contactDelivery, supportMailboxIsHelpdesk } from '../contact-delivery';
 
 /**
  * When a contact message is due. A privacy request owes an answer within one calendar month
@@ -37,72 +38,133 @@ const contactDueAt = (category: string | undefined, now: Date): Date =>
         : new Date(now.getTime() + tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * HOUR_MS);
 
 /**
- * Record a contact request and announce it as `task.opened` — unless the honeypot caught it.
+ * Whether the message is suspected spam: a filled honeypot, or a refused address
+ * (`checkEmailPolicy`, off by default).
+ *
+ * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
+ *             fills, declared in the contract but never persisted (see `TaskDocument`) or read
+ *             back.
+ * Disposable: a disposable-inbox domain is treated the same way. A visible refusal would tell a
+ *             spam script exactly which signal caught it.
+ *
+ * @param payload - the form
+ * @param email - the normalised address
+ * @see docs/understand/defences/automation-and-abuse.md#the-ladder
+ */
+const isSuspectedSpam = (payload: CreateContactTaskRequest, email: string): Promise<boolean> =>
+    checkEmailPolicy(email).then(
+        (verdict) => Boolean(payload.website?.trim()) || verdict === 'refused'
+    );
+
+/**
+ * Store the message as a contact to-do and announce it as `task.opened`, unless it is spam.
  *
  * Both halves live here because "a customer asked us something" is one event, not a write plus a
  * thing the HTTP layer remembers to do afterwards. Who is told, and how, is `notifications`'
  * business: it hears the event.
  *
- * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
- *             fills, declared in the contract but never persisted (see `TaskDocument`)
- *             or read back. A non-empty value writes the row as `spam` and announces nothing
- *             — the bot still gets its `202`, so it learns nothing, but nobody's inbox hears
- *             about it.
- * Account:    `subjectId` is the signed-in sender's account, so the export and the erasure follow the
- *             task to the person; absent for an anonymous sender.
- * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
- *             way — filed as `spam`, not announced, still a `202`. A visible refusal would
- *             tell a spam script exactly which signal caught it.
+ * @param payload - the form
+ * @param email - the normalised address
+ * @param suspectedSpam - filed as `spam`, closed at birth, announcing nothing: the bot still gets
+ *   its `202`, so it learns nothing, but nobody's inbox hears about it
+ * @param subjectId - the signed-in sender's account, so the export and the erasure follow the
+ *   task to the person; absent for an anonymous sender
+ */
+const storeContactTask = (
+    payload: CreateContactTaskRequest,
+    email: string,
+    suspectedSpam: boolean,
+    subjectId?: string
+): Promise<TaskDocument> => {
+    const now = new Date();
+
+    /**
+     * The message and its `task.opened` row commit together. Suspected spam is stored
+     * (closed at birth) but announces nothing: contact spam tells nobody.
+     */
+    return announceInTransaction(
+        (session) =>
+            taskRepository.create(
+                {
+                    name: payload.name?.trim() || undefined,
+                    ...(subjectId ? { subjectId: toObjectId(subjectId) } : {}),
+                    email,
+                    subject: payload.subject.trim(),
+                    message: payload.message.trim(),
+                    ...(payload.category ? { category: payload.category } : {}),
+                    ...(payload.orderNumber?.trim()
+                        ? { orderNumber: payload.orderNumber.trim() }
+                        : {}),
+                    source: TaskSource.visitor,
+                    kind: TaskKind.contact,
+                    routeSet: CONTACT_ROUTE_SET,
+                    status: initialTaskStatus(suspectedSpam),
+                    // Spam is closed at birth: it ages from now and never owes work.
+                    ...(suspectedSpam
+                        ? { closedAt: now, resolution: TaskResolution.spam }
+                        : { dueAt: contactDueAt(payload.category, now) })
+                },
+                session
+            ),
+        (created) =>
+            suspectedSpam
+                ? []
+                : {
+                      name: TASK_OPENED,
+                      payload: taskFactOf(created),
+                      aggregateId: String(created._id)
+                  }
+    );
+};
+
+/**
+ * Record a contact request as a to-do and announce it as `task.opened`: basic mode, always
+ * available. The route calls {@link submit}, which offers the message to a help desk first; a help
+ * desk that gave up calls this to fall back.
  *
- * @see docs/understand/defences/automation-and-abuse.md#the-ladder
+ * @param payload - the form
+ * @param subjectId - the signed-in sender's account, absent for an anonymous sender
  */
 export const create = (
     payload: CreateContactTaskRequest,
     subjectId?: string
 ): Promise<TaskDocument> => {
     const email = normalizeEmail(payload.email);
-    const now = new Date();
-    const honeypotFilled = Boolean(payload.website?.trim());
+    return isSuspectedSpam(payload, email).then((spam) =>
+        storeContactTask(payload, email, spam, subjectId)
+    );
+};
 
-    return checkEmailPolicy(email).then((verdict) => {
-        const suspectedSpam = honeypotFilled || verdict === 'refused';
-
-        /**
-         * The message and its `task.opened` row commit together. Suspected spam is stored
-         * (closed at birth) but announces nothing: contact spam tells nobody.
-         */
-        return announceInTransaction(
-            (session) =>
-                taskRepository.create(
-                    {
-                        name: payload.name?.trim() || undefined,
-                        ...(subjectId ? { subjectId: toObjectId(subjectId) } : {}),
-                        email,
-                        subject: payload.subject.trim(),
-                        message: payload.message.trim(),
-                        ...(payload.category ? { category: payload.category } : {}),
-                        ...(payload.orderNumber?.trim()
-                            ? { orderNumber: payload.orderNumber.trim() }
-                            : {}),
-                        source: TaskSource.visitor,
-                        kind: TaskKind.contact,
-                        routeSet: CONTACT_ROUTE_SET,
-                        status: initialTaskStatus(suspectedSpam),
-                        // Spam is closed at birth: it ages from now and never owes work.
-                        ...(suspectedSpam
-                            ? { closedAt: now, resolution: TaskResolution.spam }
-                            : { dueAt: contactDueAt(payload.category, now) })
-                    },
-                    session
-                ),
-            (created) =>
-                suspectedSpam
-                    ? []
-                    : {
-                          name: TASK_OPENED,
-                          payload: taskFactOf(created),
-                          aggregateId: String(created._id)
-                      }
+/**
+ * What `POST /tasks` does: screen the message, offer it to the help desk port when one is on, and
+ * file the basic-mode to-do when none takes it. Spam never reaches the port: it stays local, as in
+ * basic mode.
+ *
+ * @param payload - the form
+ * @param subjectId - the signed-in sender's account, absent for an anonymous sender
+ */
+export const submit = (payload: CreateContactTaskRequest, subjectId?: string): Promise<void> => {
+    const email = normalizeEmail(payload.email);
+    return isSuspectedSpam(payload, email).then((spam) => {
+        const port = spam ? undefined : contactDelivery();
+        const taken = port
+            ? port.accept({
+                  ...(payload.name?.trim() ? { name: payload.name.trim() } : {}),
+                  email,
+                  subject: payload.subject.trim(),
+                  message: payload.message.trim(),
+                  ...(payload.category ? { category: payload.category } : {}),
+                  ...(payload.orderNumber?.trim()
+                      ? { orderNumber: payload.orderNumber.trim() }
+                      : {}),
+                  ...(subjectId ? { subjectId } : {}),
+                  receivedAt: new Date()
+              })
+            : Promise.resolve(false);
+        return taken.then((accepted) =>
+            accepted
+                ? undefined
+                : storeContactTask(payload, email, spam, subjectId).then(() => undefined)
         );
     });
 };
@@ -125,17 +187,24 @@ export const mailMainMailbox = (taskId: string, reminder?: ContactReminder): Pro
     return taskRepository.findById(taskId).then((task) => {
         if (!task?.email || task.kind !== TaskKind.contact) return;
 
-        const mail = contactRequestEmail(getDefaultLocale(), {
-            id: String(task._id),
-            orderNumber: task.orderNumber,
-            name: task.name,
-            email: task.email,
-            subject: task.subject,
-            message: task.message,
-            category: task.category,
-            createdAt: task.createdAt?.toISOString(),
-            reminder
-        });
+        /**
+         * A help desk mailbox gets the link-only mail: no customer data, no `Reply-To`. The to-do
+         * exists only because the hand-over failed, so the visitor's own words stay in the admin.
+         */
+        const helpdesk = supportMailboxIsHelpdesk();
+        const mail = helpdesk
+            ? contactWaitingEmail(getDefaultLocale(), { id: String(task._id), reminder })
+            : contactRequestEmail(getDefaultLocale(), {
+                  id: String(task._id),
+                  orderNumber: task.orderNumber,
+                  name: task.name,
+                  email: task.email,
+                  subject: task.subject,
+                  message: task.message,
+                  category: task.category,
+                  createdAt: task.createdAt?.toISOString(),
+                  reminder
+              });
 
         /**
          * The first mail's id is derived from the task, so the reminder can name it as its parent
@@ -153,7 +222,7 @@ export const mailMainMailbox = (taskId: string, reminder?: ContactReminder): Pro
                 to: mailbox,
                 subject: mail.subject,
                 text: mail.text,
-                replyTo: task.email,
+                ...(helpdesk ? { noReplyTo: true } : { replyTo: task.email }),
                 ...(reminder
                     ? {
                           messageId: `<task-${String(task._id)}-${reminder}@${domain}>`,

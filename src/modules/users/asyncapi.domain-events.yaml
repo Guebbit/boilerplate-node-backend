@@ -45,8 +45,8 @@ channels:
         description:
             'A personal-data field of an account was rectified, committed with the save that moved
             it. Field names only, never values: the outbox row is kept and the delivery log
-            replayable. No in-process subscriber; it exists for the `user.updated` webhook (GDPR
-            Art. 19).'
+            replayable. The `user.updated` webhook carries it (GDPR Art. 19), and `zammad` listens
+            in process to keep its copy of the customer current.'
         x-transport: outbox
         messages:
             UserProfileChangedDomainEvent:

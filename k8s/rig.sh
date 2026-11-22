@@ -144,7 +144,7 @@ create_secrets_and_edge() {
     done
     # The integration secrets are optional: an empty value is unset (src/infrastructure/config/secret-files.ts).
     for name in payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
-        antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key; do
+        antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key zammad_api_token; do
         args+=("--from-literal=$name=")
     done
     k -n "$NAMESPACE" create secret generic app-secrets "${args[@]}" >/dev/null

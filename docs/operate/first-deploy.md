@@ -85,7 +85,7 @@ flowchart LR
         limits_file["limits_password"]
         rabbit["rabbitmq_password"]
         keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token,<br/>device_cookie_secret"]
-        integrations["integration secrets:<br/>payment_webhook_secret, oauth_*,<br/>antibot_*, posthog_personal_api_key"]
+        integrations["integration secrets:<br/>payment_webhook_secret, oauth_*,<br/>antibot_*, posthog_personal_api_key,<br/>zammad_api_token"]
         smtp["smtp_password"]
         alerts["alert_webhook_url,<br/>alert_heartbeat_token"]
         beat["backup_heartbeat_token"]
@@ -134,7 +134,7 @@ done
 # The integrations: fill in the ones you use. An empty file is unset.
 for name in smtp_password payment_webhook_secret oauth_google_client_secret \
             oauth_github_client_secret antibot_altcha_secret antibot_turnstile_secret \
-            posthog_personal_api_key alert_webhook_url alert_heartbeat_token \
+            posthog_personal_api_key zammad_api_token alert_webhook_url alert_heartbeat_token \
             backup_heartbeat_token; do
   : > "clients/acme/secrets/$name"
   chmod 0644 "clients/acme/secrets/$name"
@@ -156,10 +156,10 @@ done
   missing. Put the managed password **in the file** and leave it out of the URL: a password left
   inside the URL sits in `.env`, and so in `docker inspect`. Leaving the file **empty** reads as
   unset, and the password in your `NODE_DB_URI` / `NODE_REDIS_URL` / `NODE_RABBITMQ_URL` stands.
-- **Integrations** (SMTP, payments, OAuth, antibot, PostHog erasure): one file each, `smtp_password`,
+- **Integrations** (SMTP, payments, OAuth, antibot, PostHog erasure, the help desk): one file each, `smtp_password`,
   `payment_webhook_secret` (it may hold the `new,old` ring), `oauth_google_client_secret`,
-  `oauth_github_client_secret`, `antibot_altcha_secret`, `antibot_turnstile_secret` and
-  `posthog_personal_api_key`. Fill in the ones you use; an **empty file is unset**, which is how
+  `oauth_github_client_secret`, `antibot_altcha_secret`, `antibot_turnstile_secret`, `posthog_personal_api_key`
+  and `zammad_api_token` (the help desk's integration token, [zammad](../modules/zammad.md#setup)). Fill in the ones you use; an **empty file is unset**, which is how
   an optional secret stays optional. Delete the matching `NODE_*` lines from the client's `.env`: a
   plain `NODE_X=value` left there is still read, and shows in `docker inspect` ([the empty-file
   rule](configuration.md#secrets-as-files)). `NODE_SMTP_PASS` also reaches `alertmanager`, as the same file.

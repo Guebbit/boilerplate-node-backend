@@ -106,6 +106,41 @@ export const contactRequestEmail = (
 };
 
 /**
+ * The link-only twin of {@link contactRequestEmail}, sent while the support mailbox is a help desk:
+ * the to-do exists only because the hand-over failed, and a help desk would file a mail carrying
+ * the visitor's words as a second conversation. Carries the `[#ref]` and the admin link, no
+ * address, name or text.
+ *
+ * @param locale - the mailbox's language
+ * @param waiting - the task's id, and which reminder this is when it is not the first mail
+ */
+export const contactWaitingEmail = (
+    locale: string,
+    waiting: Pick<ContactRequest, 'id' | 'reminder'>
+): EmailContent & { text: string } => {
+    const t = translator(locale);
+    const wording = waiting.reminder ? `-${waiting.reminder}` : '';
+    const ref = taskRef(waiting.id);
+    const link = frontendLink(FRONTEND_LINK_RULES.staffPages.task, locale, { id: waiting.id });
+    const title = t(`tasks.email-contact-waiting.title${wording}`, { ref });
+    const explain = t('tasks.email-contact-waiting.explain');
+    const labelLink = t('tasks.email-contact-waiting.label-link');
+    return {
+        template: 'tasks.contact-waiting',
+        subject: `${t(`tasks.email-contact-waiting.subject${wording}`)} [#${ref}]`,
+        text: [title, '', explain, '', `${labelLink}: ${link}`].join('\n'),
+        data: {
+            locale,
+            pageMetaTitle: t('tasks.email-contact-waiting.meta-title'),
+            title,
+            explain,
+            labelLink,
+            link
+        }
+    };
+};
+
+/**
  * Operator-facing notice that an erasure deleted contact messages: the `[#ref]`s of the deleted
  * tasks and nothing else (no address, name or text), so the mailbox copies can be found and
  * deleted. Goes to the main mailbox, in `NODE_DEFAULT_LOCALE`.
