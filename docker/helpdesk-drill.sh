@@ -80,7 +80,8 @@ make_client() {
     done
     for name in restic_repository_env payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
         antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key alert_webhook_url \
-        alert_heartbeat_token backup_heartbeat_token zammad_api_token; do
+        alert_heartbeat_token alert_ntfy_url alert_ntfy_token alert_telegram_bot_token alert_pushover_user_key \
+        alert_pushover_token backup_heartbeat_token zammad_api_token; do
         : >"clients/$1/secrets/$name"
     done
     printf 'COMPOSE_PROFILES=%s\n' "$2" >"clients/$1/.env"

@@ -5,10 +5,13 @@
 # Usage:   alertmanager-render.sh <template> <out-config> <secrets-dir> [exec alertmanager args...]
 # Reads:   ALERT_EMAIL_TO, ALERT_EMAIL_FROM, ALERT_WEBHOOK_URL, ALERT_HEARTBEAT_URL,
 #          ALERT_HEARTBEAT_TOKEN, and the app's NODE_SMTP_HOST / _PORT / _USER / _PASS.
-#          Each of NODE_SMTP_PASS, ALERT_WEBHOOK_URL and ALERT_HEARTBEAT_TOKEN also has a `_FILE`
-#          form naming a file with the value, which wins over the plain variable (an empty file is
-#          unset; a named file that is missing or unreadable stops the render): production hands
-#          them over as files, dev as variables.
+#          The phone push: ALERT_NTFY_URL (+ ALERT_NTFY_TOKEN), ALERT_TELEGRAM_BOT_TOKEN +
+#          ALERT_TELEGRAM_CHAT_ID, ALERT_PUSHOVER_USER_KEY + ALERT_PUSHOVER_TOKEN.
+#          Every secret (NODE_SMTP_PASS, the webhook URL, the heartbeat token and each push
+#          credential, but not the chat id, which is a number) also has a `_FILE` form naming a
+#          file with the value, which wins over the plain variable (an empty file is unset; a named
+#          file that is missing or unreadable stops the render): production hands them over as
+#          files, dev as variables.
 #          ALERT_SMTP_REQUIRE_TLS (default true) is the one extra: a plain-SMTP sink such as mailpit
 #          needs false.
 # Secrets: URLs, tokens and the SMTP password go to 0600 files in <secrets-dir>, never into the
@@ -74,6 +77,27 @@ webhook=$secret
 heartbeat=${ALERT_HEARTBEAT_URL:-}
 read_secret "${ALERT_HEARTBEAT_TOKEN:-}" "${ALERT_HEARTBEAT_TOKEN_FILE:-}"
 token=$secret
+read_secret "${ALERT_NTFY_URL:-}" "${ALERT_NTFY_URL_FILE:-}"
+ntfy=$secret
+read_secret "${ALERT_NTFY_TOKEN:-}" "${ALERT_NTFY_TOKEN_FILE:-}"
+ntfy_token=$secret
+read_secret "${ALERT_TELEGRAM_BOT_TOKEN:-}" "${ALERT_TELEGRAM_BOT_TOKEN_FILE:-}"
+telegram_token=$secret
+telegram_chat=${ALERT_TELEGRAM_CHAT_ID:-}
+read_secret "${ALERT_PUSHOVER_USER_KEY:-}" "${ALERT_PUSHOVER_USER_KEY_FILE:-}"
+pushover_user=$secret
+read_secret "${ALERT_PUSHOVER_TOKEN:-}" "${ALERT_PUSHOVER_TOKEN_FILE:-}"
+pushover_token=$secret
+
+# The ntfy URL the daemon posts to: the topic URL plus ntfy's built-in Alertmanager template, and
+# the urgent priority (Android lets it through Do Not Disturb). A URL that already has a query
+# gets `&`. https://docs.ntfy.sh/publish/#message-templating
+if [ -n "$ntfy" ]; then
+    case $ntfy in
+        *\?*) ntfy="$ntfy&template=alertmanager&priority=urgent" ;;
+        *) ntfy="$ntfy?template=alertmanager&priority=urgent" ;;
+    esac
+fi
 
 # Which knob groups are on. A group needs everything it cannot work without.
 email=0
@@ -82,6 +106,12 @@ hook=0
 [ -n "$webhook" ] && hook=1
 beat=0
 [ -n "$heartbeat" ] && beat=1
+push_ntfy=0
+[ -n "$ntfy" ] && push_ntfy=1
+push_telegram=0
+[ -n "$telegram_token" ] && [ -n "$telegram_chat" ] && push_telegram=1
+push_pushover=0
+[ -n "$pushover_user" ] && [ -n "$pushover_token" ] && push_pushover=1
 
 # The receiver each route points at; `null` when its knobs are empty.
 default=null
@@ -90,19 +120,22 @@ failing=null
 [ "$hook" = 1 ] && failing=webhook
 watchdog=null
 [ "$beat" = 1 ] && watchdog=heartbeat
+# One receiver holds every channel that is on.
 critical=null
-if [ "$email" = 1 ] && [ "$hook" = 1 ]; then
-    critical=email-and-webhook
-elif [ "$email" = 1 ]; then
-    critical=email
-elif [ "$hook" = 1 ]; then
-    critical=webhook
+if [ "$email" = 1 ] || [ "$hook" = 1 ] || [ "$push_ntfy" = 1 ] || [ "$push_telegram" = 1 ] ||
+    [ "$push_pushover" = 1 ]; then
+    critical=critical
 fi
 
 write_secret smtp-password "$smtp_pass"
 write_secret webhook-url "$webhook"
 write_secret heartbeat-url "$heartbeat"
 write_secret heartbeat-token "$token"
+write_secret ntfy-url "$ntfy"
+write_secret ntfy-token "$ntfy_token"
+write_secret telegram-bot-token "$telegram_token"
+write_secret pushover-user-key "$pushover_user"
+write_secret pushover-token "$pushover_token"
 
 # Group markers to delete, as sed range expressions.
 # Starts with a no-op so the list is never empty (a bare `sed` is a usage error).
@@ -110,6 +143,11 @@ drop="-e 's/^//'"
 [ "$email" = 0 ] && drop="$drop -e '/# BEGIN email\$/,/# END email\$/d'"
 [ -z "$smtp_pass" ] && drop="$drop -e '/# BEGIN smtp-auth\$/,/# END smtp-auth\$/d'"
 [ "$hook" = 0 ] && drop="$drop -e '/# BEGIN webhook\$/,/# END webhook\$/d'"
+[ "$hook" = 0 ] && [ "$push_ntfy" = 0 ] && drop="$drop -e '/# BEGIN webhook-configs\$/,/# END webhook-configs\$/d'"
+[ "$push_ntfy" = 0 ] && drop="$drop -e '/# BEGIN ntfy\$/,/# END ntfy\$/d'"
+[ -z "$ntfy_token" ] && drop="$drop -e '/# BEGIN ntfy-auth\$/,/# END ntfy-auth\$/d'"
+[ "$push_telegram" = 0 ] && drop="$drop -e '/# BEGIN telegram\$/,/# END telegram\$/d'"
+[ "$push_pushover" = 0 ] && drop="$drop -e '/# BEGIN pushover\$/,/# END pushover\$/d'"
 [ "$beat" = 0 ] && drop="$drop -e '/# BEGIN heartbeat\$/,/# END heartbeat\$/d'"
 [ -z "$token" ] && drop="$drop -e '/# BEGIN heartbeat-auth\$/,/# END heartbeat-auth\$/d'"
 
@@ -125,6 +163,7 @@ eval "sed $drop" < "$template" |
         -e "s/@ALERT_EMAIL_FROM@/$(escape "$from")/g" \
         -e "s/@ALERT_SMTP_HOST@/$(escape "$smtp_host")/g" \
         -e "s/@ALERT_SMTP_PORT@/$(escape "${NODE_SMTP_PORT:-587}")/g" \
+        -e "s/chat_id: ALERT_TELEGRAM_CHAT_ID/chat_id: $(escape "$telegram_chat")/g" \
         -e "s/@ALERT_SMTP_USER@/$(escape "$smtp_user")/g" \
         -e "s/require_tls: ALERT_SMTP_REQUIRE_TLS/require_tls: $(escape "${ALERT_SMTP_REQUIRE_TLS:-true}")/g" \
         -e "s/@SECRETS_DIR@/$(escape "$secrets")/g" \

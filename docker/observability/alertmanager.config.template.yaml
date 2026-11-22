@@ -4,6 +4,8 @@
 #
 # Markers:    `@NAME@` is replaced by the knob's value.
 #             `# BEGIN x` .. `# END x` lines are deleted when knob group `x` is empty.
+#             A group may sit inside another (`ntfy` inside `webhook-configs`): each range is deleted
+#             on its own.
 # Receivers:  every receiver is always defined; an emptied receiver notifies no one.
 # Docs:       docs/operate/prometheus.md#alert-routing
 
@@ -35,7 +37,7 @@ route:
         # silent while the heartbeat stayed green.
         - receiver: '@RECEIVER_DEFAULT@'
           matchers: ['alertname="AlertmanagerNotificationsFailing"']
-        # What cannot wait: email and the phone push.
+        # What cannot wait: email, the webhook and the phone push, whichever are on.
         - receiver: '@RECEIVER_CRITICAL@'
           matchers: ['severity="critical"']
 
@@ -56,13 +58,9 @@ receivers:
             # END smtp-auth
       # END email
 
-    - name: 'webhook'
-      # BEGIN webhook
-      webhook_configs:
-          - url_file: '@SECRETS_DIR@/webhook-url'
-      # END webhook
-
-    - name: 'email-and-webhook'
+    # What cannot wait: every channel that is on, in one receiver. One receiver, not one per
+    # combination: a channel added later is one more group here, never a new combination.
+    - name: 'critical'
       # BEGIN email
       email_configs:
           - to: '@ALERT_EMAIL_TO@'
@@ -74,6 +72,47 @@ receivers:
             auth_password_file: '@SECRETS_DIR@/smtp-password'
             # END smtp-auth
       # END email
+      # BEGIN webhook-configs
+      webhook_configs:
+          # `webhook` and `ntfy` are two items of one list: a second key would be a duplicate.
+          # BEGIN webhook
+          - url_file: '@SECRETS_DIR@/webhook-url'
+          # END webhook
+          # ntfy reads Alertmanager's own JSON through its built-in `alertmanager` template (the
+          # render adds `?template=alertmanager&priority=urgent` to the URL). The priority is part
+          # of the URL, so a resolution would buzz too: the other channels carry it.
+          # https://docs.ntfy.sh/publish/#message-templating
+          # BEGIN ntfy
+          - url_file: '@SECRETS_DIR@/ntfy-url'
+            send_resolved: false
+            # BEGIN ntfy-auth
+            http_config:
+                authorization:
+                    type: Bearer
+                    credentials_file: '@SECRETS_DIR@/ntfy-token'
+            # END ntfy-auth
+          # END ntfy
+      # END webhook-configs
+      # BEGIN telegram
+      # Telegram: a normal chat notification, default message text.
+      # https://prometheus.io/docs/alerting/latest/configuration/#telegram_config
+      telegram_configs:
+          - bot_token_file: '@SECRETS_DIR@/telegram-bot-token'
+            chat_id: ALERT_TELEGRAM_CHAT_ID
+      # END telegram
+      # BEGIN pushover
+      # Pushover: priority 2 repeats every `retry` until acknowledged, and gives up after `expire`.
+      # The resolution is an ordinary priority 0, or it would demand an acknowledgement too.
+      # https://prometheus.io/docs/alerting/latest/configuration/#pushover_config
+      pushover_configs:
+          - user_key_file: '@SECRETS_DIR@/pushover-user-key'
+            token_file: '@SECRETS_DIR@/pushover-token'
+            priority: '{{ if eq .Status "firing" }}2{{ else }}0{{ end }}'
+            retry: 5m
+            expire: 1h
+      # END pushover
+
+    - name: 'webhook'
       # BEGIN webhook
       webhook_configs:
           - url_file: '@SECRETS_DIR@/webhook-url'

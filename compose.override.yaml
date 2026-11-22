@@ -526,6 +526,15 @@ services:
             ALERT_EMAIL_TO: '${ALERT_EMAIL_TO-ops@example.test}'
             ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM-alertmanager@example.test}'
             ALERT_WEBHOOK_URL: '${ALERT_WEBHOOK_URL:-}'
+            # The phone push. ntfy defaults to the local `ntfy` below, so the drill works with no
+            # `.env`; Telegram and Pushover have no local stand-in and stay off until set.
+            # docs/operate/prometheus.md#phone-push
+            ALERT_NTFY_URL: '${ALERT_NTFY_URL-http://ntfy/boilerplate-alerts}'
+            ALERT_NTFY_TOKEN: '${ALERT_NTFY_TOKEN:-}'
+            ALERT_TELEGRAM_BOT_TOKEN: '${ALERT_TELEGRAM_BOT_TOKEN:-}'
+            ALERT_TELEGRAM_CHAT_ID: '${ALERT_TELEGRAM_CHAT_ID:-}'
+            ALERT_PUSHOVER_USER_KEY: '${ALERT_PUSHOVER_USER_KEY:-}'
+            ALERT_PUSHOVER_TOKEN: '${ALERT_PUSHOVER_TOKEN:-}'
             # Default: the local `gatus` below, so the heartbeat drill works without any .env.
             ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL-http://gatus:8080/api/v1/endpoints/dev_alertmanager-heartbeat/external?success=true}'
             ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN-dev-heartbeat-token}'
@@ -538,6 +547,36 @@ services:
             - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro,Z
         ports:
             - '127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093'
+
+    # ntfy: a local push server, the stand-in for the operator's own, so the whole critical-alert
+    # path can be proven without a phone: `curl http://localhost:3073/boilerplate-alerts/json?poll=1`.
+    # Development only: production gets a recipe, not a service (docs/operate/prometheus.md#phone-push).
+    # https://docs.ntfy.sh/config/
+    ntfy:
+        logging: *container-logging
+        profiles: ['observability']
+        image: docker.io/binwiederhier/ntfy:v2.38.1@sha256:038da2be5e668fee6d36a62884eea48975e1b71c29a56964e5298c1b9165a573
+        restart: unless-stopped
+        command: ['serve']
+        environment:
+            # Messages kept in a file, so a restart does not lose what a phone has not fetched.
+            NTFY_CACHE_FILE: '/var/cache/ntfy/cache.db'
+            NTFY_BASE_URL: 'http://localhost:${NTFY_PORT:-3073}'
+        healthcheck:
+            # The documented probe: /v1/health answers {"healthy":true}.
+            test:
+                [
+                    'CMD-SHELL',
+                    'wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo ''"healthy"\s*:\s*true'' || exit 1'
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        volumes:
+            - ntfy_volume:/var/cache/ntfy
+        ports:
+            # Loopback only: whoever can read a topic can read the alerts.
+            - '127.0.0.1:${NTFY_PORT:-3073}:80'
 
     # Gatus: stands in for the off-host heartbeat service. Alertmanager pings it every minute; when
     # the pings stop (stop `alertmanager` to drill it) it mails mailpit (`integrations` profile).
@@ -798,6 +837,7 @@ volumes:
     prometheus_volume:
     loki_volume:
     umami_db_volume:
+    ntfy_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

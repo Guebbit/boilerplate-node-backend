@@ -140,52 +140,130 @@ Prometheus evaluates the rules; Alertmanager decides who is told. The routing is
 reads no environment variables, and its email `to` / `from` / `smarthost` have no `_file` form.
 Same routing for every client and for dev; only the values differ.
 
-| Alert                              | Goes to                | Why                                                                                                                           |
-| ---------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Watchdog`                         | the heartbeat URL only | silence on the other end = the pipeline is dead                                                                               |
-| `AlertmanagerNotificationsFailing` | the OTHER channel      | a failing email goes to the webhook, a failing webhook (or the heartbeat) goes to email: never to the receiver that is broken |
-| `severity: critical`               | email **and** webhook  | a phone push for what cannot wait                                                                                             |
-| everything else                    | email                  | through the app's own SMTP account (`NODE_SMTP_*`)                                                                            |
+| Alert                              | Goes to                           | Why                                                                                                                           |
+| ---------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Watchdog`                         | the heartbeat URL only            | silence on the other end = the pipeline is dead                                                                               |
+| `AlertmanagerNotificationsFailing` | the OTHER channel                 | a failing email goes to the webhook, a failing webhook (or the heartbeat) goes to email: never to the receiver that is broken |
+| `severity: critical`               | every channel that is on, at once | email, the webhook, and the [phone push](#phone-push) (ntfy, Telegram, Pushover): what cannot wait                            |
+| everything else                    | email                             | through the app's own SMTP account (`NODE_SMTP_*`)                                                                            |
 
-| Knob                                 | Meaning                                                                                  |
-| ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM` | who receives the email, and from what address (`from` falls back to `NODE_SMTP_USER`)    |
-| `ALERT_WEBHOOK_URL`                  | ntfy (with a templated URL, [recipe below](#webhook-ntfy)) or a bridge for anything else |
-| `ALERT_HEARTBEAT_URL`, `_TOKEN`      | the off-host service that raises the alarm when the `Watchdog` pings stop                |
+| Knob                                                 | Meaning                                                                                        |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM`                 | who receives the email, and from what address (`from` falls back to `NODE_SMTP_USER`)          |
+| `ALERT_WEBHOOK_URL`                                  | Alertmanager's generic webhook, for a bridge you run; critical alerts and failed notifications |
+| `ALERT_NTFY_URL`, `ALERT_NTFY_TOKEN`                 | [ntfy](#phone-push-ntfy): the topic URL (the credential), and an optional bearer token         |
+| `ALERT_TELEGRAM_BOT_TOKEN`, `ALERT_TELEGRAM_CHAT_ID` | [Telegram](#phone-push-telegram): the bot, and the chat it writes to                           |
+| `ALERT_PUSHOVER_USER_KEY`, `ALERT_PUSHOVER_TOKEN`    | [Pushover](#phone-push-pushover): the account's user key, and the application's token          |
+| `ALERT_HEARTBEAT_URL`, `_TOKEN`                      | the off-host service that raises the alarm when the `Watchdog` pings stop                      |
 
 - **The webhook is Alertmanager's generic one.** It posts a fixed JSON body (`{"version":"4","alerts":[...]}`) that
-  Alertmanager cannot reshape. Slack, Telegram, Discord and Pushover reject that body, and Matrix needs a bridge in
-  front of it. ntfy takes any POST, so it is the one service that works directly; anything else needs a small
-  bridge that turns the JSON into the service's own format.
-- **Empty knob, route off.** Its alerts go to `null` and nothing warns about it at boot. Email needs
+  Alertmanager cannot reshape. Slack, Discord and Matrix reject that body or need a bridge in front of it, and a bridge is
+  yours to run. Telegram, Pushover and ntfy do not need one: they have their own groups below.
+- **Empty knob, route off.** Its alerts go to `null` and nothing warns about it at boot. A group that needs two
+  knobs (Telegram, Pushover) is on only when both are set. Email needs
   `ALERT_EMAIL_TO`, a sender and `NODE_SMTP_HOST`; with `NODE_SMTP_PASS` empty (in production, an empty `smtp_password` file) no SMTP login is sent.
-- **Secrets stay out of the config.** The webhook and heartbeat URLs, the token and the SMTP password are
+- **Secrets stay out of the config.** The webhook and heartbeat URLs, every token and key and the SMTP password are
   written to `0600` files at start and read through Alertmanager's `url_file` / `*_file` forms, so they do not
   show in `/api/v2/status`.
-- **In production the secrets are files.** The webhook URL, the heartbeat token and the SMTP password reach
-  the container as `alert_webhook_url`, `alert_heartbeat_token` and `smtp_password`
+- **In production the secrets are files.** The webhook URL, the heartbeat token, the push credentials and the SMTP
+  password reach the container as `alert_webhook_url`, `alert_heartbeat_token`, `alert_ntfy_url`, `alert_ntfy_token`,
+  `alert_telegram_bot_token`, `alert_pushover_user_key`, `alert_pushover_token` and `smtp_password`
   ([secret files](first-deploy.md#secrets)), through `ALERT_WEBHOOK_URL_FILE` and its siblings; an empty
-  file is unset. Dev keeps the plain `ALERT_*` variables.
+  file is unset. Dev keeps the plain `ALERT_*` variables. The Telegram chat id is a number, not a secret, and stays in `.env`.
 - **Values are escaped** (`/`, `&`, `\` and `'`) before they reach the template, so an address or a password can
   contain them.
-- **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and needs no
-  `.env` change.
+- **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and ntfy to a local
+  `ntfy` service (`observability` profile, `http://localhost:3073`); neither needs a `.env` change.
 
-### The ntfy URL {#webhook-ntfy}
+### Phone push {#phone-push}
 
-Sent plain, an ntfy push is the raw JSON. A readable one needs ntfy's own templating in the URL, and `p=5` marks
-the push urgent (it can override Do Not Disturb on Android):
+A `critical` alert reaches the operator's phone through whichever of three channels have their knobs set. They can
+all be on at once, and they share one `critical` receiver, so adding a channel never changes the routes. Warnings
+stay on email; the heartbeat and the "notifications failing" routes are untouched.
+
+| Channel  | How                                                  | What the phone does                                       | Cost             |
+| -------- | ---------------------------------------------------- | --------------------------------------------------------- | ---------------- |
+| ntfy     | the webhook, ntfy's own `alertmanager` template      | Android: an urgent push overrides Do Not Disturb          | free, self-host  |
+| Telegram | Alertmanager's native `telegram_configs`             | a normal chat notification                                | free             |
+| Pushover | Alertmanager's native `pushover_configs`, priority 2 | repeats every 5 minutes until acknowledged, for up to 1 h | about 5 USD once |
+
+The resolution is not pushed urgently: Pushover gets it as an ordinary message, and the ntfy push is sent for the
+firing alert only (its priority is part of the URL, so a resolution would buzz too). Telegram carries both.
+
+#### ntfy {#phone-push-ntfy}
+
+Alertmanager has no native ntfy receiver, so the push is its generic webhook pointed at ntfy, and ntfy's built-in
+`alertmanager` template (ntfy 2.14 or later) turns the JSON into a readable title and message. No bridge, no code of ours.
+Set the **topic URL**; the render appends `?template=alertmanager&priority=urgent` itself:
 
 ```
-ALERT_WEBHOOK_URL='https://ntfy.example.com/alerts?tpl=1&t={{.commonLabels.alertname}}&m={{.commonAnnotations.summary}}&p=5'
+ALERT_NTFY_URL=https://ntfy.example.com/some-long-random-topic
 ```
 
-`p=5` applies to every alert that reaches the webhook, not only the critical ones. The template fields are ntfy's
-(<https://docs.ntfy.sh/publish/#message-templating>); check the result with the drill below before relying on it.
+The topic name is the credential on a server with no access control, so pick a long random one and treat the URL as a
+secret (in production it is the `alert_ntfy_url` file). On a server that does have access control, give Alertmanager a
+token (`tk_…`, `ntfy token add`) in `ALERT_NTFY_TOKEN` and it sends it as a bearer header. Template reference:
+<https://docs.ntfy.sh/publish/#message-templating>.
+
+**Your own ntfy server.** A deployer who already runs one just points the URL at it. Otherwise this is enough beside the
+stack (it is a recipe, not a service of ours, so the boilerplate picks no host or provider):
+
+```yaml
+ntfy:
+    image: docker.io/binwiederhier/ntfy:v2.38.1
+    command: ['serve']
+    environment:
+        NTFY_BASE_URL: 'https://ntfy.example.com'
+        NTFY_CACHE_FILE: '/var/cache/ntfy/cache.db'
+        # Behind a reverse proxy: take the visitor's address from its header, or every client is the proxy.
+        NTFY_BEHIND_PROXY: 'true'
+        # iOS only: Apple lets nobody but ntfy.sh's own server push to a phone. This forwards just a poll
+        # request (the topic hash, not the message) to it, so the phone wakes up and fetches from yours.
+        NTFY_UPSTREAM_BASE_URL: 'https://ntfy.sh'
+        # Deny by default, then grant the alerts topic to one user: `ntfy user add`, `ntfy access`, `ntfy token add`.
+        NTFY_AUTH_FILE: '/var/lib/ntfy/auth.db'
+        NTFY_AUTH_DEFAULT_ACCESS: 'deny-all'
+    volumes:
+        - ntfy-cache:/var/cache/ntfy
+        - ntfy-auth:/var/lib/ntfy
+```
+
+Put TLS in front of it (the same reverse proxy as the API). Install the ntfy app on the phone, point it at the server
+and subscribe to the topic. On Android, allow the app to override Do Not Disturb for urgent messages.
+
+#### Telegram {#phone-push-telegram}
+
+1. Create a bot with `@BotFather` (`/newbot`) and keep its token: `ALERT_TELEGRAM_BOT_TOKEN`
+   (production: the `alert_telegram_bot_token` file).
+2. Send the bot any message from the chat that should receive the alerts, then read the chat id from
+   `https://api.telegram.org/bot<token>/getUpdates` (`message.chat.id`): `ALERT_TELEGRAM_CHAT_ID`. A group's id is negative.
+
+The message is Alertmanager's default text. A bot token is a credential: if it leaks, revoke it in `@BotFather`
+(`/revoke`) and set the new one.
+
+#### Pushover {#phone-push-pushover}
+
+Register an application in the Pushover account for the **application token** (`ALERT_PUSHOVER_TOKEN`) and copy the
+**user key** from the account page (`ALERT_PUSHOVER_USER_KEY`); production uses the `alert_pushover_token` and
+`alert_pushover_user_key` files. While an alert is firing the message is priority 2 (emergency): it repeats every
+5 minutes until someone acknowledges it in the app, and stops after an hour. Its resolution is an ordinary message.
+
+### The push drill {#phone-push-drill}
+
+Proves a critical alert reaches a phone-side receiver. On the local stack ntfy needs no phone: subscribe with `curl`.
+
+1. `npm run compose -- --profile observability up -d alertmanager ntfy`
+2. Fire a critical alert by hand:
+   `npm run compose -- exec alertmanager amtool --alertmanager.url=http://localhost:9093 alert add PushDrill severity=critical`
+3. After the 30 s grouping wait, read the topic:
+   `curl -s 'http://localhost:3073/boilerplate-alerts/json?poll=1'`: a JSON line whose `title` names `PushDrill`.
+4. With Telegram set in `.env`, the same alert also arrives in the chat; with Pushover, on the phone.
+
+On a staging stack, use your own topic and repeat the drill from the phone: an alert nobody has seen buzz is not known to work.
 
 ### The local drill
 
-Proves the whole chain on your machine: a rule fires, Alertmanager routes it, a mail arrives.
+Proves the whole chain on your machine: a rule fires, Alertmanager routes it, a mail arrives. (The phone push has [its own drill](#phone-push-drill).)
 Mailpit lives in the `integrations` profile, so start it with the `observability` one.
 
 1. `npm run compose -- --profile observability --profile integrations up -d`

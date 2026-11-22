@@ -138,7 +138,8 @@ done
 # The integration secrets are optional: an empty file is unset.
 for name in payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
     antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key \
-    alert_webhook_url alert_heartbeat_token backup_heartbeat_token zammad_api_token; do
+    alert_webhook_url alert_heartbeat_token alert_ntfy_url alert_ntfy_token alert_telegram_bot_token \
+    alert_pushover_user_key alert_pushover_token backup_heartbeat_token zammad_api_token; do
     : >"$DIR/secrets/$name"
 done
 cat >"$DIR/.env" <<E
