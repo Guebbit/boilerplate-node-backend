@@ -2,10 +2,12 @@
 # The restore drill: proves the latest backup restores, and says how long that took.
 #   1. restore the latest database snapshot into a THROWAWAY Mongo (`mongorestore --oplogReplay`)
 #   2. count every collection in the restored copy, compare with the counts saved at backup time
-#   3. restore the latest files snapshot and verify every byte
-#   4. `restic check --read-data-subset` on the repository
-#   5. print the elapsed time: that is how long the shop is down on a bad day
-# Exit 0 only when every step passed. Never touches the live database.
+#   3. when Zammad was backed up: restore its dump into a THROWAWAY Postgres (`pg_restore`), count tickets
+#      and users, compare with the counts saved at backup time
+#   4. restore the latest files snapshot and verify every byte
+#   5. `restic check --read-data-subset` on the repository
+#   6. print the elapsed time: that is how long the shop is down on a bad day
+# Exit 0 only when every step passed. Never touches a live database.
 # Design: docs/operate/backups.md#the-restore-drill
 # shellcheck source=common.sh
 source /usr/local/lib/backup/common.sh
@@ -14,6 +16,9 @@ source /usr/local/lib/backup/common.sh
 DRILL_HOST="${DRILL_MONGO_HOST:-restore-drill-db}"
 DRILL_PORT="${DRILL_MONGO_PORT:-27017}"
 RESTORE_DIR="${DRILL_RESTORE_DIR:-/restore}"
+# The throwaway Postgres for Zammad's dump: trust auth, no published port, never the live one.
+DRILL_HELPDESK_HOST="${DRILL_HELPDESK_HOST:-restore-drill-helpdesk-db}"
+DRILL_HELPDESK_PORT="${DRILL_HELPDESK_PORT:-5432}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -34,6 +39,16 @@ wait_for_throwaway() {
     done
 }
 
+# Waits until the throwaway Postgres accepts connections, like `wait_for_throwaway` for Mongo.
+wait_for_helpdesk_throwaway() {
+    local tries=60
+    until pg_isready -q -h "$DRILL_HELPDESK_HOST" -p "$DRILL_HELPDESK_PORT" -U postgres; do
+        tries=$((tries - 1))
+        [ "$tries" -gt 0 ] || fail "the throwaway Postgres at $DRILL_HELPDESK_HOST:$DRILL_HELPDESK_PORT never answered"
+        sleep 1
+    done
+}
+
 # The newest snapshot id with the given tag; empty when there is none.
 latest_snapshot() {
     restic_run snapshots --host "$BACKUP_HOST" --tag "$1" --latest 1 --json | jq -r '.[0].id // empty'
@@ -42,6 +57,26 @@ latest_snapshot() {
 # The `run:` tag of a snapshot, which pairs the dump with its counts.
 run_tag() {
     restic_run snapshots "$1" --json | jq -r '.[0].tags[] | select(startswith("run:"))'
+}
+
+# Compares `name<TAB>count` files: $2 the restored copy's, $3 what the backup saw. $1 words the summary
+# ("N <what> match, M do not"). A live dump window moves counts a little (the oplog replay lands later
+# writes), so allow max(5, 1%) drift per name. A missing or emptied name always fails. Exit 1 on any miss.
+compare_tables() {
+    awk -F'\t' -v what="$1" '
+        NR == FNR { actual[$1] = $2; next }
+        {
+            name = $1; want = $2 + 0
+            if (name ~ /^local\./) next
+            if (!(name in actual)) { printf "MISSING  %s (expected %d)\n", name, want; bad++; next }
+            got = actual[name] + 0
+            slack = want / 100; if (slack < 5) slack = 5
+            diff = got > want ? got - want : want - got
+            if (diff > slack || (want > 0 && got == 0)) { printf "MISMATCH %s expected %d got %d\n", name, want, got; bad++ }
+            else { printf "ok       %s %d\n", name, got; good++ }
+        }
+        END { printf "%d %s match, %d do not\n", good, what, bad; exit bad > 0 }
+    ' "$2" "$3"
 }
 
 # Step 1: restore the dump. `--oplogReplay` applies the operations recorded during the dump, so
@@ -63,25 +98,33 @@ compare_counts() {
     mongodump --host "$DRILL_HOST" --port "$DRILL_PORT" --archive=/dev/null 2>"$WORK/count.log" \
         || fail "could not count the restored copy"
     count_lines <"$WORK/count.log" >"$WORK/actual.tsv"
-    # A live dump window moves counts a little (the oplog replay lands later writes), so allow
-    # max(5, 1%) drift per collection. A missing or emptied collection always fails.
-    awk -F'\t' '
-        NR == FNR { actual[$1] = $2; next }
-        {
-            ns = $1; want = $2 + 0
-            if (ns ~ /^local\./) next
-            if (!(ns in actual)) { printf "MISSING  %s (expected %d)\n", ns, want; bad++; next }
-            got = actual[ns] + 0
-            slack = want / 100; if (slack < 5) slack = 5
-            diff = got > want ? got - want : want - got
-            if (diff > slack || (want > 0 && got == 0)) { printf "MISMATCH %s expected %d got %d\n", ns, want, got; bad++ }
-            else { printf "ok       %s %d\n", ns, got; good++ }
-        }
-        END { printf "%d collections match, %d do not\n", good, bad; exit bad > 0 }
-    ' "$WORK/actual.tsv" "$WORK/expected.tsv" || fail "the restored counts differ from the backup's"
+    compare_tables collections "$WORK/actual.tsv" "$WORK/expected.tsv" || fail "the restored counts differ from the backup's"
 }
 
-# Step 3: files. `--verify` re-reads every restored file and checks it against the repository.
+# Step 3: Zammad. The dump is restored into an empty database owned by the same role, with
+# `--no-owner --no-privileges` so the throwaway needs none of the live roles; then tickets and users are
+# counted and compared with what the backup saw. A live dump window moves the counts a little, so allow
+# max(5, 1%), like the Mongo counts; an emptied table always fails.
+# https://www.postgresql.org/docs/17/app-pgrestore.html
+restore_helpdesk() {
+    local dump_snapshot="$1" counts_snapshot="$2"
+    log "restoring Zammad snapshot $dump_snapshot into $DRILL_HELPDESK_HOST"
+    wait_for_helpdesk_throwaway
+    psql -h "$DRILL_HELPDESK_HOST" -p "$DRILL_HELPDESK_PORT" -U postgres -v ON_ERROR_STOP=1 -q \
+        -c "CREATE ROLE ${HELPDESK_USER} LOGIN" -c "CREATE DATABASE ${HELPDESK_DB} OWNER ${HELPDESK_USER}" \
+        >/dev/null || fail "could not create the throwaway Zammad database"
+    restic_run dump "$dump_snapshot" zammad.pgdump \
+        | pg_restore -h "$DRILL_HELPDESK_HOST" -p "$DRILL_HELPDESK_PORT" -U postgres -d "$HELPDESK_DB" \
+            --no-owner --no-privileges --exit-on-error 2>"$WORK/pg_restore.log" \
+        || { tail -n 20 "$WORK/pg_restore.log" >&2; fail "pg_restore failed"; }
+    restic_run dump "$counts_snapshot" helpdesk-counts.tsv >"$WORK/helpdesk-expected.tsv"
+    helpdesk_counts "$DRILL_HELPDESK_HOST" "$DRILL_HELPDESK_PORT" postgres "$HELPDESK_DB" >"$WORK/helpdesk-actual.tsv" \
+        || fail "could not count the restored Zammad copy"
+    compare_tables "Zammad counts" "$WORK/helpdesk-actual.tsv" "$WORK/helpdesk-expected.tsv" ||
+        fail "the restored Zammad counts differ from the backup's"
+}
+
+# Step 4: files. `--verify` re-reads every restored file and checks it against the repository.
 restore_files() {
     local snapshot
     snapshot="$(latest_snapshot files)"
@@ -105,6 +148,15 @@ drill() {
         wait_for_throwaway
         restore_database "$dump_snapshot"
         compare_counts "$counts_snapshot"
+    fi
+    local helpdesk_snapshot helpdesk_counts_snapshot
+    helpdesk_snapshot="$(latest_snapshot helpdesk-db)"
+    if [ -n "$helpdesk_snapshot" ]; then
+        helpdesk_counts_snapshot="$(restic_run snapshots --host "$BACKUP_HOST" --tag "helpdesk-counts,$(run_tag "$helpdesk_snapshot")" --json | jq -r '.[0].id // empty')"
+        [ -n "$helpdesk_counts_snapshot" ] || fail "no Zammad counts snapshot for the latest Zammad dump"
+        restore_helpdesk "$helpdesk_snapshot" "$helpdesk_counts_snapshot"
+    else
+        log "no Zammad snapshot (the helpdesk profile was never backed up), skipping"
     fi
     if [ "${DRILL_RESTORE_FILES:-true}" = true ]; then restore_files; fi
     log "checking a ${DRILL_CHECK_SUBSET:-10%} slice of the repository"

@@ -6,20 +6,28 @@
 #   3. a second run after a small change: restic deduplicates (the second run stores little)
 #   4. the restore drill restores into a throwaway Mongo and compares the counts
 #   5. a damaged repository makes the drill fail
-#   6. the second-machine kit (rclone append-only server): backup accepted, `forget` refused,
-#      the maintenance job prunes on the server's own disk
+#   6. Zammad: skipped while its Postgres is absent; with a real Postgres 17 (the compose file's pin,
+#      initialised by docker/zammad/postgres-init.sh) its dump is backed up, restored into a throwaway
+#      Postgres and the ticket and user counts compared; a dump older than the cap is forgotten
+#   7. the second-machine kit (rclone append-only server): backup accepted, `forget` refused,
+#      the maintenance job prunes on the server's own disk, and applies the Zammad dump cap there
 # Everything runs on one private `--internal` network; nothing publishes a port. Leaves nothing behind.
+# Containers are named `boilerplate-bdrill<pid>-*` and labelled `crew=boilerplate` (CLAUDE.md § Containers);
+# the image built here is removed at the end.
 # Run it: `npm run backup:drill` (CI: the `backup-drill` job). Docs: docs/operate/backups.md#the-restore-drill
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 ROOT="$PWD"
-ID="bdrill$$"
+ID="boilerplate-bdrill$$"
 NET="$ID"
 TMP="$(mktemp -d)"
 IMAGE="${BACKUP_DRILL_IMAGE:-boilerplate-backup:drill}"
+# Removed at the end only when this drill built it.
+BUILT_IMAGE=""
 # The same pinned images the compose files use.
 MONGO_IMAGE="$(sed -n -E "s/^ +image: (docker.io\/library\/mongo:[^@ ]+@sha256:[0-9a-f]+).*/\1/p" compose.yaml | head -1)"
+POSTGRES_IMAGE="$(sed -n -E 's/^x-zammad-postgres-image: &zammad-postgres-image (.+)$/\1/p' compose.production.yaml)"
 RCLONE_IMAGE="$(sed -n -E 's/^ +image: (docker.io\/rclone\/rclone:[^ ]+).*/\1/p' compose.backup-server.yaml | head -1)"
 GATUS_IMAGE="${BACKUP_DRILL_GATUS_IMAGE:-docker.io/twinproduction/gatus:v5.37.0}"
 PASS=0
@@ -39,17 +47,18 @@ cleanup() {
     docker ps -aq --filter "label=$ID" | xargs -r docker rm -f >/dev/null 2>&1 || true
     docker volume ls -q --filter "label=$ID" | xargs -r docker volume rm -f >/dev/null 2>&1 || true
     docker network rm "$NET" >/dev/null 2>&1 || true
+    if [ -n "$BUILT_IMAGE" ]; then docker rmi -f "$BUILT_IMAGE" >/dev/null 2>&1 || true; fi
     rm -rf "$TMP"
     if [ "$code" -eq 0 ] && [ "$PASS" -eq 1 ]; then echo "BACKUP DRILL PASSED"; else echo "BACKUP DRILL DID NOT PASS (exit $code)" >&2; fi
     exit "$code"
 }
 trap cleanup EXIT
 
-# `docker run` with this drill's label, so `cleanup` finds it.
-run() { docker run --label "$ID" "$@"; }
+# `docker run` with this drill's label (so `cleanup` finds it) and the crew's.
+run() { docker run --label "$ID" --label crew=boilerplate "$@"; }
 
 # Creates a labelled volume.
-volume() { docker volume create --label "$ID" "$1" >/dev/null; }
+volume() { docker volume create --label "$ID" --label crew=boilerplate "$1" >/dev/null; }
 
 # The backup image, running one of its scripts once, the way the `backup` service runs it.
 backup_image() {
@@ -60,6 +69,7 @@ backup_image() {
         -v "$TMP/secrets/restic_password:/run/secrets/restic_password:ro" \
         -v "$TMP/secrets/mongo_backup_password:/run/secrets/mongo_backup_password:ro" \
         -v "$TMP/secrets/backup_heartbeat_token:/run/secrets/backup_heartbeat_token:ro" \
+        -v "$TMP/secrets/zammad_postgres_password:/run/secrets/zammad_postgres_password:ro" \
         -v "$ID-ca:/ca-dir:ro" -v "$ID-uploads:/data/uploads:ro" -v "$ID-storage:/data/storage:ro" \
         -v "$ID-cache:/cache" -v "$ID-repo:/repo" \
         -e BACKUP_HOST=drill -e BACKUP_REPOSITORY="${BACKUP_REPOSITORY:-/repo}" \
@@ -81,10 +91,11 @@ mongosh_root() {
 
 step "build the backup image"
 docker build -q -f docker/Dockerfile.backup -t "$IMAGE" . >/dev/null
+BUILT_IMAGE="$IMAGE"
 
 step "secrets and network"
 mkdir -p "$TMP/secrets"
-for name in mongo_root_password mongo_app_password mongo_backup_password restic_password; do
+for name in mongo_root_password mongo_app_password mongo_backup_password restic_password zammad_postgres_password zammad_postgres_superuser_password; do
     openssl rand -hex 32 >"$TMP/secrets/$name"
     chmod 0644 "$TMP/secrets/$name"
 done
@@ -144,6 +155,13 @@ backup_image backup-job
 raw1="$(raw_size)"
 echo "raw data after run 1: $raw1 bytes"
 
+# Zammad's Postgres is absent here, so `BACKUP_HELPDESK=auto` must skip it: no Zammad snapshot, no failure.
+snapshots_tagged() {
+    backup_image bash -c "source /usr/local/lib/backup/common.sh; restic snapshots --tag $1 --json | jq length"
+}
+[ "$(snapshots_tagged helpdesk-db)" = 0 ] || die "a Zammad dump exists although the helpdesk profile is not running"
+echo "no Zammad snapshot while zammad-postgres is absent"
+
 step "a small change, then backup 2, then backup 3 with nothing changed"
 mongosh_root 'db.getSiblingDB("api").users.insertMany(Array.from({length: 100}, (_, i) => ({ n: 9000 + i, text: "late" })))' >/dev/null
 backup_image backup-job
@@ -175,6 +193,57 @@ drill() {
 step "the restore drill: throwaway Mongo, counts, files, repository check"
 throwaway
 drill
+
+step "Zammad: a real Postgres 17, dumped into restic, restored into a throwaway, counts compared"
+# `zammad-postgres` as compose.production.yaml starts it: the same pinned image, the same initdb script.
+run -d --name "$ID-zammad-postgres" --network "$NET" --network-alias zammad-postgres \
+    --cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add DAC_OVERRIDE --cap-add FOWNER \
+    -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD_FILE=/run/secrets/zammad_postgres_superuser_password \
+    -e ZAMMAD_DB=zammad_production -e ZAMMAD_DB_USER=zammad -e ZAMMAD_DB_PASS_FILE=/run/secrets/zammad_postgres_password \
+    -v "$TMP/secrets/zammad_postgres_password:/run/secrets/zammad_postgres_password:ro" \
+    -v "$TMP/secrets/zammad_postgres_superuser_password:/run/secrets/zammad_postgres_superuser_password:ro" \
+    -v "$ROOT/docker/zammad/postgres-init.sh:/docker-entrypoint-initdb.d/10-create-zammad-role.sh:ro" \
+    "$POSTGRES_IMAGE" >/dev/null
+# The compose healthcheck: TCP, as Zammad's own role, so the initdb hook has really run.
+zammad_sql() {
+    docker exec "$ID-zammad-postgres" sh -c \
+        "PGPASSWORD=\"\$(cat /run/secrets/zammad_postgres_password)\" psql --no-password -q -A -t --host 127.0.0.1 --username zammad --dbname zammad_production -v ON_ERROR_STOP=1 -c \"$1\""
+}
+for _ in $(seq 1 60); do zammad_sql 'SELECT 1' >/dev/null 2>&1 && break; sleep 2; done
+zammad_sql 'SELECT 1' >/dev/null || die "the Zammad Postgres never accepted the role the initdb hook creates"
+# The two tables the restore drill counts, with enough rows for the drift allowance to matter.
+zammad_sql 'CREATE TABLE tickets (id serial PRIMARY KEY, title text); INSERT INTO tickets (title) SELECT md5(i::text) FROM generate_series(1, 700) AS i; CREATE TABLE users (id serial PRIMARY KEY, login text); INSERT INTO users (login) SELECT md5(i::text) FROM generate_series(1, 120) AS i' >/dev/null
+backup_image backup-job
+[ "$(snapshots_tagged helpdesk-db)" = 1 ] || die "the run did not store exactly one Zammad dump"
+[ "$(snapshots_tagged helpdesk-counts)" = 1 ] || die "the run did not store the Zammad counts"
+echo "one Zammad dump and its counts are in the repository"
+throwaway
+docker rm -f "$ID-helpdesk-throwaway" >/dev/null 2>&1 || true
+run -d --name "$ID-helpdesk-throwaway" --network "$NET" --network-alias restore-drill-helpdesk-db \
+    --cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID --cap-add DAC_OVERRIDE --cap-add FOWNER \
+    -e POSTGRES_HOST_AUTH_METHOD=trust --tmpfs /var/lib/postgresql/data:size=1g "$POSTGRES_IMAGE" >/dev/null
+drill | tee "$TMP/zammad-drill.log"
+grep -q '2 Zammad counts match, 0 do not' "$TMP/zammad-drill.log" || die "the drill did not compare Zammad's tickets and users"
+echo "the Zammad dump restored and its ticket and user counts match"
+
+step "Zammad: a dump older than the cap is forgotten, even when the monthly knob would keep it"
+# An old dump, backdated with restic's own `--time`. `BACKUP_KEEP_MONTHLY=24` makes the ordinary policy
+# keep it, so only the cap (BACKUP_HELPDESK_MAX_DAYS, the erasure ledger's retention) can remove it.
+backup_image bash -c 'source /usr/local/lib/backup/common.sh
+    echo old | restic backup --host "$BACKUP_HOST" --tag helpdesk-db --tag run:old --stdin --stdin-filename zammad.pgdump \
+        --time "$(date -u -d "300 days ago" "+%Y-%m-%d %H:%M:%S")"' >/dev/null
+[ "$(snapshots_tagged run:old)" = 1 ] || die "the backdated dump was not stored"
+EXTRA=(-e BACKUP_KEEP_MONTHLY=24 -e BACKUP_HELPDESK_MAX_DAYS=220)
+backup_image backup-job >/dev/null
+EXTRA=()
+[ "$(snapshots_tagged run:old)" = 0 ] || die "a Zammad dump older than the cap survived a run"
+echo "the 300-day-old dump is gone; the recent one stays"
+[ "$(snapshots_tagged helpdesk-db)" -ge 1 ] || die "the cap removed the recent Zammad dump too"
+# The later steps (a damaged repository, the second machine) are about Mongo: take Zammad's snapshots out
+# with the Postgres, so they do not fail for a reason that is not theirs.
+backup_image bash -c 'source /usr/local/lib/backup/common.sh
+    restic snapshots --tag helpdesk-db --tag helpdesk-counts --json | jq -r ".[].id" | xargs -r restic forget' >/dev/null
+docker rm -f "$ID-helpdesk-throwaway" "$ID-zammad-postgres" >/dev/null
 
 step "the heartbeat: Gatus sees a green ping after a good run and a red one after a bad run"
 mkdir -p "$TMP/gatus"
@@ -300,15 +369,24 @@ grep -i -E "forbidden|403|not allowed|refus" "$TMP/forget.log" | head -2 || true
 tail -n 3 "$TMP/forget.log"
 EXTRA=("${CLIENT_ENV[@]}")
 echo "snapshots after the refused forget: $(snapshots) (was $before plus one new backup)"
+# A 300-day-old Zammad dump, backdated with restic's `--time`: the append-only server accepts it, the client
+# never deletes (BACKUP_PRUNE=false), and the keep-hourly knob below would keep it. Only the server's cap
+# (BACKUP_HELPDESK_MAX_DAYS) can remove it.
+backup_image bash -c 'source /usr/local/lib/backup/common.sh
+    echo old | restic backup --host "$BACKUP_HOST" --tag helpdesk-db --tag run:old --stdin --stdin-filename zammad.pgdump \
+        --time "$(date -u -d "300 days ago" "+%Y-%m-%d %H:%M:%S")"' >/dev/null
+[ "$(snapshots_tagged run:old)" = 1 ] || die "the append-only server did not accept the backdated Zammad dump"
 # The upkeep, on the server's own disk: keep only the newest of each kind.
 run --rm --user 1000:1000 --read-only --cap-drop ALL --tmpfs /tmp:mode=1777,size=64m \
     -v "$ID-data:/data" -v "$TMP/server/clients:/clients:ro" -v "$ID-cache:/cache" \
     -e BACKUP_SERVER_DATA_DIR=/data/repos -e BACKUP_KEEP_HOURLY=1 -e BACKUP_KEEP_DAILY=0 -e BACKUP_KEEP_WEEKLY=0 -e BACKUP_KEEP_MONTHLY=0 \
-    -e BACKUP_CHECK_SUBSET=100% --entrypoint backup-server-maintenance "$IMAGE" >"$TMP/upkeep.log" 2>&1 || { cat "$TMP/upkeep.log"; die "the server's upkeep failed"; }
+    -e BACKUP_HELPDESK_MAX_DAYS=220 -e BACKUP_CHECK_SUBSET=100% --entrypoint backup-server-maintenance "$IMAGE" >"$TMP/upkeep.log" 2>&1 || { cat "$TMP/upkeep.log"; die "the server's upkeep failed"; }
 tail -n 4 "$TMP/upkeep.log"
 after="$(snapshots)"
 echo "snapshots after the upkeep: $after"
 [ "$after" -eq 3 ] || die "the upkeep should leave one snapshot per kind (3), found $after"
+[ "$(snapshots_tagged run:old)" = 0 ] || die "the server's upkeep kept a Zammad dump older than the cap"
+echo "the 300-day-old Zammad dump is gone from the second machine"
 throwaway
 EXTRA=("${CLIENT_ENV[@]}")
 step "restore from the second machine"

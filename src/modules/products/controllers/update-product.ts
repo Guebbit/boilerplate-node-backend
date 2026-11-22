@@ -16,7 +16,7 @@ import { productService } from '../services';
 /**
  * `PUT` and `PATCH /products/:id` — one handler pair over `productService.updateById`.
  * Validated against `zodProductReplaceSchema`/`zodProductUpdateSchema`, not the raw generated
- * schemas: they add the fallback-locale guard and the release-date rule on top of the generated
+ * schemas: they add the release-date and price rules on top of the generated
  * body, so a bad write 422s with its field-named message here, at the one place the body is
  * validated, rather than from a schema `updateById` would otherwise have to re-check.
  */

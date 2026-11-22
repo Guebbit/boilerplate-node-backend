@@ -1,8 +1,9 @@
-# Backup image: restic + the MongoDB Database Tools + supercronic, and the scripts that use them.
+# Backup image: restic + the MongoDB Database Tools + the PostgreSQL 17 client + supercronic, and the scripts that use them.
 #
 # One image, three jobs:
 #   backup service        entrypoint.sh: turns the BACKUP_* knobs into a crontab, runs supercronic
-#   restore drill         restore-drill.sh: restore the latest snapshot into a throwaway Mongo, compare
+#   restore drill         restore-drill.sh: restore the latest snapshot into a throwaway Mongo (and, when Zammad
+#                         was backed up, a throwaway Postgres), compare the counts
 #   second-machine prune  server-maintenance.sh: `forget --prune` + `check` on the append-only server's disk
 #
 # Why its own image: the backup holds the restic password, the repository credentials and a
@@ -21,12 +22,29 @@ FROM docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d
 ARG RESTIC_VERSION=0.19.1
 ARG MONGO_TOOLS_VERSION=100.19.1
 ARG SUPERCRONIC_VERSION=v0.2.51
+# SHA-256 of the PGDG repository signing key (the key file itself, not a fingerprint).
+ARG PGDG_KEY_SHA256=0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76
 
 # bash for the scripts, jq to read `restic ... --json`, curl for the heartbeat and the health
 # check, bzip2 to unpack restic's release asset. The apt lists are dropped in the same layer.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash bzip2 ca-certificates curl jq \
     && rm -rf /var/lib/apt/lists/*
+
+# PostgreSQL client 17 (pg_dump, pg_restore, psql), PostgreSQL licence, from the PGDG apt repository:
+# Ubuntu 24.04 ships 16, and a client older than the server refuses its dump. 17 is the major of
+# Zammad's own Postgres (compose.production.yaml, `zammad-postgres`). The repository's signing key is
+# pinned by SHA-256 like every other download here; apt then verifies the packages against it.
+# https://www.postgresql.org/download/linux/ubuntu/
+RUN set -eu; \
+    curl -fsSL -o /tmp/pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc; \
+    echo "${PGDG_KEY_SHA256}  /tmp/pgdg.asc" | sha256sum -c -; \
+    install -D -m 0644 /tmp/pgdg.asc /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc; \
+    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-client-17; \
+    rm -rf /var/lib/apt/lists/* /tmp/pgdg.asc
 
 # restic, https://github.com/restic/restic/releases (BSD-2-Clause). Digest = the release asset's.
 RUN set -eu; \

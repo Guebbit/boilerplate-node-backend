@@ -14,7 +14,9 @@ source /usr/local/lib/backup/common.sh
 DATA_DIR="${BACKUP_SERVER_DATA_DIR:-/data}"
 CLIENTS_DIR="${BACKUP_SERVER_CLIENTS_DIR:-/clients}"
 
-# Prunes and checks one client's repository.
+# Prunes and checks one client's repository. Zammad's dumps get a second pass, because the client skips
+# its own when its side is append-only (BACKUP_PRUNE=false): nothing tagged `helpdesk-db` outlives
+# BACKUP_HELPDESK_MAX_DAYS here either.
 maintain_client() {
     local client="$1"
     export RESTIC_REPOSITORY="$DATA_DIR/$client"
@@ -25,6 +27,7 @@ maintain_client() {
     restic_run forget --group-by host,paths --prune \
         --keep-hourly "${BACKUP_KEEP_HOURLY:-24}" --keep-daily "${BACKUP_KEEP_DAILY:-7}" \
         --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}" \
+        && forget_helpdesk_expired '' --prune \
         && restic_run check --read-data-subset="${BACKUP_CHECK_SUBSET:-5%}"
 }
 

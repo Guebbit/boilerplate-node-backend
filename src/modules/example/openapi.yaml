@@ -378,7 +378,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 title:
                     type: string
-                    description: The title in the request's language, falling back field by field. Written through `/locales/translations/example/{id}`.
+                    description: The title in the request's language, falling back to the stored default-language one. Other languages are written through `/locales/translations/example/{id}`; the default language is this title itself.
                 body:
                     type: string
                 status:

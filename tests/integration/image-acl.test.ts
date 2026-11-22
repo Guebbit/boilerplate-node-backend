@@ -108,7 +108,7 @@ describe('imageUrl is never a client-named path', () => {
         const created = await api()
             .post('/products')
             .set('Authorization', adminBearer)
-            .field('translations', JSON.stringify({ en: { title: 'Victim' } }))
+            .field('title', 'Victim')
             .field('price', '10')
             .attach('imageUpload', PNG_BYTES, { filename: 'v.png', contentType: 'image/png' });
         victimCreatedStatus = created.status;
@@ -156,12 +156,12 @@ describe('imageUrl is never a client-named path', () => {
             const target = await api()
                 .post('/products')
                 .set('Authorization', adminBearer)
-                .send({ price: '1.00', translations: { en: { title: 'Target' } } });
+                .send({ price: '1.00', title: 'Target' });
             const url = label.startsWith('POST') ? '/products' : `/products/${target.body.id}`;
             const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
             const full = {
                 price: '1.00',
-                translations: { en: { title: 'Attempt' } },
+                title: 'Attempt',
                 active: true,
                 purchasable: true,
                 requiresShipping: true,
@@ -181,7 +181,7 @@ describe('imageUrl is never a client-named path', () => {
             const multipart = await api()
                 [method](url)
                 .set('Authorization', adminBearer)
-                .field('translations', JSON.stringify(full.translations))
+                .field('title', full.title)
                 .field('price', '1')
                 .field('active', 'true')
                 .field('requiresShipping', 'true')

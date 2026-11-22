@@ -63,8 +63,10 @@ describe('GET /products/:id: translations follow read:Translation', () => {
         const keyed = await api().get(path).set('Authorization', bearerOf(secret));
         const guest = await api().get(path);
 
-        expect(keyed.body.translations).toMatchObject({ en: { title: 'On sale' } });
+        expect(keyed.body.source).toEqual({ title: 'On sale' });
+        expect(keyed.body.translations).toEqual({});
         expect(guest.body).not.toHaveProperty('translations');
+        expect(guest.body).not.toHaveProperty('source');
     });
 
     /**
@@ -81,6 +83,7 @@ describe('GET /products/:id: translations follow read:Translation', () => {
 
         expect(guest.status).toBe(200);
         expect(guest.body).not.toHaveProperty('translations');
+        expect(guest.body).not.toHaveProperty('source');
     });
 
     it('is not the guest scope for a key holding read:Translation', async () => {
