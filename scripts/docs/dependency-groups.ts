@@ -224,9 +224,11 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Maintenance',
-        purpose: 'cross-platform env vars in npm scripts',
-        readMore: '—',
-        match: ['cross-env']
+        purpose:
+            'cross-platform env vars in npm scripts; `semver` compares Zammad advisory ranges ' +
+            'with the pinned image in `scripts/security/zammad-advisories.ts`',
+        readMore: '[Zammad](../operate/zammad.md#security-releases)',
+        match: ['cross-env', 'semver']
     }
 ];
 
