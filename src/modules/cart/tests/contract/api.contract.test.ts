@@ -1223,6 +1223,58 @@ describe('POST /cart/reorder', () => {
         ]);
     });
 
+    it('adds what the shelf holds and warns when the order asked for more', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const scarce = await createProduct({ onHand: 2 });
+        const order = await createOrder(user, [toOrderItem(scarce, 5)]);
+
+        const response = await api()
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+
+        expect(response.status).toBe(200);
+        expect(response.body.cart.summary.totalQuantity).toBe(2);
+        expect(response.body.lines).toEqual([
+            { productId: String(scarce._id), requested: 5, resulting: 2 }
+        ]);
+        expect(response.body.warnings).toEqual([
+            {
+                code: 'MERCHANDISE_NOT_ENOUGH_STOCK',
+                productId: String(scarce._id),
+                requested: 5,
+                resulting: 2
+            }
+        ]);
+    });
+
+    it('answers 200 with an out-of-stock warning when every line is sold out: sold out is not removed', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const soldOut = await createProduct({ onHand: 3 });
+        const order = await createOrder(user, [toOrderItem(soldOut, 2)]);
+        await forceStockLevel(soldOut._id, 0, 0);
+
+        const response = await api()
+            .post('/cart/reorder')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+
+        // The contract reserves 409 REORDER_UNAVAILABLE for lines that left the catalogue.
+        expect(response.status).toBe(200);
+        expect(response.body.cart.items).toHaveLength(0);
+        expect(response.body.lines).toEqual([
+            { productId: String(soldOut._id), requested: 2, resulting: 0 }
+        ]);
+        expect(response.body.warnings).toEqual([
+            {
+                code: 'MERCHANDISE_OUT_OF_STOCK',
+                productId: String(soldOut._id),
+                requested: 2,
+                resulting: 0
+            }
+        ]);
+    });
+
     it('answers 409 when nothing on the order is still available', async () => {
         const { bearer, user } = await authenticateAs('user');
         const retired = await createProduct({ title: 'Retired', active: false });

@@ -32,6 +32,7 @@ import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { invoicingService } from '../../services';
 import { correctInvoice } from '../../services/correct-invoice';
+import { collectPersonalData } from '../../services/personal-data';
 import { issueCreditNote, waitForInvoice } from '../factories';
 
 setupTestDb();
@@ -61,7 +62,7 @@ const paidAndInvoiced = async () => {
     const order = await createOrder(user, [toOrderItem(product, 1)], { billingAddress: BEFORE });
     const orderId = String(order._id);
     await markPaid(orderId);
-    return { orderId, invoice: await waitForInvoice(orderId) };
+    return { orderId, userId: user.id, invoice: await waitForInvoice(orderId) };
 };
 
 /** Staff correcting the order's billing address, through the real door. */
@@ -91,6 +92,24 @@ const counters = () =>
     }));
 
 describe('correcting the buyer of an invoiced order', () => {
+    it("exports the cancelled invoice, the credit note and the reissued invoice in the buyer's data export", async () => {
+        const { orderId, userId, invoice } = await paidAndInvoiced();
+        await correct(orderId);
+        const [note] = await waitForNotes(orderId, 1);
+        await settleOutboxNudges();
+        const [, current] = await invoicingRepository.findInvoicesByOrderId(orderId);
+
+        const exported = await collectPersonalData(userId);
+
+        // Every invoice was issued to this buyer, the corrected one included.
+        expect(exported.invoices.map(({ number }) => number).toSorted()).toEqual(
+            [invoice.number, current.number].toSorted()
+        );
+        expect(exported.creditNotes).toEqual([
+            expect.objectContaining({ orderId, number: note.number, grandTotal: '25.00' })
+        ]);
+    });
+
     it('cancels the invoice with a refund-less credit note and reissues it to the corrected buyer', async () => {
         const { orderId, invoice } = await paidAndInvoiced();
 

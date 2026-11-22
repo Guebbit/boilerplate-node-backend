@@ -511,6 +511,37 @@ describe('refund on proof, chosen by staff on a faulty item', () => {
         }
     );
 
+    it('loses a receipt whose claim a proof with refundOnProof beat inside its transaction: one refund, proof kept', async () => {
+        const { orderId, returnId } = await approvedReturn('defective');
+        const realLock = returnRepository.lockOrder.bind(returnRepository);
+        let proofSaved = false;
+        /**
+         * The receipt has read the return (no proof yet) and opened its transaction; the proof
+         * lands and commits just before the receipt's first write, the lock row.
+         */
+        jest.spyOn(returnRepository, 'lockOrder').mockImplementation(async (id, session) => {
+            if (!proofSaved) {
+                proofSaved = true;
+                await returnService.recordProofOfSending(
+                    returnId,
+                    { ...proofOn(new Date()), refundOnProof: true },
+                    callerContextAs('admin')
+                );
+            }
+            return realLock(id, session);
+        });
+
+        // The file's afterEach restores the spy, throw or not.
+        const result = await returnService.receiveReturn(returnId, {}, callerContextAs('admin'));
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
+        expect(await storedRefundStamps(orderId)).toHaveLength(1);
+        const stored = await returnRepository.findById(returnId);
+        expect(stored).toMatchObject({ status: 'approved', refundOnProof: true });
+        expect(stored?.proofOfSendingAt).toBeInstanceOf(Date);
+    });
+
     it('lets a plain receipt restock and close it, opening no second refund', async () => {
         const { orderId, returnId } = await approvedReturn('defective');
         await returnService.recordProofOfSending(
