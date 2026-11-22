@@ -1294,19 +1294,33 @@ services:
             - '--config.file=/tmp/alertmanager.yml'
             - '--storage.path=/alertmanager'
         # From the client's `.env` through `--env-file`, never `env_file:`: the app's other
-        # secrets stay out of this container. The SMTP password, the webhook URL and the heartbeat
-        # token arrive as files, never as values: the URL of a push channel is a credential too.
+        # secrets stay out of this container. The SMTP password, the webhook URL, the heartbeat
+        # token and every push credential arrive as files, never as values: the URL of a push
+        # channel is a credential too.
         # Every knob empty = every route goes to `null`.
         secrets:
             - smtp_password
             - alert_webhook_url
             - alert_heartbeat_token
+            - alert_ntfy_url
+            - alert_ntfy_token
+            - alert_telegram_bot_token
+            - alert_pushover_user_key
+            - alert_pushover_token
         environment:
             ALERT_EMAIL_TO: '${ALERT_EMAIL_TO:-}'
             ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM:-}'
             ALERT_WEBHOOK_URL_FILE: '/run/secrets/alert_webhook_url'
             ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL:-}'
             ALERT_HEARTBEAT_TOKEN_FILE: '/run/secrets/alert_heartbeat_token'
+            # The phone push: each channel is on when all its knobs are set. The ntfy topic URL is
+            # the credential, so it is a file like the others; the chat id is a number.
+            ALERT_NTFY_URL_FILE: '/run/secrets/alert_ntfy_url'
+            ALERT_NTFY_TOKEN_FILE: '/run/secrets/alert_ntfy_token'
+            ALERT_TELEGRAM_BOT_TOKEN_FILE: '/run/secrets/alert_telegram_bot_token'
+            ALERT_TELEGRAM_CHAT_ID: '${ALERT_TELEGRAM_CHAT_ID:-}'
+            ALERT_PUSHOVER_USER_KEY_FILE: '/run/secrets/alert_pushover_user_key'
+            ALERT_PUSHOVER_TOKEN_FILE: '/run/secrets/alert_pushover_token'
             # The app's own SMTP account, so alerts need no second provider.
             NODE_SMTP_HOST: '${NODE_SMTP_HOST:-}'
             NODE_SMTP_PORT: '${NODE_SMTP_PORT:-587}'
@@ -1434,6 +1448,16 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_webhook_url
     alert_heartbeat_token:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_heartbeat_token
+    alert_ntfy_url:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_ntfy_url
+    alert_ntfy_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_ntfy_token
+    alert_telegram_bot_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_telegram_bot_token
+    alert_pushover_user_key:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_pushover_user_key
+    alert_pushover_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_pushover_token
     backup_heartbeat_token:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/backup_heartbeat_token
     zammad_api_token:

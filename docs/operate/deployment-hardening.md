@@ -154,14 +154,14 @@ the SSRF guard; every other `fetch` has a hard-coded host ([SSRF](../understand/
 Egress filtering is the belt to that braces — it bounds the damage if the guard is bypassed, or if a
 dependency is compromised.
 
-| Control             | Recipe                                                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Cloud metadata      | require IMDSv2 (token-based) and set the hop limit to 1, so a container cannot reach it                    |
-| Link-local          | block `169.254.0.0/16` and `fd00:ec2::254` outbound from the app's network                                 |
-| Private ranges      | block outbound to `10/8`, `172.16/12`, `192.168/16` except the compose network                             |
-| Default-deny egress | allow only the OAuth providers, the SMTP host, the analytics collector, and the webhook subscribers' hosts |
+| Control             | Recipe                                                                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cloud metadata      | require IMDSv2 (token-based) and set the hop limit to 1, so a container cannot reach it                                                                                                                |
+| Link-local          | block `169.254.0.0/16` and `fd00:ec2::254` outbound from the app's network                                                                                                                             |
+| Private ranges      | block outbound to `10/8`, `172.16/12`, `192.168/16` except the compose network                                                                                                                         |
+| Default-deny egress | allow only the OAuth providers, the SMTP host, the analytics collector, the webhook subscribers' hosts, and the phone-push targets that are on: `api.telegram.org`, `api.pushover.net`, your ntfy host |
 
-The allowlist is short precisely because the app's outbound surface is small — that is what makes
+The phone-push targets are Alertmanager's own calls, made from the monitoring stack, not the app's, so they belong on that network's allowlist ([phone push](prometheus.md#phone-push)). The allowlist is short precisely because the app's outbound surface is small — that is what makes
 default-deny practical here rather than aspirational.
 
 ## Network segmentation

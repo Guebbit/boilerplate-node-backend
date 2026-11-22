@@ -70,6 +70,7 @@ The paired frontend owns **`8080–8099`**.
 | webhook-tester (https proxy) | `3070`            | `WEBHOOK_TESTER_PORT`                             |
 | Gatus (heartbeat status UI)  | `3071`            | `GATUS_PORT`                                      |
 | Kubernetes rig (kind edge)   | `3072`            | `K8S_RIG_PORT`                                    |
+| ntfy (local push server)     | `3073`            | `NTFY_PORT`                                       |
 | Mailpit (SMTP / inbox UI)    | `1025` / `8025`   | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT`           |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
 | Zammad (helpdesk profile)    | `3060`            | `ZAMMAD_PORT`                                     |

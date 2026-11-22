@@ -32,9 +32,9 @@ task for the warehouse ([tasks](./tasks.md#system-tasks)); it closes when the or
 ships. The shipping step alarms but opens no task: the goods already left.
 
 ::: info Where the page goes
-`critical` means email **and** the webhook. Until `ALERT_WEBHOOK_URL` is set, only the email reaches
-anyone, so read the alert mailbox. Setting up a phone push is a deployment choice, not part of this
-module.
+`critical` means email **and** every other channel that is set (the webhook, ntfy, Telegram, Pushover). Until one
+of those is set, only the email reaches anyone, so read the alert mailbox. The phone push is set up in
+[Prometheus](../operate/prometheus.md#phone-push), not in this module.
 :::
 
 ### When the alert fires

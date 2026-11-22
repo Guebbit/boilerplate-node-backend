@@ -10,7 +10,7 @@ Turn on the monitoring set and prove one alert reaches you.
 ## Before you start
 
 - The stack is up and healthy: [Check it worked](./first-deploy.md#check-it-worked).
-- A way to receive mail or a webhook for alerts.
+- A way to receive alerts: mail, a phone push (ntfy, Telegram or Pushover) or a webhook.
 
 ## Steps
 
@@ -41,9 +41,10 @@ flowchart LR
 - **You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens.
   With no `ALERT_*` knob set, Alertmanager sends every alert to `null`, which notifies no one.
   Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
-  `ALERT_WEBHOOK_URL` (ntfy with a templated URL, or a bridge for anything else) and `ALERT_HEARTBEAT_URL` in the
-  client's `.env`; in production the webhook URL and the heartbeat token are not variables but the
-  `alert_webhook_url` and `alert_heartbeat_token` secret files. [Alert routing](prometheus.md#alert-routing)
+  `ALERT_HEARTBEAT_URL`, and for a buzz on the phone the [push channels](prometheus.md#phone-push)
+  (`ALERT_NTFY_URL`, `ALERT_TELEGRAM_BOT_TOKEN` + `ALERT_TELEGRAM_CHAT_ID`, `ALERT_PUSHOVER_USER_KEY` +
+  `ALERT_PUSHOVER_TOKEN`) in the client's `.env`; in production the webhook URL, the heartbeat token and the
+  push credentials are not variables but the `alert_*` secret files. [Alert routing](prometheus.md#alert-routing)
   has the table.
 - **Prove it once, on staging.** `docker compose ... stop app`: within about two minutes
   `[FIRING] ApiDown` reaches your `ALERT_*` receiver, and `start app` sends the resolution. Then stop
