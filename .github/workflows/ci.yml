@@ -26,6 +26,8 @@ name: CI
 #                     its runtime user cannot write under `src/`
 #                     `backup-drill` — the backup image backs up a real Mongo and the restore drill restores it
 #                     `deploy-drill` — a bad deploy is refused and the previous image comes back
+#                     `zammad` — a real Zammad boots from the `helpdesk` services of the production compose file,
+#                     a token creates and reads a ticket, and the helpdesk drill passes on Docker
 #                     `publish-image` — pushes the proven image to a registry; skipped until `vars.IMAGE_REGISTRY` is set
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
@@ -850,6 +852,108 @@ jobs:
             - name: Deploy, break, roll back
               run: bash docker/deploy-drill.sh
 
+    zammad:
+        # A real Zammad, booted from the `helpdesk` services of compose.production.yaml BY NAME, so the
+        # pins CI proves are the pins an operator runs: a Dependabot bump is proven before it merges.
+        # Seeded by docker/zammad/autowizard.drill.json (`AUTOWIZARD_JSON`); the API token is minted with
+        # one basic-auth `POST /api/v1/user_access_token` (the wizard's own token is not an API token).
+        # Then a smoke check (the token creates and reads a ticket), and `npm run helpdesk:drill` for the
+        # client-address, `Authorization` and geo-lookup checks on Docker (the same script runs on
+        # Podman on a laptop). The boot time goes to the job summary: if a boot is over ~10 minutes or
+        # flaky, this moves to a schedule and to pin-bump PRs (docs/operate/zammad.md).
+        # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        permissions:
+            contents: read
+        env:
+            CONTAINER_ENGINE: docker
+            COMPOSE_PROJECT_NAME: boilerplate-zammad-ci
+            ZAMMAD_PORT: '3060'
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Setup
+              uses: ./.github/actions/setup
+
+            - name: Make a throwaway client for the stack
+              # Every secret the compose file names gets a random value (an empty file is "unset" for the
+              # optional ones, and Zammad reads only its own three). The image variable is required by the
+              # file's interpolation and only `app` runs it, so Zammad's own image stands in.
+              run: |
+                  mkdir -p "clients/$COMPOSE_PROJECT_NAME/secrets"
+                  grep -oE 'secrets/[a-z_]+$' compose.production.yaml | cut -d/ -f2 | sort -u | while read -r name; do
+                      openssl rand -hex 32 >"clients/$COMPOSE_PROJECT_NAME/secrets/$name"
+                      chmod 0644 "clients/$COMPOSE_PROJECT_NAME/secrets/$name"
+                  done
+                  printf 'COMPOSE_PROFILES=helpdesk\n' >"clients/$COMPOSE_PROJECT_NAME/.env"
+                  {
+                      echo "COMPOSE=$CONTAINER_ENGINE compose --env-file clients/$COMPOSE_PROJECT_NAME/.env -f compose.yaml -f compose.production.yaml"
+                      echo "APP_IMAGE=$(sed -n -E 's/^x-zammad-image: &zammad-image (.+)$/\1/p' compose.production.yaml)"
+                      echo "ZAMMAD_AUTOWIZARD_JSON=$(base64 -w0 docker/zammad/autowizard.drill.json)"
+                  } >>"${GITHUB_ENV:-/dev/stderr}"
+
+            - name: Boot Zammad and run the seed
+              # `zammad-init` migrates and exits 0; nginx answers once Rails is healthy. A cold pull and
+              # the first migration take minutes. The wait is bounded at ten minutes, the line H13 drew.
+              run: |
+                  start=$(date +%s)
+                  $COMPOSE up -d zammad-init zammad-nginx zammad-scheduler zammad-websocket
+                  init=unknown
+                  for _ in $(seq 1 120); do
+                      id=$($CONTAINER_ENGINE ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" --filter label=com.docker.compose.service=zammad-init | head -n 1)
+                      init=$($CONTAINER_ENGINE inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$id" 2>/dev/null || true)
+                      if [ "$init" = "exited 0" ] && curl -fsS "http://127.0.0.1:$ZAMMAD_PORT/api/v1/getting_started" >/dev/null 2>&1; then break; fi
+                      sleep 5
+                  done
+                  seconds=$(($(date +%s) - start))
+                  if [ "$init" != "exited 0" ]; then
+                      echo "zammad-init: $init"
+                      printf '### Zammad boot\n\nTimed out after **%s s** (zammad-init: %s).\n' "$seconds" "$init" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+                      exit 1
+                  fi
+                  # Running the wizard creates the admin and applies the file's settings, once.
+                  curl -fsS "http://127.0.0.1:$ZAMMAD_PORT/api/v1/getting_started/auto_wizard" | grep -q '"auto_wizard_success":true'
+                  seconds=$(($(date +%s) - start))
+                  echo "Zammad booted and seeded in ${seconds}s"
+                  printf '### Zammad boot\n\nBooted and seeded in **%s s** (from compose up to a seeded wizard).\n' "$seconds" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+            - name: Mint the API token and smoke-test it
+              # The token must be able to create a ticket and read it back: that is all the adapter does.
+              # Basic auth is only for this one call; everything after it carries the token.
+              # `field <name>` prints one top-level field of the JSON on stdin (node, so no `jq` to install).
+              run: |
+                  base="http://127.0.0.1:$ZAMMAD_PORT/api/v1"
+                  field() { node -e 'let b="";process.stdin.on("data",(c)=>{b+=c}).on("end",()=>{const v=JSON.parse(b)[process.argv[1]];if(v===undefined){process.exit(1)}process.stdout.write(String(v))})' "$1"; }
+                  token=$(curl -fsS -u 'drill-admin@example.com:Drill-Admin-Pass-2026' -H 'Content-Type: application/json' \
+                      -d '{"name":"ci-smoke","permission":["ticket.agent"]}' "$base/user_access_token" | field token)
+                  echo "::add-mask::$token"
+                  created=$(curl -fsS -H "Authorization: Token token=$token" -H 'Content-Type: application/json' \
+                      -d '{"title":"ci smoke","group":"Users","customer_id":"guess:ci-smoke@example.com","article":{"subject":"ci smoke","body":"hello","type":"note","internal":false}}' \
+                      "$base/tickets" | field id)
+                  title=$(curl -fsS -H "Authorization: Token token=$token" "$base/tickets/$created" | field title)
+                  [ "$title" = "ci smoke" ] || { echo "read back '$title'"; exit 1; }
+                  echo "the token created ticket $created and read it back"
+
+            - name: Show the Zammad logs when a step failed
+              if: failure()
+              run: $COMPOSE logs --no-color --tail 200 zammad-init zammad-railsserver zammad-nginx
+
+            - name: Take the smoke stack down
+              # The drill below boots its own, and two Zammads at once are an avoidable memory bill.
+              # The client directory holds the throwaway secrets: it goes too.
+              if: always()
+              run: |
+                  $COMPOSE down -v --remove-orphans
+                  rm -rf "clients/$COMPOSE_PROJECT_NAME"
+
+            - name: The helpdesk drill (client address, Authorization, geo lookup)
+              # Docker leg of H20. Real Chromium (preinstalled on this runner) signs in through the drill's edge proxy.
+              run: npm run helpdesk:drill
+
     publish-image:
         # Builds the production image ONCE per merge and pushes it, so `docker/deploy.sh` can pull the
         # exact bytes CI proved by digest instead of rebuilding on the host. Switched OFF until a
@@ -1005,7 +1109,7 @@ jobs:
             - container-gate
             - resolve-frontend
             - frontend-e2e
-            # `boot`, `backup-drill`, `deploy-drill`, `publish-image`, `audit` and (until its first
+            # `boot`, `backup-drill`, `deploy-drill`, `zammad`, `publish-image`, `audit` and (until its first
             # green run) `scaffold-measure` are deliberately excluded — see their own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
