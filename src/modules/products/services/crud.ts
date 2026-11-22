@@ -136,10 +136,9 @@ const withoutDates = ({
 /**
  * Writes a product row and announces it — inside the caller's transaction.
  *
- * Written with `onHand: 0` — this module never moves that counter (see `./model`'s own
- * docblock). `PRODUCT_CREATED` is how the product gets its stock level: `inventory` (which already
- * imports this module, so this cannot import back) is the one subscriber, and opens the level at
- * zero. The event goes through the outbox, so it exists exactly when the row does.
+ * The row carries no stock — `inventory` owns the counters. `PRODUCT_CREATED` is how the product
+ * gets its stock level: `inventory` (which already imports this module, so this cannot import
+ * back) is the one subscriber, and opens the level at zero. The event goes through the outbox, so it exists exactly when the row does.
  *
  * @param data - the product's fields
  * @param session - the transaction every write of this product joins

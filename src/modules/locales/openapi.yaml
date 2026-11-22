@@ -26,9 +26,10 @@ tags:
 #
 # TIER 1 — the API's OWN copy. Files under `shared/locales/` and `src/modules/*/locales/`, loaded
 # into i18next at boot. It is what `t()` resolves and what `GET /locales/{locale}/dictionary` serves.
-# Editable only by a deploy, permanently: it exists to let a client render copy when NO RESPONSE
-# ARRIVES, and putting it behind a database would make it unavailable in exactly the situation it
-# was created for.
+# The files are editable only by a deploy: they exist to let a client render copy when NO RESPONSE
+# ARRIVES, and putting them behind a database would make them unavailable in exactly the situation
+# they were created for. Staff edits do reach `t()`: `infrastructure/i18n/overrides.ts` merges the
+# API overrides over the files, so only the dictionary route is files-only.
 #
 # TIER 2 — the CLIENT's copy. Rows in MongoDB, edited at runtime through the admin routes below
 # and served by `GET /locales/{locale}/messages`. Nothing in the request path reads it, so a
