@@ -59,6 +59,8 @@ export interface StubTicket {
     tags: string[];
     created_at: string;
     last_contact_at: string | null;
+    /** The customer's own last message; when unset it mirrors `last_contact_at`, as under `based_on_customer_reaction`. */
+    last_contact_customer_at?: string | null;
     articles: StubArticle[];
 }
 
@@ -70,6 +72,19 @@ export interface StubUser {
     lastname?: string;
     created_at: string;
     roles: string[];
+}
+
+/** A role the stub holds: its name and the group access it grants, by group id. */
+export interface StubRole {
+    id: number;
+    name: string;
+    group_ids: Record<string, string[]>;
+}
+
+/** A group the stub holds. */
+export interface StubGroup {
+    id: number;
+    name: string;
 }
 
 /** A data-privacy task the stub holds. */
@@ -101,6 +116,12 @@ export interface ZammadStub {
     users: Map<number, StubUser>;
     /** The data-privacy tasks filed so far. */
     privacyTasks: StubPrivacyTask[];
+    /** The roles held, by id: the integration role starts with no group access. */
+    roles: Map<number, StubRole>;
+    /** The groups held, by id: the intake group `Support` and one more. */
+    groups: Map<number, StubGroup>;
+    /** A role update (`PUT /roles/:id`) answers 200 and changes nothing, as a Zammad that drops the grant would. */
+    ignoreRoleWrites: () => void;
     /** The custom attributes the object manager holds, by name. */
     attributes: Map<string, { id: number; body: Record<string, unknown> }>;
     /** The system settings held, by key: Zammad's own default until `zammad:setup` changes it. */
@@ -109,8 +130,10 @@ export interface ZammadStub {
     migrations: () => number;
     /** The next ticket create(s) misbehave, one entry each, then it behaves again. */
     misbehave: (...next: Misbehaviour[]) => void;
-    /** Every create from now on is refused with this status, until {@link ZammadStub.recover}. */
+    /** Every create and ticket lookup from now on is refused with this status, until {@link ZammadStub.recover}. */
     refuseAll: (status: number) => void;
+    /** A new data-privacy task (`POST /data_privacy_tasks`) is answered with this status, until `recover`. */
+    refusePrivacyTasks: (status: number) => void;
     /** Undo {@link ZammadStub.refuseAll}. */
     recover: () => void;
     /** An email already held by this Zammad customer id, so a profile sync to it is refused with a 422. */
@@ -195,6 +218,14 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
         const tickets: StubTicket[] = [];
         const users = new Map<number, StubUser>();
         const privacyTasks: StubPrivacyTask[] = [];
+        const roles = new Map<number, StubRole>([
+            [9, { id: 9, name: 'Shop integration', group_ids: {} }]
+        ]);
+        const groups = new Map<number, StubGroup>([
+            [1, { id: 1, name: 'Support' }],
+            [2, { id: 2, name: 'Billing' }]
+        ]);
+        let roleWritesIgnored = false;
         const attributes = new Map<string, { id: number; body: Record<string, unknown> }>(
             options.fieldsExist === false ? [] : [['request_ref', { id: 1, body: {} }]]
         );
@@ -210,6 +241,7 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
         let migrationCalls = 0;
         let queue: Misbehaviour[] = [];
         let refusing: number | undefined;
+        let taskRefusal: number | undefined;
         let hook: (() => Promise<void>) | undefined;
         let taskOutcome: StubPrivacyTask['state'] = 'completed';
         let closedCreateRefused = false;
@@ -294,8 +326,26 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
             title: typeof ticket.body.title === 'string' ? ticket.body.title : null,
             state: ticket.state,
             created_at: ticket.created_at,
-            last_contact_at: ticket.last_contact_at
+            last_contact_at: ticket.last_contact_at,
+            last_contact_customer_at:
+                ticket.last_contact_customer_at === undefined
+                    ? ticket.last_contact_at
+                    : ticket.last_contact_customer_at,
+            // A custom field comes back with every ticket, as Zammad lists it.
+            request_ref: ticket.request_ref
         });
+
+        /**
+         * A customer as Zammad lists it: role names come back only for `expand=true`, so a caller
+         * that forgot it sees no roles.
+         *
+         * @param row - the stored user
+         * @param expand - whether the request asked for `expand=true`
+         */
+        const userView = (row: StubUser, expand: boolean) => {
+            const { roles, ...plain } = row;
+            return expand ? { ...plain, roles } : plain;
+        };
 
         /** Handle `POST /api/v1/tickets`. */
         const createTicket = (
@@ -445,11 +495,41 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                         return createTicket(body ?? {}, response);
                     }
                     if (request.method === 'POST' && path === '/tickets/search') {
+                        // `refuseAll` covers the lookup a retry makes before it creates.
+                        if (refusing !== undefined) {
+                            answer(response, refusing, {});
+                            return;
+                        }
                         searchTickets(body ?? {}, response);
                         return;
                     }
 
+                    if (request.method === 'GET' && path === '/groups') {
+                        answer(response, 200, [...groups.values()]);
+                        return;
+                    }
+                    if (request.method === 'GET' && path === '/roles') {
+                        answer(response, 200, [...roles.values()]);
+                        return;
+                    }
+                    const oneRole = /^\/roles\/(\d+)$/.exec(path);
+                    if (oneRole) {
+                        const role = roles.get(Number(oneRole[1]));
+                        if (!role) {
+                            answer(response, 404, {});
+                            return;
+                        }
+                        if (request.method === 'PUT' && !roleWritesIgnored)
+                            role.group_ids = body?.group_ids as Record<string, string[]>;
+                        answer(response, 200, role);
+                        return;
+                    }
+
                     if (request.method === 'POST' && path === '/data_privacy_tasks') {
+                        if (taskRefusal !== undefined) {
+                            answer(response, taskRefusal, {});
+                            return;
+                        }
                         fileTask(body ?? {}, response);
                         return;
                     }
@@ -465,16 +545,15 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                         return;
                     }
                     if (request.method === 'GET' && path.startsWith('/users/search?')) {
-                        const query = decodeURIComponent(
-                            new URL(path, 'http://stub').searchParams.get('query') ?? ''
-                        ).toLowerCase();
+                        const params = new URL(path, 'http://stub').searchParams;
+                        const query = decodeURIComponent(params.get('query') ?? '').toLowerCase();
                         // Loose, like Zammad: a substring of the address matches.
                         answer(
                             response,
                             200,
-                            [...users.values()].filter((row) =>
-                                row.email.toLowerCase().includes(query)
-                            )
+                            [...users.values()]
+                                .filter((row) => row.email.toLowerCase().includes(query))
+                                .map((row) => userView(row, params.get('expand') === 'true'))
                         );
                         return;
                     }
@@ -485,14 +564,21 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                         answer(
                             response,
                             200,
-                            [...users.values()].slice((page - 1) * perPage, page * perPage)
+                            [...users.values()]
+                                .slice((page - 1) * perPage, page * perPage)
+                                .map((row) => userView(row, params.get('expand') === 'true'))
                         );
                         return;
                     }
-                    const oneUser = /^\/users\/(\d+)$/.exec(path);
+                    const oneUser = /^\/users\/(\d+)(\?.*)?$/.exec(path);
                     if (request.method === 'GET' && oneUser) {
                         const row = users.get(Number(oneUser[1]));
-                        if (row) answer(response, 200, row);
+                        if (row)
+                            answer(
+                                response,
+                                200,
+                                userView(row, (oneUser[2] ?? '').includes('expand=true'))
+                            );
                         else answer(response, 404, { error: "Couldn't find User" });
                         return;
                     }
@@ -650,6 +736,11 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 tickets,
                 users,
                 privacyTasks,
+                roles,
+                groups,
+                ignoreRoleWrites: () => {
+                    roleWritesIgnored = true;
+                },
                 attributes,
                 settings,
                 migrations: () => migrationCalls,
@@ -661,6 +752,10 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 },
                 recover: () => {
                     refusing = undefined;
+                    taskRefusal = undefined;
+                },
+                refusePrivacyTasks: (status) => {
+                    taskRefusal = status;
                 },
                 holdAddress: (email, customerId) => {
                     held.set(email, customerId);

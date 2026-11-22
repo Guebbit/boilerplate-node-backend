@@ -249,7 +249,9 @@ export const createShutdownHandler = (stopFunction: () => Promise<void>) => {
          */
         stopConsuming().catch(() => undefined);
         // The held-job loops stop claiming now too; a job already running is awaited by `shutdownInfra`.
-        stopJobDrain(0).catch(() => undefined);
+        // Never rejects: it only clears timers and waits for nothing (budget 0).
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises -- stopJobDrain(0) never rejects
+        void stopJobDrain(0);
 
         /**
          * Node `timers/promises` sleep: resolves after `delayMs` milliseconds (the lame-duck

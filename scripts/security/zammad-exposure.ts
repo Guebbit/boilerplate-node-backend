@@ -10,6 +10,7 @@
  *   - The image tag has a build suffix (`7.2.3-0017`); the advisory ranges do not. It is stripped
  *     from both sides.
  *   - A range that cannot be read is reported, never skipped: a skipped one is a missed advisory.
+ *     A list of bare versions counts as unreadable: it enumerates releases, it does not bound them.
  *
  * @see docs/operate/zammad.md#security-releases
  */
@@ -80,6 +81,10 @@ const COMPARATOR = /^(<=|>=|[<>=])?\s*v?(\d+(?:\.\d+){0,2})(?:-\d+)?$/u;
 const inRange = (range: string, pin: string): boolean | undefined => {
     const comparators = range.split(',').map((token) => COMPARATOR.exec(token.trim()));
     if (comparators.includes(null)) return undefined;
+    // A list of bare versions ("7.0.3, 7.1.1") names the affected releases one by one; read as a
+    // GitHub range it would AND them and never match, so it is left to a person.
+    if (comparators.length > 1 && comparators.some((match) => match?.[1] === undefined))
+        return undefined;
     const normalised = comparators.flatMap((match) => {
         // The null check above proved each match is present.
         const [, operator = '=', version = ''] = match ?? [];

@@ -107,6 +107,16 @@ describe('findExposure', () => {
         expect(ids(report.unreadable)).toEqual(['ODD', 'NULL']);
     });
 
+    it('reports a list of bare versions as unreadable, whether or not the pin is in it', () => {
+        const report = findExposure(
+            [advisory('LIST', '7.0.3, 7.1.1'), advisory('HIT', '7.2.3, 7.1.1')],
+            '7.2.3'
+        );
+
+        expect(ids(report.unreadable)).toEqual(['LIST', 'HIT']);
+        expect(report.exposed).toEqual([]);
+    });
+
     it('reports an advisory with no vulnerability entry at all', () => {
         const report = findExposure([advisory('EMPTY')], '7.2.3');
 

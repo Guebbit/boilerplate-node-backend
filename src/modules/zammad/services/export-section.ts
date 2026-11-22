@@ -23,6 +23,18 @@ import {
 import { zammadSettings, type ZammadSettings } from '../config';
 import { findCustomer } from '../repository';
 
+/**
+ * The most attachment bytes one export carries in all. The export is built in memory and base64
+ * adds a third, so a customer with many files fails the export instead of exhausting the process;
+ * the one-file cap lives in the client.
+ */
+const ATTACHMENTS_TOTAL_CAP_BYTES = 64 * 1_048_576;
+
+/** How many attachment bytes one export has downloaded so far. */
+interface AttachmentBudget {
+    used: number;
+}
+
 /** A file the customer sent, carried in the export itself. */
 export interface ExportAttachment {
     filename: string;
@@ -84,15 +96,25 @@ const present = (key: string, value: string | null | undefined): Record<string, 
  * @param settings - where Zammad is
  * @param ticketId - Zammad's id of the ticket
  * @param article - the article, with its attachment list
+ * @param budget - what this export has downloaded so far
+ * @throws {Error} when the export's attachments pass the total cap
  */
 const attachmentsOf = async (
     settings: ZammadSettings,
     ticketId: number,
-    article: ZammadArticle
+    article: ZammadArticle,
+    budget: AttachmentBudget
 ): Promise<ExportAttachment[]> => {
     const files: ExportAttachment[] = [];
     for (const attachment of article.attachments ?? []) {
-        const bytes = await downloadAttachment(settings, ticketId, article.id, attachment.id);
+        const bytes = await downloadAttachment(
+            settings,
+            ticketId,
+            article.id,
+            attachment.id,
+            ATTACHMENTS_TOTAL_CAP_BYTES - budget.used
+        );
+        budget.used += bytes.byteLength;
         const mime =
             attachment.preferences?.['Mime-Type'] ?? attachment.preferences?.['Content-Type'];
         files.push({
@@ -112,14 +134,18 @@ const attachmentsOf = async (
  * @param settings - where Zammad is
  * @param ticketId - Zammad's id of the ticket
  * @param article - the article as Zammad has it
+ * @param budget - what this export has downloaded so far
  */
 const exportArticle = async (
     settings: ZammadSettings,
     ticketId: number,
-    article: ZammadArticle
+    article: ZammadArticle,
+    budget: AttachmentBudget
 ): Promise<ExportArticle> => {
     const fromCustomer = article.sender === 'Customer';
-    const attachments = fromCustomer ? await attachmentsOf(settings, ticketId, article) : [];
+    const attachments = fromCustomer
+        ? await attachmentsOf(settings, ticketId, article, budget)
+        : [];
     return {
         id: article.id,
         ...present('type', article.type),
@@ -173,6 +199,7 @@ const customerIdsOf = (settings: ZammadSettings, subject: PersonalDataSubject): 
  *
  * @param subject - who the export is about
  * @throws {ZammadRequestError} when Zammad cannot be read: the export fails whole
+ * @throws {Error} when the files pass the cap: the export fails whole too
  */
 export const collectZammadCopy = async (
     subject: PersonalDataSubject
@@ -181,6 +208,7 @@ export const collectZammadCopy = async (
     if (!settings) return undefined;
 
     const customers: ExportCustomer[] = [];
+    const budget: AttachmentBudget = { used: 0 };
     for (const id of await customerIdsOf(settings, subject)) {
         const user = await getUser(settings, id);
         // A mapping whose customer is gone (deleted by retention, or by hand): nothing left to export.
@@ -190,7 +218,7 @@ export const collectZammadCopy = async (
         for (const ticket of await ticketsOf(settings, id)) {
             const articles: ExportArticle[] = [];
             for (const article of await listArticles(settings, ticket.id))
-                articles.push(await exportArticle(settings, ticket.id, article));
+                articles.push(await exportArticle(settings, ticket.id, article, budget));
             tickets.push({
                 id: ticket.id,
                 ...present('number', ticket.number),

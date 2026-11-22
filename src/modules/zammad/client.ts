@@ -62,8 +62,10 @@ export interface CreatedTicket {
     refKept: boolean;
 }
 
-/** A search answer: a list of tickets, of which only the ids matter. */
-const searchAnswer = z.array(z.object({ id: z.number(), customer_id: z.number() }));
+/** A search answer: a list of tickets, of which the ids and our own `request_ref` matter. */
+const searchAnswer = z.array(
+    z.object({ id: z.number(), customer_id: z.number(), request_ref: z.string().nullish() })
+);
 
 /**
  * One call to Zammad.
@@ -150,8 +152,8 @@ const escapeHtml = (value: string): string =>
 
 /** What a ticket needs from a contact message. */
 export interface TicketRequest {
-    /** The Zammad customer: its id when the account is mapped, else the address (Zammad finds or makes it). */
-    customer: { id: number } | { email: string };
+    /** The Zammad customer, by address: Zammad finds the one holding it or makes it. Never by a stored id. */
+    customer: { email: string };
     name?: string;
     subject: string;
     message: string;
@@ -225,8 +227,9 @@ export const finishSpamTicket = (
  * Create the ticket: one `web` article from the customer, our fields beside it. The create is one
  * transaction in Zammad: there is no empty ticket to clean up after a failure.
  *
- * `customer: {id}` for a mapped account; `customer_id: "guess:<email>"` otherwise, which Zammad
- * resolves to the customer with that address, creating it when there is none.
+ * The customer is always `customer_id: "guess:<email>"`, which Zammad resolves to the customer with
+ * that address, creating it when there is none. A stored id is never sent: after a restore it can be
+ * dead or reused by a stranger, while the verified address is the sender's own.
  *
  * @param request - the message and its custom fields
  * @throws {ZammadRequestError} when the call fails
@@ -235,15 +238,13 @@ export const createTicket = (request: TicketRequest): Promise<CreatedTicket> => 
     const settings = zammadSettings();
     if (!settings) return Promise.reject(new ZammadRequestError('Zammad is not configured', false));
 
-    const email = 'email' in request.customer ? request.customer.email : undefined;
+    const { email } = request.customer;
     const from = request.name && email ? `${safeName(request.name)} <${email}>` : email;
 
     const body = {
         title: request.subject,
         group: settings.group,
-        ...('id' in request.customer
-            ? { customer: { id: request.customer.id } }
-            : { customer_id: `guess:${request.customer.email}` }),
+        customer_id: `guess:${email}`,
         article: {
             subject: request.subject,
             body: escapeHtml(request.message).replaceAll('\n', '<br>'),
@@ -299,7 +300,8 @@ export const createTicket = (request: TicketRequest): Promise<CreatedTicket> => 
 /**
  * Look a ticket up by our `request_ref`, before a create is sent again after an unclear outcome.
  * A `condition` search with no `query`: plain SQL in Zammad, exact and current with or without
- * Elasticsearch.
+ * Elasticsearch. Zammad may ignore a condition it does not know, so the answer is kept only when
+ * its own `request_ref` is exactly ours: another person's ticket is never adopted.
  *
  * @param requestRef - the pending row's id
  * @returns the ticket already filed under it, or `undefined`
@@ -313,10 +315,10 @@ export const findTicketByRef = (requestRef: string): Promise<CreatedTicket | und
         settings,
         'POST',
         '/tickets/search',
-        { condition: { 'ticket.request_ref': { operator: 'is', value: requestRef } }, limit: 1 },
+        { condition: { 'ticket.request_ref': { operator: 'is', value: requestRef } }, limit: 5 },
         searchAnswer
     ).then((found) => {
-        const ticket = found.at(0);
+        const ticket = found.find((row) => row.request_ref === requestRef);
         return ticket
             ? { id: ticket.id, customerId: ticket.customer_id, refKept: true }
             : undefined;
@@ -360,7 +362,16 @@ const userAnswer = z.object({
 export type ZammadUser = z.infer<typeof userAnswer>;
 
 /**
- * Read one customer.
+ * Whether a user holds the Customer role and nothing else. An agent, an admin or the integration
+ * user carries another role; a user whose roles were not listed is not assumed to be a customer.
+ *
+ * @param user - a user read with `expand=true`
+ */
+export const isPlainCustomer = (user: ZammadUser): boolean =>
+    user.roles?.length === 1 && user.roles[0] === 'Customer';
+
+/**
+ * Read one user, with their role names (`expand=true`), so a caller can tell a customer from staff.
  *
  * @param settings - where Zammad is
  * @param zammadUserId - the customer
@@ -371,19 +382,24 @@ export const getUser = (
     settings: ZammadSettings,
     zammadUserId: number
 ): Promise<ZammadUser | undefined> =>
-    callZammad(settings, 'GET', `/users/${String(zammadUserId)}`, undefined, userAnswer).catch(
-        (error: unknown) => {
-            if (error instanceof ZammadRequestError && error.status === 404) return undefined;
-            throw error;
-        }
-    );
+    callZammad(
+        settings,
+        'GET',
+        `/users/${String(zammadUserId)}?expand=true`,
+        undefined,
+        userAnswer
+    ).catch((error: unknown) => {
+        if (error instanceof ZammadRequestError && error.status === 404) return undefined;
+        throw error;
+    });
 
 /** The most customers one address lookup reads: an address belongs to one customer, the rest is slack. */
 const ADDRESS_LOOKUP_LIMIT = 20;
 
 /**
- * Find the customers whose address is exactly `email`. Zammad's search matches loosely, so the
- * answer is filtered to the exact address, case-insensitively.
+ * Find the users whose address is exactly `email`, with their role names. Zammad's search matches
+ * loosely, so the answer is filtered to the exact address, case-insensitively. The caller tells a
+ * customer from staff by {@link isPlainCustomer}.
  *
  * @param settings - where Zammad is
  * @param email - the normalised address
@@ -393,7 +409,7 @@ export const findUsersByEmail = (settings: ZammadSettings, email: string): Promi
     callZammad(
         settings,
         'GET',
-        `/users/search?query=${encodeURIComponent(email)}&limit=${String(ADDRESS_LOOKUP_LIMIT)}`,
+        `/users/search?expand=true&query=${encodeURIComponent(email)}&limit=${String(ADDRESS_LOOKUP_LIMIT)}`,
         undefined,
         z.array(userAnswer)
     ).then((users) => users.filter((user) => user.email?.toLowerCase() === email.toLowerCase()));
@@ -545,7 +561,9 @@ const ticketRow = z.object({
     title: z.string().nullish(),
     state: z.string().nullish(),
     created_at: z.string().nullish(),
-    last_contact_at: z.string().nullish()
+    last_contact_at: z.string().nullish(),
+    /** The customer's own last message: an agent's public reply moves `last_contact_at`, not this. */
+    last_contact_customer_at: z.string().nullish()
 });
 
 /** What the module reads of a Zammad ticket. */
@@ -664,13 +682,16 @@ const ATTACHMENT_CAP_BYTES = 50 * 1_048_576;
  * @param ticketId - Zammad's id of the ticket
  * @param articleId - Zammad's id of the article
  * @param attachmentId - Zammad's id of the file
- * @throws {ZammadRequestError} when the call fails or the file is over the cap
+ * @param remainingBytes - what the caller can still take in all; the read stops mid-file past it
+ * @throws {ZammadRequestError} when the call fails
+ * @throws {Error} when the file is longer than the per-file cap or `remainingBytes`
  */
 export const downloadAttachment = (
     settings: ZammadSettings,
     ticketId: number,
     articleId: number,
-    attachmentId: number
+    attachmentId: number,
+    remainingBytes: number = ATTACHMENT_CAP_BYTES
 ): Promise<Buffer> =>
     fetch(
         `${settings.url}/api/v1/ticket_attachment/${String(ticketId)}/${String(articleId)}/${String(attachmentId)}`,
@@ -688,7 +709,10 @@ export const downloadAttachment = (
                     response.status
                 );
             }
-            return readCappedBytes(response.body as AsyncIterable<unknown>, ATTACHMENT_CAP_BYTES);
+            return readCappedBytes(
+                response.body as AsyncIterable<unknown>,
+                Math.min(ATTACHMENT_CAP_BYTES, remainingBytes)
+            );
         },
         (error: unknown) => {
             throw new ZammadRequestError(

@@ -1,6 +1,6 @@
 /**
  * @module
- * Every read and write of this module's four collections. The sweeps claim a row with a lease
+ * Every read and write of this module's five collections. The sweeps claim a row with a lease
  * (one atomic update stamps a token and an expiry) so two runners never send the same message; a
  * write that finishes a row is filtered on the token, so a runner whose lease lapsed cannot undo a
  * newer attempt.
@@ -18,6 +18,7 @@ import {
     zammadCustomerModel,
     zammadEraseJobModel,
     zammadProfileSyncModel,
+    zammadSetupModel,
     type ZammadContactDocument,
     type ZammadCustomerDocument,
     type ZammadEraseJobDocument,
@@ -278,6 +279,14 @@ export const findCustomerIn = (
  */
 export const deleteCustomer = (userId: string, session: ClientSession): Promise<unknown> =>
     zammadCustomerModel.deleteOne({ userId: toObjectId(userId) }, { session }).exec();
+
+/**
+ * Drop the mapping to a Zammad customer that is being deleted, whichever account holds it.
+ *
+ * @param zammadUserId - Zammad's id of the customer being deleted
+ */
+export const deleteCustomerByZammadId = (zammadUserId: number): Promise<unknown> =>
+    zammadCustomerModel.deleteMany({ zammadUserId }).exec();
 
 /**
  * Note that an account's profile changed: one row per account, due now. A change while a row
@@ -572,3 +581,31 @@ export const oldestPendingEraseJobAgeSeconds = (): Promise<number> =>
         .then((row) =>
             row?.createdAt ? Math.max(0, (Date.now() - row.createdAt.getTime()) / 1000) : 0
         );
+
+/** The marker key `zammad:setup` writes once the integration role reads every group. */
+const GROUPS_VERIFIED = 'groups-verified';
+
+/**
+ * Record that the integration role was just confirmed able to read every group.
+ *
+ * @param at - when the check passed
+ */
+export const markGroupsVerified = (at: Date): Promise<unknown> =>
+    zammadSetupModel.updateOne({ key: GROUPS_VERIFIED }, { $set: { at } }, { upsert: true }).exec();
+
+/** Whether a setup run ever confirmed the integration role reads every group. */
+export const groupsVerified = (): Promise<boolean> =>
+    zammadSetupModel.exists({ key: GROUPS_VERIFIED }).then(Boolean);
+
+/** Forget the marker: a setup run starts by doing so, so a run that fails leaves none. */
+export const clearGroupsVerified = (): Promise<unknown> =>
+    zammadSetupModel.deleteOne({ key: GROUPS_VERIFIED }).exec();
+
+/**
+ * Whether an erase job holds this verified address: positive evidence that the address belonged to
+ * an erased account. A completed job has dropped it, so only a job still working counts.
+ *
+ * @param email - the normalised address
+ */
+export const hasEraseJobForEmail = (email: string): Promise<boolean> =>
+    zammadEraseJobModel.exists({ email }).then(Boolean);

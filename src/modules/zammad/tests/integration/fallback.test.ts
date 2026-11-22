@@ -11,11 +11,13 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { taskService } from '@modules/tasks';
+import { userService } from '@modules/users';
+import { createUser } from '@modules/users/tests/factories';
 import { findAllTasks } from '@modules/tasks/tests/factories';
 import { zammadService } from '../../services';
 import { zammadContactModel } from '../../model';
 import { countFallbackTombstones } from '../../repository';
-import { makeDue, useZammad } from '../harness';
+import { eraseAccount, makeDue, useZammad } from '../harness';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -142,10 +144,66 @@ describe('after the last retry', () => {
     it('never brings back words an erasure already deleted', async () => {
         await submitWhileDown();
         await makeDue();
+        // The lookup works again and only the create is refused, so the create is reached.
+        zammad().recover();
+        zammad().misbehave({ kind: 'refuse', status: 503 });
         // The account is erased while the last attempt is in flight: the row is gone by the fallback.
         zammad().onCreate(() => zammadContactModel.deleteMany({}).then(() => undefined));
         await zammadService.sweepContacts();
 
         expect(await findAllTasks()).toEqual([]);
+    });
+
+    it('files no to-do for an account erased between the last failure and the fallback', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        zammad().refuseAll(503);
+        await taskService.submit(
+            { email: 'ada@example.com', subject: 'Hello', message: 'My private words.' },
+            user.id
+        );
+        await zammadService.settleHandovers();
+        await makeDue();
+
+        const getById = userService.getById.bind(userService);
+        let lookups = 0;
+        // The sender lookup still sees the account; the fallback's own check finds it erased.
+        jest.spyOn(userService, 'getById').mockImplementation((id, ...rest) => {
+            lookups += 1;
+            return lookups === 1
+                ? getById(id, ...rest)
+                : eraseAccount(user.id).then(() => getById(id, ...rest));
+        });
+        await zammadService.sweepContacts();
+
+        expect(await findAllTasks()).toEqual([]);
+        expect(await zammadContactModel.countDocuments()).toBe(0);
+    });
+
+    it('keeps the row for a retry, and lets the pass finish, when Zammad cannot be asked about an erased account’s ticket', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        zammad().misbehave({ kind: 'lose-answer' });
+        await taskService.submit(
+            { email: 'ada@example.com', subject: 'Hello', message: 'My private words.' },
+            user.id
+        );
+        await zammadService.settleHandovers();
+        await makeDue();
+        zammad().refuseAll(503);
+
+        const getById = userService.getById.bind(userService);
+        let lookups = 0;
+        // The sender lookup sees the account; the fallback's own check finds it gone. The row is
+        // left standing, as it is while an erasure's transaction has not reached it yet.
+        jest.spyOn(userService, 'getById').mockImplementation((id, ...rest) => {
+            lookups += 1;
+            return lookups === 1 ? getById(id, ...rest) : Promise.resolve(undefined);
+        });
+
+        await expect(zammadService.sweepContacts()).resolves.toBe(1);
+
+        expect(await findAllTasks()).toEqual([]);
+        expect(await zammadContactModel.find().lean()).toMatchObject([
+            { state: 'pending', attempts: 2 }
+        ]);
     });
 });

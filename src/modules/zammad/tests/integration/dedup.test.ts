@@ -55,7 +55,7 @@ describe('an unclear outcome', () => {
                     value: expect.stringMatching(/^[0-9a-f]{24}$/)
                 }
             },
-            limit: 1
+            limit: 5
         });
         expect(await zammadContactModel.countDocuments()).toBe(0);
     });
@@ -138,6 +138,27 @@ describe('an unclear outcome', () => {
 
         expect(searches()).toHaveLength(1);
         expect(zammad().tickets).toHaveLength(1);
+        expect(await zammadContactModel.countDocuments()).toBe(0);
+    });
+});
+
+describe('a lookup Zammad answers loosely', () => {
+    it('adopts only a ticket whose request_ref is ours: another message’s ticket is not taken', async () => {
+        zammad().misbehave({ kind: 'refuse', status: 503 });
+        await submit();
+        // Zammad ignores the condition and lists a ticket that belongs to another message.
+        zammad().addTicket({ customerId: 901, createdAt: new Date().toISOString() }).request_ref =
+            'someone-elses-message';
+        zammad().searchQuirks({ ignoreConditions: true });
+
+        await makeDue();
+        await zammadService.sweepContacts();
+
+        // Ours was created beside it, not swallowed by it.
+        expect(zammad().tickets).toHaveLength(2);
+        expect(zammad().tickets.map((ticket) => ticket.request_ref)).toContain(
+            'someone-elses-message'
+        );
         expect(await zammadContactModel.countDocuments()).toBe(0);
     });
 });

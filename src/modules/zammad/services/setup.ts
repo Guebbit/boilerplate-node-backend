@@ -8,7 +8,10 @@
  * Creating a field forces one Zammad restart (its own `auto_shutdown`; compose brings it back).
  * Changing a select's options later is configuration only: no migration, no restart.
  *
- * It also sets the one Zammad system setting our retention clock rests on (`LAST_CONTACT_SETTING`).
+ * It also sets the one Zammad system setting our retention clock rests on (`LAST_CONTACT_SETTING`),
+ * and gives the integration role `read` on every group (retention must see every ticket), failing
+ * closed: a group the role still cannot read stops the run, and only a passing run leaves the
+ * marker retention asks for.
  *
  * @see docs/modules/zammad.md#setup
  */
@@ -17,6 +20,7 @@ import { z } from 'zod';
 import { TaskCategory } from '@types';
 import { callZammad } from '../client';
 import { zammadSettings, type ZammadSettings } from '../config';
+import { clearGroupsVerified, markGroupsVerified } from '../repository';
 
 /** One of our ticket fields, as the object manager takes it. */
 interface FieldSpec {
@@ -112,6 +116,8 @@ export interface SetupReport {
     updated: string[];
     /** System settings that held another value and were changed; one already right is left alone. */
     settingsChanged: string[];
+    /** Group access the integration role lacked and was given, as `<group>: +<access>`. */
+    roleGranted: string[];
 }
 
 /**
@@ -140,8 +146,93 @@ const ensureLastContactSetting = async (settings: ZammadSettings): Promise<strin
 };
 
 /**
- * Create or update every field, run the pending migration when a field was created, then set the
- * system settings.
+ * The role the integration user holds. The installer creates it by this exact name and gives it to
+ * the integration user (`docs/modules/zammad.md#setup`, step 5); setup finds it by the name.
+ */
+const INTEGRATION_ROLE = 'Shop integration';
+
+/** A role as Zammad lists it: the group access it grants, by group id. */
+const roleRow = z.object({
+    id: z.number(),
+    name: z.string(),
+    group_ids: z.record(z.string(), z.array(z.string())).optional()
+});
+
+/** Every group, with the name the intake setting refers to. */
+const groupRows = z.array(z.object({ id: z.number(), name: z.string() }));
+
+/**
+ * Whether a list of access words includes `access`. `full` stands for every one of them.
+ *
+ * @param held - what the role holds on one group
+ * @param access - `read`, `create` or `change`
+ */
+const holds = (held: readonly string[], access: string): boolean =>
+    held.includes(access) || held.includes('full');
+
+/**
+ * Give the integration role `read` on every group and `create` and `change` on the intake group only
+ * (a spam ticket is closed and tagged after it is made, which Zammad answers 403 without `change`), adding
+ * only what is missing, then read the role back and fail unless it reads every group.
+ *
+ * @param settings - Zammad's address, the intake group's name and an ADMIN token
+ * @returns what was added, as `<group>: +<access>`; empty when the role was already right
+ * @throws {Error} when the role or the intake group is missing, or a group is still unreadable
+ * @throws {ZammadRequestError} when Zammad refuses a call
+ */
+const ensureIntegrationRole = async (settings: ZammadSettings): Promise<string[]> => {
+    const roles = await callZammad(settings, 'GET', '/roles', undefined, z.array(roleRow));
+    const role = roles.find(({ name }) => name === INTEGRATION_ROLE);
+    if (!role)
+        throw new Error(
+            `Zammad has no role named "${INTEGRATION_ROLE}": create it and give it to the integration user (docs/modules/zammad.md#setup, step 5).`
+        );
+    const groups = await callZammad(settings, 'GET', '/groups', undefined, groupRows);
+    const intake = groups.find(({ name }) => name === settings.group);
+    if (!intake)
+        throw new Error(`Zammad has no group named "${settings.group}" (NODE_ZAMMAD_GROUP).`);
+
+    const wanted: Record<string, string[]> = { ...role.group_ids };
+    const granted: string[] = [];
+    for (const group of groups) {
+        const access = [...(wanted[String(group.id)] ?? [])];
+        for (const needed of group.id === intake.id ? ['read', 'create', 'change'] : ['read']) {
+            if (holds(access, needed)) continue;
+            access.push(needed);
+            granted.push(`${group.name}: +${needed}`);
+        }
+        wanted[String(group.id)] = access;
+    }
+    if (granted.length > 0)
+        await callZammad(
+            settings,
+            'PUT',
+            `/roles/${String(role.id)}`,
+            { group_ids: wanted },
+            roleRow
+        );
+
+    // Fail closed: what Zammad holds now, not what we asked for, decides.
+    const after = await callZammad(
+        settings,
+        'GET',
+        `/roles/${String(role.id)}`,
+        undefined,
+        roleRow
+    );
+    const unreadable = groups.filter(
+        ({ id }) => !holds(after.group_ids?.[String(id)] ?? [], 'read')
+    );
+    if (unreadable.length > 0)
+        throw new Error(
+            `The role "${INTEGRATION_ROLE}" cannot read: ${unreadable.map(({ name }) => name).join(', ')}.`
+        );
+    return granted;
+};
+
+/**
+ * Create or update every field, run the pending migration when a field was created, set the
+ * system settings, then give the integration role its group access.
  *
  * @param settings - Zammad's address and an ADMIN token
  * @returns what changed
@@ -155,7 +246,7 @@ export const ensureTicketFields = async (settings: ZammadSettings): Promise<Setu
         undefined,
         existingAttributes
     );
-    const report: SetupReport = { created: [], updated: [], settingsChanged: [] };
+    const report: SetupReport = { created: [], updated: [], settingsChanged: [], roleGranted: [] };
 
     // Sequential: one object-manager write at a time, as Zammad's own admin screen does.
     for (const spec of fieldSpecs()) {
@@ -196,6 +287,7 @@ export const ensureTicketFields = async (settings: ZammadSettings): Promise<Setu
         );
 
     report.settingsChanged = await ensureLastContactSetting(settings);
+    report.roleGranted = await ensureIntegrationRole(settings);
 
     return report;
 };
@@ -211,5 +303,11 @@ export const setupTicketFields = (adminToken: string): Promise<SetupReport> => {
     const settings = zammadSettings();
     if (!settings)
         return Promise.reject(new Error('NODE_ZAMMAD_URL is not set: nothing to set up.'));
-    return ensureTicketFields({ ...settings, token: adminToken });
+    // The old marker goes first: a run that fails (a new group the role cannot read) leaves none.
+    return clearGroupsVerified()
+        .then(() => ensureTicketFields({ ...settings, token: adminToken }))
+        .then((report) =>
+            // Only a run that read every group back leaves the marker retention asks for.
+            markGroupsVerified(new Date()).then(() => report)
+        );
 };

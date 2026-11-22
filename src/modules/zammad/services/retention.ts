@@ -4,7 +4,7 @@
  * the same Data Privacy task the erase job uses. Three rules, all measured by us because Zammad has
  * no retention of its own:
  *
- * Tickets:    last customer contact (else creation) older than `NODE_ZAMMAD_RETENTION_DAYS`,
+ * Tickets:    last customer message (`last_contact_customer_at`, else creation) older than `NODE_ZAMMAD_RETENTION_DAYS`,
  *             open or closed. Matches basic mode's per-piece rule (`tasks`' retention).
  * Customers:  created before the cutoff, with the Customer role only, and no ticket left.
  * Spam:       a ticket tagged `suspected-spam` after 30 days, whatever its age otherwise.
@@ -21,6 +21,7 @@ import { DAY_MS } from '@domain-primitives/time';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     fileDataPrivacyTask,
+    isPlainCustomer,
     listUsers,
     getTicketTags,
     ZammadRequestError,
@@ -31,6 +32,7 @@ import {
     type ZammadTicket
 } from '../client';
 import { zammadConfig, zammadSettings, type ZammadSettings } from '../config';
+import { deleteCustomerByZammadId, groupsVerified } from '../repository';
 
 /** How long a suspected-spam ticket is kept, in days: the same figure as the local spam to-dos. */
 const SPAM_RETENTION_DAYS = 30;
@@ -80,7 +82,8 @@ const reapTickets = async (
 
 /**
  * File a task for every customer created before the cutoff who has the Customer role only and no
- * ticket. An agent, an admin or the integration user carries another role and is never listed.
+ * ticket, and drop the account mapping that pointed at each. An agent, an admin or the integration
+ * user carries another role and is never listed.
  * Every page is read: the pass runs daily under a long lease, and a cap would leave whatever lies
  * past it unreaped for ever.
  *
@@ -98,8 +101,7 @@ const reapCustomers = async (settings: ZammadSettings, cutoff: Date): Promise<nu
 
         const candidates = fresh.filter(
             (user) =>
-                user.roles?.length === 1 &&
-                user.roles[0] === 'Customer' &&
+                isPlainCustomer(user) &&
                 user.created_at !== undefined &&
                 user.created_at !== null &&
                 new Date(user.created_at) < cutoff
@@ -110,7 +112,11 @@ const reapCustomers = async (settings: ZammadSettings, cutoff: Date): Promise<nu
                 { 'ticket.customer_id': { operator: 'is', value: user.id } },
                 1
             );
-            if (tickets.length === 0 && (await fileOnce(settings, 'User', user.id))) filed += 1;
+            if (tickets.length > 0) continue;
+            if (await fileOnce(settings, 'User', user.id)) filed += 1;
+            // The customer is going: an account still mapped to it would send every later contact
+            // to a dead id, so the mapping goes with it (also when the task was already queued).
+            await deleteCustomerByZammadId(user.id);
         }
         if (users.length < USERS_PAGE_SIZE) return filed;
         // A full page with nothing new: Zammad ignored `page`, the run cannot be completed.
@@ -122,8 +128,14 @@ const reapCustomers = async (settings: ZammadSettings, cutoff: Date): Promise<nu
 /**
  * The scheduled pass. Inert while the URL is unset.
  *
+ * Customers are reaped only once `zammad:setup` has confirmed the integration role reads every group:
+ * a customer whose tickets sit in a group it cannot read looks ticketless and would be deleted with
+ * them. Without that marker the tickets and spam still go, the customers are skipped, and the run
+ * fails so the alert hears of it.
+ *
  * @returns what it filed, by rule
  * @throws {ZammadRequestError} when Zammad cannot be read: the job fails and `ScheduledJobStale` hears of it
+ * @throws {Error} when `zammad:setup` never confirmed the role reads every group
  */
 export const reapRetention = async (): Promise<RetentionReport> => {
     const settings = zammadSettings();
@@ -133,12 +145,12 @@ export const reapRetention = async (): Promise<RetentionReport> => {
     const cutoff = new Date(now - zammadConfig().NODE_ZAMMAD_RETENTION_DAYS * DAY_MS);
     const spamCutoff = new Date(now - SPAM_RETENTION_DAYS * DAY_MS);
 
-    // `created_at` is never later than the last contact, so a ticket older than the cutoff by
+    // `created_at` is never later than the last customer contact, so a ticket older than the cutoff by
     // creation is a superset of the ones older by contact; the exact test follows in code.
     const tickets = await reapTickets(
         settings,
         { 'ticket.created_at': { operator: 'before (absolute)', value: cutoff.toISOString() } },
-        (ticket) => new Date(ticket.last_contact_at ?? ticket.created_at ?? now) < cutoff
+        (ticket) => new Date(ticket.last_contact_customer_at ?? ticket.created_at ?? now) < cutoff
     );
     const spam = await reapTickets(
         settings,
@@ -157,8 +169,13 @@ export const reapRetention = async (): Promise<RetentionReport> => {
             new Date(ticket.created_at) < spamCutoff &&
             getTicketTags(settings, ticket.id).then((tags) => tags.includes(SPAM_TAG))
     );
-    const customers = await reapCustomers(settings, cutoff);
+    const verified = await groupsVerified();
+    const customers = verified ? await reapCustomers(settings, cutoff) : 0;
 
     logger.info({ message: 'Zammad retention pass done.', tickets, customers, spam });
+    if (!verified)
+        throw new Error(
+            'Zammad retention skipped customers: run `npm run zammad:setup`, which confirms the integration role reads every group.'
+        );
     return { tickets, customers, spam };
 };
