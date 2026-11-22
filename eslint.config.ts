@@ -1699,6 +1699,7 @@ export default defineConfig(
             'jest.config.replicas.js',
             'jest.config.broker.js',
             'jest.config.zammad.js',
+            'jest.sequencer.zammad.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
         extends: [tseslint.configs.disableTypeChecked],

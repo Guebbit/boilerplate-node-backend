@@ -527,7 +527,7 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                     const tagsRead = /^\/tags\?object=Ticket&o_id=(\d+)$/.exec(path);
                     if (request.method === 'GET' && tagsRead) {
                         const ticket = tickets.find((row) => row.id === Number(tagsRead[1]));
-                        answer(response, 200, ticket?.tags ?? []);
+                        answer(response, 200, { tags: ticket?.tags ?? [] });
                         return;
                     }
                     if (request.method === 'POST' && path === '/tags/add') {

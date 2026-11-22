@@ -150,6 +150,11 @@ no downgrade: the only way back is the backup.
 Zammad fixes security bugs on its **current stable line only**, so follow each new minor release within one
 patch cycle of the old line, not after it.
 
+The `zammad` job in `ci.yml` is what proves a bump: it boots the pinned services, seeds them, sets our fields
+up and runs `npm run test:zammad` against them before the pin merges
+([what the suites confirm](../modules/zammad.md#testing)). A bump that breaks an answer the adapter reads
+fails there, not in production.
+
 ## Security releases {#security-releases}
 
 | Severity       | The pin is bumped within | Then                                               |

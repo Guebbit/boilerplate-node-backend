@@ -724,6 +724,7 @@ export const addTicketTag = (
 
 /**
  * The tags a ticket carries, read back: the check before a deletion that rests on a tag.
+ * Zammad answers `{ "tags": [...] }`, not a bare list (confirmed on a real 7.2.3).
  *
  * @param settings - where Zammad is
  * @param ticketId - Zammad's id of the ticket
@@ -735,8 +736,8 @@ export const getTicketTags = (settings: ZammadSettings, ticketId: number): Promi
         'GET',
         `/tags?object=Ticket&o_id=${String(ticketId)}`,
         undefined,
-        z.array(z.string())
-    );
+        z.object({ tags: z.array(z.string()) })
+    ).then(({ tags }) => tags);
 
 /**
  * Close a ticket.
