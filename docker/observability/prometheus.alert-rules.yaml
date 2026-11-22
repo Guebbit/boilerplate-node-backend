@@ -249,6 +249,21 @@ groups:
                 summary: 'A 5-minute sweep has not succeeded in 30 minutes'
                 description: '{{ $labels.task }} has not recorded a success in 30 minutes — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
+          # A hold that cannot be expired is logged and skipped, and the sweep still succeeds, so
+          # `FrequentSweepStale` stays quiet while its units stay reserved. The gauge is read from
+          # Mongo at scrape time (the sweep runs in the unscraped `cron` container) and counts
+          # holds still `held` more than 10 minutes past their deadline. `for: 15m` is three sweep
+          # ticks, so a late tick or a brief backlog never pages.
+          # See docs/modules/inventory-reservations.md#when-a-hold-keeps-failing-to-expire.
+          - alert: ReservationExpiryFailing
+            expr: inventory_overdue_holds > 0
+            for: 15m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A stale stock hold keeps failing to expire'
+                description: 'inventory_overdue_holds has been above zero for 15 minutes — a hold is past its deadline and the sweep cannot expire it, so its units stay reserved. See docs/modules/inventory-reservations.md#when-a-hold-keeps-failing-to-expire.'
+
     # Security signals. Every threshold below is a starting point sized for a quiet shop:
     # "tune to your traffic" before trusting it. A busy deployment raises the rates; a quiet one
     # may lower them. Label names are the ones the metrics register (see docs/operate/prometheus.md).
