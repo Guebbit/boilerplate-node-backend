@@ -16,15 +16,19 @@ its delivery.
 
 | Order                                              | Due                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------- |
-| never paid and canceled                            | at once                                                       |
+| never paid, no money received, and canceled        | at once                                                       |
 | never paid, still open                             | not due: its cash may still come                              |
 | delivered                                          | `conformityUntil` + `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE` (0) |
 | paid, ended without delivery (cancelled, refunded) | `paidAt` + `NODE_ORDER_PII_DAYS_UNDELIVERED` (540)            |
+| canceled, money landed after the cancel            | `moneyReceivedAt` + `NODE_ORDER_PII_DAYS_UNDELIVERED` (540)   |
 | paid, still open                                   | not due: it still has to be shipped, delivered or returned    |
+
+Money that lands after the scrub finds the buyer gone: an accepted limit, since the order was never paid when
+it was wiped. Staff follow the refund up from the payment record.
 
 ```mermaid
 flowchart TD
-    A[Clock started: erasure, minimisation or a walk-in order] --> B{paid?}
+    A[Clock started: erasure, minimisation or a walk-in order] --> B{paid, or money received?}
     B -- no --> Q{canceled?}
     Q -- yes --> N[scrub at once]
     Q -- no --> W[wait: cash may still come]
@@ -32,7 +36,7 @@ flowchart TD
     B -- yes --> C{delivered?}
     C -- yes --> D[scrub at conformityUntil + days after guarantee]
     C -- no --> E{canceled?}
-    E -- yes --> F[scrub at paidAt + days undelivered]
+    E -- yes --> F[scrub at paidAt or moneyReceivedAt + days undelivered]
     E -- no --> G[wait: still open]
     G -. delivered later .-> D
 ```

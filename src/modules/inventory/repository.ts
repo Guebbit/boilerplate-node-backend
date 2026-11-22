@@ -557,6 +557,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         session: ClientSession
     ) => Promise<ReservationDocument[]>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
+    countHeldPastDeadline: (cutoff: Date) => Promise<number>;
     pushItems: (
         orderId: string,
         parts: readonly { productId: string; quantity: number; kind?: HoldKind }[],
@@ -758,6 +759,18 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
             .sort({ expiresAt: 1 })
             .limit(limit)
             .exec(),
+
+    /**
+     * How many holds are still `held` although their deadline passed at or before `cutoff`. The
+     * sweep expires everything past its deadline on every tick, so a hold counted here is one it
+     * could not expire, or has not run for. Same filter as {@link findExpired}, so the
+     * `status, expiresAt` index serves it.
+     *
+     * @param cutoff - deadlines at or before this moment count
+     * @returns the number of such holds
+     */
+    countHeldPastDeadline: (cutoff: Date) =>
+        reservationModel.countDocuments({ status: 'held', expiresAt: { $lte: cutoff } }).exec(),
 
     /**
      * Add lines to a still-`held` hold, in the transaction that takes their units: a hold names

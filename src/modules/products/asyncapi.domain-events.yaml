@@ -21,8 +21,7 @@ channels:
                 $ref: '#/components/messages/ProductDeletedDomainEvent'
     domain.product.created:
         address: product.created
-        description:
-            "A product was created. The document is written with `onHand: 0`, and `inventory`
+        description: "A product was created. The product document carries no stock, and `inventory`
             (which already imports this module, so an import back here would cycle) is the one and
             only listener: it opens the product's stock level at zero. Stock never rides this event:
             units enter only through `POST /inventory/levels/{productId}/receive`, which moves the

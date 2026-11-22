@@ -182,6 +182,26 @@ export const markOrderPaidAt = (orderId: string, paidAt: Date): Promise<OrderDoc
         .exec();
 
 /**
+ * Stamp `moneyReceivedAt` directly: money that reached an order which could no longer take it.
+ * Like {@link markOrderPaidAt}, the field is not an `OrderOverrides` key, and a retention test
+ * needs it without driving a whole settlement.
+ *
+ * @param orderId - the order to stamp
+ * @param moneyReceivedAt - when the late money landed
+ */
+export const markOrderMoneyReceivedAt = (
+    orderId: string,
+    moneyReceivedAt: Date
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findByIdAndUpdate(
+            orderId,
+            { $set: { moneyReceivedAt } },
+            { timestamps: false, returnDocument: 'after' }
+        )
+        .exec();
+
+/**
  * Set an order's frozen guarantee deadline directly, the way {@link setWithdrawUntil} does for the
  * withdrawal one.
  * @param conformityUntil - the deadline to freeze; `undefined` clears it
