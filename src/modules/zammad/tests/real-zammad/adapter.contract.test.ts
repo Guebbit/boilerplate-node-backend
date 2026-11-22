@@ -105,7 +105,7 @@ describe('the Zammad adapter against a real Zammad', () => {
         expect(second.customerId).toBe(first.customerId);
     });
 
-    it('takes a mapped customer by id', async () => {
+    it('resolves the same customer again from the address', async () => {
         const created = await createTicket({
             customer: { email: `contract-${run}-c@example.com` },
             subject: 'Contract: by email',
@@ -115,8 +115,8 @@ describe('the Zammad adapter against a real Zammad', () => {
         });
 
         const again = await createTicket({
-            customer: { id: created.customerId },
-            subject: 'Contract: by id',
+            customer: { email: `contract-${run}-c@example.com` },
+            subject: 'Contract: by the address again',
             message: 'Two',
             senderVerified: true,
             requestRef: `ref-${run}-c2`
@@ -260,14 +260,15 @@ describe('the Zammad adapter against a real Zammad', () => {
         });
 
         it('pages a ticket search past a hundred rows', async () => {
-            const customer = await makeUser(zammad, `contract-${run}-m@example.com`);
+            const email = `contract-${run}-m@example.com`;
+            const customer = await makeUser(zammad, email);
             const count = TICKETS_PAGE_SIZE + 1;
             // Ten at a time: a hundred and one sequential creates would take a minute.
             for (let start = 0; start < count; start += 10) {
                 await Promise.all(
                     Array.from({ length: Math.min(10, count - start) }, (_, offset) =>
                         createTicket({
-                            customer: { id: customer },
+                            customer: { email },
                             subject: `Contract: page ${String(start + offset)}`,
                             message: 'One of many',
                             senderVerified: false,

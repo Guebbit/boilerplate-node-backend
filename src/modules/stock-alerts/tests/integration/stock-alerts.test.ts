@@ -407,12 +407,13 @@ describe('the sweep, further', () => {
         expect(await stockAlertModel.countDocuments()).toBe(1);
     });
 
-    it('reaches a product past the first hundred it waits for', async () => {
+    it('reads the waiting requests in two batches and still answers the real one', async () => {
         const { bearer, user } = await shopper();
         const productId = await soldOut();
         await ask(bearer, productId);
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
-        // 100 products that do not exist fill the first batch; the real one is in the next.
+        // 100 products that do not exist make 101 waiting: whichever order the database lists them
+        // in, one availability read cannot hold them all, so the real one may land in the second.
         await stockAlertModel.insertMany(
             Array.from({ length: 100 }, (_, index) => ({
                 userId: user.id,
@@ -420,10 +421,17 @@ describe('the sweep, further', () => {
             }))
         );
 
-        const answered = await stockAlertService.sweepBuyable();
+        const reads = jest.spyOn(inventoryService, 'availabilityOfProducts');
 
-        expect(answered).toBe(1);
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        try {
+            const answered = await stockAlertService.sweepBuyable();
+
+            expect(reads.mock.calls.map(([ids]) => ids.length)).toEqual([100, 1]);
+            expect(answered).toBe(1);
+            expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        } finally {
+            reads.mockRestore();
+        }
     });
 });
 

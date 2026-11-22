@@ -20,6 +20,7 @@ import { taskService, type ContactMessage } from '@modules/tasks';
 import { userService } from '@modules/users';
 import {
     createTicket,
+    fileDataPrivacyTask,
     findTicketByRef,
     finishSpamTicket,
     ZammadRequestError,
@@ -32,7 +33,7 @@ import {
     addPendingContact,
     claimDueContact,
     deleteContactById,
-    findCustomer,
+    hasEraseJobForEmail,
     holdsContact,
     rescheduleContact,
     tombstoneContact,
@@ -45,13 +46,14 @@ const PASS_LIMIT = 100;
 /**
  * Who sent the message, as far as Zammad may be told. An account is linked only under the
  * signed-in-sender rule: the sender was signed in AND the address they typed is the account's
- * verified one. Anything else is a customer keyed by the typed address alone.
+ * verified one. Anything else is a customer keyed by the typed address alone, except an account
+ * that no longer exists: that is an erasure, and the message must not be filed under any address.
  */
 interface Sender {
     /** The linked account, when the rule holds. */
     userId?: string;
-    /** The Zammad customer that account is already mapped to, when it is. */
-    zammadUserId?: number;
+    /** The account named by the row is gone: it was erased after the row was claimed. */
+    erased?: true;
 }
 
 /**
@@ -62,16 +64,21 @@ interface Sender {
 const senderOf = (row: ZammadContactDocument): Promise<Sender> => {
     if (!row.subjectId) return Promise.resolve({});
     const userId = String(row.subjectId);
-    return userService.getById(userId).then((user) => {
+    return userService.getById(userId).then((user): Sender => {
+        if (!user) return { erased: true };
         const linked =
-            user?.verifiedAt && row.email !== undefined && normalizeEmail(user.email) === row.email;
-        if (!linked) return {};
-        return findCustomer(userId).then((mapping) => ({
-            userId,
-            ...(mapping ? { zammadUserId: mapping.zammadUserId } : {})
-        }));
+            user.verifiedAt && row.email !== undefined && normalizeEmail(user.email) === row.email;
+        return linked ? { userId } : {};
     });
 };
+
+/**
+ * Whether an account no longer exists: the one question every "was it erased?" check asks.
+ *
+ * @param userId - the account named by a row
+ */
+const accountIsGone = (userId: string): Promise<boolean> =>
+    userService.getById(userId).then((user) => !user);
 
 /**
  * Send one claimed message: look the ticket up first when an earlier attempt's outcome is
@@ -85,10 +92,8 @@ const sendTicket = (row: ZammadContactDocument, sender: Sender): Promise<Created
     const requestRef = String(row._id);
     const create = (): Promise<CreatedTicket> =>
         createTicket({
-            customer:
-                sender.zammadUserId === undefined
-                    ? { email: row.email ?? '' }
-                    : { id: sender.zammadUserId },
+            // By address, never by the stored mapping: the id may be dead or a stranger's after a restore.
+            customer: { email: row.email ?? '' },
             ...(row.name ? { name: row.name } : {}),
             subject: row.subject ?? '',
             message: row.message ?? '',
@@ -121,6 +126,60 @@ const sendTicket = (row: ZammadContactDocument, sender: Sender): Promise<Created
 };
 
 /**
+ * The row was already gone when the ticket was filed. Either the account was erased while the
+ * call was in flight, or a second runner took over a lapsed lease and settled the row first. Only
+ * the first is an erasure: a live account's customer is never queued for deletion.
+ *
+ * @param row - the claimed message
+ * @param sender - who it was linked to
+ * @param ticket - what Zammad answered
+ */
+const settleLostRow = (
+    row: ZammadContactDocument,
+    sender: Sender,
+    ticket: CreatedTicket
+): Promise<void> => {
+    /**
+     * The customer is deleted only when it is the erased person's: the sender was linked to
+     * the account (typed its verified address), or there was no account at all and the row
+     * went by its verified address. A signed-in sender who typed someone else's address made
+     * a customer that is the STRANGER's; deleting it would erase their tickets.
+     */
+    if (sender.userId === undefined && row.subjectId) {
+        logger.error({
+            message:
+                'zammad: a message was handed over after its account was erased, to a customer that is not the account’s',
+            zammadCustomerId: ticket.customerId
+        });
+        return Promise.resolve();
+    }
+    const erase = (): Promise<void> => {
+        logger.warn({
+            message: 'zammad: a message was handed over after its account was erased',
+            zammadCustomerId: ticket.customerId
+        });
+        return queueRaceErasure(ticket.customerId, sender.userId);
+    };
+    if (sender.userId === undefined)
+        // A guest message: only an erase job holding its address is evidence that it was an erasure.
+        return hasEraseJobForEmail(row.email ?? '').then((evidence) => {
+            if (evidence) return erase();
+            logger.warn({
+                message:
+                    'zammad: a guest message was settled by another runner; no erase job names its address, so nothing is erased',
+                zammadCustomerId: ticket.customerId
+            });
+        });
+    return accountIsGone(sender.userId).then((gone) => {
+        if (gone) return erase();
+        logger.warn({
+            message: 'zammad: a message was settled by another runner; nothing is erased',
+            zammadCustomerId: ticket.customerId
+        });
+    });
+};
+
+/**
  * The ticket exists: delete the row, then remember the customer. The delete is by id and decides
  * the erasure race: a row already gone means the account was erased while the call was in flight, so
  * nothing is mapped and an erase job deletes the customer the ticket created.
@@ -141,27 +200,7 @@ const settle = (
         });
 
     return deleteContactById(String(row._id)).then((deleted) => {
-        if (!deleted) {
-            /**
-             * The customer is deleted only when it is the erased person's: the sender was linked to
-             * the account (typed its verified address), or there was no account at all and the row
-             * went by its verified address. A signed-in sender who typed someone else's address made
-             * a customer that is the STRANGER's; deleting it would erase their tickets.
-             */
-            if (sender.userId !== undefined || !row.subjectId) {
-                logger.warn({
-                    message: 'zammad: a message was handed over after its account was erased',
-                    zammadCustomerId: ticket.customerId
-                });
-                return queueRaceErasure(ticket.customerId, sender.userId);
-            }
-            logger.error({
-                message:
-                    'zammad: a message was handed over after its account was erased, to a customer that is not the account’s',
-                zammadCustomerId: ticket.customerId
-            });
-            return;
-        }
+        if (!deleted) return settleLostRow(row, sender, ticket);
         return sender.userId
             ? upsertCustomer(sender.userId, ticket.customerId).then(() => undefined)
             : undefined;
@@ -178,6 +217,51 @@ const categoryOf = (category: string | undefined): CreateContactTaskRequest['cat
     Object.values(TaskCategory).find((known) => known === category);
 
 /**
+ * The account behind a claimed message was erased before the ticket was filed. Nothing is filed
+ * now and the row is dropped, so the words never go out under the typed address. An earlier
+ * attempt of unclear outcome may still have made a ticket: it is looked up by its `request_ref` and
+ * Zammad is asked to delete THAT ticket (not its customer, who may be someone else).
+ *
+ * @param row - the claimed message
+ * @throws {ZammadRequestError} when Zammad cannot be asked; the row stays for the next attempt
+ */
+const dropErasedContact = (row: ZammadContactDocument): Promise<void> => {
+    const settings = zammadSettings();
+    const deleteTicket =
+        row.unclear && settings
+            ? findTicketByRef(String(row._id)).then((found) =>
+                  found ? fileDataPrivacyTask(settings, 'Ticket', found.id) : undefined
+              )
+            : Promise.resolve(undefined);
+    return deleteTicket
+        .then(() => deleteContactById(String(row._id)))
+        .then(() => {
+            logger.warn({
+                message:
+                    'zammad: a message was dropped, its account was erased before the hand-over'
+            });
+        });
+};
+
+/**
+ * Count an attempt and push the row out by the outbox's backoff.
+ *
+ * @param row - the claimed message
+ * @param attempts - failed attempts so far, this one included
+ * @param unclear - whether a ticket may already exist
+ */
+const retryLater = (
+    row: ZammadContactDocument,
+    attempts: number,
+    unclear: boolean
+): Promise<void> =>
+    rescheduleContact(String(row._id), row.leaseToken ?? '', {
+        attempts,
+        unclear,
+        nextAttemptAt: new Date(Date.now() + outboxBackoffMs(attempts))
+    }).then(() => undefined);
+
+/**
  * The last retry failed: hand the message back to basic mode. The to-do is filed and the link-only
  * mail goes to the support mailbox; the row becomes a tombstone the fallback alert counts.
  * Skipped when an erasure already deleted the row, so an erased person's words never come back.
@@ -187,26 +271,41 @@ const categoryOf = (category: string | undefined): CreateContactTaskRequest['cat
 const fallBack = (row: ZammadContactDocument): Promise<void> => {
     const id = String(row._id);
     const token = row.leaseToken ?? '';
+    const category = categoryOf(row.category);
 
     return holdsContact(id, token).then((held) => {
         if (!held) return;
-        const category = categoryOf(row.category);
-        return taskService
-            .create(
-                {
-                    ...(row.name ? { name: row.name } : {}),
-                    email: row.email ?? '',
-                    subject: row.subject ?? '',
-                    message: row.message ?? '',
-                    ...(category ? { category } : {}),
-                    ...(row.orderNumber ? { orderNumber: row.orderNumber } : {})
-                },
-                row.subjectId ? String(row.subjectId) : undefined
-            )
-            .then(() => tombstoneContact(id, token))
-            .then(() => {
-                logger.error({ message: 'zammad: a contact message fell back to basic mode' });
-            });
+        // An account erased since the claim: its words must not come back as a to-do.
+        const gone = row.subjectId ? accountIsGone(String(row.subjectId)) : Promise.resolve(false);
+        return gone.then((erased) =>
+            erased
+                ? // Zammad could not be asked: the row stays for the next pass, which tries again.
+                  dropErasedContact(row).catch((error: unknown) => {
+                      logger.warn({
+                          message: 'zammad: dropping an erased contact failed, the row is kept',
+                          error
+                      });
+                      return retryLater(row, row.attempts + 1, true);
+                  })
+                : taskService
+                      .create(
+                          {
+                              ...(row.name ? { name: row.name } : {}),
+                              email: row.email ?? '',
+                              subject: row.subject ?? '',
+                              message: row.message ?? '',
+                              ...(category ? { category } : {}),
+                              ...(row.orderNumber ? { orderNumber: row.orderNumber } : {})
+                          },
+                          row.subjectId ? String(row.subjectId) : undefined
+                      )
+                      .then(() => tombstoneContact(id, token))
+                      .then(() => {
+                          logger.error({
+                              message: 'zammad: a contact message fell back to basic mode'
+                          });
+                      })
+        );
     });
 };
 
@@ -236,11 +335,7 @@ const failed = (
 
     if (attempts >= outboxConfig().NODE_OUTBOX_MAX_ATTEMPTS) return fallBack(row);
 
-    return rescheduleContact(String(row._id), row.leaseToken ?? '', {
-        attempts,
-        unclear,
-        nextAttemptAt: new Date(Date.now() + outboxBackoffMs(attempts))
-    }).then(() => undefined);
+    return retryLater(row, attempts, unclear);
 };
 
 /**
@@ -251,12 +346,16 @@ const failed = (
 const handOver = (row: ZammadContactDocument): Promise<void> =>
     senderOf(row).then(
         (sender) =>
-            sendTicket(row, sender).then(
-                // A failure while settling comes AFTER Zammad took the ticket: it may exist.
-                (ticket) =>
-                    settle(row, sender, ticket).catch((error: unknown) => failed(row, error, true)),
-                (error: unknown) => failed(row, error)
-            ),
+            sender.erased
+                ? dropErasedContact(row).catch((error: unknown) => failed(row, error))
+                : sendTicket(row, sender).then(
+                      // A failure while settling comes AFTER Zammad took the ticket: it may exist.
+                      (ticket) =>
+                          settle(row, sender, ticket).catch((error: unknown) =>
+                              failed(row, error, true)
+                          ),
+                      (error: unknown) => failed(row, error)
+                  ),
         (error: unknown) => failed(row, error)
     );
 

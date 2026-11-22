@@ -18,6 +18,9 @@ setupTestDb();
 /** The stub of the case that is running. */
 const zammad = useZammad();
 
+/** One mebibyte in bytes. */
+const MIB = 1_048_576;
+
 /** A customer with one ticket: the customer's mail with a file, a staff reply and an internal note. */
 const seedConversation = (customerId: number, email: string) => {
     zammad().addUser({ id: customerId, email, firstname: 'Ada', lastname: 'Lovelace' });
@@ -143,6 +146,65 @@ describe('the zammad section', () => {
         await expect(
             zammadService.collectPersonalData(personalDataSubjectOf(user))
         ).rejects.toThrow('does not page');
+    });
+
+    it('fails the export when one file is over the per-file cap, instead of shrinking it', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        await upsertCustomer(user.id, 612);
+        zammad().addUser({ id: 612, email: 'ada@example.com' });
+        zammad().addTicket({
+            customerId: 612,
+            createdAt: '2026-01-01T10:00:00.000Z',
+            articles: [
+                {
+                    sender: 'Customer',
+                    body: 'Big file',
+                    attachments: [
+                        {
+                            filename: 'big.bin',
+                            contentType: 'application/octet-stream',
+                            data: Buffer.alloc(51 * MIB)
+                        }
+                    ]
+                }
+            ]
+        });
+
+        await expect(
+            zammadService.collectPersonalData(personalDataSubjectOf(user))
+        ).rejects.toThrow('longer than');
+    });
+
+    it('fails the export when the files together pass the total cap, though each is under the per-file one', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        await upsertCustomer(user.id, 612);
+        zammad().addUser({ id: 612, email: 'ada@example.com' });
+        zammad().addTicket({
+            customerId: 612,
+            createdAt: '2026-01-01T10:00:00.000Z',
+            articles: [
+                {
+                    sender: 'Customer',
+                    body: 'Two files',
+                    attachments: [
+                        {
+                            filename: 'a.bin',
+                            contentType: 'application/octet-stream',
+                            data: Buffer.alloc(33 * MIB)
+                        },
+                        {
+                            filename: 'b.bin',
+                            contentType: 'application/octet-stream',
+                            data: Buffer.alloc(33 * MIB)
+                        }
+                    ]
+                }
+            ]
+        });
+
+        await expect(
+            zammadService.collectPersonalData(personalDataSubjectOf(user))
+        ).rejects.toThrow('longer than');
     });
 
     it('skips a mapped customer Zammad no longer has', async () => {

@@ -75,3 +75,5 @@ jobs:
                   title: ${{ needs.advisories.outputs.outcome == 'exposed' && 'Zammad security advisory covers the pinned version' || 'Zammad advisory watcher failed' }}
                   label: 'zammad-advisory'
                   workflow-name: 'Zammad advisories'
+                  # The deadlines of docs/operate/zammad.md#security-releases, on the issue that asks for a bump only.
+                  details: ${{ needs.advisories.outputs.outcome == 'exposed' && 'Bump the pinned Zammad image within 7 days for a critical or high advisory, 30 days for medium or low (docs/operate/zammad.md#security-releases).' || '' }}

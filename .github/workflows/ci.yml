@@ -947,20 +947,35 @@ jobs:
             - name: Set our ticket fields up, and mint the suites' tokens
               # Without `zammad:setup` Zammad drops `request_ref` silently and the `condition` search finds
               # nothing. Creating the fields makes Zammad restart itself once: wait for the NEW process (the
-              # container's start time moves), or the suites would meet the dying one. Two tokens, both for
-              # the seeded admin: the integration user's (`ticket.agent`, `admin.data_privacy`, what the
-              # module runs with) and an admin's (the field setup, settings, throwaway users).
+              # container's start time moves), or the suites would meet the dying one. Two tokens: the
+              # integration user's and an admin's (the field setup, settings, throwaway users).
+              # The integration user holds exactly the role `Shop integration` (`ticket.agent`,
+              # `admin.data_privacy`, no group access until `zammad:setup` grants it), as
+              # docs/modules/zammad.md#setup step 5 has the installer make it, so the suites run with what
+              # production runs with, not the admin's reach. `zammad:setup` also leaves a marker in OUR
+              # database, so a throwaway mongod holds it for that one run.
               run: |
                   base="http://127.0.0.1:$ZAMMAD_PORT/api/v1"
                   field() { node -e 'let b="";process.stdin.on("data",(c)=>{b+=c}).on("end",()=>{const v=JSON.parse(b)[process.argv[1]];if(v===undefined){process.exit(1)}process.stdout.write(String(v))})' "$1"; }
                   mint() { curl -fsS -u 'drill-admin@example.com:Drill-Admin-Pass-2026' -H 'Content-Type: application/json' -d "{\"name\":\"$1\",\"permission\":$2}" "$base/user_access_token" | field token; }
-                  integration=$(mint ci-integration '["ticket.agent","admin.data_privacy"]')
+                  admin_auth='drill-admin@example.com:Drill-Admin-Pass-2026'
+                  role_id=$(curl -fsS -u "$admin_auth" -H 'Content-Type: application/json' -d "{\"name\":\"Shop integration\",\"active\":true,\"permissions\":[\"ticket.agent\",\"admin.data_privacy\"]}" "$base/roles" | field id)
+                  curl -fsS -u "$admin_auth" -H 'Content-Type: application/json' -d "{\"login\":\"integration@helpdesk.invalid\",\"email\":\"integration@helpdesk.invalid\",\"password\":\"$(openssl rand -hex 24)\",\"role_ids\":[$role_id]}" "$base/users" >/dev/null
+                  # The token comes from the Rails console, as docs/modules/zammad.md#setup step 6 has the installer
+                  # do it: a user mints tokens only for themselves, and the access-token permission is off in production.
+                  # `tail -n 1`: the console may print warnings before the token.
+                  integration=$($COMPOSE exec -T zammad-railsserver bash -c 'export POSTGRESQL_PASS="$(cat /run/secrets/zammad_postgres_password)"; bundle exec rails r "puts Token.create!(action: %q(api), user_id: User.find_by(login: %q(integration@helpdesk.invalid)).id, persistent: true, expires_at: 1.year.from_now, preferences: {permission: %w[ticket.agent admin.data_privacy]}).token"' | tail -n 1)
                   admin=$(mint ci-admin '["admin"]')
                   echo "::add-mask::$integration"
                   echo "::add-mask::$admin"
                   rails=$($CONTAINER_ENGINE ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" --filter label=com.docker.compose.service=zammad-railsserver | head -n 1)
                   started=$($CONTAINER_ENGINE inspect --format '{{.State.StartedAt}}' "$rails")
-                  out=$(NODE_ZAMMAD_URL="http://127.0.0.1:$ZAMMAD_PORT" NODE_ZAMMAD_API_TOKEN="$admin" NODE_ZAMMAD_GROUP=Users ZAMMAD_ADMIN_TOKEN="$admin" npm run zammad:setup 2>&1) || { echo "$out"; exit 1; }
+                  # The setup leaves its "groups verified" marker in a throwaway mongod, removed with the step.
+                  mongod_bin="${MONGOMS_SYSTEM_BINARY:-mongod}"
+                  dbdir=$(mktemp -d)
+                  "$mongod_bin" --dbpath "$dbdir" --port 27099 --bind_ip 127.0.0.1 --fork --logpath "$dbdir/mongod.log" >/dev/null
+                  trap '"$mongod_bin" --dbpath "$dbdir" --shutdown >/dev/null 2>&1 || true' EXIT
+                  out=$(NODE_DB_URI="mongodb://127.0.0.1:27099/zammad-setup" NODE_ZAMMAD_URL="http://127.0.0.1:$ZAMMAD_PORT" NODE_ZAMMAD_API_TOKEN="$admin" NODE_ZAMMAD_GROUP=Users ZAMMAD_ADMIN_TOKEN="$admin" npm run zammad:setup 2>&1) || { echo "$out"; exit 1; }
                   echo "$out"
                   if echo "$out" | grep -q '"restartNeeded":true'; then
                       restarted=no

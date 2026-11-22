@@ -23,16 +23,19 @@ import {
     findDataPrivacyTask,
     findUsersByEmail,
     getDataPrivacyTask,
-    getUser
+    getUser,
+    isPlainCustomer,
+    type ZammadUser
 } from '../client';
 import { zammadAuditActions } from '../audit';
-import { zammadEnabled, zammadSettings, type ZammadSettings } from '../config';
+import { zammadSettings, type ZammadSettings } from '../config';
 import type { ZammadEraseJobDocument, ZammadEraseTarget } from '../model';
 import {
     addEraseJob,
     claimDueEraseJob,
     completeEraseJob,
     failEraseJob,
+    groupsVerified,
     reopenEraseJobsSince,
     rescheduleEraseJob,
     saveEraseProgress
@@ -48,6 +51,8 @@ const PASS_LIMIT = 50;
 interface TargetOutcome {
     target: ZammadEraseTarget;
     failed: boolean;
+    /** The user is not a plain customer: left untouched, for a person. */
+    staff?: ZammadUser;
 }
 
 /**
@@ -95,6 +100,9 @@ const advanceTarget = (
 
     return getUser(settings, target.zammadUserId).then((user) => {
         if (!user) return { target: { ...target, done: true }, failed: false };
+        // Whichever path named this user (the mapping, a ticket's customer, a race), a non-customer
+        // is never filed for deletion: it goes to a person.
+        if (!isPlainCustomer(user)) return { target, failed: false, staff: user };
         if (target.taskId === undefined) return fileTask(settings, target);
 
         return getDataPrivacyTask(settings, target.taskId).then((task) => {
@@ -111,16 +119,21 @@ const advanceTarget = (
 
 /**
  * Look the account's verified address up in Zammad once, adding every customer that holds it:
- * a person can have written before they had an account.
+ * a person can have written before they had an account. A user with any other role (an agent
+ * sharing the address) is never a target: it is returned apart, for a person to look at.
  *
  * @param settings - where Zammad is
  * @param job - the claimed job
- * @returns the customers, now including the address's
+ * @returns the customers, now including the address's, and the non-customers that hold it
  */
 const withAddressCustomers = (
     settings: ZammadSettings,
     job: ZammadEraseJobDocument
-): Promise<{ targets: ZammadEraseTarget[]; emailResolved: boolean }> => {
+): Promise<{
+    targets: ZammadEraseTarget[];
+    emailResolved: boolean;
+    staffMatches: ZammadUser[];
+}> => {
     const known = job.targets.map(({ zammadUserId, taskId, filedAt, done }) => ({
         zammadUserId,
         done,
@@ -128,16 +141,18 @@ const withAddressCustomers = (
         ...(filedAt ? { filedAt } : {})
     }));
     if (job.emailResolved || !job.email)
-        return Promise.resolve({ targets: known, emailResolved: true });
+        return Promise.resolve({ targets: known, emailResolved: true, staffMatches: [] });
 
     return findUsersByEmail(settings, job.email).then((users) => ({
         targets: [
             ...known,
             ...users
+                .filter(isPlainCustomer)
                 .filter((user) => known.every((target) => target.zammadUserId !== user.id))
                 .map((user) => ({ zammadUserId: user.id, done: false }))
         ],
-        emailResolved: true
+        emailResolved: true,
+        staffMatches: users.filter((user) => !isPlainCustomer(user))
     }));
 };
 
@@ -152,17 +167,31 @@ const withAddressCustomers = (
 const advance = async (settings: ZammadSettings, job: ZammadEraseJobDocument): Promise<void> => {
     const resolved = await withAddressCustomers(settings, job);
     const targets: ZammadEraseTarget[] = [];
+    const staffMatches = [...resolved.staffMatches];
     let failed = false;
     for (const target of resolved.targets) {
         const outcome = await advanceTarget(settings, target);
         targets.push(outcome.target);
         failed ||= outcome.failed;
+        if (outcome.staff) staffMatches.push(outcome.staff);
     }
 
     if (failed) {
         logger.error({
             message: 'zammad: a deletion task failed; the erase job is parked',
             jobId: String(job._id)
+        });
+        await failEraseJob(job, targets);
+        return;
+    }
+    // The customers were stepped above; a staff user sharing the address is left untouched and a
+    // person decides. Parking raises `ZammadEraseFailed`. Ids and role names only: no address.
+    if (staffMatches.length > 0) {
+        logger.error({
+            message:
+                'zammad: the erased address also belongs to a non-customer user, left untouched; the erase job is parked for a person',
+            jobId: String(job._id),
+            zammadUsers: staffMatches.map(({ id, roles }) => ({ id, roles }))
         });
         await failEraseJob(job, targets);
         return;
@@ -234,17 +263,26 @@ export const queueErasure = (
     zammadUserIds: readonly number[],
     session: ClientSession
 ): Promise<void> =>
-    // Nothing to look for: no mapping, and either no verified address or no Zammad to ask.
-    zammadUserIds.length === 0 && !(subject.emailVerified && zammadEnabled())
-        ? Promise.resolve()
-        : addEraseJob(
-              {
-                  userId: subject.userId,
-                  ...(subject.emailVerified ? { email: subject.email } : {}),
-                  zammadUserIds
-              },
-              session
-          ).then(() => undefined);
+    // A mapping is always worth a job. A verified address alone is looked up only where Zammad was
+    // ever set up (the marker `zammad:setup` leaves), whether or not the URL is set now: with no
+    // marker no helpdesk ever held this person, so nothing is queued and no address is kept.
+    (zammadUserIds.length > 0
+        ? Promise.resolve(true)
+        : subject.emailVerified
+          ? groupsVerified()
+          : Promise.resolve(false)
+    ).then((owed) =>
+        owed
+            ? addEraseJob(
+                  {
+                      userId: subject.userId,
+                      ...(subject.emailVerified ? { email: subject.email } : {}),
+                      zammadUserIds
+                  },
+                  session
+              ).then(() => undefined)
+            : undefined
+    );
 
 /**
  * The erasure race's second half: a ticket was filed for an account that was erased while the call

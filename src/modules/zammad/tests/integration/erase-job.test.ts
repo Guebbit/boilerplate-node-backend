@@ -7,13 +7,14 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { setEnvironment } from '@tests/environment';
 import { logger } from '@infrastructure/adapters/logger';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { erasureLedgerRetentionMs } from '@modules/account';
 import { createUser } from '@modules/users/tests/factories';
 import { zammadJobs } from '../../jobs';
-import { zammadEraseJobModel } from '../../model';
-import { upsertCustomer } from '../../repository';
+import { zammadEraseJobModel, zammadSetupModel } from '../../model';
+import { markGroupsVerified, upsertCustomer } from '../../repository';
 import { eraseAccount, useZammad } from '../harness';
 
 setupTestDb();
@@ -21,7 +22,9 @@ setupTestDb();
 /** The stub of the case that is running. */
 const zammad = useZammad();
 
-beforeEach(() => {
+beforeEach(async () => {
+    // Zammad was set up here: `zammad:setup` left its marker, so a verified address is looked up.
+    await markGroupsVerified(new Date());
     jest.spyOn(logger, 'error').mockImplementation(() => logger);
     jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 });
@@ -85,6 +88,26 @@ describe('the row the erasure writes', () => {
         expect(job.targets).toMatchObject([{ zammadUserId: 612 }]);
     });
 
+    it('queues no address lookup, and keeps no address, where Zammad was never set up', async () => {
+        await zammadSetupModel.deleteMany({});
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+
+        await eraseAccount(user.id);
+
+        expect(await zammadEraseJobModel.countDocuments()).toBe(0);
+    });
+
+    it('still queues the address lookup while the helpdesk URL is unset, once Zammad was set up here', async () => {
+        setEnvironment({ NODE_ZAMMAD_URL: undefined });
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+
+        await eraseAccount(user.id);
+
+        expect(await zammadEraseJobModel.find().lean()).toMatchObject([
+            { email: 'ada@example.com', emailResolved: false, state: 'pending' }
+        ]);
+    });
+
     it('writes nothing for an unverified account that was never a customer', async () => {
         const user = await createUser({ email: 'ada@example.com' });
 
@@ -135,6 +158,39 @@ describe('completed', () => {
 
         expect(taskRequests().map(({ body }) => body?.deletable_id)).toEqual([700]);
         expect(zammad().users.has(701)).toBe(true);
+    });
+
+    it('erases the customer that holds the address, leaves an agent that shares it, and parks the job', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        zammad().addUser({ id: 700, email: 'ada@example.com' });
+        zammad().addUser({ id: 800, email: 'ada@example.com', roles: ['Agent'] });
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        await eraseAccount(user.id);
+
+        await runSweep();
+
+        expect(taskRequests().map(({ body }) => body?.deletable_id)).toEqual([700]);
+        expect(zammad().users.has(700)).toBe(false);
+        expect(zammad().users.has(800)).toBe(true);
+        expect(await jobState()).toBe('failed');
+        // Ids and role names only: the address is not in the log.
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({ zammadUsers: [{ id: 800, roles: ['Agent'] }] })
+        );
+        expect(JSON.stringify(logged.mock.calls)).not.toContain('ada@example.com');
+    });
+
+    it('never files a deletion for a non-customer the mapping names, and parks the job', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        zammad().addUser({ id: 900, email: 'staff@example.com', roles: ['Agent'] });
+        await upsertCustomer(user.id, 900);
+        await eraseAccount(user.id);
+
+        await runSweep();
+
+        expect(taskRequests()).toEqual([]);
+        expect(zammad().users.has(900)).toBe(true);
+        expect(await jobState()).toBe('failed');
     });
 
     it('never looks an unverified address up: anyone can sign up with a stranger’s', async () => {

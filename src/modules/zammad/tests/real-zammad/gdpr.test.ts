@@ -23,9 +23,11 @@ import { createUser } from '@modules/users/tests/factories';
 import { callZammad, closeTicket, createTicket, findDataPrivacyTask } from '../../client';
 import { zammadService } from '../../services';
 import { ensureTicketFields } from '../../services/setup';
+import { markGroupsVerified } from '../../repository';
 import {
     addArticle,
     lastContactOf,
+    lastCustomerContactOf,
     makeUser,
     pause,
     pointModuleAt,
@@ -53,6 +55,10 @@ beforeAll(async () => {
     // clock is a customer's last message).
     await ensureTicketFields(settingsFor(zammad, 'admin'));
 });
+
+// `ensureTicketFields` read the integration role back and found every group readable: leave the
+// marker `zammad:setup` would, which the erase hook and retention check. A fresh database per case.
+beforeEach(() => markGroupsVerified(new Date()).then(() => undefined));
 
 beforeEach(() => {
     pointModuleAt(zammad);
@@ -160,6 +166,38 @@ describe('the retention clock', () => {
 
         expect(first).toBeTruthy();
         expect(afterNote).toBe(first);
+        expect(new Date(afterCustomer ?? 0).getTime()).toBeGreaterThan(
+            new Date(first ?? 0).getTime()
+        );
+    });
+
+    it('keeps the customer’s own clock still on an agent’s public reply', async () => {
+        const created = await createTicket({
+            customer: { email: `gdpr-${run}-d@example.com` },
+            subject: 'Customer clock',
+            message: 'First',
+            senderVerified: false,
+            requestRef: `ref-${run}-d`
+        });
+        const first = await lastCustomerContactOf(zammad, created.id);
+        await pause(1100);
+
+        await addArticle(zammad, created.id, {
+            sender: 'Agent',
+            internal: false,
+            body: 'Staff answering the customer'
+        });
+        const afterReply = await lastCustomerContactOf(zammad, created.id);
+        await pause(1100);
+        await addArticle(zammad, created.id, {
+            sender: 'Customer',
+            internal: false,
+            body: 'The customer writes again'
+        });
+        const afterCustomer = await lastCustomerContactOf(zammad, created.id);
+
+        expect(first).toBeTruthy();
+        expect(afterReply).toBe(first);
         expect(new Date(afterCustomer ?? 0).getTime()).toBeGreaterThan(
             new Date(first ?? 0).getTime()
         );

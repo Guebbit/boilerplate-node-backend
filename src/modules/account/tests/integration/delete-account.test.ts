@@ -168,4 +168,18 @@ describe('POST /account/restore', () => {
         expect([unknown.status, expired.status]).toEqual([422, 422]);
         expect(withoutInstance(expired.body)).toEqual(withoutInstance(unknown.body));
     });
+
+    it('leaves an account whose grace has run out locked, even with a live link', async () => {
+        const { user, token } = await scheduled('late@example.com');
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { purgeAt: new Date(Date.now() - 1000) } }
+        );
+
+        const response = await api().post('/account/restore').send({ token });
+
+        expect(response.status).toBe(422);
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.deletedBy).toBe('owner');
+    });
 });
