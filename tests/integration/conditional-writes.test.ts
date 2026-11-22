@@ -448,7 +448,7 @@ describe('a product edited through its translations', () => {
             .patch(path)
             .set('Authorization', bearer)
             .set('If-Match', before)
-            .send({ translations: { en: { title: 'A new English title' } } });
+            .send({ title: 'A new English title' });
 
         expect(write.status).toBe(200);
         expect(etagOf(write)).not.toBe(before);
@@ -564,7 +564,7 @@ describe('the translations route of a product, fenced on the product', () => {
             .put(path)
             .set('Authorization', bearer)
             .set('If-Match', tag)
-            .send({ en: { fields: { title: 'A late English title' } }, ...italian(1) });
+            .send(italian(1));
 
         expect(stale.status).toBe(412);
     });

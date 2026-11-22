@@ -127,7 +127,8 @@ Two jobs keep the staff's summary rows true: `sweep:staff-digest` (daily, 06:30 
 `sweep:staff-weekly` (Mondays, 06:30 UTC; the late-preorder row). Each row is a count read from the
 module that owns it; a count of zero removes the row, one that fell is updated quietly, one that
 appeared or grew is unread again, pushed and, where the route says `digest`, mailed once per person
-per run.
+per run. The returns side carries two rows about goods that are late: no proof of sending yet, and
+a proof on file ([why two](./shop-tasks-notices.md#the-staff-digest)).
 
 Full detail: [Shop-tasks notices, digest and badge](./shop-tasks-notices.md#the-staff-digest).
 

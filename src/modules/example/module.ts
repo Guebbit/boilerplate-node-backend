@@ -11,7 +11,7 @@
  * events + mail    ./events.ts, ./services/notify.ts, ./emails.ts, ./templates  subscribe
  * rate limits      ./rate-limits.ts                             rateLimits
  * webhook          ./events.ts, the webhooks catalogue          publicEvents
- * translations     (the repository's `writeTranslatedFields`)   translatables
+ * translations     (the repository's `translatable`)            translatables
  * cover image      ./services/cover.ts, ./controllers/put-example-cover.ts  imageTargets
  * typed setting    ./config.ts                                  config
  * demo seed        ../../../scenarios/example.ts               (the scenario table)
@@ -65,7 +65,7 @@ export default {
     },
     // Where the image pipeline writes a finished digest back, keyed by the job's `collection`.
     imageTargets: { [EXAMPLE_IMAGE_COLLECTION]: { writeback: exampleRepository.writebackImage } },
-    // `title` is the fallback-language column; other languages live in `locales`' own rows.
+    // `title` is the default-language column; other languages live in `locales`' own rows.
     translatables: {
         example: {
             collection: 'examples',

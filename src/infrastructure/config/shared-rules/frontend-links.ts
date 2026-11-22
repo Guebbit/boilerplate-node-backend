@@ -62,8 +62,10 @@ export const frontendLinksSchema = z.strictObject({
         preordersLate: template,
         /** Summary row: fulfillment orders held too long. */
         deliveryHoldsOpen: template,
-        /** Summary row: withdrawals whose goods have not come back. */
+        /** Summary row: approved returns with no proof of sending, goods overdue. */
         returnsAwaitingGoods: template,
+        /** Summary row: approved returns with a proof of sending, goods late. */
+        returnsProofGoodsLate: template,
         /** Summary row: return requests awaiting a decision. */
         returnsUndecided: template,
         /** Summary row: the low-stock board. */

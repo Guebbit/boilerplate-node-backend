@@ -14,19 +14,19 @@ Each notice code is its own dictionary key: `shop-tasks.<name>` for a buyer's me
 union by `openapi.notifications.yaml` and to the stream's `NotificationPayload` by
 `asyncapi.notifications.yaml`.
 
-| Code                                                      | Audience | Written on                           | Told                               | Mail                  |
-| --------------------------------------------------------- | -------- | ------------------------------------ | ---------------------------------- | --------------------- |
-| `shop-tasks.cart-line-removed`                            | buyer    | `cart.lines_removed`                 | whose carts held the product       | —                     |
-| `shop-tasks.wishlist-item-removed`                        | buyer    | `wishlist.items_removed`             | whose wishlists held the product   | —                     |
-| `shop-tasks.cart-merge-refused`                           | buyer    | `cart.merge_refused`                 | the signed-in user                 | —                     |
-| `shop-tasks.fulfillment-delayed`                          | buyer    | `fulfillment_order.delayed`          | the buyer, if the account exists   | —                     |
-| `shop-tasks.fulfillment-held`                             | buyer    | `fulfillment_order.hold_noticed`     | the buyer, if the account exists   | —                     |
-| `shop-tasks.shipment-lost`                                | buyer    | `shipment.lost`                      | the buyer, if the account exists   | —                     |
-| `shop-tasks.stock-alert`                                  | buyer    | `stock_alert.sent`                   | who asked                          | —                     |
-| `shop-tasks.staff.purchase-hold-placed`                   | staff    | `order.purchase_hold_placed`         | `UserBanning`                      | now                   |
-| `shop-tasks.staff.return-requested`                       | staff    | `return.requested` (not withdrawals) | `ReturnManagement`                 | —                     |
-| `shop-tasks.staff.outcome-unknown`                        | staff    | the idempotency ledger (no event)    | the route's own set, see below     | now                   |
-| the ten summary rows, see [the digest](#the-staff-digest) | staff    | the digest jobs                      | the set that does the counted work | digest, where overdue |
+| Code                                                         | Audience | Written on                           | Told                               | Mail                  |
+| ------------------------------------------------------------ | -------- | ------------------------------------ | ---------------------------------- | --------------------- |
+| `shop-tasks.cart-line-removed`                               | buyer    | `cart.lines_removed`                 | whose carts held the product       | —                     |
+| `shop-tasks.wishlist-item-removed`                           | buyer    | `wishlist.items_removed`             | whose wishlists held the product   | —                     |
+| `shop-tasks.cart-merge-refused`                              | buyer    | `cart.merge_refused`                 | the signed-in user                 | —                     |
+| `shop-tasks.fulfillment-delayed`                             | buyer    | `fulfillment_order.delayed`          | the buyer, if the account exists   | —                     |
+| `shop-tasks.fulfillment-held`                                | buyer    | `fulfillment_order.hold_noticed`     | the buyer, if the account exists   | —                     |
+| `shop-tasks.shipment-lost`                                   | buyer    | `shipment.lost`                      | the buyer, if the account exists   | —                     |
+| `shop-tasks.stock-alert`                                     | buyer    | `stock_alert.sent`                   | who asked                          | —                     |
+| `shop-tasks.staff.purchase-hold-placed`                      | staff    | `order.purchase_hold_placed`         | `UserBanning`                      | now                   |
+| `shop-tasks.staff.return-requested`                          | staff    | `return.requested` (not withdrawals) | `ReturnManagement`                 | —                     |
+| `shop-tasks.staff.outcome-unknown`                           | staff    | the idempotency ledger (no event)    | the route's own set, see below     | now                   |
+| the eleven summary rows, see [the digest](#the-staff-digest) | staff    | the digest jobs                      | the set that does the counted work | digest, where overdue |
 
 The `fulfillment-delayed` and `shipment-lost` params name their dates (`agreedAt`, `expectedAt`) as plain shop days (`YYYY-MM-DD`), converted from the event's instants when the row is written, so the inbox prints the same day as the mail.
 
@@ -59,25 +59,36 @@ module that owns it; a count of zero removes the row, one that fell is updated q
 appeared or grew is unread again, pushed and, where the route says `digest`, mailed once per person
 per run.
 
-| Summary row                               | Counts                                    | Run    | Set told              | Mail   |
-| ----------------------------------------- | ----------------------------------------- | ------ | --------------------- | ------ |
-| `shop-tasks.staff.transfers-due`          | bank transfers due soon                   | daily  | `PaymentRecording`    | bell   |
-| `shop-tasks.staff.unshipped`              | paid orders with goods still to ship      | daily  | `DeliveryStart`       | digest |
-| `shop-tasks.staff.returns-undecided`      | return requests still undecided           | daily  | `ReturnManagement`    | digest |
-| `shop-tasks.staff.returns-awaiting-goods` | approved returns overdue for their goods  | daily  | `ReturnReceiving`     | digest |
-| `shop-tasks.staff.delivery-holds-open`    | held orders open too long                 | daily  | `DeliveryManagement`  | digest |
-| `shop-tasks.staff.awaiting-tracking`      | shipped parcels with no tracking code     | daily  | `DeliveryManagement`  | bell   |
-| `shop-tasks.staff.undelivered`            | parcels shipped and never marked arrived  | daily  | `DeliveryManagement`  | digest |
-| `shop-tasks.staff.stale-refunds`          | refunds open past the attention threshold | daily  | `PaymentRefunding`    | digest |
-| `shop-tasks.staff.low-stock`              | products low on stock                     | daily  | `InventoryManagement` | bell   |
-| `shop-tasks.staff.preorders-late`         | preorders past their date                 | weekly | `OrderEditing`        | digest |
+| Summary row                                 | Counts                                               | Run    | Set told              | Mail   |
+| ------------------------------------------- | ---------------------------------------------------- | ------ | --------------------- | ------ |
+| `shop-tasks.staff.transfers-due`            | bank transfers due soon                              | daily  | `PaymentRecording`    | bell   |
+| `shop-tasks.staff.unshipped`                | paid orders with goods still to ship                 | daily  | `DeliveryStart`       | digest |
+| `shop-tasks.staff.returns-undecided`        | return requests still undecided                      | daily  | `ReturnManagement`    | digest |
+| `shop-tasks.staff.returns-awaiting-goods`   | approved returns overdue for their goods             | daily  | `ReturnReceiving`     | digest |
+| `shop-tasks.staff.returns-proof-goods-late` | approved returns with a proof of sending, goods late | daily  | `ReturnReceiving`     | digest |
+| `shop-tasks.staff.delivery-holds-open`      | held orders open too long                            | daily  | `DeliveryManagement`  | digest |
+| `shop-tasks.staff.awaiting-tracking`        | shipped parcels with no tracking code                | daily  | `DeliveryManagement`  | bell   |
+| `shop-tasks.staff.undelivered`              | parcels shipped and never marked arrived             | daily  | `DeliveryManagement`  | digest |
+| `shop-tasks.staff.stale-refunds`            | refunds open past the attention threshold            | daily  | `PaymentRefunding`    | digest |
+| `shop-tasks.staff.low-stock`                | products low on stock                                | daily  | `InventoryManagement` | bell   |
+| `shop-tasks.staff.preorders-late`           | preorders past their date                            | weekly | `OrderEditing`        | digest |
 
 `returns-awaiting-goods` counts only what needs action: an approved return, a withdrawal or a
 faulty or wrong item, with neither goods nor proof of sending after `WITHDRAWAL_SEND_BACK_DAYS` (14)
 plus `NODE_STAFF_RETURN_TRANSIT_DAYS` days. The clock starts the day the buyer stated the withdrawal,
 or the day staff approved the faulty item. The text tells staff to ask the buyer once for proof of
 posting and to keep the refund on hold; one proof recorded takes the return out of the count. The
-returns list shows the ones still inside their days.
+returns list shows the ones still inside their days. Its link opens the list on
+`proofOfSending=false`.
+
+`returns-proof-goods-late` is the other half: an approved return, a withdrawal or a faulty or wrong
+item, whose proof of sending is on file and whose goods are still not back `NODE_STAFF_RETURN_TRANSIT_DAYS`
+days after the date on the proof. The wording is neutral on money on purpose: a withdrawal's proof
+(or a faulty item's, with `refundOnProof`) already opened a refund, any other faulty item's may be
+due, and the row only says the goods are late: follow up with the carrier and check the refund. Its
+link opens the list on `proofOfSending=true`. A goodwill return (`other`) has no deadline in law, so
+it never shows in either row, and one with a proof on file goes silent. The old row counts only returns
+with no proof, so no return is counted twice.
 
 Each row carries `params.work`: the filtered list path, from the `staffPages:` block of
 `shared/rules/frontend-links.yaml` (`SUMMARY_PAGES`). The bell opens it as it is, and the digest mail
@@ -85,7 +96,7 @@ links the same entry, so the two cannot drift. Some rows open a list slightly wi
 (`unshipped` lists every age, not only the late ones). Its link,
 `fulfillmentStatus=awaiting_shipment&deleted=false`, otherwise opens exactly the counted set.
 
-There is no digest extension point in `notifications`: all ten rows are the shop's, so a registry
+There is no digest extension point in `notifications`: all eleven rows are the shop's, so a registry
 would have one caller. The primitives (`writeSummary`, `clearSummary`, `staffRecipients`) are the
 extension point; the digest is lifted back into `notifications` only when a foundation row exists.
 

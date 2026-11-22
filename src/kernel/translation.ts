@@ -133,11 +133,11 @@ export interface TranslationPort {
     /**
      * Applies an ALREADY-VALIDATED plan — see {@link plan} — without touching the entity's cache
      * tag or an audit trail: a caller with its own document to write owns both itself, in the same
-     * operation that calls this. The derived index column IS written (see the implementation's own
-     * docblock — it is one invariant that must not vary by caller). Never validates; a caller that
-     * skips {@link plan} first can corrupt data.
+     * operation that calls this. Each row is stamped with the digest of the entity's text as it
+     * stands, so the caller writes its own document FIRST, in the same `session`. Never validates;
+     * a caller that skips {@link plan} first can corrupt data.
      *
-     * `session` joins every row it writes, and the derived column, to the caller's transaction.
+     * `session` joins every row it writes to the caller's transaction.
      */
     write: (
         entityType: string,
@@ -177,7 +177,6 @@ export type TranslationWriteSlot =
 
 /** A validated batch, ready for {@link TranslationPort.write}. */
 export interface TranslationWritePlan {
-    fallbackLocale: string;
     planned: TranslationWriteSlot[];
 }
 
@@ -264,9 +263,8 @@ export const isTranslationAvailable = (): boolean => translationPort !== undefin
  * The validate half of a write, for a caller with its own entity to write alongside the
  * translations — see {@link TranslationPort.plan}.
  *
- * Unregistered falls back to fallback-language-only content: a batch naming only the
- * fallback locale plans a single upsert; naming anything else, or leaving the fallback slot empty
- * or deleted, is a 422 — `locales` being absent makes the shop monolingual, it does not make
+ * Unregistered: no language but the default exists, and that one is the entity's own text, so
+ * any locale named is a 422 — `locales` being absent makes the shop monolingual, it does not make
  * writing content impossible.
  */
 export const planTranslations = (
@@ -275,33 +273,14 @@ export const planTranslations = (
 ): Promise<TranslationWritePlan | ResponseReject> => {
     if (translationPort) return translationPort.plan(entityType, payload);
 
-    const fallbackLocale = getFallbackLocale();
-    const otherLocale = Object.keys(payload).find((locale) => locale !== fallbackLocale);
-    if (otherLocale !== undefined)
-        return Promise.resolve(
-            generateReject(422, [
-                fieldError(
-                    otherLocale,
-                    t('translation.error-locale-unavailable', { locale: otherLocale })
-                )
-            ])
-        );
+    const named = Object.keys(payload).at(0);
+    if (named === undefined) return Promise.resolve({ planned: [] });
 
-    const fallbackSlot = payload[fallbackLocale];
-    if (!fallbackSlot || Object.keys(fallbackSlot.fields).length === 0)
-        return Promise.resolve(
-            generateReject(422, [
-                fieldError(
-                    fallbackLocale,
-                    t('translation.error-fallback-required', { locale: fallbackLocale })
-                )
-            ])
-        );
-
-    return Promise.resolve({
-        fallbackLocale,
-        planned: [{ locale: fallbackLocale, kind: 'upsert', fields: fallbackSlot.fields }]
-    });
+    const message =
+        named === getFallbackLocale()
+            ? 'translation.error-default-language'
+            : 'translation.error-locale-unavailable';
+    return Promise.resolve(generateReject(422, [fieldError(named, t(message, { locale: named }))]));
 };
 
 /**
@@ -310,7 +289,7 @@ export const planTranslations = (
  */
 export const isTranslationPlan = (
     value: TranslationWritePlan | ResponseReject
-): value is TranslationWritePlan => 'fallbackLocale' in value;
+): value is TranslationWritePlan => 'planned' in value;
 
 /** The write half of a write — see {@link TranslationPort.write}. A no-op when unregistered. */
 export const writeTranslations = (

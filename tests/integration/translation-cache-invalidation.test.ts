@@ -61,31 +61,37 @@ import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
 
-/** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
+/** `en` is the default language in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
 describe('a translation write invalidates the cached product it translated', () => {
     it('serves a second identical read from cache, then re-renders it after a PATCH', async () => {
         await givenLocale(FALLBACK);
+        await givenLocale('it');
         const product = await createProduct({ title: 'Old title' });
         const id = String(product._id);
         const { bearer } = await authenticateAs('admin');
+        const readItalian = () => api().get(`/products/${id}`).set('Accept-Language', 'it');
+        await api()
+            .patch(`/locales/translations/product/${id}`)
+            .set('Authorization', bearer)
+            .send({ it: { fields: { title: 'Vecchio titolo' }, origin: 'human' } });
 
-        const first = await api().get(`/products/${id}`);
+        const first = await readItalian();
         expect(first.headers['cache-status']).toContain('fwd=miss');
-        expect(first.body.title).toBe('Old title');
+        expect(first.body.title).toBe('Vecchio titolo');
 
-        const cached = await api().get(`/products/${id}`);
+        const cached = await readItalian();
         expect(cached.headers['cache-status']).toMatch(/; hit; ttl=\d+/);
 
         await api()
             .patch(`/locales/translations/product/${id}`)
             .set('Authorization', bearer)
-            .send({ [FALLBACK]: { fields: { title: 'New title' }, origin: 'human' } });
+            .send({ it: { fields: { title: 'Nuovo titolo' }, origin: 'human' } });
 
-        const afterPatch = await api().get(`/products/${id}`);
+        const afterPatch = await readItalian();
         expect(afterPatch.headers['cache-status']).toContain('fwd=miss');
-        expect(afterPatch.body.title).toBe('New title');
+        expect(afterPatch.body.title).toBe('Nuovo titolo');
     });
 });
 

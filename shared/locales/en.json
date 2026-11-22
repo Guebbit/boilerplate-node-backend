@@ -165,6 +165,7 @@
             "receivedTo": "Received to",
             "reference": "Reference",
             "refund": "Refund",
+            "refundOnProof": "Refund on proof",
             "refundRef": "Refund reference",
             "releaseDate": "Release date",
             "remember": "Remember me",
@@ -215,6 +216,6 @@
     },
     "translation": {
         "error-locale-unavailable": "Only {{locale}} can be set today (translation is unavailable).",
-        "error-fallback-required": "The default language ({{locale}}) needs its own text."
+        "error-default-language": "{{locale}} is the default language: its text is the entry's own, not a translation."
     }
 }

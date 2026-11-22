@@ -118,18 +118,18 @@ captured delivery's signature is a copy-paste rather than a mystery — see
 `scenarios/locales.ts` seeds five languages, each chosen to demonstrate one state a language and
 its entries can be in — not five demo rows so much as five points on a small grid:
 
-| Role           | Tag                         | What it demonstrates                                                                                                                                              |
-| -------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`       | (the deployment's fallback) | The catalogue's own source language — every product's fallback-locale `translations` row must exist and be active before anything else can be written against it. |
-| `downloadable` | `es`                        | Exists only as rows, no deployed dictionary file — downloadable from the API at runtime.                                                                          |
-| `answerable`   | `it`                        | Deployed as files AND registered here, so its shipped copy can be overridden per key.                                                                             |
-| `draft`        | `fr`                        | Being translated, not yet published.                                                                                                                              |
-| `empty`        | `ja`                        | Registered and not yet translated at all.                                                                                                                         |
+| Role           | Tag                         | What it demonstrates                                                                                                                                      |
+| -------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`       | (the deployment's fallback) | The catalogue's own source language: the default, the products' own text. It has no `translations` rows, but it is registered and active like the others. |
+| `downloadable` | `es`                        | Exists only as rows, no deployed dictionary file — downloadable from the API at runtime.                                                                  |
+| `answerable`   | `it`                        | Deployed as files AND registered here, so its shipped copy can be overridden per key.                                                                     |
+| `draft`        | `fr`                        | Being translated, not yet published.                                                                                                                      |
+| `empty`        | `ja`                        | Registered and not yet translated at all.                                                                                                                 |
 
 `locales` finishes seeding before the rest of `shopModules` runs concurrently — see
 [Strategic DDD](../understand/strategic-ddd.md#reading-the-map) — because `products.seed()` writes its
-rows' `translations` through a path that requires every locale in that write, the fallback
-included, to already exist as an ACTIVE row first.
+rows' `translations` through a path that requires every locale in that write (`it`) to already exist
+as a registered row first.
 
 ## The guarantee mechanism
 

@@ -15,7 +15,8 @@ x-error-codes:
     RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_PROOF_ALREADY_RECORDED: { status: 409, description: 'A proof of sending is already on this return; it is recorded once.' }
-    RETURN_REFUND_OPENED_ON_PROOF: { status: 409, description: 'The refund was opened when the proof of sending was recorded, so a handling deduction can no longer come out of it (Directive 2011/83/EU Art. 13(3)); claim it from the buyer separately.' }
+    RETURN_REFUND_OPENED_ON_PROOF: { status: 409, description: 'The refund was opened when the proof of sending was recorded, so a handling deduction can no longer come out of it (Directive 2011/83/EU Art. 13(3)), and a repair or a replacement can no longer be chosen; claim the deduction from the buyer separately.' }
+    RETURN_REFUND_ON_PROOF_INVALID: { status: 422, description: 'Refund on proof is chosen for a reason that has no remedy to choose between: only a `defective` or `wrong_item` return takes it (a withdrawal''s proof opens the refund already).' }
     RETURN_REFUND_OPEN: { status: 409, description: 'The return cannot be canceled: the proof of sending already opened its refund, which is owed and open, so a canceled return would no longer add up. Receive the goods (with 0 on every line if the parcel was lost) instead.' }
     RETURN_PROOF_DATE_INVALID: { status: 422, description: 'The date on the proof of sending is in the future.' }
     RETURN_NOT_CLOSABLE: { status: 409, description: 'The return is not one that was received and still awaits its money, so it cannot be closed by hand.' }
@@ -68,6 +69,15 @@ paths:
                   in: query
                   schema:
                       $ref: '#/components/schemas/ReturnReason'
+                - name: proofOfSending
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                  description: >-
+                      `true` keeps the returns that carry a proof of sending, `false` those that have
+                      none yet. The staff summary rows "proof on file, goods late" and "overdue for
+                      their goods" open the list on one each.
                 - name: sort
                   in: query
                   required: false
@@ -413,7 +423,9 @@ paths:
                 was opened then (`POST /returns/{id}/proof-of-sending`), so receiving the goods opens no
                 second one and a `handlingDeduction` above 0 answers 409 `RETURN_REFUND_OPENED_ON_PROOF`
                 (Art. 13(3): the shop can no longer withhold it); the return closes in this step when
-                that refund already settled, and otherwise when it does. A parcel lost on its way back is received with 0 on every line: this shop's policy
+                that refund already settled, and otherwise when it does. The same holds for a defect or
+                a wrong item whose proof staff recorded with `refundOnProof`: a `repair` or `replace`
+                then answers 409 `RETURN_REFUND_OPENED_ON_PROOF` too. A parcel lost on its way back is received with 0 on every line: this shop's policy
                 is to bear that risk and refund on proof of sending (the EU leaves the final risk to
                 national law), so the refund is owed, and nothing goes on sale. The amount is fixed
                 when the goods are received and shown as `refundAmount`. If the payment provider
@@ -469,15 +481,19 @@ paths:
                 Art. 13(3)), so the money can go back before the parcel arrives: the amount is quoted
                 now, with no handling deduction. A later `POST /returns/{id}/receive` restocks as usual
                 and opens no second refund. On a `defective` or `wrong_item` return the remedy is only
-                decided at receipt, so the proof is recorded and nothing is refunded; if receipt then
-                refunds, that refund is due the moment the goods or the proof came, whichever is
-                earlier. This shop's policy is to refund on proof of sending, so a parcel lost on its
+                decided at receipt, so by default the proof is recorded and nothing is refunded; if
+                receipt then refunds, that refund is due the moment the goods or the proof came,
+                whichever is earlier. Staff who accept the buyer's termination of the contract
+                (Directive 2019/771 Art. 13(4), 16) send `refundOnProof: true`: the proof then opens
+                the refund like a withdrawal's, `Return.refundOnProof` says so, and receipt can no
+                longer choose a repair or a replacement (409 `RETURN_REFUND_OPENED_ON_PROOF`).
+                `refundOnProof` on another reason answers 422 `RETURN_REFUND_ON_PROOF_INVALID`. This shop's policy is to refund on proof of sending, so a parcel lost on its
                 way back is still refunded (the EU leaves the final risk to national law). Needs
                 `receive:Return`, which carries a fresh-session requirement.
             operationId: recordProofOfSending
             x-error-codes:
                 '409': [RETURN_NOT_RECEIVABLE, RETURN_PROOF_ALREADY_RECORDED]
-                '422': [RETURN_PROOF_DATE_INVALID]
+                '422': [RETURN_PROOF_DATE_INVALID, RETURN_REFUND_ON_PROOF_INVALID]
             security:
                 - bearerAuth: ['receive:Return']
             parameters:
@@ -521,7 +537,7 @@ components:
             maxItems: 2
             items:
                 type: string
-                enum: [createdAt, -createdAt, status, -status]
+                enum: [createdAt, -createdAt, status, -status, proofOfSendingAt, -proofOfSendingAt]
 
         ReturnReason:
             type: string
@@ -739,6 +755,12 @@ components:
                     type: string
                     maxLength: 200
                     description: The carrier document's reference (a tracking or receipt number). Present with `proofOfSendingAt`.
+                refundOnProof:
+                    type: boolean
+                    description: >-
+                        `true` when staff opened the refund of a `defective` or `wrong_item` return with
+                        its proof of sending. Receipt then takes no repair or replacement. Absent
+                        otherwise (a withdrawal's proof opens its refund without this flag).
                 closedAt:
                     type: string
                     format: date-time
@@ -878,6 +900,12 @@ components:
                     minLength: 1
                     maxLength: 200
                     description: The document's reference, a tracking or receipt number. Plain text.
+                refundOnProof:
+                    type: boolean
+                    description: >-
+                        Staff's choice, for a `defective` or `wrong_item` return only: `true` opens the
+                        refund now, as a withdrawal's proof does. Absent or `false` leaves the remedy to
+                        receipt. Any other reason with `true` answers 422 `RETURN_REFUND_ON_PROOF_INVALID`.
 
         CloseReturnRequest:
             type: object

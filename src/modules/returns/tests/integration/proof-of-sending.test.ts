@@ -15,6 +15,8 @@ import { eventually } from '@tests/eventually';
 import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -27,6 +29,11 @@ import returnsModule from '../../module';
 import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
 import { returnModel } from '../../model';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -357,5 +364,232 @@ describe('a proof of sending on a faulty item', () => {
         );
 
         expect(result.success && result.data.status).toBe('canceled');
+    });
+});
+
+describe('refund on proof, chosen by staff on a faulty item', () => {
+    it('opens the refund with the proof, due the day on the proof, and says so on the return', async () => {
+        const { orderId, returnId } = await approvedReturn('defective');
+        const sentAt = new Date('2026-03-02T09:00:00.000Z');
+
+        const result = await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(sentAt), refundOnProof: true },
+            callerContextAs('admin')
+        );
+
+        expect(result.success && result.data.status).toBe('approved');
+        expect(result.success && result.data.refundAmount).toBe('60.00');
+        expect(result.success && result.data.refundOnProof).toBe(true);
+        expect(await storedRefundStamps(orderId)).toEqual([
+            expect.objectContaining({ returnId, dueRule: 'faulty', dueBy: sentAt })
+        ]);
+    });
+
+    it('opens nothing when staff do not choose it, and stores no flag', async () => {
+        const { orderId, returnId } = await approvedReturn('defective');
+
+        await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(new Date()), refundOnProof: false },
+            callerContextAs('admin')
+        );
+
+        expect(await storedRefundStamps(orderId)).toEqual([]);
+        const reread = await returnRepository.findById(returnId);
+        expect(reread?.refundOnProof).toBeUndefined();
+    });
+
+    it('records the choice on the proof audit row', async () => {
+        const { returnId } = await approvedReturn('defective');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(new Date()), refundOnProof: true },
+            callerContextAs('admin')
+        );
+
+        const row = auditSpy.mock.calls
+            .map(([event]) => event)
+            .find(({ action }) => action === 'admin.return.proof_recorded');
+        expect(row?.metadata).toMatchObject({ opensRefund: true, refundOnProof: true });
+    });
+
+    it.each(['withdrawal', 'other'] as const)(
+        'refuses it on a %s with 422 on refundOnProof, and records nothing',
+        async (reason) => {
+            const { returnId } = await approvedReturn(reason === 'other' ? 'defective' : reason);
+            // A goodwill return cannot be opened by the fixture, so its reason is set directly.
+            if (reason === 'other') await returnModel.updateOne({ _id: returnId }, { reason });
+
+            const result = await returnService.recordProofOfSending(
+                returnId,
+                { ...proofOn(new Date()), refundOnProof: true },
+                callerContextAs('admin')
+            );
+
+            expect(asReject(result).status).toBe(422);
+            expect(asReject(result).errors[0]).toMatchObject({
+                code: 'RETURN_REFUND_ON_PROOF_INVALID',
+                details: { field: 'refundOnProof' }
+            });
+            const reread = await returnRepository.findById(returnId);
+            expect(reread?.proofOfSendingAt).toBeUndefined();
+        }
+    );
+
+    it('turns the cancel action off and refuses a cancel with 409 RETURN_REFUND_OPEN', async () => {
+        const { returnId } = await approvedReturn('defective');
+        await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(new Date()), refundOnProof: true },
+            callerContextAs('admin')
+        );
+        const stored = await returnRepository.findById(returnId);
+
+        const result = await returnService.cancelReturn(
+            returnId,
+            undefined,
+            callerContextAs('admin')
+        );
+
+        expect(returnService.withActions(stored!, asAdmin()).actions.cancel).toBe(false);
+        expect(asReject(result).errors[0].code).toBe('RETURN_REFUND_OPEN');
+        const reread = await returnRepository.findById(returnId);
+        expect(reread?.status).toBe('approved');
+    });
+
+    it('refuses a repair or a replacement at receipt with 409, before anything moves', async () => {
+        const { shirt, returnId } = await approvedReturn('defective');
+        await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(new Date()), refundOnProof: true },
+            callerContextAs('admin')
+        );
+
+        for (const remedy of ['repair', 'replace'] as const) {
+            const result = await returnService.receiveReturn(
+                returnId,
+                { remedy },
+                callerContextAs('admin')
+            );
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('RETURN_REFUND_OPENED_ON_PROOF');
+        }
+        const reread = await returnRepository.findById(returnId);
+        expect(reread?.status).toBe('approved');
+        expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
+    });
+
+    it.each(['refund', 'repair'] as const)(
+        'loses a %s receipt that read the return before the proof landed: 409, one refund, still approved',
+        async (remedy) => {
+            const { orderId, returnId } = await approvedReturn('defective');
+            const beforeProof = await returnRepository.findById(returnId);
+            await returnService.recordProofOfSending(
+                returnId,
+                { ...proofOn(new Date()), refundOnProof: true },
+                callerContextAs('admin')
+            );
+            // The receipt's own read, taken just before the proof was saved.
+            jest.spyOn(returnRepository, 'findById').mockResolvedValueOnce(beforeProof);
+
+            const result = await returnService.receiveReturn(
+                returnId,
+                { remedy },
+                callerContextAs('admin')
+            );
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
+            expect(await storedRefundStamps(orderId)).toHaveLength(1);
+            jest.restoreAllMocks();
+            const stored = await returnRepository.findById(returnId);
+            expect(stored?.status).toBe('approved');
+        }
+    );
+
+    it('lets a plain receipt restock and close it, opening no second refund', async () => {
+        const { orderId, returnId } = await approvedReturn('defective');
+        await returnService.recordProofOfSending(
+            returnId,
+            { ...proofOn(new Date()), refundOnProof: true },
+            callerContextAs('admin')
+        );
+
+        const result = await returnService.receiveReturn(returnId, {}, callerContextAs('admin'));
+
+        expect(result.success && result.data.status).toBe('closed');
+        expect(await storedRefundStamps(orderId)).toHaveLength(1);
+    });
+});
+
+/**
+ * Two shirts (30.00) with 5.00 of standard delivery, paid and delivered; one shirt comes back under
+ * a proof that opens its refund, then the other under a plain receipt that takes the last unit.
+ * @param reason - a defect's first proof carries `refundOnProof`, a withdrawal's needs none
+ * @returns `refundAmount` the plain receipt of the later return fixed: with the delivery, 35.00
+ */
+const secondReturnRefund = async (reason: 'withdrawal' | 'defective') => {
+    buyers += 1;
+    const user = await createUser({ email: `partial-${buyers}@example.com` });
+    const shirt = await createProduct({ title: 'Shirt', price: '30.00', onHand: 10 });
+    const order = await createOrder(user, [toOrderItem(shirt, 2)], {
+        shippingMethod: 'standard',
+        shippingCost: '5.00'
+    });
+    const orderId = String(order._id);
+    await inventoryService.reserveForOrder(orderId, [
+        { productId: String(shirt._id), quantity: 2 }
+    ]);
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
+    if (!intent.success) throw new Error('intent refused');
+    await paymentService.confirmPayment(
+        intent.data.id,
+        'pm_card_visa',
+        asCustomer(user.id),
+        testCallerContext
+    );
+    await carryOrderTo(orderId, 'delivered');
+
+    const oneShirt = [{ productId: String(shirt._id), quantity: 1 }];
+    const open = async () => {
+        const outcome = await returnService.createReturn(
+            { orderId, reason, lines: oneShirt },
+            asCustomer(user.id),
+            testCallerContext
+        );
+        if (!outcome.success) throw new Error('expected a return');
+        const id = String(outcome.data._id);
+        if (reason !== 'withdrawal')
+            await returnService.approveReturn(id, callerContextAs('admin'));
+        return id;
+    };
+    const first = await open();
+    const second = await open();
+    await returnService.recordProofOfSending(
+        first,
+        { ...proofOn(new Date()), ...(reason === 'defective' ? { refundOnProof: true } : {}) },
+        callerContextAs('admin')
+    );
+
+    const received = await returnService.receiveReturn(second, {}, callerContextAs('admin'));
+    return received.success ? received.data.refundAmount : undefined;
+};
+
+describe('the delivery owed on a partial return whose refund opened on proof', () => {
+    /**
+     * Two shirts (30.00) with 5.00 of standard delivery, paid and delivered; one shirt comes back
+     * under a proof that opens its refund, then the other under a plain receipt that takes the
+     * last unit. Answers the refund of the SECOND return.
+     */
+    it('is refunded with the second return of a withdrawal: the first one already counts as settled', async () => {
+        expect(await secondReturnRefund('withdrawal')).toBe('35.00');
+    });
+
+    it('is refunded with the second return of a defect whose first refund opened on proof', async () => {
+        expect(await secondReturnRefund('defective')).toBe('35.00');
     });
 });

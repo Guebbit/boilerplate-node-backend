@@ -35,6 +35,7 @@ export type ReturnStamp = Partial<
         | 'proofOfSendingAt'
         | 'proofCarrier'
         | 'proofReference'
+        | 'refundOnProof'
         | 'shippingRefund'
         | 'closedAt'
         | 'canceledAt'
@@ -72,7 +73,11 @@ export const returnRepository: Repository<ReturnDocument, StoredReturn> & {
         searchable: {
             objectIds: { orderId: 'orderId' },
             exact: { status: 'status', reason: 'reason' },
-            sortable: { createdAt: 'createdAt', status: 'status' }
+            sortable: {
+                createdAt: 'createdAt',
+                status: 'status',
+                proofOfSendingAt: 'proofOfSendingAt'
+            }
         }
     }),
 

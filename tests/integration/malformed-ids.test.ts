@@ -161,11 +161,11 @@ const fillParameter = (
 /**
  * Bodies for the writes whose random spec-valid body is refused (422) before the entity is looked
  * up, so their unknown-id probe would never answer the 404 a malformed id is compared with. A PUT
- * must carry the fallback locale (it may not delete `en`); a PATCH with nothing to merge reaches
- * the owner lookup.
+ * of nothing replaces nothing, and a PATCH with nothing to merge changes nothing: both reach the
+ * owner lookup.
  */
 const BODY_THAT_REACHES_THE_404: Record<string, unknown> = {
-    'put /locales/translations/{entityType}/{id}': { en: { fields: { title: 'A title' } } },
+    'put /locales/translations/{entityType}/{id}': {},
     'patch /locales/translations/{entityType}/{id}': {}
 };
 

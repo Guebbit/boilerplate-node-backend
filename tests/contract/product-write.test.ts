@@ -1,6 +1,6 @@
 /**
  * The multilingual product write surface, over real HTTP: `POST /products`, `PUT`/`PATCH
- * /products/{id}` and the `translations` map of `GET /products/{id}`. Cross-module by nature, sitting at the top level rather than
+ * /products/{id}`, and the `translations` map and `source` of `GET /products/{id}`. Cross-module by nature, sitting at the top level rather than
  * under `src/modules/products/tests/`: driving these routes needs a real `locales` collection
  * row, which `products` may only reach through the `kernel/translation.ts` port.
  */
@@ -37,7 +37,7 @@ const titleTooShort = () => {
 
 // `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
-/** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
+/** `en` is the default language in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
 beforeEach(async () => {
@@ -48,13 +48,11 @@ describe('POST /products', () => {
     it('matches the contract, creating a product in every language sent at once', async () => {
         const { bearer } = await authenticateAsRole('editor');
 
-        const response = await api()
-            .post('/products')
-            .set('Authorization', bearer)
-            .send({
-                price: '24.90',
-                translations: { en: { title: 'Memory Foam Bed', description: 'Extra support' } }
-            });
+        const response = await api().post('/products').set('Authorization', bearer).send({
+            price: '24.90',
+            title: 'Memory Foam Bed',
+            description: 'Extra support'
+        });
 
         expect(response.status).toBe(201);
         expect(response.body.title).toBe('Memory Foam Bed');
@@ -66,13 +64,13 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.00', translations: { en: { title: 'Abcd' } } });
+            .send({ price: '10.00', title: 'Abcd' });
 
         expect(response.status).toBe(422);
         expect(response.body.errors).toEqual([
             expect.objectContaining({
                 message: titleTooShort(),
-                details: { field: 'translations.en.title' }
+                details: { field: 'title' }
             })
         ]);
     });
@@ -87,7 +85,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price, translations: { en: { title: 'Memory Foam Bed' } } });
+            .send({ price, title: 'Memory Foam Bed' });
 
         expect(response.status).toBe(422);
     });
@@ -98,21 +96,15 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.5', translations: { en: { title: 'Memory Foam Bed' } } });
+            .send({ price: '10.5', title: 'Memory Foam Bed' });
 
         expect(response.status).toBe(201);
         expect(response.body.price).toBe('10.50');
     });
 
     it.each([
-        [
-            'a null locale',
-            { price: '10.00', translations: { en: { title: 'Memory Foam Bed' }, it: null } }
-        ],
-        [
-            'a null imageUrl',
-            { price: '10.00', translations: { en: { title: 'Memory Foam Bed' } }, imageUrl: null }
-        ]
+        ['a null locale', { price: '10.00', title: 'Memory Foam Bed', translations: { it: null } }],
+        ['a null imageUrl', { price: '10.00', title: 'Memory Foam Bed', imageUrl: null }]
     ])('refuses %s: a create has nothing to clear', async (_label, body) => {
         const { bearer } = await authenticateAsRole('editor');
 
@@ -127,7 +119,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.00', translations: { en: { title: 'Memory Foam Bed' } } });
+            .send({ price: '10.00', title: 'Memory Foam Bed' });
 
         expect(response.status).toBe(201);
         expect(response.body).not.toHaveProperty('description');
@@ -135,13 +127,28 @@ describe('POST /products', () => {
         expect(stored?.description).toBeUndefined();
     });
 
-    it('rejects a body missing the fallback locale', async () => {
+    it('rejects a body missing the title: the default language needs its own words', async () => {
         const { bearer } = await authenticateAsRole('editor');
 
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
             .send({ price: '10.00', translations: {} });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'title' });
+    });
+
+    it.each([
+        ['an entry', { title: 'Memory Foam Bed' }],
+        ['a null', null]
+    ])('rejects %s for the default language inside translations', async (_label, slot) => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: '10.00', title: 'Memory Foam Bed', translations: { en: slot } });
 
         expect(response.status).toBe(422);
     });
@@ -154,13 +161,11 @@ describe('POST /products', () => {
     it('creates the product with no stock, and a receipt then gives it its opening count', async () => {
         const { bearer } = await authenticateAs('admin');
 
-        const response = await api()
-            .post('/products')
-            .set('Authorization', bearer)
-            .send({
-                price: '12.00',
-                translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
-            });
+        const response = await api().post('/products').set('Authorization', bearer).send({
+            price: '12.00',
+            title: 'Cedar Chew Toy',
+            description: 'Durable'
+        });
         const id = String(response.body.id);
         await settleOutboxNudges();
 
@@ -192,14 +197,12 @@ describe('POST /products', () => {
     it('refuses an opening count in the create body: stock is not a product field', async () => {
         const { bearer } = await authenticateAs('admin');
 
-        const response = await api()
-            .post('/products')
-            .set('Authorization', bearer)
-            .send({
-                price: '12.00',
-                onHand: 7,
-                translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
-            });
+        const response = await api().post('/products').set('Authorization', bearer).send({
+            price: '12.00',
+            onHand: 7,
+            title: 'Cedar Chew Toy',
+            description: 'Durable'
+        });
 
         expect(response.status).toBe(422);
     });
@@ -222,7 +225,8 @@ describe('PUT /products/{id}', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Bed, replaced' } }
+                title: 'Bed, replaced',
+                translations: {}
             });
 
         expect(response.status).toBe(200);
@@ -256,7 +260,8 @@ describe('PUT /products/{id}', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Bed, replaced' } }
+                title: 'Bed, replaced',
+                translations: {}
             });
 
         expect(response.status).toBe(200);
@@ -283,7 +288,8 @@ describe('PUT /products/{id}', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Bed, replaced' } }
+                title: 'Bed, replaced',
+                translations: {}
             };
             delete body[field];
 
@@ -303,7 +309,7 @@ describe('PUT /products/{id}', () => {
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: '15.00', translations: { en: { title: 'Bed, replaced' } } });
+            .send({ price: '15.00', title: 'Bed, replaced' });
 
         expect(response.status).toBe(422);
     });
@@ -320,31 +326,31 @@ describe('PUT /products/{id}', () => {
             .set('Authorization', bearer)
             .send({
                 price: '10.00',
-                translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
+                title: 'Dog Bed',
+                translations: { it: { title: 'Cuccia' } }
             });
         const id = String(created.body.id);
 
-        const response = await api()
-            .put(`/products/${id}`)
-            .set('Authorization', bearer)
-            .send({
-                price: '10.00',
-                active: true,
-                purchasable: true,
-                requiresShipping: true,
-                allowBackorder: false,
-                noWithdrawal: false,
-                categories: [],
-                tags: [],
-                translations: { en: { title: 'Dog Bed, replaced' } }
-            });
+        const response = await api().put(`/products/${id}`).set('Authorization', bearer).send({
+            price: '10.00',
+            active: true,
+            purchasable: true,
+            requiresShipping: true,
+            allowBackorder: false,
+            noWithdrawal: false,
+            categories: [],
+            tags: [],
+            title: 'Dog Bed, replaced',
+            translations: {}
+        });
         const admin = await api().get(`/products/${id}`).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(Object.keys(admin.body.translations)).toEqual(['en']);
+        expect(admin.body.translations).toEqual({});
+        expect(admin.body.source.title).toBe('Dog Bed, replaced');
     });
 
-    it('refuses a PUT whose translations leave out the fallback locale', async () => {
+    it('refuses a PUT that names the default language inside translations', async () => {
         await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: '10.00' });
@@ -361,10 +367,12 @@ describe('PUT /products/{id}', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { it: { title: 'Cuccia' } }
+                title: 'Bed, replaced',
+                translations: { en: { title: 'Bed, again' } }
             });
 
         expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'translations.en' });
     });
 
     /**
@@ -387,7 +395,8 @@ describe('PUT /products/{id}', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Bed, replaced' } }
+                title: 'Bed, replaced',
+                translations: {}
             });
 
         expect(response.status).toBe(422);
@@ -405,7 +414,7 @@ describe('PATCH /products/{id}', () => {
         const response = await api()
             .patch(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .send({ price: '15.00', translations: { en: { title: 'Bed, revised' } } });
+            .send({ price: '15.00', title: 'Bed, revised' });
 
         expect(response.status).toBe(200);
         expect(response.body.price).toBe('15.00');
@@ -468,60 +477,82 @@ describe('PATCH /products/{id}', () => {
     });
 });
 
-/** Creates a product with both fields in the fallback locale, returning its id and a session. */
+/** Creates a product with both fields in the default language and an Italian copy of both. */
 const seeded = async () => {
+    await givenLocale('it');
     const { bearer } = await authenticateAs('admin');
     const created = await api()
         .post('/products')
         .set('Authorization', bearer)
         .send({
             price: '10.00',
-            translations: { en: { title: 'Cozy Bed', description: 'Extra support' } }
+            title: 'Cozy Bed',
+            description: 'Extra support',
+            translations: { it: { title: 'Cuccia', description: 'Supporto extra' } }
         });
     return { bearer, id: String(created.body.id) };
 };
 
-/** The whole `en` entry as the editor's form would read it back. */
-const readEnglish = (bearer: string, id: string) =>
+/** What the editor's form reads of a product: the default text, and the other languages. */
+interface FormRead {
+    source: Record<string, string>;
+    translations: Record<string, Record<string, string>>;
+}
+
+/** The product as the editor's form reads it back. */
+const readForForm = (bearer: string, id: string) =>
     api()
         .get(`/products/${id}`)
         .set('Authorization', bearer)
-        .then((response) => response.body.translations.en as Record<string, unknown>);
+        // `as`: the response body is `any`; the shape is the one `Product.source`/`translations` declare.
+        .then((response) => response.body as FormRead);
 
-describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
-    it('changes only the field named — the description and its mirrored column stay', async () => {
+describe('PATCH /products/{id}, the default language and the others (RFC 7396)', () => {
+    it('changes only the field named — the description stays', async () => {
         const { bearer, id } = await seeded();
 
         const response = await api()
             .patch(`/products/${id}`)
             .set('Authorization', bearer)
-            .send({ translations: { en: { title: 'Cozy Bed XL' } } });
+            .send({ title: 'Cozy Bed XL' });
 
         expect(response.status).toBe(200);
         expect(response.body.description).toBe('Extra support');
-        expect(await readEnglish(bearer, id)).toEqual({
-            title: 'Cozy Bed XL',
-            description: 'Extra support'
-        });
+        const body = await readForForm(bearer, id);
+        expect(body.source).toEqual({ title: 'Cozy Bed XL', description: 'Extra support' });
     });
 
-    it('clears the description on null, in the row and in the mirrored column', async () => {
+    it('clears the description on null', async () => {
         const { bearer, id } = await seeded();
 
         const response = await api()
             .patch(`/products/${id}`)
             .set('Authorization', bearer)
-            .send({ translations: { en: { description: null } } });
+            .send({ description: null });
 
         expect(response.status).toBe(200);
         expect(response.body).not.toHaveProperty('description');
-        expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed' });
+        const body = await readForForm(bearer, id);
+        expect(body.source).toEqual({ title: 'Cozy Bed' });
+    });
+
+    it('merges a translated field without touching the default text or the other fields', async () => {
+        const { bearer, id } = await seeded();
+
+        await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations: { it: { title: 'Cuccia XL' } } });
+
+        const body = await readForForm(bearer, id);
+        expect(body.translations.it).toEqual({ title: 'Cuccia XL', description: 'Supporto extra' });
+        expect(body.source).toEqual({ title: 'Cozy Bed', description: 'Extra support' });
     });
 
     it.each([
-        ['an empty description', { en: { description: '' } }],
-        ['an empty locale object', { en: {} }],
-        ['a cleared title', { en: { title: null } }]
+        ['an empty description', { it: { description: '' } }],
+        ['an empty locale object', { it: {} }],
+        ['a cleared title', { it: { title: null } }]
     ])('422s %s', async (_label, translations) => {
         const { bearer, id } = await seeded();
 
@@ -533,7 +564,36 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
         expect(response.status).toBe(422);
     });
 
-    it('states the locale whole on a PUT: an omitted description is cleared', async () => {
+    it('422s a title under the minimum, and an empty description, on the default language', async () => {
+        const { bearer, id } = await seeded();
+
+        const short = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ title: 'abc' });
+        const empty = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ description: '' });
+
+        expect(short.status).toBe(422);
+        expect(short.body.errors[0].details).toEqual({ field: 'title' });
+        expect(empty.status).toBe(422);
+    });
+
+    it('422s any entry for the default language inside translations', async () => {
+        const { bearer, id } = await seeded();
+
+        const response = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations: { en: null } });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'translations.en' });
+    });
+
+    it('states the default language whole on a PUT: an omitted description is cleared', async () => {
         const { bearer, id } = await seeded();
 
         const response = await api()
@@ -548,53 +608,91 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Cozy Bed XL' } }
+                title: 'Cozy Bed XL',
+                translations: { it: { title: 'Cuccia' } }
             });
 
         expect(response.status).toBe(200);
-        expect(await readEnglish(bearer, id)).toEqual({ title: 'Cozy Bed XL' });
+        const body = await readForForm(bearer, id);
+        expect(body.source).toEqual({ title: 'Cozy Bed XL' });
+        // The Italian row was stated whole too: its description is gone.
+        expect(body.translations.it).toEqual({ title: 'Cuccia' });
+    });
+
+    it('stamps a row written beside a new title as current, and a row left alone as outdated', async () => {
+        const { bearer, id } = await seeded();
+        await givenLocale('de');
+        await api()
+            .patch(`/locales/translations/product/${id}`)
+            .set('Authorization', bearer)
+            .send({ de: { fields: { title: 'Hundekorb' }, origin: 'human' } });
+
+        await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ title: 'Cozy Bed, new', translations: { it: { title: 'Cuccia nuova' } } });
+
+        const rows = await api()
+            .get(`/locales/translations/product/${id}`)
+            .set('Authorization', bearer);
+        const outdatedByLocale = Object.fromEntries(
+            rows.body.translations.map((row: { locale: string; outdated: boolean }) => [
+                row.locale,
+                row.outdated
+            ])
+        );
+        expect(outdatedByLocale).toEqual({ de: true, it: false });
     });
 });
 
 describe('the generic translator door follows the product rules (bug W9)', () => {
     it('refuses a title under the product minimum instead of writing it', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ title: 'Cozy Bed', price: '10.00' });
+        const { bearer, id } = await seeded();
 
         const response = await api()
-            .patch(`/locales/translations/product/${String(product._id)}`)
+            .patch(`/locales/translations/product/${id}`)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'abc' }, origin: 'human' } });
+            .send({ it: { fields: { title: 'abc' }, origin: 'human' } });
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].details.field).toBe('en.title');
+        expect(response.body.errors[0].details.field).toBe('it.title');
     });
 
     it('merges one field on PATCH and replaces the locale whole on PUT', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ title: 'Cozy Bed', price: '10.00' });
-        const url = `/locales/translations/product/${String(product._id)}`;
-        await api()
-            .put(url)
-            .set('Authorization', bearer)
-            .send({
-                en: { fields: { title: 'Cozy Bed', description: 'Extra support' }, origin: 'human' }
-            });
+        const { bearer, id } = await seeded();
+        const url = `/locales/translations/product/${id}`;
 
         const merged = await api()
             .patch(url)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed XL' }, origin: 'human' } });
+            .send({ it: { fields: { title: 'Cuccia XL' }, origin: 'human' } });
         const replaced = await api()
             .put(url)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: 'Cozy Bed XXL' }, origin: 'human' } });
+            .send({ it: { fields: { title: 'Cuccia XXL' }, origin: 'human' } });
 
         expect(merged.body.translations[0].fields).toEqual({
-            title: 'Cozy Bed XL',
+            title: 'Cuccia XL',
+            description: 'Supporto extra'
+        });
+        expect(replaced.body.translations[0].fields).toEqual({ title: 'Cuccia XXL' });
+    });
+
+    it('answers the product’s own text as the source, and refuses the default language', async () => {
+        const { bearer, id } = await seeded();
+        const url = `/locales/translations/product/${id}`;
+
+        const read = await api().get(url).set('Authorization', bearer);
+        const refused = await api()
+            .patch(url)
+            .set('Authorization', bearer)
+            .send({ en: { fields: { title: 'Cozy Bed XL' }, origin: 'human' } });
+
+        expect(read.body.source.fields).toEqual({
+            title: 'Cozy Bed',
             description: 'Extra support'
         });
-        expect(replaced.body.translations[0].fields).toEqual({ title: 'Cozy Bed XXL' });
+        expect(refused.status).toBe(422);
     });
 });
 
@@ -602,14 +700,11 @@ describe('SKU', () => {
     it('creates a product carrying a sku', async () => {
         const { bearer } = await authenticateAsRole('editor');
 
-        const response = await api()
-            .post('/products')
-            .set('Authorization', bearer)
-            .send({
-                price: '24.90',
-                sku: 'DOG-BED-15KG',
-                translations: { en: { title: 'Dog Bed' } }
-            });
+        const response = await api().post('/products').set('Authorization', bearer).send({
+            price: '24.90',
+            sku: 'DOG-BED-15KG',
+            title: 'Dog Bed'
+        });
 
         expect(response.status).toBe(201);
         expect(response.body.sku).toBe('DOG-BED-15KG');
@@ -627,7 +722,7 @@ describe('SKU', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.00', sku: 'DUP-1', translations: { en: { title: 'Collides' } } });
+            .send({ price: '10.00', sku: 'DUP-1', title: 'Collides' });
 
         expect(response.status).toBe(409);
     });
@@ -656,15 +751,12 @@ describe('VAT rate type', () => {
         async (rateType) => {
             const { bearer } = await authenticateAsRole('editor');
 
-            const response = await api()
-                .post('/products')
-                .set('Authorization', bearer)
-                .send({
-                    price: '24.90',
-                    taxClass: 'zero',
-                    rateType,
-                    translations: { en: { title: 'Dog Bed' } }
-                });
+            const response = await api().post('/products').set('Authorization', bearer).send({
+                price: '24.90',
+                taxClass: 'zero',
+                rateType,
+                title: 'Dog Bed'
+            });
 
             expect(response.status).toBe(201);
             expect(response.body.rateType).toBe(rateType);
@@ -691,15 +783,17 @@ describe('VAT rate type', () => {
     });
 });
 
-describe('GET /products/{id}, the translations map', () => {
-    it('matches the contract, returning every language the product has', async () => {
+describe('GET /products/{id}, the translations map and the source', () => {
+    it('matches the contract, returning the default text and every other language', async () => {
+        await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
         const created = await api()
             .post('/products')
             .set('Authorization', bearer)
             .send({
                 price: '24.90',
-                translations: { en: { title: 'Memory Foam Bed' } }
+                title: 'Memory Foam Bed',
+                translations: { it: { title: 'Letto in memory' } }
             });
 
         const response = await api()
@@ -707,12 +801,13 @@ describe('GET /products/{id}, the translations map', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.translations.en.title).toBe('Memory Foam Bed');
+        expect(response.body.source).toEqual({ title: 'Memory Foam Bed' });
+        expect(response.body.translations).toEqual({ it: { title: 'Letto in memory' } });
     });
 });
 
-/** A create body titled in the fallback language. */
-const bodyTitled = (title: string) => ({ price: '10.00', translations: { en: { title } } });
+/** A create body titled in the default language. */
+const bodyTitled = (title: string) => ({ price: '10.00', title });
 
 describe('the product writes carry no stock, for any role', () => {
     /** Every stock-shaped field the product answer used to carry. */
@@ -760,15 +855,12 @@ describe('product states: `purchasable`', () => {
         const plain = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.00', translations: { en: { title: 'Plain Dog Bed' } } });
-        const offSale = await api()
-            .post('/products')
-            .set('Authorization', bearer)
-            .send({
-                price: '10.00',
-                purchasable: false,
-                translations: { en: { title: 'Off-sale Dog Bed' } }
-            });
+            .send({ price: '10.00', title: 'Plain Dog Bed' });
+        const offSale = await api().post('/products').set('Authorization', bearer).send({
+            price: '10.00',
+            purchasable: false,
+            title: 'Off-sale Dog Bed'
+        });
 
         expect(plain.body.purchasable).toBe(true);
         expect(offSale.body.purchasable).toBe(false);
@@ -802,7 +894,8 @@ describe('product states: `purchasable`', () => {
                 noWithdrawal: false,
                 categories: [],
                 tags: [],
-                translations: { en: { title: 'Bed, replaced' } }
+                title: 'Bed, replaced',
+                translations: {}
             });
 
         expect(response.status).toBe(422);
@@ -817,7 +910,7 @@ const productCount = (bearer: string): Promise<number> =>
         .then((response) => (response.body.items as unknown[]).length);
 
 describe('POST /products with an Idempotency-Key', () => {
-    const TRANSLATIONS = { en: { title: 'Memory Foam Bed', description: 'Extra support' } };
+    const WORDS = { title: 'Memory Foam Bed', description: 'Extra support' };
 
     it('creates one product for a retried JSON body and replays the first answer', async () => {
         const { bearer } = await authenticateAsRole('editor');
@@ -827,7 +920,7 @@ describe('POST /products with an Idempotency-Key', () => {
                 .post('/products')
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', 'product-json-1')
-                .send({ price: '24.90', translations: TRANSLATIONS })
+                .send({ price: '24.90', ...WORDS })
         );
 
         expect(first.status).toBe(201);
@@ -846,7 +939,8 @@ describe('POST /products with an Idempotency-Key', () => {
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', 'product-multipart-1')
                 .field('price', '24.90')
-                .field('translations', JSON.stringify(TRANSLATIONS))
+                .field('title', WORDS.title)
+                .field('description', WORDS.description)
         );
 
         expect(first.status).toBe(201);
@@ -862,7 +956,7 @@ describe('POST /products with an Idempotency-Key', () => {
                 .post('/products')
                 .set('Authorization', bearer)
                 .set('Idempotency-Key', key)
-                .send({ price: '24.90', translations: TRANSLATIONS });
+                .send({ price: '24.90', ...WORDS });
 
         await sendTwice(() => create('product-json-1'));
         await create('product-json-2');
@@ -881,7 +975,8 @@ const REPLACEMENT = {
     noWithdrawal: false,
     categories: [],
     tags: [],
-    translations: { en: { title: 'Dog Bed, replaced' }, it: { title: 'Cuccia, sostituita' } }
+    title: 'Dog Bed, replaced',
+    translations: { it: { title: 'Cuccia, sostituita' } }
 };
 
 /**
@@ -896,7 +991,8 @@ const PRODUCT_WRITES = {
             .set('Accept-Language', language)
             .send({
                 price: '24.90',
-                translations: { en: { title: 'Memory Foam Bed' }, it: { title: 'Letto in memory' } }
+                title: 'Memory Foam Bed',
+                translations: { it: { title: 'Letto in memory' } }
             }),
     put: (bearer: string, language: string, id: string) =>
         api()
@@ -929,7 +1025,8 @@ const seedBilingual = (bearer: string): Promise<string> =>
         .set('Authorization', bearer)
         .send({
             price: '10.00',
-            translations: { en: { title: 'Dog Bed' }, it: { title: 'Cuccia' } }
+            title: 'Dog Bed',
+            translations: { it: { title: 'Cuccia' } }
         })
         .then((created) => String(created.body.id));
 

@@ -6,7 +6,7 @@ info:
 x-error-codes:
     LOCALE_LANGUAGE_NOT_FOUND: { status: 404, description: 'No language is registered under that tag.' }
     LOCALE_LANGUAGE_EXISTS: { status: 409, description: 'A language is already registered under that tag.' }
-    LOCALE_LANGUAGE_IS_FALLBACK: { status: 409, description: 'The deployment''s fallback language cannot be deactivated or deleted: every translatable row''s source lives there.' }
+    LOCALE_LANGUAGE_IS_FALLBACK: { status: 409, description: 'The deployment''s fallback language cannot be deactivated or deleted: every translatable entity''s own text is written in it.' }
     LOCALE_LANGUAGE_ALREADY_ACTIVE: { status: 409, description: 'The language is already switched on.' }
     LOCALE_LANGUAGE_ALREADY_INACTIVE: { status: 409, description: 'The language is already switched off.' }
     LOCALE_ENTRY_KEY_EXISTS: { status: 409, description: 'The key is already translated in this language and app, or a batch names it twice.' }
@@ -817,9 +817,11 @@ paths:
             tags: [Locales]
             summary: Read every translation an entity has
             description: |
-                Every locale this entity has a row for, in one response — the admin shape a
-                translation screen reads as a whole. A public read resolves to one language
-                server-side; this is the only door that shows every language at once.
+                The entity's own text (`source`, in the default language) and every other language it
+                has a row for, in one response — the admin shape a translation screen reads as a
+                whole. A public read resolves to one language server-side; this is the only door
+                that shows every language at once. Each row says whether it is `outdated`: written
+                from a source text that has since changed.
             operationId: getEntityTranslations
             x-error-codes:
                 '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
@@ -831,7 +833,7 @@ paths:
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'
             responses:
                 '200':
-                    description: Every locale this entity has a row for
+                    description: The entity's source text and every other language it has a row for
                     content:
                         application/json:
                             schema:
@@ -852,13 +854,13 @@ paths:
                 is `null`. A key that is neither in the body nor already stored never existed
                 either way.
 
-                The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null, same
-                invariant `POST /products` already enforces on create: a caller cannot replace the
-                whole set and leave the entity with nothing to fall back to.
+                The default language (`NODE_FALLBACK_LOCALE`) is not a translation: the entity's own
+                text IS that language, and it is edited through the entity's own write. Naming it
+                here, as an object or `null`, is a 422, and a `PUT` never deletes it.
 
                 422 for the same reasons `PATCH` refuses — an unknown locale, an empty
-                `fields` object, a `fields` key the `translatables` registry does not declare, or a
-                missing/`null` fallback locale.
+                `fields` object, a `fields` key the `translatables` registry does not declare, or
+                the default language.
             operationId: replaceEntityTranslations
             x-error-codes:
                 '404': [LOCALE_ENTITY_TYPE_UNKNOWN, LOCALE_ENTITY_NOT_FOUND]
@@ -876,7 +878,7 @@ paths:
                             $ref: '#/components/schemas/ReplaceEntityTranslationsRequest'
             responses:
                 '200':
-                    description: Every locale this entity has a row for, after the write
+                    description: The entity's source text and every other language it has a row for, after the write
                     content:
                         application/json:
                             schema:
@@ -905,9 +907,9 @@ paths:
                 never a value — clear with `null`.
 
                 An empty `fields` object is a 422, never a delete — deletion is the locale's own
-                `null`, spent deliberately so a mis-click can never delete translated work. `null`
-                on the fallback locale is a 422: deleting it would leave the entity with nothing to
-                fall back to.
+                `null`, spent deliberately so a mis-click can never delete translated work. The
+                default language (`NODE_FALLBACK_LOCALE`) is the entity's own text, edited through
+                the entity's own write: naming it here is a 422.
 
                 422 equally when a named locale does not exist in the `locales` collection (an
                 inactive one is accepted: that is where a draft is written), and when `fields` names a key the `translatables` registry does not
@@ -934,7 +936,7 @@ paths:
                             $ref: '#/components/schemas/UpdateEntityTranslationsRequest'
             responses:
                 '200':
-                    description: Every locale this entity has a row for, after the write
+                    description: The entity's source text and every other language it has a row for, after the write
                     content:
                         application/json:
                             schema:
@@ -1537,9 +1539,9 @@ components:
             additionalProperties: false
             required: [id, entityType, entityId, locale, fields, origin, createdAt, updatedAt]
             description: >-
-                One entity's words in one language. Unique on (entityType, entityId, locale) — the
-                fallback-locale row is not a special case, it is simply the row whose `locale`
-                equals this deployment's `NODE_FALLBACK_LOCALE`.
+                One entity's words in one language other than the default. Unique on (entityType,
+                entityId, locale). The default language has no row: the entity's own text is that
+                language, and a stray row in it is ignored by every read.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1564,11 +1566,15 @@ components:
                 sourceDigest:
                     type: string
                     description: >-
-                        Hash of the fallback-locale row's `fields` at the moment this row was
-                        translated. A mismatch means the source has changed since — stale, not
-                        wrong. Absent on the fallback-locale row itself, which is never stale
-                        relative to its own content.
+                        Hash of the entity's own text (`source.fields`) at the moment this row was
+                        written. A mismatch means the source has changed since — outdated, not
+                        wrong.
                     example: 3f1a9c2b7e4d5f60
+                outdated:
+                    type: boolean
+                    description: >-
+                        Only on the admin read: `true` when `sourceDigest` differs from the
+                        entity's current `source.digest`, or the row has none. Never stored.
                 origin:
                     $ref: '#/components/schemas/TranslationOrigin'
                 translatedBy:
@@ -1582,22 +1588,45 @@ components:
                     type: string
                     format: date-time
 
+        TranslationSource:
+            type: object
+            additionalProperties: false
+            required: [fields, digest]
+            description: >-
+                The entity's own text, in the default language (`NODE_FALLBACK_LOCALE`): what every
+                translation is a copy of. Shopify's `translatableContent`.
+            properties:
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: Field name to text. A field the entity holds no text for has no key.
+                    example:
+                        title: Orthopedic Memory Foam Dog Bed
+                digest:
+                    type: string
+                    description: Hash of `fields`; a row whose `sourceDigest` differs is `outdated`.
+                    example: 3f1a9c2b7e4d5f60
+
         EntityTranslations:
             type: object
             additionalProperties: false
-            required: [entityType, entityId, translations, fields]
+            required: [entityType, entityId, source, translations, fields]
             description: >-
-                Every locale one entity has a row for, in one response — the shape the admin
-                translation screen for that entity reads and writes as a whole.
+                The entity's own text and every other language it has a row for, in one response —
+                the shape the admin translation screen for that entity reads and writes as a whole.
             properties:
                 entityType:
                     $ref: '#/components/schemas/TranslatableEntityType'
                 entityId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                source:
+                    $ref: '#/components/schemas/TranslationSource'
                 translations:
                     type: array
                     items:
                         $ref: '#/components/schemas/Translation'
+                    description: Every language but the default one the entity has a row for, each with `outdated`.
                 fields:
                     type: array
                     items: { type: string }

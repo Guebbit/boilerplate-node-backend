@@ -535,7 +535,7 @@ describe('removeEntityTranslations', () => {
         await translationRepository.upsertEntityLocale(
             'widget',
             'w1',
-            FALLBACK,
+            'it',
             { title: 'Doomed' },
             'human',
             undefined,
@@ -544,7 +544,7 @@ describe('removeEntityTranslations', () => {
         await translationRepository.upsertEntityLocale(
             'widget',
             'w2',
-            FALLBACK,
+            'it',
             { title: 'Survivor' },
             'human',
             undefined,

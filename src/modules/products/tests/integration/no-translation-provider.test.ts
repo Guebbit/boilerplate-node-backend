@@ -3,7 +3,7 @@
  * `products` with the `locales` module absent. No `registerModules` call in this file installs a
  * translation port, and `registerTranslationPort` is reset explicitly rather than relying on
  * module isolation, so this suite proves the same behaviour a deployment sees when `locales` is
- * genuinely uninstalled: the fallback language still writes and reads, and any other language
+ * genuinely uninstalled: the default language still writes and reads, and any translation
  * 422s rather than a 500 from a missing port — `kernel/translation.ts`'s fallback answers it.
  */
 
@@ -21,15 +21,12 @@ setupTestDb();
 /* No provider for the whole suite — the one thing this file is testing. */
 beforeEach(() => registerTranslationPort(undefined));
 
-/** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
-const FALLBACK = 'en';
-
 describe('productService.create — no translation provider', () => {
-    it('writes the fallback language alone', async () => {
+    it('writes the default language alone', async () => {
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: '12.50',
-                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                title: 'Standing Desk'
             }),
             testCallerContext
         );
@@ -42,10 +39,8 @@ describe('productService.create — no translation provider', () => {
         const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: '12.50',
-                translations: {
-                    [FALLBACK]: { title: 'Standing Desk' },
-                    it: { title: 'Scrivania' }
-                }
+                title: 'Standing Desk',
+                translations: { it: { title: 'Scrivania' } }
             }),
             testCallerContext
         );
@@ -57,23 +52,26 @@ describe('productService.create — no translation provider', () => {
 });
 
 describe('productService.updateById — no translation provider', () => {
-    it('refuses a PATCH naming only a language that is not the fallback', async () => {
+    it.each([
+        ['it', 'a language other than the default'],
+        ['en', 'the default language']
+    ])('refuses a PATCH naming %s, %s, with a field-named 422', async (locale) => {
         const product = await createProduct({ title: 'Bookshelf' });
 
         const result = await productService.updateById(
             product.id,
-            { translations: { it: { title: 'Libreria' } } },
+            { translations: { [locale]: { title: 'Libreria' } } },
             testCallerContext
         );
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);
-        expect((result as ResponseReject).errors[0]?.details?.field).toBe('translations.it');
+        expect((result as ResponseReject).errors[0]?.details?.field).toBe(`translations.${locale}`);
     });
 });
 
 describe('productService.getByIdForCaller — no translation provider', () => {
-    it('builds the fallback tab from the product’s own columns', async () => {
+    it('answers the product’s own columns as the source, and no other language', async () => {
         const product = await createProduct({ title: 'Bookshelf', description: 'Oak, 5 shelves' });
 
         const admin = await productService.getByIdForCaller(
@@ -82,9 +80,8 @@ describe('productService.getByIdForCaller — no translation provider', () => {
             callerContextAs('admin')
         );
 
-        expect(admin?.translations).toEqual({
-            [FALLBACK]: { title: 'Bookshelf', description: 'Oak, 5 shelves' }
-        });
+        expect(admin?.source).toEqual({ title: 'Bookshelf', description: 'Oak, 5 shelves' });
+        expect(admin?.translations).toEqual({});
     });
 });
 

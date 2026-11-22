@@ -17,6 +17,8 @@
         "proof-date-in-future": "The date on the proof of sending cannot be in the future.",
         "proof-already-recorded": "A proof of sending is already recorded for this return.",
         "paid-outside-after-proof": "The refund for this return was already opened when the proof of sending was recorded, so it cannot be recorded as paid outside the application now.",
+        "refund-on-proof-invalid": "Refund on proof applies only to a defective or wrong-item return: a withdrawal's proof opens its refund already.",
+        "remedy-after-refund-on-proof": "The refund was opened when the proof of sending was recorded, so a repair or a replacement can no longer be chosen.",
         "refund-opened-on-proof": "The refund was opened when the proof of sending was recorded, so no handling deduction can come out of it. Claim it from the buyer separately.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
         "nothing-to-cancel": "There is nothing left to cancel here. If nothing has shipped yet, cancel the whole order instead.",

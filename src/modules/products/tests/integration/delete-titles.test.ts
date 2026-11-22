@@ -143,14 +143,18 @@ describe('productService.titlesById', () => {
         await expect(productService.titlesById(String(product._id))).resolves.toEqual({});
     });
 
-    it('lets a translated title win over the product column for its own language', async () => {
+    it('names the default language from the product column, whatever a stray row says', async () => {
         const product = await createProduct({ title: 'Column title' });
         jest.mocked(translation.readServedTranslations).mockResolvedValueOnce(
-            new Map([['en', { title: 'Translated title' }]])
+            new Map([
+                ['en', { title: 'Stray default row' }],
+                ['it', { title: 'Titolo tradotto' }]
+            ])
         );
 
         await expect(productService.titlesById(String(product._id))).resolves.toEqual({
-            en: 'Translated title'
+            en: 'Column title',
+            it: 'Titolo tradotto'
         });
     });
 });

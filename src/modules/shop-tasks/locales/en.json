@@ -21,6 +21,7 @@
                 "preorders-late": "{{n}} preorders are past their date",
                 "delivery-holds-open": "{{n}} held orders have waited too long",
                 "returns-awaiting-goods": "{{n}} returns are overdue for their goods: ask the buyer once for proof of posting, and keep the refund on hold",
+                "returns-proof-goods-late": "{{n}} returns have a proof of posting but the goods are late: follow up with the carrier, and check whether a refund is due",
                 "returns-undecided": "{{n}} return requests still need a decision",
                 "low-stock": "{{n}} products are low on stock",
                 "unshipped": "{{n}} paid orders still have goods to ship",

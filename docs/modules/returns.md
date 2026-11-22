@@ -109,6 +109,11 @@ customer's note, staff's decline message and the lines are `GET /returns/{id}`, 
 customer's own list is the same shape. See
 [a list row is a list item](../reference/responses.md#a-list-row-is-a-list-item).
 
+Staff can narrow it by `status`, `reason`, `orderId` and `proofOfSending` (`true` keeps the returns
+with a proof of sending on file, `false` those without), and sort by `proofOfSendingAt`. The two
+staff digest rows about late goods open the list on one value each
+([the staff digest](./shop-tasks-notices.md#the-staff-digest)).
+
 ## The lifecycle
 
 ```mermaid

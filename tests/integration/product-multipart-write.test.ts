@@ -60,10 +60,7 @@ const FALLBACK = 'en';
 
 describe('writing a product through a multipart body', () => {
     beforeEach(async () => {
-        /**
-         * Every case below writes the fallback locale — see the same note in
-         * `locales/tests/integration/translations.test.ts`.
-         */
+        // The default language is registered and active, as in a real deployment.
         await givenLocale(FALLBACK);
     });
 
@@ -79,15 +76,8 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field(
-                'translations',
-                JSON.stringify({
-                    en: {
-                        title: 'Multipart product',
-                        description: 'Created through a form body'
-                    }
-                })
-            )
+            .field('title', 'Multipart product')
+            .field('description', 'Created through a form body')
             .field('price', '101.5')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -109,12 +99,12 @@ describe('writing a product through a multipart body', () => {
         const created = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ price: '10.00', translations: { en: { title: 'Starts as JSON' } } });
+            .send({ price: '10.00', title: 'Starts as JSON' });
 
         const response = await api()
             .patch(`/products/${created.body.id}`)
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Updated through a form' } }))
+            .field('title', 'Updated through a form')
             .field('price', '42')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -131,7 +121,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Inactive on arrival' } }))
+            .field('title', 'Inactive on arrival')
             .field('price', '5')
             /**
              * The string 'false' is truthy — the decoder is the only thing standing between this
@@ -153,7 +143,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Digital good on arrival' } }))
+            .field('title', 'Digital good on arrival')
             .field('price', '5')
             /**
              * The string 'false' is truthy — same trap as `active` above, so the create
@@ -175,7 +165,7 @@ describe('writing a product through a multipart body', () => {
         const created = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Backorderable from a form' } }))
+            .field('title', 'Backorderable from a form')
             .field('price', '5')
             // The string 'false' is truthy, and an edit form sends this field on every save.
             .field('allowBackorder', 'true');
@@ -196,7 +186,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Active by default' } }))
+            .field('title', 'Active by default')
             .field('price', '7')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -213,7 +203,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Nonsense price' } }))
+            .field('title', 'Nonsense price')
             .field('price', 'not-a-number')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',

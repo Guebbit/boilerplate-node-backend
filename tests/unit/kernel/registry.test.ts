@@ -61,8 +61,8 @@ it('skips a module with no subscribe, rather than treating it as a mistake', () 
  */
 describe('resolveTranslatables', () => {
     it('flattens every module into one lookup keyed by entityType', () => {
-        const writeProduct = jest.fn();
-        const writePage = jest.fn();
+        const sourceOfProduct = jest.fn();
+        const sourceOfPage = jest.fn();
         const modules: AppModule[] = [
             {
                 name: 'products',
@@ -72,7 +72,7 @@ describe('resolveTranslatables', () => {
                         fieldRules: titleRules,
                         cacheTag: 'products',
                         revisionOf: jest.fn(),
-                        writeDerived: writeProduct,
+                        sourceOf: sourceOfProduct,
                         markEdited: jest.fn()
                     }
                 },
@@ -86,7 +86,7 @@ describe('resolveTranslatables', () => {
                         fieldRules: bodyRules,
                         cacheTag: 'pages',
                         revisionOf: jest.fn(),
-                        writeDerived: writePage,
+                        sourceOf: sourceOfPage,
                         markEdited: jest.fn()
                     }
                 },
@@ -100,7 +100,7 @@ describe('resolveTranslatables', () => {
                 fieldRules: titleRules,
                 cacheTag: 'products',
                 revisionOf: expect.any(Function),
-                writeDerived: writeProduct,
+                sourceOf: sourceOfProduct,
                 markEdited: expect.any(Function)
             },
             page: {
@@ -108,7 +108,7 @@ describe('resolveTranslatables', () => {
                 fieldRules: bodyRules,
                 cacheTag: 'pages',
                 revisionOf: expect.any(Function),
-                writeDerived: writePage,
+                sourceOf: sourceOfPage,
                 markEdited: expect.any(Function)
             }
         });
@@ -124,7 +124,7 @@ describe('resolveTranslatables', () => {
             fieldRules: titleRules,
             cacheTag: 'products',
             revisionOf: jest.fn(),
-            writeDerived: jest.fn(),
+            sourceOf: jest.fn(),
             markEdited: jest.fn()
         };
         const modules: AppModule[] = [

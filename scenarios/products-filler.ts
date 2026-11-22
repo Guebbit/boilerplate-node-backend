@@ -244,9 +244,9 @@ export interface FillerProduct {
     /** `false` marks a digital good. Absent means physical. */
     requiresShipping?: false;
     /**
-     * Both locales' copy for the write surface's translation batch (see `./products`). `en` is
-     * built from the same template call as the flat `title`/`description` above, so the two can
-     * never drift apart.
+     * Both locales' copy (see `./products`). `en` is built from the same template call as the
+     * flat `title`/`description` above, so the two can never drift apart; only `it` is written
+     * as a translation row.
      */
     translations: { en: FillerCopy; it: FillerCopy };
 }

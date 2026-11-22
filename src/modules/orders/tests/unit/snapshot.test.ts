@@ -17,7 +17,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     resolve: jest.fn().mockResolvedValue(new Map()),
     removeAll: jest.fn().mockResolvedValue(0),
     search: jest.fn().mockResolvedValue([]),
-    plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
+    plan: jest.fn().mockResolvedValue({ planned: [] }),
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
