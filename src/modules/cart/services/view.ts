@@ -11,11 +11,11 @@
 
 import { NO_MONEY, toDecimalString } from '@domain-primitives/money';
 import { orderTotal, sumLineItems } from '@modules/orders';
-import { inventoryService, type StockPosition } from '@modules/inventory';
-import { productService } from '@modules/products';
+import { inventoryService, type LiveAvailability } from '@modules/inventory';
+import { isBackorder, productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { CartItem, CartShipping } from '@types';
+import type { CartItem, CartShipping, CartWarning } from '@types';
 import {
     SHIPPING_METHODS,
     methodFitsWeight,
@@ -23,10 +23,9 @@ import {
     type StaticShippingMethod
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
-import { basketWeight, lineAvailability, needsShipping } from '../domain';
-import { presentCart, type CartView } from '../presenter';
+import { basketWeight, fitsStock, needsShipping, unitsShippingLater } from '../domain';
+import { presentCart, type CartView, type JudgedCartLine } from '../presenter';
 import { cartLineMax } from '../config';
-import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 import { shopCurrency } from '@modules/shop';
 
 /**
@@ -133,11 +132,56 @@ export const effectiveShippingChoice = (
 ): string | undefined =>
     stored !== undefined && options.some((option) => option.id === stored) ? stored : undefined;
 
-/** Assemble the view from lines already joined and the ledger's units, with no further read. */
+/**
+ * What a hard-deleted or never-judged product reads: nothing to buy. The cart line is kept, so the
+ * client can show it and let the shopper remove it.
+ */
+const NOT_FOR_SALE: LiveAvailability = {
+    availability: 'out_of_stock',
+    quantityAvailable: 0,
+    shelf: 0
+};
+
+/**
+ * One line with the product's own stock answer, and whether checkout would take it as it stands.
+ * The words and numbers are inventory's (`GET /products/{id}/availability`); only
+ * `quantityBackordered` and `buyable` are this module's.
+ *
+ * @param line - the stored line joined to its product
+ * @param stock - the product's live availability; absent for a hard-deleted product
+ */
+const judgeLine = (line: CartLine, stock: LiveAvailability | undefined): JudgedCartLine => {
+    const { availability, availabilityDate, quantityAvailable, shelf } = stock ?? NOT_FOR_SALE;
+    // Nothing ships later on a line that cannot be bought at all.
+    const quantityBackordered =
+        availability === 'out_of_stock'
+            ? undefined
+            : unitsShippingLater({
+                  preorder: availability === 'preorder',
+                  backorder: line.product !== null && isBackorder(line.product, new Date()),
+                  shelf,
+                  quantity: line.quantity
+              });
+    return {
+        productId: line.productId,
+        quantity: line.quantity,
+        availability,
+        ...(availabilityDate === undefined ? {} : { availabilityDate }),
+        ...(quantityAvailable === undefined ? {} : { quantityAvailable }),
+        ...(quantityBackordered === undefined ? {} : { quantityBackordered }),
+        // Hidden, deleted and off-sale products all read `out_of_stock`, so one test covers them.
+        buyable:
+            availability !== 'out_of_stock' &&
+            (quantityAvailable === undefined || fitsStock(line.quantity, quantityAvailable))
+    };
+};
+
+/** Assemble the view from lines already joined and the products' availability, with no further read. */
 const buildView = (
     cart: CartDocument | null,
     lines: CartLine[],
-    positions: Map<string, StockPosition>
+    stock: Map<string, LiveAvailability>,
+    warnings: readonly CartWarning[] | undefined
 ): CartView => {
     /**
      * A cart never freezes a currency of its own — it hasn't checked out — so it always
@@ -152,16 +196,7 @@ const buildView = (
         options.find((option) => option.id === selected)?.price ??
         toDecimalString(NO_MONEY, currency);
     return presentCart({
-        lines: lines.map(({ productId, quantity: lineQuantity, product }) => ({
-            productId,
-            quantity: lineQuantity,
-            availability: lineAvailability({
-                product: availabilityProductOf(product),
-                available: positions.get(productId)?.available,
-                shelf: positions.get(productId)?.shelf,
-                quantity: lineQuantity
-            })
-        })),
+        lines: lines.map((line) => judgeLine(line, stock.get(line.productId))),
         count,
         quantity,
         itemsTotal: price,
@@ -173,26 +208,27 @@ const buildView = (
         totalPrice: orderTotal({ items: lines, shippingCost, currency }),
         currency,
         shipping: { required, ...(selected === undefined ? {} : { selected }), options },
-        lineMax: cartLineMax()
+        lineMax: cartLineMax(),
+        warnings
     });
 };
 
 /**
  * Turn a cart document into the response the contract declares.
- * The joined `product` prices the cart and, with the ledger's units, sets each line's
- * `availability`, then is dropped: `CartResponseItem` in `openapi.yaml` is
- * `additionalProperties: false` over `{ productId, quantity, availability }`. The ledger is
- * read once for the whole cart (`inventoryService.availableFor`, the same source checkout and the
- * merge use), and the value is never the number left. Use `cartGet` where the joined product is
- * actually needed.
+ * The joined product prices the cart and, with inventory's live availability, sets each line's
+ * stock answer, then is dropped: `CartResponseItem` in `openapi.yaml` is `additionalProperties:
+ * false`. The ledger is read once for the whole cart, uncached, so a line never shows a number a
+ * stock move has already changed. Use `cartGet` where the joined product is actually needed.
+ *
+ * @param cart - the stored cart, or `null` for none
+ * @param warnings - what the write that produced this view clamped; absent for a read
  */
-export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
+export const toCartView = (
+    cart: CartDocument | null,
+    warnings?: readonly CartWarning[]
+): Promise<CartView> =>
     readCartLines(cart).then((lines) =>
         inventoryService
-            .availableFor(
-                lines.map(({ productId }) => productId),
-                preorderIdsOf(lines),
-                backorderIdsOf(lines)
-            )
-            .then((positions) => buildView(cart, lines, positions))
+            .liveAvailabilityOf(lines.map(({ productId }) => productId))
+            .then((stock) => buildView(cart, lines, stock, warnings))
     );

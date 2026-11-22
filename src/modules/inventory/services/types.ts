@@ -25,14 +25,16 @@ export interface StockLine {
 }
 
 /**
- * One line a hold could not cover, and by how much it fell short. For a preorder line `available`
- * is what is left of the allowance, not what is on the shelf.
+ * One line a hold could not cover, and by how many units it can be bought now. For a preorder line
+ * `quantityAvailable` is what is left of the allowance, not what is on the shelf, and it counts the
+ * room under the cap for a product open to backorder: the shopper's own number (`GET
+ * /products/{id}/availability`), never the raw shelf.
  */
 export interface StockShortfall {
     productId: string;
     title: string;
     requested: number;
-    available: number;
+    quantityAvailable: number;
 }
 
 /**

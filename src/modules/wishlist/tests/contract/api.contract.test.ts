@@ -45,9 +45,7 @@ describe('GET /wishlist', () => {
         const response = await api().get('/wishlist').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.items).toEqual([
-            { productId: String(product._id), availability: 'in_stock' }
-        ]);
+        expect(response.body.items).toEqual([{ productId: String(product._id) }]);
     });
 });
 
@@ -62,9 +60,7 @@ describe('POST /wishlist/items', () => {
             .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
-        expect(response.body.items).toEqual([
-            { productId: String(product._id), availability: 'in_stock' }
-        ]);
+        expect(response.body.items).toEqual([{ productId: String(product._id) }]);
     });
 
     // A saved product is a line of the wishlist: no 201, no Location, nothing to GET.
@@ -90,9 +86,7 @@ describe('POST /wishlist/items', () => {
             .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
-        expect(response.body.items).toEqual([
-            { productId: String(product._id), availability: 'in_stock' }
-        ]);
+        expect(response.body.items).toEqual([{ productId: String(product._id) }]);
     });
 
     it('matches the error contract for a missing productId', async () => {
@@ -177,6 +171,7 @@ describe('POST /wishlist/items/{productId}/move-to-cart', () => {
                 productId: String(product._id),
                 quantity: 1,
                 availability: 'in_stock',
+                quantityAvailable: 10,
                 canIncrease: true
             }
         ]);

@@ -11,7 +11,6 @@ import * as checkout from './checkout';
 import * as reorder from './reorder';
 import * as merge from './merge';
 import * as cleanup from './cleanup';
-import * as shelf from './shelf';
 
 export type { CheckoutChoices } from './checkout';
 export type { MergeResult } from './merge';
@@ -32,6 +31,5 @@ export const cartService = {
     orderConfirm: checkout.orderConfirm,
     reorderIntoCart: reorder.reorderIntoCart,
     merge: merge.cartMerge,
-    productAvailabilityFor: shelf.productAvailabilityFor,
     productRemoveFromCartsById: cleanup.productRemoveFromCartsById
 };

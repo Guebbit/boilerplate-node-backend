@@ -19,22 +19,38 @@ setupTestDb();
 const query = (list: string[]) => list.map((id) => `id=${id}`).join('&');
 
 describe('GET /products/{id}/availability', () => {
-    it('answers a guest in_stock for a product with shelf units, with no date', async () => {
+    it('answers a guest in_stock for a product with shelf units, with the number and no date', async () => {
         const product = await createProduct({ onHand: 4 });
 
         const response = await api().get(`/products/${String(product._id)}/availability`);
 
         expect(response.status).toBe(200);
-        expect(response.body).toEqual({ productId: String(product._id), availability: 'in_stock' });
+        expect(response.body).toEqual({
+            productId: String(product._id),
+            availability: 'in_stock',
+            quantityAvailable: 4
+        });
         expect(response.headers['cache-control']).toBe('public, no-cache');
     });
 
-    it('answers out_of_stock for an empty shelf', async () => {
+    it('answers out_of_stock for an empty shelf, with 0 rather than no number', async () => {
         const product = await createProduct({ onHand: 0 });
 
         const response = await api().get(`/products/${String(product._id)}/availability`);
 
-        expect(response.body.availability).toBe('out_of_stock');
+        expect(response.body).toEqual({
+            productId: String(product._id),
+            availability: 'out_of_stock',
+            quantityAvailable: 0
+        });
+    });
+
+    it('answers 0 for a product that is not on sale, whatever is on the shelf', async () => {
+        const product = await createProduct({ onHand: 9, purchasable: false });
+
+        const response = await api().get(`/products/${String(product._id)}/availability`);
+
+        expect(response.body).toMatchObject({ availability: 'out_of_stock', quantityAvailable: 0 });
     });
 
     it('answers a preorder with the release day as availabilityDate', async () => {
@@ -50,7 +66,8 @@ describe('GET /products/{id}/availability', () => {
         expect(response.body).toEqual({
             productId: String(product._id),
             availability: 'preorder',
-            availabilityDate: '2999-01-05'
+            availabilityDate: '2999-01-05',
+            quantityAvailable: 10
         });
     });
 
@@ -72,6 +89,8 @@ describe('GET /products/{id}/availability', () => {
             availability: 'backorder',
             availabilityDate: '2999-03-01'
         });
+        // No cap: no limit, which is an absent field and never a number.
+        expect(response.body).not.toHaveProperty('quantityAvailable');
     });
 
     it('promises a backorder with no restock date the shop day 30 days from now', async () => {
@@ -86,7 +105,8 @@ describe('GET /products/{id}/availability', () => {
 
         expect(response.body).toMatchObject({
             availability: 'backorder',
-            availabilityDate: shopDayOf(new Date(Date.now() + BACKORDER_PROMISE_DAYS * DAY_MS))
+            availabilityDate: shopDayOf(new Date(Date.now() + BACKORDER_PROMISE_DAYS * DAY_MS)),
+            quantityAvailable: 5
         });
     });
 
@@ -134,8 +154,8 @@ describe('GET /products/availability', () => {
         expect(response.body.items).toHaveLength(2);
         expect(response.body.items).toEqual(
             expect.arrayContaining([
-                { productId: String(stocked._id), availability: 'in_stock' },
-                { productId: String(empty._id), availability: 'out_of_stock' }
+                { productId: String(stocked._id), availability: 'in_stock', quantityAvailable: 4 },
+                { productId: String(empty._id), availability: 'out_of_stock', quantityAvailable: 0 }
             ])
         );
     });

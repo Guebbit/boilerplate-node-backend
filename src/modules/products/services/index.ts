@@ -26,9 +26,6 @@ import {
     titlesById
 } from './lookups';
 
-/** Whether a caller may read exact stock — published so a sibling's refusal can say the same. */
-export { canSeeStock } from './stock-view';
-
 /**
  * The service's public surface — every controller and cross-module caller goes through this.
  * `create` and `updateById` write the translation rows with the product, so there is no door

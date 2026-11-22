@@ -17,7 +17,7 @@ paths:
         get:
             tags: [Inventory]
             summary: Stock levels
-            description: The stock board — every product with its three counters and the availability derived from them. Admin (`read:StockLevel`), the raw counts. A customer sees `availability` and `availabilityDate` from `GET /products/{id}/availability`, never `onHand` or `reserved`. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+            description: The stock board — every product with its three counters and the availability derived from them. Admin (`read:StockLevel`), the raw counts. A customer sees `availability`, `availabilityDate` and `quantityAvailable` from `GET /products/{id}/availability`, never `onHand` or `reserved`. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
             operationId: listInventoryLevels
             security:
                 - bearerAuth: ['read:StockLevel']
@@ -440,6 +440,12 @@ components:
                     type: string
                     format: date
                     description: Google's `availability_date`, a calendar day in the shop's time zone. Present only with `preorder` (the release date) and `backorder` (the restock date, or 30 days from today when none is set).
+                quantityAvailable:
+                    type: integer
+                    minimum: 0
+                    description: |
+                        How many units can be bought now (Shopify's `quantityAvailable`). The shelf, plus the room left under the backorder cap for a product open to backorder; only the room left for a preorder. `0` exactly when `availability` is `out_of_stock`, which includes a product that is not on sale. Absent means no limit (a backorder with no cap).
+                        The raw `onHand` and `reserved` stay behind `read:StockLevel`.
 
         ProductAvailabilityResponse:
             type: object

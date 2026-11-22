@@ -48,7 +48,7 @@ describe('evaluateCheckout', () => {
                     productId: 'p-pre',
                     title: 'Coming soon',
                     requested: 3,
-                    availability: 'insufficient_stock'
+                    quantityAvailable: 2
                 }
             ]
         });
@@ -94,17 +94,16 @@ describe('evaluateCheckout', () => {
         });
     });
 
-    // Exact stock is for stock readers (`read:StockLevel`), and no shopper is one.
-    it('names the short line without the number left', () => {
+    it('names the short line with how many can be bought', () => {
         const verdict = evaluateCheckout([line(6, 5)]);
 
         expect(
             !verdict.ok && verdict.reason === 'insufficient-stock' && verdict.shortfalls
-        ).toEqual([{ productId: '', title: '', requested: 6, availability: 'insufficient_stock' }]);
+        ).toEqual([{ productId: '', title: '', requested: 6, quantityAvailable: 5 }]);
     });
 
-    // Off sale is "stock 0" for checkout, with its own name so the client words it differently.
-    it('refuses an off-sale product under the stock refusal, named unavailable', () => {
+    // Off sale is "stock 0" for checkout, whatever the ledger still holds.
+    it('refuses an off-sale product under the stock refusal, with nothing to buy', () => {
         const offSale = {
             quantity: 1,
             productId: 'p-1',
@@ -114,20 +113,18 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1, 10), offSale])).toEqual({
             ok: false,
             reason: 'insufficient-stock',
-            shortfalls: [
-                { productId: 'p-1', title: 'Bed', requested: 1, availability: 'unavailable' }
-            ]
+            shortfalls: [{ productId: 'p-1', title: 'Bed', requested: 1, quantityAvailable: 0 }]
         });
     });
 
-    it('names a sold-out line out_of_stock, apart from a short one', () => {
+    it('names a sold-out line with 0, apart from a short one with what is left', () => {
         const verdict = evaluateCheckout([line(2, 0), line(6, 5)]);
 
         expect(
             !verdict.ok &&
                 verdict.reason === 'insufficient-stock' &&
-                verdict.shortfalls.map(({ availability }) => availability)
-        ).toEqual(['out_of_stock', 'insufficient_stock']);
+                verdict.shortfalls.map(({ quantityAvailable }) => quantityAvailable)
+        ).toEqual([0, 5]);
     });
 
     // Hidden wins over off sale: the line is `removed`, which is the 404-shaped refusal.

@@ -274,6 +274,7 @@ describe('getForBadge', () => {
                 productId: String(product._id),
                 quantity: 2,
                 availability: 'in_stock',
+                quantityAvailable: 10,
                 canIncrease: true
             }
         ]);
@@ -281,6 +282,7 @@ describe('getForBadge', () => {
             'productId',
             'quantity',
             'availability',
+            'quantityAvailable',
             'canIncrease'
         ]);
     });
@@ -429,6 +431,7 @@ describe('setItemById', () => {
                     productId: String(product._id),
                     quantity: 2,
                     availability: 'in_stock',
+                    quantityAvailable: 10,
                     canIncrease: true
                 }
             ],
@@ -515,7 +518,7 @@ describe('setItemById', () => {
     it('sets a line straight to the 999 cap — the set path never goes through the add refusal', () =>
         atHardCap(async () => {
             const user = await createUser();
-            const product = await createProduct();
+            const product = await createProduct({ onHand: 1000 });
 
             const result = await cartService.setItemById(user.id, String(product._id), 999);
 
@@ -703,7 +706,7 @@ describe('addItemById', () => {
     it('refuses an add that would push a line past 999, and changes nothing', () =>
         atHardCap(async () => {
             const user = await createUser();
-            const product = await createProduct();
+            const product = await createProduct({ onHand: 1000 });
             await cartService.setItemById(user.id, String(product._id), 999);
 
             const result = await cartService.addItemById(user.id, String(product._id), 1);
@@ -721,7 +724,7 @@ describe('reorderIntoCart', () => {
     it('clamps a reordered line to 999 instead of pushing it past the cap', () =>
         atHardCap(async () => {
             const user = await createUser();
-            const product = await createProduct();
+            const product = await createProduct({ onHand: 1000 });
             await cartService.setItemById(user.id, String(product._id), 998);
             const order = await createOrder(user, [toOrderItem(product, 2)]);
 
@@ -740,7 +743,7 @@ describe('reorderIntoCart', () => {
         atHardCap(async () => {
             const user = await createUser();
             const kept = await createProduct({ title: 'Kept' });
-            const full = await createProduct({ title: 'Full' });
+            const full = await createProduct({ title: 'Full', onHand: 1000 });
             await cartService.setItemById(user.id, String(full._id), 999);
             const order = await createOrder(user, [toOrderItem(kept, 1), toOrderItem(full, 1)]);
 

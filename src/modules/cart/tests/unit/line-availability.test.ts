@@ -1,7 +1,7 @@
 /**
  * @module
- * `lineAvailability` — the one precedence rule behind a cart line, a wishlist line, a merge result
- * and checkout's refusal. Every row of the precedence table, cart and wishlist variants.
+ * `lineAvailability` — the cart's internal precedence rule, behind checkout's refusal. Every row of
+ * the precedence table.
  *
  * No mocks, no database.
  */
@@ -128,39 +128,6 @@ describe('lineAvailability', () => {
         ]
     ])('cart line, %s: %s', (_label, facts, expected) => {
         expect(lineAvailability(facts)).toBe(expected);
-    });
-
-    it.each<[string, AvailabilityFacts, string]>([
-        ['stock', { product: LIVE, available: 1 }, 'in_stock'],
-        ['none left', { product: LIVE, available: 0 }, 'out_of_stock'],
-        ['off sale', { product: { ...LIVE, purchasable: false }, available: 4 }, 'unavailable'],
-        ['hidden', { product: { ...LIVE, active: false }, available: 4 }, 'removed'],
-        ['gone', { product: null, available: undefined }, 'removed'],
-        [
-            'a preorder with allowance',
-            { product: { ...LIVE, preorder: true }, available: 1 },
-            'preorder'
-        ],
-        [
-            'a backorder product with an empty shelf and room',
-            { product: { ...LIVE, backorder: true }, available: 4, shelf: 0 },
-            'backorder'
-        ],
-        [
-            'a backorder product with something on the shelf',
-            { product: { ...LIVE, backorder: true }, available: 9, shelf: 5 },
-            'in_stock'
-        ]
-    ])('wishlist line, %s: %s', (_label, facts, expected) => {
-        expect(lineAvailability(facts)).toBe(expected);
-    });
-
-    it('never gives a wishlist line insufficient_stock', () => {
-        const values = [0, 1, 5, 999].map((available) =>
-            lineAvailability({ product: LIVE, available })
-        );
-
-        expect(values).not.toContain('insufficient_stock');
     });
 });
 

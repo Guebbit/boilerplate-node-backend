@@ -145,8 +145,7 @@ describe('a cart that changes during a merge', () => {
                 productId: String(product._id),
                 requested: 3,
                 resulting: 5,
-                reason: 'summed',
-                availability: 'in_stock'
+                reason: 'summed'
             }
         ]);
         await expect(heldBy(user.id)).resolves.toEqual({

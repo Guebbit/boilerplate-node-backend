@@ -109,9 +109,8 @@ There is no `onHand`, `reserved` or allowance on the product document, and no co
 `preorder` or `backorder`: the answer is the same for every role, apart from what a role may see at
 all (the `actions` it holds, the `translations` a translator reads). A shopper's stock signal is the
 availability read below; a stock reader's counters are `GET /inventory/levels/{productId}`
-(`read:StockLevel`, which `canSeeStock` in `services/stock-view.ts` still names for the one other
-caller that needs it). The counters tell a competitor how fast a line sells and how much is left, so
-they stay behind that key.
+(`read:StockLevel`). The raw counters tell a competitor how fast a line sells, so they stay behind
+that key; how many a shopper can buy (`quantityAvailable`) is public, on the availability read.
 
 **Availability is its own read.** What a shopper is told about stock (`availability`, `availabilityDate`)
 is answered by [`inventory`](./inventory.md#the-availability-reads) under `/products/{id}/availability`
@@ -212,12 +211,13 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
   (the name in every language, locale → title) for exactly that: it is read before a hard delete
   drops the translation rows, because once the event fires the product is gone and nothing else
   could name it. A soft delete carries them too.
-- A **hidden** product's line stays in the cart and the wishlist, reads `removed` with no title,
-  and comes back to a stock value if the product is shown again. An **off-sale** product's line
-  stays too, reads `unavailable`, and is added to a cart like a sold-out product.
+- A **hidden** product's line stays in the cart and the wishlist, reads `out_of_stock` with
+  `quantityAvailable: 0` (the client tells it apart from the product details it holds), and comes
+  back to its stock answer if the product is shown again. An **off-sale** product's line stays too
+  and reads the same; a new add of one succeeds with nothing added and a warning.
 - `cart`'s checkout refuses both. A hidden or deleted product answers `CART_PRODUCT_UNAVAILABLE`;
   an off-sale one joins the stock refusal `CART_INSUFFICIENT_STOCK`. Each carries `details.lines`
-  naming exactly which lines are affected (with an `availability` on the stock refusal), instead of
+  naming exactly which lines are affected (with `quantityAvailable` on the stock refusal), instead of
   leaving the client to work it out. That guard is about a NEW purchase; once an order exists the
   product counts as present.
 

@@ -3,8 +3,8 @@
  * The merge rule (`planMergeLine`, in the cart's domain layer).
  *
  * No mocks, no database. The invariants are asserted over a grid of inputs, so a boundary an
- * example would miss still has to hold; the named cases pin which reason wins. Stock is not an
- * input: the rule adds what `POST /cart` would, and the shared `fitsStock` rule flags the result.
+ * example would miss still has to hold; the named cases pin which reason wins. Stock clamps after
+ * the ceiling, and the plan names the verdict for the caller to warn with.
  */
 
 import { planMergeLine, type MergeLineFacts } from '../../domain';
@@ -18,8 +18,16 @@ const MAX_LINES = 100;
 /** Facts with the ceilings filled in, the product listed and room for a new line; each case names only what it is about. */
 const plan = (
     facts: Pick<MergeLineFacts, 'requested' | 'held'> &
-        Partial<Pick<MergeLineFacts, 'listed' | 'lines'>>
-) => planMergeLine({ listed: true, lines: 0, ...facts, lineMax: LINE_MAX, maxLines: MAX_LINES });
+        Partial<Pick<MergeLineFacts, 'listed' | 'lines' | 'quantityAvailable'>>
+) =>
+    planMergeLine({
+        listed: true,
+        lines: 0,
+        quantityAvailable: undefined,
+        ...facts,
+        lineMax: LINE_MAX,
+        maxLines: MAX_LINES
+    });
 
 describe('planMergeLine', () => {
     it('adds the whole line, with no reason, when nothing is held', () => {
@@ -64,6 +72,59 @@ describe('planMergeLine', () => {
         expect(plan({ requested: 2, held: 3, lines: MAX_LINES })).toEqual({
             add: 2,
             reason: 'summed'
+        });
+    });
+
+    describe('stock', () => {
+        it('adds the whole line when there is no limit', () => {
+            expect(plan({ requested: 50, held: 0, quantityAvailable: undefined })).toEqual({
+                add: 50
+            });
+        });
+
+        it('adds only what can be bought, and says how far it was held back', () => {
+            expect(plan({ requested: 5, held: 0, quantityAvailable: 3 })).toEqual({
+                add: 3,
+                stock: { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', wanted: 5 }
+            });
+        });
+
+        it('judges the sum against the number, not the guest line alone', () => {
+            expect(plan({ requested: 2, held: 3, quantityAvailable: 4 })).toEqual({
+                add: 1,
+                reason: 'summed',
+                stock: { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', wanted: 5 }
+            });
+        });
+
+        it('adds nothing, out of stock, when none can be bought', () => {
+            expect(plan({ requested: 2, held: 0, quantityAvailable: 0 })).toEqual({
+                add: 0,
+                stock: { code: 'MERCHANDISE_OUT_OF_STOCK', wanted: 2 }
+            });
+        });
+
+        it('never lowers a line already above the number', () => {
+            expect(plan({ requested: 1, held: 8, quantityAvailable: 3 })).toEqual({
+                add: 0,
+                reason: 'summed',
+                stock: { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', wanted: 9 }
+            });
+        });
+
+        it('applies the stock limit to what the ceiling left, and keeps the ceiling reason', () => {
+            expect(plan({ requested: 5, held: 996, quantityAvailable: 998 })).toEqual({
+                add: 2,
+                reason: 'capped',
+                stock: { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', wanted: 999 }
+            });
+        });
+
+        it('says nothing about stock for a product that is not shown', () => {
+            expect(plan({ requested: 2, held: 0, listed: false, quantityAvailable: 0 })).toEqual({
+                add: 0,
+                reason: 'removed'
+            });
         });
     });
 

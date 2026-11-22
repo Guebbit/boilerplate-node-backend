@@ -88,7 +88,7 @@ describe('an unlimited backorder cap', () => {
 
         const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
 
-        expect(outcome).toMatchObject({ held: false, shortfalls: [{ available: 1 }] });
+        expect(outcome).toMatchObject({ held: false, shortfalls: [{ quantityAvailable: 1 }] });
     });
 });
 
@@ -98,7 +98,7 @@ describe('a closed backorder cap', () => {
 
         const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 1)]);
 
-        expect(outcome).toMatchObject({ held: false, shortfalls: [{ available: 0 }] });
+        expect(outcome).toMatchObject({ held: false, shortfalls: [{ quantityAvailable: 0 }] });
     });
 
     it('treats a level without the field as closed, not unlimited', async () => {

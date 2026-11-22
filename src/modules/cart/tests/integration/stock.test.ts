@@ -16,7 +16,7 @@ import { cartService } from '../../services';
 import { orderService } from '@modules/orders';
 import { orderRepository, readOrder, countOrders } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
-import { removeLevel } from '@modules/inventory/tests/factories';
+import { forceStockLevel, removeLevel } from '@modules/inventory/tests/factories';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { resetDomainEvents } from '@kernel/events';
@@ -69,8 +69,10 @@ describe('checkout holds units without selling them', () => {
     it('refuses a cart over what is available and moves nothing', async () => {
         const user = await createUser();
         await giveAddress(user.id);
-        const product = await createProduct({ onHand: 2 });
+        const product = await createProduct({ onHand: 10 });
         await cartService.addItemById(user.id, String(product._id), 3);
+        // A sale after the add: a cart reserves nothing, so the line is now over what is left.
+        await forceStockLevel(product._id, 2, 0);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -80,8 +82,8 @@ describe('checkout holds units without selling them', () => {
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'CART_INSUFFICIENT_STOCK',
             /**
-             * Which line, and how much was asked for — the number left is not told to a shopper.
-             * Without the line the customer is editing the cart by trial and error.
+             * Which line, how much was asked for and how many can be bought — the number any
+             * shopper may read. Without the line the customer is editing the cart by trial and error.
              */
             details: {
                 lines: [
@@ -89,7 +91,7 @@ describe('checkout holds units without selling them', () => {
                         productId: String(product._id),
                         title: product.title,
                         requested: 3,
-                        availability: 'insufficient_stock'
+                        quantityAvailable: 2
                     }
                 ]
             }
@@ -105,8 +107,10 @@ describe('checkout holds units without selling them', () => {
             {
                 productId: String(product._id),
                 quantity: 3,
-                availability: 'insufficient_stock',
-                canIncrease: true
+                availability: 'in_stock',
+                quantityAvailable: 2,
+                // Over what can be bought: the "+" is already off.
+                canIncrease: false
             }
         ]);
         expect(cart.checkoutable).toBe(false);
@@ -147,12 +151,14 @@ describe('checkout holds units without selling them', () => {
     it('names every short line at once, not just the first', async () => {
         const user = await createUser();
         await giveAddress(user.id);
-        const shortA = await createProduct({ title: 'Short A', onHand: 1 });
-        const shortB = await createProduct({ title: 'Short B', onHand: 2 });
+        const shortA = await createProduct({ title: 'Short A', onHand: 10 });
+        const shortB = await createProduct({ title: 'Short B', onHand: 10 });
         const fine = await createProduct({ title: 'Fine', onHand: 99 });
         await cartService.addItemById(user.id, String(shortA._id), 5);
         await cartService.addItemById(user.id, String(shortB._id), 5);
         await cartService.addItemById(user.id, String(fine._id), 1);
+        await forceStockLevel(shortA._id, 1, 0);
+        await forceStockLevel(shortB._id, 2, 0);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -168,13 +174,13 @@ describe('checkout holds units without selling them', () => {
                 productId: String(shortA._id),
                 title: 'Short A',
                 requested: 5,
-                availability: 'insufficient_stock'
+                quantityAvailable: 1
             },
             {
                 productId: String(shortB._id),
                 title: 'Short B',
                 requested: 5,
-                availability: 'insufficient_stock'
+                quantityAvailable: 2
             }
         ]);
     });
@@ -183,9 +189,10 @@ describe('checkout holds units without selling them', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
-        const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
+        const scarce = await createProduct({ title: 'Scarce', onHand: 10 });
         await cartService.addItemById(user.id, String(plenty._id), 2);
         await cartService.addItemById(user.id, String(scarce._id), 2);
+        await forceStockLevel(scarce._id, 1, 0);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -224,19 +231,19 @@ describe('checkout holds units without selling them', () => {
          * The loser is refused by the RESERVE, not by the pre-flight — both pre-flights saw the
          * unit as available, which is the whole point of the conditional write. So this is the
          * path that reports a shortfall read back at the moment it refused — and, like the
-         * pre-flight, names the line without the number left, which a shopper is not told.
+         * pre-flight, names the line with the number that can be bought.
          */
         const loser = first.success ? second : first;
         const refusal = !loser.success && loser.errors[0];
         expect(refusal && refusal.code).toBe('CART_INSUFFICIENT_STOCK');
-        // `toEqual`, not `toMatchObject`: an extra `available` on the line must fail.
+        // `toEqual`, not `toMatchObject`: the line is exactly these four fields.
         expect(refusal && refusal.details).toEqual({
             lines: [
                 {
                     productId: String(lastOne._id),
                     title: lastOne.title,
                     requested: 1,
-                    availability: 'out_of_stock'
+                    quantityAvailable: 0
                 }
             ]
         });
@@ -260,8 +267,9 @@ describe('a checkout that cannot keep its order', () => {
     it('writes no order and burns no order number when the hold is refused', async () => {
         const user = await createUser();
         await giveAddress(user.id);
-        const product = await createProduct({ onHand: 1 });
+        const product = await createProduct({ onHand: 10 });
         await cartService.addItemById(user.id, String(product._id), 2);
+        await forceStockLevel(product._id, 1, 0);
         const createSpy = jest.spyOn(orderRepository, 'create');
         const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
@@ -357,12 +365,45 @@ describe('the admin order create holds units like checkout', () => {
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'ORDER_INSUFFICIENT_STOCK',
             details: {
-                lines: [{ productId: String(scarce._id), requested: 5, available: 1 }]
+                lines: [
+                    {
+                        productId: String(scarce._id),
+                        title: 'Scarce',
+                        requested: 5,
+                        quantityAvailable: 1
+                    }
+                ]
             }
         });
         expect(await countersOf(plenty._id)).toMatchObject({ reserved: 0, available: 50 });
         expect(await countersOf(scarce._id)).toMatchObject({ reserved: 0, available: 1 });
     });
+
+    it.each(['admin', 'customer'])(
+        'tells a %s caller the same four fields: the number is public',
+        async (role) => {
+            const user = await createUser();
+            const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
+
+            const result = await orderService.create(
+                user.id,
+                user.email,
+                [{ productId: String(scarce._id), quantity: 5 }],
+                callerContextAs(role)
+            );
+
+            expect(!result.success && result.errors[0].details).toEqual({
+                lines: [
+                    {
+                        productId: String(scarce._id),
+                        title: 'Scarce',
+                        requested: 5,
+                        quantityAvailable: 1
+                    }
+                ]
+            });
+        }
+    );
 });
 
 describe('cancel releases the hold', () => {

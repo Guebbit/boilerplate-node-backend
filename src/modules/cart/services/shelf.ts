@@ -1,7 +1,8 @@
 /**
  * @module
- * What is on the shelf for a set of products: the joined product plus the ledger's units, read
- * together once, so the merge reads the catalogue and the ledger in two queries per request.
+ * What the merge needs about a set of products: the joined product and how many can be bought,
+ * read together once, so a merge reads the catalogue and inventory a fixed number of times per
+ * request however many lines it carries.
  *
  * @see docs/modules/cart.md#stock-checked-in-three-places
  */
@@ -10,85 +11,47 @@ import { inventoryService } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { LineAvailability } from '@types';
-import { lineAvailability } from '../domain';
-import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 
-/** One product's shelf: the document (`null` = hard-deleted) and the units for sale. */
+/** One product's shelf: the document (`null` = hard-deleted) and how many can be bought. */
 export interface Shelf {
     /** Unscoped join: a hidden or soft-deleted product still resolves. */
     product: Lean<ProductDocument> | null;
-    /** The ledger's units for sale; absent for a product with no level row. */
-    available: number | undefined;
-    /** The shelf alone, which tells a line the shelf covers from one that spills; absent likewise. */
-    shelf?: number | undefined;
+    /** How many can be bought now, `0` for a product that cannot be; `undefined` is no limit. */
+    quantityAvailable: number | undefined;
 }
 
 /**
- * Read the shelf of every product, in two queries however many there are: the catalogue first,
- * then the ledger, which needs to know which products are preorders.
+ * Read the shelf of every product, in two reads however many there are: the catalogue and
+ * inventory's live availability.
  *
  * @param productIds - the products to look up; repeats are fine
  * @returns one entry per distinct id, in the order first seen
  */
 export const readShelf = (productIds: readonly string[]): Promise<Map<string, Shelf>> => {
     const ids = [...new Set(productIds)];
-    return productService.findManyByIds(ids).then((products) => {
+    return Promise.all([
+        productService.findManyByIds(ids),
+        inventoryService.liveAvailabilityOf(ids)
+    ]).then(([products, stock]) => {
         const byId = new Map(products.map((product) => [String(product._id), product]));
-        /**
-         * The catalogue says which are preorders and which are open to backorder; the ledger then
-         * answers their allowance, or the shelf and the room together, instead of the shelf.
-         */
-        const lines = ids.map((id) => ({ productId: id, product: byId.get(id) ?? null }));
-        return inventoryService.availableFor(ids, preorderIdsOf(lines), backorderIdsOf(lines)).then(
-            (positions) =>
-                new Map(
-                    ids.map((id) => [
-                        id,
-                        {
-                            product: byId.get(id) ?? null,
-                            available: positions.get(id)?.available,
-                            shelf: positions.get(id)?.shelf
-                        }
-                    ])
-                )
+        return new Map(
+            ids.map((id) => [
+                id,
+                {
+                    product: byId.get(id) ?? null,
+                    // An id with no availability has no product to buy.
+                    quantityAvailable: stock.has(id) ? stock.get(id)?.quantityAvailable : 0
+                }
+            ])
         );
     });
 };
 
 /**
- * The availability of a shelf's product — the cart's one precedence rule, on what the join and
- * the ledger returned. The level's count: the product holds none.
- *
- * @param shelf - the product and its ledger units
- * @param quantity - units the line holds; omit for a wishlist line or a bare "is it listed" test
- * @returns the line's availability
- */
-export const shelfAvailability = (
-    { product, available, shelf }: Shelf,
-    quantity?: number
-): LineAvailability =>
-    lineAvailability({ product: availabilityProductOf(product), available, shelf, quantity });
-
-/**
  * Whether the catalogue shows the product publicly — the same test `findPublicById` applies. A
  * product merely off sale is listed; a hidden or deleted one is not.
  *
- * @param shelf - the product and its ledger units
+ * @param shelf - the product and how many can be bought
  */
-export const isListed = (shelf: Shelf): boolean => shelfAvailability(shelf) !== 'removed';
-
-/**
- * The availability of each product as a line without a quantity: what a wishlist line reads.
- * Two queries however many products there are.
- *
- * @param productIds - the products to judge; repeats are fine
- * @returns one availability per distinct id, never `insufficient_stock`
- */
-export const productAvailabilityFor = (
-    productIds: readonly string[]
-): Promise<Map<string, LineAvailability>> =>
-    readShelf(productIds).then(
-        (shelves) =>
-            new Map([...shelves].map(([id, shelf]) => [id, shelfAvailability(shelf)] as const))
-    );
+export const isListed = ({ product }: Shelf): boolean =>
+    product !== null && product.active !== false && !product.deletedAt;
