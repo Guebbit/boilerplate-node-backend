@@ -11,7 +11,7 @@ one XSS is worth more than it looks — it is not "a popup", it is the attacker 
 
 This is a backend repo, so most of this family belongs to the paired Vue frontend and is walked on
 its own
-[Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
+[Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/understand/web-attack-defences.md)
 page. What lives **here** is the half of each shared row this API owns — and those are the rows
 worth reading, because a control split across two repos is the kind that gets half-implemented.
 
@@ -95,4 +95,4 @@ is just not automatically account takeover plus a purchase.
 - [Authentication](authentication.md) — the cookies and tokens every shared row above is about
 - [Infrastructure](infrastructure.md#headers-the-browser-acts-on) — the headers half
 - [HTTP and caches](http-and-caches.md) — cache deception, from the server side
-- The frontend's own [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md) — every row marked "frontend" above
+- The frontend's own [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/understand/web-attack-defences.md) — every row marked "frontend" above
