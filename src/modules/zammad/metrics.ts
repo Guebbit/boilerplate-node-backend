@@ -1,15 +1,20 @@
 /**
  * @module
- * Two gauges read at SCRAPE time from the database, so the app serves them whatever process did the
+ * Four gauges read at SCRAPE time from the database, so the app serves them whatever process did the
  * work: the sweeps run in the cron container, which Prometheus does not scrape, so a counter moved
- * there would never be seen. Built for `ZammadHandoverStuck` and `ZammadHandoverFellBack`.
+ * there would never be seen. Built for `ZammadHandoverStuck`, `ZammadHandoverFellBack`, `ZammadEraseFailed` and `ZammadEraseStuck`.
  *
  * @see docs/modules/zammad.md#watching-it
  */
 
 import { Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
-import { countFallbackTombstones, oldestPendingContactAgeSeconds } from './repository';
+import {
+    countFailedEraseJobs,
+    countFallbackTombstones,
+    oldestPendingContactAgeSeconds,
+    oldestPendingEraseJobAgeSeconds
+} from './repository';
 
 /**
  * Age in seconds of the oldest contact message still waiting for hand-over, `0` when none waits.
@@ -35,5 +40,31 @@ const _zammadHandoverFallbacks = new Gauge({
     registers: [metricsRegistry],
     async collect() {
         this.set(await countFallbackTombstones());
+    }
+});
+
+/**
+ * Erase jobs whose Zammad deletion task Zammad itself reported failed. The sweep does not retry
+ * one: above zero means a person's data may still be in Zammad and a technician must look.
+ */
+const _zammadEraseJobsFailed = new Gauge({
+    name: 'zammad_erase_jobs_failed',
+    help: 'Erase jobs whose Zammad data-privacy task failed.',
+    registers: [metricsRegistry],
+    async collect() {
+        this.set(await countFailedEraseJobs());
+    }
+});
+
+/**
+ * Age in seconds of the oldest erase job still pending, `0` when none waits. Zammad runs a task
+ * within minutes: past an hour the sweep is not running or Zammad is not working through its tasks.
+ */
+const _zammadEraseOldestPendingSeconds = new Gauge({
+    name: 'zammad_erase_oldest_pending_seconds',
+    help: 'Age in seconds of the oldest erase job not yet completed in Zammad.',
+    registers: [metricsRegistry],
+    async collect() {
+        this.set(await oldestPendingEraseJobAgeSeconds());
     }
 });

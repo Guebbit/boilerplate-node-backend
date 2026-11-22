@@ -38,23 +38,27 @@ const contactDueAt = (category: string | undefined, now: Date): Date =>
         : new Date(now.getTime() + tasksConfig().NODE_TASKS_CONTACT_SLA_HOURS * HOUR_MS);
 
 /**
- * Whether the message is suspected spam: a filled honeypot, or a refused address
- * (`checkEmailPolicy`, off by default).
+ * Which signal, if any, marks the message as suspected spam: a filled honeypot, or a refused
+ * address (`checkEmailPolicy`, off by default).
  *
  * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
  *             fills, declared in the contract but never persisted (see `TaskDocument`) or read
- *             back.
+ *             back. It wins when both fire, and it never leaves this module.
  * Disposable: a disposable-inbox domain is treated the same way. A visible refusal would tell a
- *             spam script exactly which signal caught it.
+ *             spam script exactly which signal caught it. A help desk may file this one itself.
  *
  * @param payload - the form
  * @param email - the normalised address
  * @see docs/understand/defences/automation-and-abuse.md#the-ladder
  */
-const isSuspectedSpam = (payload: CreateContactTaskRequest, email: string): Promise<boolean> =>
-    checkEmailPolicy(email).then(
-        (verdict) => Boolean(payload.website?.trim()) || verdict === 'refused'
-    );
+const spamSignal = (
+    payload: CreateContactTaskRequest,
+    email: string
+): Promise<'honeypot' | 'email' | undefined> =>
+    checkEmailPolicy(email).then((verdict) => {
+        if (payload.website?.trim()) return 'honeypot';
+        return verdict === 'refused' ? 'email' : undefined;
+    });
 
 /**
  * Store the message as a contact to-do and announce it as `task.opened`, unless it is spam.
@@ -130,23 +134,25 @@ export const create = (
     subjectId?: string
 ): Promise<TaskDocument> => {
     const email = normalizeEmail(payload.email);
-    return isSuspectedSpam(payload, email).then((spam) =>
-        storeContactTask(payload, email, spam, subjectId)
+    return spamSignal(payload, email).then((signal) =>
+        storeContactTask(payload, email, signal !== undefined, subjectId)
     );
 };
 
 /**
  * What `POST /tasks` does: screen the message, offer it to the help desk port when one is on, and
- * file the basic-mode to-do when none takes it. Spam never reaches the port: it stays local, as in
- * basic mode.
+ * file the basic-mode to-do when none takes it. A honeypot catch never reaches the port: it stays
+ * local, as in basic mode. An email-check catch is offered with `suspectedSpam`, so a help desk can
+ * file it closed; a port that declines leaves it local too.
  *
  * @param payload - the form
  * @param subjectId - the signed-in sender's account, absent for an anonymous sender
  */
 export const submit = (payload: CreateContactTaskRequest, subjectId?: string): Promise<void> => {
     const email = normalizeEmail(payload.email);
-    return isSuspectedSpam(payload, email).then((spam) => {
-        const port = spam ? undefined : contactDelivery();
+    return spamSignal(payload, email).then((signal) => {
+        const spam = signal !== undefined;
+        const port = signal === 'honeypot' ? undefined : contactDelivery();
         const taken = port
             ? port.accept({
                   ...(payload.name?.trim() ? { name: payload.name.trim() } : {}),
@@ -158,6 +164,7 @@ export const submit = (payload: CreateContactTaskRequest, subjectId?: string): P
                       ? { orderNumber: payload.orderNumber.trim() }
                       : {}),
                   ...(subjectId ? { subjectId } : {}),
+                  ...(signal === 'email' ? { suspectedSpam: true as const } : {}),
                   receivedAt: new Date()
               })
             : Promise.resolve(false);

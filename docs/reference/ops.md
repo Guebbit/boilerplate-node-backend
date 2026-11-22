@@ -117,6 +117,8 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run job sweep:webhook-retries`    | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                                                                          |
 | `npm run job sweep:zammad-contacts`    | every minute   | Yes    | Hands every contact message that is due to Zammad as a ticket, retrying by the outbox's backoff; after the last retry the message becomes a to-do and a link-only mail instead.                                                |
 | `npm run job sweep:zammad-profiles`    | every 5 min    | Yes    | Overwrites the Zammad customer of each account whose profile changed with the account's current address and name; a change that Zammad refuses for good is logged and dropped.                                                 |
+| `npm run job sweep:zammad-erasures`    | every minute   | Yes    | Files and follows the Zammad deletion task of every erased account's customer until Zammad reports it completed; a task that failed or stays unfinished raises the alert.                                                      |
+| `npm run job reap:zammad-retention`    | 02:25 nightly  | Yes    | Files a Zammad deletion task for every ticket whose last customer contact is past the retention window, for every customer left with no tickets, and for suspected-spam tickets after 30 days.                                 |
 
 <!-- jobs:end -->
 
@@ -185,7 +187,10 @@ rebuilds it), which is why `db:bootstrap` syncs before the server starts there. 
 see [Data — TTL windows](./data.md#ttl-windows). `tasks`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
 sits inside the common limitation periods. It runs on `closedAt`, so an open task never expires and a
-reopen stops the clock; changing it needs `npm run db:sync`. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
+reopen stops the clock; changing it needs `npm run db:sync`. **Spam to-dos have a shorter, fixed window of
+30 days** (`tasks_spam_ttl`, a partial TTL on `closedAt` where `resolution` is `spam`): a message nobody should
+answer has no evidence value. It is a new index on a collection that already exists, so `npm run db:sync`
+builds it on a deployed database. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
 abandoned row is ever removed. `leases` has no TTL on purpose: a job that stopped running entirely must
 keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
 and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.

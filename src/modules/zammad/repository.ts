@@ -1,6 +1,6 @@
 /**
  * @module
- * Every read and write of this module's three collections. The sweeps claim a row with a lease
+ * Every read and write of this module's four collections. The sweeps claim a row with a lease
  * (one atomic update stamps a token and an expiry) so two runners never send the same message; a
  * write that finishes a row is filtered on the token, so a runner whose lease lapsed cannot undo a
  * newer attempt.
@@ -16,9 +16,12 @@ import type { ContactMessage } from '@modules/tasks';
 import {
     zammadContactModel,
     zammadCustomerModel,
+    zammadEraseJobModel,
     zammadProfileSyncModel,
     type ZammadContactDocument,
     type ZammadCustomerDocument,
+    type ZammadEraseJobDocument,
+    type ZammadEraseTarget,
     type ZammadProfileSyncDocument
 } from './model';
 
@@ -68,6 +71,7 @@ export const addPendingContact = (message: ContactMessage): Promise<ZammadContac
         ...(message.category ? { category: message.category } : {}),
         ...(message.orderNumber ? { orderNumber: message.orderNumber } : {}),
         ...(message.subjectId ? { subjectId: toObjectId(message.subjectId) } : {}),
+        ...(message.suspectedSpam ? { suspectedSpam: true } : {}),
         attempts: 0,
         nextAttemptAt: message.receivedAt,
         unclear: false
@@ -254,6 +258,19 @@ export const upsertCustomer = (userId: string, zammadUserId: number): Promise<un
         .exec();
 
 /**
+ * The Zammad customer an account is, read inside the erasure's transaction: the erase hook reads
+ * it before it deletes the mapping.
+ *
+ * @param userId - the erased account
+ * @param session - the erasure's transaction
+ */
+export const findCustomerIn = (
+    userId: string,
+    session: ClientSession
+): Promise<ZammadCustomerDocument | null> =>
+    zammadCustomerModel.findOne({ userId: toObjectId(userId) }, null, { session }).exec();
+
+/**
  * Delete an account's mapping inside the erasure's transaction.
  *
  * @param userId - the erased account
@@ -361,3 +378,197 @@ export const dropProfileSync = (row: ZammadProfileSyncDocument): Promise<unknown
  */
 export const deleteProfileSync = (userId: string, session: ClientSession): Promise<unknown> =>
     zammadProfileSyncModel.deleteOne({ userId: toObjectId(userId) }, { session }).exec();
+
+/** The ladder of one erase pass: how soon a job is looked at again while Zammad works. */
+const ERASE_POLL_MS = MINUTE_MS;
+
+/**
+ * Write an erase job. Inside the erasure's transaction for an account (`session`), or alone for the
+ * customer an erasure race left behind.
+ *
+ * @param job - who and what to erase; `email` only when the account proved it
+ * @param session - the erasure's transaction, when there is one
+ */
+export const addEraseJob = (
+    job: { userId?: string; email?: string; zammadUserIds: readonly number[] },
+    session?: ClientSession
+): Promise<unknown> =>
+    zammadEraseJobModel.create(
+        [
+            {
+                ...(job.userId ? { userId: toObjectId(job.userId) } : {}),
+                ...(job.email ? { email: job.email } : {}),
+                emailResolved: !job.email,
+                targets: job.zammadUserIds.map((zammadUserId) => ({ zammadUserId, done: false })),
+                state: 'pending',
+                attempts: 0,
+                nextAttemptAt: new Date()
+            }
+        ],
+        { session }
+    );
+
+/** Claim the oldest due pending erase job, as {@link claimDueContact} claims a message. */
+export const claimDueEraseJob = (): Promise<ZammadEraseJobDocument | null> => {
+    const now = new Date();
+    return zammadEraseJobModel
+        .findOneAndUpdate(
+            {
+                state: 'pending',
+                nextAttemptAt: { $lte: now },
+                $or: [{ leaseExpiresAt: { $exists: false } }, { leaseExpiresAt: { $lt: now } }]
+            },
+            { $set: lease() },
+            { sort: { nextAttemptAt: 1 }, returnDocument: 'after' }
+        )
+        .exec();
+};
+
+/**
+ * Save what a pass learned and let go of the claim: the next look is a poll away. A lapsed claim
+ * writes nothing.
+ *
+ * @param job - the claimed job
+ * @param progress - the customers (with their task ids) and whether the address was looked up
+ */
+export const saveEraseProgress = (
+    job: ZammadEraseJobDocument,
+    progress: { targets: readonly ZammadEraseTarget[]; emailResolved: boolean }
+): Promise<unknown> =>
+    zammadEraseJobModel
+        .updateOne(
+            { _id: job._id, leaseToken: job.leaseToken },
+            {
+                $set: {
+                    ...progress,
+                    attempts: 0,
+                    nextAttemptAt: new Date(Date.now() + ERASE_POLL_MS)
+                },
+                $unset: { leaseToken: '', leaseExpiresAt: '' }
+            }
+        )
+        .exec();
+
+/**
+ * A pass failed on Zammad (down, refusing): count it, release the claim, try again later. An erasure
+ * is owed, so the job never gives up; the stuck alert is how a person hears of it.
+ *
+ * @param job - the claimed job
+ * @param nextAttemptAt - not before this instant
+ */
+export const rescheduleEraseJob = (
+    job: ZammadEraseJobDocument,
+    nextAttemptAt: Date
+): Promise<unknown> =>
+    zammadEraseJobModel
+        .updateOne(
+            { _id: job._id, leaseToken: job.leaseToken },
+            {
+                $set: { attempts: job.attempts + 1, nextAttemptAt },
+                $unset: { leaseToken: '', leaseExpiresAt: '' }
+            }
+        )
+        .exec();
+
+/**
+ * Every customer is gone from Zammad: mark the job completed, drop the address, and set the expiry
+ * that ends the row with the erasure ledger's window.
+ *
+ * @param job - the claimed job
+ * @param targets - the customers, all done
+ * @param retentionMs - how long the row is kept
+ */
+export const completeEraseJob = (
+    job: ZammadEraseJobDocument,
+    targets: readonly ZammadEraseTarget[],
+    retentionMs: number
+): Promise<unknown> => {
+    const completedAt = new Date();
+    return zammadEraseJobModel
+        .updateOne(
+            { _id: job._id, leaseToken: job.leaseToken },
+            {
+                $set: {
+                    state: 'completed',
+                    targets,
+                    emailResolved: true,
+                    completedAt,
+                    expireAt: new Date(completedAt.getTime() + retentionMs)
+                },
+                $unset: { email: '', leaseToken: '', leaseExpiresAt: '' }
+            }
+        )
+        .exec();
+};
+
+/**
+ * Zammad reported a task failed: park the job for a technician. The sweep does not retry it, and
+ * the failed-jobs gauge alerts.
+ *
+ * @param job - the claimed job
+ * @param targets - the customers with their task progress
+ */
+export const failEraseJob = (
+    job: ZammadEraseJobDocument,
+    targets: readonly ZammadEraseTarget[]
+): Promise<unknown> =>
+    zammadEraseJobModel
+        .updateOne(
+            { _id: job._id, leaseToken: job.leaseToken },
+            {
+                $set: { state: 'failed', targets },
+                $unset: { leaseToken: '', leaseExpiresAt: '' }
+            }
+        )
+        .exec();
+
+/**
+ * Put the jobs completed at or after a time back to pending, every customer undone, so the same
+ * worker files the tasks again. Used after Zammad alone was restored from a dump taken at `since`.
+ *
+ * @param since - the dump's time
+ * @returns how many jobs went back to pending
+ */
+export const reopenEraseJobsSince = (since: Date): Promise<number> =>
+    zammadEraseJobModel
+        .updateMany(
+            { state: 'completed', completedAt: { $gte: since } },
+            [
+                {
+                    $set: {
+                        state: 'pending',
+                        attempts: 0,
+                        nextAttemptAt: new Date(),
+                        targets: {
+                            $map: {
+                                input: '$targets',
+                                as: 'target',
+                                in: { zammadUserId: '$$target.zammadUserId', done: false }
+                            }
+                        }
+                    }
+                },
+                { $unset: ['completedAt', 'expireAt', 'leaseToken', 'leaseExpiresAt'] }
+            ],
+            // An aggregation-pipeline update: `$map` rewrites every target in place. Mongoose refuses an
+            // array update without this flag. https://mongoosejs.com/docs/api/query.html#Query.prototype.updateMany()
+            { updatePipeline: true }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);
+
+/** Erase jobs Zammad reported failed. Read at scrape time. */
+export const countFailedEraseJobs = (): Promise<number> =>
+    zammadEraseJobModel.countDocuments({ state: 'failed' }).exec();
+
+/** Age in seconds of the oldest pending erase job, `0` when none waits. Read at scrape time. */
+export const oldestPendingEraseJobAgeSeconds = (): Promise<number> =>
+    zammadEraseJobModel
+        .findOne({ state: 'pending' })
+        .sort({ createdAt: 1 })
+        .select({ createdAt: 1 })
+        .lean()
+        .exec()
+        .then((row) =>
+            row?.createdAt ? Math.max(0, (Date.now() - row.createdAt.getTime()) / 1000) : 0
+        );

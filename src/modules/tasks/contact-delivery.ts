@@ -22,6 +22,12 @@ export interface ContactMessage {
     orderNumber?: string;
     /** The signed-in sender's account id; absent for an anonymous sender. */
     subjectId?: string;
+    /**
+     * The email check refused the address (a disposable inbox, no mail server): the help desk files
+     * it already closed and tagged as spam, notifying nobody. Never set for a honeypot catch,
+     * which stays local.
+     */
+    suspectedSpam?: true;
     /** When the form arrived. */
     receivedAt: Date;
 }
@@ -33,7 +39,7 @@ export interface ContactDelivery {
      * to-do is filed; `false` when this port is not on (basic mode files the to-do). Never calls
      * the help desk inside the request: it stores and returns.
      *
-     * @param message - the screened message; suspected spam never reaches the port
+     * @param message - the screened message; a honeypot catch never reaches the port
      */
     accept: (message: ContactMessage) => Promise<boolean>;
 

@@ -15,6 +15,7 @@ import { registerContactDelivery } from '@modules/tasks';
 import { USER_PROFILE_CHANGED } from '@modules/users';
 // Registers the two gauges with the metrics registry at module load.
 import './metrics';
+import './audit';
 import { zammadJobs } from './jobs';
 import { zammadService } from './services';
 import { zammadConfig, zammadEnabled } from './config';

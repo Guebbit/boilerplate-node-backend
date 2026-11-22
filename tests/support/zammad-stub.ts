@@ -19,7 +19,35 @@ export interface RecordedRequest {
     body: Record<string, unknown> | undefined;
     /** The `Authorization` header as sent. */
     authorization: string | undefined;
+    /** The `X-Zammad-Suppress-Notifications` header as sent. */
+    suppressNotifications: string | undefined;
 }
+
+/** A file attached to a stub article. */
+export interface StubAttachment {
+    id: number;
+    filename: string;
+    contentType: string;
+    data: Buffer;
+}
+
+/** An article of a stub ticket. */
+export interface StubArticle {
+    id: number;
+    sender: 'Customer' | 'Agent' | 'System';
+    internal: boolean;
+    from?: string;
+    to?: string;
+    subject?: string;
+    body: string;
+    created_at: string;
+    attachments: StubAttachment[];
+}
+
+/** What a test gives for an article: every field optional, attachments without ids. */
+export type StubArticleInput = Partial<Omit<StubArticle, 'attachments'>> & {
+    attachments?: Omit<StubAttachment, 'id'>[];
+};
 
 /** A ticket the stub holds. */
 export interface StubTicket {
@@ -27,6 +55,29 @@ export interface StubTicket {
     customer_id: number;
     request_ref: string | null;
     body: Record<string, unknown>;
+    state: string;
+    tags: string[];
+    created_at: string;
+    last_contact_at: string | null;
+    articles: StubArticle[];
+}
+
+/** A customer the stub holds. */
+export interface StubUser {
+    id: number;
+    email: string;
+    firstname?: string;
+    lastname?: string;
+    created_at: string;
+    roles: string[];
+}
+
+/** A data-privacy task the stub holds. */
+export interface StubPrivacyTask {
+    id: number;
+    state: 'in process' | 'completed' | 'failed';
+    deletable_type: 'User' | 'Ticket';
+    deletable_id: number;
 }
 
 /** How the next ticket create misbehaves, once. */
@@ -44,8 +95,12 @@ export interface ZammadStub {
     token: string;
     /** Every request so far, oldest first. */
     requests: RecordedRequest[];
-    /** The tickets created so far. */
+    /** The tickets held. */
     tickets: StubTicket[];
+    /** The customers held, by id. */
+    users: Map<number, StubUser>;
+    /** The data-privacy tasks filed so far. */
+    privacyTasks: StubPrivacyTask[];
     /** The custom attributes the object manager holds, by name. */
     attributes: Map<string, { id: number; body: Record<string, unknown> }>;
     /** How many times the pending-migration endpoint was called. */
@@ -60,6 +115,36 @@ export interface ZammadStub {
     holdAddress: (email: string, customerId: number) => void;
     /** Runs while a ticket create is being answered (after the ticket exists, when there is one): for the erasure race. */
     onCreate: (hook: (() => Promise<void>) | undefined) => void;
+    /** Hold a customer, as if it already existed in Zammad. */
+    addUser: (user: Partial<StubUser> & { id: number; email: string }) => StubUser;
+    /** Hold a ticket, with the given articles, as if it already existed in Zammad. */
+    addTicket: (ticket: {
+        customerId: number;
+        createdAt: string;
+        lastContactAt?: string;
+        state?: string;
+        tags?: string[];
+        title?: string;
+        articles?: StubArticleInput[];
+    }) => StubTicket;
+    /**
+     * How a new data-privacy task behaves: `completed` (the default) deletes the customer or ticket
+     * at once; `in process` leaves it pending until {@link ZammadStub.finishTasks}; `failed` fails it.
+     */
+    privacyTaskOutcome: (state: StubPrivacyTask['state']) => void;
+    /** Move every task still `in process` to `state`; a `completed` one deletes its target. */
+    finishTasks: (state: 'completed' | 'failed') => void;
+    /** Every request from now on is answered 503, as a Zammad that is down would. */
+    goDown: () => void;
+    /**
+     * Make the ticket search misbehave the ways a real Zammad might: `ignoreConditions` answers
+     * every ticket whatever the condition said, `ignorePaging` answers the same page for every `page`.
+     */
+    searchQuirks: (quirks: { ignoreConditions?: boolean; ignorePaging?: boolean }) => void;
+    /** The next ticket update (`PUT /tickets/:id`) is refused with this status, once. */
+    refuseNextClose: (status: number) => void;
+    /** A create with `state: closed` is refused with a 422, as a Zammad that does not take it would. */
+    refuseClosedCreate: () => void;
     /** Closes the listener. */
     stop: () => Promise<void>;
 }
@@ -106,6 +191,8 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
     new Promise((resolve) => {
         const requests: RecordedRequest[] = [];
         const tickets: StubTicket[] = [];
+        const users = new Map<number, StubUser>();
+        const privacyTasks: StubPrivacyTask[] = [];
         const attributes = new Map<string, { id: number; body: Record<string, unknown> }>(
             options.fieldsExist === false ? [] : [['request_ref', { id: 1, body: {} }]]
         );
@@ -119,6 +206,14 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
         let queue: Misbehaviour[] = [];
         let refusing: number | undefined;
         let hook: (() => Promise<void>) | undefined;
+        let taskOutcome: StubPrivacyTask['state'] = 'completed';
+        let closedCreateRefused = false;
+        let down = false;
+        let quirks: { ignoreConditions?: boolean; ignorePaging?: boolean } = {};
+        let closeRefusal: number | undefined;
+        let nextTaskId = 40;
+        let nextArticleId = 7000;
+        let nextAttachmentId = 8000;
 
         /**
          * The customer id for a create's `customer` or `customer_id` field.
@@ -136,14 +231,76 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
             if (known !== undefined) return known;
             nextCustomerId += 1;
             customers.set(guess, nextCustomerId);
+            users.set(nextCustomerId, {
+                id: nextCustomerId,
+                email: guess,
+                created_at: new Date().toISOString(),
+                roles: ['Customer']
+            });
             return nextCustomerId;
         };
+
+        /**
+         * Hold an article, filling the fields a test does not care about.
+         *
+         * @param article - what the test gave
+         */
+        const makeArticle = (article: StubArticleInput): StubArticle => {
+            nextArticleId += 1;
+            return {
+                id: nextArticleId,
+                sender: 'Customer',
+                internal: false,
+                body: 'text',
+                created_at: new Date().toISOString(),
+                ...article,
+                attachments: (article.attachments ?? []).map((file) => {
+                    nextAttachmentId += 1;
+                    return { id: nextAttachmentId, ...file };
+                })
+            };
+        };
+
+        /**
+         * Delete what a completed data-privacy task names: the customer and their tickets, or the ticket.
+         *
+         * @param task - the completed task
+         */
+        const applyTask = (task: StubPrivacyTask): void => {
+            if (task.deletable_type === 'User') {
+                users.delete(task.deletable_id);
+                for (let index = tickets.length - 1; index >= 0; index -= 1)
+                    if (tickets[index].customer_id === task.deletable_id) tickets.splice(index, 1);
+            } else {
+                const index = tickets.findIndex((ticket) => ticket.id === task.deletable_id);
+                if (index !== -1) tickets.splice(index, 1);
+            }
+        };
+
+        /**
+         * The ticket as the search and read endpoints answer it.
+         *
+         * @param ticket - the held ticket
+         */
+        const ticketView = (ticket: StubTicket) => ({
+            id: ticket.id,
+            customer_id: ticket.customer_id,
+            number: String(ticket.id),
+            title: typeof ticket.body.title === 'string' ? ticket.body.title : null,
+            state: ticket.state,
+            created_at: ticket.created_at,
+            last_contact_at: ticket.last_contact_at
+        });
 
         /** Handle `POST /api/v1/tickets`. */
         const createTicket = (
             body: Record<string, unknown>,
             response: ServerResponse
         ): Promise<void> => {
+            if (body.state === 'closed' && closedCreateRefused) {
+                answer(response, 422, { error: 'state closed is not allowed here' });
+                return Promise.resolve();
+            }
             const next = queue.shift();
             if (refusing !== undefined || next?.kind === 'refuse') {
                 const status = refusing ?? (next as { status: number }).status;
@@ -161,7 +318,21 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 id: nextTicketId,
                 customer_id: customerOf(body),
                 request_ref: known ? String(body.request_ref) : null,
-                body
+                body,
+                state: typeof body.state === 'string' ? body.state : 'new',
+                tags: [],
+                created_at: new Date().toISOString(),
+                last_contact_at: new Date().toISOString(),
+                articles: [
+                    makeArticle({
+                        sender: 'Customer',
+                        ...(typeof (body.article as Record<string, unknown> | undefined)?.from ===
+                        'string'
+                            ? { from: (body.article as { from: string }).from }
+                            : {}),
+                        body: (body.article as { body?: string } | undefined)?.body ?? ''
+                    })
+                ]
             };
             tickets.push(ticket);
             return (hook ? hook() : Promise.resolve()).then(() => {
@@ -177,17 +348,69 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
             });
         };
 
-        /** Handle `POST /api/v1/tickets/search` over `request_ref`. */
+        /** Handle `POST /api/v1/tickets/search`: `request_ref`, `customer_id`, `created_at` and `tags`. */
         const searchTickets = (body: Record<string, unknown>, response: ServerResponse): void => {
-            const condition = body.condition as Record<string, { value: string }>;
-            const wanted = condition['ticket.request_ref'].value;
+            const condition = body.condition as Record<
+                string,
+                { operator: string; value: unknown }
+            >;
+            const perPage = Number(body.per_page ?? 1000);
+            const page = Number(body.page ?? 1);
+            const matching = tickets.filter(
+                (ticket) =>
+                    quirks.ignoreConditions === true ||
+                    Object.entries(condition).every(([key, { operator, value }]) => {
+                        if (key === 'ticket.request_ref') return ticket.request_ref === value;
+                        if (key === 'ticket.customer_id') return ticket.customer_id === value;
+                        if (key === 'ticket.created_at')
+                            return (
+                                operator === 'before (absolute)' &&
+                                ticket.created_at < String(value)
+                            );
+                        if (key === 'ticket.tags')
+                            return (
+                                operator === 'contains one' && ticket.tags.includes(String(value))
+                            );
+                        return false;
+                    })
+            );
             answer(
                 response,
                 200,
-                tickets
-                    .filter((ticket) => ticket.request_ref === wanted)
-                    .map((ticket) => ({ id: ticket.id, customer_id: ticket.customer_id }))
+                matching
+                    .slice(
+                        ((quirks.ignorePaging ? 1 : page) - 1) * perPage,
+                        (quirks.ignorePaging ? 1 : page) * perPage
+                    )
+                    .map((ticket) => ticketView(ticket))
             );
+        };
+
+        /** Handle `POST /api/v1/data_privacy_tasks`. */
+        const fileTask = (body: Record<string, unknown>, response: ServerResponse): void => {
+            const type = body.deletable_type === 'Ticket' ? 'Ticket' : 'User';
+            const id = Number(body.deletable_id);
+            if (
+                privacyTasks.some(
+                    (task) =>
+                        task.deletable_type === type &&
+                        task.deletable_id === id &&
+                        task.state === 'in process'
+                )
+            ) {
+                answer(response, 422, { error: 'Task already queued' });
+                return;
+            }
+            nextTaskId += 1;
+            const task: StubPrivacyTask = {
+                id: nextTaskId,
+                state: taskOutcome,
+                deletable_type: type,
+                deletable_id: id
+            };
+            privacyTasks.push(task);
+            if (task.state === 'completed') applyTask(task);
+            answer(response, 201, task);
         };
 
         const server: Server = createServer((request, response) => {
@@ -198,9 +421,16 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                         method: request.method ?? '',
                         path,
                         body,
-                        authorization: request.headers.authorization
+                        authorization: request.headers.authorization,
+                        suppressNotifications: request.headers[
+                            'x-zammad-suppress-notifications'
+                        ] as string | undefined
                     });
 
+                    if (down) {
+                        answer(response, 503, {});
+                        return;
+                    }
                     if (request.headers.authorization !== `Token token=${TOKEN}`) {
                         answer(response, 401, { error: 'Authentication required' });
                         return;
@@ -211,6 +441,112 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                     }
                     if (request.method === 'POST' && path === '/tickets/search') {
                         searchTickets(body ?? {}, response);
+                        return;
+                    }
+
+                    if (request.method === 'POST' && path === '/data_privacy_tasks') {
+                        fileTask(body ?? {}, response);
+                        return;
+                    }
+                    const oneTask = /^\/data_privacy_tasks\/(\d+)$/.exec(path);
+                    if (request.method === 'GET' && oneTask) {
+                        const task = privacyTasks.find((row) => row.id === Number(oneTask[1]));
+                        if (task) answer(response, 200, task);
+                        else answer(response, 404, {});
+                        return;
+                    }
+                    if (request.method === 'GET' && path.startsWith('/data_privacy_tasks?')) {
+                        answer(response, 200, privacyTasks);
+                        return;
+                    }
+                    if (request.method === 'GET' && path.startsWith('/users/search?')) {
+                        const query = decodeURIComponent(
+                            new URL(path, 'http://stub').searchParams.get('query') ?? ''
+                        ).toLowerCase();
+                        // Loose, like Zammad: a substring of the address matches.
+                        answer(
+                            response,
+                            200,
+                            [...users.values()].filter((row) =>
+                                row.email.toLowerCase().includes(query)
+                            )
+                        );
+                        return;
+                    }
+                    if (request.method === 'GET' && path.startsWith('/users?')) {
+                        const params = new URL(path, 'http://stub').searchParams;
+                        const perPage = Number(params.get('per_page') ?? 100);
+                        const page = quirks.ignorePaging ? 1 : Number(params.get('page') ?? 1);
+                        answer(
+                            response,
+                            200,
+                            [...users.values()].slice((page - 1) * perPage, page * perPage)
+                        );
+                        return;
+                    }
+                    const oneUser = /^\/users\/(\d+)$/.exec(path);
+                    if (request.method === 'GET' && oneUser) {
+                        const row = users.get(Number(oneUser[1]));
+                        if (row) answer(response, 200, row);
+                        else answer(response, 404, { error: "Couldn't find User" });
+                        return;
+                    }
+                    const articles = /^\/ticket_articles\/by_ticket\/(\d+)/.exec(path);
+                    if (request.method === 'GET' && articles) {
+                        const ticket = tickets.find((row) => row.id === Number(articles[1]));
+                        answer(
+                            response,
+                            200,
+                            (ticket?.articles ?? []).map((article) => ({
+                                ...article,
+                                type: 'web',
+                                attachments: article.attachments.map((file) => ({
+                                    id: file.id,
+                                    filename: file.filename,
+                                    size: String(file.data.byteLength),
+                                    preferences: { 'Mime-Type': file.contentType }
+                                }))
+                            }))
+                        );
+                        return;
+                    }
+                    const file = /^\/ticket_attachment\/(\d+)\/(\d+)\/(\d+)$/.exec(path);
+                    if (request.method === 'GET' && file) {
+                        const found = tickets
+                            .find((row) => row.id === Number(file[1]))
+                            ?.articles.find((article) => article.id === Number(file[2]))
+                            ?.attachments.find((attachment) => attachment.id === Number(file[3]));
+                        if (!found) {
+                            answer(response, 404, {});
+                            return;
+                        }
+                        response.writeHead(200, { 'Content-Type': found.contentType });
+                        response.end(found.data);
+                        return;
+                    }
+                    const tagsRead = /^\/tags\?object=Ticket&o_id=(\d+)$/.exec(path);
+                    if (request.method === 'GET' && tagsRead) {
+                        const ticket = tickets.find((row) => row.id === Number(tagsRead[1]));
+                        answer(response, 200, ticket?.tags ?? []);
+                        return;
+                    }
+                    if (request.method === 'POST' && path === '/tags/add') {
+                        const ticket = tickets.find((row) => row.id === Number(body?.o_id));
+                        ticket?.tags.push(String(body?.item));
+                        answer(response, 200, true);
+                        return;
+                    }
+                    const ticketUpdate = /^\/tickets\/(\d+)$/.exec(path);
+                    if (request.method === 'PUT' && ticketUpdate && closeRefusal !== undefined) {
+                        const status = closeRefusal;
+                        closeRefusal = undefined;
+                        answer(response, status, {});
+                        return;
+                    }
+                    if (request.method === 'PUT' && ticketUpdate) {
+                        const ticket = tickets.find((row) => row.id === Number(ticketUpdate[1]));
+                        if (ticket && typeof body?.state === 'string') ticket.state = body.state;
+                        answer(response, 200, { id: Number(ticketUpdate[1]) });
                         return;
                     }
 
@@ -278,6 +614,8 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 token: TOKEN,
                 requests,
                 tickets,
+                users,
+                privacyTasks,
                 attributes,
                 migrations: () => migrationCalls,
                 misbehave: (...next) => {
@@ -294,6 +632,52 @@ export const startZammadStub = (options: { fieldsExist?: boolean } = {}): Promis
                 },
                 onCreate: (next) => {
                     hook = next;
+                },
+                addUser: (user) => {
+                    const row: StubUser = {
+                        created_at: new Date().toISOString(),
+                        roles: ['Customer'],
+                        ...user
+                    };
+                    users.set(row.id, row);
+                    return row;
+                },
+                addTicket: (ticket) => {
+                    nextTicketId += 1;
+                    const row: StubTicket = {
+                        id: nextTicketId,
+                        customer_id: ticket.customerId,
+                        request_ref: null,
+                        body: { title: ticket.title ?? 'Seeded' },
+                        state: ticket.state ?? 'open',
+                        tags: ticket.tags ?? [],
+                        created_at: ticket.createdAt,
+                        last_contact_at: ticket.lastContactAt ?? ticket.createdAt,
+                        articles: (ticket.articles ?? [{}]).map((article) => makeArticle(article))
+                    };
+                    tickets.push(row);
+                    return row;
+                },
+                privacyTaskOutcome: (state) => {
+                    taskOutcome = state;
+                },
+                finishTasks: (state) => {
+                    for (const task of privacyTasks.filter((row) => row.state === 'in process')) {
+                        task.state = state;
+                        if (state === 'completed') applyTask(task);
+                    }
+                },
+                searchQuirks: (next) => {
+                    quirks = next;
+                },
+                refuseNextClose: (status) => {
+                    closeRefusal = status;
+                },
+                goDown: () => {
+                    down = true;
+                },
+                refuseClosedCreate: () => {
+                    closedCreateRefused = true;
                 },
                 stop: () =>
                     new Promise<void>((done) => {

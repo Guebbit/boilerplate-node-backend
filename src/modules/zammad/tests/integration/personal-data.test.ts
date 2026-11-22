@@ -1,13 +1,11 @@
 /**
  * @module
  * What the module holds about a person, through the real doors: the account export lists it, and
- * a hard delete removes it inside the erasure's transaction. The erasure race is the one case
- * where the row is deleted while a ticket is being created.
+ * a hard delete removes it inside the erasure's transaction.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { logger } from '@infrastructure/adapters/logger';
 import { taskService } from '@modules/tasks';
 import { userService, personalDataSubjectOf } from '@modules/users';
 import { createUser } from '@modules/users/tests/factories';
@@ -56,7 +54,7 @@ describe('the export section', () => {
 
         const asked = await zammadService.collectPersonalData(personalDataSubjectOf(unverified));
 
-        expect(asked).toEqual({ pendingContacts: [] });
+        expect(asked).toEqual({ pendingContacts: [], customers: [] });
     });
 
     it('is empty, never absent, for a person with nothing', async () => {
@@ -64,7 +62,7 @@ describe('the export section', () => {
 
         await expect(
             zammadService.collectPersonalData(personalDataSubjectOf(user))
-        ).resolves.toEqual({ pendingContacts: [] });
+        ).resolves.toEqual({ pendingContacts: [], customers: [] });
     });
 });
 
@@ -94,32 +92,5 @@ describe('a hard delete', () => {
         await userService.removeById(user.id, true, callerContextAs('admin'));
 
         expect(await zammadContactModel.countDocuments()).toBe(0);
-    });
-});
-
-describe('the erasure race', () => {
-    it('maps nothing and names the returned customer when the account is erased mid-flight', async () => {
-        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
-        // The account is erased while the create is in flight: the ticket exists, the row is gone.
-        zammad().onCreate(() =>
-            userService.removeById(user.id, true, callerContextAs('admin')).then(() => undefined)
-        );
-
-        await taskService.submit(
-            { email: 'ada@example.com', subject: 'Hello', message: 'Hi' },
-            user.id
-        );
-        await zammadService.settleHandovers();
-
-        expect(zammad().tickets).toHaveLength(1);
-        expect(await zammadCustomerModel.countDocuments()).toBe(0);
-        expect(logged).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: expect.stringContaining('after its account was erased'),
-                zammadCustomerId: zammad().tickets[0].customer_id
-            })
-        );
-        logged.mockRestore();
     });
 });

@@ -32,6 +32,9 @@ import { DAY_SECONDS } from '@domain-primitives/time';
  */
 const retentionDays = tasksConfig().NODE_TASKS_RETENTION_DAYS;
 
+/** How long a spam to-do is kept, in days: a fixed number, shared with the help desk's spam tickets. */
+const SPAM_RETENTION_DAYS = 30;
+
 /** One staff note: append-only, author and time. */
 export interface TaskNoteDocument {
     authorId?: Types.ObjectId;
@@ -291,6 +294,24 @@ taskSchema.index(
     {
         expireAfterSeconds: retentionDays * DAY_SECONDS,
         partialFilterExpression: { source: TaskSource.visitor }
+    }
+);
+
+/**
+ * Spam is kept 30 days, not the retention window: a message nobody should answer has no evidence
+ * value, and its address is a stranger's. Aged from `closedAt` (set at birth for a bot catch, at
+ * the staff's mark otherwise; a reopen unsets it). Its own named, partial index beside the
+ * unconditional one above: the same key with different options needs a name of its own. A
+ * database that already has the collection needs `npm run db:sync` to build it.
+ *
+ * @see docs/reference/ops.md#data-retention
+ */
+taskSchema.index(
+    { closedAt: 1 },
+    {
+        name: 'tasks_spam_ttl',
+        expireAfterSeconds: SPAM_RETENTION_DAYS * DAY_SECONDS,
+        partialFilterExpression: { resolution: TaskResolution.spam }
     }
 );
 

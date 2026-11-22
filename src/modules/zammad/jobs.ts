@@ -1,8 +1,8 @@
 /**
  * @module
  * The scheduled jobs `zammad` owns: the minute pass that hands waiting messages over (the nudge
- * after the `202` is the fast path, this is the safety net) and the pass that keeps customer
- * profiles current.
+ * after the `202` is the fast path, this is the safety net), the pass that keeps customer
+ * profiles current, the erase sweep and the daily retention pass.
  *
  * @see docs/reference/ops.md#scheduled-jobs
  */
@@ -30,5 +30,18 @@ export const zammadJobs: readonly JobDeclaration[] = [
                 logger.info({ message: 'Zammad profile sweep done.', handled });
             }),
         lease: { ttlMs: 10 * MINUTE_MS }
+    },
+    {
+        ...zammadJobData.sweepZammadErasures,
+        run: () =>
+            zammadService.sweepErasures().then((handled) => {
+                logger.info({ message: 'Zammad erase sweep done.', handled });
+            }),
+        lease: { ttlMs: 10 * MINUTE_MS }
+    },
+    {
+        ...zammadJobData.reapZammadRetention,
+        run: () => zammadService.reapRetention().then(() => undefined),
+        lease: { ttlMs: 60 * MINUTE_MS }
     }
 ];

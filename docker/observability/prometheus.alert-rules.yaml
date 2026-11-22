@@ -222,6 +222,28 @@ groups:
                 summary: 'A contact message fell back to basic mode'
                 description: 'zammad_handover_fallbacks is above zero: Zammad did not take a message after every retry. Check the help desk; the message waits as a to-do in the shop admin.'
 
+          # An erasure Zammad has not finished (`zammad/metrics.ts`, read from the database at scrape
+          # time). A failed task is parked for a technician: the person's data may still be in Zammad.
+          - alert: ZammadEraseFailed
+            expr: zammad_erase_jobs_failed > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A Zammad deletion task for an erased account failed'
+                description: 'zammad_erase_jobs_failed is above zero: Zammad reported a data-privacy task failed, so an erased person may still be in the help desk. Look at the task in Zammad (Admin, Data Privacy) and in the zammaderasejobs collection.'
+
+          # A job pending for over an hour: the sweep is not running, or Zammad is not working through
+          # its Data Privacy tasks (its own job runs within minutes).
+          - alert: ZammadEraseStuck
+            expr: zammad_erase_oldest_pending_seconds > 3600
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'An erased account has waited over an hour for Zammad to delete its customer'
+                description: 'zammad_erase_oldest_pending_seconds is above 3600: sweep:zammad-erasures is not running, Zammad is unreachable, or its Data Privacy task is not moving.'
+
           # Every NIGHTLY `docker/crontab` line: three jobs run every 5 minutes or every minute
           # instead, each already covered by its own purpose-built alert (this one and the two
           # below), so a shared 48-hour threshold would either fire on them constantly or, worse,

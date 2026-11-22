@@ -86,7 +86,7 @@ stands.
 ### With the help desk on {#helpdesk}
 
 When your shop runs a help desk (Zammad), messages from the contact form arrive there as tickets
-and you answer them there. This inbox then holds only what could not be handed over. Four things are
+and you answer them there. This inbox then holds only what could not be handed over. Five things are
 yours to do by hand:
 
 - **A to-do that says "do not reply".** The help desk did not take the message after every retry,
@@ -97,6 +97,10 @@ yours to do by hand:
 - **"Email address already used" after a customer changed their email.** The new address already
   belongs to another customer in the help desk, so their profile did not follow. Move their tickets
   to the right customer by hand.
+- **Suspected spam.** A message the email check refused is filed in the help desk already closed and
+  tagged `suspected-spam`, and nobody is mailed. Look at the **Suspected spam** view there now and then
+  to rescue a real person who was caught by mistake (reopen the ticket); the rest is deleted after
+  30 days. A honeypot catch is a closed spam to-do in this inbox and goes after 30 days too.
 - **Writing about a person in a ticket.** Write the order number, not the name: a mention on someone
   else's ticket cannot be found and erased with the person.
 

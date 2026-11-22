@@ -516,6 +516,40 @@ tests:
                       description: 'zammad_handover_fallbacks is above zero: Zammad did not take a message after every retry. Check the help desk; the message waits as a to-do in the shop admin.'
     - interval: 1m
       input_series:
+          - series: zammad_erase_jobs_failed
+            values: 1x5
+      alert_rule_test:
+          - eval_time: 2m
+            alertname: ZammadEraseFailed
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                  exp_annotations:
+                      summary: A Zammad deletion task for an erased account failed
+                      description: 'zammad_erase_jobs_failed is above zero: Zammad reported a data-privacy task failed, so an erased person may still be in the help desk. Look at the task in Zammad (Admin, Data Privacy) and in the zammaderasejobs collection.'
+    - interval: 1m
+      input_series:
+          - series: zammad_erase_oldest_pending_seconds
+            values: 7200x30
+      alert_rule_test:
+          - eval_time: 20m
+            alertname: ZammadEraseStuck
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: An erased account has waited over an hour for Zammad to delete its customer
+                      description: 'zammad_erase_oldest_pending_seconds is above 3600: sweep:zammad-erasures is not running, Zammad is unreachable, or its Data Privacy task is not moving.'
+    - interval: 1m
+      input_series:
+          - series: zammad_erase_oldest_pending_seconds
+            values: 60x30
+      alert_rule_test:
+          - eval_time: 20m
+            alertname: ZammadEraseStuck
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: job_last_success_timestamp_seconds{task="reap:orders"}
             values: '0x3000'
           - series: job_last_success_timestamp_seconds{task="sweep:outbox"}

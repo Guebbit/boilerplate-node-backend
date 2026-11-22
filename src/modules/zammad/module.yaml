@@ -4,6 +4,7 @@ group: foundation
 dependsOn:
     - tasks # the contact seam: the port it installs, and the to-do a failed hand-over falls back to
     - users # the signed-in sender's verified address, and the profile it keeps current
+    - account # how long an erase-job row is kept: the erasure ledger's own window
 jobs:
     sweepZammadContacts:
         name: sweep:zammad-contacts
@@ -19,3 +20,18 @@ jobs:
         summary:
             Overwrites the Zammad customer of each account whose profile changed with the account's
             current address and name; a change that Zammad refuses for good is logged and dropped.
+    sweepZammadErasures:
+        name: sweep:zammad-erasures
+        # Every minute: files a data-privacy task for an erased account's Zammad customer and polls
+        # it to `completed`. Idempotent: a row is claimed with a lease.
+        schedule: '* * * * *'
+        summary: Files and follows the Zammad deletion task of every erased account's customer until
+            Zammad reports it completed; a task that failed or stays unfinished raises the alert.
+    reapZammadRetention:
+        name: reap:zammad-retention
+        # Daily, in the 02:00 stagger the other reapers use.
+        schedule: '25 2 * * *'
+        summary:
+            Files a Zammad deletion task for every ticket whose last customer contact is past the
+            retention window, for every customer left with no tickets, and for suspected-spam
+            tickets after 30 days.

@@ -31,12 +31,14 @@ flowchart LR
     shop["shop"]
     tasks["tasks"]
     users["users"]
+    zammad["zammad"]
 
     api_keys --> account
     invoicing --> account
     orders --> account
     shop --> account
     tasks --> account
+    zammad --> account
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
@@ -53,7 +55,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
     class invoicing,shop supporting;
-    class access,api_keys,tasks,users generic;
+    class access,api_keys,tasks,users,zammad generic;
     class account centre;
 ```
 

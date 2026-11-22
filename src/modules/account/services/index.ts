@@ -58,6 +58,11 @@ export {
 } from '../token-types';
 export { termsVersion } from '../consent-record';
 export { operatorIdentity } from './operator-identity';
+/**
+ * How long an erasure-ledger row is kept, in ms. A module that mirrors the ledger with rows of its
+ * own (a third party's erasure jobs) keeps them for the same window, so a restore finds both.
+ */
+export { erasureLedgerRetentionMs } from '../config';
 export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
 export { VERIFY_RESEND_SECONDS } from './verification';

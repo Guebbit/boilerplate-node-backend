@@ -1,9 +1,9 @@
 /**
  * @module
- * The three collections this module owns, all small and all about delivery, never about tickets:
+ * The four collections this module owns, all small and all about delivery and erasure, never about tickets:
  * `zammadcontacts` (a message waiting to be handed over), `zammadcustomers` (which Zammad customer
- * a signed-in account is) and `zammadprofilesyncs` (an account whose profile Zammad must be told
- * about).
+ * a signed-in account is), `zammadprofilesyncs` (an account whose profile Zammad must be told
+ * about) and `zammaderasejobs` (a person Zammad must forget, and the proof it did).
  *
  * @see docs/modules/zammad.md#the-hand-over
  */
@@ -23,6 +23,11 @@ const FALLBACK_TOMBSTONE_DAYS = 7;
  */
 export interface ZammadContactDocument extends Document {
     state: 'pending' | 'fell_back';
+    /**
+     * Whether the email check refused the address: the ticket is filed already closed and tagged
+     * `suspected-spam`, with notifications suppressed. A honeypot catch never reaches this module.
+     */
+    suspectedSpam?: boolean;
     name?: string;
     email?: string;
     subject?: string;
@@ -53,6 +58,7 @@ export interface ZammadContactDocument extends Document {
 export const zammadContactSchema = new Schema<ZammadContactDocument>(
     {
         state: { type: String, enum: ['pending', 'fell_back'], default: 'pending', required: true },
+        suspectedSpam: { type: Boolean },
         name: { type: String },
         email: { type: String },
         subject: { type: String },
@@ -155,3 +161,105 @@ export const zammadProfileSyncModel = model<
     ZammadProfileSyncDocument,
     Model<ZammadProfileSyncDocument>
 >('ZammadProfileSync', zammadProfileSyncSchema);
+
+/** One Zammad customer an erase job must see deleted, and how far its deletion task got. */
+export interface ZammadEraseTarget {
+    zammadUserId: number;
+    /** The id of the data-privacy task filed for this customer, once there is one. */
+    taskId?: number;
+    /** When the task was filed: the clock the "stuck" alert reads. */
+    filedAt?: Date;
+    /** Whether the customer is gone from Zammad (task `completed`, or the customer was already absent). */
+    done: boolean;
+}
+
+/**
+ * A person Zammad must forget. Written inside the erasure's transaction, so it exists exactly when
+ * the account is gone; drained by `sweep:zammad-erasures`. After `completed` the row drops the
+ * address and stays, without anything a person could be found by, until the erasure ledger's
+ * window ends: it is what `--since` replays after Zammad alone is restored.
+ */
+export interface ZammadEraseJobDocument extends Document {
+    /** The erased account; absent for the customer an erasure race left behind. */
+    userId?: Types.ObjectId;
+    /**
+     * The verified address the account held, so a customer who wrote before the account existed
+     * is found too. Absent for an unverified account, and dropped once `completed`.
+     */
+    email?: string;
+    /** Whether the address was looked up in Zammad already. */
+    emailResolved: boolean;
+    /** Every Zammad customer to delete: the account's mapping, then what the address lookup found. */
+    targets: ZammadEraseTarget[];
+    /**
+     * `pending` is work to do or a task to follow; `completed` is finished; `failed` is a task
+     * Zammad itself reported failed: a technician looks, the sweep does not retry it.
+     */
+    state: 'pending' | 'completed' | 'failed';
+    /** Failed polls and lookups so far, for the retry ladder. */
+    attempts: number;
+    /** Not before this instant. */
+    nextAttemptAt: Date;
+    leaseToken?: string;
+    leaseExpiresAt?: Date;
+    /** When the last customer was confirmed gone. */
+    completedAt?: Date;
+    /** Mongo deletes the row at this instant: `completedAt` plus the erasure ledger's window. */
+    expireAt?: Date;
+    createdAt?: Date;
+}
+
+/** Erase job schema: the unique-free queue of persons Zammad must forget. */
+export const zammadEraseJobSchema = new Schema<ZammadEraseJobDocument>(
+    {
+        userId: { type: Schema.Types.ObjectId, ref: 'User' },
+        email: { type: String },
+        emailResolved: { type: Boolean, default: false, required: true },
+        targets: {
+            type: [
+                new Schema(
+                    {
+                        zammadUserId: { type: Number, required: true },
+                        taskId: { type: Number },
+                        filedAt: { type: Date },
+                        done: { type: Boolean, default: false, required: true }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: []
+        },
+        state: {
+            type: String,
+            enum: ['pending', 'completed', 'failed'],
+            default: 'pending',
+            required: true
+        },
+        attempts: { type: Number, default: 0, required: true },
+        nextAttemptAt: { type: Date, required: true },
+        leaseToken: { type: String },
+        leaseExpiresAt: { type: Date },
+        completedAt: { type: Date },
+        expireAt: { type: Date }
+    },
+    { timestamps: { createdAt: true, updatedAt: false } }
+);
+
+// The sweep's read: pending rows that are due.
+zammadEraseJobSchema.index({ state: 1, nextAttemptAt: 1 });
+// The replay's read: rows completed since the dump.
+zammadEraseJobSchema.index({ completedAt: 1 }, { sparse: true });
+// A completed row expires with the erasure ledger; a pending or failed one has no `expireAt` and never does.
+zammadEraseJobSchema.index(
+    { expireAt: 1 },
+    { expireAfterSeconds: 0, name: 'zammad_erase_job_ttl' }
+);
+
+// The claim never serializes, as on the other collections.
+applySerialization(zammadEraseJobSchema, { omit: ['leaseToken', 'leaseExpiresAt'] });
+
+/** Erase job model entrypoint. Collection `zammaderasejobs`. */
+export const zammadEraseJobModel = model<ZammadEraseJobDocument, Model<ZammadEraseJobDocument>>(
+    'ZammadEraseJob',
+    zammadEraseJobSchema
+);

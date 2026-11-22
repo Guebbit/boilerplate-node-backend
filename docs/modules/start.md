@@ -150,6 +150,7 @@ flowchart TD
     users --> access
     wishlist --> cart
     wishlist --> products
+    zammad --> account
     zammad --> tasks
     zammad --> users
 
@@ -172,10 +173,10 @@ flowchart TD
 | `users`         | access                                                                                                             | account, api-keys, cart, example, notifications, orders, stock-alerts, tasks, zammad         |
 | `access`        | —                                                                                                                  | account, api-keys, audit-logs, notifications, orders, payments, returns, tasks, users        |
 | `products`      | shop                                                                                                               | cart, delivery, inventory, orders, shop-tasks, sitemap, stock-alerts, wishlist               |
+| `account`       | access, users                                                                                                      | api-keys, invoicing, orders, shop, tasks, zammad                                             |
 | `inventory`     | products, shop                                                                                                     | cart, delivery, orders, returns, shop-tasks, stock-alerts                                    |
 | `payments`      | access, orders, shop                                                                                               | cart, invoicing, returns, shop-tasks, stats                                                  |
 | `returns`       | access, delivery, inventory, orders, payments, shop                                                                | shop-tasks, stats                                                                            |
-| `account`       | access, users                                                                                                      | api-keys, invoicing, orders, shop, tasks                                                     |
 | `delivery`      | inventory, orders, products, shop                                                                                  | cart, returns, shop-tasks                                                                    |
 | `tasks`         | access, account, users                                                                                             | notifications, shop-tasks, zammad                                                            |
 | `invoicing`     | account, orders, payments, shop                                                                                    | stats                                                                                        |
@@ -184,8 +185,8 @@ flowchart TD
 | `stock-alerts`  | inventory, products, users                                                                                         | shop-tasks                                                                                   |
 | `api-keys`      | access, account, users                                                                                             | —                                                                                            |
 | `wishlist`      | cart, products                                                                                                     | shop-tasks                                                                                   |
+| `zammad`        | account, tasks, users                                                                                              | —                                                                                            |
 | `audit-logs`    | access                                                                                                             | observability                                                                                |
-| `zammad`        | tasks, users                                                                                                       | —                                                                                            |
 | `addresses`     | —                                                                                                                  | cart                                                                                         |
 | `example`       | users                                                                                                              | —                                                                                            |
 | `observability` | audit-logs                                                                                                         | —                                                                                            |

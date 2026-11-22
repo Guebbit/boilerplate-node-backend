@@ -8,8 +8,8 @@ audience: [developer, operator]
 An optional help desk: hands contact-form messages to a self-hosted Zammad, and keeps its copy of a customer inside the shop's erasure, export and profile rules.
 
 ::: tip At a glance
-**Owns** — the messages waiting to be handed over, the `{account, Zammad customer}` mapping, and the profile-sync rows. Not the ticket: replies, status and history live in Zammad.
-**Depends on** — [`tasks`](./tasks.md) (the port it installs, the to-do it falls back to), [`users`](./users.md) (the verified address, the profile it keeps current).
+**Owns** — the messages waiting to be handed over, the `{account, Zammad customer}` mapping, the profile-sync rows and the erase jobs. Not the ticket: replies, status and history live in Zammad.
+**Depends on** — [`tasks`](./tasks.md) (the port it installs, the to-do it falls back to), [`users`](./users.md) (the verified address, the profile it keeps current), [`account`](./account.md) (the erasure ledger's window, which the erase jobs outlive).
 **Breaks if you change** — nothing imports it. It installs `registerContactDelivery` in `tasks` and listens to `user.profile_changed`.
 :::
 
@@ -24,9 +24,11 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     zammad["zammad<br/><i>this module</i>"]
+    account["account"]
     tasks["tasks"]
     users["users"]
 
+    zammad --> account
     zammad --> tasks
     zammad --> users
     users -. "user.profile_changed" .-> zammad
@@ -35,7 +37,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class tasks,users generic;
+    class account,tasks,users generic;
     class zammad centre;
 ```
 
@@ -65,7 +67,7 @@ Three things stay true whatever Zammad does:
 | `NODE_ZAMMAD_URL`            | Zammad's internal rails address on the `helpdesk` network (`http://zammad-railsserver:3000`), never nginx and never the public host. No default: unset means inert. |
 | `NODE_ZAMMAD_API_TOKEN`      | The integration user's token. `NODE_ZAMMAD_API_TOKEN_FILE` stands in for it; in production it is the `zammad_api_token` secret file, and an empty file is unset.    |
 | `NODE_ZAMMAD_GROUP`          | The Zammad group a contact message is filed in.                                                                                                                     |
-| `NODE_ZAMMAD_RETENTION_DAYS` | Days a ticket is kept after the customer's last contact (default 730).                                                                                              |
+| `NODE_ZAMMAD_RETENTION_DAYS` | Days a ticket is kept after the customer's last contact, else after its creation (default 730). Read by [the retention job](#retention).                            |
 | `ZAMMAD_PORT`                | The loopback port Zammad's nginx publishes on (compose only; the app never reads it).                                                                               |
 
 The URL, token and group are set together: a URL without the other two refuses boot.
@@ -74,14 +76,14 @@ The URL, token and group are set together: a URL without the other two refuses b
 
 The request never waits on Zammad (G13). `POST /tasks` stores a **pending row** and answers `202`.
 
-| Step              | What happens                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Take              | `tasks.submit` screens the message. Spam stays local. Otherwise the port stores a pending row and starts an in-process nudge.                                |
-| Send              | A claimed row (leased, like the outbox) becomes one `POST /api/v1/tickets`: group, customer, one `web` article from the customer with an HTML-escaped body.  |
-| Our fields        | `shop_category`, `order_number`, `shop_sender_verified`, `request_ref` (the row's id) and `shop_account` (a link to the account in our admin).               |
-| Retry             | A failure pushes the row out by the outbox's backoff, without jitter. The sweep `sweep:zammad-contacts` runs every minute as the safety net.                 |
-| Unclear outcome   | A timeout, a 5xx or a 429 may have created the ticket. The next attempt searches `request_ref` first and adopts the ticket it finds; otherwise it resends.   |
-| Last retry failed | The message becomes a to-do and the link-only mail goes to the support mailbox. The row is blanked to a tombstone that the fallback alert counts for a week. |
+| Step              | What happens                                                                                                                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Take              | `tasks.submit` screens the message. A honeypot catch stays local; an email-check catch goes to Zammad as [spam](#spam). Otherwise the port stores a pending row and starts an in-process nudge. |
+| Send              | A claimed row (leased, like the outbox) becomes one `POST /api/v1/tickets`: group, customer, one `web` article from the customer with an HTML-escaped body.                                     |
+| Our fields        | `shop_category`, `order_number`, `shop_sender_verified`, `request_ref` (the row's id) and `shop_account` (a link to the account in our admin).                                                  |
+| Retry             | A failure pushes the row out by the outbox's backoff, without jitter. The sweep `sweep:zammad-contacts` runs every minute as the safety net.                                                    |
+| Unclear outcome   | A timeout, a 5xx or a 429 may have created the ticket. The next attempt searches `request_ref` first and adopts the ticket it finds; otherwise it resends.                                      |
+| Last retry failed | The message becomes a to-do and the link-only mail goes to the support mailbox. The row is blanked to a tombstone that the fallback alert counts for a week.                                    |
 
 **Dedup.** Zammad has no idempotency key. `request_ref` is ours: a `condition` search with no `query`, which Zammad runs as plain SQL, with or without Elasticsearch.
 
@@ -101,13 +103,80 @@ Zammad refusing for good is logged and dropped: a `422` means the new address al
 
 ## Personal data
 
-| Data                             | Export                            | Erase                                       |
-| -------------------------------- | --------------------------------- | ------------------------------------------- |
-| Pending messages                 | `zammad.pendingContacts`          | deleted by account id, or by verified email |
-| The `{userId, zammadUserId}` row | `zammad.customerId`               | deleted                                     |
-| The profile-sync row             | not exported (a pointer, no data) | deleted                                     |
+| Data                             | Export                                               | Erase                                                                                      |
+| -------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Pending messages                 | `zammad.pendingContacts`                             | deleted by account id, or by verified email                                                |
+| The `{userId, zammadUserId}` row | `zammad.customerId`                                  | deleted, after its id is copied into the erase job                                         |
+| The profile-sync row             | not exported (a pointer, no data)                    | deleted                                                                                    |
+| Zammad's own copy                | `zammad.customers`: customer, tickets, every article | an [erase job](#erasure) has Zammad delete the customer, their tickets, articles and files |
 
-The erase hook runs inside the erasure transaction. **The erase race:** a worker that created a ticket deletes its row by id afterwards. A row already gone means the account was erased while the call was in flight, so nothing is mapped and the error log names the Zammad customer id that was returned.
+The erase hook runs inside the erasure transaction.
+
+### Erasure {#erasure}
+
+```mermaid
+flowchart LR
+    hook["erase hook<br/><i>in the erasure's transaction</i>"] --> job[("erase job<br/>pending")]
+    job -->|"sweep:zammad-erasures, every minute"| task["POST /data_privacy_tasks<br/>one per customer"]
+    task -->|"poll"| done{"state"}
+    done -->|"completed, or customer gone"| completed[("completed<br/><i>address dropped, id kept</i>")]
+    done -->|"in process"| job
+    done -->|"failed"| failed[("failed<br/><i>alert, a technician looks</i>")]
+```
+
+The row `{userId, zammadUserIds[], email, state}` is written **inside the erasure's transaction**, so it exists exactly when the account is gone. The ids come from the mapping, read before it is deleted. `email` is the account's address and is stored **only when verified**: anyone can sign up with a stranger's address, and looking it up would erase a stranger. It covers a person who wrote before they had an account.
+
+`sweep:zammad-erasures` claims a job (leased) and, per customer:
+
+| What it finds                            | What it does                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| the verified address not yet looked up   | finds every customer holding it, once, and adds them                             |
+| the customer is already gone from Zammad | counts it as done, files nothing                                                 |
+| no task yet                              | `POST /api/v1/data_privacy_tasks {deletable_type: "User"}`                       |
+| a `422` (a task is already queued)       | looks that task up in the list and follows it                                    |
+| a task `in process`                      | waits for the next pass; never files a second one                                |
+| a task `completed`                       | done                                                                             |
+| a task `failed`                          | parks the whole job as `failed`: it is not retried                               |
+| Zammad unreachable or refusing           | retries by the outbox's backoff; **never gives up**, because the erasure is owed |
+
+When every customer is done the row becomes `completed`, **drops the address**, and stays until the erasure ledger forgets it (`NODE_ERASURE_LEDGER_RETENTION_DAYS`, 220 days): it is what [the replay](../operate/zammad.md#restore) reads. A `failed` or an hour-old `pending` job never expires. `ZammadEraseFailed` and `ZammadEraseStuck` say so.
+
+**What Zammad's task removes:** the customer, their tickets and articles, their search-index entries, and the attachments and raw mail nothing else refers to.
+
+**Mentions stay.** An article on **another** customer's ticket that names the person is not found: Zammad has no tool for it. The staff guide rule is to write the order number, not the name; the mention ends with that ticket's [retention](#retention). For the rare case, staff file a Ticket deletion task by hand.
+
+**Zammad keeps a masked task row** (`j*e@e*e.com` and the ticket numbers) and its audit log keeps a password change someone else made, with the full name. A Ticket deletion task keeps the masked title. All of it is cleaned after 12 months. The [data retention page](../understand/data-retention.md#the-help-desk-zammad) says so.
+
+**The erasure race.** A worker that created a ticket deletes its row by id afterwards. A row already gone means the account was erased while the call was in flight: nothing is mapped, and the worker writes an erase job for the customer the ticket created, **but only when that customer is the erased person's**: the sender was linked to the account (typed its verified address), or there was no account and the row went by the verified address. A signed-in sender who typed someone else's address made a customer that is the stranger's, which stays; the worker logs an error instead.
+
+### Export {#export}
+
+`zammad.customers` reads Zammad through its API on every export: the customer, their tickets, every article (**internal notes included, the author left out**: `from`, `to` and `cc` appear only on what the customer wrote) and **the files the customer sent**, base64 in the file itself. Art. 15(3) asks for a copy, and an export that named files without carrying them would look complete without being. It finds the account's mapped customer and any customer holding the verified address, and keeps only tickets that name that customer. A Zammad that ignores paging fails the export. **If Zammad cannot be read the whole export fails**: an incomplete Art. 15 answer must never look like a complete one.
+
+## Retention {#retention}
+
+`reap:zammad-retention` runs daily, leased, and files the same Data Privacy task the erase job uses. Zammad has no retention of its own, so the clock is ours.
+
+| What                    | When it is deleted                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A ticket                | its last customer contact, else its creation, is older than `NODE_ZAMMAD_RETENTION_DAYS` (730), open or closed |
+| A customer              | created before that cutoff, holding the Customer role only, and with no ticket left                            |
+| A suspected-spam ticket | tagged `suspected-spam` and older than 30 days                                                                 |
+
+Agents, admins and the integration user carry another role and are never listed. Every search is only a net: each ticket is re-checked in code (its age, and for spam the tag read back) before a task is filed, so a Zammad that ignored a search condition cannot cause a mass deletion. Every page is read until a short one; the lease is 60 minutes. A full page that adds nothing new (Zammad ignoring `page`) fails the run, so the failure reaches `ScheduledJobStale`. The pass files tasks and does not follow them: one Zammad has not run by tomorrow answers `422` and is skipped. This relies on `ticket_last_contact_behaviour = based_on_customer_reaction`, so that every customer message moves the clock ([Setup](#setup)).
+
+## Spam {#spam}
+
+| Signal                                            | Where it goes                                                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Email check (a disposable or unreachable address) | Zammad, created already `closed`, tagged `suspected-spam`, with the `X-Zammad-Suppress-Notifications` header so nobody is mailed |
+| Honeypot                                          | a closed local spam to-do, as in basic mode                                                                                      |
+
+Zammad refusing `state: closed` on create makes the worker create the ticket and then close it, in the same step. After a lost answer the retry adopts the ticket it finds and tags it again. Either way the visitor got the ordinary `202`. Both kinds are deleted after **30 days**: the retention pass for the tickets, and a TTL index on `tasks` for the local to-dos (`tasks_spam_ttl`; a database that already exists needs `npm run db:sync`).
+
+## Restore after Zammad alone is restored {#restore-replay}
+
+A restored dump brings back customers erased after it. `npm run zammad:replay-erasures -- --since <dump time>` sets the erase jobs completed since then back to `pending`, runs one erase pass, and writes a restoration-log audit row (`zammad.erasures.replayed`). A customer the restored Zammad does not hold counts as done, so a customer created after the dump needs no special case. The order of the whole recovery is in [the runbook](../operate/zammad.md#restore). A whole-host restore is already covered: `ops:reapply-erasures` brings the erase hook back to life.
 
 ## Setup
 
@@ -123,19 +192,23 @@ The technician does this once, in Zammad, before setting `NODE_ZAMMAD_URL`.
 8. **The email channel:** an IMAP + SMTP channel on the support mailbox, so staff replies leave from it and customer replies come back to it. Pointing `NODE_SUPPORT_EMAIL` at that mailbox is the usual choice; taking the module out means pointing it back.
 9. **The privacy deadline:** `privacy` messages owe an answer within one month (GDPR Art. 12(3)). Add an SLA on `shop_category`; if an SLA condition cannot read a custom field, route `privacy` through a trigger that adds a tag and put the SLA on the tag.
 
+10. **A "Suspected spam" view:** an overview whose condition is the tag `suspected-spam`, so staff can glance over what the email check caught before the retention pass deletes it after 30 days. Nobody is mailed about them.
+
 **Reply-To.** Every transactional mail carries `Reply-To: NODE_SUPPORT_EMAIL`, so a customer's reply to an order mail becomes a ticket. That is intended: it is support traffic.
 
 **Turning search on.** The module ships with `ELASTICSEARCH_ENABLED=false`: staff search is substring-only and Zammad's reports refuse to run. To turn it on, add an Elasticsearch service and set the variable; Zammad's init container rebuilds a missing index on its next start, so the switch is reversible. Nothing here needs it: the lookups use `condition` searches, which run as SQL.
 
 ## Watching it
 
-| Signal                   | Where                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ZammadHandoverStuck`    | The oldest waiting message is older than 15 minutes: the sweep is not running, or Zammad refuses.                               |
-| `ZammadHandoverFellBack` | A message gave up and fell back to a to-do. Look at Zammad; the to-do is resolved in our admin.                                 |
-| Zammad's health check    | [Gatus](../operate/gatus.md) reads `/api/v1/monitoring/health_check`, which also reports a failing email channel (IMAP errors). |
+| Signal                   | Where                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ZammadHandoverStuck`    | The oldest waiting message is older than 15 minutes: the sweep is not running, or Zammad refuses.                                            |
+| `ZammadHandoverFellBack` | A message gave up and fell back to a to-do. Look at Zammad; the to-do is resolved in our admin.                                              |
+| `ZammadEraseFailed`      | Zammad reported a deletion task failed: an erased person may still be in the help desk. Look at the task in Zammad and at `zammaderasejobs`. |
+| `ZammadEraseStuck`       | An erase job has waited over an hour: the sweep is not running, Zammad is unreachable, or its task is not moving.                            |
+| Zammad's health check    | [Gatus](../operate/gatus.md) reads `/api/v1/monitoring/health_check`, which also reports a failing email channel (IMAP errors).              |
 
-Both gauges are read from the database when Prometheus scrapes the app, not counted in the cron container, which nobody scrapes. The module is never part of `/readyz`: a help-desk outage must not take the shop down.
+The gauges are read from the database when Prometheus scrapes the app, not counted in the cron container, which nobody scrapes. The module is never part of `/readyz`: a help-desk outage must not take the shop down.
 
 ## Staff entry
 
@@ -145,13 +218,13 @@ The frontend shows a "Helpdesk" link to staff only when its own runtime setting 
 
 Delete `src/modules/zammad/` and its line in `src/modules.ts`, then what the module owned outside its folder:
 
-- `scripts/ops/zammad-setup.ts` and the `zammad:setup` and `test:zammad` scripts, with `jest.config.zammad.js`;
-- the two `Zammad*` alerts in `docker/observability/prometheus.alert-rules.yaml` and their cases in the test file;
-- `tests/support/zammad-stub.ts`, and the `NODE_ZAMMAD_*` block of `.env-example`.
+- `scripts/ops/zammad-setup.ts` and `scripts/ops/zammad-replay-erasures.ts`, the `zammad:setup`, `zammad:replay-erasures` and `test:zammad` scripts, with `jest.config.zammad.js`;
+- the four `Zammad*` alerts in `docker/observability/prometheus.alert-rules.yaml` and their cases in the test file;
+- `tests/support/zammad-stub.ts`, `tests/integration/zammad-erasure.test.ts`, and the `NODE_ZAMMAD_*` block of `.env-example`.
 
 The port goes with the module, so `tasks` files the to-do again and sends the full mail; point the mailbox back by hand.
 
-**The module's data is personal data, so it does not stay behind.** Before deleting the code, let the pending messages drain: while `NODE_ZAMMAD_URL` is set the sweep hands each to Zammad or, after the last retry, falls it back to a to-do, so wait until `zammadcontacts` holds no `pending` row. (With the URL unset the sweep does nothing.) Then drop the three collections by hand: `zammadcontacts` (waiting messages and fallback markers), `zammadcustomers` (the account to Zammad customer map) and `zammadprofilesyncs`. Removing the code alone leaves them in the database. The deletability check passes: with the module gone, `tsc` and the `tasks` and cross-cutting suites stay green ([how to re-run it](../build/module-removal.md#re-running-the-deletability-check)).
+**The module's data is personal data, so it does not stay behind.** Before deleting the code, let the pending messages drain: while `NODE_ZAMMAD_URL` is set the sweep hands each to Zammad or, after the last retry, falls it back to a to-do, so wait until `zammadcontacts` holds no `pending` row. (With the URL unset the sweep does nothing.) Let the erase jobs finish as well: `zammaderasejobs` must hold no `pending` or `failed` row, or an erased person is still in Zammad. Then drop the four collections by hand: `zammadcontacts` (waiting messages and fallback markers), `zammadcustomers` (the account to Zammad customer map), `zammadprofilesyncs` and `zammaderasejobs` (the completed rows are the replay's record). Removing the code alone leaves them in the database. The `tasks_spam_ttl` index stays: it belongs to `tasks`. The deletability check passes: with the module gone, `tsc` and the `tasks` and cross-cutting suites stay green ([how to re-run it](../build/module-removal.md#re-running-the-deletability-check)).
 
 ## Libraries
 

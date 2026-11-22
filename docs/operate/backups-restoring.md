@@ -223,6 +223,12 @@ stack's first boot (`restic restore latest --tag files --target <dir>`, then cop
 Skipping this looks fine until a customer clicks a broken image or the reaper finds no mail queued
 that a customer swears was sent.
 
+### 3 · Zammad on its own {#zammad-on-its-own}
+
+Restoring only the help desk's database (a bad Zammad upgrade, say) while the shop stays as it is brings back
+the customers erased since the dump. That has its own order, ending in `npm run zammad:replay-erasures`:
+[Zammad: Restore](./zammad.md#restore).
+
 ## Read next
 
 - [Backups](./backups.md)

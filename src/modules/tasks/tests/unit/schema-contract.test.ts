@@ -63,7 +63,8 @@ describe('taskSchema', () => {
             'openKey_1: openKey+1',
             'routeSet_1_status_1_dueAt_1: routeSet+1, status+1, dueAt+1',
             'status_1_dueAt_1: status+1, dueAt+1',
-            'subjectId_1: subjectId+1'
+            'subjectId_1: subjectId+1',
+            'tasks_spam_ttl: closedAt+1'
         ]);
     });
 
@@ -86,7 +87,9 @@ describe('taskSchema', () => {
             'openKey_1: partialFilterExpression={"openKey":{"$exists":true}}, unique=true',
             'routeSet_1_status_1_dueAt_1: (none)',
             'status_1_dueAt_1: (none)',
-            'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}'
+            'subjectId_1: partialFilterExpression={"subjectId":{"$exists":true}}',
+            // Spam is kept a fixed 30 days: its own named, partial TTL beside the closed-task one.
+            'tasks_spam_ttl: expireAfterSeconds=2592000, partialFilterExpression={"resolution":"spam"}'
         ]);
     });
 

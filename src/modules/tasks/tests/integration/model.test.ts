@@ -36,6 +36,21 @@ describe('retention clocks', () => {
             ])
         );
     });
+
+    it('keeps spam 30 days, in an index of its own beside the closed-task one', async () => {
+        const all = await taskModel.collection.indexes();
+
+        expect(all).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    name: 'tasks_spam_ttl',
+                    key: { closedAt: 1 },
+                    expireAfterSeconds: 30 * 86_400,
+                    partialFilterExpression: { resolution: 'spam' }
+                })
+            ])
+        );
+    });
 });
 
 describe('task serialization', () => {

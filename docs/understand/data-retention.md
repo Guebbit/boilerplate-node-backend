@@ -168,6 +168,33 @@ provider, outside the app, so the app cannot delete from it.
 | What happens at an erasure?        | By any door (admin hard delete, the purge, the inactivity erasure, a restore replay), the shop deletes the person's messages, then mails the mailbox ONE notice with their `[#ref]`s only. Staff delete the matching mails: [the guide](../use-the-shop/support.md#mailbox-after-erasure) |
 | What do the provider's backups do? | They age out on the provider's own schedule, which the Art. 28 processor contract states                                                                                                                                                                                                  |
 
+## The help desk (Zammad) {#the-help-desk-zammad}
+
+With the optional [`zammad`](../modules/zammad.md) module on, a contact message also lives in Zammad,
+which is the operator's own system. Zammad has no retention of its own, so the clocks are ours, and
+the app deletes through Zammad's own Data Privacy task, the documented door.
+
+| Data                                  | Rule                                                                                                                    | Mode                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| A ticket                              | deleted when its last customer contact (else creation) is older than `NODE_ZAMMAD_RETENTION_DAYS` (730), open or closed | Zammad on                   |
+| A customer                            | deleted when created before that cutoff, with the Customer role only and no ticket left                                 | Zammad on                   |
+| A suspected-spam ticket               | deleted after 30 days                                                                                                   | Zammad on                   |
+| A spam to-do                          | deleted after 30 days (`tasks_spam_ttl`, on `closedAt`)                                                                 | both modes                  |
+| A contact message not yet handed over | kept until the ticket exists; blanked to a counter marker after the last retry; erased with the account                 | Zammad on                   |
+| A task (to-do)                        | the rules above: 730 days                                                                                               | basic mode and the fallback |
+| An erased account's Zammad customer   | deleted by an erase job, written in the erasure's transaction                                                           | Zammad on                   |
+| The erase job itself                  | after `completed` it drops the address and keeps the Zammad user id until `NODE_ERASURE_LEDGER_RETENTION_DAYS`          | Zammad on                   |
+
+**What Zammad keeps after a deletion task, and accepts.** The task row keeps a masked name and address
+(`j*e@e*e.com`) and the ticket numbers; Zammad's audit log keeps a password change someone else made,
+with the full name; a Ticket deletion task keeps the masked title. Zammad cleans all of it after
+12 months. **What it cannot reach:** an article on another customer's ticket that mentions the person is
+not found by any tool, so the staff guide says to write the order number, not the name, and the mention
+ends with that ticket's own clock.
+
+**After Zammad alone is restored,** the promise below holds for the help desk too: the erase jobs completed
+since the dump are replayed ([Zammad: Restore](../operate/zammad.md#restore)).
+
 ## Backups and erasure
 
 A backup is a copy of everything, kept for as long as the keep knobs say (24 hourly, 7 daily, 4 weekly,
@@ -181,6 +208,7 @@ the snapshot was taken.
 | What is promised after a restore?          | **Every erasure since the snapshot is re-applied before the app opens.** An erased account does not come back to life, not even for the minutes between a restore and a manual fix                                                                                                                                                    |
 | Where does the list come from?             | The **erasure ledger**: one row `{ userId, at, kind }` per erased, scheduled or cancelled account, written in the erasure's own transaction (an owner's schedule and cancel too; a staff cancel is eventual, through the outbox) and kept longer than the oldest backup (`NODE_ERASURE_LEDGER_RETENTION_DAYS`)                        |
 | Who re-applies it, and how?                | A person, with `npm run ops:reapply-erasures -- --since <snapshot time>`, on the restored database with the app, workers and cron stopped. Never on its own, never from a schedule. It also deletes the held mail jobs that still name an erased address                                                                              |
+| And Zammad restored alone?                 | The erase jobs (`zammaderasejobs`) outlive the dump the same way, and `npm run zammad:replay-erasures -- --since <dump time>` files the deletion tasks again. A customer created after the dump is simply absent from the restored database and counts as done                                                                        |
 | What does the ledger hold?                 | Ids and dates only: no email, ip or user agent. A deletion record carries no content data (SDM Baustein 60)                                                                                                                                                                                                                           |
 
 ```mermaid

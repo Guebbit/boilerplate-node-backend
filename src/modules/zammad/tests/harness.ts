@@ -7,7 +7,9 @@
 
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
+import { callerContextAs } from '@tests/callers';
 import { setEnvironment } from '@tests/environment';
+import { userService } from '@modules/users';
 import { startZammadStub, type ZammadStub } from '@tests/zammad-stub';
 import { enabledModules } from '../../../modules';
 import { zammadService } from '../services';
@@ -48,3 +50,11 @@ export const useZammad = (options: { fieldsExist?: boolean } = {}): (() => Zamma
 /** Make every waiting message due now, as if its backoff had passed. */
 export const makeDue = (): Promise<unknown> =>
     zammadContactModel.updateMany({}, { $set: { nextAttemptAt: new Date(0) } }).exec();
+
+/**
+ * Hard-delete an account through the real erasure cascade, as the purge job does.
+ *
+ * @param userId - the account to erase
+ */
+export const eraseAccount = (userId: string): Promise<unknown> =>
+    userService.removeById(userId, true, callerContextAs('admin'));

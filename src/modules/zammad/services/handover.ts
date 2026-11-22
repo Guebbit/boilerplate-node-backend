@@ -18,8 +18,15 @@ import { outboxBackoffMs } from '@kernel/outbox';
 import { outboxConfig } from '@kernel/config';
 import { taskService, type ContactMessage } from '@modules/tasks';
 import { userService } from '@modules/users';
-import { createTicket, findTicketByRef, ZammadRequestError, type CreatedTicket } from '../client';
-import { zammadEnabled } from '../config';
+import {
+    createTicket,
+    findTicketByRef,
+    finishSpamTicket,
+    ZammadRequestError,
+    type CreatedTicket
+} from '../client';
+import { zammadEnabled, zammadSettings } from '../config';
+import { queueRaceErasure } from './erase-job';
 import type { ZammadContactDocument } from '../model';
 import {
     addPendingContact,
@@ -89,6 +96,7 @@ const sendTicket = (row: ZammadContactDocument, sender: Sender): Promise<Created
             ...(row.orderNumber ? { orderNumber: row.orderNumber } : {}),
             senderVerified: sender.userId !== undefined,
             requestRef,
+            ...(row.suspectedSpam ? { suspectedSpam: true } : {}),
             ...(sender.userId
                 ? {
                       accountLink: frontendLink(
@@ -100,13 +108,22 @@ const sendTicket = (row: ZammadContactDocument, sender: Sender): Promise<Created
                 : {})
         });
 
-    return row.unclear ? findTicketByRef(requestRef).then((found) => found ?? create()) : create();
+    /**
+     * A ticket an earlier unclear attempt filed is found, not filed again; a spam one is closed
+     * and tagged again too, since the lost attempt may have died between the create and either.
+     */
+    const settings = zammadSettings();
+    const adopt = (found: CreatedTicket): Promise<CreatedTicket> =>
+        row.suspectedSpam && settings ? finishSpamTicket(settings, found) : Promise.resolve(found);
+    return row.unclear
+        ? findTicketByRef(requestRef).then((found) => (found ? adopt(found) : create()))
+        : create();
 };
 
 /**
  * The ticket exists: delete the row, then remember the customer. The delete is by id and decides
  * the erasure race: a row already gone means the account was erased while the call was in flight, so
- * nothing is mapped and the returned customer is named in the log for staff to remove.
+ * nothing is mapped and an erase job deletes the customer the ticket created.
  *
  * @param row - the claimed message
  * @param sender - who it was linked to
@@ -125,8 +142,22 @@ const settle = (
 
     return deleteContactById(String(row._id)).then((deleted) => {
         if (!deleted) {
+            /**
+             * The customer is deleted only when it is the erased person's: the sender was linked to
+             * the account (typed its verified address), or there was no account at all and the row
+             * went by its verified address. A signed-in sender who typed someone else's address made
+             * a customer that is the STRANGER's; deleting it would erase their tickets.
+             */
+            if (sender.userId !== undefined || !row.subjectId) {
+                logger.warn({
+                    message: 'zammad: a message was handed over after its account was erased',
+                    zammadCustomerId: ticket.customerId
+                });
+                return queueRaceErasure(ticket.customerId, sender.userId);
+            }
             logger.error({
-                message: 'zammad: a message was handed over after its account was erased',
+                message:
+                    'zammad: a message was handed over after its account was erased, to a customer that is not the account’s',
                 zammadCustomerId: ticket.customerId
             });
             return;

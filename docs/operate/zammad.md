@@ -186,8 +186,33 @@ older than the server refuses its dump.
 
 ## Restore {#restore}
 
-Not written: restoring Zammad alone from a backup and re-applying later erasures depends on the erasure job,
-which does not exist yet.
+Restoring Zammad **alone** (not the whole host) brings back every customer erased after the dump. Our erase
+jobs (`zammaderasejobs`) outlive the dump, so they can delete those customers again. Do it in this order:
+
+1. **Export the Zammad `data_privacy_tasks` rows done since the dump**, from the database being replaced:
+   `SELECT deletable_type, deletable_id, updated_at FROM data_privacy_tasks WHERE state = 'completed' AND updated_at >= '<dump time>'`.
+   Each row stores `deletable_id`, which also covers erasures staff filed by hand, and which our jobs do not know.
+2. **Stop the Zammad channels and our sender** (`sweep:zammad-contacts`), so no new ticket takes a recycled id
+   before the replay and nothing is mailed from the restored state.
+3. **Restore** the dump ([Backup](#backup), restic tag `helpdesk-db`).
+4. **Run the replay**, then re-file the hand-made erasures from step 1 by hand (Admin, Data Privacy):
+
+    ```sh
+    npm run zammad:replay-erasures -- --since <dump time> --snapshot <restic snapshot id> --by <your name>
+    ```
+
+    It sets the erase jobs completed since the dump back to `pending` and runs one erase pass; the scheduled
+    `sweep:zammad-erasures` then follows the tasks to `completed`. A customer the restored Zammad does not hold
+    (it was created after the dump) counts as done. A restoration-log audit row records who did it.
+
+5. **Rebuild the search index** with `rake zammad:searchindex:rebuild`, only if you turned Elasticsearch on
+   ([Turning search on](#turning-search-on)).
+6. **Restart the channels.**
+
+A dump older than `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220) cannot be replayed: the jobs that would name its
+erasures have expired. That is why [the backup](#backup) keeps no Zammad dump longer than that. A **whole-host**
+restore needs none of this: `ops:reapply-erasures` brings the erase hook back to life
+([Restoring](./backups-restoring.md)).
 
 ## The drill {#the-drill}
 

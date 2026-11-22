@@ -86,7 +86,12 @@ describe('an unclear outcome', () => {
             id: 900,
             customer_id: 901,
             request_ref: String(row._id),
-            body: { request_ref: String(row._id) }
+            body: { request_ref: String(row._id) },
+            state: 'new',
+            tags: [],
+            created_at: new Date().toISOString(),
+            last_contact_at: null,
+            articles: []
         });
         await zammadContactModel.updateOne(
             { _id: row._id },

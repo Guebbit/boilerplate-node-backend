@@ -11,9 +11,12 @@ x-personal-data:
         schema:
             type: object
             description: >
-                What the help-desk hand-over holds about this person: the contact messages still
-                waiting to be sent to Zammad, and the Zammad customer their account is linked to.
-                Always present; the list is empty and `customerId` absent when there is nothing.
+                What the help desk holds about this person: the contact messages still waiting to be
+                sent to Zammad, the Zammad customer their account is linked to, and Zammad's own copy
+                (`customers`, read live). Always present; the list is empty and `customerId` absent
+                when there is nothing, and `customers` is absent while Zammad is not switched on.
+                Internal notes and staff replies carry no author. Files the customer sent are carried
+                in full, base64-encoded.
             required: [pendingContacts]
             properties:
                 pendingContacts:
@@ -23,6 +26,13 @@ x-personal-data:
                 customerId:
                     type: integer
                     description: The Zammad customer id the account is linked to. Absent when no ticket ever linked it.
+                customers:
+                    type: array
+                    description: >
+                        Every Zammad customer that is this person, with their tickets. The account's
+                        linked customer, and any customer holding the account's verified address.
+                    items:
+                        $ref: '#/components/schemas/ExportZammadCustomer'
 
 paths: {}
 
@@ -50,3 +60,86 @@ components:
                 createdAt:
                     type: string
                     format: date-time
+        ExportZammadCustomer:
+            type: object
+            description: A Zammad customer record and everything filed under it.
+            required: [id, tickets]
+            properties:
+                id:
+                    type: integer
+                email:
+                    type: string
+                firstname:
+                    type: string
+                lastname:
+                    type: string
+                createdAt:
+                    type: string
+                tickets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportZammadTicket'
+        ExportZammadTicket:
+            type: object
+            required: [id, articles]
+            properties:
+                id:
+                    type: integer
+                number:
+                    type: string
+                title:
+                    type: string
+                state:
+                    type: string
+                createdAt:
+                    type: string
+                articles:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportZammadArticle'
+        ExportZammadArticle:
+            type: object
+            description: >
+                One message of a ticket, internal notes included. `from`, `to` and `cc` appear only
+                on a message the customer wrote; a staff member's address is not this person's data.
+            required: [id, internal, body]
+            properties:
+                id:
+                    type: integer
+                type:
+                    type: string
+                sender:
+                    type: string
+                internal:
+                    type: boolean
+                subject:
+                    type: string
+                body:
+                    type: string
+                contentType:
+                    type: string
+                createdAt:
+                    type: string
+                from:
+                    type: string
+                to:
+                    type: string
+                cc:
+                    type: string
+                attachments:
+                    type: array
+                    description: The files the customer sent with this message.
+                    items:
+                        $ref: '#/components/schemas/ExportZammadAttachment'
+        ExportZammadAttachment:
+            type: object
+            required: [filename, size, contentBase64]
+            properties:
+                filename:
+                    type: string
+                contentType:
+                    type: string
+                size:
+                    type: integer
+                contentBase64:
+                    type: string

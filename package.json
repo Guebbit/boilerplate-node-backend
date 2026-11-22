@@ -75,6 +75,7 @@
         "job": "tsx scripts/ops/run-job.ts",
         "reencrypt": "tsx scripts/ops/reencrypt.ts",
         "zammad:setup": "tsx scripts/ops/zammad-setup.ts",
+        "zammad:replay-erasures": "tsx scripts/ops/zammad-replay-erasures.ts",
         "ops:reapply-erasures": "tsx scripts/ops/reapply-erasures.ts",
         "refresh:breached-passwords": "tsx scripts/security/refresh-breached-passwords.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
