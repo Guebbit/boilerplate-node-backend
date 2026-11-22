@@ -31,9 +31,9 @@ export default {
     locales: path.join(__dirname, 'locales'),
     imageTargets: { products: { writeback: productRepository.writebackImage } },
     /**
-     * `title`/`description` are a translated product's DERIVED index column, not its own data —
-     * kept only so Mongo has something to sort and index on. `products` is both the collection a
-     * translation write updates and the cache tag it must clear.
+     * `title`/`description` ARE the default language: the translation rows hold the other
+     * languages only. `products` is both the collection the entity lives in and the cache tag a
+     * translation write must clear.
      */
     translatables: {
         product: {

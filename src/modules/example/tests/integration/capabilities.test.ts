@@ -262,15 +262,16 @@ describe('the writes `locales` makes on this collection', () => {
         expect(await exampleRepository.translatable.revisionOf(MISSING_ID)).toBeUndefined();
     });
 
-    it('copies the fallback-language title onto the row without counting it as an edit', async () => {
+    it("reads an example's own text for the named columns, and nothing for a missing one", async () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id, title: 'Before' });
-        const before = await fieldOf(String(mine._id), 'updatedAt');
 
-        await exampleRepository.translatable.writeDerived(String(mine._id), { title: 'After' });
-
-        expect(await fieldOf(String(mine._id), 'title')).toBe('After');
-        expect(await fieldOf(String(mine._id), 'updatedAt')).toEqual(before);
+        expect(await exampleRepository.translatable.sourceOf(String(mine._id), ['title'])).toEqual({
+            title: 'Before'
+        });
+        expect(
+            await exampleRepository.translatable.sourceOf(MISSING_ID, ['title'])
+        ).toBeUndefined();
     });
 
     it('moves updatedAt, the ETag, when only a translation changed', async () => {

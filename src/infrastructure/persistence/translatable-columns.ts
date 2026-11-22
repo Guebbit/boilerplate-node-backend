@@ -1,17 +1,16 @@
 /**
  * @module
- * The three writes the `locales` translation port asks of an owning module, once, over its model:
- * does the entity exist, copy the fallback locale's fields onto its own columns, and stamp it as
- * edited. `products` and `example` both hand `locales` exactly these; each now builds them from its
- * own model instead of writing them out.
+ * What the `locales` translation port asks of an owning module, once, over its model: does the
+ * entity exist, what is its own default-language text, and stamp it as edited. `products` and
+ * `example` both hand `locales` exactly these; each builds them from its own model instead of
+ * writing them out.
  *
  * Same shape as `reencryptOf(model)` in `../security/reencrypt.ts`: a function of the model.
  *
  * @see docs/modules/locales.md#the-translations-collection
  */
 
-import type { ClientSession, Document, Model, UpdateQuery } from 'mongoose';
-import { clearedOrValue, setAndUnset } from './changes';
+import type { ClientSession, Document, Model } from 'mongoose';
 import { toObjectId } from './create-repository';
 import { EDIT_REVISION } from './revision-plugin';
 import { PreconditionFailedError, preconditionFilter } from './versioning';
@@ -21,15 +20,15 @@ export interface TranslatableColumns {
     /** The document's edit counter (`0` before its first edit), or `undefined` when none has this id; any scope. */
     revisionOf: (entityId: string) => Promise<number | undefined>;
     /**
-     * Copies the fallback locale's fields onto the document's own columns, so a search or a list
-     * never resolves a translation for the language the row is already in. A cleared field is no
-     * field (`$unset`), the same as its translation row. `timestamps: false`: a derived copy is not an edit anybody made.
+     * The document's own text for the named columns: the default language, which every
+     * translation row is a copy of. A column the document has no string for is left out, never
+     * `''`, so the same text always digests the same. `undefined` when none has this id.
      */
-    writeDerived: (
+    sourceOf: (
         entityId: string,
-        fields: Record<string, string | null>,
+        fields: readonly string[],
         session?: ClientSession
-    ) => Promise<void>;
+    ) => Promise<Record<string, string> | undefined>;
     /**
      * Stamps the document as edited, so its version (the ETag) moves even when no column changed.
      * Written by hand with `timestamps: false`, since Mongoose adds no `$set` to an empty update.
@@ -63,24 +62,26 @@ export const translatableColumnsOf = <TDocument extends Document>(
         return row ? (row.editRevision ?? 0) : undefined;
     },
 
-    writeDerived: (entityId, fields, session) =>
-        model
-            .updateOne(
+    sourceOf: async (entityId, fields, session) => {
+        // `session` joins the caller's transaction, so a write just made inside it is read back.
+        const row = await model
+            .findOne(
                 { _id: toObjectId(entityId) },
-                /**
-                 * `as`: the column names arrive as data (the port's `fields`), which a generic
-                 * `TDocument` cannot show the compiler. A `null` becomes an `$unset`.
-                 */
-                setAndUnset(
-                    Object.fromEntries(
-                        Object.entries(fields).map(([name, value]) => [name, clearedOrValue(value)])
-                    )
-                ) as UpdateQuery<TDocument>,
-                // `session` joins the caller's transaction; `undefined` stands alone.
-                { timestamps: false, session }
+                // A projection by name: the columns arrive as data, which a generic `TDocument` cannot show.
+                Object.fromEntries(fields.map((field) => [field, 1]))
             )
-            .exec()
-            .then(() => undefined),
+            .session(session ?? null)
+            .lean<Record<string, unknown>>()
+            .exec();
+        if (!row) return undefined;
+        // `typeof` keeps a column that holds no string (absent, or a stray value) out of the source.
+        return Object.fromEntries(
+            fields.flatMap((field) => {
+                const value = row[field];
+                return typeof value === 'string' ? [[field, value]] : [];
+            })
+        );
+    },
 
     markEdited: (entityId, session) => {
         const fence = preconditionFilter(entityId, EDIT_REVISION);

@@ -45,8 +45,8 @@ export const languageNotFound = (): ResponseReject =>
 
 /**
  * The deployment's fallback locale, deactivated or deleted — refused before either happens.
- * Every translatable entity's source row lives there; losing it empties the catalogue in every
- * language at once, so the guard sits here rather than trusting an operator to know that.
+ * Every translatable entity's own text is written in it; losing it would leave that text in no
+ * language at all, so the guard sits here rather than trusting an operator to know that.
  */
 const rejectFallbackLocale = (tag: string): ResponseReject | undefined =>
     tag === getFallbackLocale()

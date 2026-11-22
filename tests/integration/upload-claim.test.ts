@@ -64,7 +64,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Claimed product' } }))
+            .field('title', 'Claimed product')
             .field('price', '10')
             .attach('imageUpload', PNG_BYTES, IMAGE);
         await settled(() => false);
@@ -79,7 +79,7 @@ describe('POST /products', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Refused product' } }))
+            .field('title', 'Refused product')
             .field('price', '-5')
             .attach('imageUpload', PNG_BYTES, IMAGE);
         await settled(() => uploadedFiles().length === 0);
@@ -97,7 +97,8 @@ describe('PUT /products/:id', () => {
         const response = await api()
             .put(`/products/${String(product._id)}`)
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Updated product' } }))
+            .field('title', 'Updated product')
+            .field('translations', '{}')
             .field('price', '12')
             .field('active', 'true')
             .field('purchasable', 'true')
@@ -119,7 +120,8 @@ describe('PUT /products/:id', () => {
         const response = await api()
             .put(`/products/${MISSING_ID}`)
             .set('Authorization', bearer)
-            .field('translations', JSON.stringify({ en: { title: 'Updated product' } }))
+            .field('title', 'Updated product')
+            .field('translations', '{}')
             .field('price', '12')
             .field('active', 'true')
             .field('purchasable', 'true')

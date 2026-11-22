@@ -64,7 +64,7 @@ export interface LocaleEntryDocument
 
 /** Mongoose document type for one entity's translated fields, in one locale. */
 export interface TranslationDocument
-    extends Omit<Translation, 'id' | 'createdAt' | 'updatedAt'>, Document {
+    extends Omit<Translation, 'id' | 'createdAt' | 'updatedAt' | 'outdated'>, Document {
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -274,7 +274,7 @@ export const translationSchema = new Schema<TranslationDocument, TranslationMode
             required: true,
             default: () => ({})
         },
-        // Absent on the fallback-locale row — see `deriveSourceDigest` in `./repository`.
+        // The digest of the entity's own text when this row was written — see `deriveSourceDigest` in `./repository`.
         sourceDigest: {
             type: String
         },

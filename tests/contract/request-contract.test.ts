@@ -333,10 +333,10 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     createUser: { role: () => 'editor' },
     assignUserRole: { role: () => 'editor' },
     /**
-     * `translations` is a `Record<locale, ...>` to the schema: it cannot say the key must be the
-     * deployment's fallback locale, whose row must exist.
+     * `translations` is a `Record<locale, ...>` to the schema: it cannot say a key must be a
+     * language other than the default one, whose row must exist. No other language is legal here.
      */
-    createProduct: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
+    createProduct: { translations: () => ({}) },
     createOrder: {
         userId: (world) => world.userId,
         /**
@@ -405,13 +405,13 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     createWebhookSubscription: { eventTypes: () => ['*'] },
     replaceWebhookSubscription: { eventTypes: () => ['*'] },
     updateWebhookSubscription: { eventTypes: () => ['*'] },
-    replaceProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
-    updateProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) }
+    replaceProductById: { translations: () => ({}) },
+    updateProductById: { translations: () => ({}) }
 };
 
-/** A legal translations body: the fallback locale, with one field, which is what a write must carry. */
-const FALLBACK_TRANSLATIONS = {
-    en: { fields: { title: 'Generated Product Title' }, origin: 'human' }
+/** A legal translations body: one language besides the default, with one field. */
+const LEGAL_TRANSLATIONS = {
+    it: { fields: { title: 'Generated Product Title' }, origin: 'human' }
 };
 
 /**
@@ -420,7 +420,7 @@ const FALLBACK_TRANSLATIONS = {
  * @throws {Error} when the operation has no generated Zod body — the census test names it first
  */
 const legalBody = (operation: Operation): Record<string, unknown> => {
-    if (RECORD_BODIES.has(operation.operationId ?? '')) return FALLBACK_TRANSLATIONS;
+    if (RECORD_BODIES.has(operation.operationId ?? '')) return LEGAL_TRANSLATIONS;
     const zod = zodBodyOf(operation);
     if (!zod) throw new Error(`no generated Zod body for ${labelOf(operation)}`);
     return validPayload(zod);
@@ -530,9 +530,9 @@ const expectBodyAccepted = (response: Response): void => {
 };
 
 describe('every write operation (contract-derived)', () => {
-    // The fallback locale must exist as a row for a product or translation write to name it.
+    // The language a translation write names must exist as a row.
     beforeEach(async () => {
-        await givenLocale('en');
+        await givenLocale('it');
     });
 
     it('walks every write operation the spec declares', () => {

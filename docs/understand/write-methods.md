@@ -157,8 +157,9 @@ today: the one that did, an email held as `pendingEmail` until proven, is its ow
 (`POST /account/email-change`), so `PUT /account` stores exactly what it is sent.
 
 **A keyed map is part of the representation.** A product's `translations` on a PUT is the whole
-set: a stored locale it leaves out is deleted, the fallback locale is required, and a locale it
-states is stated whole (its omitted `description` is cleared).
+set of the OTHER languages: a stored locale it leaves out is deleted (`{}` deletes them all), the
+default language is never a key (it is the top-level `title`/`description`), and a locale it states
+is stated whole (its omitted `description` is cleared).
 
 ## PATCH — JSON Merge Patch
 

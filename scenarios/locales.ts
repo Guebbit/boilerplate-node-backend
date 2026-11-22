@@ -16,9 +16,9 @@ import type { Caller } from './flows/client';
 /** The seeded languages, named by what each one is here to demonstrate. */
 const SEED_LOCALE_TAGS = {
     /**
-     * The deployment's fallback locale — the product catalogue's source language. Every
-     * product's fallback-locale `translations` row needs this to exist and be active, or
-     * `planTranslations` has nothing to validate that row's own locale against (`./products`).
+     * The deployment's fallback locale — the default language, the product catalogue's source
+     * text. It has no `translations` rows; the other languages' rows are validated against the
+     * languages registered here (`./products`).
      */
     source: getFallbackLocale(),
     /** A language that exists ONLY as rows — no deployed file — downloadable from the API. */

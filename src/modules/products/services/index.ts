@@ -29,7 +29,7 @@ import {
 /**
  * The service's public surface — every controller and cross-module caller goes through this.
  * `create` and `updateById` write the translation rows with the product, so there is no door
- * that moves a title without its fallback-locale row.
+ * that leaves a row stamped with a text the product no longer has.
  */
 export const productService = {
     callerScope,

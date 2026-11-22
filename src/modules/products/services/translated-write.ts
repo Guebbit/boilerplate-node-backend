@@ -1,12 +1,11 @@
 /**
  * @module
  * The product's write doors: `create` and `updateById` write a product and its translation rows in
- * one operation. There is no door that writes the row alone, so a title can never move without
- * its fallback-locale translation.
+ * one operation. The product's own `title`/`description` are the default language; the rows are
+ * the other languages, each stamped with the digest of the text the save left on the product.
  */
 
 import type { z } from 'zod';
-import { getFallbackLocale } from '@infrastructure/i18n';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
     isTranslationPlan,
@@ -73,12 +72,11 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
  * Create a product and its translation rows in ONE transaction — the create door of the
  * multilingual product write surface.
  *
- * Before:  the translations batch's locales and field names — `planTranslations`; nothing written
- *          yet (a bad batch costs no transaction). `data` arrives already validated by
- *          `zodProductCreateSchema` at the controller, which also refuses a missing or `null`
- *          fallback locale.
- * Inside:  the row, its `PRODUCT_CREATED` outbox event, every translation row, the derived column.
- *          All commit together or none does.
+ * Before:  the translations batch's locales and field names — `planTranslations`, which also
+ *          refuses the default language as a key; nothing written yet (a bad batch costs no
+ *          transaction). `data` arrives already validated by `zodProductCreateSchema`.
+ * Inside:  the row, its `PRODUCT_CREATED` outbox event, every translation row. All commit
+ *          together or none does.
  * After:   the relay wake-up, the audit entry, the image enqueue — each catching its own failure.
  *
  * `imageExtras` is server-derived, never part of the contract body, so it joins only once
@@ -89,12 +87,9 @@ export const create = async (
     context: CallerContext,
     imageExtras: ServerImageFields = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
-    const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
+    const { translations = {}, ...productFields } = data;
+    const plan = await planTranslations('product', toUpsertTranslationsRequest(translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
-
-    // Present by the schema's own refinement; a create has no null locale.
-    const fallbackEntry = data.translations[getFallbackLocale()];
-    const { translations: _translations, ...productFields } = data;
 
     const product = await withTransaction((session) =>
         insertProduct(
@@ -102,10 +97,7 @@ export const create = async (
                 ...productFields,
                 ...imageExtras,
                 // `null` on a create means no image: the schema default applies to `undefined` only.
-                imageUrl: imageExtras.imageUrl ?? undefined,
-                title: fallbackEntry.title,
-                // No description is no field on disk, never `''`.
-                description: fallbackEntry.description
+                imageUrl: imageExtras.imageUrl ?? undefined
             },
             session
         ).then((inserted) =>
@@ -127,8 +119,8 @@ export const create = async (
  * multilingual product write surface. A PUT arrives here with every omitted locale already `null`
  * ({@link clearOmittedLocales}), so this one path serves both verbs.
  *
- * Inside:  the 404 check, the row, the translation
- *          rows and the derived column. After: the audit entry, the old-image delete, the image
+ * Inside:  the 404 check, the row, then the translation rows (read the new text for their
+ *          digest). After: the audit entry, the old-image delete, the image
  *          enqueue — see {@link updateByIdInTransaction} and {@link finishUpdateById}.
  *
  * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
@@ -148,24 +140,10 @@ export const updateById = async (
         : undefined;
     if (plan && !isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 
-    /**
-     * An upsert at the fallback locale is the only slot that touches the derived index column;
-     * `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
-     */
-    const fallbackEntry = translations?.[getFallbackLocale()];
-    const derivedFields = fallbackEntry
-        ? {
-              ...(fallbackEntry.title === undefined ? {} : { title: fallbackEntry.title }),
-              ...(fallbackEntry.description === undefined
-                  ? {}
-                  : { description: fallbackEntry.description })
-          }
-        : {};
-
     const result = await withTransaction((session) =>
         updateByIdInTransaction(
             id,
-            { ...productFields, ...imageExtras, ...derivedFields, touch: plan !== undefined },
+            { ...productFields, ...imageExtras, touch: plan !== undefined },
             session
         ).then((outcome) =>
             plan && 'updated' in outcome
@@ -189,8 +167,8 @@ const TRANSLATED_FIELDS = ['description'] as const;
 /**
  * PUT's `translations` is the whole set (RFC 9110 §9.3.4): every locale the product holds and the
  * body leaves out becomes `null` — the same signal a PATCH sends to delete one — and a description
- * a stated locale leaves out becomes `null` too, the merge's own way to clear a field. The
- * fallback locale is never among the deleted: the PUT schema refuses a body without it.
+ * a stated locale leaves out becomes `null` too, the merge's own way to clear a field. The default
+ * language is no stored locale (it is the product's own text), so it is never among the deleted.
  *
  * @param id - the product being replaced
  * @param changes - the validated, filled PUT change-set

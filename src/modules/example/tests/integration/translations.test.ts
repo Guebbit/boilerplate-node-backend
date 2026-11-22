@@ -1,8 +1,8 @@
 /**
  * @module
  * The example's title is translatable. This drives the `locales` door end to end: the module
- * registered itself as a translatable entity type, the fallback-language write is copied back onto
- * the row (what a list shows), and another language leaves the row alone.
+ * registered itself as a translatable entity type, the default language is the row's own title
+ * (this door refuses it), and another language is a row that leaves the title alone.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -45,7 +45,7 @@ const adminWithLanguages = async () => {
 };
 
 describe('translating an example’s title through /locales', () => {
-    it('copies the fallback-language title onto the row', async () => {
+    it('refuses the default language, and leaves the row’s own title alone', async () => {
         const { user, bearer } = await adminWithLanguages();
         const example = await createExample({ userId: user.id, title: 'Before' });
 
@@ -54,8 +54,9 @@ describe('translating an example’s title through /locales', () => {
             .set('Authorization', bearer)
             .send({ en: { fields: { title: 'After' }, origin: 'human' } });
 
-        expect(response.status).toBe(200);
-        expect(await fieldOf(String(example._id), 'title')).toBe('After');
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'en' });
+        expect(await fieldOf(String(example._id), 'title')).toBe('Before');
     });
 
     it('leaves the row’s own title alone for another language, and stores that language', async () => {
@@ -88,10 +89,9 @@ describe('translating an example’s title through /locales', () => {
     });
 
     it.each([
-        ['a cleared title', 'en', null],
-        ['a cleared title in another language', 'it', null],
-        ['a title past the contract bound', 'en', 'x'.repeat(201)],
-        ['a title of only spaces', 'en', '   ']
+        ['a cleared title', 'it', null],
+        ['a title past the contract bound', 'it', 'x'.repeat(201)],
+        ['a title of only spaces', 'it', '   ']
     ])('refuses %s and leaves the row alone', async (_label, locale, title) => {
         const { user, bearer } = await adminWithLanguages();
         const example = await createExample({ userId: user.id, title: 'Keep' });
@@ -113,10 +113,10 @@ describe('translating an example’s title through /locales', () => {
         const response = await api()
             .patch(`/locales/translations/example/${String(example._id)}`)
             .set('Authorization', bearer)
-            .send({ en: { fields: { title: '  After  ' }, origin: 'human' } });
+            .send({ it: { fields: { title: '  Dopo  ' }, origin: 'human' } });
 
         expect(response.status).toBe(200);
-        expect(await fieldOf(String(example._id), 'title')).toBe('After');
+        expect(response.body.translations[0].fields).toEqual({ title: 'Dopo' });
     });
 
     it('answers 404 for an example that does not exist', async () => {

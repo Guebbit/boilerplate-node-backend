@@ -216,6 +216,6 @@
     },
     "translation": {
         "error-locale-unavailable": "Oggi si può impostare solo {{locale}} (la traduzione non è disponibile).",
-        "error-fallback-required": "La lingua predefinita ({{locale}}) richiede un proprio testo."
+        "error-default-language": "{{locale}} è la lingua predefinita: il suo testo è quello della voce stessa, non una traduzione."
     }
 }

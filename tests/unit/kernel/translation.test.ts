@@ -37,7 +37,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     resolve: jest.fn().mockResolvedValue(new Map()),
     removeAll: jest.fn().mockResolvedValue(0),
     search: jest.fn().mockResolvedValue([]),
-    plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
+    plan: jest.fn().mockResolvedValue({ planned: [] }),
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
     readServed: jest.fn().mockResolvedValue(new Map()),
@@ -150,37 +150,29 @@ describe('planTranslations', () => {
         setEnvironment({ NODE_FALLBACK_LOCALE: 'en' });
     });
 
-    it('plans a single fallback-locale upsert when no port is registered', async () => {
-        const result = await planTranslations('product', { en: { fields: { title: 'Kennel' } } });
+    it('plans nothing for an empty batch when no port is registered', async () => {
+        const result = await planTranslations('product', {});
 
-        expect(isTranslationPlan(result) && result).toEqual({
-            fallbackLocale: 'en',
-            planned: [{ locale: 'en', kind: 'upsert', fields: { title: 'Kennel' } }]
-        });
+        expect(isTranslationPlan(result) && result).toEqual({ planned: [] });
     });
 
-    it('422s a non-fallback locale when no port is registered', async () => {
-        const result = await planTranslations('product', {
-            en: { fields: { title: 'Kennel' } },
-            it: { fields: { title: 'Cuccia' } }
-        });
+    it('422s a non-default locale when no port is registered, as unavailable', async () => {
+        const result = await planTranslations('product', { it: { fields: { title: 'Cuccia' } } });
 
-        expect('success' in result && !result.success).toBe(true);
+        expect(!isTranslationPlan(result) && result.status).toBe(422);
         expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'it' });
+        expect(!isTranslationPlan(result) && result.errors[0]?.message).toContain('it');
     });
 
-    it('422s a deleted (null) fallback slot when no port is registered', async () => {
-        const result = await planTranslations('product', { en: null });
+    it.each([
+        ['an upsert', { en: { fields: { title: 'Kennel' } } }],
+        ['a delete (null)', { en: null }]
+    ])('422s the default locale as %s when no port is registered', async (_name, batch) => {
+        const result = await planTranslations('product', batch);
 
-        expect('success' in result && !result.success).toBe(true);
+        expect(!isTranslationPlan(result) && result.status).toBe(422);
         expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'en' });
-    });
-
-    it('422s an empty fallback slot when no port is registered', async () => {
-        const result = await planTranslations('product', { en: { fields: {} } });
-
-        expect('success' in result && !result.success).toBe(true);
-        expect(!isTranslationPlan(result) && result.errors[0]?.details).toEqual({ field: 'en' });
+        expect(!isTranslationPlan(result) && result.errors[0]?.message).toMatch(/default language/);
     });
 
     it('reports translation unavailable only when no port is registered', () => {
@@ -190,7 +182,7 @@ describe('planTranslations', () => {
     });
 
     it('delegates to the registered port with exactly what it was given', async () => {
-        const plan = { fallbackLocale: 'en', planned: [] };
+        const plan = { planned: [] };
         const port = fakePort({ plan: jest.fn().mockResolvedValue(plan) });
         registerTranslationPort(port);
 
@@ -205,7 +197,7 @@ describe('planTranslations', () => {
 describe('writeTranslations', () => {
     it('resolves without writing anything when no port is registered', async () => {
         await expect(
-            writeTranslations('product', 'p1', { fallbackLocale: 'en', planned: [] }, undefined)
+            writeTranslations('product', 'p1', { planned: [] }, undefined)
         ).resolves.toBeUndefined();
     });
 
@@ -215,8 +207,7 @@ describe('writeTranslations', () => {
         registerTranslationPort(port);
 
         const plan = {
-            fallbackLocale: 'en',
-            planned: [{ locale: 'en', kind: 'upsert' as const, fields: { title: 'Bed' } }]
+            planned: [{ locale: 'it', kind: 'upsert' as const, fields: { title: 'Bed' } }]
         };
         await writeTranslations('product', 'p1', plan, 'translator-1');
 
@@ -227,7 +218,7 @@ describe('writeTranslations', () => {
         const write = jest.fn().mockResolvedValue(undefined);
         registerTranslationPort(fakePort({ write }));
         const session = asStub<ClientSession>({});
-        const plan = { fallbackLocale: 'en', planned: [] };
+        const plan = { planned: [] };
 
         await writeTranslations('product', 'p1', plan, undefined, session);
 

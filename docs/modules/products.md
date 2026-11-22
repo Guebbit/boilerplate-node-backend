@@ -246,49 +246,54 @@ stored as typed and charged as 20.00. The price is stored as a `Decimal128`
 
 ## Translated content
 
-`title`/`description` are not columns this module resolves on its own. They live as per-locale rows
-in the `translations` collection [`locales`](./locales.md) owns (`entityType: 'product'`) — one row
-per language, the fallback language included, no special-cased "source" row.
+The product's own `title`/`description` ARE the default language (`NODE_FALLBACK_LOCALE`), the way
+Shopify, Medusa, Saleor and Magento hold it. The other languages live as per-locale rows in the
+`translations` collection [`locales`](./locales.md) owns (`entityType: 'product'`): one row per
+language, none for the default. A leftover row in the default language is ignored by every read.
 
 Every read resolves them onto the wire shape: `search()` and `getById()` in
 `src/modules/products/services/{search,read}.ts` call `applyTranslations('product', …)`, which overlays the
-caller's negotiated language chain — exact tag, base language, then the deployment's fallback — over
-an already-serialized page in one batched query. The language is the one the API negotiated from
+caller's negotiated language chain — exact tag, base language — over the product's own text (the
+fallback) in an already-serialized page, in one batched query. The language is the one the API negotiated from
 `Accept-Language` among the languages that are switched on, a deployed file or a registered row
 ([one language per request](../understand/i18n.md#one-language-per-request)), not the raw header; text in
 a language that is switched off is never part of the chain, except a staff preview
 ([a draft language](./locales.md#a-draft-language)). See
 [Internationalisation](../understand/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
 
-::: warning The document's own `title`/`description` are a derived index column, not the wire shape
-`productSchema`'s `title`/`description` (`src/modules/products/model.ts`) exist only so Mongo has
-something to sort, and something to run free-text search against (`productRepository`'s
-`createRepository` call, its `searchable.text`/`regex` options). [`inventory`](./inventory.md)'s
-stock board does not join against it — it composes its own `stocklevels` read with a separate call
-to this module for titles, the same "the service is the door" rule everything else here follows.
-They are written only when the
-FALLBACK-locale translation row changes, never read back into an API response: a public read
-always goes through the resolver above.
+::: warning The document's own `title`/`description` are the default language
+`productSchema`'s `title`/`description` (`src/modules/products/model.ts`) are the source text:
+what a read returns when no row overlays it, what free-text search and the title sort run on
+(`productRepository`'s `createRepository` call, its `searchable.text`/`regex` options), and what
+every translation row's `sourceDigest` is taken from. Title sort and search therefore use the
+default language only, as Shopify's do on the original title. [`inventory`](./inventory.md)'s stock
+board does not join against it — it composes its own `stocklevels` read with a separate call to this
+module for titles, the same "the service is the door" rule everything else here follows.
+Search also unions the translation rows of the caller's language, so an Italian word finds the product.
 :::
 
 ### Writing translated content
 
-`POST /products`, `PUT /products/{id}` and `PATCH /products/{id}` all take a `translations` map
-keyed by locale instead of a flat `title`/`description`. The fallback locale's entry is required
-and non-null on `POST` — a new product needs something to fall back to. A `PUT` states the whole
-map, like every other field: a locale it omits is deleted, and the fallback locale is required, so
-the product always keeps something to fall back to. On `PATCH` the fallback entry is optional (an
-absent key leaves that locale untouched) but never `null` — deleting the one locale every other read
-falls back to would leave the product with nothing. Every other locale is optional, and `null` on an
-existing one (never the fallback) deletes its row.
+`POST /products`, `PUT /products/{id}` and `PATCH /products/{id}` take the default language as
+top-level `title`/`description`, plus a `translations` map keyed by locale for the OTHER languages.
+It is one save. `title` is required on `POST` and `PUT`; `translations` may be left out of a `POST`.
+A `PUT` states the whole map, like every other field: a locale it omits is deleted, and `{}` deletes
+them all; `description: null` (or omitting it) clears the default description. On `PATCH` every key
+is optional and `translations` merges: an absent key leaves that locale untouched, an object merges
+field by field, and `null` deletes the row. A default-language key in `translations`, `null`
+included, is a 422 (`translations.en`): that language is the top-level text.
 `src/modules/products/services/translated-write.ts`'s `create`/`updateById` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
-product and its rows in the same operation. `GET /products/{id}` adds a `translations` map (every
-language, drafts included) for a caller holding `read:Translation` — what the editor's form
-populates its tabs from — while `title`/`description` stay the caller's resolved language. What the
-caller may see shapes the body; there is no separate staff URL. Such a caller never reads or fills
-the shared cache entry (`cacheScopeKey`), because a custom API key can hold `read:Translation`
-alone.
+product and its rows in the same operation, the product first: each row is stamped with the
+digest of the text the save left on the product, so a row written beside a new title is current
+and one left alone is flagged `outdated` on the generic door's read.
+
+`GET /products/{id}` adds `translations` (every other language, drafts included) and `source` (the
+stored default-language text) for a caller holding `read:Translation` — what the editor's form
+populates itself from — while `title`/`description` stay the caller's resolved language, which is
+why the form reads `source`. What the caller may see shapes the body; there is no separate staff
+URL, and a shopper never gets either field. Such a caller never reads or fills the shared cache
+entry (`cacheScopeKey`), because a custom API key can hold `read:Translation` alone.
 
 This is a different door from the generic one — see
 [`locales`](./locales.md#the-generic-translations-door-and-why-it-s-not-the-only-one): only

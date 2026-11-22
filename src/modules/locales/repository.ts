@@ -418,14 +418,16 @@ const translationBase = createRepository<TranslationDocument, Translation>(trans
 });
 
 /**
- * Every locale this entity has a row for, sorted by locale so a response is byte-stable.
+ * Every language but the default this entity has a row for, sorted by locale so a response is
+ * byte-stable. The default language is the entity's own text: a row in it (left over from before
+ * the default changed, or from an older write) is ignored here like in every other lookup.
  */
 const findEntityTranslations = (
     entityType: string,
     entityId: string
 ): Promise<TranslationDocument[]> =>
     translationModel
-        .find({ entityType, entityId })
+        .find({ entityType, entityId, locale: { $ne: getFallbackLocale() } })
         .sort({ locale: 1 })
         .lean<TranslationDocument[]>()
         .exec();
@@ -444,10 +446,10 @@ const findEntityLocale = (
         .exec();
 
 /**
- * The tags whose entity text is SERVED: every language switched on, plus the fallback language
- * (which can be neither switched off nor deleted, and may have no `locales` row at all). A
- * language's draft text is written but not served: both public read paths below read only these
- * rows, the way the manifest and the dictionary drop the language itself.
+ * The tags whose entity text is SERVED: every language switched on, except the default one. The
+ * default language is the entity's own text, never a row: a row in it is ignored, so it can never
+ * shadow that text. A language's draft text is written but not served: every read path below reads
+ * only these rows, the way the manifest and the dictionary drop the language itself.
  *
  * An allow-list, not a deny-list of the switched-off: a row whose language no longer exists (a
  * delete racing a write, the cascade is not transactional) is served by nothing. Languages are a
@@ -466,7 +468,7 @@ const servedTags = (draftTag?: string): Promise<string[]> =>
             draftTag ? { $or: [{ active: true }, { tag: draftTag }] } : { active: true }
         )
         .exec()
-        .then((active) => [...new Set([...active, getFallbackLocale()])]);
+        .then((active) => [...new Set(active)].filter((tag) => tag !== getFallbackLocale()));
 
 /**
  * {@link findEntityTranslations} limited to the languages the shop serves — see {@link servedTags}.
@@ -492,7 +494,8 @@ const findServedEntityTranslations = (
  * `localeCandidates` is `[exact, base, fallback]`, most specific first (see
  * `localeCandidatesFor`); merging walks it in REVERSE so a more specific locale's fields overwrite
  * a less specific one's, field by field — not row by row, since a locale may have translated only
- * some of an entity's fields.
+ * some of an entity's fields. The fallback (default) language never has rows, so its entry matches
+ * nothing: the entity's own columns are that language, and the caller lays rows over them.
  */
 const resolveEntityFields = (
     entityType: string,
@@ -584,7 +587,7 @@ const findEntityIdsByFieldMatch = (
  *
  * Keys are sorted before hashing: `fields` is written and read as a plain object with no
  * guaranteed key order, and two writes of the same content in a different order must produce the
- * same digest — otherwise every fallback-locale save would mark every translation stale.
+ * same digest — otherwise every save of the entity's text would mark every translation outdated.
  */
 export const deriveSourceDigest = (fields: TranslationFields): string =>
     createHash('sha256')
@@ -598,7 +601,7 @@ export const deriveSourceDigest = (fields: TranslationFields): string =>
  *
  * `sourceDigest` is the caller's job to compute (see {@link deriveSourceDigest}): the repository
  * has no opinion on what "the source" means, that is `services/translations.ts`'s reading of the
- * fallback locale.
+ * entity's own text.
  */
 const upsertEntityLocale = (
     entityType: string,
