@@ -141,6 +141,8 @@ The row `{userId, zammadUserIds[], email, state}` is written **inside the erasur
 
 When every customer is done the row becomes `completed`, **drops the address**, and stays until the erasure ledger forgets it (`NODE_ERASURE_LEDGER_RETENTION_DAYS`, 220 days): it is what [the replay](../operate/zammad.md#restore) reads. A `failed` or an hour-old `pending` job never expires. `ZammadEraseFailed` and `ZammadEraseStuck` say so.
 
+**How long a task takes.** Zammad runs its Data Privacy tasks from a scheduler with a ten-minute period, so a task reaches `completed` up to about ten minutes after it was filed (five seen on a quiet instance). The sweep polls every minute until then.
+
 **What Zammad's task removes:** the customer, their tickets and articles, their search-index entries, and the attachments and raw mail nothing else refers to.
 
 **Mentions stay.** An article on **another** customer's ticket that names the person is not found: Zammad has no tool for it. The staff guide rule is to write the order number, not the name; the mention ends with that ticket's [retention](#retention). For the rare case, staff file a Ticket deletion task by hand.
@@ -183,14 +185,14 @@ A restored dump brings back customers erased after it. `npm run zammad:replay-er
 The technician does this once, in Zammad, before setting `NODE_ZAMMAD_URL`.
 
 1. **Two-factor on the Agent and Admin roles** (an authenticator app or a security key). Staff log in with a password; there is no SSO.
-2. **Settings:** `api_password_access = false` (basic auth skips 2FA on the calendar feeds), `geo_ip_backend` off (it sends every client address to a third party), `ticket_last_contact_behaviour = based_on_customer_reaction`.
+2. **Settings:** `api_password_access = false` (basic auth skips 2FA on the calendar feeds), `geo_ip_backend` off (it sends every client address to a third party), `ticket_last_contact_behaviour = based_on_customer_reaction`. The last one is **not Zammad's default** (that is `check_if_agent_already_replied`, under which a customer's second message moves nothing), and the retention clock rests on it.
 3. **Roles:** remove `user_preferences.access_token` from the Agent and Admin roles (a token skips 2FA). Turn off "New User Accounts" and `user_lost_password`. An admin resets a staff password.
 4. **Turn off the default "auto reply (on new tickets)" trigger.** It fires on API tickets too, mails whatever address a visitor typed, and points customers at Zammad's portal. Basic mode sends the visitor nothing, and so does this.
 5. **The integration user:** `integration@helpdesk.invalid`, in no notification group, with a random password nobody uses. Its role holds `ticket.agent` and `admin.data_privacy`, plus `create` and `read` on the intake group, and **not** `admin.user`.
 6. **The token.** A user can only mint tokens for themselves and the access-token permission is removed, so use the Rails console: `Token.create!(action: 'api', user_id: <id>, persistent: true, expires_at: 12.months.from_now, preferences: {permission: ['ticket.agent', 'admin.data_privacy']})`. Put it in `NODE_ZAMMAD_API_TOKEN` (or the `_FILE`). **Rotation:** create a new token, deploy, delete the old one. Tokens coexist, so there is no gap.
 7. **The fields:** `ZAMMAD_ADMIN_TOKEN=<an admin token> npm run zammad:setup`. It is idempotent and creates or updates `shop_category` (one option per `TaskCategory`), `order_number`, `request_ref`, `shop_sender_verified` and `shop_account`. Creating a field makes Zammad restart itself once; compose brings it back. Changing the options later needs neither migration nor restart.
 8. **The email channel:** an IMAP + SMTP channel on the support mailbox, so staff replies leave from it and customer replies come back to it. Pointing `NODE_SUPPORT_EMAIL` at that mailbox is the usual choice; taking the module out means pointing it back.
-9. **The privacy deadline:** `privacy` messages owe an answer within one month (GDPR Art. 12(3)). Add an SLA on `shop_category`; if an SLA condition cannot read a custom field, route `privacy` through a trigger that adds a tag and put the SLA on the tag.
+9. **The privacy deadline:** `privacy` messages owe an answer within one month (GDPR Art. 12(3)). Add an SLA whose condition is `shop_category is privacy`: an SLA condition can read a custom field (confirmed on 7.2.3), so no tag is needed.
 
 10. **A "Suspected spam" view:** an overview whose condition is the tag `suspected-spam`, so staff can glance over what the email check caught before the retention pass deletes it after 30 days. Nobody is mailed about them.
 
@@ -218,13 +220,42 @@ The frontend shows a "Helpdesk" link to staff only when its own runtime setting 
 
 Delete `src/modules/zammad/` and its line in `src/modules.ts`, then what the module owned outside its folder:
 
-- `scripts/ops/zammad-setup.ts` and `scripts/ops/zammad-replay-erasures.ts`, the `zammad:setup`, `zammad:replay-erasures` and `test:zammad` scripts, with `jest.config.zammad.js`;
+- `scripts/ops/zammad-setup.ts` and `scripts/ops/zammad-replay-erasures.ts`, the `zammad:setup`, `zammad:replay-erasures` and `test:zammad` scripts, with `jest.config.zammad.js` and `jest.sequencer.zammad.js`;
 - the four `Zammad*` alerts in `docker/observability/prometheus.alert-rules.yaml` and their cases in the test file;
 - `tests/support/zammad-stub.ts`, `tests/integration/zammad-erasure.test.ts`, and the `NODE_ZAMMAD_*` block of `.env-example`.
 
 The port goes with the module, so `tasks` files the to-do again and sends the full mail; point the mailbox back by hand.
 
 **The module's data is personal data, so it does not stay behind.** Before deleting the code, let the pending messages drain: while `NODE_ZAMMAD_URL` is set the sweep hands each to Zammad or, after the last retry, falls it back to a to-do, so wait until `zammadcontacts` holds no `pending` row. (With the URL unset the sweep does nothing.) Let the erase jobs finish as well: `zammaderasejobs` must hold no `pending` or `failed` row, or an erased person is still in Zammad. Then drop the four collections by hand: `zammadcontacts` (waiting messages and fallback markers), `zammadcustomers` (the account to Zammad customer map), `zammadprofilesyncs` and `zammaderasejobs` (the completed rows are the replay's record). Removing the code alone leaves them in the database. The `tasks_spam_ttl` index stays: it belongs to `tasks`. The deletability check passes: with the module gone, `tsc` and the `tasks` and cross-cutting suites stay green ([how to re-run it](../build/module-removal.md#re-running-the-deletability-check)).
+
+## Testing {#testing}
+
+Three layers, each answering what the one before cannot:
+
+| Layer              | Where                                                           | What it proves                                                               |
+| ------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| The double         | `tests/` of this module, against `tests/support/zammad-stub.ts` | Our logic: retries, dedup, the erase job's states, the export, retention.    |
+| The adapter        | `tests/real-zammad/adapter.contract.test.ts`                    | That the real Zammad answers the calls the adapter makes the way it expects. |
+| The journeys, GDPR | `tests/real-zammad/{journeys,gdpr}.test.ts`                     | That what we send is kept, and what we ask to be deleted is deleted.         |
+
+The last two run with `npm run test:zammad` against a booted Zammad (`NODE_TEST_ZAMMAD_URL`, `NODE_TEST_ZAMMAD_TOKEN`, `NODE_TEST_ZAMMAD_ADMIN_TOKEN`; an unset variable fails the run, it never skips it). `npm test` ignores them. The `zammad` job in `ci.yml` boots the pinned services, runs `npm run zammad:setup`, mints the two tokens and runs the suites on every push, so a bump of the Zammad pin is proven before it merges ([Upgrade](../operate/zammad.md#upgrade)). The journeys wait for Zammad's own Data Privacy scheduler (a ten-minute tick), so a run takes about ten minutes. `jest.sequencer.zammad.js` runs the GDPR file last: its retention case files a deletion for everything older than its shifted clock.
+
+**What the real Zammad confirmed (7.2.3):**
+
+| Question                                                                                | Answer                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `condition` search on `request_ref` finds the ticket                                  | Yes, without Elasticsearch (tested); with it, untested.                                                                                                                                                  |
+| `customer_id: "guess:<email>"` makes, then reuses, a customer                           | Yes. `customer: "guess:<email>"` answers 422, so the adapter sends `customer_id`.                                                                                                                        |
+| A ticket can be created with `state: closed`                                            | Yes, in one call.                                                                                                                                                                                        |
+| `X-Zammad-Suppress-Notifications` silences a create                                     | Yes, for a token with `ticket.agent`: an agent watching the group gets nothing, and gets notified of an ordinary create.                                                                                 |
+| `POST /tags/add`, and reading tags back                                                 | Yes. The read answers `{"tags": [...]}`, not a bare list; adding a tag twice is a no-op.                                                                                                                 |
+| The conditions `ticket.tags` (contains one) and `ticket.created_at` (before (absolute)) | Yes, together.                                                                                                                                                                                           |
+| A user search by address without Elasticsearch                                          | Yes, exact address found.                                                                                                                                                                                |
+| `/users?expand=true` lists role names                                                   | Yes (`["Customer"]`, `["Agent"]`), which is what keeps retention off staff.                                                                                                                              |
+| `tickets/search` honours `per_page=100` and `page`                                      | Yes: 101 tickets come back in two pages.                                                                                                                                                                 |
+| The Data Privacy task                                                                   | Lists at `GET /data_privacy_tasks`, states `in process` and `completed`; a second task for the same object answers 422 "already queued". Deletes the customer, their tickets, articles and stored files. |
+| An SLA on a custom field (`shop_category`)                                              | Yes: tickets of that category get an escalation time, others none.                                                                                                                                       |
+| `last_contact_at` under `based_on_customer_reaction`                                    | Moves on a customer's message, not on an internal note. Under Zammad's default setting it does not move on the second message.                                                                           |
 
 ## Libraries
 

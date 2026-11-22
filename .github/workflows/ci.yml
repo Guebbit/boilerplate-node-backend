@@ -857,13 +857,16 @@ jobs:
         # pins CI proves are the pins an operator runs: a Dependabot bump is proven before it merges.
         # Seeded by docker/zammad/autowizard.drill.json (`AUTOWIZARD_JSON`); the API token is minted with
         # one basic-auth `POST /api/v1/user_access_token` (the wizard's own token is not an API token).
-        # Then a smoke check (the token creates and reads a ticket), and `npm run helpdesk:drill` for the
-        # client-address, `Authorization` and geo-lookup checks on Docker (the same script runs on
-        # Podman on a laptop). The boot time goes to the job summary: if a boot is over ~10 minutes or
-        # flaky, this moves to a schedule and to pin-bump PRs (docs/operate/zammad.md).
+        # Then a smoke check (the token creates and reads a ticket), `npm run zammad:setup` for our ticket
+        # fields, `npm run test:zammad` (the adapter contract, the module's journeys and its GDPR checks
+        # against this real Zammad), and `npm run helpdesk:drill` for the client-address,
+        # `Authorization` and geo-lookup checks on Docker (the same script runs on Podman on a laptop).
+        # The boot time goes to the job summary: if a boot is over ~10 minutes or flaky, this moves to a
+        # schedule and to pin-bump PRs (docs/operate/zammad.md).
         # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
         runs-on: ubuntu-latest
-        timeout-minutes: 40
+        # Boot ~5 minutes, the suites ~10 (Zammad runs its Data Privacy tasks on a ten-minute tick), the drill ~10.
+        timeout-minutes: 60
         permissions:
             contents: read
         env:
@@ -877,7 +880,10 @@ jobs:
                   persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
+              # `setup-mongod`: the journeys run the app in this process, on the in-memory mongod the base jest config starts.
               uses: ./.github/actions/setup
+              with:
+                  setup-mongod: 'true'
 
             - name: Make a throwaway client for the stack
               # Every secret the compose file names gets a random value (an empty file is "unset" for the
@@ -937,6 +943,47 @@ jobs:
                   title=$(curl -fsS -H "Authorization: Token token=$token" "$base/tickets/$created" | field title)
                   [ "$title" = "ci smoke" ] || { echo "read back '$title'"; exit 1; }
                   echo "the token created ticket $created and read it back"
+
+            - name: Set our ticket fields up, and mint the suites' tokens
+              # Without `zammad:setup` Zammad drops `request_ref` silently and the `condition` search finds
+              # nothing. Creating the fields makes Zammad restart itself once: wait for the NEW process (the
+              # container's start time moves), or the suites would meet the dying one. Two tokens, both for
+              # the seeded admin: the integration user's (`ticket.agent`, `admin.data_privacy`, what the
+              # module runs with) and an admin's (the field setup, settings, throwaway users).
+              run: |
+                  base="http://127.0.0.1:$ZAMMAD_PORT/api/v1"
+                  field() { node -e 'let b="";process.stdin.on("data",(c)=>{b+=c}).on("end",()=>{const v=JSON.parse(b)[process.argv[1]];if(v===undefined){process.exit(1)}process.stdout.write(String(v))})' "$1"; }
+                  mint() { curl -fsS -u 'drill-admin@example.com:Drill-Admin-Pass-2026' -H 'Content-Type: application/json' -d "{\"name\":\"$1\",\"permission\":$2}" "$base/user_access_token" | field token; }
+                  integration=$(mint ci-integration '["ticket.agent","admin.data_privacy"]')
+                  admin=$(mint ci-admin '["admin"]')
+                  echo "::add-mask::$integration"
+                  echo "::add-mask::$admin"
+                  rails=$($CONTAINER_ENGINE ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME" --filter label=com.docker.compose.service=zammad-railsserver | head -n 1)
+                  started=$($CONTAINER_ENGINE inspect --format '{{.State.StartedAt}}' "$rails")
+                  out=$(NODE_ZAMMAD_URL="http://127.0.0.1:$ZAMMAD_PORT" NODE_ZAMMAD_API_TOKEN="$admin" NODE_ZAMMAD_GROUP=Users ZAMMAD_ADMIN_TOKEN="$admin" npm run zammad:setup 2>&1) || { echo "$out"; exit 1; }
+                  echo "$out"
+                  if echo "$out" | grep -q '"restartNeeded":true'; then
+                      restarted=no
+                      for _ in $(seq 1 60); do
+                          now=$($CONTAINER_ENGINE inspect --format '{{.State.StartedAt}}' "$rails")
+                          if [ "$now" != "$started" ] && curl -fsS -H "Authorization: Token token=$admin" "$base/tickets?per_page=1" >/dev/null 2>&1; then restarted=yes; break; fi
+                          sleep 5
+                      done
+                      [ "$restarted" = yes ] || { echo "Zammad did not come back after the field setup"; exit 1; }
+                  fi
+                  {
+                      echo "NODE_TEST_ZAMMAD_URL=http://127.0.0.1:$ZAMMAD_PORT"
+                      echo "NODE_TEST_ZAMMAD_TOKEN=$integration"
+                      echo "NODE_TEST_ZAMMAD_ADMIN_TOKEN=$admin"
+                  } >>"${GITHUB_ENV:-/dev/stderr}"
+
+            - name: The real-Zammad suites (adapter contract, journeys, GDPR)
+              # `npm run test:zammad`: an unset variable fails it, never skips it. The journeys wait for
+              # Zammad's own Data Privacy scheduler (a ten-minute tick), so this step takes minutes.
+              run: |
+                  start=$(date +%s)
+                  npm run test:zammad
+                  printf '### Real-Zammad suites\n\nPassed in **%s s**.\n' "$(($(date +%s) - start))" >>"${GITHUB_STEP_SUMMARY:-/dev/null}"
 
             - name: Show the Zammad logs when a step failed
               if: failure()
