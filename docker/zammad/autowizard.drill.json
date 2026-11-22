@@ -1,0 +1,33 @@
+{
+    "Users": [
+        {
+            "login": "drill-admin@example.com",
+            "firstname": "Drill",
+            "lastname": "Admin",
+            "email": "drill-admin@example.com",
+            "password": "Drill-Admin-Pass-2026"
+        }
+    ],
+    "Settings": [
+        {
+            "name": "product_name",
+            "value": "Drill Helpdesk"
+        },
+        {
+            "name": "fqdn",
+            "value": "helpdesk.drill.test"
+        },
+        {
+            "name": "http_type",
+            "value": "https"
+        },
+        {
+            "name": "system_online_service",
+            "value": false
+        },
+        {
+            "name": "geo_ip_backend",
+            "value": ""
+        }
+    ]
+}

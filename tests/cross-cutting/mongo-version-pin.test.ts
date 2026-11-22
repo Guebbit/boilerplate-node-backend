@@ -27,7 +27,11 @@ interface ComposeFile {
  * @returns one tag per mongo service.
  */
 const mongoTags = (file: string): string[] => {
-    const compose = parse(readFileSync(path.join(REPO_ROOT, file), 'utf8')) as ComposeFile;
+    // `maxAliasCount`: the default of 100 guards a hostile document; production's own shared blocks are
+    // aliased by more services than that.
+    const compose = parse(readFileSync(path.join(REPO_ROOT, file), 'utf8'), {
+        maxAliasCount: 1000
+    }) as ComposeFile;
     return Object.values(compose.services)
         .map((service) => service.image ?? '')
         .filter((image) => /(?:^|\/)mongo:/.test(image))

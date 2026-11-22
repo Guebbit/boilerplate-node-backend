@@ -77,6 +77,11 @@ updates:
           include: scope
       cooldown:
           default-days: 7
+          # Zammad fixes security bugs on its current stable line only, and its advisories never reach
+          # Dependabot's security updates (no ecosystem), so its pin must not wait out the cooldown.
+          # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
+          exclude:
+              - '*zammad/zammad'
       # dependabot-core#15718: it reads this image's `-386` tag suffix as a version segment and
       # proposes the i386-only build. Bump it by hand: when the dev-images group PR lands, move this
       # image to the latest otel tag and run `bash docker/observability/validate-configs.sh`. Drop

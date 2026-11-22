@@ -82,6 +82,7 @@
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
         "backup:drill": "bash docker/backup/drill.sh",
         "deploy:drill": "bash docker/deploy-drill.sh",
+        "helpdesk:drill": "bash docker/helpdesk-drill.sh",
         "k8s:rig": "bash k8s/rig.sh",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",

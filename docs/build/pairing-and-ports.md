@@ -72,6 +72,7 @@ The paired frontend owns **`8080–8099`**.
 | Kubernetes rig (kind edge)   | `3072`            | `K8S_RIG_PORT`                                    |
 | Mailpit (SMTP / inbox UI)    | `1025` / `8025`   | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT`           |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
+| Zammad (helpdesk profile)    | `3060`            | `ZAMMAD_PORT`                                     |
 | Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
 | Loki                         | `3100`            | `LOKI_PORT`                                       |
 | OTel Collector (HTTP / gRPC) | `4318` / `4317`   | `OTEL_OTLP_HTTP_PORT` / `OTEL_OTLP_GRPC_PORT`     |

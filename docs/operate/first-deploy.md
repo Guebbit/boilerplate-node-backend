@@ -55,7 +55,8 @@ export COMPOSE_PROJECT_NAME=acme
 `COMPOSE_PROJECT_NAME` does two jobs at once: it prefixes every container, network and volume, and
 it selects `clients/acme/.env` below. Unset, the stack refuses to start rather than guessing. To
 run a second client on the same host, repeat with a different name and a different `NODE_PORT` —
-nothing is shared between them.
+nothing is shared between them. (Two stacks that both run the `helpdesk` profile also need their own
+`ZAMMAD_PORT` and `ZAMMAD_EDGE_*`: [Two Client Stacks](two-client-stacks.md#the-helpdesk-profile).)
 
 Then edit `clients/acme/.env` and set real values. One early choice: `NODE_SESSION_MODE`, how people stay signed in (`jwt`, the default, or `cookie`), which decides whether the two signing secrets are needed at all — see [Choosing the session mode](../modules/account-sessions.md#choosing-the-session-mode). Changing it later signs everyone out. The credentials and keys are **not** in this file
 (see [Secrets](#secrets)); delete their lines from your copy. Delete the `NODE_SEED_*` demo
@@ -127,7 +128,8 @@ mkdir -p -m 0700 "clients/acme/secrets"
 for name in mongo_root_password mongo_app_password mongo_backup_password restic_password \
             redis_password limits_password rabbitmq_password \
             token_access token_refresh totp_encryption_key pii_encryption_key \
-            webhook_secret_encryption_key pseudonym_key metrics_token device_cookie_secret; do
+            webhook_secret_encryption_key pseudonym_key metrics_token device_cookie_secret \
+            zammad_postgres_password zammad_postgres_superuser_password; do
   openssl rand -hex 32 > "clients/acme/secrets/$name"
   chmod 0644 "clients/acme/secrets/$name"
 done
@@ -135,7 +137,7 @@ done
 for name in smtp_password payment_webhook_secret oauth_google_client_secret \
             oauth_github_client_secret antibot_altcha_secret antibot_turnstile_secret \
             posthog_personal_api_key alert_webhook_url alert_heartbeat_token \
-            backup_heartbeat_token; do
+            backup_heartbeat_token zammad_api_token; do
   : > "clients/acme/secrets/$name"
   chmod 0644 "clients/acme/secrets/$name"
 done
@@ -146,6 +148,10 @@ done
   stack needs the file even with the `backup` profile off. `restic_password` encrypts the repository: keep
   a copy off the host. The `backup` profile also mounts `restic_repository_env` (the repository's own
   login as `NAME=value` lines; create it empty with `: > clients/acme/secrets/restic_repository_env`).
+- **Helpdesk:** `zammad_postgres_password` is the login of the role Zammad connects to its own database as, and
+  `zammad_postgres_superuser_password` the bootstrap superuser's (the `helpdesk` profile, [Zammad](zammad.md));
+  compose needs both files whether or not the profile runs, and generated values are right either way. `zammad_api_token` is the integration user's token the API sends to Zammad; leave it empty
+  until Zammad is running and the integration user exists.
 - **Modes:** the files are `0644` inside a `0700` directory. Compose ignores `uid`/`mode` for a file
   secret, and Redis (uid 999) and node (uid 1000) must both read it; the directory is what keeps
   other host users out.

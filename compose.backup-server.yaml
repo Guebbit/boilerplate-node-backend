@@ -106,6 +106,8 @@ services:
             BACKUP_KEEP_DAILY: '${BACKUP_KEEP_DAILY:-7}'
             BACKUP_KEEP_WEEKLY: '${BACKUP_KEEP_WEEKLY:-4}'
             BACKUP_KEEP_MONTHLY: '${BACKUP_KEEP_MONTHLY:-6}'
+            # No Zammad dump is kept longer than this: set it to the clients' NODE_ERASURE_LEDGER_RETENTION_DAYS.
+            BACKUP_HELPDESK_MAX_DAYS: '${BACKUP_HELPDESK_MAX_DAYS:-220}'
             BACKUP_CHECK_SUBSET: '${BACKUP_CHECK_SUBSET:-5%}'
             # This machine's own freshness check (a second Gatus endpoint). Empty = off.
             BACKUP_HEARTBEAT_URL: '${BACKUP_HEARTBEAT_URL:-}'
