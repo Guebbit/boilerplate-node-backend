@@ -9,7 +9,7 @@ Running the shop: what is for sale, at what price, and what happens to orders af
 
 Sign in as the shop manager, or as the admin, who can do this job too. The accounts and passwords are on [Test it yourself](./test-me.md).
 
-<!-- IMG: the shop manager's dashboard after signing in · the shop manager's dashboard with orders and the catalogue -->
+![The sales dashboard: date range controls, then totals for sales, orders, average order value and refunds](./img/manager.webp)
 
 ::: tip When something goes wrong
 Odd cases that land on you: [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing), [fewer on the shelf than promised](./when-something-goes-wrong-orders-and-delivery.md#fewer-on-shelf), [a refund owed by hand](./when-something-goes-wrong-refunds.md#refund-owed-by-hand).

@@ -10,7 +10,7 @@ what it looks like — plus the words on every screen, in every language the sho
 
 Sign in as the editor, a real, narrower account, not the owner's (see [Test it yourself](./test-me.md)).
 
-<!-- IMG: the product edit form with its translated fields · the product form with the language tabs -->
+![The product edit form: English and Italiano language tabs above the title and description, so each language is edited in its own tab](./img/editor.webp)
 
 Every role's full rights are in [the role table](./start.md#what-that-actually-grants).
 

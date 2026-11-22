@@ -9,7 +9,7 @@ Stock, and getting parcels out of the door.
 
 Sign in as the warehouse account (see [Test it yourself](./test-me.md)).
 
-<!-- IMG: the warehouse pick list · the pick list with orders ready to ship -->
+![The orders list the warehouse works from: filters on top, then each order with its status, payment and a View button](./img/warehouse.webp)
 
 ::: tip When something goes wrong
 Odd cases that land on you: [fewer on the shelf than promised](./when-something-goes-wrong-orders-and-delivery.md#fewer-on-shelf), [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing), [shipped but not arrived](./when-something-goes-wrong-orders-and-delivery.md#shipped-not-arrived).

@@ -9,7 +9,7 @@ What someone buying pet supplies actually experiences, start to finish.
 
 Sign in as the customer account (see [Test it yourself](./test-me.md)).
 
-<!-- IMG: the shop's front page for a signed-out visitor · product list with category filters -->
+![The shop's front page for a signed-out visitor: the product list with its category and tag filters above a search form](./img/shopper.webp)
 
 ## The journey
 

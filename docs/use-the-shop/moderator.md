@@ -5,7 +5,7 @@ audience: [staff, owner]
 
 # The moderator
 
-<!-- IMG: a customer's account page with the purchase hold and the ban action · the account page showing the hold notice and the Deactivate user button -->
+![A customer's user page: the Purchase hold field reads None, and Pause checkout sits beside Edit user and Manage access](./img/moderator.webp)
 
 Accounts that need action taken against them, orders that need sorting out, and money that needs
 to go back.

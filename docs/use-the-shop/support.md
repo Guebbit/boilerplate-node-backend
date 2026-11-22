@@ -9,7 +9,7 @@ Messages from people, accounts that need help, and knowing whether the shop is a
 
 Sign in as the support account (see [Test it yourself](./test-me.md)).
 
-<!-- IMG: the support desk's task list · the list of contact-form messages with owners and due dates -->
+![The support desk's task list: contact messages newest first, each with its status, due date and Take, Resolve and Mark as spam buttons](./img/support.webp)
 
 ::: tip When something goes wrong
 When a buyer asks where their parcel is: [shipped but not arrived](./when-something-goes-wrong-orders-and-delivery.md#shipped-not-arrived), [an order stuck in processing](./when-something-goes-wrong-orders-and-delivery.md#stuck-in-processing).
