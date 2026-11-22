@@ -157,6 +157,11 @@ x-backup-env: &backup-env
     BACKUP_CHECK_SUBSET: '${BACKUP_CHECK_SUBSET:-5%}'
     BACKUP_HEARTBEAT_URL: '${BACKUP_HEARTBEAT_URL:-}'
     MONGO_BACKUP_USER: '${MONGO_BACKUP_USER:-backup}'
+    # `auto` backs Zammad up when its Postgres answers by name, `true` insists on it, `false` skips it.
+    BACKUP_HELPDESK: '${BACKUP_HELPDESK:-auto}'
+    # Zammad dumps are never kept longer than the erasure ledger: after a restore the ledger is how
+    # erased accounts are re-applied (docs/operate/zammad.md#restore).
+    BACKUP_HELPDESK_MAX_DAYS: '${NODE_ERASURE_LEDGER_RETENTION_DAYS:-220}'
 
 x-app-env: &app-env
     NODE_ENV: 'production'
@@ -231,10 +236,93 @@ x-service-secrets: &service-secrets
     - antibot_altcha_secret
     - antibot_turnstile_secret
     - posthog_personal_api_key
+    - zammad_api_token
+
+# ── HELPDESK, OFF BY DEFAULT ────────────────────────────────────────────────────────────────────
+# `profiles: [helpdesk]` starts a self-hosted Zammad next to the API: COMPOSE_PROFILES=bundled,helpdesk
+# The `zammad` module hands contact messages to it; staff answer customers there. Without the profile
+# nothing here runs and the API behaves as it always did.
+#
+#   images        every one is `tag@sha256`. Zammad is >= 7.2.3 (the 2FA fixes); a bump is deliberate.
+#   no search     `ELASTICSEARCH_ENABLED=false`: no Elasticsearch service (docs/operate/zammad.md).
+#   networks      the data services sit on `helpdesk` only, never on `default` (Mongo, both Redis,
+#                 RabbitMQ). `app`, `cron`, `worker`, `worker-heavy`, `backup` and `restore-drill`
+#                 join `helpdesk` too: they call Zammad's API on `zammad-railsserver:3000` and
+#                 dump its database. The API needs no nginx; nginx is the browser's door.
+#   one port      only `zammad-nginx` publishes, on 127.0.0.1:${ZAMMAD_PORT:-3060}. Zammad's TLS and
+#                 the public hostname are the operator's edge proxy (first-deploy-proxy-and-storage.md#proxy-settings).
+#   client address  Zammad rate-limits and logs per client address, so it must see the real one.
+#                 `RAILS_TRUSTED_PROXIES` names exactly two addresses: nginx's own and the gateway of
+#                 `helpdesk-edge` (the engine's port forwarder arrives from one of them).
+#                 `helpdesk-edge` is the only network with a fixed subnet. Exactly three services join
+#                 it: `zammad-nginx` and the two it proxies to, `zammad-railsserver` and
+#                 `zammad-websocket`. So Rails sees nginx's fixed address as its peer. A stack without
+#                 the profile never creates it, so two client stacks can share a host. Two stacks BOTH
+#                 running the profile set different `ZAMMAD_EDGE_*` values.
+#   backup        our restic `backup` dumps Postgres with `pg_dump -Fc` (docs/operate/backups.md). Zammad's
+#                 own backup service is deliberately absent: up to a day of data lost, runs as root.
+#
+# docs/operate/zammad.md has the runbook.
+x-zammad-image: &zammad-image ghcr.io/zammad/zammad:7.2.3-0017@sha256:5ca0884d5a2ac659210140232b4f4d9da6081ad91410c9edae871b1e86684136
+x-zammad-postgres-image: &zammad-postgres-image docker.io/library/postgres:17.12-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
+
+# What `zammad-init`, `-railsserver`, `-scheduler`, `-websocket` and `-nginx` share (nginx overrides the
+# entrypoint and secrets: it has no database). The database password is a secret FILE; Zammad reads it
+# from `POSTGRESQL_PASS`, so the entrypoint reads the file into that variable for the one process it
+# starts and hands over to Zammad's own entrypoint.
+x-zammad-service: &zammad-service
+    logging: *logging
+    image: *zammad-image
+    restart: unless-stopped
+    profiles: [helpdesk]
+    networks: [helpdesk]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    secrets:
+        - zammad_postgres_password
+    entrypoint:
+        - 'bash'
+        - '-c'
+        - 'POSTGRESQL_PASS="$$(cat /run/secrets/zammad_postgres_password)"; export POSTGRESQL_PASS; exec /docker-entrypoint.sh "$$@"'
+        - 'zammad'
+    environment:
+        MEMCACHE_SERVERS: 'zammad-memcached:11211'
+        POSTGRESQL_HOST: 'zammad-postgres'
+        POSTGRESQL_PORT: '5432'
+        POSTGRESQL_USER: 'zammad'
+        POSTGRESQL_DB: 'zammad_production'
+        POSTGRESQL_OPTIONS: '?pool=50'
+        # `zammad-postgres` creates the database itself (docker/zammad/postgres-init.sh) and the role
+        # Zammad connects as is not allowed to.
+        POSTGRESQL_DB_CREATE: 'false'
+        REDIS_URL: 'redis://zammad-redis:6379'
+        ELASTICSEARCH_ENABLED: 'false'
+        NGINX_PORT: '8080'
+        # The edge proxy terminates TLS; this is what Zammad tells the browser the scheme is.
+        NGINX_SERVER_SCHEME: 'https'
+        # Exactly two addresses: nginx's own and the edge gateway. docs/operate/zammad.md#client-address
+        RAILS_TRUSTED_PROXIES: '${ZAMMAD_EDGE_NGINX_IP:-10.250.77.2},${ZAMMAD_EDGE_GATEWAY:-10.250.77.1}'
+        TZ: '${ZAMMAD_TZ:-UTC}'
+        # First-start seeding only (the helpdesk drill and CI); empty = Zammad's own setup wizard.
+        AUTOWIZARD_JSON: '${ZAMMAD_AUTOWIZARD_JSON:-}'
+        # Where `zammad-init` saves the payload and the Rails server reads it: the shared storage volume.
+        # Zammad's own default carries its quotes literally and sits in a directory the two do not share.
+        AUTOWIZARD_RELATIVE_PATH: 'storage/auto_wizard.json'
+    volumes:
+        - zammad-storage:/opt/zammad/storage
+    depends_on:
+        zammad-memcached:
+            condition: service_healthy
+        zammad-postgres:
+            condition: service_healthy
+        zammad-redis:
+            condition: service_healthy
 
 services:
     app:
         logging: *logging
+        networks: [default, helpdesk]
         # `image:` alongside `build:`: the image this build produces is tagged once, and `cron`/
         # `setup` reference that same tag by `image:` alone — one build, three containers running
         # it, never three separate builds of the same Dockerfile drifting apart. `build:` is the
@@ -375,6 +463,7 @@ services:
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
     cron:
         logging: *logging
+        networks: [default, helpdesk]
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         restart: unless-stopped
         deploy:
@@ -465,6 +554,7 @@ services:
     # time to finish and ack before the broker redelivers it.
     worker:
         logging: *logging
+        networks: [default, helpdesk]
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         restart: unless-stopped
         stop_grace_period: 30s
@@ -521,6 +611,7 @@ services:
     # See docs/understand/rabbitmq.md#job-kinds.
     worker-heavy:
         logging: *logging
+        networks: [default, helpdesk]
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         restart: unless-stopped
         stop_grace_period: 30s
@@ -586,6 +677,7 @@ services:
     # Dockerfile. `docker/deploy.sh` builds `app` first, so the image exists before this runs.
     setup:
         logging: *logging
+        networks: [default]
         image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
@@ -639,6 +731,7 @@ services:
 
     database:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -752,6 +845,7 @@ services:
     # access:bootstrap both need a set that can take writes.
     mongo-rs-init:
         logging: *logging
+        networks: [default]
         # The same image as `database` (compose.yaml). The two production-only Mongo services share this
         # one spelling (`restore-drill-db` aliases it); they cannot move to the base file, where
         # development would start them.
@@ -776,6 +870,7 @@ services:
 
     cache:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -833,6 +928,7 @@ services:
     # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
     limits:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -862,6 +958,7 @@ services:
 
     queue:
         logging: *logging
+        networks: [default]
         image: docker.io/library/rabbitmq:4-alpine@sha256:2cb43283d8bbd3caa6c0f0dc00e96c8de772df33df7fd8af6aee4d605aeb8ada
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -907,6 +1004,7 @@ services:
     # dump's log; the three controls are the same.
     backup:
         logging: *logging
+        networks: [default, helpdesk]
         image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
         build:
             context: .
@@ -930,11 +1028,15 @@ services:
             - restic_repository_env
             - mongo_backup_password
             - backup_heartbeat_token
+            # Read only to dump Zammad's database; it never starts a dump while the profile is off.
+            - zammad_postgres_password
         volumes:
             # Read-only: a compromised backup container can read the files, never change them.
             - uploads:/data/uploads:ro
             # The whole volume is mounted; only `mail-spool/` is backed up (the PDFs are regenerable).
             - storage:/data/storage:ro
+            # Zammad's attachments when it stores them on disk. Empty without the helpdesk profile.
+            - zammad-storage:/data/zammad-storage:ro
             - mongo-ca-dir:/ca-dir:ro
             # restic's cache: makes `forget`/`check` fast. Losing it costs time, never data.
             - backup-cache:/cache
@@ -959,6 +1061,7 @@ services:
     # gone when the drill ends. It shares nothing with the live `database`.
     restore-drill-db:
         logging: *logging
+        networks: [default]
         image: *mongo-image
         profiles: [restore-drill]
         <<: *data-hardening
@@ -977,6 +1080,7 @@ services:
     #       -f compose.yaml -f compose.production.yaml --profile restore-drill run --rm restore-drill
     restore-drill:
         logging: *logging
+        networks: [default, helpdesk]
         image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
         profiles: [restore-drill]
         restart: 'no'
@@ -988,6 +1092,7 @@ services:
         environment:
             <<: *backup-env
             DRILL_MONGO_HOST: restore-drill-db
+            DRILL_HELPDESK_HOST: restore-drill-helpdesk-db
             DRILL_CHECK_SUBSET: '${DRILL_CHECK_SUBSET:-10%}'
             DRILL_RESTORE_FILES: '${DRILL_RESTORE_FILES:-true}'
         secrets:
@@ -1003,14 +1108,154 @@ services:
         depends_on:
             restore-drill-db:
                 condition: service_healthy
+            restore-drill-helpdesk-db:
+                condition: service_healthy
         healthcheck:
             disable: true
+
+    # ── helpdesk profile (see "HELPDESK, OFF BY DEFAULT" above) ──────────────────────────────────
+
+    # Zammad's own Postgres, 17 like upstream's tested stack. Two roles, each with its own secret: the
+    # bootstrap superuser (administration only, nothing else mounts its file) and the role Zammad
+    # connects as, which owns the database.
+    zammad-postgres:
+        logging: *logging
+        networks: [helpdesk]
+        image: *zammad-postgres-image
+        restart: unless-stopped
+        profiles: [helpdesk]
+        <<: *data-hardening
+        secrets:
+            - zammad_postgres_password
+            - zammad_postgres_superuser_password
+        environment:
+            POSTGRES_USER: 'postgres'
+            POSTGRES_PASSWORD_FILE: '/run/secrets/zammad_postgres_superuser_password'
+            ZAMMAD_DB: 'zammad_production'
+            ZAMMAD_DB_USER: 'zammad'
+            ZAMMAD_DB_PASS_FILE: '/run/secrets/zammad_postgres_password'
+        volumes:
+            - zammad-postgres-data:/var/lib/postgresql/data
+            - ./docker/zammad/postgres-init.sh:/docker-entrypoint-initdb.d/10-create-zammad-role.sh:ro
+        healthcheck:
+            # TCP, as Zammad's own role, so the initdb hook has really run: `pg_isready` says yes for an
+            # unknown role and for the socket-only server that runs while the data directory initialises.
+            # The image trusts 127.0.0.1, so no password is needed (nor put on a command line).
+            test:
+                [
+                    'CMD-SHELL',
+                    'psql --no-password --quiet --output /dev/null --variable ON_ERROR_STOP=1 --host 127.0.0.1 --username zammad --dbname zammad_production --command "SELECT 1"'
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 60s
+
+    # Sessions, websocket fan-out and the job queue. No password: it is reachable only on `helpdesk`.
+    zammad-redis:
+        logging: *logging
+        networks: [helpdesk]
+        image: docker.io/library/redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+        restart: unless-stopped
+        profiles: [helpdesk]
+        <<: *data-hardening
+        volumes:
+            - zammad-redis-data:/data
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    zammad-memcached:
+        logging: *logging
+        networks: [helpdesk]
+        image: docker.io/library/memcached:1.6.45-alpine@sha256:084fb554292d1447bc2c68b80c2331b98834514f56c866bc21a61be3c2ee376d
+        restart: unless-stopped
+        profiles: [helpdesk]
+        <<: *data-hardening
+        command: ['memcached', '-m', '256M']
+        healthcheck:
+            test: ['CMD', 'nc', '-z', '127.0.0.1', '11211']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
+    # Creates or migrates the database, then exits: the other Zammad services wait for it. It runs as
+    # the image's own non-root user (upstream's compose uses root; it is not needed). A migration runs
+    # on the first start of a new image and there is no downgrade, so back up first
+    # (docs/operate/zammad.md#upgrade).
+    zammad-init:
+        <<: *zammad-service
+        command: ['zammad-init']
+        restart: on-failure
+
+    # Also on `helpdesk-edge`: nginx proxies to it there, and its peer address is what Rails trusts.
+    zammad-railsserver:
+        <<: *zammad-service
+        command: ['zammad-railsserver']
+        networks: [helpdesk, helpdesk-edge]
+        healthcheck:
+            test: ['CMD', 'curl', '-sf', 'http://127.0.0.1:3000']
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 120s
+
+    zammad-scheduler:
+        <<: *zammad-service
+        command: ['zammad-scheduler']
+
+    zammad-websocket:
+        <<: *zammad-service
+        command: ['zammad-websocket']
+        networks: [helpdesk, helpdesk-edge]
+
+    # The ONLY helpdesk service that publishes a port, on loopback like `app`. It is on `helpdesk-edge`
+    # only (with `zammad-railsserver` and `zammad-websocket`, the two it proxies to), at the fixed
+    # address `RAILS_TRUSTED_PROXIES` names, so the port forwarder's address is unambiguous.
+    zammad-nginx:
+        <<: *zammad-service
+        command: ['zammad-nginx']
+        # It proxies only: no database, so neither the password nor the entrypoint that reads it.
+        entrypoint: ['/docker-entrypoint.sh']
+        secrets: []
+        init: false
+        networks:
+            helpdesk-edge:
+                ipv4_address: '${ZAMMAD_EDGE_NGINX_IP:-10.250.77.2}'
+        ports:
+            - '127.0.0.1:${ZAMMAD_PORT:-3060}:8080'
+        depends_on:
+            zammad-railsserver:
+                condition: service_healthy
+
+    # The restore drill's throwaway Postgres: a plain instance on a tmpfs, trust auth, no published
+    # port, gone when the drill ends. It shares nothing with `zammad-postgres`.
+    restore-drill-helpdesk-db:
+        logging: *logging
+        networks: [default]
+        image: *zammad-postgres-image
+        profiles: [restore-drill]
+        <<: *data-hardening
+        environment:
+            POSTGRES_HOST_AUTH_METHOD: 'trust'
+        tmpfs:
+            - /var/lib/postgresql/data:size=2g
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres']
+            interval: 5s
+            timeout: 5s
+            retries: 20
 
     # ── monitoring profile (see "MONITORING, OFF BY DEFAULT" above) ──────────────────────────────
 
     # Prometheus: scrapes the API with the shared metrics token and evaluates the alert rules.
     prometheus:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -1030,6 +1275,7 @@ services:
     # Alertmanager: groups and routes what Prometheus fires, by the `ALERT_*` knobs (empty = `null`).
     alertmanager:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -1074,6 +1320,7 @@ services:
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -1090,6 +1337,7 @@ services:
     # https://github.com/prometheus/node_exporter#docker
     node-exporter:
         logging: *logging
+        networks: [default]
         image: docker.io/prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
         restart: unless-stopped
         profiles: [monitoring]
@@ -1109,6 +1357,7 @@ services:
     # docs/operate/first-deploy-monitoring.md#what-the-log-shipper-can-read
     alloy:
         logging: *logging
+        networks: [default]
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -1185,6 +1434,12 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/alert_heartbeat_token
     backup_heartbeat_token:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/backup_heartbeat_token
+    zammad_api_token:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/zammad_api_token
+    zammad_postgres_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/zammad_postgres_password
+    zammad_postgres_superuser_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/zammad_postgres_superuser_password
 
 volumes:
     mongo-data:
@@ -1206,6 +1461,26 @@ volumes:
     # neither may be a tmpfs.
     storage:
     quarantine:
+    # The helpdesk profile's: Zammad's Postgres, its Redis, and the attachments it keeps on disk.
+    zammad-postgres-data:
+    zammad-redis-data:
+    zammad-storage:
+
+# `default` is compose's own network, named here only because every service lists it. `helpdesk`
+# has no fixed subnet, so every stack can create it. `helpdesk-edge` is fixed (see "HELPDESK, OFF BY
+# DEFAULT" above) and only `zammad-nginx`, `zammad-railsserver` and `zammad-websocket` join it.
+# https://docs.docker.com/reference/compose-file/networks/
+networks:
+    default: {}
+    helpdesk: {}
+    helpdesk-edge:
+        ipam:
+            config:
+                - subnet: '${ZAMMAD_EDGE_SUBNET:-10.250.77.0/24}'
+                  gateway: '${ZAMMAD_EDGE_GATEWAY:-10.250.77.1}'
+                  # Dynamic addresses come from the top half only, so nginx's fixed one is never taken first.
+                  ip_range: '${ZAMMAD_EDGE_RANGE:-10.250.77.128/25}'
+
 # ── TRACES AND DASHBOARDS ARE NOT IN THIS FILE, ON PURPOSE ──────────────────────────────────────
 # The `monitoring` profile above covers metrics, alerts and container logs. Traces and dashboards
 # are left out: the API exports OTLP to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` names — a collector

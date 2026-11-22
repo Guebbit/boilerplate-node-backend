@@ -111,7 +111,10 @@ in a compose override file). A public CA needs nothing.
 `/data/repos` that has a matching `clients/<name>/password`:
 
 1. `restic forget --group-by host,paths --prune` with the `BACKUP_KEEP_*` knobs (24 / 7 / 4 / 6 by default),
-2. `restic check --read-data-subset=5%` (`BACKUP_CHECK_SUBSET`).
+2. forget every snapshot tagged `helpdesk-db` older than `BACKUP_HELPDESK_MAX_DAYS` (220 by default; set it to the
+   clients' `NODE_ERASURE_LEDGER_RETENTION_DAYS`), counted from today, not from the newest dump. **It must equal every client's ledger retention**: this machine cannot read their settings, so a shorter value deletes dumps a restore needs, and a longer one keeps them past the point where the ledger can re-apply erasures: no [Zammad](./zammad.md#backup) dump outlives it. The client
+   skips this pass itself when its side is append-only, so the server is the only place it can run,
+3. `restic check --read-data-subset=5%` (`BACKUP_CHECK_SUBSET`).
 
 One failing client never skips the others. With `BACKUP_HEARTBEAT_URL` set (a Gatus external endpoint,
 [the same shape as the clients'](./backups.md#the-heartbeat)) the run pings green or red, so a

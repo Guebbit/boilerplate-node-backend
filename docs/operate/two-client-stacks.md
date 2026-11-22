@@ -130,6 +130,21 @@ Every one of `brava`'s containers and named volumes is gone; `acme` never notice
 GDPR-erasure story for a client relationship ending, demonstrated rather than asserted — silo means
 "delete a client's data" is one `down -v`, not a query someone has to get right.
 
+## The helpdesk profile {#the-helpdesk-profile}
+
+Two stacks share nothing, not even a Docker network, and that has to stay true when one of them runs the
+`helpdesk` profile ([Zammad](./zammad.md)). The one thing Zammad needs that clashes is a **fixed subnet**: it
+trusts its proxy tier by address ([why](./zammad.md#client-address)), so those addresses cannot float.
+
+- The fixed subnet lives on `helpdesk-edge`, which only Zammad's proxy tier joins. A stack without the
+  profile never creates it, so it cannot collide with anything.
+- `helpdesk`, the network the API and the backup join, has **no** fixed subnet, so every stack can create it.
+- Two stacks that **both** run the profile set different `ZAMMAD_EDGE_SUBNET`, `_GATEWAY`, `_NGINX_IP` and
+  `_RANGE`, and different `ZAMMAD_PORT`s. The defaults suit exactly one.
+
+`npm run helpdesk:drill` brings up a second stack beside a profile-on stack and checks that each has its own
+`helpdesk` network and that only the profile-on stack has `helpdesk-edge`.
+
 ## When Compose stops being the answer
 
 **Not yet.** At twenty clients, Kubernetes adds a control plane, an ingress controller,

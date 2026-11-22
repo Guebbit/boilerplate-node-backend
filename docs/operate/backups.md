@@ -38,14 +38,14 @@ flowchart LR
     class DB,Files,Repo store;
 ```
 
-| Piece          | What                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Image          | `docker/Dockerfile.backup`: restic, the [MongoDB Database Tools](./mongodb-database-tools.md), supercronic. Non-root, read-only |
-| Service        | `backup` in `compose.production.yaml`, `profiles: [backup]`. One per client stack                                               |
-| Mounts         | `uploads` and `storage` volumes **read-only**, the Mongo CA certificate. **No Docker socket**                                   |
-| Secrets        | `restic_password`, `mongo_backup_password`, `restic_repository_env`: this container holds them, the app and `cron` do not       |
-| Scheduler      | supercronic builds its crontab at start from the knobs below (`docker/backup/entrypoint.sh`). It serves `/health` for the check |
-| Why not `cron` | the `cron` container runs the app image with the app's keys. Backups need other secrets, and each secret lives in one container |
+| Piece          | What                                                                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Image          | `docker/Dockerfile.backup`: restic, the [MongoDB Database Tools](./mongodb-database-tools.md), the PostgreSQL 17 client, supercronic. Non-root, read-only |
+| Service        | `backup` in `compose.production.yaml`, `profiles: [backup]`. One per client stack                                                                         |
+| Mounts         | `uploads` and `storage` volumes **read-only**, the Mongo CA certificate. **No Docker socket**                                                             |
+| Secrets        | `restic_password`, `mongo_backup_password`, `restic_repository_env`: this container holds them, the app and `cron` do not                                 |
+| Scheduler      | supercronic builds its crontab at start from the knobs below (`docker/backup/entrypoint.sh`). It serves `/health` for the check                           |
+| Why not `cron` | the `cron` container runs the app image with the app's keys. Backups need other secrets, and each secret lives in one container                           |
 
 Start it by adding `backup` to the stack's profiles and creating the three secret files:
 
@@ -74,10 +74,16 @@ and every backup is unreadable.
 2. **The counts.** The dump's own log says how many documents each collection had
    (`done dumping api.users (4100 documents)`). They are saved as a tiny snapshot of the same run
    (tagged `counts`), for a restore to compare against.
-3. **The files.** The uploads and the mail spool, as plain files. The rendered invoice PDFs are
-   left out: regenerable.
-4. **Forget.** `restic forget` per the keep knobs, unless `BACKUP_PRUNE=false`.
-5. **The heartbeat.** Green when all of it worked, red with the reason when any step failed.
+3. **Zammad, when the `helpdesk` profile runs** ([Zammad](./zammad.md#backup)). `pg_dump -Fc` of its
+   Postgres, streamed into restic the same way (tag `helpdesk-db`), and its ticket and user counts as a
+   tiny snapshot (tag `helpdesk-counts`). Skipped, without a warning, while `zammad-postgres` does not
+   answer by name.
+4. **The files.** The uploads and the mail spool, as plain files, and Zammad's attachment volume when it
+   keeps them on disk. The rendered invoice PDFs are left out: regenerable.
+5. **Forget.** `restic forget` per the keep knobs, unless `BACKUP_PRUNE=false`. Zammad's dumps get a
+   second pass: none is kept longer than `BACKUP_HELPDESK_MAX_DAYS`. With `BACKUP_PRUNE=false` (an append-only
+   repository) the client skips both, and [the second machine's upkeep](./backup-server.md#the-upkeep) applies the cap.
+6. **The heartbeat.** Green when all of it worked, red with the reason when any step failed.
 
 All snapshots of one run share a `run:<timestamp>` tag. Each stack labels its snapshots with its own
 `--host` (the compose project name), so two stacks sharing one repository never prune each other.
@@ -127,19 +133,21 @@ appears in `ps` or in `/proc/*/cmdline`.
 All in the client's `.env` (the block is in `.env-example`, Part D6). The compose file passes them
 to the container; none reaches the app.
 
-| Knob                                                     | Default                     | Meaning                                                                                                             |
-| -------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `BACKUP_REPOSITORY`                                      | empty                       | Any restic repository. **Empty = dormant**: the container idles, healthy, runs nothing, no warning                  |
-| secret `restic_password`                                 | -                           | Encrypts the repository                                                                                             |
-| secret `restic_repository_env`                           | empty file                  | The repository's own login as `NAME=value` lines (`RESTIC_REST_USERNAME`, `AWS_SECRET_ACCESS_KEY`...)               |
-| `BACKUP_SCHEDULE`                                        | `0 * * * *`                 | Cron expression (UTC). Hourly: cheap once deduplication works                                                       |
-| `BACKUP_KEEP_HOURLY` / `_DAILY` / `_WEEKLY` / `_MONTHLY` | 24 / 7 / 4 / 6              | How many snapshots to keep. The only "size" control restic has; a hard cap is the storage's quota                   |
-| `BACKUP_PRUNE`                                           | `true`                      | `false` when the repository is append-only: that side deletes, this one only adds                                   |
-| `BACKUP_CHECK_SCHEDULE` / `BACKUP_CHECK_SUBSET`          | `30 3 * * 0` / `5%`         | The [weekly upkeep](#integrity-check)                                                                               |
-| `BACKUP_DATABASE`                                        | `true`                      | `false` when the database is not in this stack (a managed Mongo): the files are still backed up                     |
-| `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                       | The [off-host freshness check](#the-heartbeat); the token is the `backup_heartbeat_token` secret file in production |
-| `MONGO_BACKUP_USER`                                      | `backup`                    | The database account name                                                                                           |
-| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag. `docker/deploy.sh` builds `boilerplate-backup:<git sha>` and sets this itself                        |
+| Knob                                                     | Default                                    | Meaning                                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BACKUP_REPOSITORY`                                      | empty                                      | Any restic repository. **Empty = dormant**: the container idles, healthy, runs nothing, no warning                                             |
+| secret `restic_password`                                 | -                                          | Encrypts the repository                                                                                                                        |
+| secret `restic_repository_env`                           | empty file                                 | The repository's own login as `NAME=value` lines (`RESTIC_REST_USERNAME`, `AWS_SECRET_ACCESS_KEY`...)                                          |
+| `BACKUP_SCHEDULE`                                        | `0 * * * *`                                | Cron expression (UTC). Hourly: cheap once deduplication works                                                                                  |
+| `BACKUP_KEEP_HOURLY` / `_DAILY` / `_WEEKLY` / `_MONTHLY` | 24 / 7 / 4 / 6                             | How many snapshots to keep. The only "size" control restic has; a hard cap is the storage's quota                                              |
+| `BACKUP_PRUNE`                                           | `true`                                     | `false` when the repository is append-only: that side deletes, this one only adds                                                              |
+| `BACKUP_CHECK_SCHEDULE` / `BACKUP_CHECK_SUBSET`          | `30 3 * * 0` / `5%`                        | The [weekly upkeep](#integrity-check)                                                                                                          |
+| `BACKUP_DATABASE`                                        | `true`                                     | `false` when the database is not in this stack (a managed Mongo): the files are still backed up                                                |
+| `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                                      | The [off-host freshness check](#the-heartbeat); the token is the `backup_heartbeat_token` secret file in production                            |
+| `MONGO_BACKUP_USER`                                      | `backup`                                   | The database account name                                                                                                                      |
+| `BACKUP_HELPDESK`                                        | `auto`                                     | `auto` backs [Zammad](./zammad.md#backup) up when its Postgres answers by name, `true` insists (a missing one fails the run), `false` skips it |
+| `BACKUP_HELPDESK_MAX_DAYS`                               | `NODE_ERASURE_LEDGER_RETENTION_DAYS` (220) | No Zammad dump is kept longer, so a restore can always replay the [erasure ledger](./backups-restoring.md#erasures-after-a-restore) over it    |
+| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest`                | The image tag. `docker/deploy.sh` builds `boilerplate-backup:<git sha>` and sets this itself                                                   |
 
 `BACKUP_PRUNE` defaults to `true` on purpose. Forgotten `false` on a plain disk or S3 repository, the
 repository grows forever, silently. Forgotten `true` on an append-only server, `forget` is refused,
@@ -218,12 +226,13 @@ Uploads and the mail spool are not in the database dump: [Restoring](./backups-r
 
 ## The tools
 
-| Tool                                                                   | Role                                               | Page                                          |
-| ---------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
-| [restic](https://restic.net)                                           | encrypted, deduplicating snapshots                 | [restic](./restic.md)                         |
-| [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/) | `mongodump`, `mongorestore`                        | [Database Tools](./mongodb-database-tools.md) |
-| [supercronic](https://github.com/aptible/supercronic)                  | the scheduler, also in the `cron` container        | [Health checks](./health-checks.md)           |
-| [rclone](https://rclone.org)                                           | `serve restic --append-only` on the second machine | [rclone](./rclone.md)                         |
+| Tool                                                                             | Role                                                   | Page                                          |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------- |
+| [restic](https://restic.net)                                                     | encrypted, deduplicating snapshots                     | [restic](./restic.md)                         |
+| [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/)           | `mongodump`, `mongorestore`                            | [Database Tools](./mongodb-database-tools.md) |
+| [PostgreSQL client 17](https://www.postgresql.org/docs/17/reference-client.html) | `pg_dump`, `pg_restore`, `psql`, for Zammad's database | [Zammad](./zammad.md#backup)                  |
+| [supercronic](https://github.com/aptible/supercronic)                            | the scheduler, also in the `cron` container            | [Health checks](./health-checks.md)           |
+| [rclone](https://rclone.org)                                                     | `serve restic --append-only` on the second machine     | [rclone](./rclone.md)                         |
 
 Considered and not used: **resticprofile** (restic now does natively what it added: `--stdin-from-command`,
 `--retry-lock`, `RESTIC_*` variables; one maintainer), **Percona Backup for MongoDB** (see

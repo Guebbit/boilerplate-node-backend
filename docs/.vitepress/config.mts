@@ -619,7 +619,8 @@ export default defineConfig({
                         { text: 'Deploy and rollback', link: '/operate/deploy-and-rollback' },
                         { text: 'Two Client Stacks', link: '/operate/two-client-stacks' },
                         { text: 'Deployment hardening', link: '/operate/deployment-hardening' },
-                        { text: 'Health checks', link: '/operate/health-checks' }
+                        { text: 'Health checks', link: '/operate/health-checks' },
+                        { text: 'Zammad (helpdesk)', link: '/operate/zammad' }
                     ]
                 },
                 {
