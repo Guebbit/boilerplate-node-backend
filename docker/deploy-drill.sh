@@ -130,7 +130,7 @@ mkdir -p -m 0700 "$DIR/secrets"
 for name in mongo_root_password mongo_app_password mongo_backup_password restic_password \
     redis_password limits_password rabbitmq_password token_access token_refresh totp_encryption_key \
     pii_encryption_key webhook_secret_encryption_key pseudonym_key metrics_token device_cookie_secret \
-    smtp_password; do
+    smtp_password zammad_postgres_password zammad_postgres_superuser_password; do
     openssl rand -hex 32 >"$DIR/secrets/$name"
     chmod 0644 "$DIR/secrets/$name"
 done
@@ -138,7 +138,7 @@ done
 # The integration secrets are optional: an empty file is unset.
 for name in payment_webhook_secret oauth_google_client_secret oauth_github_client_secret \
     antibot_altcha_secret antibot_turnstile_secret posthog_personal_api_key \
-    alert_webhook_url alert_heartbeat_token backup_heartbeat_token; do
+    alert_webhook_url alert_heartbeat_token backup_heartbeat_token zammad_api_token; do
     : >"$DIR/secrets/$name"
 done
 cat >"$DIR/.env" <<E

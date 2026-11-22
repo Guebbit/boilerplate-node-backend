@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { BlockList } from 'node:net';
 import { parse } from 'yaml';
 import { REPO_ROOT } from '@tests/paths';
 
@@ -49,10 +50,19 @@ interface ComposeFile {
             healthcheck?: { test?: string[] };
             profiles?: string[];
             logging?: { driver?: string; options?: Record<string, string> };
+            image?: string;
+            user?: string;
+            /** The networks a service joins: a list of names, or a map of name to its per-service options. */
+            networks?: string[] | Record<string, { ipv4_address?: string } | null>;
         }
     >;
     /** Top-level secrets, each backed by a file. */
     secrets?: Record<string, { file: string }>;
+    /** Top-level networks; only `ipam` matters here. */
+    networks?: Record<
+        string,
+        { ipam?: { config?: { subnet?: string; gateway?: string; ip_range?: string }[] } } | null
+    >;
 }
 
 /** Narrows what `yaml`'s `parse` hands back to the shape this file reads. */
@@ -70,7 +80,10 @@ const isComposeFile = (value: unknown): value is ComposeFile =>
  */
 const parsedCompose: unknown = parse(
     readFileSync(path.join(REPO_ROOT, 'compose.production.yaml'), 'utf8'),
-    { merge: true }
+    // `maxAliasCount` guards a hostile document from expanding without bound. This is our own file, and
+    // its shared blocks (logging, hardening, the Zammad service) are aliased by many services, so the
+    // default of 100 is too low.
+    { merge: true, maxAliasCount: 1000 }
 );
 
 if (!isComposeFile(parsedCompose))
@@ -764,5 +777,319 @@ describe('the Kubernetes manifests, compose, the rig and boot-check name the sam
         expect(Object.keys(BOOT_CHECK_FILE_NAMES).toSorted()).toEqual(
             [...bootCheckFiles.keys()].toSorted()
         );
+    });
+});
+
+/**
+ * The names of the networks a service joins, whichever of compose's two spellings it used.
+ *
+ * @param name - the service
+ */
+const networksOf = (name: string): string[] => {
+    const { networks } = compose.services[name] ?? {};
+    return Array.isArray(networks) ? networks : Object.keys(networks ?? {});
+};
+
+/**
+ * The default of a `${VARIABLE:-default}` interpolation, which is the value a stack without an override runs.
+ *
+ * @param text - a compose value
+ * @throws {Error} when the value is not of that form
+ */
+const defaultOf = (text: string): string => {
+    const match = /^\$\{[A-Z_]+:-([^}]*)\}$/.exec(text);
+    if (!match) throw new Error(`[production-topology] "${text}" is not a \${VARIABLE:-default}.`);
+    return match[1] ?? '';
+};
+
+/**
+ * The services that mount a secret, sorted.
+ *
+ * @param secret - the secret's name
+ */
+const holdersOf = (secret: string): string[] =>
+    Object.entries(mountedSecrets())
+        .filter(([, secrets]) => secrets.includes(secret))
+        .map(([name]) => name)
+        .toSorted();
+
+/**
+ * The fixed address a service takes on a network.
+ *
+ * @param name - the service
+ * @param network - the network the address is looked up on
+ * @throws {Error} when the service lists its networks as bare names, so it can have no fixed address
+ */
+const fixedAddressOn = (name: string, network: string): string => {
+    const { networks } = compose.services[name] ?? {};
+    if (networks === undefined || Array.isArray(networks))
+        throw new Error(`[production-topology] ${name} lists no per-network options.`);
+    return networks[network]?.ipv4_address ?? '';
+};
+
+/** The Zammad services: everything the `helpdesk` profile starts. */
+const ZAMMAD_SERVICES = Object.keys(compose.services).filter((name) => name.startsWith('zammad-'));
+
+/** The two Zammad services nginx proxies to, which share `helpdesk-edge` with it. */
+const EDGE_NEIGHBOURS = ['zammad-nginx', 'zammad-railsserver', 'zammad-websocket'];
+
+/** The services that call Zammad or dump its database, so they join `helpdesk`. */
+const HELPDESK_CLIENTS = ['app', 'cron', 'worker', 'worker-heavy', 'backup', 'restore-drill'];
+
+describe('the helpdesk profile: images', () => {
+    /**
+     * The pin is what makes an upgrade a decision: a floating tag would run a migration on the next
+     * restart, with no backup taken first, and Zammad has no downgrade.
+     */
+    it.each([
+        ...ZAMMAD_SERVICES.filter((name) => name !== 'zammad-nginx'),
+        'restore-drill-helpdesk-db'
+    ])('%s runs an image pinned by tag and digest', (name) => {
+        const [reference = '', digest = ''] = (compose.services[name]?.image ?? '').split('@', 2);
+
+        expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+        // A tag too: the digest alone says nothing to a reader, and Dependabot moves the two together.
+        expect(reference.slice(reference.lastIndexOf('/') + 1)).toContain(':');
+    });
+
+    /**
+     * 7.2.1 fixed a critical bypass of Zammad's two-factor layer and 7.2.3 a brute-force of it; staff
+     * sign-in rests on that layer, so the pin never goes below the fix.
+     */
+    it('pins Zammad at 7.2.3 or later', () => {
+        const tag = /:(\d+)\.(\d+)\.(\d+)(?:-\d+)?@/.exec(
+            compose.services['zammad-railsserver']?.image ?? ''
+        );
+        const [major, minor, patch] = (tag?.slice(1, 4) ?? []).map(Number);
+
+        // A pin in a shape this reads wrongly must fail, not pass vacuously.
+        expect(tag).not.toBeNull();
+        expect([major, minor, patch]).not.toContain(undefined);
+        expect(
+            (major ?? 0) * 1_000_000 + (minor ?? 0) * 1000 + (patch ?? 0)
+        ).toBeGreaterThanOrEqual(7_002_003);
+    });
+
+    it('runs every Zammad process from the one image', () => {
+        const images = new Set(
+            [
+                'zammad-init',
+                'zammad-railsserver',
+                'zammad-scheduler',
+                'zammad-websocket',
+                'zammad-nginx'
+            ].map((name) => compose.services[name]?.image)
+        );
+
+        expect(images.size).toBe(1);
+    });
+
+    it('keeps Zammad on the same Postgres major as the backup image reads', () => {
+        const dockerfileBackup = readFileSync(
+            path.join(REPO_ROOT, 'docker', 'Dockerfile.backup'),
+            'utf8'
+        );
+
+        expect(compose.services['zammad-postgres']?.image).toMatch(/\/postgres:17\./);
+        expect(dockerfileBackup).toContain('postgresql-client-17');
+    });
+
+    it('ships no Elasticsearch', () => {
+        const withSearch = ZAMMAD_SERVICES.filter(
+            (name) => environmentOf(name).ELASTICSEARCH_ENABLED === 'true'
+        );
+
+        expect(Object.keys(compose.services).filter((name) => /elasticsearch/i.test(name))).toEqual(
+            []
+        );
+        expect(withSearch).toEqual([]);
+        expect(environmentOf('zammad-railsserver').ELASTICSEARCH_ENABLED).toBe('false');
+    });
+});
+
+describe('the helpdesk profile: what starts, and what is exposed', () => {
+    it('lists the Zammad services it expects', () => {
+        // A census of one: with none found, every `it.each` below would pass over nothing.
+        expect(ZAMMAD_SERVICES.toSorted()).toEqual([
+            'zammad-init',
+            'zammad-memcached',
+            'zammad-nginx',
+            'zammad-postgres',
+            'zammad-railsserver',
+            'zammad-redis',
+            'zammad-scheduler',
+            'zammad-websocket'
+        ]);
+    });
+
+    it.each(ZAMMAD_SERVICES)('%s starts only under the helpdesk profile', (name) => {
+        expect(compose.services[name]?.profiles).toEqual(['helpdesk']);
+    });
+
+    it.each(ZAMMAD_SERVICES)('%s drops every capability and gains no privilege', (name) => {
+        expect(compose.services[name]?.cap_drop).toEqual(['ALL']);
+        expect(compose.services[name]?.security_opt).toContain('no-new-privileges:true');
+    });
+
+    it('runs no Zammad service as root', () => {
+        expect(
+            ZAMMAD_SERVICES.filter((name) =>
+                /^(?:root|0)(?::|$)/.test(compose.services[name]?.user ?? '')
+            )
+        ).toEqual([]);
+    });
+
+    /** One door: the browser's. Everything else is reached over a network the host cannot see. */
+    it('publishes exactly one port, nginx, on loopback', () => {
+        const published = ZAMMAD_SERVICES.filter(
+            (name) => (compose.services[name]?.ports ?? []).length > 0
+        );
+
+        expect(published).toEqual(['zammad-nginx']);
+        expect(hostInterfaceOf(compose.services['zammad-nginx']?.ports?.[0] ?? '')).toBe(
+            '127.0.0.1'
+        );
+        expect(compose.services['zammad-nginx']?.ports?.[0]).toContain('${ZAMMAD_PORT:-3060}');
+    });
+
+    it('has the backup mount Zammad read-only, and no helpdesk container other than the throwaway in the drill', () => {
+        expect(compose.services.backup?.volumes).toContain(
+            'zammad-storage:/data/zammad-storage:ro'
+        );
+        expect(compose.services['restore-drill-helpdesk-db']?.profiles).toEqual(['restore-drill']);
+        expect(compose.services['restore-drill-helpdesk-db']?.ports ?? []).toEqual([]);
+    });
+
+    /**
+     * Two roles, two secrets: the bootstrap superuser's file is mounted by the database alone, so code
+     * execution in a Zammad process or in the backup container never holds a superuser login.
+     */
+    it('keeps the Postgres superuser password in zammad-postgres alone', () => {
+        expect(holdersOf('zammad_postgres_superuser_password')).toEqual(['zammad-postgres']);
+        expect(environmentOf('zammad-postgres').POSTGRES_PASSWORD_FILE).toBe(
+            '/run/secrets/zammad_postgres_superuser_password'
+        );
+        expect(environmentOf('zammad-postgres').ZAMMAD_DB_PASS_FILE).toBe(
+            '/run/secrets/zammad_postgres_password'
+        );
+    });
+
+    it('hands the Zammad API token to the four services that call Zammad, and the database password to its own', () => {
+        expect(holdersOf('zammad_api_token')).toEqual(['app', 'cron', 'worker', 'worker-heavy']);
+        expect(holdersOf('zammad_postgres_password')).toEqual([
+            'backup',
+            'zammad-init',
+            'zammad-postgres',
+            'zammad-railsserver',
+            'zammad-scheduler',
+            'zammad-websocket'
+        ]);
+    });
+});
+
+describe('the helpdesk profile: networks', () => {
+    /**
+     * Zammad makes outbound calls (mail, webhooks), so it must not sit on the network Mongo and both
+     * Redis instances share. The file had no explicit networks before, so every OTHER service now
+     * names `default`: leaving one out would move it onto a network of its own.
+     */
+    it.each(ZAMMAD_SERVICES)('%s is not on the default network', (name) => {
+        expect(networksOf(name)).not.toContain('default');
+        expect(networksOf(name).length).toBeGreaterThan(0);
+    });
+
+    it('names the default network on every service that is not Zammad', () => {
+        const without = Object.keys(compose.services)
+            .filter((name) => !ZAMMAD_SERVICES.includes(name))
+            .filter((name) => !networksOf(name).includes('default'));
+
+        expect(without).toEqual([]);
+    });
+
+    it('lets exactly the services that call Zammad or dump it join helpdesk', () => {
+        const joined = Object.keys(compose.services)
+            .filter((name) => !ZAMMAD_SERVICES.includes(name))
+            .filter((name) => networksOf(name).includes('helpdesk'));
+
+        expect(joined.toSorted()).toEqual(HELPDESK_CLIENTS.toSorted());
+    });
+
+    /**
+     * A fixed subnet on a network every stack creates makes a second client stack on the host fail to
+     * come up (two stacks on one host: docs/operate/two-client-stacks.md). The fixed one is
+     * `helpdesk-edge`, which only Zammad's own proxy tier joins, so a stack without the profile never
+     * creates it.
+     */
+    it('puts a fixed subnet only on helpdesk-edge, and only the proxy tier joins it', () => {
+        const fixed = Object.entries(compose.networks ?? {})
+            .filter(([, network]) => (network?.ipam?.config ?? []).length > 0)
+            .map(([name]) => name);
+        const onEdge = Object.keys(compose.services).filter((name) =>
+            networksOf(name).includes('helpdesk-edge')
+        );
+
+        expect(fixed).toEqual(['helpdesk-edge']);
+        expect(onEdge.toSorted()).toEqual(EDGE_NEIGHBOURS.toSorted());
+    });
+
+    /**
+     * Zammad can only strip a trusted proxy from `X-Forwarded-For` by exact address, so Rails must
+     * trust exactly nginx's own address and the gateway that the engine's port forwarder arrives
+     * from, and both must be where the network puts them. At the default, every per-address limit
+     * (password reset, 2FA) becomes one shared bucket a single attacker can empty.
+     */
+    describe('the trusted proxies', () => {
+        const edge = compose.networks?.['helpdesk-edge']?.ipam?.config?.[0];
+        const nginxAddress = defaultOf(fixedAddressOn('zammad-nginx', 'helpdesk-edge'));
+        const subnet = defaultOf(edge?.subnet ?? '');
+        const gateway = defaultOf(edge?.gateway ?? '');
+
+        it('are exactly nginx and the gateway', () => {
+            const trusted = environmentOf('zammad-railsserver').RAILS_TRUSTED_PROXIES;
+
+            const [first = '', second = '', ...rest] = (trusted ?? '').split(',');
+
+            // Exactly two, each a variable with a default, and the defaults are what the network assigns.
+            expect(rest).toEqual([]);
+            expect(first).toContain('ZAMMAD_EDGE_NGINX_IP');
+            expect(second).toContain('ZAMMAD_EDGE_GATEWAY');
+            expect([defaultOf(first), defaultOf(second)]).toEqual([nginxAddress, gateway]);
+        });
+
+        it('sit inside the edge subnet, and nginx sits outside the range other services draw from', () => {
+            const [network, bits] = subnet.split('/', 2);
+            const block = new BlockList();
+            block.addSubnet(network ?? '', Number(bits));
+            const range = defaultOf(edge?.ip_range ?? '').split('/', 2);
+            const dynamic = new BlockList();
+            dynamic.addSubnet(range[0] ?? '', Number(range[1]));
+
+            expect(block.check(nginxAddress)).toBe(true);
+            expect(block.check(gateway)).toBe(true);
+            expect(dynamic.check(nginxAddress)).toBe(false);
+            expect(dynamic.check(gateway)).toBe(false);
+        });
+
+        /**
+         * All five processes that start from Zammad's image carry the list: a service that dropped it
+         * would fall back to trusting loopback only, and only that one would see one shared address.
+         */
+        it('give every Zammad process the same list', () => {
+            const processes = [
+                'zammad-init',
+                'zammad-railsserver',
+                'zammad-scheduler',
+                'zammad-websocket',
+                'zammad-nginx'
+            ];
+            const expected = environmentOf('zammad-railsserver').RAILS_TRUSTED_PROXIES;
+
+            expect(expected).toBeTruthy();
+            expect(
+                Object.fromEntries(
+                    processes.map((name) => [name, environmentOf(name).RAILS_TRUSTED_PROXIES])
+                )
+            ).toEqual(Object.fromEntries(processes.map((name) => [name, expected])));
+        });
     });
 });

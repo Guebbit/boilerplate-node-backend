@@ -178,9 +178,16 @@ What a deployment adds beyond that:
 | Management interfaces            | never publish a database UI. Reach them through an SSH tunnel or a bastion                 |
 | SSH                              | key auth only, no password auth, no root login                                             |
 
-**Compose has one flat network.** `compose.production.yaml` declares no `networks:`, so every service can reach every
-other: the segment is the host, not the service. Splitting it (a `data` network that only the app-code services join)
-is a deployer's change. On Kubernetes the same job is a `NetworkPolicy`, below.
+**Compose has one flat `default` network.** Every service names it, so every service can reach every other: the
+segment is the host, not the service. Splitting it (a `data` network that only the app-code services join) is a
+deployer's change. The one split the file ships is the [`helpdesk` profile's](./zammad.md#the-design): Zammad
+makes outbound calls of its own (mail, webhooks), so it never joins `default` and cannot reach Mongo, either
+Redis or RabbitMQ; only the services that call it or dump its database join its network. On Kubernetes the same
+job is a `NetworkPolicy`, below.
+
+The Zammad containers also keep a writable root (Zammad writes its own `tmp`, `log` and nginx configuration),
+unlike the five that run this repository's code. They drop every capability, gain no privilege and run as the
+image's non-root user, `zammad-init` included.
 
 ### On Kubernetes
 

@@ -2,8 +2,9 @@
 # One backup run, in order:
 #   1. the database dump streamed into restic (no gzip: restic deduplicates raw bytes)
 #   2. the per-collection counts the dump reported, as a tiny snapshot of the same run
-#   3. the uploads and the mail spool, as plain files
-#   4. `restic forget` per the keep knobs (skipped when BACKUP_PRUNE=false)
+#   3. Zammad's Postgres (`pg_dump -Fc`) and its ticket and user counts, when the helpdesk profile runs
+#   4. the uploads, the mail spool and Zammad's attachments, as plain files
+#   5. `restic forget` per the keep knobs (skipped when BACKUP_PRUNE=false)
 # then the heartbeat goes green, or red with the reason. Run by supercronic on BACKUP_SCHEDULE.
 # Design and failure behaviour: docs/operate/backups.md#one-run
 # shellcheck source=common.sh
@@ -41,25 +42,46 @@ backup_database() {
         --stdin --stdin-filename counts.tsv <"$WORK/counts.tsv"
 }
 
-# Step 3: durable files. The mail spool is the one directory of `storage` worth keeping; the
-# rendered PDFs there are regenerable.
+# Step 3: Zammad's database, then its counts. Postgres' own dump format (`-Fc`) is compressed and
+# restores with `pg_restore`; it is still streamed straight into restic, which refuses the snapshot
+# when `pg_dump` exits non-zero. https://www.postgresql.org/docs/17/app-pgdump.html
+backup_helpdesk() {
+    write_pgpass "$WORK"
+    local dump=(
+        pg_dump --host "$HELPDESK_HOST" --port "$HELPDESK_PORT" --username "$HELPDESK_USER"
+        --dbname "$HELPDESK_DB" --no-password --format=custom
+    )
+    restic_run backup --host "$BACKUP_HOST" --tag helpdesk-db --tag "run:$RUN_ID" \
+        --stdin-from-command --stdin-filename zammad.pgdump -- "${dump[@]}"
+    helpdesk_counts "$HELPDESK_HOST" "$HELPDESK_PORT" "$HELPDESK_USER" "$HELPDESK_DB" >"$WORK/helpdesk-counts.tsv"
+    [ -s "$WORK/helpdesk-counts.tsv" ] || { log "Zammad reported no counts"; return 1; }
+    restic_run backup --host "$BACKUP_HOST" --tag helpdesk-counts --tag "run:$RUN_ID" \
+        --stdin --stdin-filename helpdesk-counts.tsv <"$WORK/helpdesk-counts.tsv"
+}
+
+# Step 4: durable files. The mail spool is the one directory of `storage` worth keeping; the
+# rendered PDFs there are regenerable. Zammad's attachments are kept only while its profile runs.
 backup_files() {
     local paths=()
     [ -d "$UPLOADS_DIR" ] && paths+=("$UPLOADS_DIR")
     [ -d "$MAIL_SPOOL_DIR" ] && paths+=("$MAIL_SPOOL_DIR")
+    if helpdesk_wanted && [ -d "$ZAMMAD_STORAGE_DIR" ]; then paths+=("$ZAMMAD_STORAGE_DIR"); fi
     [ "${#paths[@]}" -gt 0 ] || { log "no files to back up"; return 0; }
     restic_run backup --host "$BACKUP_HOST" --tag files --tag "run:$RUN_ID" "${paths[@]}"
 }
 
-# Step 4: drop what the keep knobs no longer want. Space is reclaimed by `prune`, weekly, in
-# maintenance.sh. `--group-by host,paths`: the dump, the counts and the files are three groups,
+# Step 5: drop what the keep knobs no longer want. Space is reclaimed by `prune`, weekly, in
+# maintenance.sh. `--group-by host,paths`: each dump, its counts and the files are separate groups,
 # each with its own history; the run tag must not split them further.
+# Zammad's dumps get a second pass, by absolute age: none outlives BACKUP_HELPDESK_MAX_DAYS, whatever the
+# monthly knob says (`forget_helpdesk_expired`, common.sh).
 # https://restic.readthedocs.io/en/stable/060_forget.html
 forget_old() {
     [ "${BACKUP_PRUNE:-true}" = true ] || { log "BACKUP_PRUNE=false, not forgetting"; return 0; }
     restic_run forget --host "$BACKUP_HOST" --group-by host,paths \
         --keep-hourly "${BACKUP_KEEP_HOURLY:-24}" --keep-daily "${BACKUP_KEEP_DAILY:-7}" \
         --keep-weekly "${BACKUP_KEEP_WEEKLY:-4}" --keep-monthly "${BACKUP_KEEP_MONTHLY:-6}"
+    forget_helpdesk_expired "$BACKUP_HOST"
 }
 
 # The whole run, in order.
@@ -67,6 +89,7 @@ backup_run() {
     [ -n "$RESTIC_REPOSITORY" ] || { log "BACKUP_REPOSITORY is empty: dormant"; return 0; }
     ensure_repository
     if [ "${BACKUP_DATABASE:-true}" = true ]; then backup_database; fi
+    if helpdesk_wanted; then backup_helpdesk; fi
     backup_files
     forget_old
 }

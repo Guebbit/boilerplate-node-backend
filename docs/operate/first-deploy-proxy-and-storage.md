@@ -82,6 +82,44 @@ Also, on every proxy:
 - **Which copy wrote a log line:** every line carries `host.name` and `process.pid`. On Kubernetes
   the host name is the pod name; on one host, copies differ by pid.
 
+**The public Zammad host** (the `helpdesk` profile, [Zammad](zammad.md)) needs three more lines from its
+proxy. Zammad rate-limits and logs by client address, and it trusts a forwarded address only from the
+proxy tier in front of it:
+
+- **Overwrite `X-Forwarded-For` with `$remote_addr`.** Do not append (`$proxy_add_x_forwarded_for`): your
+  proxy is the first hop, and a header the client sent would otherwise reach Zammad's session list and
+  its limits as that client's address.
+- **Send `X-Forwarded-Proto https`.** The proxy terminates TLS; Zammad is told the scheme only through this.
+- **Refuse any request carrying an `Authorization` header with 403.** Zammad's staff screens never send one.
+  A token or basic-auth header skips its two-factor sign-in, so the public host serves the browser's cookie
+  flow only. (The API reaches Zammad over the compose network, not through this host.)
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name helpdesk.example.com;
+    # ... your ssl_certificate lines ...
+
+    if ($http_authorization != "") { return 403; }
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        # websockets: Zammad's live updates
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 86400;
+        proxy_pass http://127.0.0.1:3060; # ZAMMAD_PORT
+    }
+}
+```
+
+`$connection_upgrade` comes from the usual `map $http_upgrade $connection_upgrade` block in `http {}`.
+`docker/helpdesk-drill.sh` runs this same overwrite and the 403 rule in front of a real Zammad and checks
+both ([the drill](zammad.md#the-drill)).
+
 ### 2 · Uploaded images do not outlive the container {#uploaded-images-do-not-outlive-the-container}
 
 `imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to disk. The compose
