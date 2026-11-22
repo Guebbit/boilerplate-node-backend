@@ -164,9 +164,14 @@ fails there, not in production.
 
 Dependabot's cooldown skips the Zammad image (`.github/dependabot.yml`), so a bump PR arrives at once. Its
 security updates do not fire for Zammad: the advisories carry no ecosystem, and some are missing from
-GitHub's global database. Until an automated watcher exists, read
-<https://github.com/zammad/zammad/security/advisories> weekly and compare the affected range with the pin.
-Zammad's version numbers carry a build suffix (`7.2.3-0017`); the advisory ranges do not.
+GitHub's global database. So the daily `zammad-advisories` workflow
+(`.github/workflows/zammad-advisories.yml`) does it: it reads
+<https://github.com/zammad/zammad/security/advisories>, compares each affected range with the pin and opens one
+tracking issue, labelled `zammad-advisory`, while the pin is covered or a range cannot be read.
+Zammad's version numbers carry a build suffix (`7.2.3-0017`); the advisory ranges do not, so the script strips it.
+
+To check by hand: `npm run security:zammad-advisories`. It reads `compose.production.yaml` and exits 2 on an
+exposed pin; `GITHUB_TOKEN` lifts GitHub's anonymous limit of 60 requests an hour.
 
 ## Backup {#backup}
 
