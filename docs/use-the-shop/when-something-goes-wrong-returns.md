@@ -84,6 +84,12 @@ canceled: its units can be returned again and the order stops reading "return in
 Canceling is bookkeeping only: no money, no stock, no email. It is not a close, because the goods did
 not come back.
 
+The daily summary tells you about two kinds of late goods, and each row opens the returns list on
+its own: **overdue for their goods** (no proof of posting yet: ask the buyer once, keep the refund on
+hold) and **a proof of posting but the goods are late** (the buyer showed a receipt: follow up with
+the carrier and check whether a refund is already sent or due). A goodwill return (reason "other")
+with a proof on file never shows in either row: it has no legal deadline, so it goes silent.
+
 ::: warning If the buyer has proof of posting, do not cancel
 A buyer who shows a posting receipt sent the goods. This shop's policy is to bear the risk of the
 parcel on its way back and refund on proof of sending, so the refund is owed. Press **Proof of
@@ -111,7 +117,10 @@ parcel. A return is **approved** and nothing arrives.
    carrier and its reference. You can do this once per return.
 2. On a **withdrawal** this opens the refund at once and the buyer is paid back, even though the
    parcel never arrives. On a **faulty or wrong item** it only records the proof: you still decide
-   the remedy when you press **Goods received**, and a refund picked then is due immediately.
+   the remedy when you press **Goods received**, and a refund picked then is due immediately. If you
+   accept that the buyer ends the contract and want to pay now, tick **Refund on proof** on the same
+   form: the refund opens at once, as on a withdrawal, and **Goods received** can then only be a
+   refund (no repair or replacement).
 3. Press **Goods received** with the restock count of every line set to **0**. The units count as
    back, but nothing goes on sale: there is nothing on the shelf. After a proof on a withdrawal this
    opens no second refund and closes the return once the refund has been paid.
@@ -121,8 +130,8 @@ sending (the EU leaves the final risk to national law), so the money is owed; cl
 carrier if you wish. If the parcel turns up later and the goods are sellable, use **Receive stock**
 with a note that it is a repaired or found return.
 
-::: warning After a proof on a withdrawal, the return cannot be canceled
-The proof opened a refund the buyer is owed, so **Cancel return** is refused. Press **Goods received**
+::: warning After a proof that opened the refund, the return cannot be canceled
+A withdrawal's proof, or a faulty item's proof with **Refund on proof**, opened a refund the buyer is owed, so **Cancel return** is refused. Press **Goods received**
 instead (with 0 on every line if the parcel was lost).
 :::
 

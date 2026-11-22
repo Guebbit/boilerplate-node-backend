@@ -7,7 +7,8 @@
 
 import { addMoney, toDecimalString, toMinorUnits, NO_MONEY } from '@domain-primitives/money';
 import { BACK_RETURN_STATUSES, handsUnitsBack } from './lifecycle';
-import type { ReturnKind, ReturnRemedy, ReturnStatus } from './lifecycle';
+import type { ReturnKind, ReturnReason, ReturnRemedy, ReturnStatus } from './lifecycle';
+import { proofOpenedRefund } from './refund-due';
 import { wireLines } from './quantities';
 import type { ProductQuantity } from './quantities';
 
@@ -15,6 +16,12 @@ import type { ProductQuantity } from './quantities';
 export interface AccountedReturn {
     kind: ReturnKind;
     status: ReturnStatus;
+    /** Why it came back: with the proof, it says whether the refund opened before the goods came. */
+    reason: ReturnReason;
+    /** The date on the proof of sending, when staff recorded one. */
+    proofOfSendingAt?: Date | undefined;
+    /** Staff opened the refund with the proof, on a defect or a wrong item. */
+    refundOnProof?: boolean | undefined;
     /** What the buyer was given; a replacement or a repair settles no units. */
     remedy?: ReturnRemedy | undefined;
     lines: readonly { productId: { toString(): string }; quantity: number }[];
@@ -31,13 +38,16 @@ export interface OrderAccounts {
 }
 
 /**
- * Whether a return's units are settled: a cancellation always is (born closed); a return only once
- * its goods are back — `received` or `closed` — and the buyer did not get them back in a repair or
- * a replacement (those units are in the buyer's hands, so they settle nothing and refund no delivery).
+ * Whether a return's units are settled: a cancellation always is (born closed); a return once its
+ * goods are back — `received` or `closed` — and the buyer did not get them back in a repair or a
+ * replacement (those units are in the buyer's hands, so they settle nothing and refund no delivery);
+ * or once its refund opened on the proof of sending, since that refund already paid for the units
+ * and quoted the delivery, whether or not the parcel has arrived.
  * @param returned - the return
  */
 const isSettled = (returned: AccountedReturn): boolean =>
     returned.kind === 'cancellation' ||
+    proofOpenedRefund(returned) ||
     (BACK_RETURN_STATUSES.includes(returned.status) && !handsUnitsBack(returned));
 
 /**

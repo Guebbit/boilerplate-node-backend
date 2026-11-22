@@ -207,6 +207,29 @@ describe('GET /returns and GET /returns/{id}', () => {
         }
     });
 
+    it('keeps the returns with a proof of sending, or those without, by the boolean filter', async () => {
+        const { warehouse, id } = await withdrawn();
+        const { bearer: manager } = await authenticateAsRole('manager');
+        await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send(PROOF);
+        const idsOf = (filter: string) =>
+            api()
+                .get(`/returns?${filter}`)
+                .set('Authorization', manager)
+                .then((response) =>
+                    (response.body.items as { id: string }[]).map((item) => item.id)
+                );
+
+        expect(await idsOf('proofOfSending=true')).toContain(id);
+        expect(await idsOf('proofOfSending=false')).not.toContain(id);
+        const sorted = await api()
+            .get('/returns?sort=-proofOfSendingAt')
+            .set('Authorization', manager);
+        expect(sorted.status).toBe(200);
+    });
+
     it('takes a comma-separated sort and refuses a field outside the enum', async () => {
         const { bearer } = await customerWithOrder(OrderStatus.delivered);
 
@@ -387,6 +410,39 @@ describe('POST /returns/{id}/proof-of-sending', () => {
             .send({ sentAt: PROOF.sentAt, reference: PROOF.reference });
 
         expect(response.status).toBe(422);
+    });
+
+    it('opens the refund of a faulty item when staff send refundOnProof, and says so on the return', async () => {
+        const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
+        const created = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'defective', note: 'Cracked' });
+        const id = String(created.body.id);
+        const { bearer: manager } = await authenticateAsRole('manager');
+        await api().post(`/returns/${id}/approve`).set('Authorization', manager);
+        const { bearer: warehouse } = await authenticateAsRole('warehouse');
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send({ ...PROOF, refundOnProof: true });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ status: 'approved', refundOnProof: true });
+        expect(response.body.actions).toMatchObject({ cancel: false });
+    });
+
+    it('answers 422 RETURN_REFUND_ON_PROOF_INVALID to refundOnProof on a withdrawal', async () => {
+        const { warehouse, id } = await withdrawn();
+
+        const response = await api()
+            .post(`/returns/${id}/proof-of-sending`)
+            .set('Authorization', warehouse)
+            .send({ ...PROOF, refundOnProof: true });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('RETURN_REFUND_ON_PROOF_INVALID');
     });
 
     it('refuses the buyer: only whoever receives returns records a proof', async () => {

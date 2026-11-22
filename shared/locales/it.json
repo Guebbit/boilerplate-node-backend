@@ -165,6 +165,7 @@
             "receivedTo": "ricevuto fino al",
             "reference": "riferimento",
             "refund": "rimborso",
+            "refundOnProof": "rimborso alla prova di spedizione",
             "refundRef": "riferimento del rimborso",
             "releaseDate": "data di uscita",
             "remember": "ricordami",

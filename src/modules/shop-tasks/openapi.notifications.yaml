@@ -25,6 +25,7 @@ x-extends:
         - NotificationStaffPreordersLate
         - NotificationStaffDeliveryHoldsOpen
         - NotificationStaffReturnsAwaitingGoods
+        - NotificationStaffReturnsProofGoodsLate
         - NotificationStaffReturnsUndecided
         - NotificationStaffLowStock
         - NotificationStaffUnshipped
@@ -562,6 +563,31 @@ components:
                 code:
                     type: string
                     enum: [shop-tasks.staff.returns-awaiting-goods]
+                params:
+                    $ref: '#/components/schemas/WorkCountParams'
+                severity:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationStaffReturnsProofGoodsLate:
+            type: object
+            additionalProperties: false
+            description: Approved returns whose buyer showed a proof of sending, with the goods still not arrived long after the days to send and the carrier's transit ran out. A refund may already have been sent or may be due; the row says only that the goods are late.
+            required: [id, audience, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                audience:
+                    $ref: '../notifications/openapi.yaml#/components/schemas/NotificationAudience'
+                code:
+                    type: string
+                    enum: [shop-tasks.staff.returns-proof-goods-late]
                 params:
                     $ref: '#/components/schemas/WorkCountParams'
                 severity:

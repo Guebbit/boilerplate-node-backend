@@ -35,6 +35,8 @@ export interface ReturnFilters {
     orderId?: string;
     status?: string;
     reason?: string;
+    /** `true` keeps the returns with a proof of sending, `false` the ones without. */
+    proofOfSending?: boolean;
     sort?: string[];
 }
 
@@ -43,6 +45,8 @@ interface StatusOnly {
     status: ReturnStatus;
     reason: ReturnReason;
     proofOfSendingAt?: Date | string | undefined;
+    /** Staff opened a faulty item's refund with the proof: read by `proofOpenedRefund`. */
+    refundOnProof?: boolean | undefined;
 }
 
 /** Whether this caller works the returns queue — the wide read. */
@@ -97,15 +101,19 @@ export const withActions = (returned: ReturnDocument, authContext: AuthContext):
  * The returns this caller may see, filtered, as list items: the table's fields, not the record.
  * Staff filter freely; everyone else is held to their own orders — an `orderId` outside them answers an empty page, never someone else's rows.
  *
- * @param filters - page, and an optional order, status and reason
+ * @param filters - page, and an optional order, status, reason and whether a proof of sending is on file
  * @param authContext - the caller
  */
 export const listReturns = (
     filters: ReturnFilters,
     authContext: AuthContext
 ): Promise<{ items: ReturnListItem[]; meta: PaginatedMeta }> => {
-    const { status, reason, ...rest } = filters;
-    const exact = { ...(status ? { status } : {}), ...(reason ? { reason } : {}) };
+    const { status, reason, proofOfSending, ...rest } = filters;
+    const exact = {
+        ...(status ? { status } : {}),
+        ...(reason ? { reason } : {}),
+        ...(proofOfSending === undefined ? {} : { proofOfSendingAt: { $exists: proofOfSending } })
+    };
     const search = (scope: Record<string, unknown>) =>
         returnRepository.search(rest, { ...exact, ...scope });
 
