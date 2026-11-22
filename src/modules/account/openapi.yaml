@@ -2322,9 +2322,10 @@ components:
             minLength: 8
             description: >-
                 A password being SET by its owner — signup, reset (or the setup link) and change.
-                Length only, 8 to 128 characters (NIST SP 800-63B-4: no composition rules, no
-                forced mix of classes); what keeps a weak one out is the breached-password check
-                on every set path, not a pattern. Hashed with argon2id, which has no 72-byte
+                Length only, 8 to 128 characters. The minimum of 8 is the OWASP ASVS floor;
+                NIST SP 800-63B rev 4 asks for 15 when the password is the only factor. No
+                composition rules, no forced mix of classes (NIST SP 800-63B-4); what keeps a
+                weak one out is the breached-password check on every set path, not a pattern. Hashed with argon2id, which has no 72-byte
                 limit, so every character counts.
 
     parameters:

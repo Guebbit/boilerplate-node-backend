@@ -268,3 +268,21 @@ cases:
           url: 'https://169.254.169.254%2F/hook',
           expect: invalid-url
       }
+    - {
+          name: a full-width digit host is normalised and an allowed public address,
+          kind: url,
+          url: 'https://９３.１８４.２１６.３４/hook',
+          expect: allowed
+      }
+    - {
+          name: a full-width digit loopback host is normalised and refused as unsafe,
+          kind: url,
+          url: 'https://１２７.0.0.1/hook',
+          expect: unsafe-address
+      }
+    - {
+          name: a full-width at-sign in the host is not credentials and is refused as invalid,
+          kind: url,
+          url: 'https://a＠93.184.216.34/hook',
+          expect: invalid-url
+      }
