@@ -166,8 +166,8 @@ invoice can be missing, but a number is never skipped.
 An invoice is a numbered legal record and is never edited. When staff correct who an order is
 invoiced to (`PUT /orders/{id}/billing-address`, [orders](./orders.md#correcting-the-billing-address)),
 the invoice is cancelled and issued again: the law treats a change to an invoice as a new document that
-points back to the old one (VAT Directive Art. 219), and in Italy that is a credit note for the full
-amount and then a new invoice (DPR 633/72 art. 26). No money moves.
+points back to the old one (VAT Directive Art. 219), and in Italy that is a credit note for what is still
+invoiced and then a new invoice (DPR 633/72 art. 26). No money moves.
 
 `orders` writes the address and announces `order.billing_corrected` through the outbox, in the same
 transaction. `correctInvoice` (`services/correct-invoice.ts`) reacts, in one transaction:

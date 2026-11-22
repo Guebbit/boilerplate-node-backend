@@ -65,12 +65,12 @@ flowchart LR
 
 ## What is implemented
 
-| Area                | Current implementation                                                                                                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App image           | `docker/Dockerfile` based on `node:26.13.1-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
-| Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                  |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, hot-reload the one-process dev command                                                                                                                      |
-| Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                             |
+| Area                | Current implementation                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App image           | `docker/Dockerfile` two app targets (plus the internal `build` and the `docs` site): `dev` (Debian, glibc, Chromium and a baked `mongod`; the gate runs here — see [Running the gate in a container](#running-the-gate-in-a-container)) and `runtime` (`node:26.13.1-alpine`, the only one that ships; Chromium for Puppeteer-driven PDF rendering only when built with `INSTALL_CHROMIUM=true`) |
+| Local orchestration | `compose.yaml` and `compose.override.yaml` (loaded together) define app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                                                                                                                                                                         |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, hot-reload the one-process dev command                                                                                                                                                                                                                                                                             |
+| Podman support      | `compose:restart` and `compose:rebuild` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                                                                                                                                                                                                    |
 
 ### After a new dependency: the container reinstalls by itself
 
@@ -159,7 +159,7 @@ docker/boot-check.sh boot-check
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
 - **The `app` container owns the seeding**, not you: its startup command is `docker/ensure-deps.sh && npm run db:bootstrap && npm run dev:docker`, so a fresh volume arrives furnished — [Which database am I looking at?](run-locally.md#which-database-am-i-looking-at).
-- **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
+- **The Dockerfile is intentionally simple**: a `dev` stage for development and the gate, a lean Alpine `runtime` stage for what ships (Chromium only with `--build-arg INSTALL_CHROMIUM=true`), and compose decides runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 
 ## When Kubernetes starts to make sense
