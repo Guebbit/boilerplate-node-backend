@@ -20,6 +20,10 @@ updates:
       groups:
           minor-and-patch:
               applies-to: version-updates
+              # sharp ships a native libvips binary and its encoder decides every stored image, so a
+              # bump gets its own PR to be reviewed on its own.
+              exclude-patterns:
+                  - sharp
               update-types:
                   - minor
                   - patch
