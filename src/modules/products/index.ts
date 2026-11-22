@@ -2,8 +2,8 @@
  * @module
  * Products — public barrel; the only surface a sibling module may import. `productRepository` and
  * the model's runtime (`productSchema`, `applyProductTransform`, `productModel`) stay inside — a
- * sibling reads the `onHand`/`reserved` mirror through `productService`, never the collection
- * directly; only `@modules/inventory` ever writes it.
+ * sibling reads products through `productService`, never the collection directly. Stock is not
+ * here: it lives in `@modules/inventory`.
  *
  * @see docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel
  * @see docs/modules/products.md#its-neighbourhood
