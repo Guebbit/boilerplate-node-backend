@@ -155,7 +155,9 @@ jobs are excluded from that alert, each covered by its own faster-firing one ins
 `sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:outbox` /
 `sweep:payment-effects` / `sweep:reservations` by `FrequentSweepStale`
 (30 min) — 48 hours at that cadence would page two days after a stuck payment, a reservation
-nobody is expiring or a refund nobody is retrying. `ScheduledJobNeverSucceeded` covers every job that
+nobody is expiring or a refund nobody is retrying. A sweep that succeeds while one hold keeps failing is
+`ReservationExpiryFailing`'s (a gauge the app reads from Mongo, since the sweep runs in the unscraped `cron` container), see
+[reservations](../modules/inventory-reservations.md#when-a-hold-keeps-failing-to-expire). `ScheduledJobNeverSucceeded` covers every job that
 has a run series but no success series: one that has only ever failed. No Pushgateway needed: the value
 lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/understand/observability-layer.md`.
