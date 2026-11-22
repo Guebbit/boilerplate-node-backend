@@ -51,7 +51,9 @@ sequenceDiagram
   credit note and the buyer's mail follow, and the return closes in the same step. Only a `refund`
   remedy takes it (422 `RETURN_REMEDY_INVALID`), a caller without `create:Refund` gets 403, and a
   return whose refund the proof of sending already opened refuses it (409
-  `RETURN_REFUND_OPENED_ON_PROOF`). The amount is still capped at what the payment has left, so an
+  `RETURN_REFUND_OPENED_ON_PROOF`). The same 409 refuses a `repair` or a `replace` on a defect or a
+  wrong item whose proof staff recorded with `refundOnProof`: the refund is already open, so no other
+  remedy is left to choose. The amount is still capped at what the payment has left, so an
   earlier goodwill refund makes the record smaller than the return, the return closes anyway, and the
   short-refund to-do stays open: **Close** answers 409 `RETURN_NOT_CLOSABLE` on a closed return, so
   staff close the to-do themselves once they have checked. See [Refunds](./payments-refunds.md#paid-outside).
@@ -214,12 +216,12 @@ over the cheapest standard delivery be kept; the CJEU (C-511/08 _Heinrich Heine_
 outbound delivery to a consumer who withdraws. The Notice is silent on partial withdrawal, so the rule
 is the one that never refunds twice and never splits it:
 
-| Detail       | Rule                                                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| "last unit"  | every ordered unit is cancelled, back (a return `received` or `closed`), or in the act being settled                                 |
-| Which amount | closed by a **cancel** → all the delivery still owed; closed by a **return** → that return's reason rule (cheapest standard vs full) |
-| Two at once  | decided under the per-order lock (`ReturnOrderLock`): exactly one is last. A receipt takes the lock too                              |
-| Never twice  | each cancel and return stores the delivery inside its refund; the next is quoted on what is still owed                               |
+| Detail       | Rule                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "last unit"  | every ordered unit is cancelled, back (a return `received` or `closed`), whose refund opened on its proof of sending, or in the act being settled |
+| Which amount | closed by a **cancel** → all the delivery still owed; closed by a **return** → that return's reason rule (cheapest standard vs full)              |
+| Two at once  | decided under the per-order lock (`ReturnOrderLock`): exactly one is last. A receipt takes the lock too                                           |
+| Never twice  | each cancel and return stores the delivery inside its refund; the next is quoted on what is still owed                                            |
 
 ## Read next
 

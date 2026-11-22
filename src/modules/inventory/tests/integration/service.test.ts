@@ -24,6 +24,8 @@ import { inventoryAuditActions } from '../../audit';
 import { HOLD_ORPHANED } from '../../events';
 import { outboxEventModel } from '@kernel/outbox';
 import { inventoryCommitOrphanedTotal } from '../../services/orphan-counter';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+import '../../metrics';
 import * as auditPort from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext } from '@tests/callers';
@@ -49,6 +51,16 @@ const orphanedCount = (stage: 'commit' | 'ship'): Promise<number> =>
     inventoryCommitOrphanedTotal
         .get()
         .then(({ values }) => values.find((entry) => entry.labels.stage === stage)?.value ?? 0);
+
+/** What a scrape reads from `inventory_overdue_holds` right now (the gauge computes it on `get`). */
+const overdueHolds = (): Promise<number> =>
+    metricsRegistry
+        .getMetricsAsJSON()
+        .then(
+            (metrics) =>
+                metrics.find(({ name }) => name === 'inventory_overdue_holds')?.values[0]?.value ??
+                0
+        );
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
@@ -1171,6 +1183,32 @@ describe('runReservationSweep', () => {
             const healthyHold = await reservationRepository.findByOrderId(healthyOrder);
             expect(brokenHold?.status).toBe('held');
             expect(healthyHold?.status).toBe('released');
+        }));
+
+    it('counts a hold the sweep cannot expire as overdue only once its grace has passed', async () =>
+        withoutWindow(async () => {
+            const broken = await createProduct({ onHand: 20 });
+            const healthy = await createProduct({ onHand: 20 });
+            const brokenOrder = anOrderId();
+            await inventoryService.reserveForOrder(brokenOrder, [
+                { productId: String(broken._id), quantity: 5 }
+            ]);
+            await inventoryService.reserveForOrder(anOrderId(), [
+                { productId: String(healthy._id), quantity: 5 }
+            ]);
+            await stockLevelModel.updateOne({ productId: broken._id }, { $set: { reserved: 0 } });
+            await inventoryService.runReservationSweep();
+
+            // Past its deadline by seconds: the sweep may simply be mid-tick, so not yet counted.
+            expect(await overdueHolds()).toBe(0);
+
+            // Past it by 11 minutes, more than two ticks: the one the sweep keeps refusing. The
+            // healthy hold was released by the sweep, so it is not in the count.
+            await reservationModel.updateOne(
+                { orderId: brokenOrder },
+                { $set: { expiresAt: new Date(Date.now() - 11 * 60 * 1000) } }
+            );
+            expect(await overdueHolds()).toBe(1);
         }));
 });
 

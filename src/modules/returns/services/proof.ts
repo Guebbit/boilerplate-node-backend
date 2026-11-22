@@ -5,7 +5,8 @@
  *
  * On a withdrawal the proof opens the refund then (Directive 2011/83/EU Art. 13(3): the shop may wait
  * for the goods or the proof, whichever comes first). On a defective or wrong item it only records
- * the proof, because the remedy is decided at receipt.
+ * the proof, because the remedy is decided at receipt — unless staff choose `refundOnProof`, accepting
+ * the buyer's termination: then it opens the refund the same way.
  *
  * @see docs/modules/returns.md#the-refund-deadline
  */
@@ -31,7 +32,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { proofOpensRefund, returnLifecycle, wireLines } from '../domain';
+import { isGuaranteeReason, proofOpensRefund, returnLifecycle, wireLines } from '../domain';
 import { notReceivable, quote } from './receive';
 import { refundDueFor } from './refund-due';
 
@@ -43,6 +44,8 @@ export interface ProofOfSendingInput {
     carrier: string;
     /** The document's reference, a tracking or receipt number. */
     reference: string;
+    /** Staff's choice, defective or wrong item only: open the refund with the proof. */
+    refundOnProof?: boolean | undefined;
 }
 
 /** The 409 for a return that already carries a proof. */
@@ -100,7 +103,7 @@ const stampProof = (
     withTransaction(async (session): Promise<Recorded> => {
         const orderId = String(returned.orderId);
         const id = String(returned._id);
-        const opensRefund = proofOpensRefund(returned.reason);
+        const opensRefund = proofOpensRefund(returned.reason) || input.refundOnProof === true;
 
         let quoted: { total: string; shipping: string } | undefined;
         if (opensRefund) {
@@ -120,6 +123,7 @@ const stampProof = (
                 proofOfSendingAt: input.sentAt,
                 proofCarrier: input.carrier,
                 proofReference: input.reference,
+                ...(input.refundOnProof ? { refundOnProof: true } : {}),
                 ...(quoted ? { refundAmount: quoted.total, shippingRefund: quoted.shipping } : {})
             },
             session
@@ -175,6 +179,15 @@ export const recordProofOfSending = (
                 )
             ]);
         if (!returned) return generateReject(404, [t('returns.not-found')]);
+        // Only a defect or a wrong item has a remedy to settle early: a withdrawal's proof opens the refund anyway.
+        if (input.refundOnProof && !isGuaranteeReason(returned.reason))
+            return generateReject(422, [
+                fieldError(
+                    'refundOnProof',
+                    t('returns.refund-on-proof-invalid'),
+                    ERROR_CODES.RETURN_REFUND_ON_PROOF_INVALID
+                )
+            ]);
         if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
         if (returned.proofOfSendingAt !== undefined) return alreadyRecorded();
 
@@ -193,6 +206,7 @@ export const recordProofOfSending = (
                         orderId: String(recorded.returned.orderId),
                         carrier: input.carrier,
                         opensRefund: recorded.opened !== null,
+                        ...(input.refundOnProof ? { refundOnProof: true } : {}),
                         ...ownOrderFlag(context, buyerIdOf(order))
                     }
                 });

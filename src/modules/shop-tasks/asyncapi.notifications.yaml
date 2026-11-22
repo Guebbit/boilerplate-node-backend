@@ -21,6 +21,7 @@ x-extends:
         - NotificationStaffPreordersLatePayload
         - NotificationStaffDeliveryHoldsOpenPayload
         - NotificationStaffReturnsAwaitingGoodsPayload
+        - NotificationStaffReturnsProofGoodsLatePayload
         - NotificationStaffReturnsUndecidedPayload
         - NotificationStaffLowStockPayload
         - NotificationStaffUnshippedPayload
@@ -769,6 +770,46 @@ components:
                     type: string
                     enum:
                         - shop-tasks.staff.returns-awaiting-goods
+                params:
+                    $ref: '#/components/schemas/WorkCountParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationStaffReturnsProofGoodsLatePayload:
+            title: NotificationStaffReturnsProofGoodsLatePayload
+            type: object
+            required:
+                - id
+                - audience
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                audience:
+                    description: Whose message it is — `own`, or a `staff` work notice.
+                    type: string
+                    enum:
+                        - own
+                        - staff
+                code:
+                    type: string
+                    enum:
+                        - shop-tasks.staff.returns-proof-goods-late
                 params:
                     $ref: '#/components/schemas/WorkCountParamsPayload'
                 severity:

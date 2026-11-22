@@ -514,6 +514,33 @@ tests:
                       description: "sweep:outbox has not recorded a success in 30 minutes \u2014 see docker/crontab and docs/reference/ops.md#scheduled-jobs."
     - interval: 1m
       input_series:
+          - series: inventory_overdue_holds
+            values: '0x5 1x40'
+      alert_rule_test:
+          # Stuck since minute 6, so 14 minutes at minute 20: still inside the `for` window.
+          - eval_time: 20m
+            alertname: ReservationExpiryFailing
+            exp_alerts: []
+          # 16 minutes at minute 22: past it, so it fires.
+          - eval_time: 22m
+            alertname: ReservationExpiryFailing
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A stale stock hold keeps failing to expire
+                      description: "inventory_overdue_holds has been above zero for 15 minutes \u2014 a hold is past its deadline and the sweep cannot expire it, so its units stay reserved. See docs/modules/inventory-reservations.md#when-a-hold-keeps-failing-to-expire."
+    - interval: 1m
+      input_series:
+          - series: inventory_overdue_holds
+            values: '0x5 1x9 0x30'
+      alert_rule_test:
+          # A backlog that cleared after 10 minutes never fires.
+          - eval_time: 30m
+            alertname: ReservationExpiryFailing
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: auth_login_total{status="failure"}
             values: 0+120x20
       alert_rule_test:

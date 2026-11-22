@@ -629,7 +629,7 @@ const findCanceledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: st
 export interface PiiClaimWindow {
     /** Days a delivered order keeps the buyer after its `conformityUntil`. */
     daysAfterGuarantee: number;
-    /** Days a paid order that ended undelivered keeps the buyer after `paidAt`. */
+    /** Days a paid order that ended undelivered keeps the buyer: after `paidAt`, or `moneyReceivedAt` when no `paidAt`. */
     daysUndelivered: number;
 }
 
@@ -640,10 +640,11 @@ export interface PiiClaimWindow {
  *
  * | Order                                   | Due                                  |
  * | --------------------------------------- | ------------------------------------ |
- * | never paid, `canceled`                  | at once                              |
+ * | never paid, no money received, canceled | at once                              |
  * | never paid, still open                  | never (its cash is still to come)    |
  * | delivered (`conformityUntil` set)       | `conformityUntil` + guarantee days   |
  * | paid, `canceled` without delivery      | `paidAt` + undelivered days          |
+ * | canceled, money landed late             | `moneyReceivedAt` + undelivered days |
  * | paid and still open                     | never (it is still to be fulfilled)  |
  *
  * @param cutoff - the sweep's instant
@@ -655,7 +656,13 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
     piiClockStartedAt: { $exists: true },
     $or: [
         // Never paid AND ended: a live walk-in order waiting for its cash holds a clock but is no one's to scrub yet.
-        { paidAt: { $exists: false }, status: OrderStatus.canceled },
+        // Money that landed after the cancel (`moneyReceivedAt`) makes it a paid order for this purpose:
+        // its buyer is kept for the refund to follow up, so it goes through the clocked branch below.
+        {
+            paidAt: { $exists: false },
+            moneyReceivedAt: { $exists: false },
+            status: OrderStatus.canceled
+        },
         {
             conformityUntil: { $exists: true },
             // $dateAdd: https://www.mongodb.com/docs/manual/reference/operator/aggregation/dateAdd/
@@ -675,11 +682,14 @@ const piiDueFilter = (cutoff: Date, window: PiiClaimWindow): QueryFilter<OrderDo
         {
             conformityUntil: { $exists: false },
             status: OrderStatus.canceled,
+            // Keeps this branch from matching on a null date by itself (null sorts before every date).
+            // An order with neither field is already due through the never-paid branch above.
+            $or: [{ paidAt: { $exists: true } }, { moneyReceivedAt: { $exists: true } }],
             $expr: {
                 $lte: [
                     {
                         $dateAdd: {
-                            startDate: '$paidAt',
+                            startDate: { $ifNull: ['$paidAt', '$moneyReceivedAt'] },
                             unit: 'day',
                             amount: window.daysUndelivered
                         }

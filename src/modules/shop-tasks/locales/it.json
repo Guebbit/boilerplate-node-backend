@@ -21,6 +21,7 @@
                 "preorders-late": "{{n}} preordini oltre la data prevista",
                 "delivery-holds-open": "{{n}} ordini trattenuti da troppo tempo",
                 "returns-awaiting-goods": "{{n}} resi in ritardo con la merce: chiedi una sola volta la prova di spedizione al cliente e tieni il rimborso in sospeso",
+                "returns-proof-goods-late": "{{n}} resi con prova di spedizione ma merce in ritardo: sollecita il corriere e controlla se il rimborso è dovuto",
                 "returns-undecided": "{{n}} richieste di reso senza decisione",
                 "low-stock": "{{n}} prodotti con scorte basse",
                 "unshipped": "{{n}} ordini pagati con merce ancora da spedire",

@@ -79,7 +79,9 @@ export const cancelReturn = (
                         {
                             proofOfSendingAt: { $exists: true },
                             reason: { $in: PROOF_OPENS_REFUND_FOR }
-                        }
+                        },
+                        // The same refusal when staff chose to refund a defect or a wrong item on proof.
+                        { proofOfSendingAt: { $exists: true }, refundOnProof: true }
                     ]
                 }
             )

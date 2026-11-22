@@ -316,6 +316,56 @@ const awaiting = (id: string) =>
         rows.filter(([code]) => code === 'shop-tasks.staff.returns-awaiting-goods')
     );
 
+/** The counts the warehouse sees for the proof-on-file, goods-late row. */
+const proofLate = (id: string) =>
+    summariesOf('warehouse', id).then((rows) =>
+        rows.filter(([code]) => code === 'shop-tasks.staff.returns-proof-goods-late')
+    );
+
+describe('returns with a proof of sending and the goods late', () => {
+    it('counts nothing until the transit allowance has passed since the proof', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([
+            { status: 'approved', reason: 'withdrawal', daysAgo: 5, proof: true },
+            { status: 'approved', reason: 'defective', daysAgo: 5, proof: true }
+        ]);
+
+        await runStaffDigest('daily');
+
+        await expect(proofLate(warehouse.id)).resolves.toEqual([]);
+    });
+
+    it('counts every reason with a deadline once the proof is old enough, and no return without one', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([
+            { status: 'approved', reason: 'withdrawal', daysAgo: 10, proof: true },
+            { status: 'approved', reason: 'defective', daysAgo: 10, proof: true },
+            { status: 'approved', reason: 'wrong_item', daysAgo: 10, proof: true },
+            // Goodwill has no legal deadline: it stays out of the row.
+            { status: 'approved', reason: 'other', daysAgo: 10, proof: true },
+            // No proof on it: the other row's business, not this one.
+            { status: 'approved', reason: 'withdrawal', daysAgo: 10 }
+        ]);
+
+        await runStaffDigest('daily');
+
+        await expect(proofLate(warehouse.id)).resolves.toEqual([
+            ['shop-tasks.staff.returns-proof-goods-late', 3]
+        ]);
+    });
+
+    it('does not count a return nobody approved yet', async () => {
+        const warehouse = await staff('warehouse', 'warehouse@example.com');
+        await insertBareReturns([
+            { status: 'requested', reason: 'withdrawal', daysAgo: 10, proof: true }
+        ]);
+
+        await runStaffDigest('daily');
+
+        await expect(proofLate(warehouse.id)).resolves.toEqual([]);
+    });
+});
+
 describe('returns overdue for their goods', () => {
     it('counts nothing before 14 days plus the transit allowance have passed', async () => {
         const warehouse = await staff('warehouse', 'warehouse@example.com');

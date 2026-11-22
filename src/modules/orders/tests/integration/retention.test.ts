@@ -15,6 +15,7 @@ import {
     detachOrderUserId,
     forceOrderStatus,
     markOrderPaidAt,
+    markOrderMoneyReceivedAt,
     setConformityUntil
 } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
@@ -135,6 +136,36 @@ describe('orders — the claim window decides when a paid order loses its buyer'
         });
 
         expect(scrubbed).toBe(1);
+    });
+
+    it('keeps a canceled order whose money landed late for the undelivered days, counted from the money', async () => {
+        setEnvironment({ NODE_ORDER_PII_DAYS_UNDELIVERED: '100' });
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
+        await markOrderMoneyReceivedAt(String(order._id), new Date(Date.now() - 99 * DAY));
+        await eraseAsScheduled(user);
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+        await markOrderMoneyReceivedAt(String(order._id), new Date(Date.now() - 101 * DAY));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+    });
+
+    it('counts a paid order from paidAt even when late money also landed on it', async () => {
+        setEnvironment({ NODE_ORDER_PII_DAYS_UNDELIVERED: '100' });
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.canceled
+        });
+        await markOrderPaidAt(String(order._id), new Date(Date.now() - 101 * DAY));
+        await markOrderMoneyReceivedAt(String(order._id), new Date(Date.now() - 5 * DAY));
+        await eraseAsScheduled(user);
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
     });
 
     it('does not scrub a delivered order before conformityUntil, and does after', async () => {
